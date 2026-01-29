@@ -1,0 +1,561 @@
+# Canonical Roles
+# ROLE.* IDs describe what a stem *is* (instrument/function), not how it is processed.
+# Used for: role inference from filenames, virtual bus building, and role-aware detectors.
+
+roles:
+  _meta:
+    roles_version: "0.1.0"
+    id_prefix: "ROLE."
+    role_kinds: ["source", "bus", "fx", "utility", "reference"]
+    default_bus_groups:
+      enum: ["DRUMS", "BASS", "VOCALS", "MUSIC", "FX", "SFX", "DIALOGUE", "MASTER", "REFERENCE"]
+    inference_conventions:
+      - "Inference uses case-insensitive matching against keywords and regex."
+      - "Prefer specific roles (KICK) over broad roles (DRUMS) when both match."
+      - "If multiple roles match equally, choose the broader one and emit ISSUE.VALIDATION.UNKNOWN_ROLE as warn."
+      - "L/R tags in names may inform pan suggestions but should not override role identity."
+    notes:
+      - "Buses can be exported as stems; bus roles are included for that case."
+      - "Surround layouts are handled via LAYOUT.*; roles remain instrument/function."
+
+  # -------------------------
+  # Utility / Reference
+  # -------------------------
+  ROLE.REFERENCE.TRACK:
+    label: "Reference track"
+    description: "External reference used for comparison; not part of the mix sum."
+    kind: "reference"
+    default_bus_group: "REFERENCE"
+    inference:
+      keywords: ["ref", "reference", "a_b", "ab", "mixref"]
+      regex: ["(?i)\\bref(erence)?\\b", "(?i)\\bmix\\s*ref\\b"]
+
+  ROLE.UTILITY.CLICK:
+    label: "Click"
+    description: "Click track or guide pulse."
+    kind: "utility"
+    default_bus_group: "REFERENCE"
+    inference:
+      keywords: ["click", "metronome"]
+      regex: ["(?i)\\bclick\\b", "(?i)\\bmetronome\\b"]
+
+  ROLE.UTILITY.GUIDE:
+    label: "Guide"
+    description: "Rough guide stem used for arrangement or timing reference."
+    kind: "utility"
+    default_bus_group: "REFERENCE"
+    inference:
+      keywords: ["guide", "scratch", "rough", "demo"]
+      regex: ["(?i)\\bguide\\b", "(?i)\\bscratch\\b", "(?i)\\brough\\b"]
+
+  # -------------------------
+  # Master / Mix / Buses
+  # -------------------------
+  ROLE.MASTER.MIX:
+    label: "Mix master"
+    description: "Full mix print or mix bus stem (2-channel or multichannel)."
+    kind: "bus"
+    default_bus_group: "MASTER"
+    inference:
+      keywords: ["mix", "master", "print", "2mix", "two_mix", "fullmix"]
+      regex: ["(?i)\\b2\\s*mix\\b", "(?i)\\bfull\\s*mix\\b", "(?i)\\bmix\\s*bus\\b"]
+
+  ROLE.BUS.DRUMS:
+    label: "Drum bus"
+    description: "Submix bus containing drums/percussion."
+    kind: "bus"
+    default_bus_group: "DRUMS"
+    inference:
+      keywords: ["drum bus", "drums bus", "drumbus", "drums", "kit"]
+      regex: ["(?i)\\bdrum\\s*bus\\b", "(?i)\\bdrums\\s*bus\\b"]
+
+  ROLE.BUS.BASS:
+    label: "Bass bus"
+    description: "Submix bus containing bass elements."
+    kind: "bus"
+    default_bus_group: "BASS"
+    inference:
+      keywords: ["bass bus", "bassbus"]
+      regex: ["(?i)\\bbass\\s*bus\\b"]
+
+  ROLE.BUS.VOCALS:
+    label: "Vocal bus"
+    description: "Submix bus containing vocals (lead + background)."
+    kind: "bus"
+    default_bus_group: "VOCALS"
+    inference:
+      keywords: ["vocal bus", "vocals bus", "vox bus", "voxbus"]
+      regex: ["(?i)\\bvox\\s*bus\\b", "(?i)\\bvocals?\\s*bus\\b"]
+
+  ROLE.BUS.MUSIC:
+    label: "Music bus"
+    description: "Submix bus for instruments excluding drums/bass/vocals."
+    kind: "bus"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["music bus", "instr bus", "instruments bus", "band bus"]
+      regex: ["(?i)\\bmusic\\s*bus\\b", "(?i)\\binstr(uments)?\\s*bus\\b"]
+
+  ROLE.BUS.FX:
+    label: "FX bus"
+    description: "Submix bus for effects/ear-candy (non-dialogue)."
+    kind: "bus"
+    default_bus_group: "FX"
+    inference:
+      keywords: ["fx bus", "effects bus", "sfx bus"]
+      regex: ["(?i)\\bfx\\s*bus\\b", "(?i)\\beffects\\s*bus\\b"]
+
+  # -------------------------
+  # Drums / Percussion
+  # -------------------------
+  ROLE.DRUM.KICK:
+    label: "Kick"
+    description: "Kick drum (acoustic or electronic)."
+    kind: "source"
+    default_bus_group: "DRUMS"
+    inference:
+      keywords: ["kick", "bd", "bassdrum", "bass drum"]
+      regex: ["(?i)\\b(kick|bd)\\b", "(?i)\\bbass\\s*drum\\b"]
+
+  ROLE.DRUM.SNARE:
+    label: "Snare"
+    description: "Snare drum."
+    kind: "source"
+    default_bus_group: "DRUMS"
+    inference:
+      keywords: ["snare", "sd"]
+      regex: ["(?i)\\b(snare|sd)\\b"]
+
+  ROLE.DRUM.TOMS:
+    label: "Toms"
+    description: "Tom drums (rack/floor)."
+    kind: "source"
+    default_bus_group: "DRUMS"
+    inference:
+      keywords: ["tom", "toms", "racktom", "floortom"]
+      regex: ["(?i)\\btoms?\\b", "(?i)\\b(rack|floor)\\s*tom\\b"]
+
+  ROLE.DRUM.HIHAT:
+    label: "Hi-hat"
+    description: "Hi-hat cymbals."
+    kind: "source"
+    default_bus_group: "DRUMS"
+    inference:
+      keywords: ["hihat", "hi hat", "hat", "hh"]
+      regex: ["(?i)\\b(hi\\s*hat|hihat|hh)\\b"]
+
+  ROLE.DRUM.CYMBALS:
+    label: "Cymbals"
+    description: "Cymbal close mics (ride/crash/china/splash)."
+    kind: "source"
+    default_bus_group: "DRUMS"
+    inference:
+      keywords: ["cymbal", "cymbals", "ride", "crash", "china", "splash"]
+      regex: ["(?i)\\b(ride|crash|china|splash)\\b"]
+
+  ROLE.DRUM.OVERHEADS:
+    label: "Overheads"
+    description: "Overhead mics capturing cymbals and kit image."
+    kind: "source"
+    default_bus_group: "DRUMS"
+    inference:
+      keywords: ["oh", "overhead", "overheads", "o/h"]
+      regex: ["(?i)\\b(oh|o\\/h|overheads?)\\b"]
+
+  ROLE.DRUM.ROOM:
+    label: "Room"
+    description: "Room mics capturing kit ambience."
+    kind: "source"
+    default_bus_group: "DRUMS"
+    inference:
+      keywords: ["room", "drumroom", "ambient", "amb"]
+      regex: ["(?i)\\broom\\b", "(?i)\\bdrum\\s*room\\b"]
+
+  ROLE.DRUM.CLAP:
+    label: "Clap"
+    description: "Handclap or clap sample."
+    kind: "source"
+    default_bus_group: "DRUMS"
+    inference:
+      keywords: ["clap", "claps"]
+      regex: ["(?i)\\bclaps?\\b"]
+
+  ROLE.DRUM.PERCUSSION:
+    label: "Percussion"
+    description: "General percussion (congas, bongos, tambourine, etc.)."
+    kind: "source"
+    default_bus_group: "DRUMS"
+    inference:
+      keywords: ["perc", "percussion", "conga", "bongo", "tamb", "tambourine", "shaker"]
+      regex: ["(?i)\\bperc(ussion)?\\b", "(?i)\\b(conga|bongo|tamb(ourine)?|shaker)\\b"]
+
+  ROLE.DRUM.LOOPS:
+    label: "Drum loop"
+    description: "Looped drum/percussion stem."
+    kind: "source"
+    default_bus_group: "DRUMS"
+    inference:
+      keywords: ["loop", "drumloop", "drum loop", "break", "breakbeat"]
+      regex: ["(?i)\\bdrum\\s*loop\\b", "(?i)\\bbreak(beat)?\\b"]
+
+  # -------------------------
+  # Bass
+  # -------------------------
+  ROLE.BASS.DI:
+    label: "Bass DI"
+    description: "Direct input bass recording."
+    kind: "source"
+    default_bus_group: "BASS"
+    inference:
+      keywords: ["bass di", "di bass", "bass_direct", "bass direct"]
+      regex: ["(?i)\\bbass\\s*di\\b", "(?i)\\bdi\\s*bass\\b"]
+
+  ROLE.BASS.AMP:
+    label: "Bass amp"
+    description: "Mic'd or amp-sim bass."
+    kind: "source"
+    default_bus_group: "BASS"
+    inference:
+      keywords: ["bass amp", "bassamp", "amp bass"]
+      regex: ["(?i)\\bbass\\s*amp\\b", "(?i)\\bamp\\s*bass\\b"]
+
+  ROLE.BASS.SYNTH:
+    label: "Synth bass"
+    description: "Synthesized bass element."
+    kind: "source"
+    default_bus_group: "BASS"
+    inference:
+      keywords: ["synthbass", "synth bass", "bass synth", "808"]
+      regex: ["(?i)\\bsynth\\s*bass\\b", "(?i)\\b808\\b"]
+
+  ROLE.BASS.SUB:
+    label: "Sub bass"
+    description: "Dedicated sub layer (often < 80 Hz)."
+    kind: "source"
+    default_bus_group: "BASS"
+    inference:
+      keywords: ["sub", "subbass", "sub bass"]
+      regex: ["(?i)\\bsub\\s*bass\\b", "(?i)\\bsubbass\\b"]
+
+  # -------------------------
+  # Vocals
+  # -------------------------
+  ROLE.VOCAL.LEAD:
+    label: "Lead vocal"
+    description: "Primary vocal performance."
+    kind: "source"
+    default_bus_group: "VOCALS"
+    inference:
+      keywords: ["lead vocal", "vocal lead", "leadvox", "lead vox", "vox lead", "lv"]
+      regex: ["(?i)\\blead\\s*vox\\b", "(?i)\\blead\\s*vocal\\b", "(?i)\\bvox\\s*lead\\b"]
+
+  ROLE.VOCAL.DOUBLE:
+    label: "Vocal double"
+    description: "Double-tracked lead vocal layer."
+    kind: "source"
+    default_bus_group: "VOCALS"
+    inference:
+      keywords: ["double", "doub", "dbl", "stack"]
+      regex: ["(?i)\\b(double|dbl|stack)\\b"]
+
+  ROLE.VOCAL.HARMONY:
+    label: "Vocal harmony"
+    description: "Harmony vocal layer(s)."
+    kind: "source"
+    default_bus_group: "VOCALS"
+    inference:
+      keywords: ["harmony", "harm", "vox harm", "bgv harm"]
+      regex: ["(?i)\\bharm(ony)?\\b"]
+
+  ROLE.VOCAL.BGV:
+    label: "Background vocals"
+    description: "Background vocal group (BGVs)."
+    kind: "source"
+    default_bus_group: "VOCALS"
+    inference:
+      keywords: ["bgv", "bgvs", "backing", "bvox", "choir"]
+      regex: ["(?i)\\b(bgv|bgvs|backing|bvox|choir)\\b"]
+
+  ROLE.VOCAL.AD_LIB:
+    label: "Ad-libs"
+    description: "Ad-libs, shouts, and fills around the lead."
+    kind: "source"
+    default_bus_group: "VOCALS"
+    inference:
+      keywords: ["adlib", "ad-lib", "ad libs", "shout", "shouts"]
+      regex: ["(?i)\\bad\\s*-?libs?\\b", "(?i)\\bshouts?\\b"]
+
+  ROLE.VOCAL.CHOPS:
+    label: "Vocal chops"
+    description: "Chopped vocal samples used as musical elements."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["chops", "vocal chop", "vox chop"]
+      regex: ["(?i)\\bvocal\\s*chops?\\b", "(?i)\\bvox\\s*chops?\\b"]
+
+  # -------------------------
+  # Guitars
+  # -------------------------
+  ROLE.GTR.ELECTRIC:
+    label: "Electric guitar"
+    description: "Electric guitar stem (general)."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["gtr", "guitar", "egtr", "electric gtr", "electric guitar"]
+      regex: ["(?i)\\b(electric\\s*gtr|electric\\s*guitar|egtr|gtr)\\b"]
+
+  ROLE.GTR.ELECTRIC_L:
+    label: "Electric guitar (left)"
+    description: "Electric guitar stem intended as left side of a pair."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["gtr l", "guitar l", "egtr l", "left gtr", "gtr_left", "gtr-l"]
+      regex: ["(?i)\\b(gtr|guitar)\\s*(l|left)\\b", "(?i)\\b(left)\\s*(gtr|guitar)\\b"]
+
+  ROLE.GTR.ELECTRIC_R:
+    label: "Electric guitar (right)"
+    description: "Electric guitar stem intended as right side of a pair."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["gtr r", "guitar r", "egtr r", "right gtr", "gtr_right", "gtr-r"]
+      regex: ["(?i)\\b(gtr|guitar)\\s*(r|right)\\b", "(?i)\\b(right)\\s*(gtr|guitar)\\b"]
+
+  ROLE.GTR.ACOUSTIC:
+    label: "Acoustic guitar"
+    description: "Acoustic guitar stem."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["ac gtr", "acoustic gtr", "acoustic guitar", "agtr"]
+      regex: ["(?i)\\b(acoustic\\s*gtr|acoustic\\s*guitar|agtr|ac\\s*gtr)\\b"]
+
+  ROLE.GTR.LEAD:
+    label: "Lead guitar"
+    description: "Lead guitar melody/solo stem."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["lead gtr", "gtr lead", "solo"]
+      regex: ["(?i)\\blead\\s*(gtr|guitar)\\b", "(?i)\\bsolo\\b"]
+
+  ROLE.GTR.RHYTHM:
+    label: "Rhythm guitar"
+    description: "Rhythm guitar stem."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["rhythm gtr", "gtr rhythm", "chords"]
+      regex: ["(?i)\\brhythm\\s*(gtr|guitar)\\b", "(?i)\\bchords?\\b"]
+
+  # -------------------------
+  # Keys / Synths
+  # -------------------------
+  ROLE.KEYS.PIANO:
+    label: "Piano"
+    description: "Acoustic or sampled piano."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["piano", "grand", "upright"]
+      regex: ["(?i)\\bpiano\\b", "(?i)\\b(grand|upright)\\b"]
+
+  ROLE.KEYS.EPIANO:
+    label: "Electric piano"
+    description: "Electric piano (Rhodes/Wurli-style)."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["ep", "e-piano", "electric piano", "rhodes", "wurli", "wurlitzer"]
+      regex: ["(?i)\\b(e-?piano|electric\\s*piano|rhodes|wurli(tzer)?)\\b"]
+
+  ROLE.KEYS.ORGAN:
+    label: "Organ"
+    description: "Organ (Hammond/synth organ)."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["organ", "hammond"]
+      regex: ["(?i)\\b(organ|hammond)\\b"]
+
+  ROLE.SYNTH.PAD:
+    label: "Synth pad"
+    description: "Sustained pad textures."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["pad", "pads", "atmo pad"]
+      regex: ["(?i)\\bpads?\\b"]
+
+  ROLE.SYNTH.LEAD:
+    label: "Synth lead"
+    description: "Lead synth melody/hook."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["synth lead", "lead synth", "lead"]
+      regex: ["(?i)\\blead\\s*synth\\b", "(?i)\\bsynth\\s*lead\\b"]
+
+  ROLE.SYNTH.ARP:
+    label: "Arpeggiator"
+    description: "Arp pattern or rhythmic synth sequence."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["arp", "arpeggio", "arpeggiator", "sequence", "seq"]
+      regex: ["(?i)\\b(arp|arpeggio|arpeggiator|seq(uence)?)\\b"]
+
+  ROLE.SYNTH.FX:
+    label: "Synth FX"
+    description: "Synth effects layer (swells, glitches, weirdness)."
+    kind: "source"
+    default_bus_group: "FX"
+    inference:
+      keywords: ["synth fx", "fx synth", "glitch", "swell"]
+      regex: ["(?i)\\bsynth\\s*fx\\b", "(?i)\\bglitch\\b", "(?i)\\bswell\\b"]
+
+  # -------------------------
+  # Orchestral / Ensemble (broad roles)
+  # -------------------------
+  ROLE.STRINGS.SECTION:
+    label: "Strings"
+    description: "String section or layered strings."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["strings", "string section", "orch strings"]
+      regex: ["(?i)\\bstrings?\\b", "(?i)\\bstring\\s*section\\b"]
+
+  ROLE.BRASS.SECTION:
+    label: "Brass"
+    description: "Brass section or layered brass."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["brass", "horns", "brass section"]
+      regex: ["(?i)\\b(brass|horns)\\b", "(?i)\\bbrass\\s*section\\b"]
+
+  ROLE.WINDS.SECTION:
+    label: "Winds"
+    description: "Woodwinds or wind ensemble layers."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["winds", "woodwinds", "flute", "clarinet", "oboe", "sax"]
+      regex: ["(?i)\\b(woodwinds?|winds?|flute|clarinet|oboe|sax)\\b"]
+
+  # -------------------------
+  # FX / Ear-candy (music FX, not film SFX)
+  # -------------------------
+  ROLE.FX.RISER:
+    label: "Riser"
+    description: "Risers and build-ups."
+    kind: "fx"
+    default_bus_group: "FX"
+    inference:
+      keywords: ["riser", "build", "uplifter"]
+      regex: ["(?i)\\b(riser|uplifter|build)\\b"]
+
+  ROLE.FX.IMPACT:
+    label: "Impact"
+    description: "One-shots and impacts."
+    kind: "fx"
+    default_bus_group: "FX"
+    inference:
+      keywords: ["impact", "hit", "slam", "boom"]
+      regex: ["(?i)\\b(impact|hit|slam|boom)\\b"]
+
+  ROLE.FX.WHOOSH:
+    label: "Whoosh"
+    description: "Whooshes and transitions."
+    kind: "fx"
+    default_bus_group: "FX"
+    inference:
+      keywords: ["whoosh", "swoosh", "transition"]
+      regex: ["(?i)\\b(whoosh|swoosh|transition)\\b"]
+
+  ROLE.FX.AMBIENCE:
+    label: "Ambience"
+    description: "Ambient texture beds (non-instrumental)."
+    kind: "fx"
+    default_bus_group: "FX"
+    inference:
+      keywords: ["ambience", "ambiance", "atmo", "atmos", "texture"]
+      regex: ["(?i)\\b(ambien[ct]e|atmo(s)?|texture)\\b"]
+
+  # -------------------------
+  # Dialogue / VO (surround-friendly categories)
+  # -------------------------
+  ROLE.DIALOGUE.LEAD:
+    label: "Dialogue / VO"
+    description: "Primary spoken-word dialogue or voiceover."
+    kind: "source"
+    default_bus_group: "DIALOGUE"
+    inference:
+      keywords: ["dialogue", "dialog", "dx", "voiceover", "vo", "narration", "narrator"]
+      regex: ["(?i)\\b(dx|dialog(ue)?)\\b", "(?i)\\b(voice\\s*over|vo|narration|narrator)\\b"]
+
+  ROLE.DIALOGUE.ADR:
+    label: "ADR"
+    description: "Automated Dialogue Replacement stem."
+    kind: "source"
+    default_bus_group: "DIALOGUE"
+    inference:
+      keywords: ["adr"]
+      regex: ["(?i)\\badr\\b"]
+
+  # -------------------------
+  # SFX (film/game style, surround-friendly)
+  # -------------------------
+  ROLE.SFX.FOLEY:
+    label: "Foley"
+    description: "Foley performance (footsteps, cloth, props)."
+    kind: "source"
+    default_bus_group: "SFX"
+    inference:
+      keywords: ["foley", "footsteps", "cloth"]
+      regex: ["(?i)\\bfoley\\b", "(?i)\\bfootsteps?\\b"]
+
+  ROLE.SFX.HARD:
+    label: "Hard SFX"
+    description: "Hard sound effects (hits, doors, weapons, impacts)."
+    kind: "source"
+    default_bus_group: "SFX"
+    inference:
+      keywords: ["sfx", "hard sfx", "hardfx", "fx hard"]
+      regex: ["(?i)\\bhard\\s*sfx\\b", "(?i)\\bhard\\s*fx\\b"]
+
+  ROLE.SFX.BG:
+    label: "Background SFX"
+    description: "Background effects beds (crowds, city, room tone variants)."
+    kind: "source"
+    default_bus_group: "SFX"
+    inference:
+      keywords: ["bg sfx", "background sfx", "bgfx", "crowd", "roomtone", "room tone"]
+      regex: ["(?i)\\bbg\\s*sfx\\b", "(?i)\\b(background\\s*sfx|bgfx)\\b", "(?i)\\broom\\s*tone\\b"]
+
+  # -------------------------
+  # Catch-all roles (last resort)
+  # -------------------------
+  ROLE.MUSIC.OTHER:
+    label: "Other music"
+    description: "Unclassified musical stem (instrumental)."
+    kind: "source"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: ["music", "instrument", "instr"]
+      regex: ["(?i)\\binstr(ument)?s?\\b"]
+
+  ROLE.OTHER.UNKNOWN:
+    label: "Unknown"
+    description: "Role could not be inferred. Use as a placeholder until assigned."
+    kind: "utility"
+    default_bus_group: "MUSIC"
+    inference:
+      keywords: []
+      regex: []
+    notes:
+      - "Core should prefer emitting ISSUE.VALIDATION.UNKNOWN_ROLE rather than defaulting silently."
