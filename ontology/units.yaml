@@ -1,0 +1,159 @@
+# Canonical Units
+# Use UNIT.* IDs everywhere (features + params + evidence values that carry units).
+
+units:
+  UNIT.NONE:
+    label: "None"
+    symbol: ""
+    kind: "dimensionless"
+    notes: "Explicitly indicates no unit."
+
+  # ---------- Level / Loudness ----------
+  UNIT.DB:
+    label: "Decibel"
+    symbol: "dB"
+    kind: "level"
+    notes: "Relative level; reference depends on context."
+
+  UNIT.DBFS:
+    label: "Decibels Full Scale"
+    symbol: "dBFS"
+    kind: "level"
+    notes: "Digital amplitude relative to full scale; 0 dBFS is full scale."
+
+  UNIT.DBTP:
+    label: "Decibels True Peak"
+    symbol: "dBTP"
+    kind: "level"
+    notes: "True-peak level in dB relative to full scale."
+
+  UNIT.LUFS:
+    label: "Loudness Units relative to Full Scale"
+    symbol: "LUFS"
+    kind: "loudness"
+    notes: "Per ITU-R BS.1770 / EBU R128 conventions. May be updated as better measuring comes out"
+
+  UNIT.LU:
+    label: "Loudness Units"
+    symbol: "LU"
+    kind: "loudness_delta"
+    notes: "Relative loudness difference (e.g., LRA, short-term variation)."
+
+  # ---------- Frequency ----------
+  UNIT.HZ:
+    label: "Hertz"
+    symbol: "Hz"
+    kind: "frequency"
+    base_unit: "UNIT.HZ"
+    multiplier_to_base: 1.0
+
+  UNIT.KHZ:
+    label: "Kilohertz"
+    symbol: "kHz"
+    kind: "frequency"
+    base_unit: "UNIT.HZ"
+    multiplier_to_base: 1000.0
+
+  # ---------- Time ----------
+  UNIT.S:
+    label: "Seconds"
+    symbol: "s"
+    kind: "time"
+    base_unit: "UNIT.S"
+    multiplier_to_base: 1.0
+
+  UNIT.MS:
+    label: "Milliseconds"
+    symbol: "ms"
+    kind: "time"
+    base_unit: "UNIT.S"
+    multiplier_to_base: 0.001
+
+  UNIT.SAMPLES:
+    label: "Samples"
+    symbol: "samples"
+    kind: "sample_count"
+    notes: "Integer sample count at the session sample rate."
+
+  # ---------- Ratios / Dimensionless ----------
+  UNIT.RATIO:
+    label: "Ratio"
+    symbol: ":1"
+    kind: "dimensionless"
+    notes: "Used for compressor ratios and similar. Represent as numeric (e.g., 4.0 means 4:1)."
+
+  UNIT.PERCENT:
+    label: "Percent"
+    symbol: "%"
+    kind: "dimensionless"
+    base_unit: "UNIT.RATIO"
+    multiplier_to_base: 0.01
+    notes: "Represent 0–100; converts to ratio by multiplying by 0.01."
+
+  UNIT.Q:
+    label: "Q Factor"
+    symbol: "Q"
+    kind: "dimensionless"
+    notes: "Filter Q; dimensionless."
+
+  UNIT.CORRELATION:
+    label: "Correlation"
+    symbol: ""
+    kind: "dimensionless"
+    notes: "Typically -1.0 to +1.0 (stereo correlation)."
+
+  # ---------- Angles / Surround Metadata ----------
+  UNIT.DEG:
+    label: "Degrees"
+    symbol: "°"
+    kind: "angle"
+    base_unit: "UNIT.DEG"
+    multiplier_to_base: 1.0
+    notes: "Used for azimuth/elevation in speaker metadata."
+
+  UNIT.RAD:
+    label: "Radians"
+    symbol: "rad"
+    kind: "angle"
+    base_unit: "UNIT.DEG"
+    multiplier_to_base: 57.29577951308232
+    notes: "Stored conversion targets degrees for human readability."
+
+  # ---------- Distance / Geometry ----------
+  UNIT.M:
+    label: "Meters"
+    symbol: "m"
+    kind: "length"
+    base_unit: "UNIT.M"
+    multiplier_to_base: 1.0
+
+  # ---------- Counts / Metadata ----------
+  UNIT.COUNT:
+    label: "Count"
+    symbol: ""
+    kind: "count"
+    notes: "Non-negative integer counts (channels, stems, occurrences)."
+
+  UNIT.BIT:
+    label: "Bits"
+    symbol: "bit"
+    kind: "data_size"
+    notes: "Used for bit depth metadata."
+
+  UNIT.BPM:
+    label: "Beats Per Minute"
+    symbol: "BPM"
+    kind: "tempo"
+
+  # ---------- Slopes / Filter metadata ----------
+  UNIT.DB_PER_OCT:
+    label: "Decibels per Octave"
+    symbol: "dB/oct"
+    kind: "slope"
+    notes: "Used for filter slope descriptions."
+
+  UNIT.DB_PER_DECADE:
+    label: "Decibels per Decade"
+    symbol: "dB/dec"
+    kind: "slope"
+    notes: "Alternate slope representation; rarely used in mixing UX."

@@ -1,0 +1,564 @@
+# Canonical Evidence Keys
+# Evidence IDs (EVID.*) describe *what a value means* so reports can be explainable and deterministic.
+# The *envelope* (where/how you store evidence in a report) lives in schemas, but this file defines
+# the canonical keys, types, and unit expectations.
+
+evidence:
+  _meta:
+    evidence_version: "0.1.0"
+    id_prefix: "EVID."
+    envelope_convention:
+      required_fields:
+        - "evidence_id"     # must match an EVID.* key below
+        - "value"           # typed per value_type
+      recommended_fields:
+        - "unit_id"         # required when value_type is number/integer *and* the EVID defines a unit_id
+        - "confidence"      # 0.0–1.0 (not an evidence key; part of envelope)
+        - "source"          # tool/plugin name + version
+        - "where"           # location object (time/freq/channel/track)
+        - "why"             # short human explanation
+      where_shapes:
+        time_range_s:
+          start_s: "number >= 0"
+          end_s: "number >= start_s"
+        freq_range_hz:
+          low_hz: "number >= 0"
+          high_hz: "number >= low_hz"
+        channel_ref:
+          layout_id: "LAYOUT.*"
+          speaker_id: "SPK.*"
+          channel_index: "integer >= 0"
+        track_ref:
+          track_index: "integer >= 0"
+          track_name: "string"
+    value_types:
+      - "number"
+      - "integer"
+      - "boolean"
+      - "string"
+      - "array"
+      - "object"
+
+  # -------------------------
+  # File & Session Metadata
+  # -------------------------
+  EVID.FILE.PATH:
+    label: "File path"
+    description: "Path to the source media file as provided to the pipeline."
+    value_type: "string"
+
+  EVID.FILE.NAME:
+    label: "File name"
+    description: "Base name of the source media file."
+    value_type: "string"
+
+  EVID.FILE.FORMAT:
+    label: "Container format"
+    description: "Container/format identifier (e.g., wav, aiff, flac)."
+    value_type: "string"
+
+  EVID.FILE.HASH.SHA256:
+    label: "SHA-256 hash"
+    description: "SHA-256 hash of the file bytes for reproducibility."
+    value_type: "string"
+
+  EVID.SESSION.SAMPLE_RATE_HZ:
+    label: "Sample rate"
+    description: "Session sample rate derived from the file header or decode settings."
+    value_type: "number"
+    unit_id: "UNIT.HZ"
+    constraints:
+      min: 8000
+
+  EVID.SESSION.BIT_DEPTH:
+    label: "Bit depth"
+    description: "Bit depth of decoded PCM (or effective bit depth if converted)."
+    value_type: "integer"
+    unit_id: "UNIT.BIT"
+    constraints:
+      min: 1
+
+  EVID.SESSION.CHANNEL_COUNT:
+    label: "Channel count"
+    description: "Number of channels in the decoded audio stream."
+    value_type: "integer"
+    unit_id: "UNIT.COUNT"
+    constraints:
+      min: 1
+
+  EVID.SESSION.DURATION_S:
+    label: "Duration"
+    description: "Total duration of decoded audio."
+    value_type: "number"
+    unit_id: "UNIT.S"
+    constraints:
+      min: 0
+
+  EVID.SESSION.TEMPO_BPM:
+    label: "Tempo estimate"
+    description: "Estimated tempo for tempo-aware analysis (if available)."
+    value_type: "number"
+    unit_id: "UNIT.BPM"
+    constraints:
+      min: 0
+
+  # -------------------------
+  # Track / Stem Metadata
+  # -------------------------
+  EVID.TRACK.INDEX:
+    label: "Track index"
+    description: "Zero-based index of track/stem within the session."
+    value_type: "integer"
+    constraints:
+      min: 0
+
+  EVID.TRACK.NAME:
+    label: "Track name"
+    description: "Human track name (from filename, metadata, or user label)."
+    value_type: "string"
+
+  EVID.TRACK.ROLE_ID:
+    label: "Assigned role"
+    description: "Canonical ROLE.* assigned to the track."
+    value_type: "string"
+    constraints:
+      pattern: "^ROLE\\."
+
+  EVID.TRACK.IS_REFERENCE:
+    label: "Is reference track"
+    description: "True if this track is treated as a reference (not part of the mix sum)."
+    value_type: "boolean"
+
+  EVID.TRACK.CHANNELS:
+    label: "Track channel count"
+    description: "Number of channels in this track/stem."
+    value_type: "integer"
+    unit_id: "UNIT.COUNT"
+    constraints:
+      min: 1
+
+  EVID.TRACK.LAYOUT_ID:
+    label: "Track layout"
+    description: "Canonical LAYOUT.* describing channel layout."
+    value_type: "string"
+    constraints:
+      pattern: "^LAYOUT\\."
+
+  EVID.TRACK.CHANNEL_MAP:
+    label: "Track channel map"
+    description: "Mapping from channel index to speaker_id (SPK.*) or semantic channel tags."
+    value_type: "object"
+    examples:
+      - { "0": "SPK.L", "1": "SPK.R" }
+
+  EVID.TRACK.GAIN_DB:
+    label: "Track gain"
+    description: "Applied track gain (static) within the pipeline."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+
+  EVID.TRACK.PAN_PERCENT:
+    label: "Track pan"
+    description: "Pan position for stereo workflows, -100 (L) to +100 (R)."
+    value_type: "number"
+    unit_id: "UNIT.PERCENT"
+    constraints:
+      min: -100
+      max: 100
+
+  # -------------------------
+  # Core Level Meters (track or mix)
+  # -------------------------
+  EVID.METER.PEAK_DBFS:
+    label: "Sample peak"
+    description: "Highest sample peak level."
+    value_type: "number"
+    unit_id: "UNIT.DBFS"
+
+  EVID.METER.TRUEPEAK_DBTP:
+    label: "True peak"
+    description: "True-peak level."
+    value_type: "number"
+    unit_id: "UNIT.DBTP"
+
+  EVID.METER.LUFS_I:
+    label: "Integrated loudness"
+    description: "Integrated loudness over program duration."
+    value_type: "number"
+    unit_id: "UNIT.LUFS"
+
+  EVID.METER.LUFS_S:
+    label: "Short-term loudness"
+    description: "Short-term loudness (windowed)."
+    value_type: "number"
+    unit_id: "UNIT.LUFS"
+
+  EVID.METER.LUFS_M:
+    label: "Momentary loudness"
+    description: "Momentary loudness (shorter window)."
+    value_type: "number"
+    unit_id: "UNIT.LUFS"
+
+  EVID.METER.LRA_LU:
+    label: "Loudness range"
+    description: "Loudness Range (LRA)."
+    value_type: "number"
+    unit_id: "UNIT.LU"
+
+  EVID.METER.RMS_DBFS:
+    label: "RMS level"
+    description: "Root-mean-square level."
+    value_type: "number"
+    unit_id: "UNIT.DBFS"
+
+  EVID.METER.CREST_FACTOR_DB:
+    label: "Crest factor"
+    description: "Difference between peak and RMS (peak - RMS)."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+
+  EVID.METER.HEADROOM_DB:
+    label: "Headroom"
+    description: "Headroom to 0 dBFS based on peak (0 - peak)."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+
+  # -------------------------
+  # Quality / Safety Meters
+  # -------------------------
+  EVID.QUALITY.CLIPPED_SAMPLES_COUNT:
+    label: "Clipped samples count"
+    description: "Number of samples detected at or beyond clip threshold."
+    value_type: "integer"
+    unit_id: "UNIT.COUNT"
+    constraints:
+      min: 0
+
+  EVID.QUALITY.CLIP_EVENTS_COUNT:
+    label: "Clip events count"
+    description: "Number of contiguous clipping regions/events."
+    value_type: "integer"
+    unit_id: "UNIT.COUNT"
+    constraints:
+      min: 0
+
+  EVID.QUALITY.DC_OFFSET_PERCENT:
+    label: "DC offset estimate"
+    description: "Estimated DC offset as percent of full scale."
+    value_type: "number"
+    unit_id: "UNIT.PERCENT"
+
+  EVID.QUALITY.NOISE_FLOOR_DBFS:
+    label: "Noise floor estimate"
+    description: "Estimated noise floor during low-energy sections."
+    value_type: "number"
+    unit_id: "UNIT.DBFS"
+
+  # -------------------------
+  # Spectral Descriptors
+  # -------------------------
+  EVID.SPECTRAL.CENTROID_HZ:
+    label: "Spectral centroid"
+    description: "Center of mass of the spectrum."
+    value_type: "number"
+    unit_id: "UNIT.HZ"
+    constraints:
+      min: 0
+
+  EVID.SPECTRAL.ROLLOFF_HZ:
+    label: "Spectral rolloff"
+    description: "Frequency below which a set percentage of energy is contained."
+    value_type: "number"
+    unit_id: "UNIT.HZ"
+    constraints:
+      min: 0
+
+  EVID.SPECTRAL.BAND_ENERGY_DB:
+    label: "Band energy"
+    description: "Energy level in a frequency band."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+    where_expected:
+      - "freq_range_hz"
+
+  EVID.SPECTRAL.BAND_ENERGY_RATIO:
+    label: "Band energy ratio"
+    description: "Ratio of energy in a band to broadband energy."
+    value_type: "number"
+    unit_id: "UNIT.RATIO"
+    where_expected:
+      - "freq_range_hz"
+
+  # -------------------------
+  # Stereo / Phase / Imaging
+  # -------------------------
+  EVID.IMAGE.CORRELATION:
+    label: "Stereo correlation"
+    description: "Correlation coefficient (typically -1 to +1)."
+    value_type: "number"
+    unit_id: "UNIT.CORRELATION"
+    constraints:
+      min: -1
+      max: 1
+
+  EVID.IMAGE.SIDE_LEVEL_DB:
+    label: "Side level"
+    description: "Estimated side channel level (mid/side analysis)."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+
+  EVID.IMAGE.MID_LEVEL_DB:
+    label: "Mid level"
+    description: "Estimated mid channel level (mid/side analysis)."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+
+  EVID.IMAGE.MS_BALANCE_DB:
+    label: "Mid-side balance"
+    description: "Mid level minus side level (mid - side)."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+
+  # -------------------------
+  # Segmentation Evidence
+  # -------------------------
+  EVID.SEGMENT.START_S:
+    label: "Segment start time"
+    description: "Start time of an analyzed segment."
+    value_type: "number"
+    unit_id: "UNIT.S"
+    constraints:
+      min: 0
+
+  EVID.SEGMENT.END_S:
+    label: "Segment end time"
+    description: "End time of an analyzed segment."
+    value_type: "number"
+    unit_id: "UNIT.S"
+    constraints:
+      min: 0
+
+  EVID.SEGMENT.DURATION_S:
+    label: "Segment duration"
+    description: "Duration of an analyzed segment (end - start)."
+    value_type: "number"
+    unit_id: "UNIT.S"
+    constraints:
+      min: 0
+
+  # -------------------------
+  # Detector Thresholds / Tunables (as evidence)
+  # -------------------------
+  EVID.DETECTOR.THRESHOLD_DB:
+    label: "Detector threshold"
+    description: "Threshold used by a detector for a dB-domain decision."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+
+  EVID.DETECTOR.THRESHOLD_DBFS:
+    label: "Detector threshold (dBFS)"
+    description: "Threshold used by a detector in dBFS."
+    value_type: "number"
+    unit_id: "UNIT.DBFS"
+
+  EVID.DETECTOR.THRESHOLD_DBTP:
+    label: "Detector threshold (dBTP)"
+    description: "Threshold used by a detector in dBTP."
+    value_type: "number"
+    unit_id: "UNIT.DBTP"
+
+  EVID.DETECTOR.THRESHOLD_LUFS:
+    label: "Detector threshold (LUFS)"
+    description: "Threshold used by a detector in LUFS."
+    value_type: "number"
+    unit_id: "UNIT.LUFS"
+
+  EVID.DETECTOR.THRESHOLD_RATIO:
+    label: "Detector threshold (ratio)"
+    description: "Threshold used by a detector in ratio units."
+    value_type: "number"
+    unit_id: "UNIT.RATIO"
+    constraints:
+      min: 0
+
+  # -------------------------
+  # Issue Evidence (generic)
+  # -------------------------
+  EVID.ISSUE.SCORE:
+    label: "Issue score"
+    description: "Normalized issue severity score (0–1) used for ranking."
+    value_type: "number"
+    unit_id: "UNIT.RATIO"
+    constraints:
+      min: 0
+      max: 1
+
+  EVID.ISSUE.SEVERITY_LABEL:
+    label: "Issue severity label"
+    description: "Human label for severity bucket (e.g., info/warn/error)."
+    value_type: "string"
+    constraints:
+      enum: ["info", "warn", "error"]
+
+  EVID.ISSUE.TARGET_ROLE_ID:
+    label: "Target role"
+    description: "ROLE.* that the issue is primarily associated with."
+    value_type: "string"
+    constraints:
+      pattern: "^ROLE\\."
+
+  EVID.ISSUE.MEASURED_VALUE:
+    label: "Measured value"
+    description: "Measured numeric value that triggered or quantified the issue."
+    value_type: "number"
+    unit_id: "UNIT.NONE"
+    notes: "Use unit_id in envelope to override when needed (e.g., LUFS/Hz)."
+
+  EVID.ISSUE.EXPECTED_RANGE:
+    label: "Expected range"
+    description: "Expected numeric range for the measured value."
+    value_type: "object"
+    examples:
+      - { "min": -14.0, "max": -8.0, "unit_id": "UNIT.LUFS" }
+
+  # -------------------------
+  # Action Evidence (what changed)
+  # -------------------------
+  EVID.ACTION.ACTION_ID:
+    label: "Action ID"
+    description: "ACTION.* selected or applied."
+    value_type: "string"
+    constraints:
+      pattern: "^ACTION\\."
+
+  EVID.ACTION.PARAMS:
+    label: "Action params"
+    description: "Parameter object used to configure the action."
+    value_type: "object"
+
+  EVID.ACTION.DELTA_PEAK_DB:
+    label: "Delta peak"
+    description: "Change in peak level after applying an action (after - before)."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+
+  EVID.ACTION.DELTA_LUFS_I:
+    label: "Delta integrated loudness"
+    description: "Change in integrated loudness after applying an action (after - before)."
+    value_type: "number"
+    unit_id: "UNIT.LUFS"
+
+  EVID.ACTION.DELTA_CORRELATION:
+    label: "Delta correlation"
+    description: "Change in correlation after applying an action (after - before)."
+    value_type: "number"
+    unit_id: "UNIT.CORRELATION"
+
+  EVID.ACTION.DRY_WET_PERCENT:
+    label: "Dry/wet"
+    description: "Dry/wet mix used by an action."
+    value_type: "number"
+    unit_id: "UNIT.PERCENT"
+    constraints:
+      min: 0
+      max: 100
+
+  # -------------------------
+  # Surround: Speaker / Layout Evidence
+  # -------------------------
+  EVID.SURROUND.SPEAKER_ID:
+    label: "Speaker ID"
+    description: "SPK.* reference used in channel mapping or layout definitions."
+    value_type: "string"
+    constraints:
+      pattern: "^SPK\\."
+
+  EVID.SURROUND.AZIMUTH_DEG:
+    label: "Speaker azimuth"
+    description: "Speaker azimuth angle (degrees)."
+    value_type: "number"
+    unit_id: "UNIT.DEG"
+
+  EVID.SURROUND.ELEVATION_DEG:
+    label: "Speaker elevation"
+    description: "Speaker elevation angle (degrees)."
+    value_type: "number"
+    unit_id: "UNIT.DEG"
+
+  EVID.SURROUND.DISTANCE_M:
+    label: "Speaker distance"
+    description: "Distance from listening position to speaker."
+    value_type: "number"
+    unit_id: "UNIT.M"
+    constraints:
+      min: 0
+
+  EVID.SURROUND.LAYOUT_ID:
+    label: "Layout ID"
+    description: "LAYOUT.* identifier."
+    value_type: "string"
+    constraints:
+      pattern: "^LAYOUT\\."
+
+  EVID.SURROUND.BED_CHANNEL_COUNT:
+    label: "Bed channel count"
+    description: "Number of channels in the bed (non-object) component."
+    value_type: "integer"
+    unit_id: "UNIT.COUNT"
+    constraints:
+      min: 0
+
+  EVID.SURROUND.OBJECT_COUNT:
+    label: "Object count"
+    description: "Number of objects (if object-based metadata is present)."
+    value_type: "integer"
+    unit_id: "UNIT.COUNT"
+    constraints:
+      min: 0
+
+  # -------------------------
+  # Downmix Policy / Matrix Evidence (scaffolding)
+  # -------------------------
+  EVID.DOWNMIX.POLICY_ID:
+    label: "Downmix policy ID"
+    description: "Policy identifier used for downmixing (policy pack entry)."
+    value_type: "string"
+
+  EVID.DOWNMIX.MATRIX_NAME:
+    label: "Downmix matrix name"
+    description: "Human-readable name of the downmix matrix used."
+    value_type: "string"
+
+  EVID.DOWNMIX.MATRIX_COEFFICIENT:
+    label: "Downmix coefficient"
+    description: "One coefficient entry from a downmix matrix."
+    value_type: "object"
+    examples:
+      - { "from_speaker_id": "SPK.C", "to_speaker_id": "SPK.L", "gain_db": -3.0 }
+
+  EVID.DOWNMIX.RESULT.PEAK_DBFS:
+    label: "Downmix result peak"
+    description: "Peak level of the downmix render."
+    value_type: "number"
+    unit_id: "UNIT.DBFS"
+
+  EVID.DOWNMIX.RESULT.TRUEPEAK_DBTP:
+    label: "Downmix result true peak"
+    description: "True peak level of the downmix render."
+    value_type: "number"
+    unit_id: "UNIT.DBTP"
+
+  EVID.DOWNMIX.RESULT.LUFS_I:
+    label: "Downmix result integrated loudness"
+    description: "Integrated loudness of the downmix render."
+    value_type: "number"
+    unit_id: "UNIT.LUFS"
+
+  EVID.DOWNMIX.RESULT.CORRELATION:
+    label: "Downmix result correlation"
+    description: "Correlation of the downmix render (for stereo results)."
+    value_type: "number"
+    unit_id: "UNIT.CORRELATION"
+    constraints:
+      min: -1
+      max: 1

@@ -1,0 +1,615 @@
+# Canonical Issues
+# ISSUE.* IDs represent detected technical problems (not tastes).
+# Severity scoring is determined by detectors (plugins), not the ontology.
+# Ontology provides stable IDs, definitions, and hints for evidence + common fixes.
+
+issues:
+  _meta:
+    issues_version: "0.1.0"
+    id_prefix: "ISSUE."
+    severity_convention:
+      scale: "0-100"
+      labels: ["info", "warn", "error"]
+    confidence_levels: ["low", "medium", "high"]
+    issue_types:
+      - "validation"
+      - "safety"
+      - "spectral"
+      - "masking"
+      - "dynamics"
+      - "imaging"
+      - "translation"
+      - "surround"
+    evidence_hints:
+      # These are hints for report/UI consistency, not hard schema rules.
+      where_shapes:
+        - "time_range_s"
+        - "freq_range_hz"
+        - "channel_ref"
+        - "track_ref"
+
+  # -------------------------
+  # Validation (session integrity)
+  # -------------------------
+  ISSUE.VALIDATION.DECODE_ERROR:
+    label: "Decode error"
+    description: "A stem could not be decoded reliably (format/codec issue or corrupted file)."
+    issue_type: "validation"
+    default_scope: "stem"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+      - "EVID.FILE.FORMAT"
+      - "EVID.FILE.HASH.SHA256"
+    suggested_actions: []
+    notes:
+      - "Blocks analysis for that stem unless the user replaces or re-exports it."
+
+  ISSUE.VALIDATION.SAMPLE_RATE_MISMATCH:
+    label: "Sample rate mismatch"
+    description: "Not all stems share the same sample rate, risking drift and incorrect analysis."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.SESSION.SAMPLE_RATE_HZ"
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+    notes:
+      - "User should re-export or convert stems to a common sample rate."
+
+  ISSUE.VALIDATION.BIT_DEPTH_MISMATCH:
+    label: "Bit depth mismatch"
+    description: "Not all stems share the same bit depth, which can affect headroom and noise behavior."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.SESSION.BIT_DEPTH"
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.DURATION_MISMATCH:
+    label: "Duration mismatch"
+    description: "Stem durations do not match (beyond tolerance), breaking alignment and downmix checks."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.SESSION.DURATION_S"
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.STEM_ALIGNMENT_OFFSET:
+    label: "Stem alignment offset"
+    description: "At least one stem appears shifted in time relative to others (start offset)."
+    issue_type: "validation"
+    default_scope: "stem"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.SEGMENT.START_S"
+      - "EVID.SEGMENT.END_S"
+    suggested_actions:
+      - "ACTION.UTILITY.DELAY"
+    notes:
+      - "Core should prefer reporting the offset; applying delay is usually approval-required."
+
+  ISSUE.VALIDATION.CHANNEL_COUNT_MISMATCH:
+    label: "Channel count mismatch"
+    description: "A stem has an unexpected channel count for its declared or inferred layout."
+    issue_type: "validation"
+    default_scope: "stem"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.TRACK.CHANNELS"
+      - "EVID.TRACK.LAYOUT_ID"
+      - "EVID.TRACK.CHANNEL_MAP"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.UNKNOWN_ROLE:
+    label: "Unknown role"
+    description: "A stem role could not be inferred or assigned to a canonical ROLE.*."
+    issue_type: "validation"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.TRACK.NAME"
+      - "EVID.TRACK.INDEX"
+    suggested_actions: []
+    notes:
+      - "Not fatal, but reduces strategy quality (bus building, role-specific heuristics)."
+
+  ISSUE.VALIDATION.UNKNOWN_LAYOUT:
+    label: "Unknown layout"
+    description: "A stem channel layout could not be inferred or assigned to a canonical LAYOUT.*."
+    issue_type: "validation"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.TRACK.LAYOUT_ID"
+      - "EVID.TRACK.CHANNEL_MAP"
+    suggested_actions: []
+    notes:
+      - "Surround-aware checks may be skipped until layout is declared."
+
+  # -------------------------
+  # Safety / Level / Stability
+  # -------------------------
+  ISSUE.SAFETY.CLIPPING_SAMPLES:
+    label: "Clipping detected"
+    description: "Hard clipping is present (sample values at or beyond clip threshold)."
+    issue_type: "safety"
+    default_scope: "stem"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.QUALITY.CLIPPED_SAMPLES_COUNT"
+      - "EVID.QUALITY.CLIP_EVENTS_COUNT"
+      - "EVID.METER.PEAK_DBFS"
+      - "EVID.SEGMENT.START_S"
+      - "EVID.SEGMENT.END_S"
+    suggested_actions:
+      - "ACTION.UTILITY.GAIN"
+      - "ACTION.DYN.LIMITER"
+    notes:
+      - "Default behavior should favor gain trim first, then limiting only if approved."
+
+  ISSUE.SAFETY.TRUEPEAK_OVER_CEILING:
+    label: "True peak over ceiling"
+    description: "True peak exceeds a ceiling (risk of intersample clipping)."
+    issue_type: "safety"
+    default_scope: "stem"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.METER.TRUEPEAK_DBTP"
+      - "EVID.DETECTOR.THRESHOLD_DBTP"
+      - "EVID.SEGMENT.START_S"
+      - "EVID.SEGMENT.END_S"
+    suggested_actions:
+      - "ACTION.UTILITY.GAIN"
+      - "ACTION.DYN.LIMITER"
+
+  ISSUE.SAFETY.INSUFFICIENT_HEADROOM:
+    label: "Insufficient headroom"
+    description: "Peaks are close to full scale, leaving little room for processing or summing."
+    issue_type: "safety"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.METER.PEAK_DBFS"
+      - "EVID.METER.HEADROOM_DB"
+    suggested_actions:
+      - "ACTION.UTILITY.GAIN"
+      - "ACTION.UTILITY.TRIM"
+
+  ISSUE.SAFETY.DC_OFFSET:
+    label: "DC offset"
+    description: "A DC offset is present, reducing headroom and potentially biasing dynamics."
+    issue_type: "safety"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.QUALITY.DC_OFFSET_PERCENT"
+    suggested_actions: []
+    notes:
+      - "The action (DC removal) is renderer/DSP-specific; keep as a warning until we add an explicit action."
+
+  ISSUE.SAFETY.NOISE_FLOOR_HIGH:
+    label: "High noise floor"
+    description: "Noise floor is elevated and may be audible in quiet sections."
+    issue_type: "safety"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.QUALITY.NOISE_FLOOR_DBFS"
+      - "EVID.SEGMENT.START_S"
+      - "EVID.SEGMENT.END_S"
+    suggested_actions: []
+    notes:
+      - "Noise reduction is content-sensitive; typically suggest-only."
+
+  # -------------------------
+  # Spectral balance / Tonal problems
+  # -------------------------
+  ISSUE.SPECTRAL.MUD:
+    label: "Mud"
+    description: "Low-mid energy is excessive, reducing clarity (often ~200–500 Hz)."
+    issue_type: "spectral"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_freq_range_hz: { low_hz: 200, high_hz: 500 }
+    typical_evidence_ids:
+      - "EVID.SPECTRAL.BAND_ENERGY_DB"
+      - "EVID.SPECTRAL.BAND_ENERGY_RATIO"
+      - "EVID.SEGMENT.START_S"
+      - "EVID.SEGMENT.END_S"
+    suggested_actions:
+      - "ACTION.EQ.BELL_CUT"
+      - "ACTION.DYN_EQ.BAND"
+    notes:
+      - "Often emerges from accumulation across many stems. Detectors may attach this to a bus."
+
+  ISSUE.SPECTRAL.BOXINESS:
+    label: "Boxiness"
+    description: "Midrange congestion that sounds 'boxy' (often ~400–900 Hz)."
+    issue_type: "spectral"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_freq_range_hz: { low_hz: 400, high_hz: 900 }
+    typical_evidence_ids:
+      - "EVID.SPECTRAL.BAND_ENERGY_DB"
+      - "EVID.SPECTRAL.BAND_ENERGY_RATIO"
+    suggested_actions:
+      - "ACTION.EQ.BELL_CUT"
+      - "ACTION.DYN_EQ.BAND"
+
+  ISSUE.SPECTRAL.HARSHNESS:
+    label: "Harshness"
+    description: "Upper-mid energy is excessive, increasing fatigue (often ~2–5 kHz)."
+    issue_type: "spectral"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_freq_range_hz: { low_hz: 2000, high_hz: 5000 }
+    typical_evidence_ids:
+      - "EVID.SPECTRAL.BAND_ENERGY_DB"
+      - "EVID.SPECTRAL.BAND_ENERGY_RATIO"
+      - "EVID.SEGMENT.START_S"
+      - "EVID.SEGMENT.END_S"
+    suggested_actions:
+      - "ACTION.EQ.BELL_CUT"
+      - "ACTION.DYN_EQ.BAND"
+    notes:
+      - "Detectors should prefer narrow or dynamic cuts before broad tonal moves."
+
+  ISSUE.SPECTRAL.SIBILANCE:
+    label: "Sibilance"
+    description: "Sibilant energy is excessive (often ~5–10 kHz) causing 'sss' sharpness."
+    issue_type: "spectral"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_freq_range_hz: { low_hz: 5000, high_hz: 10000 }
+    typical_evidence_ids:
+      - "EVID.SPECTRAL.BAND_ENERGY_DB"
+      - "EVID.SPECTRAL.BAND_ENERGY_RATIO"
+      - "EVID.SEGMENT.START_S"
+      - "EVID.SEGMENT.END_S"
+    suggested_actions:
+      - "ACTION.DYN.DEESSER"
+      - "ACTION.DYN_EQ.BAND"
+      - "ACTION.EQ.BELL_CUT"
+
+  ISSUE.SPECTRAL.SUB_EXCESS:
+    label: "Sub excess"
+    description: "Sub-bass energy is excessive, risking translation and headroom (often ~20–60 Hz)."
+    issue_type: "spectral"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_freq_range_hz: { low_hz: 20, high_hz: 60 }
+    typical_evidence_ids:
+      - "EVID.SPECTRAL.BAND_ENERGY_RATIO"
+      - "EVID.METER.HEADROOM_DB"
+    suggested_actions:
+      - "ACTION.EQ.HIGH_PASS"
+      - "ACTION.EQ.LOW_SHELF"
+      - "ACTION.DYN_EQ.BAND"
+
+  ISSUE.SPECTRAL.SUB_ONLY_BASS:
+    label: "Sub-only bass"
+    description: "Bass energy is concentrated too low, likely disappearing on small speakers."
+    issue_type: "translation"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.SPECTRAL.BAND_ENERGY_RATIO"
+    suggested_actions: []
+    notes:
+      - "A 'fix' often involves arrangement/sound design or harmonic generation, so default is suggest-only."
+
+  ISSUE.SPECTRAL.RESONANCE:
+    label: "Persistent resonance"
+    description: "A narrow-band resonance persists over time (ringing/whistling tone)."
+    issue_type: "spectral"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.SPECTRAL.BAND_ENERGY_DB"
+      - "EVID.SPECTRAL.CENTROID_HZ"
+      - "EVID.SEGMENT.START_S"
+      - "EVID.SEGMENT.END_S"
+    suggested_actions:
+      - "ACTION.EQ.NOTCH_CUT"
+      - "ACTION.DYN_EQ.BAND"
+    notes:
+      - "Detectors should provide a tight freq_range_hz and a high-Q suggestion."
+
+  # -------------------------
+  # Masking (inter-stem competition)
+  # -------------------------
+  ISSUE.MASKING.KICK_BASS:
+    label: "Kick and bass masking"
+    description: "Kick and bass overlap in a way that reduces punch or note clarity."
+    issue_type: "masking"
+    default_scope: "bus"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.SPECTRAL.BAND_ENERGY_RATIO"
+      - "EVID.SEGMENT.START_S"
+      - "EVID.SEGMENT.END_S"
+    suggested_actions:
+      - "ACTION.EQ.BELL_CUT"
+      - "ACTION.DYN_EQ.BAND"
+      - "ACTION.DYN.COMPRESSOR"
+    notes:
+      - "Sidechain strategies may exist later; for now this is phrased as overlap/masking."
+
+  ISSUE.MASKING.VOCAL_VS_MUSIC:
+    label: "Vocal masked by music"
+    description: "Lead vocal intelligibility is reduced by competing instruments in key bands."
+    issue_type: "masking"
+    default_scope: "bus"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.SPECTRAL.BAND_ENERGY_RATIO"
+      - "EVID.SEGMENT.START_S"
+      - "EVID.SEGMENT.END_S"
+    suggested_actions:
+      - "ACTION.EQ.BELL_CUT"
+      - "ACTION.DYN_EQ.BAND"
+      - "ACTION.UTILITY.GAIN"
+    notes:
+      - "Resolver should prefer minimal, targeted moves and make tradeoffs explicit."
+
+  # -------------------------
+  # Dynamics (envelope + control)
+  # -------------------------
+  ISSUE.DYNAMICS.TRANSIENT_SPIKES:
+    label: "Transient spikes"
+    description: "Short peaks are disproportionately high, reducing usable loudness and headroom."
+    issue_type: "dynamics"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.METER.PEAK_DBFS"
+      - "EVID.METER.RMS_DBFS"
+      - "EVID.METER.CREST_FACTOR_DB"
+      - "EVID.SEGMENT.START_S"
+      - "EVID.SEGMENT.END_S"
+    suggested_actions:
+      - "ACTION.DYN.COMPRESSOR"
+      - "ACTION.DYN.LIMITER"
+      - "ACTION.UTILITY.GAIN"
+
+  ISSUE.DYNAMICS.OVER_COMPRESSION:
+    label: "Over-compression risk"
+    description: "Dynamics appear overly flattened, risking lifelessness and pumping artifacts."
+    issue_type: "dynamics"
+    default_scope: "stem"
+    default_severity_label: "info"
+    typical_evidence_ids:
+      - "EVID.METER.CREST_FACTOR_DB"
+      - "EVID.METER.LRA_LU"
+    suggested_actions: []
+    notes:
+      - "Detectors should be conservative here. This is close to taste."
+
+  ISSUE.DYNAMICS.PUMPING_BREATHING:
+    label: "Pumping/breathing"
+    description: "Level modulation artifacts suggest aggressive dynamics control or limiter interaction."
+    issue_type: "dynamics"
+    default_scope: "bus"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.METER.LUFS_S"
+      - "EVID.METER.LUFS_M"
+      - "EVID.SEGMENT.START_S"
+      - "EVID.SEGMENT.END_S"
+    suggested_actions: []
+    notes:
+      - "Without a full dynamics-edit action set, keep as suggest-only."
+
+  # -------------------------
+  # Imaging / Phase (stereo or multi-channel)
+  # -------------------------
+  ISSUE.IMAGING.NEGATIVE_CORRELATION:
+    label: "Negative correlation"
+    description: "Correlation drops toward negative values, indicating potential phase cancellation."
+    issue_type: "imaging"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.IMAGE.CORRELATION"
+      - "EVID.SEGMENT.START_S"
+      - "EVID.SEGMENT.END_S"
+    suggested_actions:
+      - "ACTION.UTILITY.POLARITY_INVERT"
+      - "ACTION.IMAGE.WIDTH"
+      - "ACTION.IMAGE.MS_BALANCE"
+    notes:
+      - "Most fixes are context-dependent; polarity invert usually requires approval."
+
+  ISSUE.IMAGING.MONO_COLLAPSE_RISK:
+    label: "Mono collapse risk"
+    description: "Content likely loses energy or clarity when summed to mono."
+    issue_type: "translation"
+    default_scope: "bus"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.IMAGE.CORRELATION"
+      - "EVID.IMAGE.MS_BALANCE_DB"
+    suggested_actions:
+      - "ACTION.IMAGE.WIDTH"
+      - "ACTION.IMAGE.MS_BALANCE"
+    notes:
+      - "Detectors should attach a segment where collapse is most severe."
+
+  ISSUE.IMAGING.LR_IMBALANCE:
+    label: "Left-right imbalance"
+    description: "Stereo balance is significantly skewed, reducing stability of the image."
+    issue_type: "imaging"
+    default_scope: "bus"
+    default_severity_label: "info"
+    typical_evidence_ids:
+      - "EVID.IMAGE.MID_LEVEL_DB"
+      - "EVID.IMAGE.SIDE_LEVEL_DB"
+    suggested_actions:
+      - "ACTION.UTILITY.PAN"
+      - "ACTION.UTILITY.GAIN"
+
+  # -------------------------
+  # Translation (profiles, fold-down, devices)
+  # -------------------------
+  ISSUE.TRANSLATION.PROFILE_SCORE_LOW:
+    label: "Translation score low"
+    description: "A translation simulation (phone/earbuds/car/mono) shows elevated risk or failure."
+    issue_type: "translation"
+    default_scope: "session"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.ISSUE.SCORE"
+      - "EVID.SEGMENT.START_S"
+      - "EVID.SEGMENT.END_S"
+    suggested_actions: []
+    notes:
+      - "Profile identifiers live in policies; evidence should name the profile in the envelope/source/why."
+
+  ISSUE.TRANSLATION.LOUDNESS_OUT_OF_RANGE:
+    label: "Loudness out of range"
+    description: "Integrated loudness is outside an expected range for the chosen workflow/profile."
+    issue_type: "translation"
+    default_scope: "bus"
+    default_severity_label: "info"
+    typical_evidence_ids:
+      - "EVID.METER.LUFS_I"
+      - "EVID.DETECTOR.THRESHOLD_LUFS"
+      - "EVID.ISSUE.EXPECTED_RANGE"
+    suggested_actions:
+      - "ACTION.UTILITY.GAIN"
+      - "ACTION.MASTER.NORMALIZE_LOUDNESS"
+
+  # -------------------------
+  # Surround / Immersive (scaffolding)
+  # -------------------------
+  ISSUE.SURROUND.FRONT_STAGE_IMBALANCE:
+    label: "Front stage imbalance"
+    description: "Front channels (L/C/R) are imbalanced in level, affecting focus and stability."
+    issue_type: "surround"
+    default_scope: "bus"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.SURROUND.LAYOUT_ID"
+      - "EVID.SURROUND.BED_CHANNEL_COUNT"
+      - "EVID.SPECTRAL.BAND_ENERGY_DB"
+    suggested_actions:
+      - "ACTION.SURROUND.GROUP_GAIN"
+      - "ACTION.SURROUND.CHANNEL_GAIN"
+
+  ISSUE.SURROUND.CENTER_FOCUS_ISSUE:
+    label: "Center focus issue"
+    description: "Center channel content is too low or too high relative to the front stage."
+    issue_type: "surround"
+    default_scope: "bus"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.SURROUND.LAYOUT_ID"
+      - "EVID.SURROUND.SPEAKER_ID"
+      - "EVID.SURROUND.AZIMUTH_DEG"
+      - "EVID.SPECTRAL.BAND_ENERGY_DB"
+    suggested_actions:
+      - "ACTION.SURROUND.CHANNEL_GAIN"
+      - "ACTION.SURROUND.GROUP_GAIN"
+    notes:
+      - "Detectors should identify whether the risk is intelligibility loss vs dominance."
+
+  ISSUE.SURROUND.SURROUND_BALANCE_ISSUE:
+    label: "Surround balance issue"
+    description: "Surround channels are disproportionately loud/quiet relative to the front stage."
+    issue_type: "surround"
+    default_scope: "bus"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.SURROUND.LAYOUT_ID"
+      - "EVID.SPECTRAL.BAND_ENERGY_RATIO"
+    suggested_actions:
+      - "ACTION.SURROUND.GROUP_GAIN"
+
+  ISSUE.SURROUND.HEIGHT_SMEAR:
+    label: "Height smear"
+    description: "Height content is overly diffuse or competes with the bed, reducing intent clarity."
+    issue_type: "surround"
+    default_scope: "bus"
+    default_severity_label: "info"
+    typical_evidence_ids:
+      - "EVID.SURROUND.LAYOUT_ID"
+      - "EVID.SPECTRAL.CENTROID_HZ"
+      - "EVID.SPECTRAL.BAND_ENERGY_RATIO"
+    suggested_actions:
+      - "ACTION.SURROUND.GROUP_GAIN"
+    notes:
+      - "Highly intent-dependent; keep conservative unless a profile explicitly prioritizes height separation."
+
+  ISSUE.SURROUND.LFE_OVERUSE:
+    label: "LFE overuse"
+    description: "LFE carries excessive energy, risking translation and headroom (or misrouting)."
+    issue_type: "surround"
+    default_scope: "bus"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.SURROUND.LAYOUT_ID"
+      - "EVID.SURROUND.SPEAKER_ID"
+      - "EVID.SPECTRAL.BAND_ENERGY_RATIO"
+      - "EVID.METER.HEADROOM_DB"
+    suggested_actions:
+      - "ACTION.SURROUND.CHANNEL_GAIN"
+      - "ACTION.SURROUND.GROUP_GAIN"
+    notes:
+      - "Detectors should attach freq bands (sub) and show whether LFE dominates vs supports."
+
+  ISSUE.SURROUND.DOWNMIX_DIALOGUE_LOSS:
+    label: "Downmix dialogue loss"
+    description: "Important center/front content (often dialogue/lead) is reduced in a downmix."
+    issue_type: "surround"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.DOWNMIX.POLICY_ID"
+      - "EVID.DOWNMIX.RESULT.LUFS_I"
+      - "EVID.DOWNMIX.RESULT.CORRELATION"
+      - "EVID.SEGMENT.START_S"
+      - "EVID.SEGMENT.END_S"
+    suggested_actions:
+      - "ACTION.DOWNMIX.RENDER"
+      - "ACTION.SURROUND.GROUP_GAIN"
+      - "ACTION.SURROUND.CHANNEL_GAIN"
+    notes:
+      - "This is a translation failure mode. Evidence should include the specific downmix target layout."
+
+  ISSUE.SURROUND.DOWNMIX_CLIPPING_RISK:
+    label: "Downmix clipping risk"
+    description: "A downmix render risks clipping or excessive true-peak due to summing."
+    issue_type: "surround"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.DOWNMIX.POLICY_ID"
+      - "EVID.DOWNMIX.RESULT.PEAK_DBFS"
+      - "EVID.DOWNMIX.RESULT.TRUEPEAK_DBTP"
+    suggested_actions:
+      - "ACTION.DOWNMIX.RENDER"
+      - "ACTION.UTILITY.GAIN"
+      - "ACTION.DYN.LIMITER"
+
+  ISSUE.SURROUND.DOWNMIX_PHASE_CANCELLATION:
+    label: "Downmix phase cancellation"
+    description: "A downmix shows strong cancellation artifacts (image collapse or lost elements)."
+    issue_type: "surround"
+    default_scope: "session"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.DOWNMIX.RESULT.CORRELATION"
+      - "EVID.IMAGE.CORRELATION"
+      - "EVID.SEGMENT.START_S"
+      - "EVID.SEGMENT.END_S"
+    suggested_actions:
+      - "ACTION.IMAGE.MS_BALANCE"
+      - "ACTION.IMAGE.WIDTH"
+      - "ACTION.SURROUND.GROUP_GAIN"
+      - "ACTION.SURROUND.CHANNEL_GAIN"
