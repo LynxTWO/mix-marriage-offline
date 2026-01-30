@@ -1,0 +1,182 @@
+# MMO Safety Gates Policy
+# Core-enforced constraints that bound what the system can auto-apply or render.
+# Plugins may propose anything; the core evaluates proposals against these gates.
+
+gates:
+  _meta:
+    gates_version: "0.1.0"
+    policy_id: "POLICY.GATES.CORE_V0"
+    id_prefix: "GATE."
+    created_utc: "2026-01-29T00:00:00Z"
+    contexts: ["suggest", "auto_apply", "render"]
+    outcomes: ["allow", "suggest_only", "reject"]
+    conventions:
+      - "suggest: may appear in recall sheet, but is not auto-applied or rendered."
+      - "auto_apply: eligible for automatic application (must pass all gates)."
+      - "render: eligible for renderer output (must pass all gates)."
+      - "hard_* limits are never exceeded (even with approval)."
+      - "approval allows bypassing *approval* gates, not hard safety limits."
+    notes:
+      - "Defaults are conservative and meant to be user-configurable in settings."
+
+  # -------------------------
+  # Non-negotiable rendering safety
+  # -------------------------
+  GATE.NO_CLIP:
+    label: "No clipping"
+    description: >
+      Prevent any rendered audio from exceeding the configured true-peak ceiling.
+      The renderer may apply a small safety trim if needed; otherwise the plan is rejected.
+    kind: "safety"
+    default_enabled: true
+    config:
+      max_true_peak_dbtp:
+        value: -1.0
+        unit_id: "UNIT.DBTP"
+        hard_max: 0.0
+        recommended_range: { min: -3.0, max: -0.5 }
+      # If post-render peaks exceed max_true_peak_dbtp, the renderer may apply this
+      # much gain reduction (trim) to recover without changing character too much.
+      max_safety_trim_db:
+        value: 6.0
+        unit_id: "UNIT.DB"
+        hard_max: 24.0
+      # Renderer hint: oversampling improves true-peak estimation and safer limiting.
+      oversample_factor_hint:
+        value: 4
+        unit_id: "UNIT.COUNT"
+        allowed: [1, 2, 4, 8, 16]
+    enforcement:
+      suggest: "allow"
+      auto_apply: "reject"
+      render: "reject"
+    violation_reason_id: "REASON.CLIP_RISK"
+
+  # -------------------------
+  # Approval and authority boundaries
+  # -------------------------
+  GATE.REQUIRES_APPROVAL:
+    label: "Requires approval"
+    description: "Block auto-apply/render for any action marked requires_approval unless explicit approval is provided."
+    kind: "authority"
+    default_enabled: true
+    config:
+      approval_required: { value: true, unit_id: "UNIT.NONE" }
+    enforcement:
+      suggest: "allow"
+      auto_apply: "reject"
+      render: "reject"
+    violation_reason_id: "REASON.APPROVAL_REQUIRED"
+
+  # -------------------------
+  # Param limits (bounded authority defaults)
+  # -------------------------
+  GATE.MAX_GAIN_DB:
+    label: "Max gain change"
+    description: "Limit absolute gain moves (utility gain, trims, and surround group/channel gain)."
+    kind: "param_limit"
+    default_enabled: true
+    applies_to_params: ["PARAM.GAIN.DB", "PARAM.GAIN.TRIM_DB", "PARAM.SURROUND.GAIN_DB"]
+    limits:
+      auto_apply_abs_max: { value: 3.0, unit_id: "UNIT.DB" }
+      suggest_abs_max:    { value: 12.0, unit_id: "UNIT.DB" }
+      hard_abs_max:       { value: 24.0, unit_id: "UNIT.DB" }
+    enforcement:
+      suggest: "allow"
+      auto_apply: "suggest_only"
+      render: "reject"
+    violation_reason_id: "REASON.GAIN_TOO_LARGE"
+
+  GATE.MAX_DELAY_MS:
+    label: "Max alignment delay"
+    description: "Limit alignment delay moves (not FX delay time)."
+    kind: "param_limit"
+    default_enabled: true
+    applies_to_params: ["PARAM.DELAY.MS"]
+    limits:
+      auto_apply_max: { value: 10.0, unit_id: "UNIT.MS" }
+      suggest_max:    { value: 50.0, unit_id: "UNIT.MS" }
+      hard_max:       { value: 200.0, unit_id: "UNIT.MS" }
+    enforcement:
+      suggest: "allow"
+      auto_apply: "suggest_only"
+      render: "reject"
+    violation_reason_id: "REASON.DELAY_TOO_LARGE"
+
+  GATE.MAX_EQ_GAIN_DB:
+    label: "Max EQ band gain"
+    description: "Limit absolute EQ band gain (boosts and cuts)."
+    kind: "param_limit"
+    default_enabled: true
+    applies_to_params: ["PARAM.EQ.GAIN_DB"]
+    limits:
+      auto_apply_abs_max: { value: 2.0, unit_id: "UNIT.DB" }
+      suggest_abs_max:    { value: 6.0, unit_id: "UNIT.DB" }
+      hard_abs_max:       { value: 18.0, unit_id: "UNIT.DB" }
+    enforcement:
+      suggest: "allow"
+      auto_apply: "suggest_only"
+      render: "reject"
+    violation_reason_id: "REASON.EQ_GAIN_TOO_LARGE"
+
+  GATE.MAX_EQ_BANDS:
+    label: "Max EQ bands"
+    description: "Limit the number of EQ bands applied per target in a single action plan."
+    kind: "count_limit"
+    default_enabled: true
+    applies_to_actions_prefixes: ["ACTION.EQ."]
+    limits:
+      auto_apply_max: { value: 4, unit_id: "UNIT.COUNT" }
+      suggest_max:    { value: 12, unit_id: "UNIT.COUNT" }
+      hard_max:       { value: 32, unit_id: "UNIT.COUNT" }
+    enforcement:
+      suggest: "allow"
+      auto_apply: "suggest_only"
+      render: "reject"
+    violation_reason_id: "REASON.EQ_BANDS_TOO_MANY"
+
+  GATE.MAX_COMP_RATIO:
+    label: "Max compressor ratio"
+    description: "Limit compressor ratio (broadband compression)."
+    kind: "param_limit"
+    default_enabled: true
+    applies_to_params: ["PARAM.COMP.RATIO"]
+    limits:
+      auto_apply_max: { value: 3.0, unit_id: "UNIT.RATIO" }
+      suggest_max:    { value: 8.0, unit_id: "UNIT.RATIO" }
+      hard_max:       { value: 20.0, unit_id: "UNIT.RATIO" }
+    enforcement:
+      suggest: "allow"
+      auto_apply: "suggest_only"
+      render: "reject"
+    violation_reason_id: "REASON.COMP_RATIO_TOO_HIGH"
+
+  # -------------------------
+  # Policy existence / capability checks
+  # -------------------------
+  GATE.DOWNMIX_POLICY_EXISTS:
+    label: "Downmix policy exists"
+    description: "Require that PARAM.DOWNMIX.POLICY_ID resolves to a known policy in policies/downmix.yaml."
+    kind: "lookup"
+    default_enabled: true
+    config:
+      registry_file: { value: "policies/downmix.yaml", unit_id: "UNIT.NONE" }
+    enforcement:
+      suggest: "allow"
+      auto_apply: "reject"
+      render: "reject"
+    violation_reason_id: "REASON.DOWNMIX_POLICY_MISSING"
+
+  GATE.OVERSAMPLE_SUPPORTED:
+    label: "Oversample supported"
+    description: "Require that the selected renderer supports oversampling if ACTION.RENDER.SET_OVERSAMPLE is used."
+    kind: "capability"
+    default_enabled: true
+    config:
+      # Minimum required support for the action to be valid.
+      supported_factors_minimum: { value: [1, 2, 4], unit_id: "UNIT.NONE" }
+    enforcement:
+      suggest: "allow"
+      auto_apply: "reject"
+      render: "reject"
+    violation_reason_id: "REASON.OVERSAMPLE_UNSUPPORTED"

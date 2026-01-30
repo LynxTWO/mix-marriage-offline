@@ -1,0 +1,156 @@
+# Immersive Fold-Down Policy Pack (v0)
+# Height-to-bed fold-downs for common immersive beds, plus composed paths to 5.1 and 2.0.
+
+downmix_policy_pack:
+  policy_id: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+  pack_version: "0.1.0"
+  created_utc: "2026-01-29T00:00:00Z"
+  label: "Immersive fold-down v0"
+  description: >
+    Deterministic, transparent fold-down matrices for common immersive beds (5.1.2/5.1.4/7.1.2/7.1.4).
+    Heights fold into the nearest bed speakers at -6 dB (0.5) by default.
+  notes:
+    - "Heights are folded at -6 dB to reduce front-stage overload and preserve intent."
+    - "Composed matrices match the same coefficient choices as the Standard fold-down pack."
+    - "LFE is passed through unchanged when the target has LFE, and dropped for 2.0/1.0 targets (use Standard alternates if desired)."
+  constants:
+    coef_minus_6db: 0.5
+    coef_minus_3db: 0.7071
+    coef_minus_3db_over_2: 0.3536  # 0.7071 / 2
+    coef_quarter: 0.25             # 0.5 / 2
+
+  matrices:
+
+    # -------------------------
+    # Height-to-bed only
+    # -------------------------
+    DMX.IMM.5_1_2_TO_5_1.HEIGHT_TO_BED:
+      label: "5.1.2 -> 5.1 (heights to front -6 dB)"
+      source_layout_id: "LAYOUT.5_1_2"
+      target_layout_id: "LAYOUT.5_1"
+      coefficients:
+        SPK.L:   { SPK.L: 1.0, SPK.TFL: 0.5 }
+        SPK.R:   { SPK.R: 1.0, SPK.TFR: 0.5 }
+        SPK.C:   { SPK.C: 1.0 }
+        SPK.LFE: { SPK.LFE: 1.0 }
+        SPK.LS:  { SPK.LS: 1.0 }
+        SPK.RS:  { SPK.RS: 1.0 }
+
+    DMX.IMM.5_1_4_TO_5_1.HEIGHT_TO_BED:
+      label: "5.1.4 -> 5.1 (heights to nearest bed -6 dB)"
+      source_layout_id: "LAYOUT.5_1_4"
+      target_layout_id: "LAYOUT.5_1"
+      coefficients:
+        SPK.L:   { SPK.L: 1.0, SPK.TFL: 0.5 }
+        SPK.R:   { SPK.R: 1.0, SPK.TFR: 0.5 }
+        SPK.C:   { SPK.C: 1.0 }
+        SPK.LFE: { SPK.LFE: 1.0 }
+        SPK.LS:  { SPK.LS: 1.0, SPK.TRL: 0.5 }
+        SPK.RS:  { SPK.RS: 1.0, SPK.TRR: 0.5 }
+
+    DMX.IMM.7_1_2_TO_7_1.HEIGHT_TO_BED:
+      label: "7.1.2 -> 7.1 (heights to front -6 dB)"
+      source_layout_id: "LAYOUT.7_1_2"
+      target_layout_id: "LAYOUT.7_1"
+      coefficients:
+        SPK.L:   { SPK.L: 1.0, SPK.TFL: 0.5 }
+        SPK.R:   { SPK.R: 1.0, SPK.TFR: 0.5 }
+        SPK.C:   { SPK.C: 1.0 }
+        SPK.LFE: { SPK.LFE: 1.0 }
+        SPK.LS:  { SPK.LS: 1.0 }
+        SPK.RS:  { SPK.RS: 1.0 }
+        SPK.LRS: { SPK.LRS: 1.0 }
+        SPK.RRS: { SPK.RRS: 1.0 }
+
+    DMX.IMM.7_1_4_TO_7_1.HEIGHT_TO_BED:
+      label: "7.1.4 -> 7.1 (heights to nearest bed -6 dB)"
+      source_layout_id: "LAYOUT.7_1_4"
+      target_layout_id: "LAYOUT.7_1"
+      coefficients:
+        SPK.L:   { SPK.L: 1.0, SPK.TFL: 0.5 }
+        SPK.R:   { SPK.R: 1.0, SPK.TFR: 0.5 }
+        SPK.C:   { SPK.C: 1.0 }
+        SPK.LFE: { SPK.LFE: 1.0 }
+        SPK.LS:  { SPK.LS: 1.0 }
+        SPK.RS:  { SPK.RS: 1.0 }
+        SPK.LRS: { SPK.LRS: 1.0, SPK.TRL: 0.5 }
+        SPK.RRS: { SPK.RRS: 1.0, SPK.TRR: 0.5 }
+
+    # -------------------------
+    # Composed convenience matrices (so the renderer doesn't need to multiply matrices on day 1)
+    # -------------------------
+    DMX.IMM.5_1_4_TO_2_0.COMPOSED:
+      label: "5.1.4 -> 2.0 (composed)"
+      source_layout_id: "LAYOUT.5_1_4"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L:
+          SPK.L: 1.0
+          SPK.C: 0.7071
+          SPK.LS: 0.7071
+          SPK.TFL: 0.5
+          SPK.TRL: 0.3536
+        SPK.R:
+          SPK.R: 1.0
+          SPK.C: 0.7071
+          SPK.RS: 0.7071
+          SPK.TFR: 0.5
+          SPK.TRR: 0.3536
+
+    DMX.IMM.5_1_2_TO_2_0.COMPOSED:
+      label: "5.1.2 -> 2.0 (composed)"
+      source_layout_id: "LAYOUT.5_1_2"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L: { SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071, SPK.TFL: 0.5 }
+        SPK.R: { SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071, SPK.TFR: 0.5 }
+
+    DMX.IMM.7_1_4_TO_5_1.COMPOSED:
+      label: "7.1.4 -> 5.1 (composed)"
+      source_layout_id: "LAYOUT.7_1_4"
+      target_layout_id: "LAYOUT.5_1"
+      coefficients:
+        SPK.L:   { SPK.L: 1.0, SPK.TFL: 0.5 }
+        SPK.R:   { SPK.R: 1.0, SPK.TFR: 0.5 }
+        SPK.C:   { SPK.C: 1.0 }
+        SPK.LFE: { SPK.LFE: 1.0 }
+        SPK.LS:  { SPK.LS: 1.0, SPK.LRS: 0.7071, SPK.TRL: 0.3536 }
+        SPK.RS:  { SPK.RS: 1.0, SPK.RRS: 0.7071, SPK.TRR: 0.3536 }
+
+    DMX.IMM.7_1_4_TO_2_0.COMPOSED:
+      label: "7.1.4 -> 2.0 (composed)"
+      source_layout_id: "LAYOUT.7_1_4"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L:
+          SPK.L: 1.0
+          SPK.C: 0.7071
+          SPK.LS: 0.7071
+          SPK.LRS: 0.5
+          SPK.TFL: 0.5
+          SPK.TRL: 0.25
+        SPK.R:
+          SPK.R: 1.0
+          SPK.C: 0.7071
+          SPK.RS: 0.7071
+          SPK.RRS: 0.5
+          SPK.TFR: 0.5
+          SPK.TRR: 0.25
+
+    DMX.IMM.7_1_4_TO_1_0.MONO_FROM_COMPOSED:
+      label: "7.1.4 -> 1.0 mono (from composed stereo)"
+      source_layout_id: "LAYOUT.7_1_4"
+      target_layout_id: "LAYOUT.1_0"
+      coefficients:
+        SPK.M:
+          SPK.L: 0.5
+          SPK.R: 0.5
+          SPK.C: 0.7071
+          SPK.LS: 0.3536
+          SPK.RS: 0.3536
+          SPK.LRS: 0.25
+          SPK.RRS: 0.25
+          SPK.TFL: 0.25
+          SPK.TFR: 0.25
+          SPK.TRL: 0.125
+          SPK.TRR: 0.125
