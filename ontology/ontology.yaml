@@ -50,6 +50,7 @@ includes:
     actions: "actions.yaml"
     params: "params.yaml"
     evidence: "evidence.yaml"
+    reasons: "reasons.yaml"
 
   surround:
     speakers: "speakers.yaml"
@@ -92,6 +93,11 @@ category_specs:
     root_key: "evidence"
     id_prefix: "EVID."
     file_key: "includes.core.evidence"
+
+  - category: "reasons"
+    root_key: "reasons"
+    id_prefix: "REASON."
+    file_key: "includes.core.reasons"
   - category: "speakers"
     root_key: "speakers"
     id_prefix: "SPK."
@@ -111,6 +117,7 @@ validation_defaults:
     actions: ["label", "description", "required_params"]
     params: ["label", "description", "unit_id", "value_type"]
     evidence: ["label", "description", "value_type"]
+    reasons: ["label", "description", "kind"]
 
   allowed_value_types:
     - "number"

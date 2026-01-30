@@ -42,6 +42,7 @@ ontology/
   actions.yaml         # ACTION.* DAW-agnostic operations + required params
   params.yaml          # PARAM.* action parameters + units + constraints
   evidence.yaml        # EVID.* evidence keys for explainability
+  reasons.yaml         # REASON.* gate outcome reasons (explainability codes)
 
   speakers.yaml        # SPK.* semantic speakers (azimuth/elevation defaults)
   layouts.yaml         # LAYOUT.* channel layouts + canonical ordering
@@ -112,6 +113,10 @@ This is what keeps plugins and fixtures from breaking unexpectedly.
 ### `evidence.yaml`
 - Canonical evidence keys (time ranges, freq ranges, meters, counts, etc.).
 - Used by detectors and resolvers to prove “what/why/where”.
+
+### `reasons.yaml`
+- Canonical `REASON.*` codes used by gates and policy evaluation.
+- Explains *why* a plan was rejected or downgraded (not an `ISSUE.*`).
 
 ### `speakers.yaml` and `layouts.yaml`
 - **Surround foundation**.

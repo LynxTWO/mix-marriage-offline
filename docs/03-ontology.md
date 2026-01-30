@@ -17,6 +17,7 @@ MMO avoids that by defining a single, canonical vocabulary (the “ontology”) 
 - action parameters
 - units
 - evidence fields
+- gate outcome reasons
 
 Contributors can name internal variables however they like.  
 But anything leaving a plugin must use **canonical ontology IDs**.
@@ -51,6 +52,7 @@ Canonical IDs are uppercase, dot-separated:
 - `UNIT.DBTP`
 - `LAYOUT.7_1_4`
 - `SPK.TFR`
+- `REASON.CLIP_RISK`
 
 ### 3.2 Rules
 - IDs are stable. Once released, **do not rename** an ID.
@@ -118,6 +120,9 @@ Minimum set:
 
 - `ontology/evidence.yaml`  
   Evidence keys used to justify issues and actions (time ranges, freq ranges, stems involved).
+
+- `ontology/reasons.yaml`
+  Canonical `REASON.*` codes used by gates to explain plan rejections/downgrades.
 
 Policies (swappable by design):
 - `ontology/policies/gates.yaml`  
