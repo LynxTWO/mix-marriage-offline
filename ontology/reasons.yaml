@@ -1,0 +1,58 @@
+# Canonical Gating Reasons
+# REASON.* IDs explain *why* a gate produced suggest_only/reject.
+# These are stable, machine-readable codes used in ActionPlan gating results.
+
+reasons:
+  _meta:
+    reasons_version: "0.1.0"
+    id_prefix: "REASON."
+    created_utc: "2026-01-29T00:00:00Z"
+    kinds: ["safety", "authority", "param_limit", "count_limit", "lookup", "capability"]
+    notes:
+      - "Reasons are not issues; they are gate outcomes intended for explainable plan evaluation."
+      - "Keep reasons few and stable. Prefer adding new reasons over repurposing old ones."
+
+  REASON.CLIP_RISK:
+    label: "Clipping risk"
+    kind: "safety"
+    description: "Rendered audio would exceed the configured true-peak ceiling and cannot be recovered within the allowed safety trim."
+
+  REASON.APPROVAL_REQUIRED:
+    label: "Approval required"
+    kind: "authority"
+    description: "The action/plan requires explicit user approval before auto-apply or render is permitted."
+
+  REASON.GAIN_TOO_LARGE:
+    label: "Gain change too large"
+    kind: "param_limit"
+    description: "A gain parameter exceeds configured auto-apply/suggest limits (bounded authority)."
+
+  REASON.EQ_GAIN_TOO_LARGE:
+    label: "EQ gain too large"
+    kind: "param_limit"
+    description: "An EQ band gain exceeds configured limits for the current context."
+
+  REASON.EQ_BANDS_TOO_MANY:
+    label: "Too many EQ bands"
+    kind: "count_limit"
+    description: "The plan contains more EQ bands than allowed for the current context."
+
+  REASON.COMP_RATIO_TOO_HIGH:
+    label: "Compression ratio too high"
+    kind: "param_limit"
+    description: "A compressor ratio exceeds configured limits for the current context."
+
+  REASON.DELAY_TOO_LARGE:
+    label: "Delay time too large"
+    kind: "param_limit"
+    description: "A delay time exceeds configured limits for the current context."
+
+  REASON.DOWNMIX_POLICY_MISSING:
+    label: "Downmix policy missing"
+    kind: "lookup"
+    description: "PARAM.DOWNMIX.POLICY_ID did not resolve to a known policy in policies/downmix.yaml."
+
+  REASON.OVERSAMPLE_UNSUPPORTED:
+    label: "Oversampling unsupported"
+    kind: "capability"
+    description: "The selected renderer cannot satisfy the requested oversampling factor(s)."
