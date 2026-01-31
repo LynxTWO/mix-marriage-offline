@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/report.schema.json",
+  "title": "MMO Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "report_id", "project_id", "generated_at", "engine_version", "ontology_version", "session", "issues", "recommendations"],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "report_id": { "type": "string", "minLength": 1 },
+    "project_id": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "engine_version": { "type": "string" },
+    "ontology_version": { "type": "string" },
+    "session": { "$ref": "#/$defs/session" },
+    "issues": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/issue" }
+    },
+    "recommendations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/recommendation" }
+    },
+    "translation_results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/translation_result" }
+    },
+    "plugins": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/plugin_run" }
+    },
+    "artifacts": { "$ref": "#/$defs/artifacts" }
+  },
+  "$defs": {
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stems"],
+      "properties": {
+        "stems": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/stem" }
+        },
+        "buses": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/bus" }
+        },
+        "source_layout_id": { "type": "string", "pattern": "^LAYOUT\\." }
+      }
+    },
+    "stem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stem_id", "file_path"],
+      "properties": {
+        "stem_id": { "type": "string", "minLength": 1 },
+        "file_path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "minLength": 16 },
+        "role_id": { "type": "string", "pattern": "^ROLE\\." },
+        "layout_id": { "type": "string", "pattern": "^LAYOUT\\." },
+        "channel_count": { "type": "integer", "minimum": 1 },
+        "duration_s": { "type": "number", "minimum": 0 },
+        "sample_rate_hz": { "type": "number", "minimum": 8000 }
+      }
+    },
+    "bus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bus_id", "member_stem_ids"],
+      "properties": {
+        "bus_id": { "type": "string", "minLength": 1 },
+        "member_stem_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "layout_id": { "type": "string", "pattern": "^LAYOUT\\." }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope"],
+      "properties": {
+        "scope": { "type": "string", "enum": ["stem", "bus", "session"] },
+        "stem_id": { "type": "string" },
+        "bus_id": { "type": "string" },
+        "layout_id": { "type": "string", "pattern": "^LAYOUT\\." },
+        "speaker_id": { "type": "string", "pattern": "^SPK\\." },
+        "channel_index": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_id", "value"],
+      "properties": {
+        "evidence_id": { "type": "string", "pattern": "^EVID\\." },
+        "value": {},
+        "unit_id": { "type": "string", "pattern": "^UNIT\\." },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "source": { "type": "string" },
+        "where": { "type": "object", "additionalProperties": true },
+        "why": { "type": "string" }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue_id", "severity", "confidence", "evidence"],
+      "properties": {
+        "issue_id": { "type": "string", "pattern": "^ISSUE\\." },
+        "severity": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "message": { "type": "string" },
+        "target": { "$ref": "#/$defs/target" },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      }
+    },
+    "param": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["param_id", "value"],
+      "properties": {
+        "param_id": { "type": "string", "pattern": "^PARAM\\." },
+        "value": {},
+        "unit_id": { "type": "string", "pattern": "^UNIT\\." }
+      }
+    },
+    "recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recommendation_id", "action_id", "risk", "requires_approval", "params"],
+      "properties": {
+        "recommendation_id": { "type": "string", "minLength": 1 },
+        "issue_id": { "type": "string", "pattern": "^ISSUE\\." },
+        "action_id": { "type": "string", "pattern": "^ACTION\\." },
+        "risk": { "type": "string", "enum": ["low", "medium", "high"] },
+        "requires_approval": { "type": "boolean" },
+        "target": { "$ref": "#/$defs/target" },
+        "params": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/param" }
+        },
+        "notes": { "type": "string" },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      }
+    },
+    "translation_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "score"],
+      "properties": {
+        "profile_id": { "type": "string", "minLength": 1 },
+        "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "issues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/issue" }
+        }
+      }
+    },
+    "plugin_run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plugin_id", "version"],
+      "properties": {
+        "plugin_id": { "type": "string", "pattern": "^PLUGIN\\." },
+        "version": { "type": "string" },
+        "sha256": { "type": "string" },
+        "status": { "type": "string", "enum": ["ok", "failed", "skipped"] }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "report_json_path": { "type": "string" },
+        "report_pdf_path": { "type": "string" },
+        "recall_csv_path": { "type": "string" },
+        "renders_dir": { "type": "string" }
+      }
+    }
+  }
+}
