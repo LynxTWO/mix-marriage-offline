@@ -124,4 +124,4 @@ When the contributor docs land, start with:
 ---
 
 ## License
-TBD. Likely Apache-2.0 or MIT. We will pick one early so contributors know the rules.
+Apache-2.0. See `LICENSE`.
