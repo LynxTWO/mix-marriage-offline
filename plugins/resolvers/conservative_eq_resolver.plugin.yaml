@@ -1,0 +1,12 @@
+plugin_id: "PLUGIN.RESOLVER.CONSERVATIVE_EQ"
+plugin_type: "resolver"
+name: "Conservative EQ Resolver"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Proposes conservative EQ actions for detected issues (stub implementation)."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "plugins.resolvers.conservative_eq_resolver:ConservativeEqResolver"
+capabilities:
+  - "ACTION.EQ.BELL_CUT"
+  - "ACTION.EQ.NOTCH_CUT"

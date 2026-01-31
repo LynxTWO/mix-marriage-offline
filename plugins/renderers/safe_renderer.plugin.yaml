@@ -1,0 +1,11 @@
+plugin_id: "PLUGIN.RENDERER.SAFE"
+plugin_type: "renderer"
+name: "Safe Renderer"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Optional conservative rendering within strict limits (stub implementation)."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "plugins.renderers.safe_renderer:SafeRenderer"
+capabilities:
+  - "ACTION.DOWNMIX.RENDER"
