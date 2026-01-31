@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Policy validation result",
+  "type": "object",
+  "required": ["registry_file", "ok", "issue_counts", "issues"],
+  "properties": {
+    "registry_file": {
+      "type": "string",
+      "description": "Path to the registry file that was validated."
+    },
+    "ok": {
+      "type": "boolean",
+      "description": "True when no error-level issues were emitted."
+    },
+    "issue_counts": {
+      "type": "object",
+      "required": ["error", "warn"],
+      "properties": {
+        "error": {"type": "integer", "minimum": 0},
+        "warn": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["issue_id", "severity_label", "message"],
+        "properties": {
+          "issue_id": {
+            "type": "string",
+            "pattern": "^ISSUE\\.VALIDATION\\."
+          },
+          "severity_label": {
+            "type": "string",
+            "enum": ["error", "warn"]
+          },
+          "message": {"type": "string"},
+          "evidence": {
+            "type": "object",
+            "description": "Optional evidence payload (file paths, IDs, coefficients)."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
