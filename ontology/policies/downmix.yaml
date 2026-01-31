@@ -17,14 +17,14 @@ downmix:
     POLICY.DOWNMIX.STANDARD_FOLDOWN_V0:
       label: "Standard fold-down v0"
       description: "Conservative, broadly compatible Lo/Ro style fold-downs for surround beds (3.0/4.0/5.1/7.1)."
-      file: "policies/downmix_policies/standard_foldown_v0.yaml"
+      file: "downmix_policies/standard_foldown_v0.yaml"
       supports_source_layouts: ["LAYOUT.3_0", "LAYOUT.4_0", "LAYOUT.5_0", "LAYOUT.5_1", "LAYOUT.7_0", "LAYOUT.7_1"]
       supports_target_layouts: ["LAYOUT.2_0", "LAYOUT.1_0", "LAYOUT.5_1"]
 
     POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0:
       label: "Immersive fold-down v0"
       description: "Height-to-bed fold-downs plus bed fold-downs for common immersive beds (5.1.2/5.1.4/7.1.2/7.1.4)."
-      file: "policies/downmix_policies/immersive_foldown_v0.yaml"
+      file: "downmix_policies/immersive_foldown_v0.yaml"
       supports_source_layouts: ["LAYOUT.5_1_2", "LAYOUT.5_1_4", "LAYOUT.7_1_2", "LAYOUT.7_1_4"]
       supports_target_layouts: ["LAYOUT.7_1", "LAYOUT.5_1", "LAYOUT.2_0", "LAYOUT.1_0"]
 

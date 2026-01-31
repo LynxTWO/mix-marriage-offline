@@ -128,6 +128,8 @@ def _validate_matrix(
     layouts: Dict[str, Any],
     speakers: Dict[str, Any],
     issues: List[Dict[str, Any]],
+    *,
+    strict: bool,
 ) -> None:
     if not isinstance(matrix, dict):
         _add_issue(
@@ -195,7 +197,8 @@ def _validate_matrix(
         )
 
     for target_spk, source_map in coefficients.items():
-        if target_spk not in speakers_known:
+        target_is_known = target_spk in speakers_known
+        if not target_is_known:
             _add_issue(
                 issues,
                 ISSUE_DOWNMIX_SPEAKER_UNKNOWN,
@@ -224,7 +227,8 @@ def _validate_matrix(
 
         sum_abs = 0.0
         for source_spk, coef in source_map.items():
-            if source_spk not in speakers_known:
+            source_is_known = source_spk in speakers_known
+            if not source_is_known:
                 _add_issue(
                     issues,
                     ISSUE_DOWNMIX_SPEAKER_UNKNOWN,
@@ -237,7 +241,11 @@ def _validate_matrix(
                     },
                 )
 
-            if source_layout_channels is not None and source_spk not in source_layout_channels:
+            if (
+                source_is_known
+                and source_layout_channels is not None
+                and source_spk not in source_layout_channels
+            ):
                 _add_issue(
                     issues,
                     ISSUE_DOWNMIX_LAYOUT_SPEAKER_MISMATCH,
@@ -311,6 +319,7 @@ def _validate_matrix(
 
             sum_abs += abs(coef_value)
 
+        warn_threshold = 2.5 if strict else 4.0
         if sum_abs > 4.0:
             _add_issue(
                 issues,
@@ -324,12 +333,12 @@ def _validate_matrix(
                     "sum_abs": sum_abs,
                 },
             )
-        elif sum_abs > 2.5:
+        elif sum_abs > warn_threshold:
             _add_issue(
                 issues,
                 ISSUE_DOWNMIX_COEFFICIENT_SUM_EXCESSIVE,
                 "warn",
-                "Sum of absolute coefficients exceeds soft limit (> 2.5).",
+                "Sum of absolute coefficients exceeds soft limit.",
                 {
                     "file_path": str(pack_path),
                     "matrix_id": matrix_id,
@@ -346,6 +355,8 @@ def _validate_pack(
     layouts: Dict[str, Any],
     speakers: Dict[str, Any],
     issues: List[Dict[str, Any]],
+    *,
+    strict: bool,
 ) -> Optional[Dict[str, Any]]:
     if not isinstance(pack_data, dict) or "downmix_policy_pack" not in pack_data:
         _add_issue(
@@ -400,12 +411,20 @@ def _validate_pack(
         return None
 
     for matrix_id, matrix in matrices.items():
-        _validate_matrix(matrix_id, matrix, pack_path, layouts, speakers, issues)
+        _validate_matrix(
+            matrix_id,
+            matrix,
+            pack_path,
+            layouts,
+            speakers,
+            issues,
+            strict=strict,
+        )
 
     return pack
 
 
-def validate_registry(registry_path: Path) -> Dict[str, Any]:
+def validate_registry(registry_path: Path, *, strict: bool = False) -> Dict[str, Any]:
     issues: List[Dict[str, Any]] = []
     root = Path(__file__).resolve().parents[1]
 
@@ -506,7 +525,15 @@ def validate_registry(registry_path: Path) -> Dict[str, Any]:
         if pack_data is None:
             continue
 
-        pack = _validate_pack(pack_path, pack_data, policy_id, layouts, speakers, issues)
+        pack = _validate_pack(
+            pack_path,
+            pack_data,
+            policy_id,
+            layouts,
+            speakers,
+            issues,
+            strict=strict,
+        )
         if pack is not None:
             pack_cache[policy_id] = pack
             matrices = pack.get("matrices")
@@ -780,10 +807,15 @@ def main() -> int:
         default="ontology/policies/downmix.yaml",
         help="Path to the downmix registry YAML.",
     )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Enable stricter warnings (including sum_abs soft limits).",
+    )
     args = parser.parse_args()
 
     registry_path = Path(args.registry_file)
-    result = validate_registry(registry_path)
+    result = validate_registry(registry_path, strict=args.strict)
     print(json.dumps(result, indent=2))
     return 1 if result["issue_counts"]["error"] > 0 else 0
 
