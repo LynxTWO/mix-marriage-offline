@@ -16,7 +16,7 @@ Before you export:
 - Keep the session sample rate (44.1k, 48k, 96k). Do not mix rates inside one folder.
 
 Avoid:
-- MP3/AAC exports
+- MP3/AAC or any other lossy exports. FLAC, WAV, or WAVPack files are recomended. WAVPack supports 32-bit floating point and is lossless compression. FLAC supports 24-bit (32-bit integer depending on build), and is also lossless and also supports tags.
 - Normalization on export
 - Per-stem limiting that changes the intent
 
