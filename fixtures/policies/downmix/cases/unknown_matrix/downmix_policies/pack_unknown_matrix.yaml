@@ -1,0 +1,14 @@
+downmix_policy_pack:
+  policy_id: "POLICY.DOWNMIX.FIXTURE_UNKNOWN_MATRIX"
+  pack_version: "0.0.0"
+  created_utc: "2026-01-30T00:00:00Z"
+  label: "Fixture pack: unknown matrix"
+  description: "Contains a valid matrix, but the registry references a different (missing) matrix_id."
+  matrices:
+    DMX.FIXTURE.5_1_TO_2_0.DUMMY:
+      label: "Dummy 5.1 -> 2.0"
+      source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L: { SPK.L: 1.0 }
+        SPK.R: { SPK.R: 1.0 }

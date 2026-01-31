@@ -1,0 +1,22 @@
+downmix:
+  _meta:
+    downmix_registry_version: "0.0.0"
+    id_prefix: "POLICY.DOWNMIX."
+    created_utc: "2026-01-30T00:00:00Z"
+
+  policies:
+    POLICY.DOWNMIX.FIXTURE_INVALID_COEFF:
+      label: "Fixture invalid coefficient"
+      description: "Matrix contains a non-numeric coefficient."
+      file: "downmix_policies/pack_invalid_coeff.yaml"
+      supports_source_layouts: ["LAYOUT.5_1"]
+      supports_target_layouts: ["LAYOUT.2_0"]
+
+  default_policy_by_source_layout:
+    LAYOUT.5_1: "POLICY.DOWNMIX.FIXTURE_INVALID_COEFF"
+
+  conversions:
+    - source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.2_0"
+      policy_id: "POLICY.DOWNMIX.FIXTURE_INVALID_COEFF"
+      matrix_id: "DMX.FIXTURE.5_1_TO_2_0.INVALID_COEFF"

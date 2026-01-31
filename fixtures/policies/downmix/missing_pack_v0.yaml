@@ -1,0 +1,16 @@
+fixture_id: "FIX.POLICY.DOWNMIX.MISSING_PACK.V0"
+fixture_type: "policy_validation"
+policy_kind: "downmix"
+description: "Registry references a pack file that does not exist."
+
+inputs:
+  registry_file: "fixtures/policies/downmix/cases/missing_pack/downmix.yaml"
+
+expected:
+  issue_counts:
+    error: 1
+    warn: 0
+  must_include:
+    - issue_id: "ISSUE.VALIDATION.POLICY_FILE_MISSING"
+      severity_label: "error"
+      count_min: 1

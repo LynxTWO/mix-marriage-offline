@@ -1,0 +1,14 @@
+downmix_policy_pack:
+  policy_id: "POLICY.DOWNMIX.FIXTURE_INVALID_COEFF"
+  pack_version: "0.0.0"
+  created_utc: "2026-01-30T00:00:00Z"
+  label: "Fixture pack: invalid coefficient"
+  description: "Matrix contains a non-numeric coefficient value."
+  matrices:
+    DMX.FIXTURE.5_1_TO_2_0.INVALID_COEFF:
+      label: "5.1 -> 2.0 invalid coefficient"
+      source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L: { SPK.L: 1.0, SPK.C: "oops" }
+        SPK.R: { SPK.R: 1.0 }

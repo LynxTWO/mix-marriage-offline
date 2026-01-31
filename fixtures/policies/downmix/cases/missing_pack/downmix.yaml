@@ -1,0 +1,22 @@
+downmix:
+  _meta:
+    downmix_registry_version: "0.0.0"
+    id_prefix: "POLICY.DOWNMIX."
+    created_utc: "2026-01-30T00:00:00Z"
+
+  policies:
+    POLICY.DOWNMIX.FIXTURE_MISSING_PACK:
+      label: "Fixture missing pack"
+      description: "Intentionally references a missing pack file."
+      file: "downmix_policies/missing_pack.yaml"
+      supports_source_layouts: ["LAYOUT.5_1"]
+      supports_target_layouts: ["LAYOUT.2_0"]
+
+  default_policy_by_source_layout:
+    LAYOUT.5_1: "POLICY.DOWNMIX.FIXTURE_MISSING_PACK"
+
+  conversions:
+    - source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.2_0"
+      policy_id: "POLICY.DOWNMIX.FIXTURE_MISSING_PACK"
+      matrix_id: "DMX.FIX.5_1_TO_2_0"

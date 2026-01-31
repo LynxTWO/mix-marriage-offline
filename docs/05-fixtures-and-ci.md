@@ -207,3 +207,11 @@ After this doc:
 - implement `tests/test_fixtures.py` using tolerance-based checks
 - add ontology validation tests to CI
 
+
+## Policy fixtures
+
+Policy integrity is validated separately from audio analysis.
+
+- `fixtures/policies/` contains deterministic cases for registry and policy-pack validation.
+- These cases should be runnable in CI without any audio files.
+- Expected outputs should be expressed as `ISSUE.VALIDATION.*` IDs (see `docs/08-policy-validation.md`).

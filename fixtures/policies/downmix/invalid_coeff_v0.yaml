@@ -1,0 +1,16 @@
+fixture_id: "FIX.POLICY.DOWNMIX.INVALID_COEFF.V0"
+fixture_type: "policy_validation"
+policy_kind: "downmix"
+description: "Pack contains a non-numeric coefficient (should fail hard)."
+
+inputs:
+  registry_file: "fixtures/policies/downmix/cases/invalid_coeff/downmix.yaml"
+
+expected:
+  issue_counts:
+    error: 1
+    warn: 0
+  must_include:
+    - issue_id: "ISSUE.VALIDATION.DOWNMIX_COEFFICIENT_INVALID"
+      severity_label: "error"
+      count_min: 1

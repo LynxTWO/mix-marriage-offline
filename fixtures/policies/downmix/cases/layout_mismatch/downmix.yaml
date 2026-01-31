@@ -1,0 +1,22 @@
+downmix:
+  _meta:
+    downmix_registry_version: "0.0.0"
+    id_prefix: "POLICY.DOWNMIX."
+    created_utc: "2026-01-30T00:00:00Z"
+
+  policies:
+    POLICY.DOWNMIX.FIXTURE_LAYOUT_MISMATCH:
+      label: "Fixture layout speaker mismatch"
+      description: "Matrix references a known speaker that is not part of the declared source layout."
+      file: "downmix_policies/pack_layout_mismatch.yaml"
+      supports_source_layouts: ["LAYOUT.5_1"]
+      supports_target_layouts: ["LAYOUT.2_0"]
+
+  default_policy_by_source_layout:
+    LAYOUT.5_1: "POLICY.DOWNMIX.FIXTURE_LAYOUT_MISMATCH"
+
+  conversions:
+    - source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.2_0"
+      policy_id: "POLICY.DOWNMIX.FIXTURE_LAYOUT_MISMATCH"
+      matrix_id: "DMX.FIXTURE.5_1_TO_2_0.LAYOUT_MISMATCH"

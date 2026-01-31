@@ -1,0 +1,22 @@
+downmix:
+  _meta:
+    downmix_registry_version: "0.0.0"
+    id_prefix: "POLICY.DOWNMIX."
+    created_utc: "2026-01-30T00:00:00Z"
+
+  policies:
+    POLICY.DOWNMIX.FIXTURE_UNKNOWN_MATRIX:
+      label: "Fixture unknown matrix"
+      description: "Conversion references a matrix_id not present in the referenced pack."
+      file: "downmix_policies/pack_unknown_matrix.yaml"
+      supports_source_layouts: ["LAYOUT.5_1"]
+      supports_target_layouts: ["LAYOUT.2_0"]
+
+  default_policy_by_source_layout:
+    LAYOUT.5_1: "POLICY.DOWNMIX.FIXTURE_UNKNOWN_MATRIX"
+
+  conversions:
+    - source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.2_0"
+      policy_id: "POLICY.DOWNMIX.FIXTURE_UNKNOWN_MATRIX"
+      matrix_id: "DMX.TEST.5_1_TO_2_0.MISSING"

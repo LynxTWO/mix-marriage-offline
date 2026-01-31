@@ -1,0 +1,16 @@
+fixture_id: "FIX.POLICY.DOWNMIX.LAYOUT_MISMATCH.V0"
+fixture_type: "policy_validation"
+policy_kind: "downmix"
+description: "Pack uses a speaker that is valid but not part of the declared source/target layout."
+
+inputs:
+  registry_file: "fixtures/policies/downmix/cases/layout_mismatch/downmix.yaml"
+
+expected:
+  issue_counts:
+    error: 1
+    warn: 0
+  must_include:
+    - issue_id: "ISSUE.VALIDATION.DOWNMIX_LAYOUT_SPEAKER_MISMATCH"
+      severity_label: "error"
+      count_min: 1

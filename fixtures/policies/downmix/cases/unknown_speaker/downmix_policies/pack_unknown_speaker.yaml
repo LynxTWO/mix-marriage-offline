@@ -1,0 +1,14 @@
+downmix_policy_pack:
+  policy_id: "POLICY.DOWNMIX.FIXTURE_UNKNOWN_SPEAKER"
+  pack_version: "0.0.0"
+  created_utc: "2026-01-30T00:00:00Z"
+  label: "Fixture pack: unknown speaker"
+  description: "Matrix contains a source speaker that is not defined (SPK.NO_SUCH_SPK)."
+  matrices:
+    DMX.FIXTURE.5_1_TO_2_0.UNKNOWN_SPK:
+      label: "5.1 -> 2.0 with unknown speaker"
+      source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L: { SPK.L: 1.0, SPK.NO_SUCH_SPK: 0.25 }
+        SPK.R: { SPK.R: 1.0 }

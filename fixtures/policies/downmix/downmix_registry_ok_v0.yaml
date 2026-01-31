@@ -1,0 +1,13 @@
+fixture_id: "FIX.POLICY.DOWNMIX.REGISTRY.OK.V0"
+fixture_type: "policy_validation"
+policy_kind: "downmix"
+description: "Canonical downmix registry + packs load and validate cleanly."
+
+inputs:
+  registry_file: "ontology/policies/downmix.yaml"
+
+expected:
+  issue_counts:
+    error: 0
+    warn: 0
+  must_include: []

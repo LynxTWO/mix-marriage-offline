@@ -132,6 +132,139 @@ issues:
     notes:
       - "Surround-aware checks may be skipped until layout is declared."
 
+
+  # -------------------------
+  # Validation (ontology & policy integrity)
+  # -------------------------
+  ISSUE.VALIDATION.POLICY_PARSE_ERROR:
+    label: "Policy parse error"
+    description: "A policy YAML file could not be parsed (syntax/encoding error)."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+    notes:
+      - "This is a repository/installation integrity problem, not an audio analysis result."
+
+  ISSUE.VALIDATION.POLICY_SCHEMA_INVALID:
+    label: "Policy schema invalid"
+    description: "A policy YAML file parsed, but required keys/fields are missing or malformed."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.POLICY_FILE_MISSING:
+    label: "Policy file missing"
+    description: "A referenced policy or policy-pack file does not exist at the expected path."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.DOWNMIX_POLICY_ID_MISMATCH:
+    label: "Downmix policy ID mismatch"
+    description: "A downmix policy registry entry points to a pack file whose policy_id does not match the registry."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.DOWNMIX.POLICY_ID"
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.DOWNMIX_MATRIX_ID_MISSING:
+    label: "Downmix matrix ID missing"
+    description: "A downmix conversion references a matrix_id that is not present in the referenced policy pack."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.DOWNMIX.POLICY_ID"
+      - "EVID.DOWNMIX.MATRIX_ID"
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.DOWNMIX_LAYOUT_UNKNOWN:
+    label: "Downmix layout unknown"
+    description: "A downmix registry or pack references a source/target layout that is not defined in ontology/layouts.yaml."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.DOWNMIX.SOURCE_LAYOUT_ID"
+      - "EVID.DOWNMIX.TARGET_LAYOUT_ID"
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.DOWNMIX_SPEAKER_UNKNOWN:
+    label: "Downmix speaker unknown"
+    description: "A downmix matrix references a SPK.* ID that is not defined in ontology/speakers.yaml."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.DOWNMIX.MATRIX_ID"
+      - "EVID.DOWNMIX.MATRIX_COEFFICIENT"
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.DOWNMIX_LAYOUT_SPEAKER_MISMATCH:
+    label: "Downmix layout speaker mismatch"
+    description: "A downmix matrix uses a speaker that is not part of the declared source or target layout."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.DOWNMIX.SOURCE_LAYOUT_ID"
+      - "EVID.DOWNMIX.TARGET_LAYOUT_ID"
+      - "EVID.DOWNMIX.MATRIX_ID"
+      - "EVID.DOWNMIX.MATRIX_COEFFICIENT"
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.DOWNMIX_COEFFICIENT_INVALID:
+    label: "Downmix coefficient invalid"
+    description: "A downmix matrix contains invalid coefficients (non-numeric, NaN/inf, or exceeds hard safety limits)."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.DOWNMIX.MATRIX_ID"
+      - "EVID.DOWNMIX.MATRIX_COEFFICIENT"
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.DOWNMIX_COEFFICIENT_HIGH:
+    label: "Downmix coefficient high"
+    description: "A downmix matrix contains unusually large coefficients (translation sanity warning)."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.DOWNMIX.MATRIX_ID"
+      - "EVID.DOWNMIX.MATRIX_COEFFICIENT"
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.DOWNMIX_COEFFICIENT_SUM_EXCESSIVE:
+    label: "Downmix coefficient sum excessive"
+    description: "A downmix output channel has an unusually large sum of absolute coefficients (risk of unexpected gain/clipping)."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.DOWNMIX.MATRIX_ID"
+      - "EVID.DOWNMIX.TARGET_LAYOUT_ID"
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
   # -------------------------
   # Safety / Level / Stability
   # -------------------------
