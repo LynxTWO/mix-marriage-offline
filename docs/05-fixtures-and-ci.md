@@ -241,3 +241,20 @@ python -m pip install -r requirements.txt
 python tools/validate_policies.py ontology/policies/downmix.yaml
 python tools/run_policy_fixtures.py fixtures/policies/downmix
 ```
+
+
+## Plugin manifests
+
+Plugin manifests are validated independently.
+
+### Install and run
+
+From the repo root:
+
+```bash
+python -m pip install -r requirements.txt
+PYTHONPATH=src python tools/validate_plugins.py plugins
+```
+
+Notes:
+- `tools/validate_plugins.py` prints a JSON payload that conforms to `schemas/validation_result.schema.json`.

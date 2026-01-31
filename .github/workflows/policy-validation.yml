@@ -25,6 +25,10 @@ jobs:
         run: |
           python tools/validate_policies.py ontology/policies/downmix.yaml
 
+      - name: Validate plugin manifests
+        run: |
+          PYTHONPATH=src python tools/validate_plugins.py plugins
+
       - name: Run policy fixtures
         run: |
           python tools/run_policy_fixtures.py fixtures/policies/downmix
