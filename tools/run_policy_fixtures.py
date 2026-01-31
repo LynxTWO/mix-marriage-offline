@@ -136,12 +136,22 @@ def main() -> int:
     parser.add_argument(
         "fixtures_dir",
         nargs="?",
-        default="fixtures/policies/downmix",
+        default=None,
         help="Directory containing policy validation fixtures.",
+    )
+    parser.add_argument(
+        "--fixtures",
+        dest="fixtures",
+        default=None,
+        help=(
+            "Optional explicit path to the fixtures directory. "
+            "If provided, this overrides the positional fixtures_dir."
+        ),
     )
     args = parser.parse_args()
 
-    fixtures_dir = Path(args.fixtures_dir)
+    fixtures_value = args.fixtures or args.fixtures_dir or "fixtures/policies/downmix"
+    fixtures_dir = Path(fixtures_value)
     return run_fixtures(fixtures_dir)
 
 

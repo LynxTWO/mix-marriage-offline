@@ -804,8 +804,17 @@ def main() -> int:
     parser.add_argument(
         "registry_file",
         nargs="?",
-        default="ontology/policies/downmix.yaml",
+        default=None,
         help="Path to the downmix registry YAML.",
+    )
+    parser.add_argument(
+        "--registry",
+        dest="registry",
+        default=None,
+        help=(
+            "Optional explicit path to the downmix registry YAML. "
+            "If provided, this overrides the positional registry_file."
+        ),
     )
     parser.add_argument(
         "--strict",
@@ -814,7 +823,8 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    registry_path = Path(args.registry_file)
+    registry_value = args.registry or args.registry_file or "ontology/policies/downmix.yaml"
+    registry_path = Path(registry_value)
     result = validate_registry(registry_path, strict=args.strict)
     print(json.dumps(result, indent=2))
     return 1 if result["issue_counts"]["error"] > 0 else 0
