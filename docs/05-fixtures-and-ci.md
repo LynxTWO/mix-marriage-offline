@@ -215,3 +215,29 @@ Policy integrity is validated separately from audio analysis.
 - `fixtures/policies/` contains deterministic cases for registry and policy-pack validation.
 - These cases should be runnable in CI without any audio files.
 - Expected outputs should be expressed as `ISSUE.VALIDATION.*` IDs (see `docs/08-policy-validation.md`).
+
+### Install and run
+
+From the repo root:
+
+```bash
+python -m pip install -r requirements.txt
+
+# Validate the downmix registry and referenced packs
+python tools/validate_policies.py ontology/policies/downmix.yaml
+
+# Run deterministic policy fixtures
+python tools/run_policy_fixtures.py fixtures/policies/downmix
+```
+
+Notes:
+- `tools/validate_policies.py` prints a JSON payload that conforms to `schemas/validation_result.schema.json`.
+- Add `--strict` to enable a lower warning threshold for coefficient `sum_abs`.
+
+### Local verify (run yourself)
+
+```bash
+python -m pip install -r requirements.txt
+python tools/validate_policies.py ontology/policies/downmix.yaml
+python tools/run_policy_fixtures.py fixtures/policies/downmix
+```
