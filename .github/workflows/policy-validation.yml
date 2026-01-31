@@ -32,3 +32,7 @@ jobs:
       - name: Run policy fixtures
         run: |
           python tools/run_policy_fixtures.py fixtures/policies/downmix
+
+      - name: Run session fixtures
+        run: |
+          PYTHONPATH=src python tools/run_session_fixtures.py fixtures/sessions

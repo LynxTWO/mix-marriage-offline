@@ -1,0 +1,19 @@
+fixture_id: "FIX.SESSION.SAMPLE_RATE_MISMATCH.V0"
+fixture_type: "session_validation"
+description: "One stem at 44.1 kHz and one at 48 kHz."
+
+inputs:
+  stems:
+    - filename: "drums_441.wav"
+      sample_rate_hz: 44100
+      channels: 2
+      bits_per_sample: 16
+      duration_s: 1.0
+    - filename: "drums_480.wav"
+      sample_rate_hz: 48000
+      channels: 2
+      bits_per_sample: 16
+      duration_s: 1.0
+
+expected_issue_ids:
+  - "ISSUE.VALIDATION.SAMPLE_RATE_MISMATCH"

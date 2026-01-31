@@ -1,0 +1,19 @@
+fixture_id: "FIX.SESSION.BIT_DEPTH_MISMATCH.V0"
+fixture_type: "session_validation"
+description: "One stem at 16-bit and one at 24-bit."
+
+inputs:
+  stems:
+    - filename: "bass_16.wav"
+      sample_rate_hz: 48000
+      channels: 2
+      bits_per_sample: 16
+      duration_s: 1.0
+    - filename: "bass_24.wav"
+      sample_rate_hz: 48000
+      channels: 2
+      bits_per_sample: 24
+      duration_s: 1.0
+
+expected_issue_ids:
+  - "ISSUE.VALIDATION.BIT_DEPTH_MISMATCH"

@@ -1,0 +1,12 @@
+fixture_id: "FIX.SESSION.DECODE_ERROR.V0"
+fixture_type: "session_validation"
+description: "Corrupted WAV header to trigger decode error."
+
+inputs:
+  stems:
+    - filename: "corrupt.wav"
+      corrupt: true
+      byte_count: 6
+
+expected_issue_ids:
+  - "ISSUE.VALIDATION.DECODE_ERROR"

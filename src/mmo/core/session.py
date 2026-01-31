@@ -46,6 +46,7 @@ def build_session_from_stems_dir(stems_dir: Path) -> dict:
                 "sha256": sha256_file(path),
                 "channel_count": metadata["channels"],
                 "sample_rate_hz": metadata["sample_rate_hz"],
+                "bits_per_sample": metadata["bits_per_sample"],
                 "duration_s": metadata["duration_s"],
             }
         )

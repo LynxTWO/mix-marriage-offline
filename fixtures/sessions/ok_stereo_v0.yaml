@@ -1,0 +1,18 @@
+fixture_id: "FIX.SESSION.OK.STEREO.V0"
+fixture_type: "session_validation"
+description: "Two stereo stems with matching rate, bit depth, and duration."
+
+inputs:
+  stems:
+    - filename: "music_a.wav"
+      sample_rate_hz: 48000
+      channels: 2
+      bits_per_sample: 16
+      duration_s: 1.0
+    - filename: "music_b.wav"
+      sample_rate_hz: 48000
+      channels: 2
+      bits_per_sample: 16
+      duration_s: 1.0
+
+expected_issue_ids: []

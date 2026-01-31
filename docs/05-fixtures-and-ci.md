@@ -208,6 +208,19 @@ After this doc:
 - add ontology validation tests to CI
 
 
+## Session fixtures (validation-only)
+
+From the repo root:
+
+```bash
+python -m pip install -r requirements.txt
+PYTHONPATH=src python tools/run_session_fixtures.py fixtures/sessions
+```
+
+Notes:
+- Session fixtures generate tiny WAV files on the fly and only assert issue IDs.
+
+
 ## Policy fixtures
 
 Policy integrity is validated separately from audio analysis.
