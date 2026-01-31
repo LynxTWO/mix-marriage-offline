@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/plugin.schema.json",
+  "title": "MMO Plugin Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["plugin_id", "plugin_type", "name", "version", "entrypoint"],
+  "properties": {
+    "plugin_id": {
+      "type": "string",
+      "description": "Canonical plugin identifier.",
+      "pattern": "^PLUGIN\\.(DETECTOR|RESOLVER|RENDERER)\\.[A-Z0-9_\\.]+$"
+    },
+    "plugin_type": {
+      "type": "string",
+      "enum": ["detector", "resolver", "renderer"]
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "description": "Semver string.",
+      "pattern": "^\\d+\\.\\d+\\.\\d+([\\-\\+][0-9A-Za-z\\.-]+)?$"
+    },
+    "author": {
+      "type": "string"
+    },
+    "license": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "mmo_min_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+([\\-\\+][0-9A-Za-z\\.-]+)?$"
+    },
+    "ontology_min_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+([\\-\\+][0-9A-Za-z\\.-]+)?$"
+    },
+    "entrypoint": {
+      "type": "string",
+      "description": "Python entrypoint in the form module.path:SymbolName",
+      "pattern": "^[A-Za-z0-9_\\.]+:[A-Za-z0-9_\\.]+$"
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "Ontology IDs the plugin may emit or act upon.",
+      "items": {
+        "type": "string",
+        "pattern": "^(ISSUE\\.|ACTION\\.|FEATURE\\.).+"
+      },
+      "uniqueItems": true
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "config_schema": {
+      "type": "object",
+      "description": "Optional JSON Schema fragment describing plugin-specific configuration.",
+      "additionalProperties": true
+    }
+  }
+}
