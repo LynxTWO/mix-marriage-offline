@@ -52,6 +52,16 @@ evidence:
     description: "Base name of the source media file."
     value_type: "string"
 
+  EVID.FILE.EXT:
+    label: "File extension"
+    description: "File extension including dot (e.g., .wav, .mp3)."
+    value_type: "string"
+
+  EVID.FILE.CODEC:
+    label: "File codec"
+    description: "Codec identifier or profile (optional when available)."
+    value_type: "string"
+
   EVID.FILE.FORMAT:
     label: "Container format"
     description: "Container/format identifier (e.g., wav, aiff, flac)."
@@ -60,6 +70,11 @@ evidence:
   EVID.FILE.HASH.SHA256:
     label: "SHA-256 hash"
     description: "SHA-256 hash of the file bytes for reproducibility."
+    value_type: "string"
+
+  EVID.VALIDATION.LOSSY_REASON:
+    label: "Lossy reason"
+    description: "Short explanation for why a stem is treated as lossy."
     value_type: "string"
 
   EVID.SESSION.SAMPLE_RATE_HZ:

@@ -45,6 +45,37 @@ issues:
     notes:
       - "Blocks analysis for that stem unless the user replaces or re-exports it."
 
+  ISSUE.VALIDATION.UNSUPPORTED_AUDIO_FORMAT:
+    label: "Unsupported audio format"
+    description: "A stem uses an audio format/codec that is not supported by the decoder."
+    issue_type: "validation"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+      - "EVID.FILE.EXT"
+      - "EVID.FILE.FORMAT"
+      - "EVID.FILE.HASH.SHA256"
+    suggested_actions: []
+    notes:
+      - "Re-export the stem as WAV (PCM) to ensure reliable decoding and analysis."
+
+  ISSUE.VALIDATION.LOSSY_STEMS_DETECTED:
+    label: "Lossy stems detected"
+    description: "One or more stems appear to be lossy encoded (e.g., MP3/AAC)."
+    issue_type: "validation"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+      - "EVID.FILE.EXT"
+      - "EVID.FILE.FORMAT"
+      - "EVID.FILE.HASH.SHA256"
+    suggested_actions: []
+    notes:
+      - "Lossy stems can hide artifacts and distort spectral/dynamics measurements."
+      - "Re-export stems as WAV to preserve full-bandwidth detail."
+
   ISSUE.VALIDATION.SAMPLE_RATE_MISMATCH:
     label: "Sample rate mismatch"
     description: "Not all stems share the same sample rate, risking drift and incorrect analysis."
@@ -151,6 +182,56 @@ issues:
   ISSUE.VALIDATION.POLICY_SCHEMA_INVALID:
     label: "Policy schema invalid"
     description: "A policy YAML file parsed, but required keys/fields are missing or malformed."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.PLUGIN_PARSE_ERROR:
+    label: "Plugin parse error"
+    description: "A plugin manifest or module file could not be parsed (syntax/encoding error)."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.PLUGIN_SCHEMA_INVALID:
+    label: "Plugin schema invalid"
+    description: "A plugin manifest parsed, but required keys/fields are missing or malformed."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.PLUGIN_ENTRYPOINT_INVALID:
+    label: "Plugin entrypoint invalid"
+    description: "A plugin entrypoint is missing, invalid, or not callable."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.PLUGIN_ID_TYPE_MISMATCH:
+    label: "Plugin ID type mismatch"
+    description: "A plugin ID does not match the expected PLUGIN.* prefix or type."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+
+  ISSUE.VALIDATION.PLUGIN_ID_DUPLICATE:
+    label: "Plugin ID duplicate"
+    description: "Two or more plugins share the same ID, causing ambiguous lookups."
     issue_type: "validation"
     default_scope: "session"
     default_severity_label: "error"

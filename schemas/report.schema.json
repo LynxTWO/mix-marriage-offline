@@ -61,7 +61,9 @@
         "layout_id": { "type": "string", "pattern": "^LAYOUT\\." },
         "channel_count": { "type": "integer", "minimum": 1 },
         "duration_s": { "type": "number", "minimum": 0 },
-        "sample_rate_hz": { "type": "number", "minimum": 8000 }
+        "sample_rate_hz": { "type": "number", "minimum": 8000 },
+        "bits_per_sample": { "type": "integer", "minimum": 1 },
+        "bit_depth": { "type": "integer", "minimum": 1 }
       }
     },
     "bus": {
