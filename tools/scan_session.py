@@ -59,9 +59,9 @@ def _validate_schema(schema_path: Path, report: Dict[str, Any]) -> None:
         raise ValueError(f"Report schema validation failed:\n{messages}")
 
 
-def build_report(stems_dir: Path, generated_at: str) -> Dict[str, Any]:
+def build_report(stems_dir: Path, generated_at: str, *, strict: bool = False) -> Dict[str, Any]:
     session = build_session_from_stems_dir(stems_dir)
-    issues = validate_session(session)
+    issues = validate_session(session, strict=strict)
     stem_hash = _hash_from_stems(session.get("stems", []))
     ontology_version = _load_ontology_version(ROOT_DIR / "ontology" / "ontology.yaml")
     return {
@@ -79,7 +79,12 @@ def build_report(stems_dir: Path, generated_at: str) -> Dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Scan a stems directory into an MMO report.")
-    parser.add_argument("stems_dir", help="Path to a directory of WAV stems.")
+    parser.add_argument("stems_dir", help="Path to a directory of audio stems.")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Treat lossy/unsupported formats as high-severity issues.",
+    )
     parser.add_argument("--out", dest="out", default=None, help="Optional output JSON path.")
     parser.add_argument(
         "--schema",
@@ -95,7 +100,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    report = build_report(Path(args.stems_dir), args.generated_at)
+    report = build_report(Path(args.stems_dir), args.generated_at, strict=args.strict)
 
     if args.schema:
         _validate_schema(Path(args.schema), report)

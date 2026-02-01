@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
@@ -16,16 +17,29 @@ def _mode_with_max_tiebreak(values: List[int]) -> Optional[int]:
 def _evidence_file(stem: Dict[str, Any]) -> List[Dict[str, Any]]:
     evidence: List[Dict[str, Any]] = []
     file_path = stem.get("file_path")
+    ext = ""
     if file_path:
         evidence.append({"evidence_id": "EVID.FILE.PATH", "value": file_path})
+        suffix = Path(file_path).suffix.lower()
+        if suffix:
+            ext = suffix
+            evidence.append({"evidence_id": "EVID.FILE.EXT", "value": suffix})
+            evidence.append(
+                {"evidence_id": "EVID.FILE.FORMAT", "value": suffix.lstrip(".")}
+            )
     sha256 = stem.get("sha256")
     if sha256:
         evidence.append({"evidence_id": "EVID.FILE.HASH.SHA256", "value": sha256})
     return evidence
 
 
-def validate_session(session: Dict[str, Any], duration_tolerance_s: float = 1e-3) -> List[Dict[str, Any]]:
+def validate_session(
+    session: Dict[str, Any], duration_tolerance_s: float = 1e-3, *, strict: bool = False
+) -> List[Dict[str, Any]]:
     stems = session.get("stems", [])
+    wav_exts = {".wav", ".wave"}
+    lossy_exts = {".mp3", ".aac", ".ogg", ".opus"}
+    unsupported_exts = {".flac", ".wv", ".aiff", ".aif", ".m4a"}
 
     sample_rates = [
         int(stem["sample_rate_hz"])
@@ -52,6 +66,60 @@ def validate_session(session: Dict[str, Any], duration_tolerance_s: float = 1e-3
     for stem in stems:
         stem_id = stem.get("stem_id")
         target = {"scope": "stem", "stem_id": stem_id} if stem_id else {"scope": "session"}
+        file_path = stem.get("file_path")
+        ext = Path(file_path).suffix.lower() if file_path else ""
+
+        if ext in lossy_exts:
+            evidence = _evidence_file(stem)
+            evidence.append(
+                {
+                    "evidence_id": "EVID.VALIDATION.LOSSY_REASON",
+                    "value": (
+                        "Lossy codecs discard audio detail; EQ/comp/saturation can "
+                        "amplify codec artifacts. Re-export stems losslessly "
+                        "(WAV/FLAC/WavPack), aligned and same length."
+                    ),
+                }
+            )
+            issues.append(
+                {
+                    "issue_id": "ISSUE.VALIDATION.LOSSY_STEMS_DETECTED",
+                    "severity": 90 if strict else 60,
+                    "confidence": 1.0,
+                    "target": target,
+                    "evidence": evidence,
+                }
+            )
+
+        if ext in unsupported_exts:
+            issues.append(
+                {
+                    "issue_id": "ISSUE.VALIDATION.UNSUPPORTED_AUDIO_FORMAT",
+                    "severity": 90 if strict else 60,
+                    "confidence": 1.0,
+                    "target": target,
+                    "evidence": _evidence_file(stem),
+                    "message": "Format detected but not supported yet; export as WAV (PCM) for now.",
+                }
+            )
+
+        if ext in wav_exts:
+            required_values = [
+                stem.get("channel_count"),
+                stem.get("sample_rate_hz"),
+                stem.get("duration_s"),
+                stem.get("bits_per_sample") or stem.get("bit_depth"),
+            ]
+            if any(not isinstance(value, (int, float)) for value in required_values):
+                issues.append(
+                    {
+                        "issue_id": "ISSUE.VALIDATION.DECODE_ERROR",
+                        "severity": 90,
+                        "confidence": 1.0,
+                        "target": target,
+                        "evidence": _evidence_file(stem),
+                    }
+                )
 
         if expected_sample_rate is not None:
             stem_sample_rate = stem.get("sample_rate_hz")
