@@ -25,6 +25,18 @@ MMO’s promise:
 - The machine handles the technical chores relentlessly
 - The human decides what the music means
 
+## Install
+Core install:
+```
+pip install .
+```
+
+Optional extras:
+```
+pip install .[pdf]
+pip install .[truth]
+```
+
 ---
 
 ## Start here

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from mmo.exporters.csv_recall import export_recall_csv
@@ -21,7 +22,14 @@ def main() -> int:
     if args.csv_path:
         export_recall_csv(report, Path(args.csv_path))
     if args.pdf_path:
-        export_report_pdf(report, Path(args.pdf_path))
+        try:
+            export_report_pdf(report, Path(args.pdf_path))
+        except RuntimeError:
+            print(
+                "PDF export requires reportlab. Install extras: pip install .[pdf]",
+                file=sys.stderr,
+            )
+            return 2
 
     return 0
 
