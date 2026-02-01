@@ -81,7 +81,13 @@ def _scan_report_path(out_report: Path) -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Scan stems, run the plugin pipeline, and export report artifacts."
+        description="Scan stems, run the plugin pipeline, and export report artifacts.",
+        epilog=(
+            "Examples:\n"
+            "  analyze_stems.py ./stems --out-report out.json\n"
+            "  analyze_stems.py ./stems --out-report out.json --keep-scan\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("stems_dir", help="Path to a directory of audio stems.")
     parser.add_argument(
@@ -112,6 +118,11 @@ def main() -> int:
     )
     parser.add_argument("--csv", default=None, help="Optional output CSV path.")
     parser.add_argument("--pdf", default=None, help="Optional output PDF path.")
+    parser.add_argument(
+        "--keep-scan",
+        action="store_true",
+        help="Keep the intermediate scan report JSON instead of deleting it.",
+    )
     args = parser.parse_args()
 
     tools_dir = Path(__file__).resolve().parent
@@ -140,10 +151,11 @@ def main() -> int:
     if exit_code != 0:
         return exit_code
 
-    try:
-        scan_report.unlink()
-    except FileNotFoundError:
-        pass
+    if not args.keep_scan:
+        try:
+            scan_report.unlink()
+        except FileNotFoundError:
+            pass
 
     exit_code = _run_export_report(
         tools_dir,

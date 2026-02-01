@@ -18,6 +18,8 @@ PYTHONPATH=src python tools/make_demo_stems.py /tmp/mmo_demo
 PYTHONPATH=src python tools/analyze_stems.py /tmp/mmo_demo --out-report out.json --peak --csv recall.csv
 ```
 
+Use `--keep-scan` to retain the intermediate `out.scan.json` scan output.
+
 Artifacts:
 - `out.json` (final report after the plugin pipeline)
 - `recall.csv` (recall/export summary)
