@@ -42,7 +42,7 @@ def validate_session(
     stems = session.get("stems", [])
     wav_exts = {".wav", ".wave"}
     lossy_exts = {".mp3", ".aac", ".ogg", ".opus"}
-    unsupported_exts = {".flac", ".wv", ".aiff", ".aif", ".m4a"}
+    unsupported_exts = {".flac", ".wv", ".aiff", ".aif"}
 
     sample_rates = [
         int(stem["sample_rate_hz"])
@@ -72,7 +72,47 @@ def validate_session(
         file_path = stem.get("file_path")
         ext = Path(file_path).suffix.lower() if file_path else ""
 
-        if ext in lossy_exts:
+        if ext == ".m4a":
+            codec = stem.get("codec_name")
+            codec = codec.lower() if isinstance(codec, str) else ""
+            if codec in {"aac", "mp4a"}:
+                evidence = _evidence_file(stem)
+                evidence.append(
+                    {
+                        "evidence_id": "EVID.VALIDATION.LOSSY_REASON",
+                        "value": (
+                            "AAC-in-M4A is lossy; codec artifacts can be amplified by "
+                            "EQ/comp/saturation. Re-export stems losslessly "
+                            "(WAV/FLAC/WavPack), aligned and same length."
+                        ),
+                    }
+                )
+                issues.append(
+                    {
+                        "issue_id": "ISSUE.VALIDATION.LOSSY_STEMS_DETECTED",
+                        "severity": 90 if strict else 60,
+                        "confidence": 1.0,
+                        "target": target,
+                        "evidence": evidence,
+                    }
+                )
+            else:
+                issues.append(
+                    {
+                        "issue_id": "ISSUE.VALIDATION.UNSUPPORTED_AUDIO_FORMAT",
+                        "severity": 90 if strict else 60,
+                        "confidence": 1.0,
+                        "target": target,
+                        "evidence": _evidence_file(stem),
+                        "message": (
+                            "ALAC-in-M4A is lossless but not supported yet; export "
+                            "as WAV (PCM) for now."
+                            if codec == "alac"
+                            else "M4A container detected but codec is unknown; export as WAV (PCM) for now."
+                        ),
+                    }
+                )
+        elif ext in lossy_exts:
             evidence = _evidence_file(stem)
             evidence.append(
                 {
