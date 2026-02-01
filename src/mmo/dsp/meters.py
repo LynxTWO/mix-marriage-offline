@@ -17,6 +17,12 @@ _EPSILON = 1e-12
 _CHUNK_FRAMES = 4096
 
 
+def iter_wav_float64_samples(
+    path: Path, *, error_context: str
+) -> Iterator[list[float]]:
+    return _iter_wav_float64_samples(path, error_context=error_context)
+
+
 def _iter_wav_float64_samples(
     path: Path, *, error_context: str
 ) -> Iterator[list[float]]:

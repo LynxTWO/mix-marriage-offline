@@ -12,16 +12,14 @@ import wave
 from pathlib import Path
 from typing import Iterable
 
-from mmo.dsp.float64 import bytes_to_int_samples_pcm, pcm_int_to_float64
 from mmo.dsp.io import read_wav_metadata
-from mmo.dsp.meters import _iter_wav_float64_samples
+from mmo.dsp.meters import iter_wav_float64_samples
 
 
 _ALLOWED_ACTIONS = {
     "ACTION.UTILITY.GAIN": "PARAM.GAIN.DB",
     "ACTION.UTILITY.TRIM": "PARAM.GAIN.TRIM_DB",
 }
-_CHUNK_FRAMES = 4096
 _FLOAT_MAX = math.nextafter(1.0, 0.0)
 
 
@@ -166,7 +164,7 @@ def _render_gain_trim(path: Path, out_path: Path, gain_db: float) -> None:
         out_handle.setsampwidth(bits_per_sample // 8)
         out_handle.setframerate(sample_rate_hz)
 
-        for float_samples in _iter_wav_float64_samples(
+        for float_samples in iter_wav_float64_samples(
             path, error_context="render gain/trim"
         ):
             int_samples = _dithered_int_samples(
