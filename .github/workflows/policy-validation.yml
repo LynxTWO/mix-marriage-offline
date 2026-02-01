@@ -40,3 +40,7 @@ jobs:
       - name: Run session fixtures
         run: |
           PYTHONPATH=src python tools/run_session_fixtures.py fixtures/sessions
+
+      - name: Run unit tests
+        run: |
+          PYTHONPATH=src python -m unittest discover -s tests -p "test_*.py"
