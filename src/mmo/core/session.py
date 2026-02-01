@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from mmo.dsp.io import read_wav_metadata, sha256_file
+from mmo.dsp.decoders import detect_format_from_path, read_metadata
+from mmo.dsp.io import sha256_file
 
 _STEM_ID_RE = re.compile(r"[^a-z0-9_]+")
 
@@ -56,10 +57,11 @@ def build_session_from_stems_dir(stems_dir: Path) -> dict:
             "file_path": file_path,
             "sha256": sha256_file(path),
         }
-        if path.suffix.lower() in {".wav", ".wave"}:
+        format_id = detect_format_from_path(path)
+        if format_id == "wav":
             try:
-                metadata = read_wav_metadata(path)
-            except ValueError:
+                metadata = read_metadata(path)
+            except (ValueError, NotImplementedError):
                 metadata = None
             if metadata:
                 stem_entry.update(
