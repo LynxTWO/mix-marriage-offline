@@ -43,6 +43,11 @@ def validate_session(
     wav_exts = {".wav", ".wave"}
     lossy_exts = {".mp3", ".aac", ".ogg", ".opus"}
     unsupported_exts = {".flac", ".wv", ".aiff", ".aif"}
+    lossy_message = (
+        "Lossy codecs remove audio detail and add artifacts (pre-echo/smearing, "
+        "bandwidth loss). Processing like EQ/compression/saturation can amplify "
+        "them. Re-export stems lossless (WAV/FLAC) from the source session."
+    )
 
     sample_rates = [
         int(stem["sample_rate_hz"])
@@ -94,6 +99,7 @@ def validate_session(
                         "confidence": 1.0,
                         "target": target,
                         "evidence": evidence,
+                        "message": lossy_message,
                     }
                 )
             else:
@@ -131,6 +137,7 @@ def validate_session(
                     "confidence": 1.0,
                     "target": target,
                     "evidence": evidence,
+                    "message": lossy_message,
                 }
             )
 
