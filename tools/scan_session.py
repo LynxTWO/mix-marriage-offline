@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -29,7 +30,9 @@ from mmo.core.session import build_session_from_stems_dir  # noqa: E402
 from mmo.core.validators import validate_session  # noqa: E402
 from mmo.dsp.decoders import detect_format_from_path  # noqa: E402
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd  # noqa: E402
+from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples  # noqa: E402
 from mmo.dsp.meters import (  # noqa: E402
+    compute_basic_stats_from_float64,
     compute_clip_sample_count_wav,
     compute_crest_factor_db_wav,
     compute_dc_offset_wav,
@@ -159,6 +162,74 @@ def _add_basic_meter_measurements(
                 ffmpeg_cmd = resolve_ffmpeg_cmd()
             if ffmpeg_cmd is None:
                 missing_ffmpeg = True
+                continue
+
+            try:
+                (
+                    peak,
+                    clip_count,
+                    dc_offset,
+                    rms_dbfs,
+                    crest_factor_db,
+                ) = compute_basic_stats_from_float64(
+                    iter_ffmpeg_float64_samples(stem_path, ffmpeg_cmd)
+                )
+            except ValueError:
+                continue
+
+            if peak <= 0.0:
+                peak_dbfs = float("-inf")
+            else:
+                peak_dbfs = 20.0 * math.log10(peak)
+
+            upsert_measurement(
+                stem,
+                evidence_id="EVID.METER.SAMPLE_PEAK_DBFS",
+                value=peak_dbfs,
+                unit_id="UNIT.DBFS",
+            )
+            upsert_measurement(
+                stem,
+                evidence_id="EVID.METER.PEAK_DBFS",
+                value=peak_dbfs,
+                unit_id="UNIT.DBFS",
+            )
+            upsert_measurement(
+                stem,
+                evidence_id="EVID.METER.CLIP_SAMPLE_COUNT",
+                value=clip_count,
+                unit_id="UNIT.COUNT",
+            )
+            upsert_measurement(
+                stem,
+                evidence_id="EVID.QUALITY.CLIPPED_SAMPLES_COUNT",
+                value=clip_count,
+                unit_id="UNIT.COUNT",
+            )
+            upsert_measurement(
+                stem,
+                evidence_id="EVID.METER.DC_OFFSET",
+                value=dc_offset,
+                unit_id="UNIT.RATIO",
+            )
+            upsert_measurement(
+                stem,
+                evidence_id="EVID.QUALITY.DC_OFFSET_PERCENT",
+                value=dc_offset * 100.0,
+                unit_id="UNIT.PERCENT",
+            )
+            upsert_measurement(
+                stem,
+                evidence_id="EVID.METER.RMS_DBFS",
+                value=rms_dbfs,
+                unit_id="UNIT.DBFS",
+            )
+            upsert_measurement(
+                stem,
+                evidence_id="EVID.METER.CREST_FACTOR_DB",
+                value=crest_factor_db,
+                unit_id="UNIT.DB",
+            )
             continue
         else:
             continue
@@ -393,7 +464,7 @@ def main() -> int:
             "--meters",
             choices=["basic", "truth"],
             default=None,
-            help="Enable additional WAV-only meter packs (basic or truth).",
+            help="Enable additional meter packs (basic or truth).",
         )
         parser.add_argument("--out", dest="out", default=None, help="Optional output JSON path.")
         parser.add_argument(

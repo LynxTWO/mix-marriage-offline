@@ -146,3 +146,45 @@ def compute_crest_factor_db_wav(path: Path) -> float:
     if ratio <= 0.0:
         return float("-inf")
     return 20.0 * math.log10(ratio)
+
+
+def compute_basic_stats_from_float64(
+    float_samples_iter: Iterator[list[float]],
+) -> tuple[float, int, float, float, float]:
+    """Return peak, clip count, DC offset, RMS dBFS, and crest factor dB."""
+    threshold = 1.0 - _EPSILON
+    peak = 0.0
+    clip_count = 0
+    total = 0.0
+    total_sq = 0.0
+    count = 0
+
+    for float_samples in float_samples_iter:
+        for sample in float_samples:
+            abs_sample = abs(sample)
+            if abs_sample > peak:
+                peak = abs_sample
+            if abs_sample >= threshold:
+                clip_count += 1
+            total += sample
+            total_sq += sample * sample
+        count += len(float_samples)
+
+    if count == 0:
+        return 0.0, 0, 0.0, float("-inf"), float("-inf")
+
+    dc_offset = total / count
+    mean_square = total_sq / count
+    if mean_square <= 0.0:
+        return peak, clip_count, dc_offset, float("-inf"), float("-inf")
+
+    rms = math.sqrt(mean_square)
+    if rms <= 0.0:
+        return peak, clip_count, dc_offset, float("-inf"), float("-inf")
+
+    rms_dbfs = 20.0 * math.log10(rms)
+    if peak <= 0.0:
+        return peak, clip_count, dc_offset, rms_dbfs, float("-inf")
+
+    crest_db = 20.0 * math.log10(peak / rms)
+    return peak, clip_count, dc_offset, rms_dbfs, crest_db
