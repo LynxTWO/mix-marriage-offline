@@ -37,6 +37,7 @@ def _write_wav(
     channels: int,
     bits_per_sample: int,
     duration_s: float,
+    samples: List[int] | None = None,
 ) -> None:
     if bits_per_sample % 8 != 0:
         raise ValueError(f"bits_per_sample must be divisible by 8: {bits_per_sample}")
@@ -45,13 +46,31 @@ def _write_wav(
         raise ValueError(f"Unsupported bits_per_sample: {bits_per_sample}")
     if sample_rate_hz <= 0 or channels <= 0 or duration_s <= 0:
         raise ValueError("sample_rate_hz, channels, and duration_s must be positive")
-    frames = int(sample_rate_hz * duration_s)
-    silence = b"\x00" * (frames * channels * sample_width)
+
+    if samples is not None:
+        if bits_per_sample not in (16, 24):
+            raise ValueError(f"Unsupported bits_per_sample for samples: {bits_per_sample}")
+        if any(not isinstance(sample, int) for sample in samples):
+            raise ValueError("samples must be integers")
+        if len(samples) % channels != 0:
+            raise ValueError("samples length must be divisible by channels")
+        max_value = (1 << (bits_per_sample - 1)) - 1
+        min_value = -(1 << (bits_per_sample - 1))
+        frames = bytearray()
+        for sample in samples:
+            if sample < min_value or sample > max_value:
+                raise ValueError(f"Sample out of range: {sample}")
+            frames.extend(int(sample).to_bytes(sample_width, "little", signed=True))
+        data = bytes(frames)
+    else:
+        frame_count = int(sample_rate_hz * duration_s)
+        data = b"\x00" * (frame_count * channels * sample_width)
+
     with wave.open(str(path), "wb") as handle:
         handle.setnchannels(channels)
         handle.setsampwidth(sample_width)
         handle.setframerate(sample_rate_hz)
-        handle.writeframes(silence)
+        handle.writeframes(data)
 
 
 def _write_corrupt(path: Path, *, byte_count: int = 6) -> None:
@@ -121,6 +140,7 @@ def _run_fixture(fixture_path: Path, fixture: Dict[str, Any]) -> bool:
                 channels=int(channels),
                 bits_per_sample=int(bits_per_sample),
                 duration_s=float(duration_s),
+                samples=stem.get("samples"),
             )
 
         try:

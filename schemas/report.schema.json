@@ -63,7 +63,14 @@
         "duration_s": { "type": "number", "minimum": 0 },
         "sample_rate_hz": { "type": "number", "minimum": 8000 },
         "bits_per_sample": { "type": "integer", "minimum": 1 },
-        "bit_depth": { "type": "integer", "minimum": 1 }
+        "bit_depth": { "type": "integer", "minimum": 1 },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "peak_dbfs": { "type": "number" }
+          }
+        }
       }
     },
     "bus": {

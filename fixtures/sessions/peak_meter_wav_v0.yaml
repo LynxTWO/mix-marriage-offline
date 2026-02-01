@@ -1,0 +1,14 @@
+fixture_id: "FIX.SESSION.PEAK.METER.WAV.V0"
+fixture_type: "session_validation"
+description: "Mono WAV with a known -6 dBFS sample peak."
+
+inputs:
+  stems:
+    - filename: "peak_mono.wav"
+      sample_rate_hz: 48000
+      channels: 1
+      bits_per_sample: 16
+      duration_s: 0.0000833333
+      samples: [0, 16384, -16384, 0]
+
+expected_issue_ids: []

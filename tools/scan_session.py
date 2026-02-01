@@ -27,6 +27,8 @@ if str(SRC_DIR) not in sys.path:
 from mmo import __version__ as engine_version  # noqa: E402
 from mmo.core.session import build_session_from_stems_dir  # noqa: E402
 from mmo.core.validators import validate_session  # noqa: E402
+from mmo.dsp.decoders import detect_format_from_path  # noqa: E402
+from mmo.dsp.meters import compute_sample_peak_dbfs_wav  # noqa: E402
 
 
 def _load_ontology_version(path: Path) -> str:
@@ -59,8 +61,42 @@ def _validate_schema(schema_path: Path, report: Dict[str, Any]) -> None:
         raise ValueError(f"Report schema validation failed:\n{messages}")
 
 
-def build_report(stems_dir: Path, generated_at: str, *, strict: bool = False) -> Dict[str, Any]:
+def _add_peak_metrics(session: Dict[str, Any], stems_dir: Path) -> None:
+    stems = session.get("stems", [])
+    for stem in stems:
+        if not isinstance(stem, dict):
+            continue
+        if "sample_rate_hz" not in stem or "bits_per_sample" not in stem:
+            continue
+        file_path = stem.get("file_path")
+        if not isinstance(file_path, str) or not file_path:
+            continue
+        stem_path = Path(file_path)
+        if not stem_path.is_absolute():
+            stem_path = stems_dir / stem_path
+        if detect_format_from_path(stem_path) != "wav":
+            continue
+        try:
+            peak_dbfs = compute_sample_peak_dbfs_wav(stem_path)
+        except ValueError:
+            continue
+        metrics = stem.get("metrics")
+        if not isinstance(metrics, dict):
+            metrics = {}
+            stem["metrics"] = metrics
+        metrics["peak_dbfs"] = peak_dbfs
+
+
+def build_report(
+    stems_dir: Path,
+    generated_at: str,
+    *,
+    strict: bool = False,
+    include_peak: bool = False,
+) -> Dict[str, Any]:
     session = build_session_from_stems_dir(stems_dir)
+    if include_peak:
+        _add_peak_metrics(session, stems_dir)
     issues = validate_session(session, strict=strict)
     stem_hash = _hash_from_stems(session.get("stems", []))
     ontology_version = _load_ontology_version(ROOT_DIR / "ontology" / "ontology.yaml")
@@ -85,6 +121,11 @@ def main() -> int:
         action="store_true",
         help="Treat lossy/unsupported formats as high-severity issues.",
     )
+    parser.add_argument(
+        "--peak",
+        action="store_true",
+        help="Compute WAV sample peak meter readings for stems.",
+    )
     parser.add_argument("--out", dest="out", default=None, help="Optional output JSON path.")
     parser.add_argument(
         "--schema",
@@ -100,7 +141,12 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    report = build_report(Path(args.stems_dir), args.generated_at, strict=args.strict)
+    report = build_report(
+        Path(args.stems_dir),
+        args.generated_at,
+        strict=args.strict,
+        include_peak=args.peak,
+    )
 
     if args.schema:
         _validate_schema(Path(args.schema), report)
