@@ -10,6 +10,18 @@ Before you export:
 - No clipping. Leave headroom.
 - Clear naming so roles can be assigned.
 
+## Quick CLI flow
+Use the demo stems generator to create deterministic stems, then run the one-shot analyzer.
+
+```
+PYTHONPATH=src python tools/make_demo_stems.py /tmp/mmo_demo
+PYTHONPATH=src python tools/analyze_stems.py /tmp/mmo_demo --out-report out.json --peak --csv recall.csv
+```
+
+Artifacts:
+- `out.json` (final report after the plugin pipeline)
+- `recall.csv` (recall/export summary)
+
 ## Recommended file format
 - WAV, PCM
 - 24-bit (or 32-bit float if your DAW supports it cleanly)
