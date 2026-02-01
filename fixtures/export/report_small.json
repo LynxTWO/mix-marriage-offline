@@ -1,0 +1,64 @@
+{
+  "schema_version": "0.1.0",
+  "report_id": "report-small",
+  "project_id": "report-small",
+  "generated_at": "2000-01-01T00:00:00Z",
+  "engine_version": "0.0.0",
+  "ontology_version": "0.0.0",
+  "session": {
+    "stems": [
+      {
+        "stem_id": "drums",
+        "file_path": "drums.wav",
+        "measurements": [
+          {
+            "evidence_id": "EVID.METER.RMS_DBFS",
+            "value": -12.5,
+            "unit_id": "UNIT.DBFS"
+          },
+          {
+            "evidence_id": "EVID.METER.SAMPLE_PEAK_DBFS",
+            "value": -1.0,
+            "unit_id": "UNIT.DBFS"
+          }
+        ]
+      }
+    ]
+  },
+  "issues": [
+    {
+      "issue_id": "ISSUE.VALIDATION.EXAMPLE",
+      "severity": 10,
+      "confidence": 0.9,
+      "message": "Example issue",
+      "evidence": [
+        {
+          "evidence_id": "EVID.FILE.FORMAT",
+          "value": "wav"
+        }
+      ]
+    }
+  ],
+  "recommendations": [
+    {
+      "recommendation_id": "REC.002",
+      "issue_id": "ISSUE.VALIDATION.EXAMPLE",
+      "action_id": "ACTION.B",
+      "risk": "medium",
+      "requires_approval": false,
+      "target": {"scope": "stem", "stem_id": "drums"},
+      "params": [{"param_id": "PARAM.X", "value": 1}],
+      "notes": "Second"
+    },
+    {
+      "recommendation_id": "REC.001",
+      "issue_id": "ISSUE.VALIDATION.EXAMPLE",
+      "action_id": "ACTION.A",
+      "risk": "low",
+      "requires_approval": true,
+      "target": {"scope": "stem", "stem_id": "drums"},
+      "params": [{"param_id": "PARAM.Y", "value": 2}],
+      "notes": "First"
+    }
+  ]
+}
