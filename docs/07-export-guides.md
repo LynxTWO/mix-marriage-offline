@@ -24,6 +24,13 @@ Artifacts:
 - `out.json` (final report after the plugin pipeline)
 - `recall.csv` (recall/export summary)
 
+## Render (optional)
+If you want MMO to render only conservative gain/trim recommendations, use the renderer tool. It only applies low-risk, approval-free, negative gain/trim values.
+
+```
+PYTHONPATH=src python tools/render_gain_trim.py /tmp/mmo_demo --report out.json --out-dir rendered
+```
+
 ## Recommended file format
 - WAV, PCM
 - 24-bit (or 32-bit float if your DAW supports it cleanly)
