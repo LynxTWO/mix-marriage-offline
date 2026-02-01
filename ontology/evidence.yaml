@@ -564,6 +564,21 @@ evidence:
     description: "Human-readable name of the downmix matrix used."
     value_type: "string"
 
+  EVID.DOWNMIX.MATRIX_ID:
+    label: "Downmix matrix ID"
+    description: "Canonical identifier for the downmix matrix used."
+    value_type: "string"
+
+  EVID.DOWNMIX.SOURCE_LAYOUT_ID:
+    label: "Downmix source layout"
+    description: "Source LAYOUT.* identifier used to select the downmix matrix."
+    value_type: "string"
+
+  EVID.DOWNMIX.TARGET_LAYOUT_ID:
+    label: "Downmix target layout"
+    description: "Target LAYOUT.* identifier produced by the downmix matrix."
+    value_type: "string"
+
   EVID.DOWNMIX.MATRIX_COEFFICIENT:
     label: "Downmix coefficient"
     description: "One coefficient entry from a downmix matrix."
