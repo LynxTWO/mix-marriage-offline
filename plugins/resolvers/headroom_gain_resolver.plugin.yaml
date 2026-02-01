@@ -1,0 +1,11 @@
+plugin_id: "PLUGIN.RESOLVER.HEADROOM_GAIN"
+plugin_type: "resolver"
+name: "Headroom Gain Resolver"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Recommends deterministic gain trims for clipping/headroom issues."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "plugins.resolvers.headroom_gain_resolver:HeadroomGainResolver"
+capabilities:
+  - "ACTION.UTILITY.GAIN"

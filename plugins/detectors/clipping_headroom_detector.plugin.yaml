@@ -1,0 +1,12 @@
+plugin_id: "PLUGIN.DETECTOR.CLIPPING_HEADROOM"
+plugin_type: "detector"
+name: "Clipping + Headroom Detector"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Detects clipping samples and insufficient headroom using meter evidence."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "plugins.detectors.clipping_headroom_detector:ClippingHeadroomDetector"
+capabilities:
+  - "ISSUE.SAFETY.CLIPPING_SAMPLES"
+  - "ISSUE.SAFETY.INSUFFICIENT_HEADROOM"
