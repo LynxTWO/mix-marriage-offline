@@ -30,6 +30,9 @@ def _evidence_file(stem: Dict[str, Any]) -> List[Dict[str, Any]]:
     sha256 = stem.get("sha256")
     if sha256:
         evidence.append({"evidence_id": "EVID.FILE.HASH.SHA256", "value": sha256})
+    codec_name = stem.get("codec_name")
+    if isinstance(codec_name, str) and codec_name:
+        evidence.append({"evidence_id": "EVID.FILE.CODEC", "value": codec_name})
     return evidence
 
 
