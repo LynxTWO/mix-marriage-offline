@@ -1,0 +1,3 @@
+recommendation_id,issue_id,action_id,risk,requires_approval,target,params,notes
+REC.HEADROOM_GAIN.001,ISSUE.SAFETY.INSUFFICIENT_HEADROOM,ACTION.UTILITY.GAIN,low,False,"{""scope"": ""stem"", ""stem_id"": ""kick""}","[{""param_id"": ""PARAM.GAIN.DB"", ""unit_id"": ""UNIT.DB"", ""value"": -0.27}]",
+REC.HEADROOM_GAIN.002,ISSUE.SAFETY.INSUFFICIENT_HEADROOM,ACTION.UTILITY.GAIN,low,False,"{""scope"": ""stem"", ""stem_id"": ""snare""}","[{""param_id"": ""PARAM.GAIN.DB"", ""unit_id"": ""UNIT.DB"", ""value"": -0.83}]",

@@ -1,0 +1,116 @@
+{
+  "schema_version": "0.1.0",
+  "report_id": "819a1516b01d05fe8e65c91d05db044362e3e505a6df560d3fa77521cbbc9d1d",
+  "project_id": "819a1516b01d05fe8e65c91d05db044362e3e505a6df560d3fa77521cbbc9d1d",
+  "generated_at": "2000-01-01T00:00:00Z",
+  "engine_version": "0.1.0",
+  "ontology_version": "0.1.0",
+  "session": {
+    "stems": [
+      {
+        "stem_id": "kick",
+        "file_path": "kick.wav",
+        "sha256": "5405969dd557e5e9071c08830b19c63f548eda6087472bc2b2e991667388d58e",
+        "channel_count": 1,
+        "sample_rate_hz": 48000,
+        "duration_s": 1.0,
+        "bits_per_sample": 24,
+        "wav_audio_format": 1,
+        "wav_audio_format_resolved": 1,
+        "metrics": {
+          "peak_dbfs": -0.7260560651621224
+        },
+        "measurements": [
+          {
+            "evidence_id": "EVID.METER.CLIP_SAMPLE_COUNT",
+            "value": 0,
+            "unit_id": "UNIT.COUNT"
+          },
+          {
+            "evidence_id": "EVID.METER.CREST_FACTOR_DB",
+            "value": 19.289235754397748,
+            "unit_id": "UNIT.DB"
+          },
+          {
+            "evidence_id": "EVID.METER.DC_OFFSET",
+            "value": 0.0026525683924555777,
+            "unit_id": "UNIT.RATIO"
+          },
+          {
+            "evidence_id": "EVID.METER.PEAK_DBFS",
+            "value": -0.7260560651621224,
+            "unit_id": "UNIT.DBFS"
+          },
+          {
+            "evidence_id": "EVID.METER.RMS_DBFS",
+            "value": -20.01529181955987,
+            "unit_id": "UNIT.DBFS"
+          },
+          {
+            "evidence_id": "EVID.METER.SAMPLE_PEAK_DBFS",
+            "value": -0.7260560651621224,
+            "unit_id": "UNIT.DBFS"
+          },
+          {
+            "evidence_id": "EVID.QUALITY.CLIPPED_SAMPLES_COUNT",
+            "value": 0,
+            "unit_id": "UNIT.COUNT"
+          }
+        ]
+      },
+      {
+        "stem_id": "snare",
+        "file_path": "snare.wav",
+        "sha256": "04423ee63bb9b21b34541305a4997080149074a734ace6ab75cfbd940fd38d68",
+        "channel_count": 1,
+        "sample_rate_hz": 48000,
+        "duration_s": 1.0,
+        "bits_per_sample": 24,
+        "wav_audio_format": 1,
+        "wav_audio_format_resolved": 1,
+        "metrics": {
+          "peak_dbfs": -0.1720060652531309
+        },
+        "measurements": [
+          {
+            "evidence_id": "EVID.METER.CLIP_SAMPLE_COUNT",
+            "value": 0,
+            "unit_id": "UNIT.COUNT"
+          },
+          {
+            "evidence_id": "EVID.METER.CREST_FACTOR_DB",
+            "value": 22.446905813092783,
+            "unit_id": "UNIT.DB"
+          },
+          {
+            "evidence_id": "EVID.METER.DC_OFFSET",
+            "value": 5.562130361795425e-05,
+            "unit_id": "UNIT.RATIO"
+          },
+          {
+            "evidence_id": "EVID.METER.PEAK_DBFS",
+            "value": -0.1720060652531309,
+            "unit_id": "UNIT.DBFS"
+          },
+          {
+            "evidence_id": "EVID.METER.RMS_DBFS",
+            "value": -22.61891187834592,
+            "unit_id": "UNIT.DBFS"
+          },
+          {
+            "evidence_id": "EVID.METER.SAMPLE_PEAK_DBFS",
+            "value": -0.1720060652531309,
+            "unit_id": "UNIT.DBFS"
+          },
+          {
+            "evidence_id": "EVID.QUALITY.CLIPPED_SAMPLES_COUNT",
+            "value": 0,
+            "unit_id": "UNIT.COUNT"
+          }
+        ]
+      }
+    ]
+  },
+  "issues": [],
+  "recommendations": []
+}

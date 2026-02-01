@@ -140,6 +140,11 @@ def main() -> int:
     if exit_code != 0:
         return exit_code
 
+    try:
+        scan_report.unlink()
+    except FileNotFoundError:
+        pass
+
     exit_code = _run_export_report(
         tools_dir,
         out_report,
