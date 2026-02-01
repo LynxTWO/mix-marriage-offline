@@ -1,0 +1,8 @@
+fixture_type: "session_validation"
+inputs:
+  stems:
+    - filename: "stem.mp3"
+      corrupt: true
+      byte_count: 6
+expected_issue_ids:
+  - "ISSUE.VALIDATION.LOSSY_STEMS_DETECTED"
