@@ -85,7 +85,7 @@ The tool can recommend anything, but it only auto-applies low-risk actions withi
 
 Optional conservative render (explicit invoke):
 ```
-PYTHONPATH=src python tools/analyze_stems.py ./stems --out-report out.json --peak --render-gain-trim-out rendered
+PYTHONPATH=src python tools/analyze_stems.py ./stems --out-report examples/demo_run/out.json --peak --render-gain-trim-out rendered
 ```
 
 ---

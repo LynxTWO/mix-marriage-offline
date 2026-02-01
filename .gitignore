@@ -2,3 +2,9 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+*.scan.json
+*.pdf
+rendered/
+*.csv
+out.json
+recall.csv

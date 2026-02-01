@@ -15,26 +15,26 @@ Use the demo stems generator to create deterministic stems, then run the one-sho
 
 ```
 PYTHONPATH=src python tools/make_demo_stems.py /tmp/mmo_demo
-PYTHONPATH=src python tools/analyze_stems.py /tmp/mmo_demo --out-report out.json --peak --csv recall.csv
+PYTHONPATH=src python tools/analyze_stems.py /tmp/mmo_demo --out-report examples/demo_run/out.json --peak --csv examples/demo_run/recall.csv
 ```
 
-Use `--keep-scan` to retain the intermediate `out.scan.json` scan output.
+Use `--keep-scan` to retain the intermediate `examples/demo_run/out.scan.json` scan output.
 
 Artifacts:
-- `out.json` (final report after the plugin pipeline)
-- `recall.csv` (recall/export summary)
+- `examples/demo_run/out.json` (final report after the plugin pipeline)
+- `examples/demo_run/recall.csv` (recall/export summary)
 
 ## Render (optional)
 If you want MMO to render only conservative gain/trim recommendations, use the renderer tool. It only applies low-risk, approval-free, negative gain/trim values.
 
 ```
-PYTHONPATH=src python tools/render_gain_trim.py /tmp/mmo_demo --report out.json --out-dir rendered
+PYTHONPATH=src python tools/render_gain_trim.py /tmp/mmo_demo --report examples/demo_run/out.json --out-dir rendered
 ```
 
 You can also run the renderer as part of the analyze flow:
 
 ```
-PYTHONPATH=src python tools/analyze_stems.py /tmp/mmo_demo --out-report out.json --peak --render-gain-trim-out rendered
+PYTHONPATH=src python tools/analyze_stems.py /tmp/mmo_demo --out-report examples/demo_run/out.json --peak --render-gain-trim-out rendered
 ```
 
 ## Recommended file format
