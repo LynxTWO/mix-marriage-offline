@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 import subprocess
 from pathlib import Path
 from typing import Any, Dict
@@ -53,8 +54,11 @@ def read_metadata_ffprobe(path: Path) -> Dict[str, Any]:
     if ffprobe is None:
         raise ValueError("ffprobe not available")
 
-    cmd = [
-        str(ffprobe),
+    if ffprobe.suffix.lower() == ".py":
+        base_cmd = [sys.executable, str(ffprobe)]
+    else:
+        base_cmd = [str(ffprobe)]
+    cmd = base_cmd + [
         "-v",
         "error",
         "-print_format",

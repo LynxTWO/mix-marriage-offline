@@ -58,12 +58,7 @@ if __name__ == "__main__":
 """.lstrip(),
             encoding="utf-8",
         )
-        wrapper_path = directory / "fake_ffprobe.cmd"
-        wrapper_path.write_text(
-            f"@echo off\n\"{sys.executable}\" \"{script_path}\" %*\n",
-            encoding="utf-8",
-        )
-        return wrapper_path
+        return script_path
 
     def test_ffprobe_metadata_flac_and_m4a(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
