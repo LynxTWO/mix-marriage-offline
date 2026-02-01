@@ -238,6 +238,24 @@ evidence:
     value_type: "number"
     unit_id: "UNIT.LUFS"
 
+  EVID.METER.LUFS_WEIGHTING_MODE:
+    label: "LUFS weighting mode"
+    description: "How channel weights were inferred (mask-known vs fallback)."
+    value_type: "string"
+    unit_id: "UNIT.NONE"
+
+  EVID.METER.LUFS_WEIGHTING_ORDER:
+    label: "LUFS inferred channel order"
+    description: "Inferred speaker order from wav_channel_mask (CSV), or unknown."
+    value_type: "string"
+    unit_id: "UNIT.NONE"
+
+  EVID.METER.LUFS_WEIGHTING_GI:
+    label: "LUFS Gi weights"
+    description: "Per-channel Gi weights applied (CSV, aligned to inferred order)."
+    value_type: "string"
+    unit_id: "UNIT.NONE"
+
   EVID.METER.LUFS_M:
     label: "Momentary loudness"
     description: "Momentary loudness (shorter window)."

@@ -20,6 +20,93 @@ _TRUEPEAK_TAPS = 63
 _LOUDNESS_OFFSET = -0.691
 _TRUEPEAK_PHASE_TAPS = 12
 _TRUEPEAK_BLOCK = 262144
+_CHANNEL_MASK_BITS: tuple[tuple[int, str], ...] = (
+    (0x00000001, "FL"),
+    (0x00000002, "FR"),
+    (0x00000004, "FC"),
+    (0x00000008, "LFE"),
+    (0x00000010, "BL"),
+    (0x00000020, "BR"),
+    (0x00000200, "SL"),
+    (0x00000400, "SR"),
+)
+
+
+def _channel_positions_from_mask(
+    channel_mask: int | None, channels: int
+) -> tuple[list[str] | None, str]:
+    """
+    Returns (positions, mode_detail).
+    positions is a list aligned to channel indices, or None if ambiguous.
+    mode_detail is a short token to help build LUFS_WEIGHTING_MODE.
+    """
+    if not channel_mask:
+        return None, "mask_missing"
+
+    positions: list[str] = []
+    for bit, label in _CHANNEL_MASK_BITS:
+        if channel_mask & bit:
+            positions.append(label)
+
+    if len(positions) < channels:
+        return None, "mask_underspecified"
+
+    mode_detail = "mask_known"
+    if len(positions) > channels:
+        positions = positions[:channels]
+        mode_detail = "mask_trimmed"
+
+    return positions, mode_detail
+
+
+def _bs1770_gi_weights(
+    channels: int, channel_mask: int | None
+) -> tuple[np.ndarray, str, str]:
+    """
+    Returns (weights, order_csv, mode_str)
+    weights: float64 length=channels
+    order_csv: speaker labels CSV or "unknown"
+    mode_str: human-readable but stable token
+    """
+    weights = np.ones(channels, dtype=np.float64)
+    positions, mode_detail = _channel_positions_from_mask(channel_mask, channels)
+
+    if positions is None:
+        if mode_detail == "mask_trimmed":
+            mode_str = "fallback_mask_trimmed_equal"
+        else:
+            mode_str = f"fallback_{mode_detail}"
+        return weights, "unknown", mode_str
+
+    order_csv = ",".join(positions) if positions else "unknown"
+    pos_set = set(positions)
+
+    for idx, pos in enumerate(positions):
+        if pos == "LFE":
+            weights[idx] = 0.0
+
+    has_sl_sr = "SL" in pos_set or "SR" in pos_set
+    if has_sl_sr:
+        for idx, pos in enumerate(positions):
+            if pos in ("SL", "SR"):
+                weights[idx] = 1.41
+        if channels >= 8:
+            mode_str = "mask_known_71_sl_sr_surround_blbr_rear"
+        else:
+            mode_str = "mask_known"
+    else:
+        for idx, pos in enumerate(positions):
+            if pos in ("BL", "BR"):
+                weights[idx] = 1.41
+        if channels == 6 and ("BL" in pos_set or "BR" in pos_set):
+            mode_str = "mask_known_51_blbr_surround"
+        else:
+            mode_str = "mask_known"
+
+    if mode_detail == "mask_trimmed":
+        mode_str = f"{mode_str}_mask_trimmed"
+
+    return weights, order_csv, mode_str
 
 
 def _read_wav_float64(path: Path) -> Tuple[np.ndarray, int]:
@@ -147,7 +234,11 @@ def _k_weighted(samples: np.ndarray, fs: int) -> np.ndarray:
 
 
 def _block_energies(
-    samples: np.ndarray, fs: int, block_s: float, hop_s: float
+    samples: np.ndarray,
+    fs: int,
+    block_s: float,
+    hop_s: float,
+    weights: np.ndarray | None = None,
 ) -> list[float]:
     block_size = int(round(block_s * fs))
     hop_size = int(round(hop_s * fs))
@@ -158,7 +249,11 @@ def _block_energies(
     energies: list[float] = []
     for start in range(0, samples.shape[0] - block_size + 1, hop_size):
         block = samples[start : start + block_size]
-        block_energy = float(np.mean(block * block, axis=0).sum())
+        per_ch = np.mean(block * block, axis=0)
+        if weights is None:
+            block_energy = float(per_ch.sum())
+        else:
+            block_energy = float(np.dot(per_ch, weights))
         energies.append(block_energy)
     return energies
 
@@ -235,6 +330,11 @@ def compute_true_peak_dbtp_wav(path: Path) -> float:
 
 def compute_lufs_integrated_wav(path: Path) -> float:
     """Compute integrated loudness (LUFS) per ITU-style gating."""
+    metadata = read_wav_metadata(path)
+    channels = int(metadata["channels"])
+    channel_mask = metadata.get("channel_mask")
+    weights, _, _ = _bs1770_gi_weights(channels, channel_mask)
+
     samples, sample_rate_hz = _read_wav_float64(path)
     if samples.size == 0:
         return float("-inf")
@@ -243,7 +343,9 @@ def compute_lufs_integrated_wav(path: Path) -> float:
     for channel_index in range(samples.shape[1]):
         weighted[:, channel_index] = _k_weighted(samples[:, channel_index], sample_rate_hz)
 
-    energies = _block_energies(weighted, sample_rate_hz, block_s=0.4, hop_s=0.1)
+    energies = _block_energies(
+        weighted, sample_rate_hz, block_s=0.4, hop_s=0.1, weights=weights
+    )
     if not energies:
         return float("-inf")
 
@@ -266,6 +368,11 @@ def compute_lufs_integrated_wav(path: Path) -> float:
 
 def compute_lufs_shortterm_wav(path: Path) -> float:
     """Compute short-term loudness (LUFS) over 3s windows."""
+    metadata = read_wav_metadata(path)
+    channels = int(metadata["channels"])
+    channel_mask = metadata.get("channel_mask")
+    weights, _, _ = _bs1770_gi_weights(channels, channel_mask)
+
     samples, sample_rate_hz = _read_wav_float64(path)
     if samples.size == 0:
         return float("-inf")
@@ -274,7 +381,9 @@ def compute_lufs_shortterm_wav(path: Path) -> float:
     for channel_index in range(samples.shape[1]):
         weighted[:, channel_index] = _k_weighted(samples[:, channel_index], sample_rate_hz)
 
-    energies = _block_energies(weighted, sample_rate_hz, block_s=3.0, hop_s=1.0)
+    energies = _block_energies(
+        weighted, sample_rate_hz, block_s=3.0, hop_s=1.0, weights=weights
+    )
     if not energies:
         return float("-inf")
     mean_energy = float(np.mean(energies))

@@ -296,6 +296,7 @@ def _add_basic_meter_measurements(
 
 def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> None:
     from mmo.dsp.meters_truth import (  # noqa: WPS433
+        _bs1770_gi_weights,
         compute_lufs_integrated_wav,
         compute_lufs_shortterm_wav,
         compute_true_peak_dbtp_wav,
@@ -341,6 +342,34 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> N
             value=lufs_s,
             unit_id="UNIT.LUFS",
         )
+
+        channels = stem.get("channels")
+        if channels is None:
+            channels = stem.get("channel_count")
+        if isinstance(channels, int) and channels > 0:
+            mask = stem.get("wav_channel_mask")
+            channel_mask = mask if isinstance(mask, int) else None
+            weights, order_csv, mode_str = _bs1770_gi_weights(channels, channel_mask)
+            gi_csv = ",".join(f"{weight:.2f}" for weight in weights)
+
+            upsert_measurement(
+                stem,
+                evidence_id="EVID.METER.LUFS_WEIGHTING_MODE",
+                value=mode_str,
+                unit_id="UNIT.NONE",
+            )
+            upsert_measurement(
+                stem,
+                evidence_id="EVID.METER.LUFS_WEIGHTING_ORDER",
+                value=order_csv,
+                unit_id="UNIT.NONE",
+            )
+            upsert_measurement(
+                stem,
+                evidence_id="EVID.METER.LUFS_WEIGHTING_GI",
+                value=gi_csv,
+                unit_id="UNIT.NONE",
+            )
 
 
 def _has_optional_dep_issue(issues: List[Dict[str, Any]], dep_name: str) -> bool:
