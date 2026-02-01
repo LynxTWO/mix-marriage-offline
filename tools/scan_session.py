@@ -226,59 +226,63 @@ def build_report(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Scan a stems directory into an MMO report.")
-    parser.add_argument("stems_dir", help="Path to a directory of audio stems.")
-    parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="Treat lossy/unsupported formats as high-severity issues.",
-    )
-    parser.add_argument(
-        "--peak",
-        action="store_true",
-        help="Compute WAV sample peak meter readings for stems.",
-    )
-    parser.add_argument(
-        "--meters",
-        choices=["basic"],
-        default=None,
-        help="Enable additional WAV-only meter packs (basic).",
-    )
-    parser.add_argument("--out", dest="out", default=None, help="Optional output JSON path.")
-    parser.add_argument(
-        "--schema",
-        dest="schema",
-        default=None,
-        help="Optional JSON schema path for validation.",
-    )
-    parser.add_argument(
-        "--generated-at",
-        dest="generated_at",
-        default="2000-01-01T00:00:00Z",
-        help="Override generated_at timestamp (ISO 8601).",
-    )
-    args = parser.parse_args()
+    try:
+        parser = argparse.ArgumentParser(description="Scan a stems directory into an MMO report.")
+        parser.add_argument("stems_dir", help="Path to a directory of audio stems.")
+        parser.add_argument(
+            "--strict",
+            action="store_true",
+            help="Treat lossy/unsupported formats as high-severity issues.",
+        )
+        parser.add_argument(
+            "--peak",
+            action="store_true",
+            help="Compute WAV sample peak meter readings for stems.",
+        )
+        parser.add_argument(
+            "--meters",
+            choices=["basic"],
+            default=None,
+            help="Enable additional WAV-only meter packs (basic).",
+        )
+        parser.add_argument("--out", dest="out", default=None, help="Optional output JSON path.")
+        parser.add_argument(
+            "--schema",
+            dest="schema",
+            default=None,
+            help="Optional JSON schema path for validation.",
+        )
+        parser.add_argument(
+            "--generated-at",
+            dest="generated_at",
+            default="2000-01-01T00:00:00Z",
+            help="Override generated_at timestamp (ISO 8601).",
+        )
+        args = parser.parse_args()
 
-    report = build_report(
-        Path(args.stems_dir),
-        args.generated_at,
-        strict=args.strict,
-        include_peak=args.peak,
-        meters=args.meters,
-    )
+        report = build_report(
+            Path(args.stems_dir),
+            args.generated_at,
+            strict=args.strict,
+            include_peak=args.peak,
+            meters=args.meters,
+        )
 
-    if args.schema:
-        _validate_schema(Path(args.schema), report)
+        if args.schema:
+            _validate_schema(Path(args.schema), report)
 
-    output = json.dumps(report, indent=2)
-    if args.out:
-        out_path = Path(args.out)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(output + "\n", encoding="utf-8")
-    else:
-        print(output)
+        output = json.dumps(report, indent=2)
+        if args.out:
+            out_path = Path(args.out)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(output + "\n", encoding="utf-8")
+        else:
+            print(output)
 
-    return 0
+        return 0
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
