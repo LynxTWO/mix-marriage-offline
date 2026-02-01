@@ -28,6 +28,7 @@ from mmo import __version__ as engine_version  # noqa: E402
 from mmo.core.session import build_session_from_stems_dir  # noqa: E402
 from mmo.core.validators import validate_session  # noqa: E402
 from mmo.dsp.decoders import detect_format_from_path  # noqa: E402
+from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd  # noqa: E402
 from mmo.dsp.meters import (  # noqa: E402
     compute_clip_sample_count_wav,
     compute_crest_factor_db_wav,
@@ -134,12 +135,14 @@ def _add_peak_metrics(session: Dict[str, Any], stems_dir: Path) -> None:
         )
 
 
-def _add_basic_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> None:
+def _add_basic_meter_measurements(
+    session: Dict[str, Any], stems_dir: Path
+) -> bool:
+    missing_ffmpeg = False
+    ffmpeg_cmd = None
     stems = session.get("stems", [])
     for stem in stems:
         if not isinstance(stem, dict):
-            continue
-        if "sample_rate_hz" not in stem or "bits_per_sample" not in stem:
             continue
         file_path = stem.get("file_path")
         if not isinstance(file_path, str) or not file_path:
@@ -147,7 +150,17 @@ def _add_basic_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> N
         stem_path = Path(file_path)
         if not stem_path.is_absolute():
             stem_path = stems_dir / stem_path
-        if detect_format_from_path(stem_path) != "wav":
+        format_id = detect_format_from_path(stem_path)
+        if format_id == "wav":
+            if "sample_rate_hz" not in stem or "bits_per_sample" not in stem:
+                continue
+        elif format_id in {"flac", "wavpack"}:
+            if ffmpeg_cmd is None:
+                ffmpeg_cmd = resolve_ffmpeg_cmd()
+            if ffmpeg_cmd is None:
+                missing_ffmpeg = True
+            continue
+        else:
             continue
 
         try:
@@ -207,6 +220,7 @@ def _add_basic_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> N
                     value=correlation,
                     unit_id="UNIT.CORRELATION",
                 )
+    return missing_ffmpeg
 
 
 def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> None:
@@ -258,11 +272,34 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> N
         )
 
 
+def _has_optional_dep_issue(issues: List[Dict[str, Any]], dep_name: str) -> bool:
+    for issue in issues:
+        if not isinstance(issue, dict):
+            continue
+        if issue.get("issue_id") != "ISSUE.VALIDATION.OPTIONAL_DEP_MISSING":
+            continue
+        evidence = issue.get("evidence", [])
+        if not isinstance(evidence, list):
+            continue
+        for item in evidence:
+            if not isinstance(item, dict):
+                continue
+            if (
+                item.get("evidence_id")
+                == "EVID.VALIDATION.MISSING_OPTIONAL_DEP"
+                and item.get("value") == dep_name
+            ):
+                return True
+    return False
+
+
 def _add_optional_dep_issue(
     issues: List[Dict[str, Any]],
     dep_name: str,
     hint: str,
 ) -> None:
+    if _has_optional_dep_issue(issues, dep_name):
+        return
     issues.append(
         {
             "issue_id": "ISSUE.VALIDATION.OPTIONAL_DEP_MISSING",
@@ -302,9 +339,16 @@ def build_report(
         )
     if include_peak:
         _add_peak_metrics(session, stems_dir)
+    missing_ffmpeg = False
     if meters == "basic":
-        _add_basic_meter_measurements(session, stems_dir)
+        missing_ffmpeg = _add_basic_meter_measurements(session, stems_dir)
     issues = validate_session(session, strict=strict)
+    if missing_ffmpeg:
+        _add_optional_dep_issue(
+            issues,
+            dep_name="ffmpeg",
+            hint="Install FFmpeg or set MMO_FFMPEG_PATH=/path/to/ffmpeg",
+        )
     if meters == "truth":
         try:
             import numpy  # noqa: F401
