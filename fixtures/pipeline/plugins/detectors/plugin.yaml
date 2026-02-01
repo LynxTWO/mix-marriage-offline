@@ -1,0 +1,12 @@
+plugin_id: "PLUGIN.DETECTOR.FIXTURE_DETERMINISTIC"
+plugin_type: "detector"
+name: "Fixture Deterministic Detector"
+version: "0.1.0"
+author: "MMO Fixtures"
+license: "Apache-2.0"
+description: "Fixture detector that always emits a single deterministic issue."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "fixtures.pipeline.plugins.detectors.deterministic_detector:DeterministicDetector"
+capabilities:
+  - "ISSUE.FIXTURE.DETERMINISTIC"
