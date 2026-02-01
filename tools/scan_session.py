@@ -189,6 +189,81 @@ def _add_basic_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> N
         )
 
 
+def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> None:
+    from mmo.dsp.meters_truth import (  # noqa: WPS433
+        compute_lufs_integrated_wav,
+        compute_lufs_shortterm_wav,
+        compute_true_peak_dbtp_wav,
+    )
+
+    stems = session.get("stems", [])
+    for stem in stems:
+        if not isinstance(stem, dict):
+            continue
+        if "sample_rate_hz" not in stem or "bits_per_sample" not in stem:
+            continue
+        file_path = stem.get("file_path")
+        if not isinstance(file_path, str) or not file_path:
+            continue
+        stem_path = Path(file_path)
+        if not stem_path.is_absolute():
+            stem_path = stems_dir / stem_path
+        if detect_format_from_path(stem_path) != "wav":
+            continue
+
+        try:
+            truepeak_dbtp = compute_true_peak_dbtp_wav(stem_path)
+            lufs_i = compute_lufs_integrated_wav(stem_path)
+            lufs_s = compute_lufs_shortterm_wav(stem_path)
+        except ValueError:
+            continue
+
+        upsert_measurement(
+            stem,
+            evidence_id="EVID.METER.TRUEPEAK_DBTP",
+            value=truepeak_dbtp,
+            unit_id="UNIT.DBTP",
+        )
+        upsert_measurement(
+            stem,
+            evidence_id="EVID.METER.LUFS_I",
+            value=lufs_i,
+            unit_id="UNIT.LUFS",
+        )
+        upsert_measurement(
+            stem,
+            evidence_id="EVID.METER.LUFS_S",
+            value=lufs_s,
+            unit_id="UNIT.LUFS",
+        )
+
+
+def _add_optional_dep_issue(
+    issues: List[Dict[str, Any]],
+    dep_name: str,
+    hint: str,
+) -> None:
+    issues.append(
+        {
+            "issue_id": "ISSUE.VALIDATION.OPTIONAL_DEP_MISSING",
+            "severity": 30,
+            "confidence": 1.0,
+            "target": {"scope": "session"},
+            "evidence": [
+                {
+                    "evidence_id": "EVID.VALIDATION.MISSING_OPTIONAL_DEP",
+                    "value": dep_name,
+                },
+                {
+                    "evidence_id": "EVID.VALIDATION.MISSING_OPTIONAL_DEP_HINT",
+                    "value": hint,
+                },
+            ],
+            "message": f"Optional dependency '{dep_name}' is missing; skipping related meters.",
+        }
+    )
+
+
 def build_report(
     stems_dir: Path,
     generated_at: str,
@@ -210,6 +285,17 @@ def build_report(
     if meters == "basic":
         _add_basic_meter_measurements(session, stems_dir)
     issues = validate_session(session, strict=strict)
+    if meters == "truth":
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            _add_optional_dep_issue(
+                issues,
+                dep_name="numpy",
+                hint="Install: pip install .[truth]",
+            )
+        else:
+            _add_truth_meter_measurements(session, stems_dir)
     stem_hash = _hash_from_stems(session.get("stems", []))
     ontology_version = _load_ontology_version(ROOT_DIR / "ontology" / "ontology.yaml")
     return {
@@ -241,9 +327,9 @@ def main() -> int:
         )
         parser.add_argument(
             "--meters",
-            choices=["basic"],
+            choices=["basic", "truth"],
             default=None,
-            help="Enable additional WAV-only meter packs (basic).",
+            help="Enable additional WAV-only meter packs (basic or truth).",
         )
         parser.add_argument("--out", dest="out", default=None, help="Optional output JSON path.")
         parser.add_argument(

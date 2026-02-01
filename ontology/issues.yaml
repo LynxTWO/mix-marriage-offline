@@ -100,6 +100,19 @@ issues:
       - "EVID.FILE.PATH"
     suggested_actions: []
 
+  ISSUE.VALIDATION.OPTIONAL_DEP_MISSING:
+    label: "Optional dependency missing"
+    description: "An optional dependency required for a requested feature is not installed."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.VALIDATION.MISSING_OPTIONAL_DEP"
+      - "EVID.VALIDATION.MISSING_OPTIONAL_DEP_HINT"
+    suggested_actions: []
+    notes:
+      - "The requested feature is skipped while the scan continues."
+
   ISSUE.VALIDATION.DURATION_MISMATCH:
     label: "Duration mismatch"
     description: "Stem durations do not match (beyond tolerance), breaking alignment and downmix checks."

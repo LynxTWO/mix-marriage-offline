@@ -77,6 +77,16 @@ evidence:
     description: "Short explanation for why a stem is treated as lossy."
     value_type: "string"
 
+  EVID.VALIDATION.MISSING_OPTIONAL_DEP:
+    label: "Missing optional dependency"
+    description: "Optional dependency required to perform a requested operation."
+    value_type: "string"
+
+  EVID.VALIDATION.MISSING_OPTIONAL_DEP_HINT:
+    label: "Missing optional dependency hint"
+    description: "Guidance for installing or enabling the missing dependency."
+    value_type: "string"
+
   EVID.SESSION.SAMPLE_RATE_HZ:
     label: "Sample rate"
     description: "Session sample rate derived from the file header or decode settings."
