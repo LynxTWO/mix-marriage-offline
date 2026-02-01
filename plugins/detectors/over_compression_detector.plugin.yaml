@@ -1,0 +1,11 @@
+plugin_id: "PLUGIN.DETECTOR.OVER_COMPRESSION"
+plugin_type: "detector"
+name: "Over-Compression Detector"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Conservatively flags over-compressed dynamics using crest factor and RMS."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "plugins.detectors.over_compression_detector:OverCompressionDetector"
+capabilities:
+  - "ISSUE.DYNAMICS.OVER_COMPRESSION"

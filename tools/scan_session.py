@@ -35,6 +35,7 @@ from mmo.dsp.meters import (  # noqa: E402
     compute_rms_dbfs_wav,
     compute_sample_peak_dbfs_wav,
 )
+from mmo.dsp.stereo import compute_stereo_correlation_wav  # noqa: E402
 
 
 def upsert_measurement(stem: Dict[str, Any], evidence_id: str, value: Any, unit_id: str) -> None:
@@ -177,6 +178,12 @@ def _add_basic_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> N
         )
         upsert_measurement(
             stem,
+            evidence_id="EVID.QUALITY.DC_OFFSET_PERCENT",
+            value=dc_offset * 100.0,
+            unit_id="UNIT.PERCENT",
+        )
+        upsert_measurement(
+            stem,
             evidence_id="EVID.METER.RMS_DBFS",
             value=rms_dbfs,
             unit_id="UNIT.DBFS",
@@ -187,6 +194,19 @@ def _add_basic_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> N
             value=crest_factor_db,
             unit_id="UNIT.DB",
         )
+
+        if stem.get("channel_count") == 2:
+            try:
+                correlation = compute_stereo_correlation_wav(stem_path)
+            except ValueError:
+                correlation = None
+            if correlation is not None:
+                upsert_measurement(
+                    stem,
+                    evidence_id="EVID.IMAGE.CORRELATION",
+                    value=correlation,
+                    unit_id="UNIT.CORRELATION",
+                )
 
 
 def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> None:

@@ -1,0 +1,11 @@
+plugin_id: "PLUGIN.DETECTOR.DC_OFFSET"
+plugin_type: "detector"
+name: "DC Offset Detector"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Detects significant DC offset using percent-of-full-scale evidence."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "plugins.detectors.dc_offset_detector:DcOffsetDetector"
+capabilities:
+  - "ISSUE.SAFETY.DC_OFFSET"
