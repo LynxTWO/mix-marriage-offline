@@ -37,6 +37,34 @@ from mmo.dsp.meters import (  # noqa: E402
 )
 
 
+def upsert_measurement(stem: Dict[str, Any], evidence_id: str, value: Any, unit_id: str) -> None:
+    measurements = stem.get("measurements")
+    if not isinstance(measurements, list):
+        measurements = []
+        stem["measurements"] = measurements
+
+    replaced = False
+    for measurement in measurements:
+        if not isinstance(measurement, dict):
+            continue
+        if measurement.get("evidence_id") == evidence_id:
+            measurement["value"] = value
+            measurement["unit_id"] = unit_id
+            replaced = True
+            break
+
+    if not replaced:
+        measurements.append(
+            {
+                "evidence_id": evidence_id,
+                "value": value,
+                "unit_id": unit_id,
+            }
+        )
+
+    measurements.sort(key=lambda item: item.get("evidence_id", ""))
+
+
 def _load_ontology_version(path: Path) -> str:
     if yaml is None:
         raise RuntimeError("PyYAML is not installed; cannot load ontology version.")
@@ -91,16 +119,11 @@ def _add_peak_metrics(session: Dict[str, Any], stems_dir: Path) -> None:
             metrics = {}
             stem["metrics"] = metrics
         metrics["peak_dbfs"] = peak_dbfs
-        measurements = stem.get("measurements")
-        if not isinstance(measurements, list):
-            measurements = []
-            stem["measurements"] = measurements
-        measurements.append(
-            {
-                "evidence_id": "EVID.METER.SAMPLE_PEAK_DBFS",
-                "value": peak_dbfs,
-                "unit_id": "UNIT.DBFS",
-            }
+        upsert_measurement(
+            stem,
+            evidence_id="EVID.METER.SAMPLE_PEAK_DBFS",
+            value=peak_dbfs,
+            unit_id="UNIT.DBFS",
         )
 
 
@@ -128,33 +151,29 @@ def _add_basic_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> N
         except ValueError:
             continue
 
-        measurements = stem.get("measurements")
-        if not isinstance(measurements, list):
-            measurements = []
-            stem["measurements"] = measurements
-        measurements.extend(
-            [
-                {
-                    "evidence_id": "EVID.METER.CLIP_SAMPLE_COUNT",
-                    "value": clip_count,
-                    "unit_id": "UNIT.COUNT",
-                },
-                {
-                    "evidence_id": "EVID.METER.DC_OFFSET",
-                    "value": dc_offset,
-                    "unit_id": "UNIT.RATIO",
-                },
-                {
-                    "evidence_id": "EVID.METER.RMS_DBFS",
-                    "value": rms_dbfs,
-                    "unit_id": "UNIT.DBFS",
-                },
-                {
-                    "evidence_id": "EVID.METER.CREST_FACTOR_DB",
-                    "value": crest_factor_db,
-                    "unit_id": "UNIT.DB",
-                },
-            ]
+        upsert_measurement(
+            stem,
+            evidence_id="EVID.METER.CLIP_SAMPLE_COUNT",
+            value=clip_count,
+            unit_id="UNIT.COUNT",
+        )
+        upsert_measurement(
+            stem,
+            evidence_id="EVID.METER.DC_OFFSET",
+            value=dc_offset,
+            unit_id="UNIT.RATIO",
+        )
+        upsert_measurement(
+            stem,
+            evidence_id="EVID.METER.RMS_DBFS",
+            value=rms_dbfs,
+            unit_id="UNIT.DBFS",
+        )
+        upsert_measurement(
+            stem,
+            evidence_id="EVID.METER.CREST_FACTOR_DB",
+            value=crest_factor_db,
+            unit_id="UNIT.DB",
         )
 
 
