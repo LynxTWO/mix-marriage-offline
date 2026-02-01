@@ -20,6 +20,26 @@ Avoid:
 - Normalization on export
 - Per-stem limiting that changes the intent
 
+## Supported stem formats (current)
+MMO detects several stem formats by extension, but only WAV metadata is decoded today.
+
+WAV (.wav/.wave):
+- Metadata supported.
+
+Lossless detected but not decoded yet:
+- FLAC (.flac), WavPack (.wv), AIFF (.aif/.aiff)
+- Warning: unsupported format. Export WAV for analysis.
+
+Lossy formats:
+- MP3 (.mp3), AAC (.aac), Ogg (.ogg), Opus (.opus)
+- Warning: lossy stems are discouraged because further processing and resampling can compound artifacts and make comparisons less reliable.
+
+M4A (.m4a):
+- Ambiguous container (AAC or ALAC). Treated as unsupported until probed.
+
+## Strict mode
+Running `scan_session --strict` elevates lossy and unsupported format warnings to higher severity for CI and advanced checks.
+
 ## Stem alignment rules
 MMO assumes stems can be summed and compared.
 
