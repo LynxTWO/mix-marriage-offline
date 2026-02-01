@@ -208,6 +208,19 @@ After this doc:
 - add ontology validation tests to CI
 
 
+## Unit tests
+
+From the repo root:
+
+```bash
+python -m pip install -r requirements.txt
+PYTHONPATH=src python -m pytest
+```
+
+Notes:
+- `PYTHONPATH=src` ensures the `mmo` package is importable in tests.
+
+
 ## Session fixtures (validation-only)
 
 From the repo root:
