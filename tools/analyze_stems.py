@@ -106,6 +106,7 @@ def main() -> int:
             "Examples:\n"
             "  analyze_stems.py ./stems --out-report out.json\n"
             "  analyze_stems.py ./stems --out-report out.json --keep-scan\n"
+            "  analyze_stems.py ./stems --out-report out.json --meters truth --keep-scan\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -127,9 +128,9 @@ def main() -> int:
     )
     parser.add_argument(
         "--meters",
-        choices=["basic"],
+        choices=["basic", "truth"],
         default="basic",
-        help="Enable additional meter packs (basic).",
+        help="Enable additional meter packs (basic or truth).",
     )
     parser.add_argument(
         "--peak",
