@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from mmo.dsp.backends.ffprobe_meta import find_ffprobe, read_metadata_ffprobe
 from mmo.dsp.io import read_wav_metadata
 
 
@@ -33,4 +34,11 @@ def read_metadata(path: Path) -> dict:
     format_id = detect_format_from_path(path)
     if format_id == "wav":
         return read_wav_metadata(path)
+    if find_ffprobe() is not None:
+        metadata = read_metadata_ffprobe(path)
+        if format_id == "m4a":
+            codec_name = metadata.get("codec_name")
+            if isinstance(codec_name, str):
+                metadata["codec_name"] = codec_name.lower()
+        return metadata
     raise NotImplementedError(f"No decoder backend for format '{format_id}'")

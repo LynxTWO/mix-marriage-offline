@@ -58,18 +58,24 @@ def build_session_from_stems_dir(stems_dir: Path) -> dict:
             "sha256": sha256_file(path),
         }
         format_id = detect_format_from_path(path)
-        if format_id == "wav":
-            try:
-                metadata = read_metadata(path)
-            except (ValueError, NotImplementedError):
-                metadata = None
-            if metadata:
+        try:
+            metadata = read_metadata(path)
+        except (ValueError, NotImplementedError):
+            metadata = None
+        if metadata:
+            stem_entry.update(
+                {
+                    "channel_count": metadata["channels"],
+                    "sample_rate_hz": metadata["sample_rate_hz"],
+                    "duration_s": metadata["duration_s"],
+                }
+            )
+            bits_per_sample = metadata.get("bits_per_sample")
+            if isinstance(bits_per_sample, int):
+                stem_entry["bits_per_sample"] = bits_per_sample
+            if format_id == "wav":
                 stem_entry.update(
                     {
-                        "channel_count": metadata["channels"],
-                        "sample_rate_hz": metadata["sample_rate_hz"],
-                        "bits_per_sample": metadata["bits_per_sample"],
-                        "duration_s": metadata["duration_s"],
                         "wav_audio_format": metadata["audio_format"],
                         "wav_audio_format_resolved": metadata.get(
                             "audio_format_resolved", metadata["audio_format"]
