@@ -17,12 +17,9 @@ from mmo.dsp.io import read_wav_metadata
 _EPSILON = 1e-12
 _TRUEPEAK_UPSAMPLE = 4
 _TRUEPEAK_TAPS = 63
-_K_WEIGHTING_HP_F0 = 38.13547087602444
-_K_WEIGHTING_HP_Q = 0.5003270373253953
-_K_WEIGHTING_HS_F0 = 1681.974450955533
-_K_WEIGHTING_HS_GAIN_DB = 4.0
-_K_WEIGHTING_HS_SLOPE = 1.0
 _LOUDNESS_OFFSET = -0.691
+_TRUEPEAK_PHASE_TAPS = 12
+_TRUEPEAK_BLOCK = 262144
 
 
 def _read_wav_float64(path: Path) -> Tuple[np.ndarray, int]:
@@ -97,48 +94,55 @@ def _apply_biquad(samples: np.ndarray, b: Iterable[float], a: Iterable[float]) -
     return output
 
 
-def _biquad_highpass(fs: int, f0: float, q: float) -> Tuple[np.ndarray, np.ndarray]:
-    w0 = 2.0 * math.pi * f0 / fs
-    cos_w0 = math.cos(w0)
-    sin_w0 = math.sin(w0)
-    alpha = sin_w0 / (2.0 * q)
-    b0 = (1.0 + cos_w0) / 2.0
-    b1 = -(1.0 + cos_w0)
-    b2 = (1.0 + cos_w0) / 2.0
-    a0 = 1.0 + alpha
-    a1 = -2.0 * cos_w0
-    a2 = 1.0 - alpha
-    b = np.array([b0 / a0, b1 / a0, b2 / a0], dtype=np.float64)
-    a = np.array([1.0, a1 / a0, a2 / a0], dtype=np.float64)
-    return b, a
+def k_weighting_biquads(
+    sample_rate_hz: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    if sample_rate_hz == 48000:
+        pre_b = np.array(
+            [1.53512485958697, -2.69169618940638, 1.19839281085285],
+            dtype=np.float64,
+        )
+        pre_a = np.array(
+            [1.0, -1.69065929318241, 0.73248077421585],
+            dtype=np.float64,
+        )
+        rlb_b = np.array([1.0, -2.0, 1.0], dtype=np.float64)
+        rlb_a = np.array(
+            [1.0, -1.99004745483398, 0.99007225036621],
+            dtype=np.float64,
+        )
+        return pre_b, pre_a, rlb_b, rlb_a
 
+    f0 = 1681.974450955533
+    gain = 3.999843853973347
+    q = 0.7071752369554196
+    k = math.tan(math.pi * f0 / sample_rate_hz)
+    vh = 10.0 ** (gain / 20.0)
+    vb = vh ** (0.4996667741545416)
+    a0 = 1.0 + k / q + k * k
+    pre_b0 = (vh + vb * k / q + k * k) / a0
+    pre_b1 = 2.0 * (k * k - vh) / a0
+    pre_b2 = (vh - vb * k / q + k * k) / a0
+    pre_a1 = 2.0 * (k * k - 1.0) / a0
+    pre_a2 = (1.0 - k / q + k * k) / a0
+    pre_b = np.array([pre_b0, pre_b1, pre_b2], dtype=np.float64)
+    pre_a = np.array([1.0, pre_a1, pre_a2], dtype=np.float64)
 
-def _biquad_highshelf(
-    fs: int, f0: float, gain_db: float, slope: float
-) -> Tuple[np.ndarray, np.ndarray]:
-    w0 = 2.0 * math.pi * f0 / fs
-    cos_w0 = math.cos(w0)
-    sin_w0 = math.sin(w0)
-    a = 10.0 ** (gain_db / 40.0)
-    alpha = sin_w0 / 2.0 * math.sqrt((a + 1.0 / a) * (1.0 / slope - 1.0) + 2.0)
-    b0 = a * ((a + 1.0) + (a - 1.0) * cos_w0 + 2.0 * math.sqrt(a) * alpha)
-    b1 = -2.0 * a * ((a - 1.0) + (a + 1.0) * cos_w0)
-    b2 = a * ((a + 1.0) + (a - 1.0) * cos_w0 - 2.0 * math.sqrt(a) * alpha)
-    a0 = (a + 1.0) - (a - 1.0) * cos_w0 + 2.0 * math.sqrt(a) * alpha
-    a1 = 2.0 * ((a - 1.0) - (a + 1.0) * cos_w0)
-    a2 = (a + 1.0) - (a - 1.0) * cos_w0 - 2.0 * math.sqrt(a) * alpha
-    b = np.array([b0 / a0, b1 / a0, b2 / a0], dtype=np.float64)
-    a = np.array([1.0, a1 / a0, a2 / a0], dtype=np.float64)
-    return b, a
+    f0 = 38.13547087602444
+    q = 0.5003270373238773
+    k = math.tan(math.pi * f0 / sample_rate_hz)
+    denom = 1.0 + k / q + k * k
+    rlb_a1 = 2.0 * (k * k - 1.0) / denom
+    rlb_a2 = (1.0 - k / q + k * k) / denom
+    rlb_b = np.array([1.0, -2.0, 1.0], dtype=np.float64)
+    rlb_a = np.array([1.0, rlb_a1, rlb_a2], dtype=np.float64)
+    return pre_b, pre_a, rlb_b, rlb_a
 
 
 def _k_weighted(samples: np.ndarray, fs: int) -> np.ndarray:
-    hp_b, hp_a = _biquad_highpass(fs, _K_WEIGHTING_HP_F0, _K_WEIGHTING_HP_Q)
-    hs_b, hs_a = _biquad_highshelf(
-        fs, _K_WEIGHTING_HS_F0, _K_WEIGHTING_HS_GAIN_DB, _K_WEIGHTING_HS_SLOPE
-    )
-    filtered = _apply_biquad(samples, hp_b, hp_a)
-    filtered = _apply_biquad(filtered, hs_b, hs_a)
+    pre_b, pre_a, rlb_b, rlb_a = k_weighting_biquads(fs)
+    filtered = _apply_biquad(samples, pre_b, pre_a)
+    filtered = _apply_biquad(filtered, rlb_b, rlb_a)
     return filtered
 
 
@@ -159,24 +163,74 @@ def _block_energies(
     return energies
 
 
+def _true_peak_48k_polyphase(channel: np.ndarray) -> float:
+    coeffs = np.array(
+        [
+            [0.0017089843750, -0.0291748046875, -0.0189208984375, -0.0083007812500],
+            [0.0109863281250, 0.0292968750000, 0.0330810546875, 0.0148925781250],
+            [-0.0196533203125, -0.0517578125000, -0.0582275390625, -0.0266113281250],
+            [0.0332031250000, 0.0891113281250, 0.1015625000000, 0.0476074218750],
+            [-0.0594482421875, -0.1665039062500, -0.2003173828125, -0.1022949218750],
+            [0.1373291015625, 0.4650878906250, 0.7797851562500, 0.9721679687500],
+            [0.9721679687500, 0.7797851562500, 0.4650878906250, 0.1373291015625],
+            [-0.1022949218750, -0.2003173828125, -0.1665039062500, -0.0594482421875],
+            [0.0476074218750, 0.1015625000000, 0.0891113281250, 0.0332031250000],
+            [-0.0266113281250, -0.0582275390625, -0.0517578125000, -0.0196533203125],
+            [0.0148925781250, 0.0330810546875, 0.0292968750000, 0.0109863281250],
+            [-0.0083007812500, -0.0189208984375, -0.0291748046875, 0.0017089843750],
+        ],
+        dtype=np.float64,
+    )
+    phase_taps = coeffs.T
+    history_len = _TRUEPEAK_PHASE_TAPS - 1
+    max_peak = 0.0
+    history = np.zeros(history_len, dtype=np.float64)
+    index = 0
+    while index < channel.shape[0]:
+        end = min(index + _TRUEPEAK_BLOCK, channel.shape[0])
+        block = channel[index:end]
+        work = np.concatenate([history, block])
+        for phase in range(_TRUEPEAK_UPSAMPLE):
+            conv = np.convolve(work, phase_taps[phase], mode="full")
+            block_out = conv[history_len : history_len + block.shape[0]]
+            phase_peak = float(np.max(np.abs(block_out))) if block_out.size else 0.0
+            if phase_peak > max_peak:
+                max_peak = phase_peak
+        if block.shape[0] >= history_len:
+            history = block[-history_len:]
+        else:
+            history = np.concatenate([history[block.shape[0] :], block])
+        index = end
+    return max_peak
+
+
 def compute_true_peak_dbtp_wav(path: Path) -> float:
     """Compute true-peak (dBTP) using 4x oversampling FIR."""
-    samples, _ = _read_wav_float64(path)
+    samples, sample_rate_hz = _read_wav_float64(path)
     if samples.size == 0:
         return float("-inf")
-    kernel = _design_lowpass_fir(cutoff=0.25, taps=_TRUEPEAK_TAPS)
+    atten = 0.25
+    gain_comp = 20.0 * math.log10(float(_TRUEPEAK_UPSAMPLE))
     max_peak = 0.0
+    kernel = None
+    if sample_rate_hz != 48000:
+        kernel = _design_lowpass_fir(cutoff=0.25, taps=_TRUEPEAK_TAPS)
     for channel_index in range(samples.shape[1]):
-        channel = samples[:, channel_index]
-        upsampled = np.zeros(channel.shape[0] * _TRUEPEAK_UPSAMPLE, dtype=np.float64)
-        upsampled[:: _TRUEPEAK_UPSAMPLE] = channel
-        filtered = np.convolve(upsampled, kernel, mode="same")
-        channel_peak = float(np.max(np.abs(filtered)))
+        channel = samples[:, channel_index] * atten
+        if sample_rate_hz == 48000:
+            channel_peak = _true_peak_48k_polyphase(channel)
+        else:
+            upsampled = np.zeros(
+                channel.shape[0] * _TRUEPEAK_UPSAMPLE, dtype=np.float64
+            )
+            upsampled[:: _TRUEPEAK_UPSAMPLE] = channel
+            filtered = np.convolve(upsampled, kernel, mode="same")
+            channel_peak = float(np.max(np.abs(filtered))) if filtered.size else 0.0
         if channel_peak > max_peak:
             max_peak = channel_peak
     if max_peak <= 0.0:
         return float("-inf")
-    return 20.0 * math.log10(max_peak)
+    return 20.0 * math.log10(max_peak) + gain_comp
 
 
 def compute_lufs_integrated_wav(path: Path) -> float:
