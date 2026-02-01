@@ -64,6 +64,9 @@
         "sample_rate_hz": { "type": "number", "minimum": 8000 },
         "bits_per_sample": { "type": "integer", "minimum": 1 },
         "bit_depth": { "type": "integer", "minimum": 1 },
+        "wav_audio_format": { "type": "integer", "minimum": 1 },
+        "wav_audio_format_resolved": { "type": "integer", "minimum": 1 },
+        "wav_channel_mask": { "type": "integer", "minimum": 0 },
         "metrics": {
           "type": "object",
           "additionalProperties": false,

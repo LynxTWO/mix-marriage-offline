@@ -70,8 +70,15 @@ def build_session_from_stems_dir(stems_dir: Path) -> dict:
                         "sample_rate_hz": metadata["sample_rate_hz"],
                         "bits_per_sample": metadata["bits_per_sample"],
                         "duration_s": metadata["duration_s"],
+                        "wav_audio_format": metadata["audio_format"],
+                        "wav_audio_format_resolved": metadata.get(
+                            "audio_format_resolved", metadata["audio_format"]
+                        ),
                     }
                 )
+                channel_mask = metadata.get("channel_mask")
+                if channel_mask is not None:
+                    stem_entry["wav_channel_mask"] = channel_mask
         stem_entries.append(stem_entry)
 
     return {"stems": stem_entries}
