@@ -186,6 +186,13 @@ def build_report(
     meters: Optional[str] = None,
 ) -> Dict[str, Any]:
     session = build_session_from_stems_dir(stems_dir)
+    stems = session.get("stems", [])
+    if not stems:
+        raise ValueError(
+            "No audio stems found in the provided directory. "
+            "Point scan_session at an actual stems folder containing .wav/.flac/.wv/.aiff/.mp3/etc. "
+            "Note: fixtures/sessions contains YAML fixture definitions, not audio stems."
+        )
     if include_peak:
         _add_peak_metrics(session, stems_dir)
     if meters == "basic":
