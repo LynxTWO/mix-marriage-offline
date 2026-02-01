@@ -82,6 +82,12 @@ Avoid randomness. If randomness is required, it must be seeded and logged.
 Plugins can propose anything, but the core enforces gates.
 Plugins must not attempt to “bypass” gates or weaken the schema.
 
+### 3.5 Numeric precision
+- Internal audio buffers are float64 normalized [-1, 1).
+- All meters, detectors, and resolvers operating on PCM must use float64.
+- Plugins must not downcast precision.
+- Any future render/export must dither/quantize only at the final output stage.
+
 ---
 
 ## 4) Plugin packaging (recommended)
@@ -243,4 +249,3 @@ After this doc:
 - implement `schemas/plugin.schema.json`
 - implement the plugin registry/loader (`src/mmo/plugins/host.py`)
 - create one reference detector and resolver that pass schema + ontology validation
-

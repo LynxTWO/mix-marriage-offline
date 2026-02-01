@@ -55,6 +55,12 @@
       },
       "uniqueItems": true
     },
+    "numeric_precision": {
+      "type": "string",
+      "enum": ["float64"],
+      "default": "float64",
+      "description": "Canonical numeric precision for DSP and PCM processing."
+    },
     "tags": {
       "type": "array",
       "items": { "type": "string" },
