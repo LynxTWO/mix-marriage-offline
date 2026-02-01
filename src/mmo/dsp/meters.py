@@ -6,10 +6,12 @@ from pathlib import Path
 from typing import Iterator
 
 from mmo.dsp.float64 import (
+    bytes_to_float_samples_ieee,
     bytes_to_int_samples_pcm,
     interleaved_to_mono_peak,
     pcm_int_to_float64,
 )
+from mmo.dsp.io import read_wav_metadata
 
 _EPSILON = 1e-12
 _CHUNK_FRAMES = 4096
@@ -18,22 +20,41 @@ _CHUNK_FRAMES = 4096
 def _iter_wav_float64_samples(
     path: Path, *, error_context: str
 ) -> Iterator[list[float]]:
+    metadata = read_wav_metadata(path)
+    audio_format = metadata["audio_format_resolved"]
+    bits_per_sample = metadata["bits_per_sample"]
+    channels = metadata["channels"]
+
+    if audio_format == 1:
+        if bits_per_sample not in (16, 24, 32):
+            raise ValueError(f"Unsupported bits per sample: {bits_per_sample}")
+    elif audio_format == 3:
+        if bits_per_sample not in (32, 64):
+            raise ValueError(f"Unsupported bits per sample: {bits_per_sample}")
+    else:
+        raise ValueError(f"Unsupported WAV format: {audio_format}")
+
     try:
         with wave.open(str(path), "rb") as handle:
-            sample_width = handle.getsampwidth()
-            bits_per_sample = sample_width * 8
-            if bits_per_sample not in (16, 24):
-                raise ValueError(f"Unsupported bits per sample: {bits_per_sample}")
-            channels = handle.getnchannels()
             while True:
                 frames = handle.readframes(_CHUNK_FRAMES)
                 if not frames:
                     break
-                int_samples = bytes_to_int_samples_pcm(frames, bits_per_sample, channels)
-                if not int_samples:
-                    continue
-                float_samples = pcm_int_to_float64(int_samples, bits_per_sample)
-                yield float_samples
+                if audio_format == 1:
+                    int_samples = bytes_to_int_samples_pcm(
+                        frames, bits_per_sample, channels
+                    )
+                    if not int_samples:
+                        continue
+                    float_samples = pcm_int_to_float64(int_samples, bits_per_sample)
+                    yield float_samples
+                elif audio_format == 3:
+                    float_samples = bytes_to_float_samples_ieee(
+                        frames, bits_per_sample, channels
+                    )
+                    if not float_samples:
+                        continue
+                    yield float_samples
     except (OSError, wave.Error) as exc:
         raise ValueError(f"Failed to read WAV for {error_context}: {path}") from exc
 

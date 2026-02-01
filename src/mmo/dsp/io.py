@@ -6,6 +6,14 @@ import struct
 from pathlib import Path
 
 
+_KSDATAFORMAT_SUBTYPE_PCM = struct.pack(
+    "<IHH8s", 0x00000001, 0x0000, 0x0010, b"\x80\x00\x00\xaa\x00\x38\x9b\x71"
+)
+_KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = struct.pack(
+    "<IHH8s", 0x00000003, 0x0000, 0x0010, b"\x80\x00\x00\xaa\x00\x38\x9b\x71"
+)
+
+
 def sha256_file(path: Path) -> str:
     """Return the SHA-256 hex digest for a file."""
     digest = hashlib.sha256()
@@ -43,6 +51,7 @@ def read_wav_metadata(path: Path) -> dict:
                 raise ValueError(f"RIFF size exceeds file size in '{path}'")
 
             fmt_fields = None
+            fmt_chunk = None
             data_bytes = None
 
             while handle.tell() + 8 <= file_size:
@@ -65,6 +74,7 @@ def read_wav_metadata(path: Path) -> dict:
                         raise ValueError(f"Truncated fmt chunk in '{path}'")
                     if chunk_size < 16:
                         raise ValueError(f"fmt chunk too small in '{path}'")
+                    fmt_chunk = chunk_data
                     fmt_fields = struct.unpack("<HHIIHH", chunk_data[:16])
                 elif chunk_id == b"data":
                     data_bytes = chunk_size
@@ -86,6 +96,8 @@ def read_wav_metadata(path: Path) -> dict:
         raise ValueError(f"Missing fmt chunk in '{path}'")
     if data_bytes is None:
         raise ValueError(f"Missing data chunk in '{path}'")
+    if fmt_chunk is None:
+        raise ValueError(f"Missing fmt chunk data in '{path}'")
 
     (
         audio_format,
@@ -105,11 +117,27 @@ def read_wav_metadata(path: Path) -> dict:
     if block_align <= 0:
         raise ValueError(f"Invalid block alignment {block_align} in '{path}'")
 
+    audio_format_resolved = audio_format
+    channel_mask = None
+
+    if audio_format == 0xFFFE and len(fmt_chunk) >= 40:
+        extension_size = struct.unpack("<H", fmt_chunk[16:18])[0]
+        if extension_size >= 22:
+            valid_bits_per_sample, channel_mask, subformat_guid = struct.unpack(
+                "<HI16s", fmt_chunk[18:40]
+            )
+            _ = valid_bits_per_sample
+            if subformat_guid == _KSDATAFORMAT_SUBTYPE_PCM:
+                audio_format_resolved = 1
+            elif subformat_guid == _KSDATAFORMAT_SUBTYPE_IEEE_FLOAT:
+                audio_format_resolved = 3
+
     num_frames = data_bytes // block_align
     duration_s = num_frames / sample_rate_hz
 
     return {
         "audio_format": audio_format,
+        "audio_format_resolved": audio_format_resolved,
         "channels": channels,
         "sample_rate_hz": sample_rate_hz,
         "bits_per_sample": bits_per_sample,
@@ -118,4 +146,6 @@ def read_wav_metadata(path: Path) -> dict:
         "data_bytes": data_bytes,
         "byte_rate": byte_rate,
         "block_align": block_align,
+        "channel_mask": channel_mask,
+        "fmt_chunk": fmt_chunk,
     }

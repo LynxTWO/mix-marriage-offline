@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import struct
 from typing import Sequence
 
@@ -27,7 +28,7 @@ def pcm_int_to_float64(samples: Sequence[int], bits_per_sample: int) -> list[flo
 def bytes_to_int_samples_pcm(
     frames: bytes, bits_per_sample: int, channels: int
 ) -> list[int]:
-    """Decode PCM bytes to signed integers for 16-bit or 24-bit WAV frames."""
+    """Decode PCM bytes to signed integers for 16-bit, 24-bit, or 32-bit WAV."""
     if channels <= 0:
         raise ValueError(f"Invalid channel count: {channels}")
 
@@ -57,7 +58,55 @@ def bytes_to_int_samples_pcm(
             samples.append(int(word))
         return samples
 
+    if bits_per_sample == 32:
+        bytes_per_sample = 4
+        bytes_per_frame = bytes_per_sample * channels
+        total_bytes = len(frames) - (len(frames) % bytes_per_frame)
+        if total_bytes <= 0:
+            return []
+        if total_bytes != len(frames):
+            frames = frames[:total_bytes]
+        count = total_bytes // bytes_per_sample
+        return list(struct.unpack(f"<{count}i", frames))
+
     raise ValueError(f"Unsupported bits per sample: {bits_per_sample}")
+
+
+def bytes_to_float_samples_ieee(
+    frames: bytes, bits_per_sample: int, channels: int
+) -> list[float]:
+    """Decode IEEE float bytes to float64 samples."""
+    if channels <= 0:
+        raise ValueError(f"Invalid channel count: {channels}")
+
+    if bits_per_sample == 32:
+        bytes_per_sample = 4
+        fmt = "f"
+    elif bits_per_sample == 64:
+        bytes_per_sample = 8
+        fmt = "d"
+    else:
+        raise ValueError(f"Unsupported bits per sample: {bits_per_sample}")
+
+    bytes_per_frame = bytes_per_sample * channels
+    total_bytes = len(frames) - (len(frames) % bytes_per_frame)
+    if total_bytes <= 0:
+        return []
+    if total_bytes != len(frames):
+        frames = frames[:total_bytes]
+    count = total_bytes // bytes_per_sample
+    samples = struct.unpack(f"<{count}{fmt}", frames)
+
+    max_value = math.nextafter(1.0, 0.0)
+    floats: list[float] = []
+    for sample in samples:
+        value = float(sample)
+        if value < -1.0:
+            value = -1.0
+        elif value >= 1.0:
+            value = max_value
+        floats.append(value)
+    return floats
 
 
 def interleaved_to_mono_peak(samples_float64: list[float], channels: int) -> float:
