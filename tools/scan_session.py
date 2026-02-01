@@ -125,6 +125,12 @@ def _add_peak_metrics(session: Dict[str, Any], stems_dir: Path) -> None:
             value=peak_dbfs,
             unit_id="UNIT.DBFS",
         )
+        upsert_measurement(
+            stem,
+            evidence_id="EVID.METER.PEAK_DBFS",
+            value=peak_dbfs,
+            unit_id="UNIT.DBFS",
+        )
 
 
 def _add_basic_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> None:
@@ -154,6 +160,12 @@ def _add_basic_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> N
         upsert_measurement(
             stem,
             evidence_id="EVID.METER.CLIP_SAMPLE_COUNT",
+            value=clip_count,
+            unit_id="UNIT.COUNT",
+        )
+        upsert_measurement(
+            stem,
+            evidence_id="EVID.QUALITY.CLIPPED_SAMPLES_COUNT",
             value=clip_count,
             unit_id="UNIT.COUNT",
         )

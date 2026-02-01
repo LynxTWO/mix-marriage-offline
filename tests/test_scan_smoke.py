@@ -48,6 +48,17 @@ class TestScanSessionSmoke(unittest.TestCase):
                 if isinstance(stem, dict)
             )
             self.assertTrue(has_measurements)
+            evidence_ids = {
+                measurement.get("evidence_id")
+                for stem in stems
+                if isinstance(stem, dict)
+                for measurement in stem.get("measurements", [])
+                if isinstance(measurement, dict)
+            }
+            self.assertIn("EVID.METER.SAMPLE_PEAK_DBFS", evidence_ids)
+            self.assertIn("EVID.METER.PEAK_DBFS", evidence_ids)
+            self.assertIn("EVID.METER.CLIP_SAMPLE_COUNT", evidence_ids)
+            self.assertIn("EVID.QUALITY.CLIPPED_SAMPLES_COUNT", evidence_ids)
 
 
 if __name__ == "__main__":
