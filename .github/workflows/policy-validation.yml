@@ -25,6 +25,10 @@ jobs:
         run: |
           python tools/validate_policies.py ontology/policies/downmix.yaml
 
+      - name: Validate ontology references
+        run: |
+          python tools/validate_ontology_refs.py --ontology ontology
+
       - name: Validate plugin manifests
         run: |
           PYTHONPATH=src python tools/validate_plugins.py plugins
