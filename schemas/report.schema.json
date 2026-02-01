@@ -70,6 +70,10 @@
           "properties": {
             "peak_dbfs": { "type": "number" }
           }
+        },
+        "measurements": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/measurement" }
         }
       }
     },
@@ -112,6 +116,18 @@
         "source": { "type": "string" },
         "where": { "type": "object", "additionalProperties": true },
         "why": { "type": "string" }
+      }
+    },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_id", "value", "unit_id"],
+      "properties": {
+        "evidence_id": { "type": "string", "pattern": "^EVID\\." },
+        "value": {
+          "anyOf": [{ "type": "number" }, { "type": "integer" }, { "type": "string" }]
+        },
+        "unit_id": { "type": "string", "pattern": "^UNIT\\." }
       }
     },
     "issue": {

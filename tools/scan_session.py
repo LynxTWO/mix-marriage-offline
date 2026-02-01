@@ -85,6 +85,17 @@ def _add_peak_metrics(session: Dict[str, Any], stems_dir: Path) -> None:
             metrics = {}
             stem["metrics"] = metrics
         metrics["peak_dbfs"] = peak_dbfs
+        measurements = stem.get("measurements")
+        if not isinstance(measurements, list):
+            measurements = []
+            stem["measurements"] = measurements
+        measurements.append(
+            {
+                "evidence_id": "EVID.METER.SAMPLE_PEAK_DBFS",
+                "value": peak_dbfs,
+                "unit_id": "UNIT.DBFS",
+            }
+        )
 
 
 def build_report(

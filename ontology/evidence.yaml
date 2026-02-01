@@ -184,6 +184,26 @@ evidence:
   # -------------------------
   # Core Level Meters (track or mix)
   # -------------------------
+  EVID.METER.SAMPLE_PEAK_DBFS:
+    label: "Sample peak (dBFS)"
+    description: "Highest sample peak level in dBFS."
+    value_type: "number"
+    unit_id: "UNIT.DBFS"
+
+  EVID.METER.CLIP_SAMPLE_COUNT:
+    label: "Clipped samples count"
+    description: "Number of samples detected at or beyond clip threshold."
+    value_type: "integer"
+    unit_id: "UNIT.COUNT"
+    constraints:
+      min: 0
+
+  EVID.METER.DC_OFFSET:
+    label: "DC offset"
+    description: "Estimated DC offset as a ratio of full scale."
+    value_type: "number"
+    unit_id: "UNIT.RATIO"
+
   EVID.METER.PEAK_DBFS:
     label: "Sample peak"
     description: "Highest sample peak level."
