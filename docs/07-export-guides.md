@@ -31,6 +31,12 @@ If you want MMO to render only conservative gain/trim recommendations, use the r
 PYTHONPATH=src python tools/render_gain_trim.py /tmp/mmo_demo --report out.json --out-dir rendered
 ```
 
+You can also run the renderer as part of the analyze flow:
+
+```
+PYTHONPATH=src python tools/analyze_stems.py /tmp/mmo_demo --out-report out.json --peak --render-gain-trim-out rendered
+```
+
 ## Recommended file format
 - WAV, PCM
 - 24-bit (or 32-bit float if your DAW supports it cleanly)

@@ -75,6 +75,26 @@ def _run_export_report(
     return _run_command(command)
 
 
+def _run_render_gain_trim(
+    tools_dir: Path,
+    stems_dir: Path,
+    report_path: Path,
+    out_dir: str | None,
+) -> int:
+    if not out_dir:
+        return 0
+    command = [
+        sys.executable,
+        str(tools_dir / "render_gain_trim.py"),
+        str(stems_dir),
+        "--report",
+        str(report_path),
+        "--out-dir",
+        out_dir,
+    ]
+    return _run_command(command)
+
+
 def _scan_report_path(out_report: Path) -> Path:
     return out_report.with_name(f"{out_report.stem}.scan{out_report.suffix}")
 
@@ -119,6 +139,11 @@ def main() -> int:
     parser.add_argument("--csv", default=None, help="Optional output CSV path.")
     parser.add_argument("--pdf", default=None, help="Optional output PDF path.")
     parser.add_argument(
+        "--render-gain-trim-out",
+        default=None,
+        help="Optional output directory for conservative gain/trim renders.",
+    )
+    parser.add_argument(
         "--keep-scan",
         action="store_true",
         help="Keep the intermediate scan report JSON instead of deleting it.",
@@ -162,6 +187,15 @@ def main() -> int:
         out_report,
         args.csv,
         args.pdf,
+    )
+    if exit_code != 0:
+        return exit_code
+
+    exit_code = _run_render_gain_trim(
+        tools_dir,
+        stems_dir,
+        out_report,
+        args.render_gain_trim_out,
     )
     if exit_code != 0:
         return exit_code

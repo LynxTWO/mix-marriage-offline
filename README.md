@@ -6,7 +6,7 @@ MMO is a standalone tool that analyzes exported stems in a folder and produces:
 - A ranked list of technical issues with evidence
 - DAW-agnostic recommendations (a recall sheet you can apply anywhere)
 - Translation checks (stereo, mono, phone, earbuds, car-like curves)
-- Optional conservative rendered stem variants (safe by default)
+- Optional conservative rendered stem variants (explicit invoke only)
 - A modular plugin system so strategies can evolve without breaking the core
 
 This is not a DAW plugin. This is not “AI that mixes your song for you.”  
@@ -82,6 +82,11 @@ The tool can recommend anything, but it only auto-applies low-risk actions withi
    - report (PDF + JSON)
    - recall sheet (CSV/TXT)
    - optional rendered stem variants
+
+Optional conservative render (explicit invoke):
+```
+PYTHONPATH=src python tools/analyze_stems.py ./stems --out-report out.json --peak --render-gain-trim-out rendered
+```
 
 ---
 
