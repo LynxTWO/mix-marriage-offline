@@ -28,7 +28,13 @@ from mmo import __version__ as engine_version  # noqa: E402
 from mmo.core.session import build_session_from_stems_dir  # noqa: E402
 from mmo.core.validators import validate_session  # noqa: E402
 from mmo.dsp.decoders import detect_format_from_path  # noqa: E402
-from mmo.dsp.meters import compute_sample_peak_dbfs_wav  # noqa: E402
+from mmo.dsp.meters import (  # noqa: E402
+    compute_clip_sample_count_wav,
+    compute_crest_factor_db_wav,
+    compute_dc_offset_wav,
+    compute_rms_dbfs_wav,
+    compute_sample_peak_dbfs_wav,
+)
 
 
 def _load_ontology_version(path: Path) -> str:
@@ -98,16 +104,73 @@ def _add_peak_metrics(session: Dict[str, Any], stems_dir: Path) -> None:
         )
 
 
+def _add_basic_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> None:
+    stems = session.get("stems", [])
+    for stem in stems:
+        if not isinstance(stem, dict):
+            continue
+        if "sample_rate_hz" not in stem or "bits_per_sample" not in stem:
+            continue
+        file_path = stem.get("file_path")
+        if not isinstance(file_path, str) or not file_path:
+            continue
+        stem_path = Path(file_path)
+        if not stem_path.is_absolute():
+            stem_path = stems_dir / stem_path
+        if detect_format_from_path(stem_path) != "wav":
+            continue
+
+        try:
+            clip_count = compute_clip_sample_count_wav(stem_path)
+            dc_offset = compute_dc_offset_wav(stem_path)
+            rms_dbfs = compute_rms_dbfs_wav(stem_path)
+            crest_factor_db = compute_crest_factor_db_wav(stem_path)
+        except ValueError:
+            continue
+
+        measurements = stem.get("measurements")
+        if not isinstance(measurements, list):
+            measurements = []
+            stem["measurements"] = measurements
+        measurements.extend(
+            [
+                {
+                    "evidence_id": "EVID.METER.CLIP_SAMPLE_COUNT",
+                    "value": clip_count,
+                    "unit_id": "UNIT.COUNT",
+                },
+                {
+                    "evidence_id": "EVID.METER.DC_OFFSET",
+                    "value": dc_offset,
+                    "unit_id": "UNIT.RATIO",
+                },
+                {
+                    "evidence_id": "EVID.METER.RMS_DBFS",
+                    "value": rms_dbfs,
+                    "unit_id": "UNIT.DBFS",
+                },
+                {
+                    "evidence_id": "EVID.METER.CREST_FACTOR_DB",
+                    "value": crest_factor_db,
+                    "unit_id": "UNIT.DB",
+                },
+            ]
+        )
+
+
 def build_report(
     stems_dir: Path,
     generated_at: str,
     *,
     strict: bool = False,
     include_peak: bool = False,
+    meters: Optional[str] = None,
 ) -> Dict[str, Any]:
     session = build_session_from_stems_dir(stems_dir)
     if include_peak:
         _add_peak_metrics(session, stems_dir)
+    if meters == "basic":
+        _add_basic_meter_measurements(session, stems_dir)
     issues = validate_session(session, strict=strict)
     stem_hash = _hash_from_stems(session.get("stems", []))
     ontology_version = _load_ontology_version(ROOT_DIR / "ontology" / "ontology.yaml")
@@ -137,6 +200,12 @@ def main() -> int:
         action="store_true",
         help="Compute WAV sample peak meter readings for stems.",
     )
+    parser.add_argument(
+        "--meters",
+        choices=["basic"],
+        default=None,
+        help="Enable additional WAV-only meter packs (basic).",
+    )
     parser.add_argument("--out", dest="out", default=None, help="Optional output JSON path.")
     parser.add_argument(
         "--schema",
@@ -157,6 +226,7 @@ def main() -> int:
         args.generated_at,
         strict=args.strict,
         include_peak=args.peak,
+        meters=args.meters,
     )
 
     if args.schema:
