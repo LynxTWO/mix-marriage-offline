@@ -150,6 +150,24 @@ issues:
       - "EVID.TRACK.CHANNEL_MAP"
     suggested_actions: []
 
+  ISSUE.VALIDATION.CHANNEL_LAYOUT_AMBIGUOUS:
+    label: "Channel layout ambiguous"
+    description: "Conflicting or insufficient channel layout metadata (WAV mask vs ffprobe layout, or truncated/underspecified inference)."
+    issue_type: "validation"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+      - "EVID.TRACK.CHANNELS"
+      - "EVID.FILE.WAV_CHANNEL_MASK"
+      - "EVID.FILE.CHANNEL_LAYOUT"
+      - "EVID.METER.LUFS_WEIGHTING_MODE"
+      - "EVID.METER.LUFS_WEIGHTING_ORDER"
+    suggested_actions: []
+    notes:
+      - "Warning-only: meters continue with safe fallbacks."
+      - "Best fix: export lossless stems with correct channel metadata (WAV mask preferred)."
+
   ISSUE.VALIDATION.UNKNOWN_ROLE:
     label: "Unknown role"
     description: "A stem role could not be inferred or assigned to a canonical ROLE.*."

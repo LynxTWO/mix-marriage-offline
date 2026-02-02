@@ -4,6 +4,11 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from mmo.dsp.channel_layout import (
+    channel_positions_from_mask,
+    parse_ffmpeg_layout_to_positions,
+)
+
 
 def _mode_with_max_tiebreak(values: List[int]) -> Optional[int]:
     if not values:
@@ -231,6 +236,122 @@ def validate_session(
                         "confidence": 1.0,
                         "target": target,
                         "evidence": evidence,
+                    }
+                )
+
+        # --------------------------------------------
+        # Channel layout ambiguity validator (warn-only)
+        # --------------------------------------------
+        channels_val = stem.get("channel_count")
+        if channels_val is None:
+            channels_val = stem.get("channels")
+
+        try:
+            channels = int(channels_val) if isinstance(channels_val, (int, float)) else None
+        except (TypeError, ValueError):
+            channels = None
+
+        if channels is not None and channels >= 3:
+            wav_mask = stem.get("wav_channel_mask")
+            wav_mask_int = wav_mask if isinstance(wav_mask, int) else None
+            layout = stem.get("channel_layout")
+            layout_str = layout if isinstance(layout, str) and layout.strip() else None
+
+            mask_positions, mask_detail = channel_positions_from_mask(wav_mask_int, channels)
+
+            layout_positions = None
+            layout_detail = None
+            if layout_str is not None:
+                layout_positions, layout_detail = parse_ffmpeg_layout_to_positions(
+                    layout_str, channels
+                )
+
+            ambiguous_reasons: List[str] = []
+            if mask_detail in ("mask_trimmed", "mask_underspecified"):
+                ambiguous_reasons.append(mask_detail)
+            if layout_detail in (
+                "layout_trimmed",
+                "layout_list_trimmed",
+                "layout_list_underspecified",
+            ):
+                ambiguous_reasons.append(layout_detail)
+            if layout_str == "6.1" and wav_mask_int is None:
+                ambiguous_reasons.append("layout_61_ambiguous_without_mask")
+
+            if mask_positions is not None and layout_positions is not None:
+                if mask_positions != layout_positions:
+                    ambiguous_reasons.append("mask_layout_conflict")
+
+            if ambiguous_reasons:
+                evidence = _evidence_file(stem)
+                evidence.append(
+                    {
+                        "evidence_id": "EVID.TRACK.CHANNELS",
+                        "value": channels,
+                        "unit_id": "UNIT.COUNT",
+                    }
+                )
+                if wav_mask_int is not None:
+                    evidence.append(
+                        {
+                            "evidence_id": "EVID.FILE.WAV_CHANNEL_MASK",
+                            "value": wav_mask_int,
+                        }
+                    )
+                if layout_str is not None:
+                    evidence.append(
+                        {
+                            "evidence_id": "EVID.FILE.CHANNEL_LAYOUT",
+                            "value": layout_str,
+                        }
+                    )
+
+                measurements = stem.get("measurements", [])
+                if isinstance(measurements, list):
+                    for measurement in measurements:
+                        if not isinstance(measurement, dict):
+                            continue
+                        evidence_id = measurement.get("evidence_id")
+                        if evidence_id in (
+                            "EVID.METER.LUFS_WEIGHTING_MODE",
+                            "EVID.METER.LUFS_WEIGHTING_ORDER",
+                        ):
+                            evidence.append(
+                                {
+                                    "evidence_id": evidence_id,
+                                    "value": measurement.get("value"),
+                                }
+                            )
+
+                evidence.append(
+                    {
+                        "evidence_id": "EVID.VALIDATION.LOSSY_REASON",
+                        "value": (
+                            "Channel layout ambiguity: "
+                            + ", ".join(sorted(set(ambiguous_reasons)))
+                        ),
+                    }
+                )
+
+                issues.append(
+                    {
+                        "issue_id": "ISSUE.VALIDATION.CHANNEL_LAYOUT_AMBIGUOUS",
+                        "severity": 40 if not strict else 55,
+                        "confidence": 1.0
+                        if (
+                            "mask_layout_conflict" in ambiguous_reasons
+                            or "mask_trimmed" in ambiguous_reasons
+                            or "layout_trimmed" in ambiguous_reasons
+                        )
+                        else 0.8,
+                        "target": target,
+                        "evidence": evidence,
+                        "message": (
+                            "Channel metadata is ambiguous (mask/layout mismatch or "
+                            "truncated/underspecified). Meters will fall back safely, "
+                            "but results may be less reliable. Prefer stems with a "
+                            "correct WAV channel mask or a precise ffprobe channel_layout."
+                        ),
                     }
                 )
 

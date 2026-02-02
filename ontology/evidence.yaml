@@ -72,6 +72,16 @@ evidence:
     description: "SHA-256 hash of the file bytes for reproducibility."
     value_type: "string"
 
+  EVID.FILE.WAV_CHANNEL_MASK:
+    label: "WAV channel mask"
+    description: "WAV channel mask integer (speaker bitmask) when available."
+    value_type: "integer"
+
+  EVID.FILE.CHANNEL_LAYOUT:
+    label: "FFprobe channel layout"
+    description: "FFprobe/FFmpeg channel_layout string when available."
+    value_type: "string"
+
   EVID.VALIDATION.LOSSY_REASON:
     label: "Lossy reason"
     description: "Short explanation for why a stem is treated as lossy."
