@@ -296,7 +296,7 @@ def _add_basic_meter_measurements(
 
 def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> bool:
     from mmo.dsp.meters_truth import (  # noqa: WPS433
-        _bs1770_gi_weights,
+        bs1770_weighting_info,
         compute_lufs_integrated_float64,
         compute_lufs_integrated_wav,
         compute_lufs_shortterm_float64,
@@ -319,7 +319,9 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
         if not stem_path.is_absolute():
             stem_path = stems_dir / stem_path
         format_id = detect_format_from_path(stem_path)
-        channels = stem.get("channel_count")
+        channels = stem.get("channels")
+        if not isinstance(channels, int) or channels <= 0:
+            channels = stem.get("channel_count")
         if not isinstance(channels, int) or channels <= 0:
             continue
         sample_rate_hz = stem.get("sample_rate_hz")
@@ -399,7 +401,7 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
 
         mask = stem.get("wav_channel_mask")
         channel_mask = mask if isinstance(mask, int) else None
-        weights, order_csv, mode_str = _bs1770_gi_weights(
+        weights, order_csv, mode_str = bs1770_weighting_info(
             channels,
             channel_mask,
             channel_layout=stem.get("channel_layout"),

@@ -14,9 +14,9 @@ class TestTruthMetersFfmpegLayoutWeighting(unittest.TestCase):
     def test_layout_51_blbr_surround(self) -> None:
         self._skip_if_no_numpy()
         import numpy as np
-        from mmo.dsp.meters_truth import _bs1770_gi_weights
+        from mmo.dsp.meters_truth import bs1770_weighting_info
 
-        weights, order_csv, mode_str = _bs1770_gi_weights(
+        weights, order_csv, mode_str = bs1770_weighting_info(
             6, None, channel_layout="5.1"
         )
         expected = np.array([1.0, 1.0, 1.0, 0.0, 1.41, 1.41], dtype=np.float64)
@@ -27,9 +27,9 @@ class TestTruthMetersFfmpegLayoutWeighting(unittest.TestCase):
     def test_layout_51_side_surround(self) -> None:
         self._skip_if_no_numpy()
         import numpy as np
-        from mmo.dsp.meters_truth import _bs1770_gi_weights
+        from mmo.dsp.meters_truth import bs1770_weighting_info
 
-        weights, order_csv, mode_str = _bs1770_gi_weights(
+        weights, order_csv, mode_str = bs1770_weighting_info(
             6, None, channel_layout="5.1(side)"
         )
         expected = np.array([1.0, 1.0, 1.0, 0.0, 1.41, 1.41], dtype=np.float64)
@@ -40,9 +40,9 @@ class TestTruthMetersFfmpegLayoutWeighting(unittest.TestCase):
     def test_layout_71_surround(self) -> None:
         self._skip_if_no_numpy()
         import numpy as np
-        from mmo.dsp.meters_truth import _bs1770_gi_weights
+        from mmo.dsp.meters_truth import bs1770_weighting_info
 
-        weights, order_csv, mode_str = _bs1770_gi_weights(
+        weights, order_csv, mode_str = bs1770_weighting_info(
             8, None, channel_layout="7.1"
         )
         expected = np.array(

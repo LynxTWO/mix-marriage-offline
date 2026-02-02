@@ -33,13 +33,29 @@ _CHANNEL_MASK_BITS: tuple[tuple[int, str], ...] = (
     (0x00000200, "SL"),
     (0x00000400, "SR"),
 )
-_FFMPEG_LAYOUT_MASKS: dict[str, int] = {
-    "mono": 0x00000004,
-    "stereo": 0x00000003,
-    "5.1": 0x0000003F,
-    "5.1(side)": 0x0000060F,
-    "7.1": 0x0000063F,
-    "7.1(wide)": 0x000006CF,
+_FFMPEG_LAYOUT_TOKENS: dict[str, str] = {
+    "fl": "FL",
+    "fr": "FR",
+    "fc": "FC",
+    "lfe": "LFE",
+    "bl": "BL",
+    "br": "BR",
+    "sl": "SL",
+    "sr": "SR",
+    "flc": "FLC",
+    "frc": "FRC",
+    "bc": "BC",
+}
+_FFMPEG_LAYOUT_KNOWN: dict[str, list[str]] = {
+    "mono": ["FC"],
+    "stereo": ["FL", "FR"],
+    "5.1": ["FL", "FR", "FC", "LFE", "BL", "BR"],
+    "5.1(side)": ["FL", "FR", "FC", "LFE", "SL", "SR"],
+    "7.1": ["FL", "FR", "FC", "LFE", "BL", "BR", "SL", "SR"],
+    "7.1(wide)": ["FL", "FR", "FC", "LFE", "FLC", "FRC", "SL", "SR"],
+    "quad": ["FL", "FR", "BL", "BR"],
+    "4.0": ["FL", "FR", "BL", "BR"],
+    "2.1": ["FL", "FR", "LFE"],
 }
 
 
@@ -75,37 +91,76 @@ def _channel_positions_from_mask(
     return positions, mode_detail
 
 
-def _bs1770_gi_weights(
+def _parse_ffmpeg_layout_to_positions(
+    channel_layout: str, channels: int
+) -> tuple[list[str] | None, str]:
+    normalized = channel_layout.strip().lower()
+    if not normalized:
+        return None, "layout_missing"
+    if normalized == "unknown":
+        return None, "layout_unknown"
+    if "+" in normalized:
+        tokens = [token for token in normalized.split("+") if token]
+        if not tokens:
+            return None, "layout_unmapped"
+        positions: list[str] = []
+        for token in tokens:
+            label = _FFMPEG_LAYOUT_TOKENS.get(token)
+            if label is None:
+                return None, "layout_unmapped"
+            positions.append(label)
+        if len(positions) < channels:
+            return None, "layout_list_underspecified"
+        if len(positions) > channels:
+            return positions[:channels], "layout_list_trimmed"
+        return positions, "layout_list_exact"
+
+    positions = _FFMPEG_LAYOUT_KNOWN.get(normalized)
+    if positions is None:
+        return None, "layout_unmapped"
+    if len(positions) < channels:
+        return None, "layout_list_underspecified"
+    if len(positions) > channels:
+        return positions[:channels], "layout_trimmed"
+    return list(positions), normalized.replace(".", "").replace("(side)", "_side").replace(
+        "(wide)", "_wide"
+    )
+
+
+def bs1770_weighting_info(
     channels: int,
-    channel_mask: int | None,
+    wav_channel_mask: int | None,
     channel_layout: str | None = None,
 ) -> tuple[np.ndarray, str, str]:
     """
     Returns (weights, order_csv, mode_str)
     weights: float64 length=channels
-    order_csv: speaker labels CSV or "unknown"
-    mode_str: human-readable but stable token
+    order_csv: inferred positions CSV or "unknown"
+    mode_str: deterministic token
     """
     weights = np.ones(channels, dtype=np.float64)
-    positions, mode_detail = _channel_positions_from_mask(channel_mask, channels)
+    positions, mode_detail = _channel_positions_from_mask(wav_channel_mask, channels)
 
     if positions is None:
-        layout_positions, layout_detail = _channel_positions_from_ffmpeg_layout(
+        if channel_layout is None:
+            return weights, "unknown", "fallback_layout_missing"
+        layout_positions, layout_detail = _parse_ffmpeg_layout_to_positions(
             channel_layout, channels
         )
         if layout_positions is None:
-            if layout_detail == "layout_missing" and channel_mask:
-                mode_str = f"fallback_{mode_detail}"
-            else:
-                mode_str = f"fallback_{layout_detail}"
-            return weights, "unknown", mode_str
+            return weights, "unknown", f"fallback_{layout_detail}"
         positions = layout_positions
         mode_prefix = "ffmpeg_layout_known"
-        mode_trimmed = layout_detail == "layout_trimmed"
+        mode_trimmed = layout_detail in ("layout_trimmed", "layout_list_trimmed")
+        if layout_detail.startswith("layout_list_"):
+            mode_str = f"{mode_prefix}_{layout_detail}"
+        else:
+            mode_str = f"{mode_prefix}_{layout_detail}"
         use_layout = True
     else:
         mode_prefix = "mask_known"
         mode_trimmed = mode_detail == "mask_trimmed"
+        mode_str = mode_prefix
         use_layout = False
 
     order_csv = ",".join(positions) if positions else "unknown"
@@ -120,30 +175,29 @@ def _bs1770_gi_weights(
         for idx, pos in enumerate(positions):
             if pos in ("SL", "SR"):
                 weights[idx] = 1.41
-        if channels >= 8:
-            suffix = "71_sl_sr_surround_blbr_rear"
-        else:
-            suffix = ""
+        suffix = ""
     else:
         for idx, pos in enumerate(positions):
             if pos in ("BL", "BR"):
                 weights[idx] = 1.41
-        if channels == 6 and ("BL" in pos_set or "BR" in pos_set):
+        suffix = ""
+
+    if not use_layout:
+        if has_sl_sr and channels >= 8:
+            suffix = "71_sl_sr_surround_blbr_rear"
+        elif not has_sl_sr and channels == 6 and ("BL" in pos_set or "BR" in pos_set):
             suffix = "51_blbr_surround"
-        else:
-            suffix = ""
 
-    if suffix:
-        mode_str = f"{mode_prefix}_{suffix}"
+        if suffix:
+            mode_str = f"{mode_prefix}_{suffix}"
     else:
-        mode_str = mode_prefix
-
-    if use_layout and mode_str == "ffmpeg_layout_known" and channels == 6:
-        if "SL" in pos_set or "SR" in pos_set:
-            mode_str = "ffmpeg_layout_known_51_sl_sr_surround"
-    if use_layout and mode_str == "ffmpeg_layout_known_71_sl_sr_surround_blbr_rear":
-        if "BL" not in pos_set and "BR" not in pos_set:
-            mode_str = "ffmpeg_layout_known"
+        if mode_str.startswith("ffmpeg_layout_known_layout_list_"):
+            pass
+        elif "SL" in pos_set or "SR" in pos_set:
+            if channels == 6:
+                mode_str = "ffmpeg_layout_known_51_sl_sr_surround"
+            elif channels >= 8 and ("BL" in pos_set or "BR" in pos_set):
+                mode_str = "ffmpeg_layout_known_71_sl_sr_surround_blbr_rear"
 
     if mode_trimmed:
         if use_layout:
@@ -154,31 +208,12 @@ def _bs1770_gi_weights(
     return weights, order_csv, mode_str
 
 
-def _channel_positions_from_ffmpeg_layout(
-    channel_layout: str | None, channels: int
-) -> tuple[list[str] | None, str]:
-    if channel_layout is None:
-        return None, "layout_missing"
-    normalized = channel_layout.strip().lower()
-    if not normalized:
-        return None, "layout_missing"
-    if normalized == "unknown":
-        return None, "layout_unknown"
-
-    mask = _FFMPEG_LAYOUT_MASKS.get(normalized)
-    if mask is None:
-        return None, "layout_unmapped"
-
-    positions = _positions_from_mask(mask)
-    if len(positions) < channels:
-        return None, "layout_underspecified"
-
-    mode_detail = "layout_known"
-    if len(positions) > channels:
-        positions = positions[:channels]
-        mode_detail = "layout_trimmed"
-
-    return positions, mode_detail
+def _bs1770_gi_weights(
+    channels: int,
+    channel_mask: int | None,
+    channel_layout: str | None = None,
+) -> tuple[np.ndarray, str, str]:
+    return bs1770_weighting_info(channels, channel_mask, channel_layout)
 
 
 def _read_wav_float64(path: Path) -> Tuple[np.ndarray, int]:

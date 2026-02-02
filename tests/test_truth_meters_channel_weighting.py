@@ -16,9 +16,9 @@ class TestTruthMetersChannelWeighting(unittest.TestCase):
 
     def test_mask_51_blbr_surround(self) -> None:
         self._skip_if_no_numpy()
-        from mmo.dsp.meters_truth import _bs1770_gi_weights
+        from mmo.dsp.meters_truth import bs1770_weighting_info
 
-        weights, order_csv, mode_str = _bs1770_gi_weights(6, 0x3F)
+        weights, order_csv, mode_str = bs1770_weighting_info(6, 0x3F, None)
         expected = np.array([1.0, 1.0, 1.0, 0.0, 1.41, 1.41], dtype=np.float64)
         self.assertEqual(order_csv, "FL,FR,FC,LFE,BL,BR")
         self.assertTrue(np.allclose(weights, expected, atol=1e-12, rtol=0.0))
@@ -26,9 +26,9 @@ class TestTruthMetersChannelWeighting(unittest.TestCase):
 
     def test_mask_71_sl_sr_surround(self) -> None:
         self._skip_if_no_numpy()
-        from mmo.dsp.meters_truth import _bs1770_gi_weights
+        from mmo.dsp.meters_truth import bs1770_weighting_info
 
-        weights, order_csv, mode_str = _bs1770_gi_weights(8, 0x63F)
+        weights, order_csv, mode_str = bs1770_weighting_info(8, 0x63F, None)
         expected = np.array(
             [1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.41, 1.41], dtype=np.float64
         )
@@ -38,13 +38,13 @@ class TestTruthMetersChannelWeighting(unittest.TestCase):
 
     def test_fallback_mask_underspecified(self) -> None:
         self._skip_if_no_numpy()
-        from mmo.dsp.meters_truth import _bs1770_gi_weights
+        from mmo.dsp.meters_truth import bs1770_weighting_info
 
-        weights, order_csv, mode_str = _bs1770_gi_weights(6, 0x3)
+        weights, order_csv, mode_str = bs1770_weighting_info(6, 0x3, None)
         expected = np.ones(6, dtype=np.float64)
         self.assertEqual(order_csv, "unknown")
         self.assertTrue(np.allclose(weights, expected, atol=1e-12, rtol=0.0))
-        self.assertIn("fallback_mask_underspecified", mode_str)
+        self.assertIn("fallback_layout_missing", mode_str)
 
 
 if __name__ == "__main__":
