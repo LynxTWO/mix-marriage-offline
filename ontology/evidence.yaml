@@ -87,6 +87,11 @@ evidence:
     description: "Short explanation for why a stem is treated as lossy."
     value_type: "string"
 
+  EVID.VALIDATION.CHANNEL_LAYOUT_REASON:
+    label: "Channel layout reason"
+    description: "Short explanation for why channel layout metadata is ambiguous."
+    value_type: "string"
+
   EVID.VALIDATION.MISSING_OPTIONAL_DEP:
     label: "Missing optional dependency"
     description: "Optional dependency required to perform a requested operation."

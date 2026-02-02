@@ -1,8 +1,0 @@
-fixture_type: "session_validation"
-inputs:
-  stems:
-    - filename: "stem.flac"
-      corrupt: true
-      byte_count: 6
-expected_issue_ids:
-  - "ISSUE.VALIDATION.UNSUPPORTED_AUDIO_FORMAT"

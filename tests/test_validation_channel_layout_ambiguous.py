@@ -2,6 +2,21 @@ import unittest
 
 
 class TestValidationChannelLayoutAmbiguous(unittest.TestCase):
+    def _assert_has_mode_evidence(self, issues) -> None:
+        for issue in issues:
+            if issue.get("issue_id") != "ISSUE.VALIDATION.CHANNEL_LAYOUT_AMBIGUOUS":
+                continue
+            evidence = issue.get("evidence", [])
+            evidence_ids = {
+                item.get("evidence_id")
+                for item in evidence
+                if isinstance(item, dict)
+            }
+            self.assertIn("EVID.METER.LUFS_WEIGHTING_MODE", evidence_ids)
+            self.assertIn("EVID.METER.LUFS_WEIGHTING_ORDER", evidence_ids)
+            return
+        self.fail("Channel layout ambiguous issue missing from issues list.")
+
     def test_conflict_mask_vs_layout_warns(self) -> None:
         from mmo.core.validators import validate_session
 
@@ -25,6 +40,7 @@ class TestValidationChannelLayoutAmbiguous(unittest.TestCase):
         issues = validate_session(session)
         issue_ids = {item.get("issue_id") for item in issues if isinstance(item, dict)}
         self.assertIn("ISSUE.VALIDATION.CHANNEL_LAYOUT_AMBIGUOUS", issue_ids)
+        self._assert_has_mode_evidence(issues)
 
     def test_layout_61_without_mask_warns(self) -> None:
         from mmo.core.validators import validate_session
@@ -42,6 +58,7 @@ class TestValidationChannelLayoutAmbiguous(unittest.TestCase):
         issues = validate_session(session)
         issue_ids = {item.get("issue_id") for item in issues if isinstance(item, dict)}
         self.assertIn("ISSUE.VALIDATION.CHANNEL_LAYOUT_AMBIGUOUS", issue_ids)
+        self._assert_has_mode_evidence(issues)
 
     def test_layout_underspecified_warns(self) -> None:
         from mmo.core.validators import validate_session
@@ -59,6 +76,7 @@ class TestValidationChannelLayoutAmbiguous(unittest.TestCase):
         issues = validate_session(session)
         issue_ids = {item.get("issue_id") for item in issues if isinstance(item, dict)}
         self.assertIn("ISSUE.VALIDATION.CHANNEL_LAYOUT_AMBIGUOUS", issue_ids)
+        self._assert_has_mode_evidence(issues)
 
 
 if __name__ == "__main__":

@@ -43,18 +43,22 @@ PYTHONPATH=src python tools/analyze_stems.py /tmp/mmo_demo --out-report examples
 - Keep the session sample rate (44.1k, 48k, 96k). Do not mix rates inside one folder.
 
 Avoid:
-- MP3/AAC or any other lossy exports. FLAC, WAV, or WAVPack files are recomended. WAVPack supports 32-bit floating point and is lossless compression. FLAC supports 24-bit (32-bit integer depending on build), and is also lossless and also supports tags.
+- MP3/AAC or any other lossy exports. For lossless stems, use WAV, FLAC, or WavPack (all acceptable).
 - Normalization on export
 - Per-stem limiting that changes the intent
 
 ## Supported stem formats (current)
-MMO detects several stem formats by extension, but only WAV metadata is decoded today.
+MMO detects several stem formats by extension. WAV metadata is always decoded; FLAC/WavPack metadata is decoded when ffprobe/FFmpeg is available (or MMO_FFPROBE_PATH is set).
 
 WAV (.wav/.wave):
 - Metadata supported.
 
+Lossless:
+- FLAC (.flac), WavPack (.wv)
+- Warning: requires ffprobe/FFmpeg for metadata. If missing, install FFmpeg or set MMO_FFPROBE_PATH.
+
 Lossless detected but not decoded yet:
-- FLAC (.flac), WavPack (.wv), AIFF (.aif/.aiff)
+- AIFF (.aif/.aiff)
 - Warning: unsupported format. Export WAV for analysis.
 
 Lossy formats:

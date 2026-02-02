@@ -6,8 +6,10 @@ from typing import Any, Dict, List, Optional
 
 from mmo.dsp.channel_layout import (
     channel_positions_from_mask,
+    lufs_weighting_order_and_mode,
     parse_ffmpeg_layout_to_positions,
 )
+from mmo.dsp.backends.ffprobe_meta import find_ffprobe
 
 
 def _mode_with_max_tiebreak(values: List[int]) -> Optional[int]:
@@ -47,11 +49,11 @@ def validate_session(
     stems = session.get("stems", [])
     wav_exts = {".wav", ".wave"}
     lossy_exts = {".mp3", ".aac", ".ogg", ".opus"}
-    unsupported_exts = {".flac", ".wv", ".aiff", ".aif"}
+    unsupported_exts = {".aiff", ".aif"}
     lossy_message = (
         "Lossy codecs remove audio detail and add artifacts (pre-echo/smearing, "
         "bandwidth loss). Processing like EQ/compression/saturation can amplify "
-        "them. Re-export stems lossless (WAV/FLAC) from the source session."
+        "them. Re-export stems lossless (WAV/FLAC/WavPack) from the source session."
     )
 
     sample_rates = [
@@ -75,6 +77,8 @@ def validate_session(
     expected_duration = max(durations) if durations else None
 
     issues: List[Dict[str, Any]] = []
+
+    ffprobe_available = find_ffprobe() is not None
 
     for stem in stems:
         stem_id = stem.get("stem_id")
@@ -157,6 +161,51 @@ def validate_session(
                     "message": "Format detected but not supported yet; export as WAV (PCM) for now.",
                 }
             )
+
+        if ext in {".flac", ".wv"}:
+            channel_count_val = stem.get("channel_count")
+            if channel_count_val is None:
+                channel_count_val = stem.get("channels")
+            required_values = [
+                channel_count_val,
+                stem.get("sample_rate_hz"),
+                stem.get("duration_s"),
+            ]
+            if any(not isinstance(value, (int, float)) for value in required_values):
+                evidence = _evidence_file(stem)
+                if not ffprobe_available:
+                    evidence.extend(
+                        [
+                            {
+                                "evidence_id": "EVID.VALIDATION.MISSING_OPTIONAL_DEP",
+                                "value": "ffprobe",
+                            },
+                            {
+                                "evidence_id": "EVID.VALIDATION.MISSING_OPTIONAL_DEP_HINT",
+                                "value": "Install FFmpeg (ffprobe) or set MMO_FFPROBE_PATH",
+                            },
+                        ]
+                    )
+                    issues.append(
+                        {
+                            "issue_id": "ISSUE.VALIDATION.OPTIONAL_DEP_MISSING",
+                            "severity": 40 if not strict else 55,
+                            "confidence": 1.0,
+                            "target": target,
+                            "evidence": evidence,
+                            "message": "Missing ffprobe metadata for lossless stem; install FFmpeg to decode.",
+                        }
+                    )
+                else:
+                    issues.append(
+                        {
+                            "issue_id": "ISSUE.VALIDATION.DECODE_ERROR",
+                            "severity": 90,
+                            "confidence": 1.0,
+                            "target": target,
+                            "evidence": evidence,
+                        }
+                    )
 
         if ext in wav_exts:
             required_values = [
@@ -306,26 +355,25 @@ def validate_session(
                         }
                     )
 
-                measurements = stem.get("measurements", [])
-                if isinstance(measurements, list):
-                    for measurement in measurements:
-                        if not isinstance(measurement, dict):
-                            continue
-                        evidence_id = measurement.get("evidence_id")
-                        if evidence_id in (
-                            "EVID.METER.LUFS_WEIGHTING_MODE",
-                            "EVID.METER.LUFS_WEIGHTING_ORDER",
-                        ):
-                            evidence.append(
-                                {
-                                    "evidence_id": evidence_id,
-                                    "value": measurement.get("value"),
-                                }
-                            )
+                _, order_csv, mode_str = lufs_weighting_order_and_mode(
+                    channels, wav_mask_int, layout_str
+                )
+                evidence.append(
+                    {
+                        "evidence_id": "EVID.METER.LUFS_WEIGHTING_MODE",
+                        "value": mode_str,
+                    }
+                )
+                evidence.append(
+                    {
+                        "evidence_id": "EVID.METER.LUFS_WEIGHTING_ORDER",
+                        "value": order_csv,
+                    }
+                )
 
                 evidence.append(
                     {
-                        "evidence_id": "EVID.VALIDATION.LOSSY_REASON",
+                        "evidence_id": "EVID.VALIDATION.CHANNEL_LAYOUT_REASON",
                         "value": (
                             "Channel layout ambiguity: "
                             + ", ".join(sorted(set(ambiguous_reasons)))

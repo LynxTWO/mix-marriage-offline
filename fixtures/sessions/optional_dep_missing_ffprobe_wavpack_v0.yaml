@@ -1,0 +1,12 @@
+fixture_id: "FIX.SESSION.OPTIONAL_DEP_MISSING.FFPROBE.WAVPACK.V0"
+fixture_type: "session_validation"
+description: "WavPack stem missing metadata without ffprobe present."
+
+inputs:
+  stems:
+    - filename: "stem.wv"
+      corrupt: true
+      byte_count: 6
+
+expected_issue_ids:
+  - "ISSUE.VALIDATION.OPTIONAL_DEP_MISSING"

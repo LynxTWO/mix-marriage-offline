@@ -163,6 +163,7 @@ issues:
       - "EVID.FILE.CHANNEL_LAYOUT"
       - "EVID.METER.LUFS_WEIGHTING_MODE"
       - "EVID.METER.LUFS_WEIGHTING_ORDER"
+      - "EVID.VALIDATION.CHANNEL_LAYOUT_REASON"
     suggested_actions: []
     notes:
       - "Warning-only: meters continue with safe fallbacks."

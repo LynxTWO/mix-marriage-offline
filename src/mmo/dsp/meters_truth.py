@@ -14,8 +14,7 @@ from mmo.dsp.float64 import (
 )
 from mmo.dsp.io import read_wav_metadata
 from mmo.dsp.channel_layout import (
-    channel_positions_from_mask,
-    parse_ffmpeg_layout_to_positions,
+    lufs_weighting_order_and_mode,
 )
 
 _EPSILON = 1e-12
@@ -39,28 +38,12 @@ def bs1770_weighting_info(
     mode_str: deterministic token
     """
     weights = np.ones(channels, dtype=np.float64)
-    positions, mode_detail = channel_positions_from_mask(wav_channel_mask, channels)
-
+    positions, order_csv, mode_str = lufs_weighting_order_and_mode(
+        channels, wav_channel_mask, channel_layout
+    )
     if positions is None:
-        if channel_layout is None:
-            return weights, "unknown", "fallback_layout_missing"
-        layout_positions, layout_detail = parse_ffmpeg_layout_to_positions(
-            channel_layout, channels
-        )
-        if layout_positions is None:
-            return weights, "unknown", f"fallback_{layout_detail}"
-        positions = layout_positions
-        mode_prefix = "ffmpeg_layout_known"
-        mode_trimmed = layout_detail in ("layout_trimmed", "layout_list_trimmed")
-        mode_str = f"{mode_prefix}_{layout_detail}"
-        use_layout = True
-    else:
-        mode_prefix = "mask_known"
-        mode_trimmed = mode_detail == "mask_trimmed"
-        mode_str = mode_prefix
-        use_layout = False
+        return weights, order_csv, mode_str
 
-    order_csv = ",".join(positions) if positions else "unknown"
     pos_set = set(positions)
 
     for idx, pos in enumerate(positions):
@@ -72,32 +55,10 @@ def bs1770_weighting_info(
         for idx, pos in enumerate(positions):
             if pos in ("SL", "SR"):
                 weights[idx] = 1.41
-        suffix = ""
     else:
         for idx, pos in enumerate(positions):
             if pos in ("BL", "BR"):
                 weights[idx] = 1.41
-        suffix = ""
-
-    if not use_layout:
-        if has_sl_sr and channels >= 8:
-            suffix = "71_sl_sr_surround_blbr_rear"
-        elif not has_sl_sr and channels == 6 and ("BL" in pos_set or "BR" in pos_set):
-            suffix = "51_blbr_surround"
-
-        if suffix:
-            mode_str = f"{mode_prefix}_{suffix}"
-    else:
-        if mode_str.startswith("ffmpeg_layout_known_layout_list_"):
-            pass
-        elif "SL" in pos_set or "SR" in pos_set:
-            if channels == 6 and "LFE" in pos_set:
-                mode_str = "ffmpeg_layout_known_51_sl_sr_surround"
-            elif channels >= 8 and ("BL" in pos_set or "BR" in pos_set):
-                mode_str = "ffmpeg_layout_known_71_sl_sr_surround_blbr_rear"
-
-    if mode_trimmed:
-        mode_str = f"{mode_str}_layout_trimmed" if use_layout else f"{mode_str}_mask_trimmed"
 
     return weights, order_csv, mode_str
 

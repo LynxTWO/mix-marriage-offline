@@ -39,6 +39,14 @@ pip install .[truth]
 
 ---
 
+## Supported formats
+- WAV (.wav/.wave) is always supported.
+- FLAC (.flac) and WavPack (.wv) are supported when ffprobe/FFmpeg is available (or MMO_FFPROBE_PATH is set).
+- AIFF (.aif/.aiff) is not supported yet; export WAV for now.
+- Lossy formats (MP3/AAC/Ogg/Opus) will trigger warnings; re-export lossless for reliable analysis.
+
+---
+
 ## Start here
 - Proposal: `docs/00-proposal.md`
 - Philosophy: `docs/01-philosophy.md`

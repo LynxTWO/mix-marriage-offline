@@ -152,6 +152,62 @@ def parse_ffmpeg_layout_to_positions(
     return list(positions), sanitize_ffmpeg_layout_token(normalized)
 
 
+def lufs_weighting_order_and_mode(
+    channels: int,
+    wav_channel_mask: int | None,
+    channel_layout: str | None,
+) -> tuple[list[str] | None, str, str]:
+    """
+    Return (positions_or_none, order_csv, mode_str) matching meters_truth tokens.
+    """
+    positions, mode_detail = channel_positions_from_mask(wav_channel_mask, channels)
+
+    if positions is None:
+        if channel_layout is None:
+            return None, "unknown", "fallback_layout_missing"
+        layout_positions, layout_detail = parse_ffmpeg_layout_to_positions(
+            channel_layout, channels
+        )
+        if layout_positions is None:
+            return None, "unknown", f"fallback_{layout_detail}"
+        positions = layout_positions
+        mode_prefix = "ffmpeg_layout_known"
+        mode_trimmed = layout_detail in ("layout_trimmed", "layout_list_trimmed")
+        mode_str = f"{mode_prefix}_{layout_detail}"
+        use_layout = True
+    else:
+        mode_prefix = "mask_known"
+        mode_trimmed = mode_detail == "mask_trimmed"
+        mode_str = mode_prefix
+        use_layout = False
+
+    order_csv = ",".join(positions) if positions else "unknown"
+    pos_set = set(positions)
+
+    has_sl_sr = "SL" in pos_set or "SR" in pos_set
+    if not use_layout:
+        suffix = ""
+        if has_sl_sr and channels >= 8:
+            suffix = "71_sl_sr_surround_blbr_rear"
+        elif not has_sl_sr and channels == 6 and ("BL" in pos_set or "BR" in pos_set):
+            suffix = "51_blbr_surround"
+        if suffix:
+            mode_str = f"{mode_prefix}_{suffix}"
+    else:
+        if mode_str.startswith("ffmpeg_layout_known_layout_list_"):
+            pass
+        elif has_sl_sr:
+            if channels == 6 and "LFE" in pos_set:
+                mode_str = "ffmpeg_layout_known_51_sl_sr_surround"
+            elif channels >= 8 and ("BL" in pos_set or "BR" in pos_set):
+                mode_str = "ffmpeg_layout_known_71_sl_sr_surround_blbr_rear"
+
+    if mode_trimmed:
+        mode_str = f"{mode_str}_layout_trimmed" if use_layout else f"{mode_str}_mask_trimmed"
+
+    return positions, order_csv, mode_str
+
+
 def infer_lufs_order_and_mode(
     channels: int,
     wav_channel_mask: int | None,
@@ -171,27 +227,11 @@ def infer_lufs_order_and_mode(
 
     positions, mask_detail = channel_positions_from_mask(wav_channel_mask, channels)
     diag["mask_detail"] = mask_detail
+    if channel_layout is not None:
+        _, layout_detail = parse_ffmpeg_layout_to_positions(channel_layout, channels)
+        diag["layout_detail"] = layout_detail
 
-    if positions is not None:
-        order_csv = ",".join(positions) if positions else "unknown"
-        return (
-            positions,
-            order_csv,
-            "mask_known" if mask_detail != "mask_trimmed" else "mask_known_mask_trimmed",
-            diag,
-        )
-
-    if channel_layout is None:
-        return None, "unknown", "fallback_layout_missing", diag
-
-    layout_positions, layout_detail = parse_ffmpeg_layout_to_positions(channel_layout, channels)
-    diag["layout_detail"] = layout_detail
-
-    if layout_positions is None:
-        return None, "unknown", f"fallback_{layout_detail}", diag
-
-    order_csv = ",".join(layout_positions) if layout_positions else "unknown"
-    mode_str = f"ffmpeg_layout_known_{layout_detail}"
-    if layout_detail in ("layout_trimmed", "layout_list_trimmed"):
-        mode_str = f"{mode_str}_layout_trimmed"
-    return layout_positions, order_csv, mode_str, diag
+    positions, order_csv, mode_str = lufs_weighting_order_and_mode(
+        channels, wav_channel_mask, channel_layout
+    )
+    return positions, order_csv, mode_str, diag
