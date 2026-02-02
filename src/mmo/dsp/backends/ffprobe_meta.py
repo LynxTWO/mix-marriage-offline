@@ -111,6 +111,7 @@ def read_metadata_ffprobe(path: Path) -> Dict[str, Any]:
 
     bits_per_sample = _parse_int(audio_stream.get("bits_per_raw_sample"))
     codec_name = audio_stream.get("codec_name")
+    channel_layout = audio_stream.get("channel_layout")
 
     metadata: Dict[str, Any] = {
         "channels": channels,
@@ -121,5 +122,9 @@ def read_metadata_ffprobe(path: Path) -> Dict[str, Any]:
         metadata["bits_per_sample"] = bits_per_sample
     if isinstance(codec_name, str) and codec_name:
         metadata["codec_name"] = codec_name
+    if isinstance(channel_layout, str):
+        normalized = channel_layout.strip().lower()
+        if normalized:
+            metadata["channel_layout"] = normalized
 
     return metadata

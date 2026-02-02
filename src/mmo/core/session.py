@@ -76,6 +76,9 @@ def build_session_from_stems_dir(stems_dir: Path) -> dict:
             codec_name = metadata.get("codec_name")
             if isinstance(codec_name, str) and codec_name:
                 stem_entry["codec_name"] = codec_name
+            channel_layout = metadata.get("channel_layout")
+            if isinstance(channel_layout, str) and channel_layout:
+                stem_entry["channel_layout"] = channel_layout
             if format_id == "wav":
                 stem_entry.update(
                     {

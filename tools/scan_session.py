@@ -294,19 +294,23 @@ def _add_basic_meter_measurements(
     return missing_ffmpeg
 
 
-def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> None:
+def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> bool:
     from mmo.dsp.meters_truth import (  # noqa: WPS433
         _bs1770_gi_weights,
+        compute_lufs_integrated_float64,
         compute_lufs_integrated_wav,
+        compute_lufs_shortterm_float64,
         compute_lufs_shortterm_wav,
+        compute_true_peak_dbtp_float64,
         compute_true_peak_dbtp_wav,
     )
+    import numpy as np  # noqa: WPS433
 
+    missing_ffmpeg = False
+    ffmpeg_cmd = None
     stems = session.get("stems", [])
     for stem in stems:
         if not isinstance(stem, dict):
-            continue
-        if "sample_rate_hz" not in stem or "bits_per_sample" not in stem:
             continue
         file_path = stem.get("file_path")
         if not isinstance(file_path, str) or not file_path:
@@ -314,14 +318,64 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> N
         stem_path = Path(file_path)
         if not stem_path.is_absolute():
             stem_path = stems_dir / stem_path
-        if detect_format_from_path(stem_path) != "wav":
+        format_id = detect_format_from_path(stem_path)
+        channels = stem.get("channel_count")
+        if not isinstance(channels, int) or channels <= 0:
+            continue
+        sample_rate_hz = stem.get("sample_rate_hz")
+        if not isinstance(sample_rate_hz, (int, float)) or sample_rate_hz <= 0:
             continue
 
-        try:
-            truepeak_dbtp = compute_true_peak_dbtp_wav(stem_path)
-            lufs_i = compute_lufs_integrated_wav(stem_path)
-            lufs_s = compute_lufs_shortterm_wav(stem_path)
-        except ValueError:
+        if format_id == "wav":
+            try:
+                truepeak_dbtp = compute_true_peak_dbtp_wav(stem_path)
+                lufs_i = compute_lufs_integrated_wav(stem_path)
+                lufs_s = compute_lufs_shortterm_wav(stem_path)
+            except ValueError:
+                continue
+        elif format_id in {"flac", "wavpack", "aiff"}:
+            if ffmpeg_cmd is None:
+                ffmpeg_cmd = resolve_ffmpeg_cmd()
+            if ffmpeg_cmd is None:
+                missing_ffmpeg = True
+                continue
+
+            try:
+                samples: list[float] = []
+                for chunk in iter_ffmpeg_float64_samples(stem_path, ffmpeg_cmd):
+                    samples.extend(chunk)
+                if samples:
+                    samples_array = np.asarray(samples, dtype=np.float64)
+                    total = (len(samples_array) // channels) * channels
+                    if total != len(samples_array):
+                        samples_array = samples_array[:total]
+                    samples_array = samples_array.reshape(-1, channels)
+                else:
+                    samples_array = np.zeros((0, channels), dtype=np.float64)
+            except ValueError:
+                continue
+
+            try:
+                truepeak_dbtp = compute_true_peak_dbtp_float64(
+                    samples_array, int(sample_rate_hz)
+                )
+                lufs_i = compute_lufs_integrated_float64(
+                    samples_array,
+                    int(sample_rate_hz),
+                    channels,
+                    channel_mask=stem.get("wav_channel_mask"),
+                    channel_layout=stem.get("channel_layout"),
+                )
+                lufs_s = compute_lufs_shortterm_float64(
+                    samples_array,
+                    int(sample_rate_hz),
+                    channels,
+                    channel_mask=stem.get("wav_channel_mask"),
+                    channel_layout=stem.get("channel_layout"),
+                )
+            except ValueError:
+                continue
+        else:
             continue
 
         upsert_measurement(
@@ -343,33 +397,35 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> N
             unit_id="UNIT.LUFS",
         )
 
-        channels = stem.get("channels")
-        if channels is None:
-            channels = stem.get("channel_count")
-        if isinstance(channels, int) and channels > 0:
-            mask = stem.get("wav_channel_mask")
-            channel_mask = mask if isinstance(mask, int) else None
-            weights, order_csv, mode_str = _bs1770_gi_weights(channels, channel_mask)
-            gi_csv = ",".join(f"{weight:.2f}" for weight in weights)
+        mask = stem.get("wav_channel_mask")
+        channel_mask = mask if isinstance(mask, int) else None
+        weights, order_csv, mode_str = _bs1770_gi_weights(
+            channels,
+            channel_mask,
+            channel_layout=stem.get("channel_layout"),
+        )
+        gi_csv = ",".join(f"{weight:.2f}" for weight in weights)
 
-            upsert_measurement(
-                stem,
-                evidence_id="EVID.METER.LUFS_WEIGHTING_MODE",
-                value=mode_str,
-                unit_id="UNIT.NONE",
-            )
-            upsert_measurement(
-                stem,
-                evidence_id="EVID.METER.LUFS_WEIGHTING_ORDER",
-                value=order_csv,
-                unit_id="UNIT.NONE",
-            )
-            upsert_measurement(
-                stem,
-                evidence_id="EVID.METER.LUFS_WEIGHTING_GI",
-                value=gi_csv,
-                unit_id="UNIT.NONE",
-            )
+        upsert_measurement(
+            stem,
+            evidence_id="EVID.METER.LUFS_WEIGHTING_MODE",
+            value=mode_str,
+            unit_id="UNIT.NONE",
+        )
+        upsert_measurement(
+            stem,
+            evidence_id="EVID.METER.LUFS_WEIGHTING_ORDER",
+            value=order_csv,
+            unit_id="UNIT.NONE",
+        )
+        upsert_measurement(
+            stem,
+            evidence_id="EVID.METER.LUFS_WEIGHTING_GI",
+            value=gi_csv,
+            unit_id="UNIT.NONE",
+        )
+
+    return missing_ffmpeg
 
 
 def _has_optional_dep_issue(issues: List[Dict[str, Any]], dep_name: str) -> bool:
@@ -443,12 +499,6 @@ def build_report(
     if meters == "basic":
         missing_ffmpeg = _add_basic_meter_measurements(session, stems_dir)
     issues = validate_session(session, strict=strict)
-    if missing_ffmpeg:
-        _add_optional_dep_issue(
-            issues,
-            dep_name="ffmpeg",
-            hint="Install FFmpeg or set MMO_FFMPEG_PATH=/path/to/ffmpeg",
-        )
     if meters == "truth":
         try:
             import numpy  # noqa: F401
@@ -459,7 +509,13 @@ def build_report(
                 hint="Install: pip install .[truth]",
             )
         else:
-            _add_truth_meter_measurements(session, stems_dir)
+            missing_ffmpeg = _add_truth_meter_measurements(session, stems_dir) or missing_ffmpeg
+    if missing_ffmpeg:
+        _add_optional_dep_issue(
+            issues,
+            dep_name="ffmpeg",
+            hint="Install FFmpeg or set MMO_FFMPEG_PATH=/path/to/ffmpeg",
+        )
     stem_hash = _hash_from_stems(session.get("stems", []))
     ontology_version = _load_ontology_version(ROOT_DIR / "ontology" / "ontology.yaml")
     return {

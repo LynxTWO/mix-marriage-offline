@@ -32,6 +32,7 @@ def main() -> None:
                     "sample_rate": "48000",
                     "duration": "2.5",
                     "bits_per_raw_sample": "24",
+                    "channel_layout": "stereo",
                 }
             ],
             "format": {"duration": "2.5"},
@@ -80,6 +81,7 @@ if __name__ == "__main__":
             self.assertAlmostEqual(flac_meta["duration_s"], 2.5, places=6)
             self.assertEqual(flac_meta["bits_per_sample"], 24)
             self.assertEqual(flac_meta["codec_name"], "flac")
+            self.assertEqual(flac_meta["channel_layout"], "stereo")
 
             self.assertEqual(m4a_meta["channels"], 1)
             self.assertEqual(m4a_meta["sample_rate_hz"], 44100)

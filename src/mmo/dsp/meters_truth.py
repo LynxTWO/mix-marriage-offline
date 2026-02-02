@@ -27,9 +27,28 @@ _CHANNEL_MASK_BITS: tuple[tuple[int, str], ...] = (
     (0x00000008, "LFE"),
     (0x00000010, "BL"),
     (0x00000020, "BR"),
+    (0x00000040, "FLC"),
+    (0x00000080, "FRC"),
+    (0x00000100, "BC"),
     (0x00000200, "SL"),
     (0x00000400, "SR"),
 )
+_FFMPEG_LAYOUT_MASKS: dict[str, int] = {
+    "mono": 0x00000004,
+    "stereo": 0x00000003,
+    "5.1": 0x0000003F,
+    "5.1(side)": 0x0000060F,
+    "7.1": 0x0000063F,
+    "7.1(wide)": 0x000006CF,
+}
+
+
+def _positions_from_mask(channel_mask: int) -> list[str]:
+    positions: list[str] = []
+    for bit, label in _CHANNEL_MASK_BITS:
+        if channel_mask & bit:
+            positions.append(label)
+    return positions
 
 
 def _channel_positions_from_mask(
@@ -43,10 +62,7 @@ def _channel_positions_from_mask(
     if not channel_mask:
         return None, "mask_missing"
 
-    positions: list[str] = []
-    for bit, label in _CHANNEL_MASK_BITS:
-        if channel_mask & bit:
-            positions.append(label)
+    positions = _positions_from_mask(channel_mask)
 
     if len(positions) < channels:
         return None, "mask_underspecified"
@@ -60,7 +76,9 @@ def _channel_positions_from_mask(
 
 
 def _bs1770_gi_weights(
-    channels: int, channel_mask: int | None
+    channels: int,
+    channel_mask: int | None,
+    channel_layout: str | None = None,
 ) -> tuple[np.ndarray, str, str]:
     """
     Returns (weights, order_csv, mode_str)
@@ -72,11 +90,23 @@ def _bs1770_gi_weights(
     positions, mode_detail = _channel_positions_from_mask(channel_mask, channels)
 
     if positions is None:
-        if mode_detail == "mask_trimmed":
-            mode_str = "fallback_mask_trimmed_equal"
-        else:
-            mode_str = f"fallback_{mode_detail}"
-        return weights, "unknown", mode_str
+        layout_positions, layout_detail = _channel_positions_from_ffmpeg_layout(
+            channel_layout, channels
+        )
+        if layout_positions is None:
+            if layout_detail == "layout_missing" and channel_mask:
+                mode_str = f"fallback_{mode_detail}"
+            else:
+                mode_str = f"fallback_{layout_detail}"
+            return weights, "unknown", mode_str
+        positions = layout_positions
+        mode_prefix = "ffmpeg_layout_known"
+        mode_trimmed = layout_detail == "layout_trimmed"
+        use_layout = True
+    else:
+        mode_prefix = "mask_known"
+        mode_trimmed = mode_detail == "mask_trimmed"
+        use_layout = False
 
     order_csv = ",".join(positions) if positions else "unknown"
     pos_set = set(positions)
@@ -91,22 +121,64 @@ def _bs1770_gi_weights(
             if pos in ("SL", "SR"):
                 weights[idx] = 1.41
         if channels >= 8:
-            mode_str = "mask_known_71_sl_sr_surround_blbr_rear"
+            suffix = "71_sl_sr_surround_blbr_rear"
         else:
-            mode_str = "mask_known"
+            suffix = ""
     else:
         for idx, pos in enumerate(positions):
             if pos in ("BL", "BR"):
                 weights[idx] = 1.41
         if channels == 6 and ("BL" in pos_set or "BR" in pos_set):
-            mode_str = "mask_known_51_blbr_surround"
+            suffix = "51_blbr_surround"
         else:
-            mode_str = "mask_known"
+            suffix = ""
 
-    if mode_detail == "mask_trimmed":
-        mode_str = f"{mode_str}_mask_trimmed"
+    if suffix:
+        mode_str = f"{mode_prefix}_{suffix}"
+    else:
+        mode_str = mode_prefix
+
+    if use_layout and mode_str == "ffmpeg_layout_known" and channels == 6:
+        if "SL" in pos_set or "SR" in pos_set:
+            mode_str = "ffmpeg_layout_known_51_sl_sr_surround"
+    if use_layout and mode_str == "ffmpeg_layout_known_71_sl_sr_surround_blbr_rear":
+        if "BL" not in pos_set and "BR" not in pos_set:
+            mode_str = "ffmpeg_layout_known"
+
+    if mode_trimmed:
+        if use_layout:
+            mode_str = f"{mode_str}_layout_trimmed"
+        else:
+            mode_str = f"{mode_str}_mask_trimmed"
 
     return weights, order_csv, mode_str
+
+
+def _channel_positions_from_ffmpeg_layout(
+    channel_layout: str | None, channels: int
+) -> tuple[list[str] | None, str]:
+    if channel_layout is None:
+        return None, "layout_missing"
+    normalized = channel_layout.strip().lower()
+    if not normalized:
+        return None, "layout_missing"
+    if normalized == "unknown":
+        return None, "layout_unknown"
+
+    mask = _FFMPEG_LAYOUT_MASKS.get(normalized)
+    if mask is None:
+        return None, "layout_unmapped"
+
+    positions = _positions_from_mask(mask)
+    if len(positions) < channels:
+        return None, "layout_underspecified"
+
+    mode_detail = "layout_known"
+    if len(positions) > channels:
+        positions = positions[:channels]
+        mode_detail = "layout_trimmed"
+
+    return positions, mode_detail
 
 
 def _read_wav_float64(path: Path) -> Tuple[np.ndarray, int]:
@@ -302,6 +374,13 @@ def _true_peak_48k_polyphase(channel: np.ndarray) -> float:
 def compute_true_peak_dbtp_wav(path: Path) -> float:
     """Compute true-peak (dBTP) using 4x oversampling FIR."""
     samples, sample_rate_hz = _read_wav_float64(path)
+    return compute_true_peak_dbtp_float64(samples, sample_rate_hz)
+
+
+def compute_true_peak_dbtp_float64(
+    samples: np.ndarray, sample_rate_hz: int
+) -> float:
+    """Compute true-peak (dBTP) from float64 samples."""
     if samples.size == 0:
         return float("-inf")
     atten = 0.25
@@ -333,37 +412,14 @@ def compute_lufs_integrated_wav(path: Path) -> float:
     metadata = read_wav_metadata(path)
     channels = int(metadata["channels"])
     channel_mask = metadata.get("channel_mask")
-    weights, _, _ = _bs1770_gi_weights(channels, channel_mask)
-
     samples, sample_rate_hz = _read_wav_float64(path)
-    if samples.size == 0:
-        return float("-inf")
-
-    weighted = np.zeros_like(samples, dtype=np.float64)
-    for channel_index in range(samples.shape[1]):
-        weighted[:, channel_index] = _k_weighted(samples[:, channel_index], sample_rate_hz)
-
-    energies = _block_energies(
-        weighted, sample_rate_hz, block_s=0.4, hop_s=0.1, weights=weights
+    return compute_lufs_integrated_float64(
+        samples,
+        sample_rate_hz,
+        channels,
+        channel_mask=channel_mask,
+        channel_layout=None,
     )
-    if not energies:
-        return float("-inf")
-
-    abs_threshold = 10.0 ** ((-70.0 - _LOUDNESS_OFFSET) / 10.0)
-    energies = [energy for energy in energies if energy > abs_threshold]
-    if not energies:
-        return float("-inf")
-
-    mean_energy = float(np.mean(energies))
-    rel_threshold = mean_energy / 10.0
-    gated = [energy for energy in energies if energy > rel_threshold]
-    if not gated:
-        return float("-inf")
-
-    gated_energy = float(np.mean(gated))
-    if gated_energy <= 0.0:
-        return float("-inf")
-    return _LOUDNESS_OFFSET + 10.0 * math.log10(gated_energy)
 
 
 def compute_lufs_shortterm_wav(path: Path) -> float:
@@ -371,9 +427,25 @@ def compute_lufs_shortterm_wav(path: Path) -> float:
     metadata = read_wav_metadata(path)
     channels = int(metadata["channels"])
     channel_mask = metadata.get("channel_mask")
-    weights, _, _ = _bs1770_gi_weights(channels, channel_mask)
-
     samples, sample_rate_hz = _read_wav_float64(path)
+    return compute_lufs_shortterm_float64(
+        samples,
+        sample_rate_hz,
+        channels,
+        channel_mask=channel_mask,
+        channel_layout=None,
+    )
+
+
+def _compute_lufs_from_samples(
+    samples: np.ndarray,
+    sample_rate_hz: int,
+    weights: np.ndarray,
+    *,
+    block_s: float,
+    hop_s: float,
+    gated: bool,
+) -> float:
     if samples.size == 0:
         return float("-inf")
 
@@ -382,11 +454,72 @@ def compute_lufs_shortterm_wav(path: Path) -> float:
         weighted[:, channel_index] = _k_weighted(samples[:, channel_index], sample_rate_hz)
 
     energies = _block_energies(
-        weighted, sample_rate_hz, block_s=3.0, hop_s=1.0, weights=weights
+        weighted, sample_rate_hz, block_s=block_s, hop_s=hop_s, weights=weights
     )
     if not energies:
         return float("-inf")
+
+    if gated:
+        abs_threshold = 10.0 ** ((-70.0 - _LOUDNESS_OFFSET) / 10.0)
+        energies = [energy for energy in energies if energy > abs_threshold]
+        if not energies:
+            return float("-inf")
+
+        mean_energy = float(np.mean(energies))
+        rel_threshold = mean_energy / 10.0
+        energies = [energy for energy in energies if energy > rel_threshold]
+        if not energies:
+            return float("-inf")
+
     mean_energy = float(np.mean(energies))
     if mean_energy <= 0.0:
         return float("-inf")
     return _LOUDNESS_OFFSET + 10.0 * math.log10(mean_energy)
+
+
+def compute_lufs_integrated_float64(
+    samples: np.ndarray,
+    sample_rate_hz: int,
+    channels: int,
+    *,
+    channel_mask: int | None,
+    channel_layout: str | None,
+) -> float:
+    """Compute integrated loudness (LUFS) from float64 samples."""
+    weights, _, _ = _bs1770_gi_weights(
+        channels,
+        channel_mask,
+        channel_layout=channel_layout,
+    )
+    return _compute_lufs_from_samples(
+        samples,
+        sample_rate_hz,
+        weights,
+        block_s=0.4,
+        hop_s=0.1,
+        gated=True,
+    )
+
+
+def compute_lufs_shortterm_float64(
+    samples: np.ndarray,
+    sample_rate_hz: int,
+    channels: int,
+    *,
+    channel_mask: int | None,
+    channel_layout: str | None,
+) -> float:
+    """Compute short-term loudness (LUFS) from float64 samples."""
+    weights, _, _ = _bs1770_gi_weights(
+        channels,
+        channel_mask,
+        channel_layout=channel_layout,
+    )
+    return _compute_lufs_from_samples(
+        samples,
+        sample_rate_hz,
+        weights,
+        block_s=3.0,
+        hop_s=1.0,
+        gated=False,
+    )
