@@ -672,6 +672,21 @@ issues:
     notes:
       - "Most fixes are context-dependent; polarity invert usually requires approval."
 
+  ISSUE.IMAGING.NEGATIVE_CORRELATION_PAIR:
+    label: "Negative correlation in channel pair"
+    description: "A defined channel pair (FL/FR, SL/SR, BL/BR) shows negative correlation in a multichannel stem."
+    issue_type: "imaging"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+      - "EVID.TRACK.CHANNELS"
+      - "EVID.IMAGE.CORRELATION.FL_FR"
+      - "EVID.IMAGE.CORRELATION.SL_SR"
+      - "EVID.IMAGE.CORRELATION.BL_BR"
+      - "EVID.IMAGE.CORRELATION_PAIRS_LOG"
+    suggested_actions: []
+
   ISSUE.IMAGING.MONO_COLLAPSE_RISK:
     label: "Mono collapse risk"
     description: "Content likely loses energy or clarity when summed to mono."

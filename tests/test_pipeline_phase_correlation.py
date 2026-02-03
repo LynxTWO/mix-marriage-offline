@@ -21,6 +21,7 @@ class TestPipelinePhaseCorrelation(unittest.TestCase):
                     {
                         "stem_id": "stem-phase",
                         "file_path": "phase.wav",
+                        "channel_count": 2,
                         "measurements": [
                             {
                                 "evidence_id": "EVID.IMAGE.CORRELATION",

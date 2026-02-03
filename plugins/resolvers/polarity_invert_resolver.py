@@ -18,6 +18,25 @@ def _coerce_number(value: Any) -> Optional[float]:
     return None
 
 
+def _coerce_int(value: Any) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else None
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            try:
+                parsed = float(value)
+            except ValueError:
+                return None
+            return int(parsed) if parsed.is_integer() else None
+    return None
+
+
 def _extract_correlation(evidence: Any) -> Optional[float]:
     if not isinstance(evidence, list):
         return None
@@ -37,6 +56,24 @@ def _stem_target(stem_id: Any) -> Dict[str, Any]:
     if isinstance(stem_id, str) and stem_id:
         target["stem_id"] = stem_id
     return target
+
+
+def _find_stem_channels(session: Dict[str, Any], stem_id: Any) -> Optional[int]:
+    if not isinstance(stem_id, str) or not stem_id:
+        return None
+    stems = session.get("stems")
+    if not isinstance(stems, list):
+        return None
+    for stem in stems:
+        if not isinstance(stem, dict):
+            continue
+        if stem.get("stem_id") != stem_id:
+            continue
+        channels_value = stem.get("channel_count")
+        if channels_value is None:
+            channels_value = stem.get("channels")
+        return _coerce_int(channels_value)
+    return None
 
 
 class PolarityInvertResolver(ResolverPlugin):
@@ -59,14 +96,20 @@ class PolarityInvertResolver(ResolverPlugin):
             evidence: List[Dict[str, Any]] = []
 
             correlation = _extract_correlation(issue.get("evidence"))
-            if correlation is not None:
-                evidence.append(
-                    {
-                        "evidence_id": CORRELATION_EVIDENCE_ID,
-                        "value": correlation,
-                        "unit_id": "UNIT.CORRELATION",
-                    }
-                )
+            if correlation is None:
+                continue
+
+            channels = _find_stem_channels(session, stem_id)
+            if channels != 2:
+                continue
+
+            evidence.append(
+                {
+                    "evidence_id": CORRELATION_EVIDENCE_ID,
+                    "value": correlation,
+                    "unit_id": "UNIT.CORRELATION",
+                }
+            )
 
             recommendations.append(
                 {
