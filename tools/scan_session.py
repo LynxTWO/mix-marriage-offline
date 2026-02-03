@@ -157,7 +157,7 @@ def _add_basic_meter_measurements(
         if format_id == "wav":
             if "sample_rate_hz" not in stem or "bits_per_sample" not in stem:
                 continue
-        elif format_id in {"flac", "wavpack"}:
+        elif format_id in {"flac", "wavpack", "aiff"}:
             if ffmpeg_cmd is None:
                 ffmpeg_cmd = resolve_ffmpeg_cmd()
             if ffmpeg_cmd is None:
