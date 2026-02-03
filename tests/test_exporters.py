@@ -22,7 +22,7 @@ class TestExporters(unittest.TestCase):
         report = self._load_report()
         with tempfile.TemporaryDirectory() as temp_dir:
             out_path = Path(temp_dir) / "recall.csv"
-            export_recall_csv(report, out_path)
+            export_recall_csv(report, out_path, include_gates=True)
             rows = list(csv.reader(out_path.read_text(encoding="utf-8").splitlines()))
 
         self.assertEqual(
@@ -46,6 +46,27 @@ class TestExporters(unittest.TestCase):
         self.assertEqual(rows[1][-3:], ["", "", ""])
         self.assertEqual(rows[2][-3:], ["", "", ""])
 
+    def test_export_recall_csv_without_gates(self) -> None:
+        report = self._load_report()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out_path = Path(temp_dir) / "recall.csv"
+            export_recall_csv(report, out_path, include_gates=False)
+            rows = list(csv.reader(out_path.read_text(encoding="utf-8").splitlines()))
+
+        self.assertEqual(
+            rows[0],
+            [
+                "recommendation_id",
+                "issue_id",
+                "action_id",
+                "risk",
+                "requires_approval",
+                "target",
+                "params",
+                "notes",
+            ],
+        )
+
     def test_export_report_pdf_exists(self) -> None:
         if reportlab is None:
             self.skipTest("reportlab not installed")
@@ -53,6 +74,40 @@ class TestExporters(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             out_path = Path(temp_dir) / "report.pdf"
             export_report_pdf(report, out_path)
+            self.assertTrue(out_path.exists())
+            self.assertGreater(out_path.stat().st_size, 0)
+
+    def test_export_report_pdf_truncation(self) -> None:
+        if reportlab is None:
+            self.skipTest("reportlab not installed")
+        report = self._load_report()
+        report["session"] = {
+            "stems": [
+                {
+                    "stem_id": "stem-long",
+                    "measurements": [
+                        {
+                            "evidence_id": "EVID.IMAGE.CORRELATION_PAIRS_LOG",
+                            "value": "x" * 1000,
+                            "unit_id": "UNIT.TEXT",
+                        }
+                    ],
+                }
+            ]
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out_path = Path(temp_dir) / "report.pdf"
+            export_report_pdf(report, out_path, truncate_values=100)
+            self.assertTrue(out_path.exists())
+            self.assertGreater(out_path.stat().st_size, 0)
+
+    def test_export_report_pdf_no_measurements(self) -> None:
+        if reportlab is None:
+            self.skipTest("reportlab not installed")
+        report = self._load_report()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out_path = Path(temp_dir) / "report.pdf"
+            export_report_pdf(report, out_path, include_measurements=False)
             self.assertTrue(out_path.exists())
             self.assertGreater(out_path.stat().st_size, 0)
 

@@ -30,6 +30,14 @@ def _compact_json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
+def _truncate_value(value: str, limit: int) -> str:
+    if limit <= 0:
+        return ""
+    if len(value) <= limit:
+        return value
+    return f"{value[: max(limit - 12, 0)]}...(truncated)"
+
+
 def _sorted_recommendations(recommendations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return sorted(
         recommendations,
@@ -66,31 +74,40 @@ def _issues_table(issues: List[Dict[str, Any]]) -> Table:
     return table
 
 
-def _recommendations_table(recommendations: List[Dict[str, Any]]) -> Table:
-    header = [
-        "recommendation_id",
-        "action_id",
-        "risk",
-        "requires_approval",
-        "eligible_auto_apply",
-        "eligible_render",
-        "target",
-        "notes",
-    ]
+def _recommendations_table(
+    recommendations: List[Dict[str, Any]],
+    *,
+    include_gates: bool,
+    truncate_values: int,
+) -> Table:
+    header = ["recommendation_id", "action_id", "risk", "requires_approval"]
+    if include_gates:
+        header.extend(["eligible_auto_apply", "eligible_render"])
+    header.extend(["target", "notes"])
     rows = [header]
     for rec in _sorted_recommendations(recommendations):
-        rows.append(
+        row = [
+            _safe_str(rec.get("recommendation_id")),
+            _safe_str(rec.get("action_id")),
+            _safe_str(rec.get("risk")),
+            _safe_str(rec.get("requires_approval")),
+        ]
+        if include_gates:
+            row.extend(
+                [
+                    _safe_str(rec.get("eligible_auto_apply")),
+                    _safe_str(rec.get("eligible_render")),
+                ]
+            )
+        target = _compact_json(rec.get("target"))
+        notes = _safe_str(rec.get("notes"))
+        row.extend(
             [
-                _safe_str(rec.get("recommendation_id")),
-                _safe_str(rec.get("action_id")),
-                _safe_str(rec.get("risk")),
-                _safe_str(rec.get("requires_approval")),
-                _safe_str(rec.get("eligible_auto_apply")),
-                _safe_str(rec.get("eligible_render")),
-                _compact_json(rec.get("target")),
-                _safe_str(rec.get("notes")),
+                target,
+                _truncate_value(notes, truncate_values * 2),
             ]
         )
+        rows.append(row)
     table = Table(rows, repeatRows=1)
     table.setStyle(
         TableStyle(
@@ -104,7 +121,11 @@ def _recommendations_table(recommendations: List[Dict[str, Any]]) -> Table:
     return table
 
 
-def _gate_results_table(recommendations: List[Dict[str, Any]]) -> Table:
+def _gate_results_table(
+    recommendations: List[Dict[str, Any]],
+    *,
+    truncate_values: int,
+) -> Table:
     header = ["recommendation_id", "context", "outcome", "reason_id", "gate_id"]
     rows = [header]
     context_order = {"suggest": 0, "auto_apply": 1, "render": 2}
@@ -121,11 +142,11 @@ def _gate_results_table(recommendations: List[Dict[str, Any]]) -> Table:
         ):
             rows.append(
                 [
-                    _safe_str(rec.get("recommendation_id")),
-                    _safe_str(result.get("context")),
-                    _safe_str(result.get("outcome")),
-                    _safe_str(result.get("reason_id")),
-                    _safe_str(result.get("gate_id")),
+                    _truncate_value(_safe_str(rec.get("recommendation_id")), truncate_values),
+                    _truncate_value(_safe_str(result.get("context")), truncate_values),
+                    _truncate_value(_safe_str(result.get("outcome")), truncate_values),
+                    _truncate_value(_safe_str(result.get("reason_id")), truncate_values),
+                    _truncate_value(_safe_str(result.get("gate_id")), truncate_values),
                 ]
             )
     table = Table(rows, repeatRows=1)
@@ -141,7 +162,11 @@ def _gate_results_table(recommendations: List[Dict[str, Any]]) -> Table:
     return table
 
 
-def _measurements_table(stems: List[Dict[str, Any]]) -> Table:
+def _measurements_table(
+    stems: List[Dict[str, Any]],
+    *,
+    truncate_values: int,
+) -> Table:
     header = ["stem_id", "evidence_id", "value", "unit_id"]
     rows = [header]
     for stem in stems:
@@ -157,7 +182,7 @@ def _measurements_table(stems: List[Dict[str, Any]]) -> Table:
                 [
                     _safe_str(stem_id),
                     _safe_str(measurement.get("evidence_id")),
-                    _safe_str(measurement.get("value")),
+                    _truncate_value(_safe_str(measurement.get("value")), truncate_values),
                     _safe_str(measurement.get("unit_id")),
                 ]
             )
@@ -174,7 +199,14 @@ def _measurements_table(stems: List[Dict[str, Any]]) -> Table:
     return table
 
 
-def export_report_pdf(report: Dict[str, Any], out_path: Path) -> None:
+def export_report_pdf(
+    report: Dict[str, Any],
+    out_path: Path,
+    *,
+    include_measurements: bool = True,
+    include_gates: bool = True,
+    truncate_values: int = 200,
+) -> None:
     if SimpleDocTemplate is None:
         raise RuntimeError("reportlab is required for PDF export")
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -203,25 +235,41 @@ def export_report_pdf(report: Dict[str, Any], out_path: Path) -> None:
         clean_recommendations = [r for r in recommendations if isinstance(r, dict)]
         story.append(Paragraph("Recommendations", styles["Heading2"]))
         story.append(Spacer(1, 6))
-        story.append(_recommendations_table(clean_recommendations))
+        story.append(
+            _recommendations_table(
+                clean_recommendations,
+                include_gates=include_gates,
+                truncate_values=truncate_values,
+            )
+        )
         story.append(Spacer(1, 12))
 
-        if any(
+        if include_gates and any(
             isinstance(rec.get("gate_results"), list) and rec.get("gate_results")
             for rec in clean_recommendations
         ):
             story.append(Paragraph("Gate Results", styles["Heading2"]))
             story.append(Spacer(1, 6))
-            story.append(_gate_results_table(clean_recommendations))
+            story.append(
+                _gate_results_table(
+                    clean_recommendations,
+                    truncate_values=truncate_values,
+                )
+            )
             story.append(Spacer(1, 12))
 
     session = report.get("session", {})
     stems = []
     if isinstance(session, dict):
         stems = session.get("stems", [])
-    if isinstance(stems, list) and stems:
+    if include_measurements and isinstance(stems, list) and stems:
         story.append(Paragraph("Measurements", styles["Heading2"]))
         story.append(Spacer(1, 6))
-        story.append(_measurements_table([s for s in stems if isinstance(s, dict)]))
+        story.append(
+            _measurements_table(
+                [s for s in stems if isinstance(s, dict)],
+                truncate_values=truncate_values,
+            )
+        )
 
     doc.build(story)

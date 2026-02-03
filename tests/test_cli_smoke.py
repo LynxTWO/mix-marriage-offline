@@ -28,6 +28,9 @@ class TestCliSmoke(unittest.TestCase):
             text=True,
         )
         self.assertEqual(result.returncode, 0)
+        self.assertIn("--no-measurements", result.stdout)
+        self.assertIn("--no-gates", result.stdout)
+        self.assertIn("--truncate-values", result.stdout)
 
 
 if __name__ == "__main__":

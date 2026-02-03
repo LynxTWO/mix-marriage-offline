@@ -37,7 +37,12 @@ def _gate_summary(rec: Dict[str, Any]) -> str:
     return ";".join(parts)
 
 
-def export_recall_csv(report: Dict[str, Any], out_path: Path) -> None:
+def export_recall_csv(
+    report: Dict[str, Any],
+    out_path: Path,
+    *,
+    include_gates: bool = True,
+) -> None:
     recommendations = report.get("recommendations", [])
     if not isinstance(recommendations, list):
         recommendations = []
@@ -46,36 +51,44 @@ def export_recall_csv(report: Dict[str, Any], out_path: Path) -> None:
 
     with out_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
-        writer.writerow(
-            [
-                "recommendation_id",
-                "issue_id",
-                "action_id",
-                "risk",
-                "requires_approval",
-                "target",
-                "params",
-                "notes",
-                "eligible_auto_apply",
-                "eligible_render",
-                "gate_summary",
-            ]
-        )
+        header = [
+            "recommendation_id",
+            "issue_id",
+            "action_id",
+            "risk",
+            "requires_approval",
+            "target",
+            "params",
+            "notes",
+        ]
+        if include_gates:
+            header.extend(
+                [
+                    "eligible_auto_apply",
+                    "eligible_render",
+                    "gate_summary",
+                ]
+            )
+        writer.writerow(header)
         for rec in _sorted_recommendations(
             rec for rec in recommendations if isinstance(rec, dict)
         ):
-            writer.writerow(
-                [
-                    rec.get("recommendation_id", ""),
-                    rec.get("issue_id", ""),
-                    rec.get("action_id", ""),
-                    rec.get("risk", ""),
-                    rec.get("requires_approval", ""),
-                    json.dumps(rec.get("target"), sort_keys=True),
-                    json.dumps(rec.get("params"), sort_keys=True),
-                    rec.get("notes", ""),
-                    rec.get("eligible_auto_apply", ""),
-                    rec.get("eligible_render", ""),
-                    _gate_summary(rec),
-                ]
-            )
+            row = [
+                rec.get("recommendation_id", ""),
+                rec.get("issue_id", ""),
+                rec.get("action_id", ""),
+                rec.get("risk", ""),
+                rec.get("requires_approval", ""),
+                json.dumps(rec.get("target"), sort_keys=True),
+                json.dumps(rec.get("params"), sort_keys=True),
+                rec.get("notes", ""),
+            ]
+            if include_gates:
+                row.extend(
+                    [
+                        rec.get("eligible_auto_apply", ""),
+                        rec.get("eligible_render", ""),
+                        _gate_summary(rec),
+                    ]
+                )
+            writer.writerow(row)

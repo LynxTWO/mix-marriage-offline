@@ -65,6 +65,10 @@ def _run_export(
     report_path: Path,
     csv_path: str | None,
     pdf_path: str | None,
+    *,
+    no_measurements: bool,
+    no_gates: bool,
+    truncate_values: int,
 ) -> int:
     command = [
         sys.executable,
@@ -76,6 +80,12 @@ def _run_export(
         command.extend(["--csv", csv_path])
     if pdf_path:
         command.extend(["--pdf", pdf_path])
+    if no_measurements:
+        command.append("--no-measurements")
+    if no_gates:
+        command.append("--no-gates")
+    if truncate_values != 200:
+        command.extend(["--truncate-values", str(truncate_values)])
     if len(command) == 4:
         return 0
     return _run_command(command)
@@ -144,6 +154,22 @@ def main(argv: list[str] | None = None) -> int:
     export_parser.add_argument("--report", required=True, help="Path to report JSON.")
     export_parser.add_argument("--csv", default=None, help="Optional output CSV path.")
     export_parser.add_argument("--pdf", default=None, help="Optional output PDF path.")
+    export_parser.add_argument(
+        "--no-measurements",
+        action="store_true",
+        help="Omit Measurements section from PDF output.",
+    )
+    export_parser.add_argument(
+        "--no-gates",
+        action="store_true",
+        help="Omit gate fields/sections from exports.",
+    )
+    export_parser.add_argument(
+        "--truncate-values",
+        type=int,
+        default=200,
+        help="Truncate PDF cell values to this length.",
+    )
 
     args = parser.parse_args(argv)
     repo_root = Path(__file__).resolve().parents[2]
@@ -173,6 +199,9 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.report),
             args.csv,
             args.pdf,
+            no_measurements=args.no_measurements,
+            no_gates=args.no_gates,
+            truncate_values=args.truncate_values,
         )
 
     return 0
