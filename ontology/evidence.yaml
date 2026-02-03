@@ -379,6 +379,39 @@ evidence:
       min: -1
       max: 1
 
+  EVID.IMAGE.CORRELATION.FL_FR:
+    label: "Front left/right correlation"
+    description: "Correlation coefficient (FL/FR, typically -1 to +1)."
+    value_type: "number"
+    unit_id: "UNIT.CORRELATION"
+    constraints:
+      min: -1
+      max: 1
+
+  EVID.IMAGE.CORRELATION.SL_SR:
+    label: "Side left/right correlation"
+    description: "Correlation coefficient (SL/SR, typically -1 to +1)."
+    value_type: "number"
+    unit_id: "UNIT.CORRELATION"
+    constraints:
+      min: -1
+      max: 1
+
+  EVID.IMAGE.CORRELATION.BL_BR:
+    label: "Back left/right correlation"
+    description: "Correlation coefficient (BL/BR, typically -1 to +1)."
+    value_type: "number"
+    unit_id: "UNIT.CORRELATION"
+    constraints:
+      min: -1
+      max: 1
+
+  EVID.IMAGE.CORRELATION_PAIRS_LOG:
+    label: "Correlation pair log"
+    description: "Deterministic JSON log describing which correlation pairs were evaluated, their channel indices, inference mode, and skip reasons."
+    value_type: "string"
+    unit_id: "UNIT.NONE"
+
   EVID.IMAGE.SIDE_LEVEL_DB:
     label: "Side level"
     description: "Estimated side channel level (mid/side analysis)."

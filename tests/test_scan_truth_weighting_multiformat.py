@@ -108,11 +108,31 @@ if __name__ == "__main__":
             stems = report.get("session", {}).get("stems", [])
             self.assertEqual(len(stems), 4)
             for stem in stems:
+                channel_count = stem.get("channel_count")
                 measurements = stem.get("measurements", [])
                 ids = {m.get("evidence_id") for m in measurements if isinstance(m, dict)}
                 self.assertIn("EVID.METER.LUFS_WEIGHTING_MODE", ids)
                 self.assertIn("EVID.METER.LUFS_WEIGHTING_ORDER", ids)
                 self.assertIn("EVID.METER.LUFS_WEIGHTING_GI", ids)
+                if channel_count == 2:
+                    self.assertIn("EVID.IMAGE.CORRELATION", ids)
+                    self.assertIn("EVID.IMAGE.CORRELATION_PAIRS_LOG", ids)
+                elif channel_count == 6:
+                    self.assertIn("EVID.IMAGE.CORRELATION.FL_FR", ids)
+                    self.assertIn("EVID.IMAGE.CORRELATION.SL_SR", ids)
+                    self.assertIn("EVID.IMAGE.CORRELATION_PAIRS_LOG", ids)
+                elif channel_count == 8:
+                    self.assertIn("EVID.IMAGE.CORRELATION.FL_FR", ids)
+                    self.assertIn("EVID.IMAGE.CORRELATION.SL_SR", ids)
+                    self.assertIn("EVID.IMAGE.CORRELATION.BL_BR", ids)
+                    self.assertIn("EVID.IMAGE.CORRELATION_PAIRS_LOG", ids)
+
+                for measurement in measurements:
+                    if measurement.get("evidence_id") == "EVID.IMAGE.CORRELATION_PAIRS_LOG":
+                        payload = json.loads(measurement.get("value", ""))
+                        self.assertIn("mode", payload)
+                        self.assertIn("order", payload)
+                        self.assertIn("pairs", payload)
 
 
 if __name__ == "__main__":
