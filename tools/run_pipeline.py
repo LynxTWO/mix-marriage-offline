@@ -59,6 +59,7 @@ def main() -> int:
     if str(src_root) not in sys.path:
         sys.path.insert(0, str(src_root))
 
+    from mmo.core.gates import apply_gates_to_report
     from mmo.core.pipeline import load_plugins, run_detectors, run_resolvers
 
     report_path = Path(args.report)
@@ -68,6 +69,10 @@ def main() -> int:
     plugins = load_plugins(plugins_dir)
     run_detectors(report, plugins)
     run_resolvers(report, plugins)
+    apply_gates_to_report(
+        report,
+        policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+    )
 
     _write_report(output_path, report)
     return 0

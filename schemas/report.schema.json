@@ -177,6 +177,12 @@
           "type": "array",
           "items": { "$ref": "#/$defs/param" }
         },
+        "gate_results": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/gate_result" }
+        },
+        "eligible_auto_apply": { "type": "boolean" },
+        "eligible_render": { "type": "boolean" },
         "notes": { "type": "string" },
         "evidence": {
           "type": "array",
@@ -216,6 +222,18 @@
         "report_pdf_path": { "type": "string" },
         "recall_csv_path": { "type": "string" },
         "renders_dir": { "type": "string" }
+      }
+    },
+    "gate_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "context", "outcome", "details"],
+      "properties": {
+        "gate_id": { "type": "string", "pattern": "^GATE\\." },
+        "context": { "type": "string", "enum": ["suggest", "auto_apply", "render"] },
+        "outcome": { "type": "string", "enum": ["allow", "suggest_only", "reject"] },
+        "reason_id": { "type": "string", "pattern": "^REASON\\." },
+        "details": { "type": "object", "additionalProperties": true }
       }
     }
   }
