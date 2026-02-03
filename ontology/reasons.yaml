@@ -22,6 +22,11 @@ reasons:
     kind: "authority"
     description: "The action/plan requires explicit user approval before auto-apply or render is permitted."
 
+  REASON.DIAGNOSTIC_SUGGEST_ONLY:
+    label: "Diagnostic actions are suggest-only"
+    kind: "authority"
+    description: "Diagnostic guidance actions are never eligible for auto-apply or render."
+
   REASON.GAIN_TOO_LARGE:
     label: "Gain change too large"
     kind: "param_limit"

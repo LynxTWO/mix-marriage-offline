@@ -264,6 +264,51 @@ def _evaluate_count_limit(
     return results
 
 
+def _evaluate_action_prefix_limit(
+    rec: Dict[str, Any],
+    gate_id: str,
+    gate: Dict[str, Any],
+    contexts: Sequence[Context],
+) -> List[GateResult]:
+    prefixes = gate.get("applies_to_actions_prefixes")
+    if not isinstance(prefixes, list):
+        return []
+    prefixes = [prefix for prefix in prefixes if isinstance(prefix, str)]
+    if not prefixes:
+        return []
+    action_id = _coerce_str(rec.get("action_id")) or ""
+    matched_prefix = None
+    for prefix in prefixes:
+        if action_id.startswith(prefix):
+            matched_prefix = prefix
+            break
+    if matched_prefix is None:
+        return []
+
+    enforcement = gate.get("enforcement")
+    if not isinstance(enforcement, dict):
+        return []
+    reason_id = gate.get("violation_reason_id")
+    results: List[GateResult] = []
+    for context in contexts:
+        outcome = enforcement.get(context)
+        if outcome is None or outcome == "allow":
+            continue
+        results.append(
+            {
+                "gate_id": gate_id,
+                "context": context,
+                "outcome": outcome,
+                "reason_id": reason_id,
+                "details": {
+                    "action_id": action_id,
+                    "matched_prefix": matched_prefix,
+                },
+            }
+        )
+    return results
+
+
 def _evaluate_downmix_policy_exists(
     rec: Dict[str, Any],
     gate_id: str,
@@ -343,6 +388,11 @@ def evaluate_recommendation_gates(
             continue
         if kind == "count_limit":
             gate_results.extend(_evaluate_count_limit(rec, gate_id, gate, contexts))
+            continue
+        if kind == "action_prefix_limit":
+            gate_results.extend(
+                _evaluate_action_prefix_limit(rec, gate_id, gate, contexts)
+            )
             continue
         if gate_id == "GATE.DOWNMIX_POLICY_EXISTS":
             if policy_path is None:

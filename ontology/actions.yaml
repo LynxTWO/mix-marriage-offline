@@ -74,6 +74,23 @@ actions:
     allowed_granularity: ["full", "time_range"]
     gates: ["GATE.REQUIRES_APPROVAL"]
 
+  # -------------------------
+  # Diagnostic / Advisory
+  # -------------------------
+  ACTION.DIAGNOSTIC.CHECK_POLARITY:
+    label: "Check polarity / routing"
+    description: "Guidance-only: suggests verifying mic polarity, cabling, routing, and mono compatibility for a flagged channel pair. No automatic processing."
+    required_params: []
+    optional_params: []
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full"]
+    gates: []
+    notes:
+      - "Non-destructive advisory action. Intended for recall sheet only."
+
   ACTION.UTILITY.DELAY:
     label: "Delay"
     description: "Apply a time delay to the target (used for alignment or creative offset)."

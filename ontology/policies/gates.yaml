@@ -68,6 +68,18 @@ gates:
       render: "reject"
     violation_reason_id: "REASON.APPROVAL_REQUIRED"
 
+  GATE.DIAGNOSTIC_SUGGEST_ONLY:
+    label: "Diagnostic actions are suggest-only"
+    description: "Prevent any ACTION.DIAGNOSTIC.* from being eligible for auto-apply/render."
+    kind: "action_prefix_limit"
+    default_enabled: true
+    applies_to_actions_prefixes: ["ACTION.DIAGNOSTIC."]
+    enforcement:
+      suggest: "allow"
+      auto_apply: "reject"
+      render: "reject"
+    violation_reason_id: "REASON.DIAGNOSTIC_SUGGEST_ONLY"
+
   # -------------------------
   # Param limits (bounded authority defaults)
   # -------------------------
