@@ -17,6 +17,26 @@ def _sorted_recommendations(recommendations: Iterable[Dict[str, Any]]) -> List[D
     )
 
 
+def _gate_summary(rec: Dict[str, Any]) -> str:
+    gate_results = rec.get("gate_results")
+    if not isinstance(gate_results, list) or not gate_results:
+        return ""
+    context_order = {"suggest": 0, "auto_apply": 1, "render": 2}
+    parts = []
+    for result in sorted(
+        [r for r in gate_results if isinstance(r, dict)],
+        key=lambda item: (
+            context_order.get(str(item.get("context", "")), 99),
+            str(item.get("gate_id", "")),
+        ),
+    ):
+        context = str(result.get("context", ""))
+        outcome = str(result.get("outcome", ""))
+        reason_id = str(result.get("reason_id", ""))
+        parts.append(f"{context}:{outcome}({reason_id})")
+    return ";".join(parts)
+
+
 def export_recall_csv(report: Dict[str, Any], out_path: Path) -> None:
     recommendations = report.get("recommendations", [])
     if not isinstance(recommendations, list):
@@ -36,6 +56,9 @@ def export_recall_csv(report: Dict[str, Any], out_path: Path) -> None:
                 "target",
                 "params",
                 "notes",
+                "eligible_auto_apply",
+                "eligible_render",
+                "gate_summary",
             ]
         )
         for rec in _sorted_recommendations(
@@ -51,5 +74,8 @@ def export_recall_csv(report: Dict[str, Any], out_path: Path) -> None:
                     json.dumps(rec.get("target"), sort_keys=True),
                     json.dumps(rec.get("params"), sort_keys=True),
                     rec.get("notes", ""),
+                    rec.get("eligible_auto_apply", ""),
+                    rec.get("eligible_render", ""),
+                    _gate_summary(rec),
                 ]
             )

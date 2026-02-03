@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -25,6 +26,21 @@ def _safe_str(value: Any) -> str:
     return str(value)
 
 
+def _compact_json(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
+def _sorted_recommendations(recommendations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return sorted(
+        recommendations,
+        key=lambda rec: (
+            str(rec.get("risk", "")),
+            str(rec.get("action_id", "")),
+            str(rec.get("recommendation_id", "")),
+        ),
+    )
+
+
 def _issues_table(issues: List[Dict[str, Any]]) -> Table:
     header = ["issue_id", "severity", "confidence", "message"]
     rows = [header]
@@ -37,6 +53,81 @@ def _issues_table(issues: List[Dict[str, Any]]) -> Table:
                 _safe_str(issue.get("message")),
             ]
         )
+    table = Table(rows, repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return table
+
+
+def _recommendations_table(recommendations: List[Dict[str, Any]]) -> Table:
+    header = [
+        "recommendation_id",
+        "action_id",
+        "risk",
+        "requires_approval",
+        "eligible_auto_apply",
+        "eligible_render",
+        "target",
+        "notes",
+    ]
+    rows = [header]
+    for rec in _sorted_recommendations(recommendations):
+        rows.append(
+            [
+                _safe_str(rec.get("recommendation_id")),
+                _safe_str(rec.get("action_id")),
+                _safe_str(rec.get("risk")),
+                _safe_str(rec.get("requires_approval")),
+                _safe_str(rec.get("eligible_auto_apply")),
+                _safe_str(rec.get("eligible_render")),
+                _compact_json(rec.get("target")),
+                _safe_str(rec.get("notes")),
+            ]
+        )
+    table = Table(rows, repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return table
+
+
+def _gate_results_table(recommendations: List[Dict[str, Any]]) -> Table:
+    header = ["recommendation_id", "context", "outcome", "reason_id", "gate_id"]
+    rows = [header]
+    context_order = {"suggest": 0, "auto_apply": 1, "render": 2}
+    for rec in _sorted_recommendations(recommendations):
+        gate_results = rec.get("gate_results", [])
+        if not isinstance(gate_results, list):
+            continue
+        for result in sorted(
+            [r for r in gate_results if isinstance(r, dict)],
+            key=lambda item: (
+                context_order.get(str(item.get("context", "")), 99),
+                str(item.get("gate_id", "")),
+            ),
+        ):
+            rows.append(
+                [
+                    _safe_str(rec.get("recommendation_id")),
+                    _safe_str(result.get("context")),
+                    _safe_str(result.get("outcome")),
+                    _safe_str(result.get("reason_id")),
+                    _safe_str(result.get("gate_id")),
+                ]
+            )
     table = Table(rows, repeatRows=1)
     table.setStyle(
         TableStyle(
@@ -106,6 +197,23 @@ def export_report_pdf(report: Dict[str, Any], out_path: Path) -> None:
         story.append(Spacer(1, 6))
         story.append(_issues_table([i for i in issues if isinstance(i, dict)]))
         story.append(Spacer(1, 12))
+
+    recommendations = report.get("recommendations", [])
+    if isinstance(recommendations, list) and recommendations:
+        clean_recommendations = [r for r in recommendations if isinstance(r, dict)]
+        story.append(Paragraph("Recommendations", styles["Heading2"]))
+        story.append(Spacer(1, 6))
+        story.append(_recommendations_table(clean_recommendations))
+        story.append(Spacer(1, 12))
+
+        if any(
+            isinstance(rec.get("gate_results"), list) and rec.get("gate_results")
+            for rec in clean_recommendations
+        ):
+            story.append(Paragraph("Gate Results", styles["Heading2"]))
+            story.append(Spacer(1, 6))
+            story.append(_gate_results_table(clean_recommendations))
+            story.append(Spacer(1, 12))
 
     session = report.get("session", {})
     stems = []

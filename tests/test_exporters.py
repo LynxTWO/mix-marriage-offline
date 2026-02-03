@@ -36,10 +36,15 @@ class TestExporters(unittest.TestCase):
                 "target",
                 "params",
                 "notes",
+                "eligible_auto_apply",
+                "eligible_render",
+                "gate_summary",
             ],
         )
         self.assertEqual(rows[1][0], "REC.001")
         self.assertEqual(rows[2][0], "REC.002")
+        self.assertEqual(rows[1][-3:], ["", "", ""])
+        self.assertEqual(rows[2][-3:], ["", "", ""])
 
     def test_export_report_pdf_exists(self) -> None:
         if reportlab is None:
