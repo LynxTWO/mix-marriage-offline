@@ -31,6 +31,10 @@ from mmo.core.validators import validate_session  # noqa: E402
 from mmo.dsp.decoders import detect_format_from_path  # noqa: E402
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd  # noqa: E402
 from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples  # noqa: E402
+from mmo.dsp.correlation import (  # noqa: E402
+    PairCorrelationAccumulator,
+    compute_pair_correlations_wav,
+)
 from mmo.dsp.meters import (  # noqa: E402
     compute_basic_stats_from_float64,
     compute_clip_sample_count_wav,
@@ -68,6 +72,92 @@ def upsert_measurement(stem: Dict[str, Any], evidence_id: str, value: Any, unit_
         )
 
     measurements.sort(key=lambda item: item.get("evidence_id", ""))
+
+
+def _plan_correlation_pairs(
+    order_csv: str, mode_str: str, channels: int
+) -> tuple[Dict[str, tuple[int, int]], list[dict], str | None]:
+    if order_csv == "unknown":
+        return {}, [], "order_unknown"
+    if mode_str.startswith("fallback_") or "trimmed" in mode_str:
+        return {}, [], "order_not_confident"
+    order = [item.strip() for item in order_csv.split(",")]
+    if not order or any(not item for item in order):
+        return {}, [], "order_not_confident"
+    if len(order) != channels:
+        return {}, [], "order_not_confident"
+    if len(set(order)) != len(order):
+        return {}, [], "order_not_confident"
+
+    label_to_index = {label: index for index, label in enumerate(order)}
+    pair_defs = [
+        ("FL_FR", "FL", "FR", "FL/FR"),
+        ("SL_SR", "SL", "SR", "SL/SR"),
+        ("BL_BR", "BL", "BR", "BL/BR"),
+    ]
+    pairs: Dict[str, tuple[int, int]] = {}
+    meta: list[dict] = []
+    for token, label_a, label_b, pair_label in pair_defs:
+        if label_a not in label_to_index or label_b not in label_to_index:
+            continue
+        idx_a = label_to_index[label_a]
+        idx_b = label_to_index[label_b]
+        if channels == 2 and token == "FL_FR":
+            evidence_id = "EVID.IMAGE.CORRELATION"
+        else:
+            evidence_id = f"EVID.IMAGE.CORRELATION.{token}"
+        pairs[token] = (idx_a, idx_b)
+        meta.append(
+            {
+                "token": token,
+                "pair_label": pair_label,
+                "idx_a": idx_a,
+                "idx_b": idx_b,
+                "evidence_id": evidence_id,
+            }
+        )
+    return pairs, meta, None
+
+
+def _rounded_correlation(value: float) -> float:
+    rounded = round(value, 6)
+    if rounded == 0.0:
+        return 0.0
+    return rounded
+
+
+def _build_pairs_log(
+    *,
+    mode_str: str,
+    order_csv: str,
+    channels: int,
+    source: str,
+    pair_meta: list[dict],
+    correlations: Dict[str, float],
+) -> str:
+    pairs_payload: list[dict] = []
+    for meta in pair_meta:
+        token = meta["token"]
+        corr = correlations.get(token)
+        if corr is None:
+            continue
+        pairs_payload.append(
+            {
+                "pair": meta["pair_label"],
+                "idx_a": meta["idx_a"],
+                "idx_b": meta["idx_b"],
+                "evidence_id": meta["evidence_id"],
+                "correlation": _rounded_correlation(corr),
+            }
+        )
+    payload = {
+        "mode": mode_str,
+        "order": order_csv,
+        "channels": channels,
+        "source": source,
+        "pairs": pairs_payload,
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
 def _load_ontology_version(path: Path) -> str:
@@ -327,6 +417,18 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
         sample_rate_hz = stem.get("sample_rate_hz")
         if not isinstance(sample_rate_hz, (int, float)) or sample_rate_hz <= 0:
             continue
+        mask = stem.get("wav_channel_mask")
+        channel_mask = mask if isinstance(mask, int) else None
+        weights, order_csv, mode_str = bs1770_weighting_info(
+            channels,
+            channel_mask,
+            channel_layout=stem.get("channel_layout"),
+        )
+        pairs, pair_meta, skip_reason = _plan_correlation_pairs(
+            order_csv, mode_str, channels
+        )
+        pair_correlations: Dict[str, float] | None = None
+        pair_source: str | None = None
 
         if format_id == "wav":
             try:
@@ -335,6 +437,13 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
                 lufs_s = compute_lufs_shortterm_wav(stem_path)
             except ValueError:
                 continue
+            if pairs:
+                try:
+                    pair_correlations = compute_pair_correlations_wav(stem_path, pairs)
+                except ValueError:
+                    pair_correlations = None
+                else:
+                    pair_source = "wav_reader"
         elif format_id in {"flac", "wavpack", "aiff"}:
             if ffmpeg_cmd is None:
                 ffmpeg_cmd = resolve_ffmpeg_cmd()
@@ -344,8 +453,13 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
 
             try:
                 samples: list[float] = []
+                pair_accumulator = (
+                    PairCorrelationAccumulator(channels, pairs) if pairs else None
+                )
                 for chunk in iter_ffmpeg_float64_samples(stem_path, ffmpeg_cmd):
                     samples.extend(chunk)
+                    if pair_accumulator is not None:
+                        pair_accumulator.update_chunk(chunk)
                 if samples:
                     samples_array = np.asarray(samples, dtype=np.float64)
                     total = (len(samples_array) // channels) * channels
@@ -377,6 +491,9 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
                 )
             except ValueError:
                 continue
+            if pair_accumulator is not None:
+                pair_correlations = pair_accumulator.correlations()
+                pair_source = "ffmpeg_f64le"
         else:
             continue
 
@@ -398,14 +515,6 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
             value=lufs_s,
             unit_id="UNIT.LUFS",
         )
-
-        mask = stem.get("wav_channel_mask")
-        channel_mask = mask if isinstance(mask, int) else None
-        weights, order_csv, mode_str = bs1770_weighting_info(
-            channels,
-            channel_mask,
-            channel_layout=stem.get("channel_layout"),
-        )
         gi_csv = ",".join(f"{weight:.2f}" for weight in weights)
 
         upsert_measurement(
@@ -426,6 +535,52 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
             value=gi_csv,
             unit_id="UNIT.NONE",
         )
+
+        if pair_correlations is not None and pair_source is not None and pair_meta:
+            for meta in pair_meta:
+                token = meta["token"]
+                corr = pair_correlations.get(token)
+                if corr is None:
+                    continue
+                upsert_measurement(
+                    stem,
+                    evidence_id=meta["evidence_id"],
+                    value=corr,
+                    unit_id="UNIT.CORRELATION",
+                )
+            pairs_log = _build_pairs_log(
+                mode_str=mode_str,
+                order_csv=order_csv,
+                channels=channels,
+                source=pair_source,
+                pair_meta=pair_meta,
+                correlations=pair_correlations,
+            )
+            upsert_measurement(
+                stem,
+                evidence_id="EVID.IMAGE.CORRELATION_PAIRS_LOG",
+                value=pairs_log,
+                unit_id="UNIT.NONE",
+            )
+        elif skip_reason and channels >= 2:
+            layout = stem.get("channel_layout")
+            if order_csv != "unknown" or channel_mask is not None or layout is not None:
+                payload = {
+                    "mode": mode_str,
+                    "order": order_csv,
+                    "channels": channels,
+                    "source": "unknown",
+                    "skipped": True,
+                    "reason": skip_reason,
+                    "pairs": [],
+                }
+                pairs_log = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+                upsert_measurement(
+                    stem,
+                    evidence_id="EVID.IMAGE.CORRELATION_PAIRS_LOG",
+                    value=pairs_log,
+                    unit_id="UNIT.NONE",
+                )
 
     return missing_ffmpeg
 
