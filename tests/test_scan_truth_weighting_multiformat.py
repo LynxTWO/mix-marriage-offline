@@ -32,6 +32,8 @@ def payload_for(name: str) -> dict:
         return {"codec_name":"wavpack","channels":2,"sample_rate":"48000","duration":"0.5","channel_layout":"stereo"}
     if name == "dummy_71.wv":
         return {"codec_name":"wavpack","channels":8,"sample_rate":"48000","duration":"0.5","channel_layout":"7.1"}
+    if name == "dummy_stereo.aiff":
+        return {"codec_name":"pcm_s16be","channels":2,"sample_rate":"48000","duration":"0.5","channel_layout":"stereo"}
     return {"codec_name":"flac","channels":2,"sample_rate":"48000","duration":"0.5","channel_layout":"stereo"}
 
 def main() -> None:
@@ -73,6 +75,7 @@ if __name__ == "__main__":
             (stems_dir / "dummy_51.flac").write_bytes(b"")
             (stems_dir / "dummy_stereo.wv").write_bytes(b"")
             (stems_dir / "dummy_71.wv").write_bytes(b"")
+            (stems_dir / "dummy_stereo.aiff").write_bytes(b"")
 
             ffprobe_path = self._write_fake_ffprobe(Path(temp_dir))
             ffmpeg_path = self._write_fake_ffmpeg(Path(temp_dir))
@@ -103,7 +106,7 @@ if __name__ == "__main__":
 
             report = json.loads(result.stdout)
             stems = report.get("session", {}).get("stems", [])
-            self.assertEqual(len(stems), 3)
+            self.assertEqual(len(stems), 4)
             for stem in stems:
                 measurements = stem.get("measurements", [])
                 ids = {m.get("evidence_id") for m in measurements if isinstance(m, dict)}

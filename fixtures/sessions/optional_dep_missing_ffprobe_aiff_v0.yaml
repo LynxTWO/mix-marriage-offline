@@ -1,11 +1,11 @@
-fixture_id: "FIX.SESSION.OPTIONAL_DEP_MISSING.FFPROBE.WAVPACK.V0"
+fixture_id: "FIX.SESSION.OPTIONAL_DEP_MISSING.FFPROBE.AIFF.V0"
 fixture_type: "session_validation"
-description: "WavPack stem missing metadata without ffprobe present."
+description: "AIFF stem missing metadata without ffprobe present."
 
 inputs:
   force_missing_ffprobe: true
   stems:
-    - filename: "stem.wv"
+    - filename: "test.aiff"
       corrupt: true
       byte_count: 6
 

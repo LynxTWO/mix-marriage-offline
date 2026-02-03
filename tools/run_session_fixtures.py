@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import tempfile
 import wave
@@ -84,7 +85,12 @@ def _issue_ids(issues: List[Dict[str, Any]]) -> List[str]:
     return ids
 
 
-def _run_fixture(fixture_path: Path, fixture: Dict[str, Any]) -> bool:
+def _run_fixture(
+    fixture_path: Path,
+    fixture: Dict[str, Any],
+    *,
+    force_missing_ffprobe: bool = False,
+) -> bool:
     if fixture.get("fixture_type") != "session_validation":
         print(f"{fixture_path}: fixture_type must be session_validation", file=sys.stderr)
         return False
@@ -102,6 +108,11 @@ def _run_fixture(fixture_path: Path, fixture: Dict[str, Any]) -> bool:
         print(f"{fixture_path}: expected_issue_ids must be a list", file=sys.stderr)
         return False
     expected_issue_ids = sorted({str(issue_id) for issue_id in expected_issue_ids})
+
+    force_missing = bool(inputs.get("force_missing_ffprobe") or force_missing_ffprobe)
+    previous_ffprobe = os.environ.get("MMO_FFPROBE_PATH")
+    if force_missing:
+        os.environ["MMO_FFPROBE_PATH"] = os.fspath(Path("__missing_ffprobe__"))
 
     with tempfile.TemporaryDirectory(prefix="mmo_session_fixture_") as tmp_dir:
         stems_dir = Path(tmp_dir) / "stems"
@@ -148,6 +159,12 @@ def _run_fixture(fixture_path: Path, fixture: Dict[str, Any]) -> bool:
             issues = validate_session(session)
         except Exception:
             issues = [{"issue_id": "ISSUE.VALIDATION.DECODE_ERROR"}]
+        finally:
+            if force_missing:
+                if previous_ffprobe is None:
+                    os.environ.pop("MMO_FFPROBE_PATH", None)
+                else:
+                    os.environ["MMO_FFPROBE_PATH"] = previous_ffprobe
 
     actual_issue_ids = _issue_ids(issues)
     if actual_issue_ids != expected_issue_ids:
@@ -160,7 +177,7 @@ def _run_fixture(fixture_path: Path, fixture: Dict[str, Any]) -> bool:
     return True
 
 
-def run_fixtures(fixtures_dir: Path) -> int:
+def run_fixtures(fixtures_dir: Path, *, force_missing_ffprobe: bool = False) -> int:
     fixture_files = sorted(fixtures_dir.glob("*.yaml"))
     if not fixture_files:
         print(f"No fixtures found in {fixtures_dir}", file=sys.stderr)
@@ -180,7 +197,9 @@ def run_fixtures(fixtures_dir: Path) -> int:
             failures += 1
             continue
 
-        if not _run_fixture(fixture_path, fixture):
+        if not _run_fixture(
+            fixture_path, fixture, force_missing_ffprobe=force_missing_ffprobe
+        ):
             failures += 1
 
     if failures:
@@ -207,11 +226,18 @@ def main() -> int:
             "If provided, this overrides the positional fixtures_dir."
         ),
     )
+    parser.add_argument(
+        "--force-missing-ffprobe",
+        action="store_true",
+        help="Force MMO_FFPROBE_PATH to an invalid path for all fixtures.",
+    )
     args = parser.parse_args()
 
     fixtures_value = args.fixtures or args.fixtures_dir or "fixtures/sessions"
     fixtures_dir = Path(fixtures_value)
-    return run_fixtures(fixtures_dir)
+    return run_fixtures(
+        fixtures_dir, force_missing_ffprobe=bool(args.force_missing_ffprobe)
+    )
 
 
 if __name__ == "__main__":

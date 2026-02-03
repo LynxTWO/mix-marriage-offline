@@ -49,7 +49,7 @@ def validate_session(
     stems = session.get("stems", [])
     wav_exts = {".wav", ".wave"}
     lossy_exts = {".mp3", ".aac", ".ogg", ".opus"}
-    unsupported_exts = {".aiff", ".aif"}
+    unsupported_exts: set[str] = set()
     lossy_message = (
         "Lossy codecs remove audio detail and add artifacts (pre-echo/smearing, "
         "bandwidth loss). Processing like EQ/compression/saturation can amplify "
@@ -162,7 +162,7 @@ def validate_session(
                 }
             )
 
-        if ext in {".flac", ".wv"}:
+        if ext in {".flac", ".wv", ".aif", ".aiff"}:
             channel_count_val = stem.get("channel_count")
             if channel_count_val is None:
                 channel_count_val = stem.get("channels")
