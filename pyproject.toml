@@ -18,6 +18,9 @@ pdf = ["reportlab>=4"]
 truth = ["numpy>=1.26"]
 dev = ["pytest>=7.0"]
 
+[project.scripts]
+mmo = "mmo.cli:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
