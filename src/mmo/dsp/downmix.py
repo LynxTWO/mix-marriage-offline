@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -39,6 +40,79 @@ def load_layouts(ontology_layouts_path: Path = Path("ontology/layouts.yaml")) ->
 
 def load_downmix_registry(path: Path = Path("ontology/policies/downmix.yaml")) -> Dict[str, Any]:
     return load_yaml(path)
+
+
+def resolve_downmix_matrix(
+    *,
+    repo_root: Path,
+    source_layout_id: str,
+    target_layout_id: str,
+    policy_id: str | None = None,
+    layouts_path: Path | None = None,
+    registry_path: Path | None = None,
+) -> Dict[str, Any]:
+    layouts_path = layouts_path or (repo_root / "ontology" / "layouts.yaml")
+    registry_path = registry_path or (repo_root / "ontology" / "policies" / "downmix.yaml")
+    layouts = load_layouts(layouts_path)
+    registry = load_downmix_registry(registry_path)
+    return resolve_conversion(
+        layouts,
+        registry,
+        repo_root,
+        source_layout_id,
+        target_layout_id,
+        policy_id,
+    )
+
+
+def format_coeff_rows(
+    coeffs: List[List[float]],
+    *,
+    decimals: int = 6,
+) -> List[List[str]]:
+    return [
+        [f"{float(value):.{decimals}f}" for value in row]
+        for row in coeffs
+    ]
+
+
+def format_matrix_csv(
+    matrix: Dict[str, Any],
+    *,
+    decimals: int = 6,
+) -> str:
+    source_speakers = matrix.get("source_speakers")
+    target_speakers = matrix.get("target_speakers")
+    coeffs = matrix.get("coeffs")
+    if not isinstance(source_speakers, list) or not isinstance(target_speakers, list):
+        raise ValueError("Matrix missing speaker order lists")
+    if not isinstance(coeffs, list):
+        raise ValueError("Matrix missing coeffs list")
+    if len(coeffs) != len(target_speakers):
+        raise ValueError("Matrix coeff row count does not match target speakers")
+    for row in coeffs:
+        if not isinstance(row, list):
+            raise ValueError("Matrix coeff rows must be lists")
+        if len(row) != len(source_speakers):
+            raise ValueError("Matrix coeff row width does not match source speakers")
+
+    formatted = format_coeff_rows(coeffs, decimals=decimals)
+    rows = [",".join(["target_speaker", *source_speakers])]
+    for target_speaker, row in zip(target_speakers, formatted):
+        rows.append(",".join([target_speaker, *row]))
+    return "\n".join(rows) + "\n"
+
+
+def render_matrix(
+    matrix: Dict[str, Any],
+    *,
+    output_format: str = "json",
+) -> str:
+    if output_format == "json":
+        return json.dumps(matrix, indent=2, sort_keys=True) + "\n"
+    if output_format == "csv":
+        return format_matrix_csv(matrix)
+    raise ValueError(f"Unsupported output format: {output_format}")
 
 
 def load_policy_pack(registry: Dict[str, Any], policy_id: str, repo_root: Path) -> Dict[str, Any]:

@@ -171,6 +171,38 @@ def main(argv: list[str] | None = None) -> int:
         help="Truncate PDF cell values to this length.",
     )
 
+    downmix_parser = subparsers.add_parser("downmix", help="Downmix policy tools.")
+    downmix_subparsers = downmix_parser.add_subparsers(dest="downmix_command", required=True)
+    downmix_show_parser = downmix_subparsers.add_parser(
+        "show", help="Resolve and display a downmix matrix."
+    )
+    downmix_show_parser.add_argument(
+        "--source",
+        required=True,
+        help="Source layout ID (e.g., LAYOUT.5_1).",
+    )
+    downmix_show_parser.add_argument(
+        "--target",
+        required=True,
+        help="Target layout ID (e.g., LAYOUT.2_0).",
+    )
+    downmix_show_parser.add_argument(
+        "--policy",
+        default=None,
+        help="Optional policy ID override (e.g., POLICY.DOWNMIX.STANDARD_FOLDOWN_V0).",
+    )
+    downmix_show_parser.add_argument(
+        "--format",
+        choices=["json", "csv"],
+        default="json",
+        help="Output format for the resolved matrix.",
+    )
+    downmix_show_parser.add_argument(
+        "--out",
+        default=None,
+        help="Optional output path; defaults to stdout.",
+    )
+
     args = parser.parse_args(argv)
     repo_root = Path(__file__).resolve().parents[2]
     tools_dir = repo_root / "tools"
@@ -203,5 +235,38 @@ def main(argv: list[str] | None = None) -> int:
             no_gates=args.no_gates,
             truncate_values=args.truncate_values,
         )
+    if args.command == "downmix":
+        from mmo.dsp.downmix import (  # noqa: WPS433
+            render_matrix,
+            resolve_downmix_matrix,
+        )
+
+        if args.downmix_command != "show":
+            print("Unknown downmix command.", file=sys.stderr)
+            return 2
+
+        layouts_path = repo_root / "ontology" / "layouts.yaml"
+        registry_path = repo_root / "ontology" / "policies" / "downmix.yaml"
+        try:
+            matrix = resolve_downmix_matrix(
+                repo_root=repo_root,
+                source_layout_id=args.source,
+                target_layout_id=args.target,
+                policy_id=args.policy,
+                layouts_path=layouts_path,
+                registry_path=registry_path,
+            )
+            output = render_matrix(matrix, output_format=args.format)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+        if args.out:
+            out_path = Path(args.out)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(output, encoding="utf-8")
+        else:
+            print(output, end="")
+        return 0
 
     return 0
