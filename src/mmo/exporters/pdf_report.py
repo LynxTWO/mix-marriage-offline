@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
+from mmo.core.gates import load_gates_policy
 from mmo.exporters.pdf_utils import render_maybe_json, truncate_value
 
 try:
@@ -26,6 +27,104 @@ def _safe_str(value: Any) -> str:
     if value is None:
         return ""
     return str(value)
+
+
+def _coerce_number(value: Any) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _format_threshold(value: float) -> str:
+    if float(value).is_integer():
+        return f"{value:.1f}"
+    if abs(value) < 1:
+        return f"{value:.2f}"
+    return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+def _find_gates_policy_path() -> Path | None:
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "ontology" / "policies" / "gates.yaml"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _read_gate_limit(config: Dict[str, Any], key: str) -> float | None:
+    value = config.get(key)
+    if isinstance(value, dict):
+        return _coerce_number(value.get("value"))
+    return _coerce_number(value)
+
+
+def _downmix_qa_delta_thresholds() -> List[tuple[str, float, float]] | None:
+    policy_path = _find_gates_policy_path()
+    if policy_path is None:
+        return None
+    try:
+        gates = load_gates_policy(policy_path)
+    except Exception:
+        return None
+
+    gate_map = [
+        ("LUFS Δ", "GATE.DOWNMIX_QA_LUFS_DELTA_LIMIT"),
+        ("True Peak Δ", "GATE.DOWNMIX_QA_TRUE_PEAK_DELTA_LIMIT"),
+        ("Correlation Δ", "GATE.DOWNMIX_QA_CORR_DELTA_LIMIT"),
+    ]
+    thresholds: List[tuple[str, float, float]] = []
+    for label, gate_id in gate_map:
+        gate = gates.get(gate_id)
+        if not isinstance(gate, dict):
+            return None
+        config = gate.get("config")
+        if not isinstance(config, dict):
+            return None
+        warn_abs_max = _read_gate_limit(config, "warn_abs_max")
+        fail_abs_max = _read_gate_limit(config, "fail_abs_max")
+        if warn_abs_max is None or fail_abs_max is None:
+            return None
+        thresholds.append((label, warn_abs_max, fail_abs_max))
+    return thresholds
+
+
+def _downmix_qa_thresholds_line() -> str | None:
+    thresholds = _downmix_qa_delta_thresholds()
+    if not thresholds:
+        return None
+    parts = [
+        f"{label} warn {_format_threshold(warn)} / fail {_format_threshold(fail)}"
+        for label, warn, fail in thresholds
+    ]
+    return f"Thresholds: {', '.join(parts)}"
+
+
+def _has_downmix_qa_delta_gate_results(report: Dict[str, Any]) -> bool:
+    recommendations = report.get("recommendations", [])
+    if not isinstance(recommendations, list):
+        return False
+    gate_ids = {
+        "GATE.DOWNMIX_QA_LUFS_DELTA_LIMIT",
+        "GATE.DOWNMIX_QA_TRUE_PEAK_DELTA_LIMIT",
+        "GATE.DOWNMIX_QA_CORR_DELTA_LIMIT",
+    }
+    for rec in recommendations:
+        if not isinstance(rec, dict):
+            continue
+        gate_results = rec.get("gate_results", [])
+        if not isinstance(gate_results, list):
+            continue
+        for result in gate_results:
+            if not isinstance(result, dict):
+                continue
+            if result.get("gate_id") in gate_ids:
+                return True
+    return False
 
 
 def _compact_json(value: Any) -> str:
@@ -467,50 +566,57 @@ def export_report_pdf(
         )
 
     downmix_qa = report.get("downmix_qa")
-    if isinstance(downmix_qa, dict):
+    has_downmix_qa = isinstance(downmix_qa, dict)
+    has_downmix_qa_gates = _has_downmix_qa_delta_gate_results(report)
+    if has_downmix_qa or has_downmix_qa_gates:
         story.append(Spacer(1, 12))
         story.append(Paragraph("Downmix QA", styles["Heading2"]))
         story.append(Spacer(1, 6))
-        for label, value in _downmix_qa_summary_fields(downmix_qa):
-            story.append(
-                Paragraph(
-                    f"{label}: {truncate_value(_safe_str(value), truncate_values)}",
-                    styles["Normal"],
+        if has_downmix_qa:
+            for label, value in _downmix_qa_summary_fields(downmix_qa):
+                story.append(
+                    Paragraph(
+                        f"{label}: {truncate_value(_safe_str(value), truncate_values)}",
+                        styles["Normal"],
+                    )
                 )
-            )
+        thresholds_line = _downmix_qa_thresholds_line()
+        if thresholds_line:
+            story.append(Paragraph(thresholds_line, styles["Normal"]))
 
-        measurements = downmix_qa.get("measurements", [])
-        if isinstance(measurements, list) and measurements:
-            summary_rows = _downmix_qa_key_measurement_rows(measurements)
-            if summary_rows:
+        if has_downmix_qa:
+            measurements = downmix_qa.get("measurements", [])
+            if isinstance(measurements, list) and measurements:
+                summary_rows = _downmix_qa_key_measurement_rows(measurements)
+                if summary_rows:
+                    story.append(Spacer(1, 6))
+                    story.append(Paragraph("Downmix QA Summary", styles["Heading3"]))
+                    story.append(Spacer(1, 6))
+                    story.append(_downmix_qa_summary_table(summary_rows))
                 story.append(Spacer(1, 6))
-                story.append(Paragraph("Downmix QA Summary", styles["Heading3"]))
+                story.append(Paragraph("Downmix QA Measurements", styles["Heading3"]))
                 story.append(Spacer(1, 6))
-                story.append(_downmix_qa_summary_table(summary_rows))
-            story.append(Spacer(1, 6))
-            story.append(Paragraph("Downmix QA Measurements", styles["Heading3"]))
-            story.append(Spacer(1, 6))
-            story.append(
-                _downmix_qa_measurements_table(
-                    [m for m in measurements if isinstance(m, dict)],
-                    truncate_values=truncate_values,
+                story.append(
+                    _downmix_qa_measurements_table(
+                        [m for m in measurements if isinstance(m, dict)],
+                        truncate_values=truncate_values,
+                    )
                 )
-            )
 
-        issues = downmix_qa.get("issues", [])
-        if isinstance(issues, list) and issues:
-            story.append(Spacer(1, 6))
-            story.append(Paragraph("Downmix QA Issues", styles["Heading3"]))
-            story.append(Spacer(1, 6))
-            story.append(
-                Paragraph(f"issues_count: {len([i for i in issues if isinstance(i, dict)])}", styles["Normal"])
-            )
-            story.append(Spacer(1, 4))
-            story.append(
-                _downmix_qa_issues_table(
-                    [i for i in issues if isinstance(i, dict)],
-                    truncate_values=truncate_values,
+            issues = downmix_qa.get("issues", [])
+            if isinstance(issues, list) and issues:
+                story.append(Spacer(1, 6))
+                story.append(Paragraph("Downmix QA Issues", styles["Heading3"]))
+                story.append(Spacer(1, 6))
+                story.append(
+                    Paragraph(f"issues_count: {len([i for i in issues if isinstance(i, dict)])}", styles["Normal"])
                 )
-            )
+                story.append(Spacer(1, 4))
+                story.append(
+                    _downmix_qa_issues_table(
+                        [i for i in issues if isinstance(i, dict)],
+                        truncate_values=truncate_values,
+                    )
+                )
 
     doc.build(story)

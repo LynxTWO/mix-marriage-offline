@@ -135,6 +135,16 @@ class TestExporters(unittest.TestCase):
         self.assertEqual(field_map.get("seconds_compared"), 12.5)
         self.assertEqual(field_map.get("max_seconds"), 120.0)
 
+    def test_downmix_qa_thresholds_line_from_gates(self) -> None:
+        line = pdf_report._downmix_qa_thresholds_line()
+        self.assertIsNotNone(line)
+        if line is None:
+            return
+        self.assertIn("Thresholds:", line)
+        self.assertIn("LUFS Δ warn 2.0 / fail 4.0", line)
+        self.assertIn("True Peak Δ warn 1.0 / fail 2.0", line)
+        self.assertIn("Correlation Δ warn 0.15 / fail 0.30", line)
+
     def test_render_maybe_json_truncates_string_values(self) -> None:
         payload = {"keep": "ok", "blob": "x" * 50}
         rendered = render_maybe_json(json.dumps(payload), limit=20, pretty=True)
