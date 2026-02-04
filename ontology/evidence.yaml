@@ -645,6 +645,85 @@ evidence:
     description: "Canonical identifier for the downmix matrix used."
     value_type: "string"
 
+  EVID.DOWNMIX.QA.SRC_PATH:
+    label: "Downmix QA source path"
+    description: "Path to the source multichannel file used for downmix QA."
+    value_type: "string"
+
+  EVID.DOWNMIX.QA.REF_PATH:
+    label: "Downmix QA reference path"
+    description: "Path to the reference stereo file used for downmix QA."
+    value_type: "string"
+
+  EVID.DOWNMIX.QA.LUFS_FOLD:
+    label: "Downmix QA folded LUFS"
+    description: "Integrated LUFS for the folded downmix."
+    value_type: "number"
+    unit_id: "UNIT.LUFS"
+
+  EVID.DOWNMIX.QA.LUFS_REF:
+    label: "Downmix QA reference LUFS"
+    description: "Integrated LUFS for the reference stereo."
+    value_type: "number"
+    unit_id: "UNIT.LUFS"
+
+  EVID.DOWNMIX.QA.LUFS_DELTA:
+    label: "Downmix QA LUFS delta"
+    description: "Folded LUFS minus reference LUFS."
+    value_type: "number"
+    unit_id: "UNIT.LUFS"
+
+  EVID.DOWNMIX.QA.TRUE_PEAK_FOLD:
+    label: "Downmix QA folded true peak"
+    description: "True peak for the folded downmix."
+    value_type: "number"
+    unit_id: "UNIT.DBTP"
+
+  EVID.DOWNMIX.QA.TRUE_PEAK_REF:
+    label: "Downmix QA reference true peak"
+    description: "True peak for the reference stereo."
+    value_type: "number"
+    unit_id: "UNIT.DBTP"
+
+  EVID.DOWNMIX.QA.TRUE_PEAK_DELTA:
+    label: "Downmix QA true peak delta"
+    description: "Folded true peak minus reference true peak."
+    value_type: "number"
+    unit_id: "UNIT.DBTP"
+
+  EVID.DOWNMIX.QA.CORR_FOLD:
+    label: "Downmix QA folded correlation"
+    description: "Stereo correlation for the folded downmix."
+    value_type: "number"
+    unit_id: "UNIT.CORRELATION"
+    constraints:
+      min: -1
+      max: 1
+
+  EVID.DOWNMIX.QA.CORR_REF:
+    label: "Downmix QA reference correlation"
+    description: "Stereo correlation for the reference."
+    value_type: "number"
+    unit_id: "UNIT.CORRELATION"
+    constraints:
+      min: -1
+      max: 1
+
+  EVID.DOWNMIX.QA.CORR_DELTA:
+    label: "Downmix QA correlation delta"
+    description: "Folded correlation minus reference correlation."
+    value_type: "number"
+    unit_id: "UNIT.CORRELATION"
+    constraints:
+      min: -2
+      max: 2
+
+  EVID.DOWNMIX.QA.LOG:
+    label: "Downmix QA log"
+    description: "Deterministic JSON log for downmix QA (matrix/layouts/seconds/tolerances/backend)."
+    value_type: "string"
+    unit_id: "UNIT.NONE"
+
   EVID.DOWNMIX.SOURCE_LAYOUT_ID:
     label: "Downmix source layout"
     description: "Source LAYOUT.* identifier used to select the downmix matrix."

@@ -20,6 +20,7 @@ issues:
       - "imaging"
       - "translation"
       - "surround"
+      - "downmix_qa"
     evidence_hints:
       # These are hints for report/UI consistency, not hard schema rules.
       where_shapes:
@@ -874,3 +875,87 @@ issues:
       - "ACTION.IMAGE.WIDTH"
       - "ACTION.SURROUND.GROUP_GAIN"
       - "ACTION.SURROUND.CHANNEL_GAIN"
+
+  # -------------------------
+  # Downmix QA (fold-down vs reference)
+  # -------------------------
+  ISSUE.DOWNMIX.QA.LUFS_MISMATCH:
+    label: "Downmix LUFS mismatch"
+    description: "Folded downmix integrated LUFS differs from reference stereo beyond tolerance."
+    issue_type: "downmix_qa"
+    default_scope: "session"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+      - "EVID.DOWNMIX.QA.REF_PATH"
+      - "EVID.DOWNMIX.QA.SRC_PATH"
+      - "EVID.DOWNMIX.POLICY_ID"
+      - "EVID.DOWNMIX.MATRIX_ID"
+      - "EVID.DOWNMIX.QA.LUFS_FOLD"
+      - "EVID.DOWNMIX.QA.LUFS_REF"
+      - "EVID.DOWNMIX.QA.LUFS_DELTA"
+
+  ISSUE.DOWNMIX.QA.TRUE_PEAK_MISMATCH:
+    label: "Downmix true peak mismatch"
+    description: "Folded downmix true peak differs from reference stereo beyond tolerance."
+    issue_type: "downmix_qa"
+    default_scope: "session"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+      - "EVID.DOWNMIX.QA.REF_PATH"
+      - "EVID.DOWNMIX.QA.SRC_PATH"
+      - "EVID.DOWNMIX.POLICY_ID"
+      - "EVID.DOWNMIX.MATRIX_ID"
+      - "EVID.DOWNMIX.QA.TRUE_PEAK_FOLD"
+      - "EVID.DOWNMIX.QA.TRUE_PEAK_REF"
+      - "EVID.DOWNMIX.QA.TRUE_PEAK_DELTA"
+
+  ISSUE.DOWNMIX.QA.CORRELATION_MISMATCH:
+    label: "Downmix correlation mismatch"
+    description: "Folded downmix correlation differs from reference stereo beyond tolerance."
+    issue_type: "downmix_qa"
+    default_scope: "session"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+      - "EVID.DOWNMIX.QA.REF_PATH"
+      - "EVID.DOWNMIX.QA.SRC_PATH"
+      - "EVID.DOWNMIX.POLICY_ID"
+      - "EVID.DOWNMIX.MATRIX_ID"
+      - "EVID.DOWNMIX.QA.CORR_FOLD"
+      - "EVID.DOWNMIX.QA.CORR_REF"
+      - "EVID.DOWNMIX.QA.CORR_DELTA"
+
+  ISSUE.DOWNMIX.QA.SAMPLE_RATE_MISMATCH:
+    label: "Sample rate mismatch"
+    description: "Source and reference sample rates do not match; QA compare is invalid."
+    issue_type: "downmix_qa"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.DOWNMIX.QA.REF_PATH"
+      - "EVID.DOWNMIX.QA.SRC_PATH"
+      - "EVID.SESSION.SAMPLE_RATE_HZ"
+
+  ISSUE.DOWNMIX.QA.CHANNELS_INVALID:
+    label: "Reference must be stereo"
+    description: "Reference file must decode to exactly 2 channels."
+    issue_type: "downmix_qa"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.DOWNMIX.QA.REF_PATH"
+      - "EVID.DOWNMIX.QA.SRC_PATH"
+      - "EVID.SESSION.CHANNEL_COUNT"
+
+  ISSUE.DOWNMIX.QA.DECODE_FAILED:
+    label: "Decode failed"
+    description: "Could not decode source or reference for QA."
+    issue_type: "downmix_qa"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.DOWNMIX.QA.REF_PATH"
+      - "EVID.DOWNMIX.QA.SRC_PATH"
+      - "EVID.FILE.PATH"

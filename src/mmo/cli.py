@@ -202,6 +202,58 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Optional output path; defaults to stdout.",
     )
+    downmix_qa_parser = downmix_subparsers.add_parser(
+        "qa", help="Compare folded downmix against a stereo reference."
+    )
+    downmix_qa_parser.add_argument(
+        "--src",
+        required=True,
+        help="Path to the multichannel source file.",
+    )
+    downmix_qa_parser.add_argument(
+        "--ref",
+        required=True,
+        help="Path to the stereo reference file.",
+    )
+    downmix_qa_parser.add_argument(
+        "--source-layout",
+        required=True,
+        help="Source layout ID (e.g., LAYOUT.5_1).",
+    )
+    downmix_qa_parser.add_argument(
+        "--policy",
+        default=None,
+        help="Optional policy ID override (e.g., POLICY.DOWNMIX.STANDARD_FOLDOWN_V0).",
+    )
+    downmix_qa_parser.add_argument(
+        "--meters",
+        choices=["basic", "truth"],
+        default="truth",
+        help="Meter pack to use (basic or truth).",
+    )
+    downmix_qa_parser.add_argument(
+        "--tolerance-lufs",
+        type=float,
+        default=1.0,
+        help="LUFS delta tolerance for QA warnings.",
+    )
+    downmix_qa_parser.add_argument(
+        "--tolerance-true-peak",
+        type=float,
+        default=1.0,
+        help="True peak delta tolerance (dBTP) for QA warnings.",
+    )
+    downmix_qa_parser.add_argument(
+        "--tolerance-corr",
+        type=float,
+        default=0.15,
+        help="Correlation delta tolerance for QA warnings.",
+    )
+    downmix_qa_parser.add_argument(
+        "--out",
+        default=None,
+        help="Optional output path; defaults to stdout.",
+    )
 
     args = parser.parse_args(argv)
     repo_root = Path(__file__).resolve().parents[2]
@@ -240,6 +292,39 @@ def main(argv: list[str] | None = None) -> int:
             render_matrix,
             resolve_downmix_matrix,
         )
+        from mmo.core.downmix_qa import run_downmix_qa  # noqa: WPS433
+
+        if args.downmix_command == "qa":
+            try:
+                report = run_downmix_qa(
+                    Path(args.src),
+                    Path(args.ref),
+                    source_layout_id=args.source_layout,
+                    policy_id=args.policy,
+                    tolerance_lufs=args.tolerance_lufs,
+                    tolerance_true_peak_db=args.tolerance_true_peak,
+                    tolerance_corr=args.tolerance_corr,
+                    repo_root=repo_root,
+                    meters=args.meters,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            output = json.dumps(report, indent=2, sort_keys=True) + "\n"
+            if args.out:
+                out_path = Path(args.out)
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                out_path.write_text(output, encoding="utf-8")
+            else:
+                print(output, end="")
+
+            issues = report.get("downmix_qa", {}).get("issues", [])
+            has_error = any(
+                isinstance(issue, dict) and issue.get("severity", 0) >= 80
+                for issue in issues
+            )
+            return 1 if has_error else 0
 
         if args.downmix_command != "show":
             print("Unknown downmix command.", file=sys.stderr)

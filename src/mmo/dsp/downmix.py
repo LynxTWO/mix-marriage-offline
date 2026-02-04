@@ -65,6 +65,96 @@ def resolve_downmix_matrix(
     )
 
 
+def apply_matrix_to_audio(
+    coeffs: List[List[float]],
+    source_interleaved: List[float],
+    source_channels: int,
+    target_channels: int = 2,
+) -> List[float]:
+    if target_channels <= 0:
+        raise ValueError("target_channels must be positive")
+    if source_channels <= 0:
+        raise ValueError("source_channels must be positive")
+    if len(coeffs) != target_channels:
+        raise ValueError("coeffs row count must match target_channels")
+    for row in coeffs:
+        if len(row) != source_channels:
+            raise ValueError("coeffs row width must match source_channels")
+
+    total_frames = len(source_interleaved) // source_channels
+    if total_frames <= 0:
+        return []
+
+    output: List[float] = []
+    for frame_index in range(total_frames):
+        base = frame_index * source_channels
+        for target_index in range(target_channels):
+            row = coeffs[target_index]
+            total = 0.0
+            for source_index in range(source_channels):
+                total += float(row[source_index]) * float(
+                    source_interleaved[base + source_index]
+                )
+            output.append(total)
+    return output
+
+
+def iter_apply_matrix_to_chunks(
+    coeffs: List[List[float]],
+    chunks_iter,
+    source_channels: int,
+    target_channels: int = 2,
+    chunk_frames: int = 4096,
+):
+    if chunk_frames <= 0:
+        raise ValueError("chunk_frames must be positive")
+    if target_channels <= 0:
+        raise ValueError("target_channels must be positive")
+    if source_channels <= 0:
+        raise ValueError("source_channels must be positive")
+    if len(coeffs) != target_channels:
+        raise ValueError("coeffs row count must match target_channels")
+    for row in coeffs:
+        if len(row) != source_channels:
+            raise ValueError("coeffs row width must match source_channels")
+
+    buffer: List[float] = []
+    offset = 0
+
+    def _apply_frames(start: int, frames: int) -> List[float]:
+        output: List[float] = []
+        for frame_index in range(frames):
+            base = start + frame_index * source_channels
+            for target_index in range(target_channels):
+                row = coeffs[target_index]
+                total = 0.0
+                for source_index in range(source_channels):
+                    total += float(row[source_index]) * float(
+                        buffer[base + source_index]
+                    )
+                output.append(total)
+        return output
+
+    for chunk in chunks_iter:
+        if not chunk:
+            continue
+        if offset:
+            buffer = buffer[offset:]
+            offset = 0
+        buffer.extend(chunk)
+        available_samples = len(buffer) - offset
+        available_frames = available_samples // source_channels
+        while available_frames >= chunk_frames:
+            yield _apply_frames(offset, chunk_frames)
+            offset += chunk_frames * source_channels
+            available_frames -= chunk_frames
+
+    if offset:
+        buffer = buffer[offset:]
+        offset = 0
+    remaining_frames = len(buffer) // source_channels
+    if remaining_frames > 0:
+        yield _apply_frames(0, remaining_frames)
 def format_coeff_rows(
     coeffs: List[List[float]],
     *,
