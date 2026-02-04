@@ -119,9 +119,12 @@ This command only computes the matrix; it does not render audio.
 ## Downmix QA
 Compare a folded downmix against a stereo reference:
 ```
-mmo downmix qa --src path/to/5.1.flac --ref path/to/ref_stereo.flac --source-layout LAYOUT.5_1 --meters truth --max-seconds 120
+mmo downmix qa --src path/to/5.1.flac --ref path/to/ref_stereo.flac --source-layout LAYOUT.5_1 --format json
+mmo downmix qa --src path/to/5.1.flac --ref path/to/ref_stereo.flac --source-layout LAYOUT.5_1 --format csv > qa.csv
+mmo downmix qa --src path/to/5.1.flac --ref path/to/ref_stereo.flac --source-layout LAYOUT.5_1 --format pdf --out qa.pdf
 ```
 Setting `--max-seconds <= 0` compares the full overlap, which can be heavy for truth meters on long files.
+PDF export requires `pip install .[pdf]`.
 
 ---
 

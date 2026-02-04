@@ -29,7 +29,28 @@
       "type": "array",
       "items": { "$ref": "#/$defs/plugin_run" }
     },
-    "artifacts": { "$ref": "#/$defs/artifacts" }
+    "artifacts": { "$ref": "#/$defs/artifacts" },
+    "downmix_qa": {
+      "type": "object",
+      "properties": {
+        "src_path": { "type": "string" },
+        "ref_path": { "type": "string" },
+        "policy_id": { "type": ["string", "null"] },
+        "matrix_id": { "type": ["string", "null"] },
+        "sample_rate_hz": { "type": ["integer", "null"] },
+        "issues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/issue" }
+        },
+        "measurements": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidence_item" }
+        },
+        "log": { "type": "string" }
+      },
+      "required": ["src_path", "ref_path", "issues", "measurements", "log"],
+      "additionalProperties": true
+    }
   },
   "$defs": {
     "session": {
@@ -121,6 +142,16 @@
         "source": { "type": "string" },
         "where": { "type": "object", "additionalProperties": true },
         "why": { "type": "string" }
+      }
+    },
+    "evidence_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_id", "value"],
+      "properties": {
+        "evidence_id": { "type": "string", "pattern": "^EVID\\." },
+        "value": {},
+        "unit_id": { "type": "string", "pattern": "^UNIT\\." }
       }
     },
     "measurement": {

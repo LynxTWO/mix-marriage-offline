@@ -13,6 +13,11 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from mmo.core.downmix_qa import run_downmix_qa  # noqa: E402
+from mmo.exporters.downmix_qa_csv import (  # noqa: E402
+    export_downmix_qa_csv,
+    render_downmix_qa_csv,
+)
+from mmo.exporters.downmix_qa_pdf import export_downmix_qa_pdf  # noqa: E402
 
 
 def main() -> int:
@@ -51,7 +56,23 @@ def main() -> int:
         default=120.0,
         help="Maximum overlap seconds to compare (<= 0 disables the cap).",
     )
-    parser.add_argument("--out", default=None, help="Optional output path; defaults to stdout.")
+    parser.add_argument(
+        "--format",
+        choices=["json", "csv", "pdf"],
+        default="json",
+        help="Output format for downmix QA results.",
+    )
+    parser.add_argument(
+        "--out",
+        default=None,
+        help="Optional output path; defaults to stdout for json/csv.",
+    )
+    parser.add_argument(
+        "--truncate-values",
+        type=int,
+        default=200,
+        help="Truncate PDF values to this length.",
+    )
     args = parser.parse_args()
 
     try:
@@ -71,13 +92,29 @@ def main() -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    output = json.dumps(report, indent=2, sort_keys=True) + "\n"
-    if args.out:
-        out_path = Path(args.out)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(output, encoding="utf-8")
+    if args.format == "json":
+        output = json.dumps(report, indent=2, sort_keys=True) + "\n"
+        if args.out:
+            out_path = Path(args.out)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(output, encoding="utf-8")
+        else:
+            print(output, end="")
+    elif args.format == "csv":
+        if args.out:
+            export_downmix_qa_csv(report, Path(args.out))
+        else:
+            print(render_downmix_qa_csv(report), end="")
+    elif args.format == "pdf":
+        out_path = Path(args.out) if args.out else Path.cwd() / "downmix_qa.pdf"
+        export_downmix_qa_pdf(
+            report,
+            out_path,
+            truncate_values=args.truncate_values,
+        )
     else:
-        print(output, end="")
+        print(f"Unsupported format: {args.format}", file=sys.stderr)
+        return 2
 
     issues = report.get("downmix_qa", {}).get("issues", [])
     has_error = any(
