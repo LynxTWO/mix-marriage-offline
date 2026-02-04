@@ -69,6 +69,7 @@ def export_recall_csv(
                     "gate_summary",
                 ]
             )
+        # Always emit the header row even when there are no recommendations.
         writer.writerow(header)
         for rec in _sorted_recommendations(
             rec for rec in recommendations if isinstance(rec, dict)

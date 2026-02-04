@@ -74,6 +74,63 @@ def _issues_table(issues: List[Dict[str, Any]]) -> Table:
     return table
 
 
+def _downmix_qa_issues_table(
+    issues: List[Dict[str, Any]],
+    *,
+    truncate_values: int,
+) -> Table:
+    header = ["issue_id", "severity", "confidence", "message"]
+    rows = [header]
+    for issue in issues:
+        rows.append(
+            [
+                _safe_str(issue.get("issue_id")),
+                _safe_str(issue.get("severity")),
+                _safe_str(issue.get("confidence")),
+                _truncate_value(_safe_str(issue.get("message")), truncate_values),
+            ]
+        )
+    table = Table(rows, repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return table
+
+
+def _downmix_qa_measurements_table(
+    measurements: List[Dict[str, Any]],
+    *,
+    truncate_values: int,
+) -> Table:
+    header = ["evidence_id", "value", "unit_id"]
+    rows = [header]
+    for measurement in measurements:
+        rows.append(
+            [
+                _safe_str(measurement.get("evidence_id")),
+                _truncate_value(_safe_str(measurement.get("value")), truncate_values),
+                _safe_str(measurement.get("unit_id")),
+            ]
+        )
+    table = Table(rows, repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return table
+
+
 def _recommendations_table(
     recommendations: List[Dict[str, Any]],
     *,
@@ -271,5 +328,65 @@ def export_report_pdf(
                 truncate_values=truncate_values,
             )
         )
+
+    downmix_qa = report.get("downmix_qa")
+    if isinstance(downmix_qa, dict):
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Downmix QA", styles["Heading2"]))
+        story.append(Spacer(1, 6))
+        story.append(
+            Paragraph(
+                f"src_path: {_truncate_value(_safe_str(downmix_qa.get('src_path')), truncate_values)}",
+                styles["Normal"],
+            )
+        )
+        story.append(
+            Paragraph(
+                f"ref_path: {_truncate_value(_safe_str(downmix_qa.get('ref_path')), truncate_values)}",
+                styles["Normal"],
+            )
+        )
+        story.append(
+            Paragraph(
+                f"policy_id: {_truncate_value(_safe_str(downmix_qa.get('policy_id')), truncate_values)}",
+                styles["Normal"],
+            )
+        )
+        story.append(
+            Paragraph(
+                f"matrix_id: {_truncate_value(_safe_str(downmix_qa.get('matrix_id')), truncate_values)}",
+                styles["Normal"],
+            )
+        )
+        story.append(
+            Paragraph(
+                f"sample_rate_hz: {_truncate_value(_safe_str(downmix_qa.get('sample_rate_hz')), truncate_values)}",
+                styles["Normal"],
+            )
+        )
+
+        measurements = downmix_qa.get("measurements", [])
+        if isinstance(measurements, list) and measurements:
+            story.append(Spacer(1, 6))
+            story.append(Paragraph("Downmix QA Measurements", styles["Heading3"]))
+            story.append(Spacer(1, 6))
+            story.append(
+                _downmix_qa_measurements_table(
+                    [m for m in measurements if isinstance(m, dict)],
+                    truncate_values=truncate_values,
+                )
+            )
+
+        issues = downmix_qa.get("issues", [])
+        if isinstance(issues, list) and issues:
+            story.append(Spacer(1, 6))
+            story.append(Paragraph("Downmix QA Issues", styles["Heading3"]))
+            story.append(Spacer(1, 6))
+            story.append(
+                _downmix_qa_issues_table(
+                    [i for i in issues if isinstance(i, dict)],
+                    truncate_values=truncate_values,
+                )
+            )
 
     doc.build(story)

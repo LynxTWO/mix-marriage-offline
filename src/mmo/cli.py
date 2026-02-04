@@ -272,6 +272,11 @@ def main(argv: list[str] | None = None) -> int:
         default=200,
         help="Truncate PDF values to this length.",
     )
+    downmix_qa_parser.add_argument(
+        "--emit-report",
+        default=None,
+        help="Optional output path for a full MMO report JSON embedding downmix QA.",
+    )
 
     args = parser.parse_args(argv)
     repo_root = Path(__file__).resolve().parents[2]
@@ -334,6 +339,22 @@ def main(argv: list[str] | None = None) -> int:
             except ValueError as exc:
                 print(str(exc), file=sys.stderr)
                 return 1
+
+            if args.emit_report:
+                from mmo.core.report_builders import (  # noqa: WPS433
+                    build_minimal_report_for_downmix_qa,
+                )
+
+                report_payload = build_minimal_report_for_downmix_qa(
+                    repo_root=repo_root,
+                    qa_payload=report,
+                )
+                out_path = Path(args.emit_report)
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                out_path.write_text(
+                    json.dumps(report_payload, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
 
             if args.format == "json":
                 output = json.dumps(report, indent=2, sort_keys=True) + "\n"

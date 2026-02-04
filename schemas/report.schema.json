@@ -10,6 +10,7 @@
     "report_id": { "type": "string", "minLength": 1 },
     "project_id": { "type": "string", "minLength": 1 },
     "generated_at": { "type": "string", "format": "date-time" },
+    "registry_file": { "type": "string" },
     "engine_version": { "type": "string" },
     "ontology_version": { "type": "string" },
     "session": { "$ref": "#/$defs/session" },
@@ -58,9 +59,10 @@
       "additionalProperties": false,
       "required": ["stems"],
       "properties": {
+        "session_id": { "type": "string" },
         "stems": {
           "type": "array",
-          "minItems": 1,
+          "minItems": 0,
           "items": { "$ref": "#/$defs/stem" }
         },
         "buses": {

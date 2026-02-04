@@ -123,6 +123,12 @@ mmo downmix qa --src path/to/5.1.flac --ref path/to/ref_stereo.flac --source-lay
 mmo downmix qa --src path/to/5.1.flac --ref path/to/ref_stereo.flac --source-layout LAYOUT.5_1 --format csv > qa.csv
 mmo downmix qa --src path/to/5.1.flac --ref path/to/ref_stereo.flac --source-layout LAYOUT.5_1 --format pdf --out qa.pdf
 ```
+Emit a standard MMO report that embeds the QA payload and then export it:
+```
+mmo downmix qa --src 5.1.flac --ref ref_stereo.flac --source-layout LAYOUT.5_1 --meters truth --emit-report qa_report.json
+mmo export --report qa_report.json --pdf qa_report.pdf
+```
+This produces a standard MMO report with an extra Downmix QA section.
 Setting `--max-seconds <= 0` compares the full overlap, which can be heavy for truth meters on long files.
 PDF export requires `pip install .[pdf]`.
 
