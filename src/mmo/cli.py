@@ -189,7 +189,10 @@ def main(argv: list[str] | None = None) -> int:
     downmix_show_parser.add_argument(
         "--policy",
         default=None,
-        help="Optional policy ID override (e.g., POLICY.DOWNMIX.STANDARD_FOLDOWN_V0).",
+        help=(
+            "Optional policy ID override (e.g., POLICY.DOWNMIX.STANDARD_FOLDOWN_V0). "
+            "See `mmo downmix list --policies` for available IDs."
+        ),
     )
     downmix_show_parser.add_argument(
         "--format",
@@ -221,9 +224,17 @@ def main(argv: list[str] | None = None) -> int:
         help="Source layout ID (e.g., LAYOUT.5_1).",
     )
     downmix_qa_parser.add_argument(
+        "--target-layout",
+        default="LAYOUT.2_0",
+        help="Target layout ID for the fold-down (default: LAYOUT.2_0).",
+    )
+    downmix_qa_parser.add_argument(
         "--policy",
         default=None,
-        help="Optional policy ID override (e.g., POLICY.DOWNMIX.STANDARD_FOLDOWN_V0).",
+        help=(
+            "Optional policy ID override (e.g., POLICY.DOWNMIX.STANDARD_FOLDOWN_V0). "
+            "See `mmo downmix list --policies` for available IDs."
+        ),
     )
     downmix_qa_parser.add_argument(
         "--meters",
@@ -277,6 +288,30 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Optional output path for a full MMO report JSON embedding downmix QA.",
     )
+    downmix_list_parser = downmix_subparsers.add_parser(
+        "list", help="List available downmix layouts, policies, and conversions."
+    )
+    downmix_list_parser.add_argument(
+        "--layouts",
+        action="store_true",
+        help="Show available layout IDs.",
+    )
+    downmix_list_parser.add_argument(
+        "--policies",
+        action="store_true",
+        help="Show available policy IDs.",
+    )
+    downmix_list_parser.add_argument(
+        "--conversions",
+        action="store_true",
+        help="Show available conversions and policy coverage.",
+    )
+    downmix_list_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for the list.",
+    )
 
     args = parser.parse_args(argv)
     repo_root = Path(__file__).resolve().parents[2]
@@ -312,6 +347,9 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.command == "downmix":
         from mmo.dsp.downmix import (  # noqa: WPS433
+            load_downmix_registry,
+            load_layouts,
+            load_policy_pack,
             render_matrix,
             resolve_downmix_matrix,
         )
@@ -323,11 +361,24 @@ def main(argv: list[str] | None = None) -> int:
         from mmo.exporters.downmix_qa_pdf import export_downmix_qa_pdf  # noqa: WPS433
 
         if args.downmix_command == "qa":
+            layouts_path = repo_root / "ontology" / "layouts.yaml"
+            try:
+                layouts = load_layouts(layouts_path)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.source_layout not in layouts:
+                print(f"Unknown source layout: {args.source_layout}", file=sys.stderr)
+                return 1
+            if args.target_layout not in layouts:
+                print(f"Unknown target layout: {args.target_layout}", file=sys.stderr)
+                return 1
             try:
                 report = run_downmix_qa(
                     Path(args.src),
                     Path(args.ref),
                     source_layout_id=args.source_layout,
+                    target_layout_id=args.target_layout,
                     policy_id=args.policy,
                     tolerance_lufs=args.tolerance_lufs,
                     tolerance_true_peak_db=args.tolerance_true_peak,
@@ -386,6 +437,153 @@ def main(argv: list[str] | None = None) -> int:
                 for issue in issues
             )
             return 1 if has_error else 0
+
+        if args.downmix_command == "list":
+            layouts_path = repo_root / "ontology" / "layouts.yaml"
+            registry_path = repo_root / "ontology" / "policies" / "downmix.yaml"
+            try:
+                layouts = load_layouts(layouts_path)
+                registry = load_downmix_registry(registry_path)
+            except (ValueError, RuntimeError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            want_layouts = args.layouts
+            want_policies = args.policies
+            want_conversions = args.conversions
+            if not (want_layouts or want_policies or want_conversions):
+                want_layouts = True
+                want_policies = True
+                want_conversions = True
+
+            payload: dict[str, list[dict[str, object]]] = {
+                "layouts": [],
+                "policies": [],
+                "conversions": [],
+            }
+
+            if want_layouts:
+                layout_rows: list[dict[str, object]] = []
+                for layout_id in sorted(layouts.keys()):
+                    info = layouts[layout_id]
+                    row: dict[str, object] = {"id": layout_id}
+                    label = info.get("label")
+                    if isinstance(label, str) and label:
+                        row["name"] = label
+                    channel_count = info.get("channel_count")
+                    if isinstance(channel_count, int):
+                        row["channels"] = channel_count
+                    channel_order = info.get("channel_order")
+                    if isinstance(channel_order, list):
+                        row["speakers"] = list(channel_order)
+                    layout_rows.append(row)
+                payload["layouts"] = layout_rows
+
+            policies = registry.get("downmix", {}).get("policies", {})
+            if want_policies:
+                policy_rows: list[dict[str, object]] = []
+                if isinstance(policies, dict):
+                    for policy_id in sorted(policies.keys()):
+                        entry = policies.get(policy_id, {})
+                        row: dict[str, object] = {"id": policy_id}
+                        description = entry.get("description") if isinstance(entry, dict) else None
+                        if isinstance(description, str) and description:
+                            row["description"] = description
+                        policy_rows.append(row)
+                payload["policies"] = policy_rows
+
+            if want_conversions:
+                conversion_map: dict[tuple[str, str], set[str]] = {}
+                conversions = registry.get("downmix", {}).get("conversions", [])
+                if isinstance(conversions, list):
+                    for entry in conversions:
+                        if not isinstance(entry, dict):
+                            continue
+                        source = entry.get("source_layout_id")
+                        target = entry.get("target_layout_id")
+                        if not (isinstance(source, str) and isinstance(target, str)):
+                            continue
+                        conversion_map.setdefault((source, target), set())
+                        policy_id = entry.get("policy_id")
+                        if isinstance(policy_id, str):
+                            conversion_map[(source, target)].add(policy_id)
+
+                if isinstance(policies, dict):
+                    for policy_id in sorted(policies.keys()):
+                        try:
+                            pack = load_policy_pack(registry, policy_id, repo_root)
+                        except ValueError as exc:
+                            print(str(exc), file=sys.stderr)
+                            return 1
+                        matrices = (
+                            pack.get("downmix_policy_pack", {}).get("matrices", {})
+                            if isinstance(pack, dict)
+                            else {}
+                        )
+                        if not isinstance(matrices, dict):
+                            continue
+                        for matrix in matrices.values():
+                            if not isinstance(matrix, dict):
+                                continue
+                            source = matrix.get("source_layout_id")
+                            target = matrix.get("target_layout_id")
+                            if not (isinstance(source, str) and isinstance(target, str)):
+                                continue
+                            conversion_map.setdefault((source, target), set()).add(policy_id)
+
+                conversion_rows: list[dict[str, object]] = []
+                for (source, target) in sorted(conversion_map.keys()):
+                    policy_ids = sorted(conversion_map[(source, target)])
+                    conversion_rows.append(
+                        {
+                            "source_layout_id": source,
+                            "target_layout_id": target,
+                            "policy_ids_available": policy_ids,
+                        }
+                    )
+                payload["conversions"] = conversion_rows
+
+            if args.format == "json":
+                output = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+                print(output, end="")
+            else:
+                lines: list[str] = []
+                if want_layouts:
+                    lines.append("Layouts")
+                    for row in payload.get("layouts", []):
+                        line = f"{row.get('id')}"
+                        name = row.get("name")
+                        if isinstance(name, str) and name:
+                            line += f"  {name}"
+                        channels = row.get("channels")
+                        if isinstance(channels, int):
+                            line += f"  channels={channels}"
+                        speakers = row.get("speakers")
+                        if isinstance(speakers, list) and speakers:
+                            line += f"  speakers={','.join(str(item) for item in speakers)}"
+                        lines.append(line)
+                    if want_policies or want_conversions:
+                        lines.append("")
+                if want_policies:
+                    lines.append("Policies")
+                    for row in payload.get("policies", []):
+                        line = f"{row.get('id')}"
+                        description = row.get("description")
+                        if isinstance(description, str) and description:
+                            line += f"  {description}"
+                        lines.append(line)
+                    if want_conversions:
+                        lines.append("")
+                if want_conversions:
+                    lines.append("Conversions")
+                    for row in payload.get("conversions", []):
+                        source = row.get("source_layout_id")
+                        target = row.get("target_layout_id")
+                        policy_ids = row.get("policy_ids_available") or []
+                        policy_text = ",".join(str(item) for item in policy_ids)
+                        lines.append(f"{source} -> {target}  policies={policy_text}")
+                print("\n".join(lines))
+            return 0
 
         if args.downmix_command != "show":
             print("Unknown downmix command.", file=sys.stderr)

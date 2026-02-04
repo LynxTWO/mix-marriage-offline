@@ -115,6 +115,11 @@ Resolve downmix matrices deterministically from the policy registry:
 mmo downmix show --source LAYOUT.5_1 --target LAYOUT.2_0 --format csv
 ```
 This command only computes the matrix; it does not render audio.
+List available layouts, policies, and conversions:
+```
+mmo downmix list
+mmo downmix list --policies
+```
 
 ## Downmix QA
 Compare a folded downmix against a stereo reference:

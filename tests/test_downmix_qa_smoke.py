@@ -298,6 +298,59 @@ class TestDownmixQaSmoke(unittest.TestCase):
             self.assertEqual(log_payload.get("max_seconds"), 0.25)
             self.assertEqual(log_payload.get("seconds_compared"), 0.25)
 
+    def test_downmix_qa_target_layout_logged(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            repo_root = Path(__file__).resolve().parents[1]
+            src_path = temp_path / "src.flac"
+            ref_path = temp_path / "ref.flac"
+            src_path.write_bytes(b"")
+            ref_path.write_bytes(b"")
+
+            ffprobe_path = self._write_fake_ffprobe(temp_path, ref_channels=2)
+            ffmpeg_path = self._write_fake_ffmpeg(temp_path)
+
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(repo_root / "src")
+            env["MMO_FFMPEG_PATH"] = str(ffmpeg_path)
+            env["MMO_FFPROBE_PATH"] = str(ffprobe_path)
+
+            result = subprocess.run(
+                [
+                    self._python_cmd(),
+                    "-m",
+                    "mmo",
+                    "downmix",
+                    "qa",
+                    "--src",
+                    os.fspath(src_path),
+                    "--ref",
+                    os.fspath(ref_path),
+                    "--source-layout",
+                    "LAYOUT.5_1",
+                    "--target-layout",
+                    "LAYOUT.2_0",
+                    "--meters",
+                    "basic",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(result.stdout)
+            measurements = payload.get("downmix_qa", {}).get("measurements", [])
+            log_values = [
+                item.get("value")
+                for item in measurements
+                if isinstance(item, dict)
+                and item.get("evidence_id") == "EVID.DOWNMIX.QA.LOG"
+            ]
+            self.assertEqual(len(log_values), 1)
+            log_payload = json.loads(log_values[0])
+            self.assertEqual(log_payload.get("target_layout_id"), "LAYOUT.2_0")
+
 
 if __name__ == "__main__":
     unittest.main()
