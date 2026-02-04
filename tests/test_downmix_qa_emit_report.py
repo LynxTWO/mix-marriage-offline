@@ -64,13 +64,18 @@ class TestDownmixQaEmitReport(unittest.TestCase):
         )
         return script_path
 
-    def _write_fake_ffmpeg(self, directory: Path) -> Path:
+    def _write_fake_ffmpeg(self, directory: Path, *, ref_samples: Optional[list] = None) -> Path:
         script_path = directory / "fake_ffmpeg.py"
+        if ref_samples is None:
+            ref_samples = [0.1, 0.1]
+        ref_samples_literal = repr(ref_samples)
         script_path.write_text(
             (
                 "import os\n"
                 "import struct\n"
                 "import sys\n"
+                "\n"
+                f"REF_SAMPLES = {ref_samples_literal}\n"
                 "\n"
                 "def main() -> None:\n"
                 "    args = sys.argv[1:]\n"
@@ -80,7 +85,7 @@ class TestDownmixQaEmitReport(unittest.TestCase):
                 "    if name.startswith('src'):\n"
                 "        samples = [0.1, 0.1, 0.0, 0.0, 0.0, 0.0] * frames\n"
                 "    else:\n"
-                "        samples = [0.1, 0.1] * frames\n"
+                "        samples = REF_SAMPLES * frames\n"
                 "    payload = struct.pack(f'<{len(samples)}d', *samples)\n"
                 "    sys.stdout.buffer.write(payload)\n"
                 "\n"
@@ -105,7 +110,7 @@ class TestDownmixQaEmitReport(unittest.TestCase):
             env["MMO_FFPROBE_PATH"] = str(ffprobe_path)
         return env
 
-    def _emit_report(self, temp_path: Path) -> Path:
+    def _emit_report(self, temp_path: Path, *, ref_samples: Optional[list] = None) -> Path:
         repo_root = Path(__file__).resolve().parents[1]
         src_path = temp_path / "src.flac"
         ref_path = temp_path / "ref.flac"
@@ -113,7 +118,7 @@ class TestDownmixQaEmitReport(unittest.TestCase):
         ref_path.write_bytes(b"")
 
         ffprobe_path = self._write_fake_ffprobe(temp_path, ref_channels=2)
-        ffmpeg_path = self._write_fake_ffmpeg(temp_path)
+        ffmpeg_path = self._write_fake_ffmpeg(temp_path, ref_samples=ref_samples)
         env = self._base_env(repo_root, ffmpeg_path, ffprobe_path)
 
         report_path = temp_path / "qa_report.json"
@@ -204,6 +209,32 @@ class TestDownmixQaEmitReport(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertTrue(pdf_path.exists())
             self.assertGreater(pdf_path.stat().st_size, 0)
+
+    def test_downmix_qa_emit_report_includes_diagnostic_rec_on_issues(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            report_path = self._emit_report(temp_path, ref_samples=[0.1, -0.1, 0.2, -0.2])
+
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+            recommendations = payload.get("recommendations", [])
+            self.assertEqual(len(recommendations), 1)
+            rec = recommendations[0]
+            self.assertEqual(rec.get("action_id"), "ACTION.DIAGNOSTIC.CHECK_DOWNMIX_QA")
+            gate_results = rec.get("gate_results", [])
+            gate_ids = {result.get("gate_id") for result in gate_results}
+            self.assertIn("GATE.DOWNMIX_QA_CORR_DELTA_LIMIT", gate_ids)
+            self.assertIn("GATE.DIAGNOSTIC_SUGGEST_ONLY", gate_ids)
+            corr_gate_results = [
+                result
+                for result in gate_results
+                if result.get("gate_id") == "GATE.DOWNMIX_QA_CORR_DELTA_LIMIT"
+            ]
+            self.assertTrue(
+                any(
+                    result.get("context") == "suggest" and result.get("outcome") == "reject"
+                    for result in corr_gate_results
+                )
+            )
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ except ImportError:  # pragma: no cover - optional dependency
     yaml = None
 
 from mmo import __version__ as engine_version
+from mmo.core.gates import apply_gates_to_report
 
 REPORT_SCHEMA_VERSION = "0.1.0"
 DEFAULT_GENERATED_AT = "2000-01-01T00:00:00Z"
@@ -189,4 +190,58 @@ def build_minimal_report_for_downmix_qa(
         "downmix_qa": downmix_qa,
     }
     merge_downmix_qa_issues_into_report(report)
+    if issues:
+        recommendations = report["recommendations"]
+        rec_id = "REC.DIAGNOSTIC.CHECK_DOWNMIX_QA.001"
+        has_rec = any(
+            isinstance(rec, dict) and rec.get("recommendation_id") == rec_id
+            for rec in recommendations
+        )
+        if not has_rec:
+            measurement_map: Dict[str, Dict[str, Any]] = {}
+            for item in measurements:
+                if not isinstance(item, dict):
+                    continue
+                evidence_id = item.get("evidence_id")
+                if isinstance(evidence_id, str) and evidence_id:
+                    measurement_map[evidence_id] = item
+
+            param_specs = [
+                ("EVID.DOWNMIX.QA.LUFS_DELTA", "PARAM.DOWNMIX.QA.LUFS_DELTA", "UNIT.LUFS"),
+                (
+                    "EVID.DOWNMIX.QA.TRUE_PEAK_DELTA",
+                    "PARAM.DOWNMIX.QA.TRUE_PEAK_DELTA",
+                    "UNIT.DBTP",
+                ),
+                ("EVID.DOWNMIX.QA.CORR_DELTA", "PARAM.DOWNMIX.QA.CORR_DELTA", "UNIT.CORRELATION"),
+            ]
+            params: List[Dict[str, Any]] = []
+            for evidence_id, param_id, unit_id in param_specs:
+                measurement = measurement_map.get(evidence_id)
+                if not measurement:
+                    continue
+                param_entry = {"param_id": param_id, "value": measurement.get("value")}
+                unit_value = measurement.get("unit_id") or unit_id
+                if unit_value:
+                    param_entry["unit_id"] = unit_value
+                params.append(param_entry)
+
+            recommendations.append(
+                {
+                    "recommendation_id": rec_id,
+                    "action_id": "ACTION.DIAGNOSTIC.CHECK_DOWNMIX_QA",
+                    "risk": "low",
+                    "requires_approval": False,
+                    "target": {"scope": "session"},
+                    "params": params,
+                    "notes": (
+                        "Downmix QA deltas exceeded thresholds; review matrix/policy/export."
+                    ),
+                }
+            )
+
+        apply_gates_to_report(
+            report,
+            policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+        )
     return report

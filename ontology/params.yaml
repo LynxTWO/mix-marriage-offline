@@ -569,6 +569,27 @@ params:
     recommended_range: { min: -24, max: 0 }
 
   # -------------------------
+  # Downmix QA deltas (diagnostic)
+  # -------------------------
+  PARAM.DOWNMIX.QA.LUFS_DELTA:
+    label: "Downmix QA LUFS delta"
+    description: "Delta between folded downmix and reference integrated loudness."
+    value_type: "number"
+    unit_id: "UNIT.LUFS"
+
+  PARAM.DOWNMIX.QA.TRUE_PEAK_DELTA:
+    label: "Downmix QA true-peak delta"
+    description: "Delta between folded downmix and reference true peak."
+    value_type: "number"
+    unit_id: "UNIT.DBTP"
+
+  PARAM.DOWNMIX.QA.CORR_DELTA:
+    label: "Downmix QA correlation delta"
+    description: "Delta between folded downmix and reference stereo correlation."
+    value_type: "number"
+    unit_id: "UNIT.CORRELATION"
+
+  # -------------------------
   # Target loudness (for optional mastering-ish constraints)
   # -------------------------
   PARAM.TARGET.LOUDNESS_LUFS_I:

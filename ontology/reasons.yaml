@@ -52,6 +52,11 @@ reasons:
     kind: "param_limit"
     description: "A delay time exceeds configured limits for the current context."
 
+  REASON.DOWNMIX_QA_DELTA_EXCEEDS:
+    label: "Downmix QA delta exceeds limit"
+    kind: "param_limit"
+    description: "Downmix QA delta exceeds configured warning/fail thresholds."
+
   REASON.DOWNMIX_POLICY_MISSING:
     label: "Downmix policy missing"
     kind: "lookup"

@@ -91,6 +91,23 @@ actions:
     notes:
       - "Non-destructive advisory action. Intended for recall sheet only."
 
+  ACTION.DIAGNOSTIC.CHECK_DOWNMIX_QA:
+    label: "Check downmix QA deltas"
+    description: "Guidance-only: suggests reviewing downmix QA deltas (LUFS, true-peak, correlation) against expected policy/matrix/export."
+    required_params: []
+    optional_params:
+      - "PARAM.DOWNMIX.QA.LUFS_DELTA"
+      - "PARAM.DOWNMIX.QA.TRUE_PEAK_DELTA"
+      - "PARAM.DOWNMIX.QA.CORR_DELTA"
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: false
+    allowed_scopes: ["session"]
+    allowed_granularity: ["full"]
+    gates: []
+    notes:
+      - "Non-destructive advisory action. Intended for QA review."
+
   ACTION.UTILITY.DELAY:
     label: "Delay"
     description: "Apply a time delay to the target (used for alignment or creative offset)."

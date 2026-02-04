@@ -125,6 +125,53 @@ class TestGates(unittest.TestCase):
             ],
         )
 
+    def test_gates_metric_delta_limit(self) -> None:
+        report = {
+            "schema_version": "0.1.0",
+            "report_id": "REPORT.TEST",
+            "project_id": "PROJECT.TEST",
+            "generated_at": "2000-01-01T00:00:00Z",
+            "engine_version": "0.1.0",
+            "ontology_version": "0.1.0",
+            "session": {},
+            "issues": [],
+            "recommendations": [
+                {
+                    "recommendation_id": "REC.DOWNMIX.QA.CORR_DELTA",
+                    "action_id": "ACTION.DOWNMIX.RENDER",
+                    "risk": "low",
+                    "requires_approval": False,
+                    "params": [
+                        {
+                            "param_id": "PARAM.DOWNMIX.QA.CORR_DELTA",
+                            "value": 0.2,
+                            "unit_id": "UNIT.CORRELATION",
+                        }
+                    ],
+                }
+            ],
+        }
+
+        policy_path = Path("ontology/policies/gates.yaml")
+        apply_gates_to_report(report, policy_path=policy_path)
+
+        rec = report["recommendations"][0]
+        delta_results = [
+            result
+            for result in rec["gate_results"]
+            if result["gate_id"] == "GATE.DOWNMIX_QA_CORR_DELTA_LIMIT"
+        ]
+        self.assertEqual(
+            {(result["context"], result["outcome"]) for result in delta_results},
+            {
+                ("suggest", "suggest_only"),
+                ("auto_apply", "suggest_only"),
+                ("render", "reject"),
+            },
+        )
+        self.assertFalse(rec["eligible_auto_apply"])
+        self.assertFalse(rec["eligible_render"])
+
 
 if __name__ == "__main__":
     unittest.main()

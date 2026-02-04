@@ -164,6 +164,72 @@ gates:
     violation_reason_id: "REASON.COMP_RATIO_TOO_HIGH"
 
   # -------------------------
+  # Downmix QA delta limits (diagnostic guidance)
+  # -------------------------
+  GATE.DOWNMIX_QA_LUFS_DELTA_LIMIT:
+    label: "Downmix QA LUFS delta limit"
+    description: "Warn/reject based on LUFS delta between folded downmix and reference."
+    kind: "metric_delta_limit"
+    default_enabled: true
+    applies_to_actions: ["ACTION.DIAGNOSTIC.CHECK_DOWNMIX_QA", "ACTION.DOWNMIX.RENDER"]
+    config:
+      param_id: "PARAM.DOWNMIX.QA.LUFS_DELTA"
+      warn_abs_max: { value: 2.0, unit_id: "UNIT.LUFS" }
+      fail_abs_max: { value: 4.0, unit_id: "UNIT.LUFS" }
+    enforcement:
+      warn:
+        suggest: "suggest_only"
+        auto_apply: "suggest_only"
+        render: "reject"
+      fail:
+        suggest: "reject"
+        auto_apply: "reject"
+        render: "reject"
+    violation_reason_id: "REASON.DOWNMIX_QA_DELTA_EXCEEDS"
+
+  GATE.DOWNMIX_QA_TRUE_PEAK_DELTA_LIMIT:
+    label: "Downmix QA true-peak delta limit"
+    description: "Warn/reject based on true-peak delta between folded downmix and reference."
+    kind: "metric_delta_limit"
+    default_enabled: true
+    applies_to_actions: ["ACTION.DIAGNOSTIC.CHECK_DOWNMIX_QA", "ACTION.DOWNMIX.RENDER"]
+    config:
+      param_id: "PARAM.DOWNMIX.QA.TRUE_PEAK_DELTA"
+      warn_abs_max: { value: 1.0, unit_id: "UNIT.DBTP" }
+      fail_abs_max: { value: 2.0, unit_id: "UNIT.DBTP" }
+    enforcement:
+      warn:
+        suggest: "suggest_only"
+        auto_apply: "suggest_only"
+        render: "reject"
+      fail:
+        suggest: "reject"
+        auto_apply: "reject"
+        render: "reject"
+    violation_reason_id: "REASON.DOWNMIX_QA_DELTA_EXCEEDS"
+
+  GATE.DOWNMIX_QA_CORR_DELTA_LIMIT:
+    label: "Downmix QA correlation delta limit"
+    description: "Warn/reject based on correlation delta between folded downmix and reference."
+    kind: "metric_delta_limit"
+    default_enabled: true
+    applies_to_actions: ["ACTION.DIAGNOSTIC.CHECK_DOWNMIX_QA", "ACTION.DOWNMIX.RENDER"]
+    config:
+      param_id: "PARAM.DOWNMIX.QA.CORR_DELTA"
+      warn_abs_max: { value: 0.15, unit_id: "UNIT.CORRELATION" }
+      fail_abs_max: { value: 0.30, unit_id: "UNIT.CORRELATION" }
+    enforcement:
+      warn:
+        suggest: "suggest_only"
+        auto_apply: "suggest_only"
+        render: "reject"
+      fail:
+        suggest: "reject"
+        auto_apply: "reject"
+        render: "reject"
+    violation_reason_id: "REASON.DOWNMIX_QA_DELTA_EXCEEDS"
+
+  # -------------------------
   # Policy existence / capability checks
   # -------------------------
   GATE.DOWNMIX_POLICY_EXISTS:

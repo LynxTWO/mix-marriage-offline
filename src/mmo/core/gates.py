@@ -309,6 +309,94 @@ def _evaluate_action_prefix_limit(
     return results
 
 
+def _evaluate_metric_delta_limit(
+    rec: Dict[str, Any],
+    gate_id: str,
+    gate: Dict[str, Any],
+    contexts: Sequence[Context],
+) -> List[GateResult]:
+    applies_to_actions = gate.get("applies_to_actions")
+    if isinstance(applies_to_actions, list):
+        applies = {action_id for action_id in applies_to_actions if isinstance(action_id, str)}
+        if applies:
+            action_id = _coerce_str(rec.get("action_id"))
+            if action_id is None or action_id not in applies:
+                return []
+
+    config = gate.get("config")
+    if not isinstance(config, dict):
+        return []
+
+    param_config = config.get("param_id")
+    if isinstance(param_config, dict):
+        param_id = _coerce_str(param_config.get("value"))
+    else:
+        param_id = _coerce_str(param_config)
+    if not param_id:
+        return []
+
+    def _read_limit(limit_key: str) -> float | None:
+        limit_value = config.get(limit_key)
+        if isinstance(limit_value, dict):
+            return _coerce_number(limit_value.get("value"))
+        return _coerce_number(limit_value)
+
+    warn_abs_max = _read_limit("warn_abs_max")
+    fail_abs_max = _read_limit("fail_abs_max")
+    if warn_abs_max is None and fail_abs_max is None:
+        return []
+
+    param_value = None
+    for param in _iter_params(rec):
+        if param.get("param_id") != param_id:
+            continue
+        param_value = _coerce_number(param.get("value"))
+        break
+    if param_value is None:
+        return []
+
+    abs_value = abs(param_value)
+    level = None
+    if fail_abs_max is not None and abs_value > fail_abs_max:
+        level = "fail"
+    elif warn_abs_max is not None and abs_value > warn_abs_max:
+        level = "warn"
+
+    if level is None:
+        return []
+
+    enforcement = gate.get("enforcement")
+    if not isinstance(enforcement, dict):
+        return []
+    level_enforcement = enforcement.get(level)
+    if not isinstance(level_enforcement, dict):
+        return []
+
+    reason_id = gate.get("violation_reason_id")
+    results: List[GateResult] = []
+    for context in contexts:
+        outcome = level_enforcement.get(context)
+        if outcome is None or outcome == "allow":
+            continue
+        results.append(
+            {
+                "gate_id": gate_id,
+                "context": context,
+                "outcome": outcome,
+                "reason_id": reason_id,
+                "details": {
+                    "param_id": param_id,
+                    "value": param_value,
+                    "abs_value": abs_value,
+                    "warn_abs_max": warn_abs_max,
+                    "fail_abs_max": fail_abs_max,
+                    "level": level,
+                },
+            }
+        )
+    return results
+
+
 def _evaluate_downmix_policy_exists(
     rec: Dict[str, Any],
     gate_id: str,
@@ -392,6 +480,11 @@ def evaluate_recommendation_gates(
         if kind == "action_prefix_limit":
             gate_results.extend(
                 _evaluate_action_prefix_limit(rec, gate_id, gate, contexts)
+            )
+            continue
+        if kind == "metric_delta_limit":
+            gate_results.extend(
+                _evaluate_metric_delta_limit(rec, gate_id, gate, contexts)
             )
             continue
         if gate_id == "GATE.DOWNMIX_POLICY_EXISTS":
