@@ -8,6 +8,7 @@ from typing import Any, Dict, Iterable, Iterator, List, Optional
 
 from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
+from mmo.dsp.backends.ffprobe_meta import find_ffprobe
 from mmo.dsp.correlation import OnlineCorrelationAccumulator
 from mmo.dsp.decoders import read_metadata
 from mmo.dsp.downmix import (
@@ -136,8 +137,13 @@ def _compute_basic_metrics_from_chunks(chunks: Iterable[List[float]]) -> Dict[st
 
 
 def _truth_metrics_from_interleaved(samples: List[float], sample_rate_hz: int) -> Dict[str, float]:
-    import numpy as np
-    from mmo.dsp import meters_truth
+    try:
+        import numpy as np
+        from mmo.dsp import meters_truth
+    except ImportError as exc:
+        raise RuntimeError(
+            "Truth meters require numpy, or choose --meters basic"
+        ) from exc
 
     total = (len(samples) // 2) * 2
     if total <= 0:
@@ -192,6 +198,7 @@ def run_downmix_qa(
     tolerance_corr: float = 0.15,
     repo_root: Path,
     meters: str = "truth",
+    max_seconds: float = 120.0,
 ) -> Dict[str, Any]:
     issues: List[Dict[str, Any]] = []
     measurements: List[Dict[str, Any]] = []
@@ -201,12 +208,17 @@ def run_downmix_qa(
         evidence = [
             {"evidence_id": "EVID.DOWNMIX.QA.SRC_PATH", "value": str(src_path)},
             {"evidence_id": "EVID.DOWNMIX.QA.REF_PATH", "value": str(ref_path)},
+            {"evidence_id": "EVID.VALIDATION.MISSING_OPTIONAL_DEP", "value": "ffmpeg"},
+            {
+                "evidence_id": "EVID.VALIDATION.MISSING_OPTIONAL_DEP_HINT",
+                "value": "Install FFmpeg or set MMO_FFMPEG_PATH",
+            },
         ]
         issues.append(
             _issue(
                 "ISSUE.DOWNMIX.QA.DECODE_FAILED",
                 90,
-                "FFmpeg not available; cannot decode audio for downmix QA.",
+                "Missing dependency for downmix QA: ffmpeg",
                 evidence,
             )
         )
@@ -218,6 +230,8 @@ def run_downmix_qa(
             "src_channels": None,
             "ref_channels": None,
             "sample_rate_hz": None,
+            "seconds_available": 0.0,
+            "max_seconds": max_seconds,
             "seconds_compared": 0.0,
             "tolerances": {
                 "lufs": tolerance_lufs,
@@ -271,6 +285,70 @@ def run_downmix_qa(
         if found_policy:
             resolved_policy_id = found_policy
 
+    src_suffix = src_path.suffix.lower()
+    ref_suffix = ref_path.suffix.lower()
+    ffprobe_required = src_suffix not in {".wav", ".wave"} or ref_suffix not in {
+        ".wav",
+        ".wave",
+    }
+    if ffprobe_required and find_ffprobe() is None:
+        evidence = [
+            {"evidence_id": "EVID.DOWNMIX.QA.SRC_PATH", "value": str(src_path)},
+            {"evidence_id": "EVID.DOWNMIX.QA.REF_PATH", "value": str(ref_path)},
+            {"evidence_id": "EVID.VALIDATION.MISSING_OPTIONAL_DEP", "value": "ffprobe"},
+            {
+                "evidence_id": "EVID.VALIDATION.MISSING_OPTIONAL_DEP_HINT",
+                "value": "Install FFmpeg (ffprobe) or set MMO_FFPROBE_PATH",
+            },
+        ]
+        issues.append(
+            _issue(
+                "ISSUE.DOWNMIX.QA.DECODE_FAILED",
+                90,
+                "Missing dependency for downmix QA: ffprobe",
+                evidence,
+            )
+        )
+        log_payload = {
+            "matrix_id": matrix_id,
+            "policy_id": resolved_policy_id,
+            "source_layout_id": source_layout_id,
+            "target_layout_id": target_layout_id,
+            "src_channels": None,
+            "ref_channels": None,
+            "sample_rate_hz": None,
+            "seconds_available": 0.0,
+            "max_seconds": max_seconds,
+            "seconds_compared": 0.0,
+            "tolerances": {
+                "lufs": tolerance_lufs,
+                "true_peak_db": tolerance_true_peak_db,
+                "correlation": tolerance_corr,
+            },
+            "decode_backend": "ffmpeg_f64le",
+            "remainder_samples_dropped": 0,
+        }
+        log_json = json.dumps(log_payload, sort_keys=True, separators=(",", ":"))
+        measurements.append(
+            {
+                "evidence_id": "EVID.DOWNMIX.QA.LOG",
+                "value": log_json,
+                "unit_id": "UNIT.NONE",
+            }
+        )
+        return {
+            "downmix_qa": {
+                "src_path": str(src_path),
+                "ref_path": str(ref_path),
+                "policy_id": resolved_policy_id,
+                "matrix_id": matrix_id,
+                "sample_rate_hz": None,
+                "issues": issues,
+                "measurements": measurements,
+                "log": log_json,
+            }
+        }
+
     try:
         src_meta = read_metadata(src_path)
         ref_meta = read_metadata(ref_path)
@@ -297,6 +375,8 @@ def run_downmix_qa(
             "src_channels": None,
             "ref_channels": None,
             "sample_rate_hz": None,
+            "seconds_available": 0.0,
+            "max_seconds": max_seconds,
             "seconds_compared": 0.0,
             "tolerances": {
                 "lufs": tolerance_lufs,
@@ -333,6 +413,11 @@ def run_downmix_qa(
     ref_sample_rate = int(ref_meta.get("sample_rate_hz", 0) or 0)
     src_duration = float(src_meta.get("duration_s", 0.0) or 0.0)
     ref_duration = float(ref_meta.get("duration_s", 0.0) or 0.0)
+    seconds_available = min(src_duration, ref_duration)
+    if max_seconds <= 0.0:
+        seconds_compared = seconds_available
+    else:
+        seconds_compared = min(seconds_available, max_seconds)
 
     if ref_channels != 2:
         evidence = [
@@ -360,7 +445,9 @@ def run_downmix_qa(
             "src_channels": src_channels,
             "ref_channels": ref_channels,
             "sample_rate_hz": None,
-            "seconds_compared": 0.0,
+            "seconds_available": seconds_available,
+            "max_seconds": max_seconds,
+            "seconds_compared": seconds_compared,
             "tolerances": {
                 "lufs": tolerance_lufs,
                 "true_peak_db": tolerance_true_peak_db,
@@ -417,7 +504,9 @@ def run_downmix_qa(
             "src_channels": src_channels,
             "ref_channels": ref_channels,
             "sample_rate_hz": None,
-            "seconds_compared": 0.0,
+            "seconds_available": seconds_available,
+            "max_seconds": max_seconds,
+            "seconds_compared": seconds_compared,
             "tolerances": {
                 "lufs": tolerance_lufs,
                 "true_peak_db": tolerance_true_peak_db,
@@ -476,7 +565,9 @@ def run_downmix_qa(
             "src_channels": src_channels,
             "ref_channels": ref_channels,
             "sample_rate_hz": None,
-            "seconds_compared": 0.0,
+            "seconds_available": seconds_available,
+            "max_seconds": max_seconds,
+            "seconds_compared": seconds_compared,
             "tolerances": {
                 "lufs": tolerance_lufs,
                 "true_peak_db": tolerance_true_peak_db,
@@ -506,7 +597,6 @@ def run_downmix_qa(
             }
         }
 
-    seconds_compared = min(src_duration, ref_duration)
     max_frames = int(seconds_compared * src_sample_rate)
 
     src_samples_iter = iter_ffmpeg_float64_samples(
@@ -551,6 +641,24 @@ def run_downmix_qa(
             ref_metrics = _truth_metrics_from_interleaved(ref_samples, src_sample_rate)
         else:
             raise ValueError(f"Unsupported meter pack: {meters}")
+    except RuntimeError as exc:
+        evidence = [
+            {"evidence_id": "EVID.DOWNMIX.QA.SRC_PATH", "value": str(src_path)},
+            {"evidence_id": "EVID.DOWNMIX.QA.REF_PATH", "value": str(ref_path)},
+            {"evidence_id": "EVID.VALIDATION.MISSING_OPTIONAL_DEP", "value": "numpy"},
+            {
+                "evidence_id": "EVID.VALIDATION.MISSING_OPTIONAL_DEP_HINT",
+                "value": "Install numpy (truth meters) or use --meters basic",
+            },
+        ]
+        issues.append(
+            _issue(
+                "ISSUE.DOWNMIX.QA.DECODE_FAILED",
+                90,
+                str(exc),
+                evidence,
+            )
+        )
     except Exception as exc:  # noqa: BLE001 - surface decode/meter failures as QA issues
         evidence = [
             {"evidence_id": "EVID.DOWNMIX.QA.SRC_PATH", "value": str(src_path)},
@@ -576,6 +684,8 @@ def run_downmix_qa(
             "src_channels": src_channels,
             "ref_channels": ref_channels,
             "sample_rate_hz": src_sample_rate,
+            "seconds_available": seconds_available,
+            "max_seconds": max_seconds,
             "seconds_compared": seconds_compared,
             "tolerances": {
                 "lufs": tolerance_lufs,
@@ -826,6 +936,8 @@ def run_downmix_qa(
         "src_channels": src_channels,
         "ref_channels": ref_channels,
         "sample_rate_hz": src_sample_rate,
+        "seconds_available": seconds_available,
+        "max_seconds": max_seconds,
         "seconds_compared": seconds_compared,
         "tolerances": {
             "lufs": tolerance_lufs,

@@ -187,6 +187,117 @@ class TestDownmixQaSmoke(unittest.TestCase):
             }
             self.assertIn("ISSUE.DOWNMIX.QA.CHANNELS_INVALID", issue_ids)
 
+    def test_downmix_qa_missing_ffprobe_flac(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            repo_root = Path(__file__).resolve().parents[1]
+            src_path = temp_path / "src.flac"
+            ref_path = temp_path / "ref.flac"
+            src_path.write_bytes(b"")
+            ref_path.write_bytes(b"")
+
+            ffmpeg_path = self._write_fake_ffmpeg(temp_path)
+
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(repo_root / "src")
+            env["MMO_FFMPEG_PATH"] = str(ffmpeg_path)
+            env.pop("MMO_FFPROBE_PATH", None)
+            env["PATH"] = ""
+
+            result = subprocess.run(
+                [
+                    self._python_cmd(),
+                    "-m",
+                    "mmo",
+                    "downmix",
+                    "qa",
+                    "--src",
+                    os.fspath(src_path),
+                    "--ref",
+                    os.fspath(ref_path),
+                    "--source-layout",
+                    "LAYOUT.5_1",
+                    "--meters",
+                    "basic",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            self.assertEqual(result.returncode, 1, msg=result.stderr)
+            payload = json.loads(result.stdout)
+            issues = payload.get("downmix_qa", {}).get("issues", [])
+            issue_ids = {
+                issue.get("issue_id")
+                for issue in issues
+                if isinstance(issue, dict)
+            }
+            self.assertIn("ISSUE.DOWNMIX.QA.DECODE_FAILED", issue_ids)
+            evidence_values = {
+                evidence.get("value")
+                for issue in issues
+                if isinstance(issue, dict)
+                for evidence in issue.get("evidence", [])
+                if isinstance(evidence, dict)
+                and evidence.get("evidence_id") == "EVID.VALIDATION.MISSING_OPTIONAL_DEP"
+            }
+            self.assertIn("ffprobe", evidence_values)
+
+    def test_downmix_qa_max_seconds_logged(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            repo_root = Path(__file__).resolve().parents[1]
+            src_path = temp_path / "src.flac"
+            ref_path = temp_path / "ref.flac"
+            src_path.write_bytes(b"")
+            ref_path.write_bytes(b"")
+
+            ffprobe_path = self._write_fake_ffprobe(temp_path, ref_channels=2)
+            ffmpeg_path = self._write_fake_ffmpeg(temp_path)
+
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(repo_root / "src")
+            env["MMO_FFMPEG_PATH"] = str(ffmpeg_path)
+            env["MMO_FFPROBE_PATH"] = str(ffprobe_path)
+
+            result = subprocess.run(
+                [
+                    self._python_cmd(),
+                    "-m",
+                    "mmo",
+                    "downmix",
+                    "qa",
+                    "--src",
+                    os.fspath(src_path),
+                    "--ref",
+                    os.fspath(ref_path),
+                    "--source-layout",
+                    "LAYOUT.5_1",
+                    "--meters",
+                    "basic",
+                    "--max-seconds",
+                    "0.25",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            payload = json.loads(result.stdout)
+            measurements = payload.get("downmix_qa", {}).get("measurements", [])
+            log_values = [
+                item.get("value")
+                for item in measurements
+                if isinstance(item, dict)
+                and item.get("evidence_id") == "EVID.DOWNMIX.QA.LOG"
+            ]
+            self.assertEqual(len(log_values), 1)
+            log_payload = json.loads(log_values[0])
+            self.assertEqual(log_payload.get("max_seconds"), 0.25)
+            self.assertEqual(log_payload.get("seconds_compared"), 0.25)
+
 
 if __name__ == "__main__":
     unittest.main()

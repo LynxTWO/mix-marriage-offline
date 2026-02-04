@@ -250,6 +250,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Correlation delta tolerance for QA warnings.",
     )
     downmix_qa_parser.add_argument(
+        "--max-seconds",
+        type=float,
+        default=120.0,
+        help="Maximum overlap seconds to compare (<= 0 disables the cap).",
+    )
+    downmix_qa_parser.add_argument(
         "--out",
         default=None,
         help="Optional output path; defaults to stdout.",
@@ -306,6 +312,7 @@ def main(argv: list[str] | None = None) -> int:
                     tolerance_corr=args.tolerance_corr,
                     repo_root=repo_root,
                     meters=args.meters,
+                    max_seconds=args.max_seconds,
                 )
             except ValueError as exc:
                 print(str(exc), file=sys.stderr)

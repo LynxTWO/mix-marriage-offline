@@ -45,6 +45,12 @@ def main() -> int:
         default=0.15,
         help="Correlation delta tolerance for QA warnings.",
     )
+    parser.add_argument(
+        "--max-seconds",
+        type=float,
+        default=120.0,
+        help="Maximum overlap seconds to compare (<= 0 disables the cap).",
+    )
     parser.add_argument("--out", default=None, help="Optional output path; defaults to stdout.")
     args = parser.parse_args()
 
@@ -59,6 +65,7 @@ def main() -> int:
             tolerance_corr=args.tolerance_corr,
             repo_root=ROOT_DIR,
             meters=args.meters,
+            max_seconds=args.max_seconds,
         )
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
