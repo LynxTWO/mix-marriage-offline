@@ -5,6 +5,8 @@ import wave
 from pathlib import Path
 from typing import Iterable, Tuple
 
+from dataclasses import dataclass
+
 import numpy as np
 
 from mmo.dsp.float64 import (
@@ -23,6 +25,14 @@ _TRUEPEAK_TAPS = 63
 _LOUDNESS_OFFSET = -0.691
 _TRUEPEAK_PHASE_TAPS = 12
 _TRUEPEAK_BLOCK = 262144
+
+
+@dataclass
+class _BiquadState:
+    x1: float = 0.0
+    x2: float = 0.0
+    y1: float = 0.0
+    y2: float = 0.0
 
 
 
@@ -143,6 +153,30 @@ def _apply_biquad(samples: np.ndarray, b: Iterable[float], a: Iterable[float]) -
     return output
 
 
+def _apply_biquad_stateful(
+    samples: np.ndarray, b: Iterable[float], a: Iterable[float], state: _BiquadState
+) -> np.ndarray:
+    b0, b1, b2 = b
+    _, a1, a2 = a
+    output = np.zeros_like(samples, dtype=np.float64)
+    x1 = state.x1
+    x2 = state.x2
+    y1 = state.y1
+    y2 = state.y2
+    for index, x0 in enumerate(samples):
+        y0 = b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+        output[index] = y0
+        x2 = x1
+        x1 = x0
+        y2 = y1
+        y1 = y0
+    state.x1 = x1
+    state.x2 = x2
+    state.y1 = y1
+    state.y2 = y2
+    return output
+
+
 def k_weighting_biquads(
     sample_rate_hz: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -220,6 +254,92 @@ def _block_energies(
     return energies
 
 
+class OnlineLufsIntegrated:
+    def __init__(
+        self,
+        sample_rate_hz: int,
+        channels: int,
+        channel_mask: int | None,
+        channel_layout: str | None,
+    ) -> None:
+        if channels <= 0:
+            raise ValueError("channels must be positive")
+        self.sample_rate_hz = sample_rate_hz
+        self.channels = channels
+        self.weights, _, _ = _bs1770_gi_weights(
+            channels,
+            channel_mask,
+            channel_layout=channel_layout,
+        )
+        self.block_size = int(round(0.4 * sample_rate_hz))
+        self.hop_size = int(round(0.1 * sample_rate_hz))
+        self._energies: list[float] = []
+        self._buffer = np.zeros((0, channels), dtype=np.float64)
+        self._pre_b, self._pre_a, self._rlb_b, self._rlb_a = k_weighting_biquads(
+            sample_rate_hz
+        )
+        self._pre_states = [_BiquadState() for _ in range(channels)]
+        self._rlb_states = [_BiquadState() for _ in range(channels)]
+
+    def update(self, chunk_frames: np.ndarray) -> None:
+        if chunk_frames.size == 0:
+            return
+        if chunk_frames.shape[1] != self.channels:
+            raise ValueError("chunk_frames channel count mismatch")
+        weighted = np.empty_like(chunk_frames, dtype=np.float64)
+        for channel_index in range(self.channels):
+            channel = chunk_frames[:, channel_index]
+            filtered = _apply_biquad_stateful(
+                channel, self._pre_b, self._pre_a, self._pre_states[channel_index]
+            )
+            filtered = _apply_biquad_stateful(
+                filtered, self._rlb_b, self._rlb_a, self._rlb_states[channel_index]
+            )
+            weighted[:, channel_index] = filtered
+
+        if self._buffer.size:
+            buffer = np.concatenate([self._buffer, weighted], axis=0)
+        else:
+            buffer = weighted
+
+        if self.block_size <= 0 or self.hop_size <= 0:
+            self._buffer = buffer
+            return
+
+        if buffer.shape[0] >= self.block_size:
+            block_count = 1 + (buffer.shape[0] - self.block_size) // self.hop_size
+            for index in range(block_count):
+                start = index * self.hop_size
+                block = buffer[start : start + self.block_size]
+                per_ch = np.mean(block * block, axis=0)
+                block_energy = float(np.dot(per_ch, self.weights))
+                self._energies.append(block_energy)
+            drop = block_count * self.hop_size
+            buffer = buffer[drop:]
+
+        self._buffer = buffer
+
+    def finalize(self) -> float:
+        if not self._energies:
+            return float("-inf")
+
+        abs_threshold = 10.0 ** ((-70.0 - _LOUDNESS_OFFSET) / 10.0)
+        energies = [energy for energy in self._energies if energy > abs_threshold]
+        if not energies:
+            return float("-inf")
+
+        mean_energy = float(np.mean(energies))
+        rel_threshold = mean_energy / 10.0
+        energies = [energy for energy in energies if energy > rel_threshold]
+        if not energies:
+            return float("-inf")
+
+        mean_energy = float(np.mean(energies))
+        if mean_energy <= 0.0:
+            return float("-inf")
+        return _LOUDNESS_OFFSET + 10.0 * math.log10(mean_energy)
+
+
 def _true_peak_48k_polyphase(channel: np.ndarray) -> float:
     coeffs = np.array(
         [
@@ -261,6 +381,118 @@ def _true_peak_48k_polyphase(channel: np.ndarray) -> float:
     return max_peak
 
 
+class OnlineTruePeak:
+    def __init__(self, sample_rate_hz: int, channels: int) -> None:
+        if channels <= 0:
+            raise ValueError("channels must be positive")
+        self.sample_rate_hz = sample_rate_hz
+        self.channels = channels
+        self._max_peak = 0.0
+        self._atten = 0.25
+        self._gain_comp = 20.0 * math.log10(float(_TRUEPEAK_UPSAMPLE))
+        self._kernel = None
+        self._phase_taps = None
+        self._histories: list[np.ndarray] = []
+        self._fir_states: list[np.ndarray] = []
+        self._skip_outputs: list[int] = []
+        self._pad = (_TRUEPEAK_TAPS - 1) // 2
+
+        if sample_rate_hz == 48000:
+            coeffs = np.array(
+                [
+                    [0.0017089843750, -0.0291748046875, -0.0189208984375, -0.0083007812500],
+                    [0.0109863281250, 0.0292968750000, 0.0330810546875, 0.0148925781250],
+                    [-0.0196533203125, -0.0517578125000, -0.0582275390625, -0.0266113281250],
+                    [0.0332031250000, 0.0891113281250, 0.1015625000000, 0.0476074218750],
+                    [-0.0594482421875, -0.1665039062500, -0.2003173828125, -0.1022949218750],
+                    [0.1373291015625, 0.4650878906250, 0.7797851562500, 0.9721679687500],
+                    [0.9721679687500, 0.7797851562500, 0.4650878906250, 0.1373291015625],
+                    [-0.1022949218750, -0.2003173828125, -0.1665039062500, -0.0594482421875],
+                    [0.0476074218750, 0.1015625000000, 0.0891113281250, 0.0332031250000],
+                    [-0.0266113281250, -0.0582275390625, -0.0517578125000, -0.0196533203125],
+                    [0.0148925781250, 0.0330810546875, 0.0292968750000, 0.0109863281250],
+                    [-0.0083007812500, -0.0189208984375, -0.0291748046875, 0.0017089843750],
+                ],
+                dtype=np.float64,
+            )
+            self._phase_taps = coeffs.T
+            history_len = _TRUEPEAK_PHASE_TAPS - 1
+            self._histories = [
+                np.zeros(history_len, dtype=np.float64) for _ in range(channels)
+            ]
+        else:
+            self._kernel = _design_lowpass_fir(cutoff=0.25, taps=_TRUEPEAK_TAPS)
+            self._fir_states = [
+                np.zeros(_TRUEPEAK_TAPS - 1, dtype=np.float64) for _ in range(channels)
+            ]
+            self._skip_outputs = [self._pad for _ in range(channels)]
+
+    def _update_true_peak_48k(self, channel: np.ndarray, channel_index: int) -> None:
+        if channel.size == 0:
+            return
+        history = self._histories[channel_index]
+        history_len = _TRUEPEAK_PHASE_TAPS - 1
+        work = np.concatenate([history, channel])
+        for phase in range(_TRUEPEAK_UPSAMPLE):
+            conv = np.convolve(work, self._phase_taps[phase], mode="full")
+            block_out = conv[history_len : history_len + channel.shape[0]]
+            if block_out.size:
+                phase_peak = float(np.max(np.abs(block_out)))
+                if phase_peak > self._max_peak:
+                    self._max_peak = phase_peak
+        if channel.shape[0] >= history_len:
+            history = channel[-history_len:]
+        else:
+            history = np.concatenate([history[channel.shape[0] :], channel])
+        self._histories[channel_index] = history
+
+    def _update_true_peak_fir(self, channel: np.ndarray, channel_index: int) -> None:
+        if channel.size == 0:
+            return
+        upsampled = np.zeros(channel.shape[0] * _TRUEPEAK_UPSAMPLE, dtype=np.float64)
+        upsampled[:: _TRUEPEAK_UPSAMPLE] = channel
+        state = self._fir_states[channel_index]
+        work = np.concatenate([state, upsampled])
+        conv = np.convolve(work, self._kernel, mode="full")
+        start = state.shape[0]
+        end = start + upsampled.shape[0]
+        output = conv[start:end]
+        skip = self._skip_outputs[channel_index]
+        if skip:
+            if skip >= output.size:
+                self._skip_outputs[channel_index] = skip - output.size
+                output = np.zeros(0, dtype=np.float64)
+            else:
+                output = output[skip:]
+                self._skip_outputs[channel_index] = 0
+        if output.size:
+            peak = float(np.max(np.abs(output)))
+            if peak > self._max_peak:
+                self._max_peak = peak
+        self._fir_states[channel_index] = work[-(_TRUEPEAK_TAPS - 1) :]
+
+    def update(self, chunk_frames: np.ndarray) -> None:
+        if chunk_frames.size == 0:
+            return
+        if chunk_frames.shape[1] != self.channels:
+            raise ValueError("chunk_frames channel count mismatch")
+        for channel_index in range(self.channels):
+            channel = chunk_frames[:, channel_index] * self._atten
+            if self.sample_rate_hz == 48000:
+                self._update_true_peak_48k(channel, channel_index)
+            else:
+                self._update_true_peak_fir(channel, channel_index)
+
+    def finalize(self) -> float:
+        if self.sample_rate_hz != 48000 and self._kernel is not None:
+            tail = np.zeros(self._pad, dtype=np.float64)
+            for channel_index in range(self.channels):
+                self._update_true_peak_fir(tail, channel_index)
+        if self._max_peak <= 0.0:
+            return float("-inf")
+        return 20.0 * math.log10(self._max_peak) + self._gain_comp
+
+
 def compute_true_peak_dbtp_wav(path: Path) -> float:
     """Compute true-peak (dBTP) using 4x oversampling FIR."""
     samples, sample_rate_hz = _read_wav_float64(path)
@@ -295,6 +527,21 @@ def compute_true_peak_dbtp_float64(
     if max_peak <= 0.0:
         return float("-inf")
     return 20.0 * math.log10(max_peak) + gain_comp
+
+
+def compute_true_peak_dbtp_from_chunks(
+    chunks: Iterable[np.ndarray], sample_rate_hz: int
+) -> float:
+    iterator = iter(chunks)
+    for first in iterator:
+        if first.size == 0:
+            continue
+        accumulator = OnlineTruePeak(sample_rate_hz, channels=first.shape[1])
+        accumulator.update(first)
+        for chunk in iterator:
+            accumulator.update(chunk)
+        return accumulator.finalize()
+    return float("-inf")
 
 
 def compute_lufs_integrated_wav(path: Path) -> float:
@@ -389,6 +636,25 @@ def compute_lufs_integrated_float64(
         hop_s=0.1,
         gated=True,
     )
+
+
+def compute_lufs_integrated_from_chunks(
+    chunks: Iterable[np.ndarray],
+    sample_rate_hz: int,
+    channels: int,
+    *,
+    channel_mask: int | None,
+    channel_layout: str | None,
+) -> float:
+    accumulator = OnlineLufsIntegrated(
+        sample_rate_hz,
+        channels,
+        channel_mask=channel_mask,
+        channel_layout=channel_layout,
+    )
+    for chunk in chunks:
+        accumulator.update(chunk)
+    return accumulator.finalize()
 
 
 def compute_lufs_shortterm_float64(

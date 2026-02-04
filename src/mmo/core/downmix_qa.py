@@ -102,6 +102,14 @@ def _compute_stereo_correlation_from_interleaved(samples: List[float]) -> float:
     return accumulator.correlation()
 
 
+def _update_stereo_correlation_from_interleaved(
+    accumulator: OnlineCorrelationAccumulator, samples: List[float]
+) -> None:
+    total = len(samples) - (len(samples) % 2)
+    for index in range(0, total, 2):
+        accumulator.update(samples[index], samples[index + 1])
+
+
 def _compute_basic_metrics_from_chunks(chunks: Iterable[List[float]]) -> Dict[str, float]:
     peak = 0.0
     total_sq = 0.0
@@ -629,16 +637,64 @@ def run_downmix_qa(
             fold_metrics = _compute_basic_metrics_from_chunks(folded_chunks)
             ref_metrics = _compute_basic_metrics_from_chunks(ref_aligned)
         elif meters == "truth":
-            folded_samples: List[float] = []
-            ref_samples: List[float] = []
-            for chunk in folded_chunks:
-                folded_samples.extend(chunk)
-            for chunk in ref_aligned:
-                ref_samples.extend(chunk)
-            fold_metrics = _truth_metrics_from_interleaved(
-                folded_samples, src_sample_rate
+            try:
+                import numpy as np
+                from mmo.dsp import meters_truth
+            except ImportError as exc:
+                raise RuntimeError(
+                    "Truth meters require numpy, or choose --meters basic"
+                ) from exc
+
+            fold_lufs = meters_truth.OnlineLufsIntegrated(
+                src_sample_rate,
+                channels=2,
+                channel_mask=None,
+                channel_layout="stereo",
             )
-            ref_metrics = _truth_metrics_from_interleaved(ref_samples, src_sample_rate)
+            fold_tp = meters_truth.OnlineTruePeak(src_sample_rate, channels=2)
+            fold_corr = OnlineCorrelationAccumulator()
+            for chunk in folded_chunks:
+                if not chunk:
+                    continue
+                total = (len(chunk) // 2) * 2
+                if total <= 0:
+                    continue
+                clipped = chunk[:total]
+                array = np.asarray(clipped, dtype=np.float64).reshape(-1, 2)
+                fold_lufs.update(array)
+                fold_tp.update(array)
+                _update_stereo_correlation_from_interleaved(fold_corr, clipped)
+
+            ref_lufs = meters_truth.OnlineLufsIntegrated(
+                src_sample_rate,
+                channels=2,
+                channel_mask=None,
+                channel_layout="stereo",
+            )
+            ref_tp = meters_truth.OnlineTruePeak(src_sample_rate, channels=2)
+            ref_corr = OnlineCorrelationAccumulator()
+            for chunk in ref_aligned:
+                if not chunk:
+                    continue
+                total = (len(chunk) // 2) * 2
+                if total <= 0:
+                    continue
+                clipped = chunk[:total]
+                array = np.asarray(clipped, dtype=np.float64).reshape(-1, 2)
+                ref_lufs.update(array)
+                ref_tp.update(array)
+                _update_stereo_correlation_from_interleaved(ref_corr, clipped)
+
+            fold_metrics = {
+                "lufs": float(fold_lufs.finalize()),
+                "true_peak": float(fold_tp.finalize()),
+                "correlation": float(fold_corr.correlation()),
+            }
+            ref_metrics = {
+                "lufs": float(ref_lufs.finalize()),
+                "true_peak": float(ref_tp.finalize()),
+                "correlation": float(ref_corr.correlation()),
+            }
         else:
             raise ValueError(f"Unsupported meter pack: {meters}")
     except RuntimeError as exc:
