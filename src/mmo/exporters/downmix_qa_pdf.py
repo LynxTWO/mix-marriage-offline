@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
+
+from mmo.exporters.pdf_utils import render_maybe_json, truncate_value
 
 try:
     from reportlab.lib import colors
@@ -24,16 +25,8 @@ def _safe_str(value: Any) -> str:
     if value is None:
         return ""
     if isinstance(value, (dict, list)):
-        return json.dumps(value, sort_keys=True, separators=(",", ":"))
+        return render_maybe_json(value, 10_000, pretty=False)
     return str(value)
-
-
-def _truncate_value(value: str, limit: int) -> str:
-    if limit <= 0:
-        return ""
-    if len(value) <= limit:
-        return value
-    return f"{value[: max(limit - 12, 0)]}...(truncated)"
 
 
 def _severity_label(severity: Any) -> str:
@@ -82,7 +75,7 @@ def _measurements_table(
     rows = [header]
     for measurement in _sorted_measurements(measurements):
         value = measurement.get("value")
-        rendered = _truncate_value(_safe_str(value), truncate_values)
+        rendered = render_maybe_json(value, truncate_values)
         rows.append(
             [
                 _safe_str(measurement.get("evidence_id")),
@@ -110,7 +103,7 @@ def _issues_table(issues: List[Dict[str, Any]], *, truncate_values: int) -> Tabl
             [
                 _safe_str(issue.get("issue_id")),
                 _severity_label(issue.get("severity")),
-                _truncate_value(_safe_str(issue.get("message")), truncate_values),
+                truncate_value(_safe_str(issue.get("message")), truncate_values),
             ]
         )
     table = Table(rows, repeatRows=1)
@@ -185,18 +178,11 @@ def export_downmix_qa_pdf(
         story.append(Paragraph("Log", styles["Heading2"]))
         story.append(Spacer(1, 6))
         raw_log = _safe_str(log_value)
-        rendered_log = _truncate_value(raw_log, truncate_values)
+        rendered_log = render_maybe_json(log_value, truncate_values, pretty=True)
         if raw_log and not rendered_log:
             story.append(Paragraph("log omitted (truncate limit <= 0)", styles["Normal"]))
         else:
             story.append(Paragraph(rendered_log, styles["Normal"]))
-            if len(raw_log) > truncate_values:
-                story.append(
-                    Paragraph(
-                        f"log truncated to {truncate_values} chars",
-                        styles["Normal"],
-                    )
-                )
         story.append(Spacer(1, 6))
 
     doc.build(story)

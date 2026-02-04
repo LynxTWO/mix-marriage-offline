@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
+from mmo.exporters.pdf_utils import render_maybe_json, truncate_value
+
 try:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import letter
@@ -27,15 +29,7 @@ def _safe_str(value: Any) -> str:
 
 
 def _compact_json(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"))
-
-
-def _truncate_value(value: str, limit: int) -> str:
-    if limit <= 0:
-        return ""
-    if len(value) <= limit:
-        return value
-    return f"{value[: max(limit - 12, 0)]}...(truncated)"
+    return render_maybe_json(value, 10_000, pretty=False)
 
 
 def _sorted_recommendations(recommendations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -79,15 +73,21 @@ def _downmix_qa_issues_table(
     *,
     truncate_values: int,
 ) -> Table:
-    header = ["issue_id", "severity", "confidence", "message"]
+    header = ["issue_id", "severity", "message"]
     rows = [header]
-    for issue in issues:
+    for issue in sorted(
+        issues,
+        key=lambda item: (
+            str(item.get("issue_id", "")),
+            str(item.get("severity", "")),
+            str(item.get("message", "")),
+        ),
+    ):
         rows.append(
             [
                 _safe_str(issue.get("issue_id")),
                 _safe_str(issue.get("severity")),
-                _safe_str(issue.get("confidence")),
-                _truncate_value(_safe_str(issue.get("message")), truncate_values),
+                truncate_value(_safe_str(issue.get("message")), truncate_values),
             ]
         )
     table = Table(rows, repeatRows=1)
@@ -114,7 +114,7 @@ def _downmix_qa_measurements_table(
         rows.append(
             [
                 _safe_str(measurement.get("evidence_id")),
-                _truncate_value(_safe_str(measurement.get("value")), truncate_values),
+                render_maybe_json(measurement.get("value"), truncate_values),
                 _safe_str(measurement.get("unit_id")),
             ]
         )
@@ -161,7 +161,7 @@ def _recommendations_table(
         row.extend(
             [
                 target,
-                _truncate_value(notes, truncate_values * 2),
+                truncate_value(notes, truncate_values * 2),
             ]
         )
         rows.append(row)
@@ -199,11 +199,11 @@ def _gate_results_table(
         ):
             rows.append(
                 [
-                    _truncate_value(_safe_str(rec.get("recommendation_id")), truncate_values),
-                    _truncate_value(_safe_str(result.get("context")), truncate_values),
-                    _truncate_value(_safe_str(result.get("outcome")), truncate_values),
-                    _truncate_value(_safe_str(result.get("reason_id")), truncate_values),
-                    _truncate_value(_safe_str(result.get("gate_id")), truncate_values),
+                    truncate_value(_safe_str(rec.get("recommendation_id")), truncate_values),
+                    truncate_value(_safe_str(result.get("context")), truncate_values),
+                    truncate_value(_safe_str(result.get("outcome")), truncate_values),
+                    truncate_value(_safe_str(result.get("reason_id")), truncate_values),
+                    truncate_value(_safe_str(result.get("gate_id")), truncate_values),
                 ]
             )
     table = Table(rows, repeatRows=1)
@@ -239,11 +239,139 @@ def _measurements_table(
                 [
                     _safe_str(stem_id),
                     _safe_str(measurement.get("evidence_id")),
-                    _truncate_value(_safe_str(measurement.get("value")), truncate_values),
+                    render_maybe_json(measurement.get("value"), truncate_values),
                     _safe_str(measurement.get("unit_id")),
                 ]
             )
     table = Table(rows, repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return table
+
+
+def _gate_legend_table() -> Table:
+    rows = [
+        ["outcome", "meaning"],
+        ["PASS", "Recommendation is approved for the given context."],
+        ["WARN", "Recommendation is eligible but needs attention before apply."],
+        ["FAIL", "Recommendation is not eligible for the given context."],
+        ["SKIP", "Gate not evaluated for this context."],
+    ]
+    table = Table(rows, repeatRows=1, colWidths=[60, 400])
+    table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return table
+
+
+def _downmix_qa_log_payload(downmix_qa: Dict[str, Any]) -> Dict[str, Any]:
+    log_value = downmix_qa.get("log")
+    if isinstance(log_value, dict):
+        return log_value
+    if isinstance(log_value, str):
+        try:
+            parsed = json.loads(log_value)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            return parsed
+    measurements = downmix_qa.get("measurements", [])
+    if isinstance(measurements, list):
+        for measurement in measurements:
+            if not isinstance(measurement, dict):
+                continue
+            if measurement.get("evidence_id") != "EVID.DOWNMIX.QA.LOG":
+                continue
+            value = measurement.get("value")
+            if isinstance(value, dict):
+                return value
+            if isinstance(value, str):
+                try:
+                    parsed = json.loads(value)
+                except json.JSONDecodeError:
+                    parsed = None
+                if isinstance(parsed, dict):
+                    return parsed
+    return {}
+
+
+def _downmix_qa_summary_fields(downmix_qa: Dict[str, Any]) -> List[tuple[str, Any]]:
+    log_payload = _downmix_qa_log_payload(downmix_qa)
+    def _pick(key: str) -> Any:
+        if key in downmix_qa and downmix_qa.get(key) is not None:
+            return downmix_qa.get(key)
+        return log_payload.get(key)
+
+    return [
+        ("src_path", _pick("src_path")),
+        ("ref_path", _pick("ref_path")),
+        ("policy_id", _pick("policy_id")),
+        ("matrix_id", _pick("matrix_id")),
+        ("source_layout_id", log_payload.get("source_layout_id")),
+        ("target_layout_id", log_payload.get("target_layout_id")),
+        ("sample_rate_hz", _pick("sample_rate_hz")),
+        ("seconds_compared", log_payload.get("seconds_compared")),
+        ("max_seconds", log_payload.get("max_seconds")),
+    ]
+
+
+def _downmix_qa_key_measurement_rows(
+    measurements: List[Dict[str, Any]],
+) -> List[List[str]]:
+    measurement_map: Dict[str, Dict[str, Any]] = {}
+    for measurement in measurements:
+        if not isinstance(measurement, dict):
+            continue
+        evidence_id = _safe_str(measurement.get("evidence_id"))
+        if evidence_id and evidence_id not in measurement_map:
+            measurement_map[evidence_id] = measurement
+
+    def _value_for(evidence_id: str) -> tuple[str, str]:
+        entry = measurement_map.get(evidence_id, {})
+        return _safe_str(entry.get("value")), _safe_str(entry.get("unit_id"))
+
+    rows: List[List[str]] = []
+    for label, src_id, ref_id, delta_id in [
+        ("LUFS", "EVID.DOWNMIX.QA.LUFS_FOLD", "EVID.DOWNMIX.QA.LUFS_REF", "EVID.DOWNMIX.QA.LUFS_DELTA"),
+        (
+            "True Peak",
+            "EVID.DOWNMIX.QA.TRUE_PEAK_FOLD",
+            "EVID.DOWNMIX.QA.TRUE_PEAK_REF",
+            "EVID.DOWNMIX.QA.TRUE_PEAK_DELTA",
+        ),
+        (
+            "Correlation",
+            "EVID.DOWNMIX.QA.CORR_FOLD",
+            "EVID.DOWNMIX.QA.CORR_REF",
+            "EVID.DOWNMIX.QA.CORR_DELTA",
+        ),
+    ]:
+        src_value, src_unit = _value_for(src_id)
+        ref_value, ref_unit = _value_for(ref_id)
+        delta_value, delta_unit = _value_for(delta_id)
+        if not (src_value or ref_value or delta_value):
+            continue
+        unit = src_unit or ref_unit or delta_unit
+        rows.append([label, src_value, ref_value, delta_value, unit])
+    return rows
+
+
+def _downmix_qa_summary_table(rows: List[List[str]]) -> Table:
+    table_rows = [["metric", "src", "ref", "delta", "unit"], *rows]
+    table = Table(table_rows, repeatRows=1)
     table.setStyle(
         TableStyle(
             [
@@ -307,6 +435,15 @@ def export_report_pdf(
         ):
             story.append(Paragraph("Gate Results", styles["Heading2"]))
             story.append(Spacer(1, 6))
+            story.append(_gate_legend_table())
+            story.append(Spacer(1, 6))
+            story.append(
+                Paragraph(
+                    "Note: suggest-only diagnostic actions are never auto-applied.",
+                    styles["Normal"],
+                )
+            )
+            story.append(Spacer(1, 6))
             story.append(
                 _gate_results_table(
                     clean_recommendations,
@@ -334,39 +471,22 @@ def export_report_pdf(
         story.append(Spacer(1, 12))
         story.append(Paragraph("Downmix QA", styles["Heading2"]))
         story.append(Spacer(1, 6))
-        story.append(
-            Paragraph(
-                f"src_path: {_truncate_value(_safe_str(downmix_qa.get('src_path')), truncate_values)}",
-                styles["Normal"],
+        for label, value in _downmix_qa_summary_fields(downmix_qa):
+            story.append(
+                Paragraph(
+                    f"{label}: {truncate_value(_safe_str(value), truncate_values)}",
+                    styles["Normal"],
+                )
             )
-        )
-        story.append(
-            Paragraph(
-                f"ref_path: {_truncate_value(_safe_str(downmix_qa.get('ref_path')), truncate_values)}",
-                styles["Normal"],
-            )
-        )
-        story.append(
-            Paragraph(
-                f"policy_id: {_truncate_value(_safe_str(downmix_qa.get('policy_id')), truncate_values)}",
-                styles["Normal"],
-            )
-        )
-        story.append(
-            Paragraph(
-                f"matrix_id: {_truncate_value(_safe_str(downmix_qa.get('matrix_id')), truncate_values)}",
-                styles["Normal"],
-            )
-        )
-        story.append(
-            Paragraph(
-                f"sample_rate_hz: {_truncate_value(_safe_str(downmix_qa.get('sample_rate_hz')), truncate_values)}",
-                styles["Normal"],
-            )
-        )
 
         measurements = downmix_qa.get("measurements", [])
         if isinstance(measurements, list) and measurements:
+            summary_rows = _downmix_qa_key_measurement_rows(measurements)
+            if summary_rows:
+                story.append(Spacer(1, 6))
+                story.append(Paragraph("Downmix QA Summary", styles["Heading3"]))
+                story.append(Spacer(1, 6))
+                story.append(_downmix_qa_summary_table(summary_rows))
             story.append(Spacer(1, 6))
             story.append(Paragraph("Downmix QA Measurements", styles["Heading3"]))
             story.append(Spacer(1, 6))
@@ -382,6 +502,10 @@ def export_report_pdf(
             story.append(Spacer(1, 6))
             story.append(Paragraph("Downmix QA Issues", styles["Heading3"]))
             story.append(Spacer(1, 6))
+            story.append(
+                Paragraph(f"issues_count: {len([i for i in issues if isinstance(i, dict)])}", styles["Normal"])
+            )
+            story.append(Spacer(1, 4))
             story.append(
                 _downmix_qa_issues_table(
                     [i for i in issues if isinstance(i, dict)],

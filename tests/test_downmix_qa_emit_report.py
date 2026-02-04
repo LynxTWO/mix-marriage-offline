@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from typing import Optional
 
+from mmo.exporters import pdf_report
+
 try:
     import reportlab  # noqa: F401
 except ImportError:
@@ -163,6 +165,14 @@ class TestDownmixQaEmitReport(unittest.TestCase):
                 if isinstance(item, dict)
             }
             self.assertIn("EVID.DOWNMIX.QA.LOG", evidence_ids)
+            summary_fields = pdf_report._downmix_qa_summary_fields(downmix_qa)
+            summary_map = {label: value for label, value in summary_fields}
+            self.assertIn("policy_id", summary_map)
+            self.assertIn("matrix_id", summary_map)
+            self.assertIn("source_layout_id", summary_map)
+            self.assertIn("target_layout_id", summary_map)
+            self.assertIn("seconds_compared", summary_map)
+            self.assertIn("max_seconds", summary_map)
 
     def test_downmix_qa_emit_report_pdf_export(self) -> None:
         if reportlab is None:

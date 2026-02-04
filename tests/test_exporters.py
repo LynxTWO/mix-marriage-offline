@@ -6,6 +6,8 @@ from pathlib import Path
 
 from mmo.exporters.csv_recall import export_recall_csv
 from mmo.exporters.pdf_report import export_report_pdf
+from mmo.exporters import pdf_report
+from mmo.exporters.pdf_utils import render_maybe_json
 
 try:
     import reportlab  # noqa: F401
@@ -110,6 +112,34 @@ class TestExporters(unittest.TestCase):
             export_report_pdf(report, out_path, include_measurements=False)
             self.assertTrue(out_path.exists())
             self.assertGreater(out_path.stat().st_size, 0)
+
+    def test_downmix_qa_summary_fields_from_log(self) -> None:
+        downmix_qa = {
+            "policy_id": "POLICY.DOWNMIX.TEST",
+            "matrix_id": "MATRIX.TEST",
+            "log": json.dumps(
+                {
+                    "source_layout_id": "LAYOUT.5_1",
+                    "target_layout_id": "LAYOUT.2_0",
+                    "seconds_compared": 12.5,
+                    "max_seconds": 120.0,
+                }
+            ),
+        }
+        fields = pdf_report._downmix_qa_summary_fields(downmix_qa)
+        field_map = {label: value for label, value in fields}
+        self.assertEqual(field_map.get("policy_id"), "POLICY.DOWNMIX.TEST")
+        self.assertEqual(field_map.get("matrix_id"), "MATRIX.TEST")
+        self.assertEqual(field_map.get("source_layout_id"), "LAYOUT.5_1")
+        self.assertEqual(field_map.get("target_layout_id"), "LAYOUT.2_0")
+        self.assertEqual(field_map.get("seconds_compared"), 12.5)
+        self.assertEqual(field_map.get("max_seconds"), 120.0)
+
+    def test_render_maybe_json_truncates_string_values(self) -> None:
+        payload = {"keep": "ok", "blob": "x" * 50}
+        rendered = render_maybe_json(json.dumps(payload), limit=20, pretty=True)
+        self.assertIn("...(truncated)", rendered)
+        self.assertIn('"keep": "ok"', rendered)
 
 
 if __name__ == "__main__":
