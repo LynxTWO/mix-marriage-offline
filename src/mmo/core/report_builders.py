@@ -16,6 +16,14 @@ from mmo.core.gates import apply_gates_to_report
 
 REPORT_SCHEMA_VERSION = "0.1.0"
 DEFAULT_GENERATED_AT = "2000-01-01T00:00:00Z"
+DOWNMIX_QA_LUFS_DELTA_GATE_ID = "GATE.DOWNMIX_QA_LUFS_DELTA_LIMIT"
+DOWNMIX_QA_TRUE_PEAK_DELTA_GATE_ID = "GATE.DOWNMIX_QA_TRUE_PEAK_DELTA_LIMIT"
+DOWNMIX_QA_CORR_DELTA_GATE_ID = "GATE.DOWNMIX_QA_CORR_DELTA_LIMIT"
+DOWNMIX_QA_DELTA_GATE_IDS = {
+    DOWNMIX_QA_LUFS_DELTA_GATE_ID,
+    DOWNMIX_QA_TRUE_PEAK_DELTA_GATE_ID,
+    DOWNMIX_QA_CORR_DELTA_GATE_ID,
+}
 
 
 def _load_ontology_version(path: Path) -> str:
@@ -143,6 +151,98 @@ def merge_downmix_qa_issues_into_report(report: Dict[str, Any]) -> None:
         return
     to_add.sort(key=lambda item: (str(item.get("issue_id", "")), str(item.get("message", ""))))
     report_issues.extend(to_add)
+
+
+def enrich_blocked_downmix_render_diagnostics(report: dict) -> dict:
+    recommendations = report.get("recommendations")
+    if not isinstance(recommendations, list):
+        return report
+
+    saw_qa_delta_render_reject = False
+    saw_reference_level_reject = False
+    saw_corr_reject = False
+
+    for rec in recommendations:
+        if not isinstance(rec, dict):
+            continue
+        if rec.get("action_id") != "ACTION.DOWNMIX.RENDER":
+            continue
+        if rec.get("eligible_render") is not False:
+            continue
+        gate_results = rec.get("gate_results")
+        if not isinstance(gate_results, list):
+            continue
+
+        rejected_gate_ids = {
+            result.get("gate_id")
+            for result in gate_results
+            if isinstance(result, dict)
+            and result.get("context") == "render"
+            and result.get("outcome") == "reject"
+            and isinstance(result.get("gate_id"), str)
+        }
+        qa_delta_rejected_gate_ids = rejected_gate_ids.intersection(DOWNMIX_QA_DELTA_GATE_IDS)
+        if not qa_delta_rejected_gate_ids:
+            continue
+
+        saw_qa_delta_render_reject = True
+        if (
+            DOWNMIX_QA_LUFS_DELTA_GATE_ID in qa_delta_rejected_gate_ids
+            or DOWNMIX_QA_TRUE_PEAK_DELTA_GATE_ID in qa_delta_rejected_gate_ids
+        ):
+            saw_reference_level_reject = True
+        if DOWNMIX_QA_CORR_DELTA_GATE_ID in qa_delta_rejected_gate_ids:
+            saw_corr_reject = True
+
+    if not saw_qa_delta_render_reject:
+        return report
+
+    existing_ids = {
+        rec.get("recommendation_id")
+        for rec in recommendations
+        if isinstance(rec, dict) and isinstance(rec.get("recommendation_id"), str)
+    }
+    diagnostics: List[tuple[str, str, str]] = [
+        (
+            "REC.DIAGNOSTIC.REVIEW_POLICY_MATRIX.001",
+            "ACTION.DIAGNOSTIC.REVIEW_DOWNMIX_POLICY_MATRIX",
+            "Review policy_id/matrix_id/target_layout_id mapping before retrying render.",
+        )
+    ]
+    if saw_reference_level_reject:
+        diagnostics.append(
+            (
+                "REC.DIAGNOSTIC.CHECK_REFERENCE_LEVELS.001",
+                "ACTION.DIAGNOSTIC.CHECK_REFERENCE_LEVELS",
+                "Verify folded/reference LUFS and true-peak alignment and calibration.",
+            )
+        )
+    if saw_corr_reject:
+        diagnostics.append(
+            (
+                "REC.DIAGNOSTIC.CHECK_PHASE_CORRELATION.001",
+                "ACTION.DIAGNOSTIC.CHECK_PHASE_CORRELATION",
+                "Inspect phase correlation and routing/polarity before retrying render.",
+            )
+        )
+
+    for rec_id, action_id, notes in diagnostics:
+        if rec_id in existing_ids:
+            continue
+        recommendations.append(
+            {
+                "recommendation_id": rec_id,
+                "action_id": action_id,
+                "risk": "low",
+                "requires_approval": False,
+                "target": {"scope": "session"},
+                "params": [],
+                "notes": notes,
+            }
+        )
+        existing_ids.add(rec_id)
+
+    return report
 
 
 def build_minimal_report_for_downmix_qa(
@@ -282,4 +382,5 @@ def build_minimal_report_for_downmix_qa(
             report,
             policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
         )
+        enrich_blocked_downmix_render_diagnostics(report)
     return report

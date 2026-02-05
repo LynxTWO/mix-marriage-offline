@@ -183,6 +183,41 @@ class TestExporters(unittest.TestCase):
         self.assertIn("Provenance:", line)
         self.assertIn("downmix.yaml", line)
 
+    def test_downmix_qa_next_checks_for_blocked_render(self) -> None:
+        report = {
+            "recommendations": [
+                {
+                    "recommendation_id": "REC.DOWNMIX.RENDER.001",
+                    "action_id": "ACTION.DOWNMIX.RENDER",
+                    "eligible_render": False,
+                    "gate_results": [
+                        {
+                            "gate_id": "GATE.DOWNMIX_QA_CORR_DELTA_LIMIT",
+                            "context": "render",
+                            "outcome": "reject",
+                            "reason_id": "REASON.DOWNMIX_QA_DELTA_EXCEEDS",
+                            "details": {},
+                        }
+                    ],
+                },
+                {
+                    "recommendation_id": "REC.DIAGNOSTIC.REVIEW_POLICY_MATRIX.001",
+                    "action_id": "ACTION.DIAGNOSTIC.REVIEW_DOWNMIX_POLICY_MATRIX",
+                },
+                {
+                    "recommendation_id": "REC.DIAGNOSTIC.CHECK_PHASE_CORRELATION.001",
+                    "action_id": "ACTION.DIAGNOSTIC.CHECK_PHASE_CORRELATION",
+                },
+            ]
+        }
+        self.assertEqual(
+            pdf_report._downmix_qa_next_checks(report),
+            [
+                "Review downmix policy matrix",
+                "Check phase correlation",
+            ],
+        )
+
     def test_render_maybe_json_truncates_string_values(self) -> None:
         payload = {"keep": "ok", "blob": "x" * 50}
         rendered = render_maybe_json(json.dumps(payload), limit=20, pretty=True)

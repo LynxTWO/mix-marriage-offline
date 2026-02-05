@@ -134,6 +134,61 @@ def _has_downmix_qa_delta_gate_results(report: Dict[str, Any]) -> bool:
     return False
 
 
+def _downmix_qa_next_checks(report: Dict[str, Any]) -> List[str]:
+    recommendations = report.get("recommendations", [])
+    if not isinstance(recommendations, list):
+        return []
+
+    render_blocked_by_qa_delta = False
+    qa_delta_gate_ids = {
+        "GATE.DOWNMIX_QA_LUFS_DELTA_LIMIT",
+        "GATE.DOWNMIX_QA_TRUE_PEAK_DELTA_LIMIT",
+        "GATE.DOWNMIX_QA_CORR_DELTA_LIMIT",
+    }
+
+    for rec in recommendations:
+        if not isinstance(rec, dict):
+            continue
+        if rec.get("action_id") != "ACTION.DOWNMIX.RENDER":
+            continue
+        if rec.get("eligible_render") is not False:
+            continue
+        gate_results = rec.get("gate_results", [])
+        if not isinstance(gate_results, list):
+            continue
+        for result in gate_results:
+            if not isinstance(result, dict):
+                continue
+            if (
+                result.get("context") == "render"
+                and result.get("outcome") == "reject"
+                and result.get("gate_id") in qa_delta_gate_ids
+            ):
+                render_blocked_by_qa_delta = True
+                break
+        if render_blocked_by_qa_delta:
+            break
+
+    if not render_blocked_by_qa_delta:
+        return []
+
+    recommendation_ids = {
+        rec.get("recommendation_id")
+        for rec in recommendations
+        if isinstance(rec, dict) and isinstance(rec.get("recommendation_id"), str)
+    }
+    checks: List[str] = []
+    ordered_checks = [
+        ("REC.DIAGNOSTIC.REVIEW_POLICY_MATRIX.001", "Review downmix policy matrix"),
+        ("REC.DIAGNOSTIC.CHECK_REFERENCE_LEVELS.001", "Check reference levels"),
+        ("REC.DIAGNOSTIC.CHECK_PHASE_CORRELATION.001", "Check phase correlation"),
+    ]
+    for recommendation_id, label in ordered_checks:
+        if recommendation_id in recommendation_ids:
+            checks.append(label)
+    return checks
+
+
 def _compact_json(value: Any) -> str:
     return render_maybe_json(value, 10_000, pretty=False)
 
@@ -591,6 +646,13 @@ def export_report_pdf(
         if thresholds_line:
             story.append(Paragraph(thresholds_line, styles["Normal"]))
         story.append(Paragraph(_downmix_qa_provenance_line(), styles["Normal"]))
+        next_checks = _downmix_qa_next_checks(report)
+        if next_checks:
+            story.append(Spacer(1, 6))
+            story.append(Paragraph("Next checks", styles["Heading3"]))
+            story.append(Spacer(1, 4))
+            for check in next_checks:
+                story.append(Paragraph(f"- {check}", styles["Normal"]))
 
         if has_downmix_qa:
             measurements = downmix_qa.get("measurements", [])

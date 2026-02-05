@@ -217,7 +217,14 @@ class TestDownmixQaEmitReport(unittest.TestCase):
 
             payload = json.loads(report_path.read_text(encoding="utf-8"))
             recommendations = payload.get("recommendations", [])
-            self.assertEqual(len(recommendations), 2)
+            recommendation_ids = {
+                rec.get("recommendation_id")
+                for rec in recommendations
+                if isinstance(rec, dict)
+            }
+            self.assertIn("REC.DIAGNOSTIC.REVIEW_POLICY_MATRIX.001", recommendation_ids)
+            self.assertIn("REC.DIAGNOSTIC.CHECK_PHASE_CORRELATION.001", recommendation_ids)
+            self.assertNotIn("REC.DIAGNOSTIC.CHECK_REFERENCE_LEVELS.001", recommendation_ids)
             diagnostic_recs = [
                 rec
                 for rec in recommendations

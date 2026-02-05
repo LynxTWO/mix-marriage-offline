@@ -108,6 +108,48 @@ actions:
     notes:
       - "Non-destructive advisory action. Intended for QA review."
 
+  ACTION.DIAGNOSTIC.REVIEW_DOWNMIX_POLICY_MATRIX:
+    label: "Review downmix policy matrix"
+    description: "Guidance-only: verify policy_id, matrix_id, and target layout mapping used for downmix render."
+    required_params: []
+    optional_params: []
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: false
+    allowed_scopes: ["session"]
+    allowed_granularity: ["full"]
+    gates: []
+    notes:
+      - "Non-destructive advisory action. Intended for QA triage when render is blocked."
+
+  ACTION.DIAGNOSTIC.CHECK_REFERENCE_LEVELS:
+    label: "Check reference levels"
+    description: "Guidance-only: verify folded/reference loudness and true-peak reference calibration before render."
+    required_params: []
+    optional_params: []
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: false
+    allowed_scopes: ["session"]
+    allowed_granularity: ["full"]
+    gates: []
+    notes:
+      - "Non-destructive advisory action for level-mismatch diagnostics."
+
+  ACTION.DIAGNOSTIC.CHECK_PHASE_CORRELATION:
+    label: "Check phase correlation"
+    description: "Guidance-only: inspect phase/correlation between folded downmix and reference before render."
+    required_params: []
+    optional_params: []
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: false
+    allowed_scopes: ["session"]
+    allowed_granularity: ["full"]
+    gates: []
+    notes:
+      - "Non-destructive advisory action for correlation-delta failures."
+
   ACTION.UTILITY.DELAY:
     label: "Delay"
     description: "Apply a time delay to the target (used for alignment or creative offset)."
