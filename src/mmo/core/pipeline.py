@@ -142,7 +142,7 @@ def _call_renderer(
     raise TypeError("Renderer plugin is not callable and has no render().")
 
 
-def _gate_summary(gate_results: Any) -> str:
+def _gate_summary(gate_results: Any, *, context: str | None = None) -> str:
     if not isinstance(gate_results, list):
         return ""
     context_order = {"suggest": 0, "auto_apply": 1, "render": 2}
@@ -150,16 +150,18 @@ def _gate_summary(gate_results: Any) -> str:
     for result in gate_results:
         if not isinstance(result, dict):
             continue
-        context = _coerce_str(result.get("context"))
+        result_context = _coerce_str(result.get("context"))
+        if context is not None and result_context != context:
+            continue
         outcome = _coerce_str(result.get("outcome"))
         gate_id = _coerce_str(result.get("gate_id"))
         reason_id = _coerce_str(result.get("reason_id"))
         rows.append(
             (
-                context_order.get(context, 99),
+                context_order.get(result_context, 99),
                 gate_id,
                 reason_id,
-                context,
+                result_context,
                 outcome,
             )
         )
@@ -291,8 +293,10 @@ def run_resolvers(session_report: Dict[str, Any], plugins: Sequence[PluginEntry]
 def run_renderers(
     report: Dict[str, Any],
     plugins: Sequence[PluginEntry],
-    *,
     output_dir: Path | None = None,
+    *,
+    eligibility_field: str = "eligible_render",
+    context: str = "render",
 ) -> List[Dict[str, Any]]:
     session = report.get("session") if isinstance(report, dict) else {}
     if not isinstance(session, dict):
@@ -301,8 +305,8 @@ def run_renderers(
     recs = _coerce_list(recommendations)
     recs = [rec for rec in recs if isinstance(rec, dict)]
     recs_by_id = _recommendation_index(recs)
-    eligible = [rec for rec in recs if rec.get("eligible_render") is True]
-    blocked = [rec for rec in recs if rec.get("eligible_render") is not True]
+    eligible = [rec for rec in recs if rec.get(eligibility_field) is True]
+    blocked = [rec for rec in recs if rec.get(eligibility_field) is not True]
 
     blocked_skipped: List[Dict[str, Any]] = []
     for rec in blocked:
@@ -311,7 +315,7 @@ def run_renderers(
                 "recommendation_id": _coerce_str(rec.get("recommendation_id")),
                 "action_id": _coerce_str(rec.get("action_id")),
                 "reason": "blocked_by_gates",
-                "gate_summary": _gate_summary(rec.get("gate_results")),
+                "gate_summary": _gate_summary(rec.get("gate_results"), context=context),
             }
         )
     blocked_skipped = _merge_skipped_entries(blocked_skipped)

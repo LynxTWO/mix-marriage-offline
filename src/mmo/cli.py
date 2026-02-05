@@ -318,6 +318,87 @@ def _validate_render_manifest(render_manifest: dict[str, Any], schema_path: Path
     )
 
 
+def _validate_apply_manifest(apply_manifest: dict[str, Any], schema_path: Path) -> None:
+    _validate_json_payload(
+        apply_manifest,
+        schema_path=schema_path,
+        payload_name="Apply manifest",
+    )
+
+
+def _coerce_str(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    return ""
+
+
+def _collect_stem_artifacts(
+    renderer_manifests: list[dict[str, Any]],
+) -> dict[str, dict[str, str]]:
+    selected: dict[str, tuple[tuple[str, str, str, str], dict[str, str]]] = {}
+    for manifest in renderer_manifests:
+        if not isinstance(manifest, dict):
+            continue
+        renderer_id = _coerce_str(manifest.get("renderer_id"))
+        outputs = manifest.get("outputs")
+        if not isinstance(outputs, list):
+            continue
+        for output in outputs:
+            if not isinstance(output, dict):
+                continue
+            stem_id = _coerce_str(output.get("target_stem_id"))
+            file_path = _coerce_str(output.get("file_path"))
+            sha256 = _coerce_str(output.get("sha256"))
+            if not stem_id or not file_path or not sha256:
+                continue
+            sort_key = (
+                renderer_id,
+                _coerce_str(output.get("output_id")),
+                file_path,
+                sha256,
+            )
+            artifact = {"file_path": file_path, "sha256": sha256}
+            existing = selected.get(stem_id)
+            if existing is None or sort_key < existing[0]:
+                selected[stem_id] = (sort_key, artifact)
+    return {
+        stem_id: payload[1]
+        for stem_id, payload in sorted(selected.items(), key=lambda item: item[0])
+    }
+
+
+def _build_applied_report(
+    report: dict[str, Any],
+    *,
+    out_dir: Path,
+    renderer_manifests: list[dict[str, Any]],
+) -> dict[str, Any]:
+    applied_report = json.loads(json.dumps(report))
+    session = applied_report.get("session")
+    if not isinstance(session, dict):
+        session = {}
+        applied_report["session"] = session
+    session["stems_dir"] = out_dir.resolve().as_posix()
+
+    stems = session.get("stems")
+    if not isinstance(stems, list):
+        return applied_report
+
+    artifacts = _collect_stem_artifacts(renderer_manifests)
+    for stem in stems:
+        if not isinstance(stem, dict):
+            continue
+        stem_id = _coerce_str(stem.get("stem_id"))
+        if not stem_id:
+            continue
+        artifact = artifacts.get(stem_id)
+        if artifact is None:
+            continue
+        stem["file_path"] = artifact["file_path"]
+        stem["sha256"] = artifact["sha256"]
+    return applied_report
+
+
 def _run_render_command(
     *,
     repo_root: Path,
@@ -401,6 +482,87 @@ def _run_downmix_render(
         profile_id=profile_id,
         command_label="downmix render",
     )
+
+
+def _run_apply_command(
+    *,
+    repo_root: Path,
+    report_path: Path,
+    plugins_dir: Path,
+    out_manifest_path: Path,
+    out_dir: Path,
+    out_report_path: Path | None,
+    profile_id: str,
+) -> int:
+    from mmo.core.gates import apply_gates_to_report  # noqa: WPS433
+    from mmo.core.pipeline import load_plugins, run_renderers  # noqa: WPS433
+
+    report = _load_report(report_path)
+    apply_gates_to_report(
+        report,
+        policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+        profile_id=profile_id,
+        profiles_path=repo_root / "ontology" / "policies" / "authority_profiles.yaml",
+    )
+
+    recommendations = report.get("recommendations")
+    recs: list[dict[str, Any]] = []
+    if isinstance(recommendations, list):
+        recs = [rec for rec in recommendations if isinstance(rec, dict)]
+
+    eligible = [rec for rec in recs if rec.get("eligible_auto_apply") is True]
+    blocked = [rec for rec in recs if rec.get("eligible_auto_apply") is not True]
+    print(
+        "apply:"
+        f" total_recommendations={len(recs)}"
+        f" eligible_auto_apply={len(eligible)}"
+        f" blocked={len(blocked)}",
+        file=sys.stderr,
+    )
+
+    plugins = load_plugins(plugins_dir)
+    renderer_plugin_ids = [
+        plugin.plugin_id for plugin in plugins if plugin.plugin_type == "renderer"
+    ]
+    renderer_ids_text = ",".join(renderer_plugin_ids) if renderer_plugin_ids else "<none>"
+    print(
+        f"apply: renderer_plugin_ids={renderer_ids_text}",
+        file=sys.stderr,
+    )
+
+    renderer_manifests = run_renderers(
+        report,
+        plugins,
+        output_dir=out_dir,
+        eligibility_field="eligible_auto_apply",
+        context="auto_apply",
+    )
+    apply_manifest = {
+        "schema_version": "0.1.0",
+        "context": "auto_apply",
+        "report_id": report.get("report_id", ""),
+        "renderer_manifests": renderer_manifests,
+    }
+    _validate_apply_manifest(
+        apply_manifest,
+        repo_root / "schemas" / "apply_manifest.schema.json",
+    )
+
+    out_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    out_manifest_path.write_text(
+        json.dumps(apply_manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    if out_report_path is not None:
+        applied_report = _build_applied_report(
+            report,
+            out_dir=out_dir,
+            renderer_manifests=renderer_manifests,
+        )
+        _write_json_file(out_report_path, applied_report)
+
+    return 0
 
 
 def _run_bundle(
@@ -551,6 +713,44 @@ def main(argv: list[str] | None = None) -> int:
         "--profile",
         default="PROFILE.ASSIST",
         help="Authority profile ID for render gating (default: PROFILE.ASSIST).",
+    )
+
+    apply_parser = subparsers.add_parser(
+        "apply",
+        help="Run renderer plugins for auto-apply eligible recommendations.",
+    )
+    apply_parser.add_argument(
+        "--report",
+        required=True,
+        help="Path to report JSON.",
+    )
+    apply_parser.add_argument(
+        "--plugins",
+        default="plugins",
+        help="Path to plugins directory.",
+    )
+    apply_parser.add_argument(
+        "--out-manifest",
+        required=True,
+        help="Path to output apply manifest JSON.",
+    )
+    apply_parser.add_argument(
+        "--out-dir",
+        required=True,
+        help="Output directory for applied renderer artifacts.",
+    )
+    apply_parser.add_argument(
+        "--profile",
+        default="PROFILE.ASSIST",
+        help="Authority profile ID for auto-apply gating (default: PROFILE.ASSIST).",
+    )
+    apply_parser.add_argument(
+        "--out-report",
+        default=None,
+        help=(
+            "Optional output path for a report JSON rewritten to point stems to "
+            "applied artifacts."
+        ),
     )
 
     bundle_parser = subparsers.add_parser(
@@ -860,6 +1060,20 @@ def main(argv: list[str] | None = None) -> int:
                 out_dir=Path(out_dir) if out_dir else None,
                 profile_id=profile_id,
                 command_label="render",
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+    if args.command == "apply":
+        try:
+            return _run_apply_command(
+                repo_root=repo_root,
+                report_path=Path(args.report),
+                plugins_dir=Path(args.plugins),
+                out_manifest_path=Path(args.out_manifest),
+                out_dir=Path(args.out_dir),
+                out_report_path=Path(args.out_report) if args.out_report else None,
+                profile_id=args.profile,
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
