@@ -32,8 +32,9 @@ def _gate_summary(rec: Dict[str, Any]) -> str:
     ):
         context = str(result.get("context", ""))
         outcome = str(result.get("outcome", ""))
+        gate_id = str(result.get("gate_id", ""))
         reason_id = str(result.get("reason_id", ""))
-        parts.append(f"{context}:{outcome}({reason_id})")
+        parts.append(f"{context}:{outcome}({gate_id}|{reason_id})")
     return ";".join(parts)
 
 

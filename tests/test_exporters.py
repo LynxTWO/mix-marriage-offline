@@ -69,6 +69,39 @@ class TestExporters(unittest.TestCase):
             ],
         )
 
+    def test_export_recall_csv_gate_summary_includes_gate_id(self) -> None:
+        report = {
+            "recommendations": [
+                {
+                    "recommendation_id": "REC.GATE.TEST",
+                    "issue_id": "ISSUE.TEST",
+                    "action_id": "ACTION.UTILITY.GAIN",
+                    "risk": "low",
+                    "requires_approval": False,
+                    "target": {},
+                    "params": [],
+                    "gate_results": [
+                        {
+                            "gate_id": "GATE.MAX_GAIN_DB",
+                            "context": "render",
+                            "outcome": "reject",
+                            "reason_id": "REASON.GAIN_TOO_LARGE",
+                            "details": {},
+                        }
+                    ],
+                    "eligible_auto_apply": False,
+                    "eligible_render": False,
+                }
+            ]
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out_path = Path(temp_dir) / "recall.csv"
+            export_recall_csv(report, out_path, include_gates=True)
+            rows = list(csv.reader(out_path.read_text(encoding="utf-8").splitlines()))
+
+        self.assertIn("gate_summary", rows[0])
+        self.assertIn("render:reject(GATE.MAX_GAIN_DB|REASON.GAIN_TOO_LARGE)", rows[1][-1])
+
     def test_export_report_pdf_exists(self) -> None:
         if reportlab is None:
             self.skipTest("reportlab not installed")
@@ -144,6 +177,11 @@ class TestExporters(unittest.TestCase):
         self.assertIn("LUFS Δ warn 2.0 / fail 4.0", line)
         self.assertIn("True Peak Δ warn 1.0 / fail 2.0", line)
         self.assertIn("Correlation Δ warn 0.15 / fail 0.30", line)
+
+    def test_downmix_qa_provenance_line(self) -> None:
+        line = pdf_report._downmix_qa_provenance_line()
+        self.assertIn("Provenance:", line)
+        self.assertIn("downmix.yaml", line)
 
     def test_render_maybe_json_truncates_string_values(self) -> None:
         payload = {"keep": "ok", "blob": "x" * 50}

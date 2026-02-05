@@ -104,6 +104,13 @@ def _downmix_qa_thresholds_line() -> str | None:
     return f"Thresholds: {', '.join(parts)}"
 
 
+def _downmix_qa_provenance_line() -> str:
+    return (
+        "Provenance: matrix_id resolved via ontology/policies/downmix.yaml and its "
+        "referenced policy pack for the selected policy_id and layouts."
+    )
+
+
 def _has_downmix_qa_delta_gate_results(report: Dict[str, Any]) -> bool:
     recommendations = report.get("recommendations", [])
     if not isinstance(recommendations, list):
@@ -583,6 +590,7 @@ def export_report_pdf(
         thresholds_line = _downmix_qa_thresholds_line()
         if thresholds_line:
             story.append(Paragraph(thresholds_line, styles["Normal"]))
+        story.append(Paragraph(_downmix_qa_provenance_line(), styles["Normal"]))
 
         if has_downmix_qa:
             measurements = downmix_qa.get("measurements", [])
