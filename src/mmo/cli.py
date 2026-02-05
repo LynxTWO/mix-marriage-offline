@@ -5,6 +5,12 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
+
+try:
+    import jsonschema
+except ImportError:  # pragma: no cover - environment issue
+    jsonschema = None
 
 
 def _run_command(command: list[str]) -> int:
@@ -96,6 +102,96 @@ def _load_report(report_path: Path) -> dict:
     if not isinstance(data, dict):
         raise ValueError("Report JSON must be an object.")
     return data
+
+
+def _validate_render_manifest(render_manifest: dict[str, Any], schema_path: Path) -> None:
+    if jsonschema is None:
+        print(
+            "jsonschema is not installed; cannot validate render manifest.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(
+            f"Failed to load render manifest schema from {schema_path}: {exc}",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    validator = jsonschema.Draft202012Validator(schema)
+    errors = sorted(validator.iter_errors(render_manifest), key=lambda err: list(err.path))
+    if not errors:
+        return
+
+    print("Render manifest schema validation failed:", file=sys.stderr)
+    for err in errors:
+        path = ".".join(str(item) for item in err.path) or "$"
+        print(f"- {path}: {err.message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def _run_downmix_render(
+    *,
+    repo_root: Path,
+    report_path: Path,
+    plugins_dir: Path,
+    out_manifest_path: Path,
+    out_dir: Path | None,
+) -> int:
+    from mmo.core.gates import apply_gates_to_report  # noqa: WPS433
+    from mmo.core.pipeline import load_plugins, run_renderers  # noqa: WPS433
+
+    report = _load_report(report_path)
+    apply_gates_to_report(
+        report,
+        policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+    )
+
+    recommendations = report.get("recommendations")
+    recs: list[dict[str, Any]] = []
+    if isinstance(recommendations, list):
+        recs = [rec for rec in recommendations if isinstance(rec, dict)]
+
+    eligible = [rec for rec in recs if rec.get("eligible_render") is True]
+    blocked = [rec for rec in recs if rec.get("eligible_render") is not True]
+    print(
+        "downmix render:"
+        f" total_recommendations={len(recs)}"
+        f" eligible_render={len(eligible)}"
+        f" blocked={len(blocked)}",
+        file=sys.stderr,
+    )
+
+    plugins = load_plugins(plugins_dir)
+    renderer_plugin_ids = [
+        plugin.plugin_id for plugin in plugins if plugin.plugin_type == "renderer"
+    ]
+    renderer_ids_text = ",".join(renderer_plugin_ids) if renderer_plugin_ids else "<none>"
+    print(
+        f"downmix render: renderer_plugin_ids={renderer_ids_text}",
+        file=sys.stderr,
+    )
+
+    manifests = run_renderers(report, plugins, output_dir=out_dir)
+    render_manifest = {
+        "schema_version": "0.1.0",
+        "report_id": report.get("report_id", ""),
+        "renderer_manifests": manifests,
+    }
+    _validate_render_manifest(
+        render_manifest,
+        repo_root / "schemas" / "render_manifest.schema.json",
+    )
+
+    out_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    out_manifest_path.write_text(
+        json.dumps(render_manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -311,6 +407,29 @@ def main(argv: list[str] | None = None) -> int:
         choices=["json", "text"],
         default="text",
         help="Output format for the list.",
+    )
+    downmix_render_parser = downmix_subparsers.add_parser(
+        "render", help="Run renderer plugins for render-eligible recommendations."
+    )
+    downmix_render_parser.add_argument(
+        "--report",
+        required=True,
+        help="Path to report JSON.",
+    )
+    downmix_render_parser.add_argument(
+        "--plugins",
+        default="plugins",
+        help="Path to plugins directory.",
+    )
+    downmix_render_parser.add_argument(
+        "--out-manifest",
+        required=True,
+        help="Path to output render manifest JSON.",
+    )
+    downmix_render_parser.add_argument(
+        "--out-dir",
+        default=None,
+        help="Optional output directory for renderer artifacts.",
     )
 
     args = parser.parse_args(argv)
@@ -584,6 +703,19 @@ def main(argv: list[str] | None = None) -> int:
                         lines.append(f"{source} -> {target}  policies={policy_text}")
                 print("\n".join(lines))
             return 0
+
+        if args.downmix_command == "render":
+            try:
+                return _run_downmix_render(
+                    repo_root=repo_root,
+                    report_path=Path(args.report),
+                    plugins_dir=Path(args.plugins),
+                    out_manifest_path=Path(args.out_manifest),
+                    out_dir=Path(args.out_dir) if args.out_dir else None,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
 
         if args.downmix_command != "show":
             print("Unknown downmix command.", file=sys.stderr)
