@@ -219,11 +219,26 @@
         },
         "eligible_auto_apply": { "type": "boolean" },
         "eligible_render": { "type": "boolean" },
+        "extreme": { "type": "boolean" },
+        "extreme_reasons": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/extreme_reason" }
+        },
         "notes": { "type": "string" },
         "evidence": {
           "type": "array",
           "items": { "$ref": "#/$defs/evidence" }
         }
+      }
+    },
+    "extreme_reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "reason_id", "details"],
+      "properties": {
+        "gate_id": { "type": "string" },
+        "reason_id": { "type": "string" },
+        "details": { "type": "object", "additionalProperties": true }
       }
     },
     "translation_result": {

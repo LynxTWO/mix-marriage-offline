@@ -38,6 +38,20 @@ def _gate_summary(rec: Dict[str, Any]) -> str:
     return ";".join(parts)
 
 
+def _extreme_gate_ids(rec: Dict[str, Any]) -> str:
+    extreme_reasons = rec.get("extreme_reasons")
+    if not isinstance(extreme_reasons, list):
+        return ""
+    gate_ids = sorted(
+        {
+            str(reason.get("gate_id"))
+            for reason in extreme_reasons
+            if isinstance(reason, dict) and isinstance(reason.get("gate_id"), str)
+        }
+    )
+    return "|".join(gate_ids)
+
+
 def export_recall_csv(
     report: Dict[str, Any],
     out_path: Path,
@@ -63,6 +77,8 @@ def export_recall_csv(
             "target",
             "params",
             "notes",
+            "extreme",
+            "extreme_gate_ids",
         ]
         if include_gates:
             header.extend(
@@ -87,6 +103,8 @@ def export_recall_csv(
                 json.dumps(rec.get("target"), sort_keys=True),
                 json.dumps(rec.get("params"), sort_keys=True),
                 rec.get("notes", ""),
+                rec.get("extreme", False),
+                _extreme_gate_ids(rec),
             ]
             if include_gates:
                 row.extend(

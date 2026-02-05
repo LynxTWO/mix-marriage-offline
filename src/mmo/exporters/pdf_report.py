@@ -29,6 +29,29 @@ def _safe_str(value: Any) -> str:
     return str(value)
 
 
+_EXTREME_CHANGES_NOTE = "Extreme changes present: review before applying"
+
+
+def _recommendation_extreme_tag(rec: Dict[str, Any]) -> str:
+    return "[EXTREME]" if rec.get("extreme") is True else ""
+
+
+def _format_recommendation_id(rec: Dict[str, Any]) -> str:
+    recommendation_id = _safe_str(rec.get("recommendation_id"))
+    extreme_tag = _recommendation_extreme_tag(rec)
+    if not extreme_tag:
+        return recommendation_id
+    if not recommendation_id:
+        return extreme_tag
+    return f"{recommendation_id} {extreme_tag}"
+
+
+def _extreme_changes_note(recommendations: List[Dict[str, Any]]) -> str | None:
+    if any(rec.get("extreme") is True for rec in recommendations):
+        return _EXTREME_CHANGES_NOTE
+    return None
+
+
 def _coerce_number(value: Any) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
@@ -305,7 +328,7 @@ def _recommendations_table(
     rows = [header]
     for rec in _sorted_recommendations(recommendations):
         row = [
-            _safe_str(rec.get("recommendation_id")),
+            _format_recommendation_id(rec),
             _safe_str(rec.get("action_id")),
             _safe_str(rec.get("risk")),
             _safe_str(rec.get("requires_approval")),
@@ -360,7 +383,7 @@ def _gate_results_table(
         ):
             rows.append(
                 [
-                    truncate_value(_safe_str(rec.get("recommendation_id")), truncate_values),
+                    truncate_value(_format_recommendation_id(rec), truncate_values),
                     truncate_value(_safe_str(result.get("context")), truncate_values),
                     truncate_value(_safe_str(result.get("outcome")), truncate_values),
                     truncate_value(_safe_str(result.get("reason_id")), truncate_values),
@@ -584,6 +607,10 @@ def export_report_pdf(
         clean_recommendations = [r for r in recommendations if isinstance(r, dict)]
         story.append(Paragraph("Recommendations", styles["Heading2"]))
         story.append(Spacer(1, 6))
+        extreme_note = _extreme_changes_note(clean_recommendations)
+        if extreme_note:
+            story.append(Paragraph(extreme_note, styles["Normal"]))
+            story.append(Spacer(1, 6))
         story.append(
             _recommendations_table(
                 clean_recommendations,

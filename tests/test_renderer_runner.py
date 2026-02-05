@@ -1,11 +1,29 @@
 import json
+import math
+import struct
+import tempfile
 import unittest
+import wave
 from pathlib import Path
 
 import jsonschema
 
 from mmo.core.gates import apply_gates_to_report
 from mmo.core.pipeline import load_plugins, run_renderers
+
+
+def _write_wav_16bit(path: Path, *, sample_rate_hz: int = 48000, duration_s: float = 0.1) -> None:
+    frames = int(sample_rate_hz * duration_s)
+    samples = [
+        int(0.45 * 32767.0 * math.sin(2.0 * math.pi * 220.0 * index / sample_rate_hz))
+        for index in range(frames)
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate_hz)
+        handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
 
 
 class TestRendererRunner(unittest.TestCase):
@@ -173,6 +191,82 @@ class TestRendererRunner(unittest.TestCase):
             tuples,
             sorted(tuples, key=lambda item: (item[0] or "", item[1] or "", item[2] or "")),
         )
+
+    def test_run_renderers_output_metadata_marks_extreme(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            out_dir = temp_path / "renders"
+            _write_wav_16bit(stems_dir / "kick.wav")
+
+            report = {
+                "schema_version": "0.1.0",
+                "report_id": "REPORT.TEST.EXTREME.MANIFEST",
+                "project_id": "PROJECT.TEST",
+                "generated_at": "2000-01-01T00:00:00Z",
+                "engine_version": "0.1.0",
+                "ontology_version": "0.1.0",
+                "session": {
+                    "stems_dir": stems_dir.resolve().as_posix(),
+                    "stems": [
+                        {
+                            "stem_id": "kick",
+                            "file_path": "kick.wav",
+                        }
+                    ],
+                },
+                "issues": [],
+                "recommendations": [
+                    {
+                        "recommendation_id": "REC.RENDER.GAIN.NORMAL",
+                        "action_id": "ACTION.UTILITY.GAIN",
+                        "risk": "low",
+                        "requires_approval": False,
+                        "target": {"scope": "stem", "stem_id": "kick"},
+                        "params": [{"param_id": "PARAM.GAIN.DB", "value": -1.0}],
+                        "eligible_render": True,
+                        "extreme": False,
+                    },
+                    {
+                        "recommendation_id": "REC.RENDER.GAIN.EXTREME",
+                        "action_id": "ACTION.UTILITY.GAIN",
+                        "risk": "low",
+                        "requires_approval": False,
+                        "target": {"scope": "stem", "stem_id": "kick"},
+                        "params": [{"param_id": "PARAM.GAIN.DB", "value": -2.0}],
+                        "eligible_render": True,
+                        "extreme": True,
+                    },
+                ],
+            }
+
+            plugins = load_plugins(Path("plugins"))
+            manifests = run_renderers(report, plugins, output_dir=out_dir)
+
+            gain_manifest = next(
+                (
+                    item
+                    for item in manifests
+                    if isinstance(item, dict)
+                    and item.get("renderer_id") == "PLUGIN.RENDERER.GAIN_TRIM"
+                ),
+                None,
+            )
+            self.assertIsNotNone(gain_manifest)
+            if gain_manifest is None:
+                return
+
+            outputs = gain_manifest.get("outputs")
+            self.assertIsInstance(outputs, list)
+            self.assertEqual(len(outputs), 1)
+            if not isinstance(outputs, list) or not outputs:
+                return
+
+            metadata = outputs[0].get("metadata")
+            self.assertIsInstance(metadata, dict)
+            if not isinstance(metadata, dict):
+                return
+            self.assertTrue(metadata.get("extreme"))
 
 
 if __name__ == "__main__":

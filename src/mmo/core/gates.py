@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
@@ -483,6 +484,173 @@ def _evaluate_count_limit(
     return _sort_gate_results(results, contexts)
 
 
+def _sort_extreme_reasons(
+    reasons: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    def _sort_key(reason: Dict[str, Any]) -> tuple[str, str, str]:
+        gate_id = _coerce_str(reason.get("gate_id")) or ""
+        reason_id = _coerce_str(reason.get("reason_id")) or ""
+        details = reason.get("details")
+        details_key = ""
+        if isinstance(details, dict):
+            details_key = json.dumps(
+                details,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            )
+        return (gate_id, reason_id, details_key)
+
+    return sorted(reasons, key=_sort_key)
+
+
+def _evaluate_param_limit_extreme_reasons(
+    rec: Dict[str, Any],
+    gate_id: str,
+    gate: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    applies_to_params = gate.get("applies_to_params")
+    if not isinstance(applies_to_params, list):
+        return []
+    applies = {param_id for param_id in applies_to_params if isinstance(param_id, str)}
+    if not applies:
+        return []
+
+    limits = gate.get("limits")
+    if not isinstance(limits, dict):
+        return []
+
+    suggest_limit, suggest_limit_kind, suggest_use_abs = _resolve_param_limit(
+        limits,
+        "suggest",
+    )
+    if suggest_limit is None or suggest_limit_kind is None:
+        return []
+
+    reason_id = _coerce_str(gate.get("violation_reason_id")) or ""
+    reasons: List[Dict[str, Any]] = []
+    for param in _iter_params(rec):
+        param_id = _coerce_str(param.get("param_id"))
+        if not param_id or param_id not in applies:
+            continue
+        value = _coerce_number(param.get("value"))
+        if value is None:
+            continue
+
+        comparison_value = abs(value) if suggest_use_abs else value
+        if comparison_value <= suggest_limit:
+            continue
+
+        details = _gate_result_details_for_param(
+            param_id=param_id,
+            value=value,
+            limit_value=suggest_limit,
+            limit_kind=suggest_limit_kind,
+            use_abs=suggest_use_abs,
+        )
+        details["trigger"] = "exceeds_suggest_limit"
+        reasons.append(
+            {
+                "gate_id": gate_id,
+                "reason_id": reason_id,
+                "details": details,
+            }
+        )
+
+    return _sort_extreme_reasons(reasons)
+
+
+def _evaluate_count_limit_extreme_reasons(
+    rec: Dict[str, Any],
+    gate_id: str,
+    gate: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    prefixes = gate.get("applies_to_actions_prefixes")
+    if not isinstance(prefixes, list):
+        return []
+    prefixes = [prefix for prefix in prefixes if isinstance(prefix, str)]
+    if not prefixes:
+        return []
+
+    action_id = _coerce_str(rec.get("action_id")) or ""
+    if not any(action_id.startswith(prefix) for prefix in prefixes):
+        return []
+
+    limits = gate.get("limits")
+    if not isinstance(limits, dict):
+        return []
+
+    suggest_limit, suggest_limit_kind = _resolve_count_limit(limits, "suggest")
+    if suggest_limit is None or suggest_limit_kind is None:
+        return []
+
+    count = sum(
+        1 for param in _iter_params(rec) if param.get("param_id") == "PARAM.EQ.GAIN_DB"
+    )
+    if count <= suggest_limit:
+        return []
+
+    reason_id = _coerce_str(gate.get("violation_reason_id")) or ""
+    return [
+        {
+            "gate_id": gate_id,
+            "reason_id": reason_id,
+            "details": {
+                "param_id": "PARAM.EQ.GAIN_DB",
+                "value": count,
+                "limit": suggest_limit,
+                "limit_kind": suggest_limit_kind,
+                "trigger": "exceeds_suggest_limit",
+            },
+        }
+    ]
+
+
+def _evaluate_extreme_reasons(
+    rec: Dict[str, Any],
+    policy: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    reasons: List[Dict[str, Any]] = []
+    for gate_id, gate in policy.items():
+        if gate_id == "_meta":
+            continue
+        if not isinstance(gate, dict):
+            continue
+        if gate.get("default_enabled") is False:
+            continue
+
+        kind = gate.get("kind")
+        if kind == "param_limit":
+            reasons.extend(_evaluate_param_limit_extreme_reasons(rec, gate_id, gate))
+            continue
+        if kind == "count_limit":
+            reasons.extend(_evaluate_count_limit_extreme_reasons(rec, gate_id, gate))
+            continue
+
+    reasons = _sort_extreme_reasons(reasons)
+    deduped: List[Dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for reason in reasons:
+        gate_id = _coerce_str(reason.get("gate_id")) or ""
+        reason_id = _coerce_str(reason.get("reason_id")) or ""
+        details = reason.get("details")
+        details_key = ""
+        if isinstance(details, dict):
+            details_key = json.dumps(
+                details,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            )
+        key = (gate_id, reason_id, details_key)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(reason)
+
+    return deduped
+
+
 def _evaluate_action_prefix_limit(
     rec: Dict[str, Any],
     gate_id: str,
@@ -673,7 +841,7 @@ def evaluate_recommendation_gates(
     *,
     approvals: set[str] | None = None,
     policy_path: Path | None = None,
-) -> Tuple[List[GateResult], bool, bool]:
+) -> Tuple[List[GateResult], bool, bool, bool, List[Dict[str, Any]]]:
     contexts = _contexts_from_policy(policy)
     gate_results: List[GateResult] = []
     for gate_id, gate in policy.items():
@@ -725,7 +893,10 @@ def evaluate_recommendation_gates(
         if result.get("context") == "render" and result.get("outcome") != "allow":
             eligible_render = False
 
-    return gate_results, eligible_auto_apply, eligible_render
+    extreme_reasons = _evaluate_extreme_reasons(rec, policy)
+    extreme = bool(extreme_reasons)
+
+    return gate_results, eligible_auto_apply, eligible_render, extreme, extreme_reasons
 
 
 def apply_gates_to_report(
@@ -749,7 +920,13 @@ def apply_gates_to_report(
     for rec in recommendations:
         if not isinstance(rec, dict):
             continue
-        gate_results, eligible_auto_apply, eligible_render = evaluate_recommendation_gates(
+        (
+            gate_results,
+            eligible_auto_apply,
+            eligible_render,
+            extreme,
+            extreme_reasons,
+        ) = evaluate_recommendation_gates(
             rec,
             policy,
             approvals=approvals,
@@ -758,3 +935,5 @@ def apply_gates_to_report(
         rec["gate_results"] = gate_results
         rec["eligible_auto_apply"] = eligible_auto_apply
         rec["eligible_render"] = eligible_render
+        rec["extreme"] = extreme
+        rec["extreme_reasons"] = extreme_reasons

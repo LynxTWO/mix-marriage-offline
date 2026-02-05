@@ -39,6 +39,8 @@ class TestExporters(unittest.TestCase):
                 "target",
                 "params",
                 "notes",
+                "extreme",
+                "extreme_gate_ids",
                 "eligible_auto_apply",
                 "eligible_render",
                 "gate_summary",
@@ -46,6 +48,8 @@ class TestExporters(unittest.TestCase):
         )
         self.assertEqual(rows[1][0], "REC.001")
         self.assertEqual(rows[2][0], "REC.002")
+        self.assertEqual(rows[1][9], "False")
+        self.assertEqual(rows[2][9], "False")
         self.assertEqual(rows[1][-3:], ["", "", ""])
         self.assertEqual(rows[2][-3:], ["", "", ""])
 
@@ -68,6 +72,8 @@ class TestExporters(unittest.TestCase):
                 "target",
                 "params",
                 "notes",
+                "extreme",
+                "extreme_gate_ids",
             ],
         )
 
@@ -105,6 +111,43 @@ class TestExporters(unittest.TestCase):
         self.assertIn("gate_summary", rows[0])
         self.assertEqual(rows[1][1], "PROFILE.GUIDE")
         self.assertIn("render:reject(GATE.MAX_GAIN_DB|REASON.GAIN_TOO_LARGE)", rows[1][-1])
+
+    def test_export_recall_csv_extreme_columns(self) -> None:
+        report = {
+            "profile_id": "PROFILE.TURBO",
+            "recommendations": [
+                {
+                    "recommendation_id": "REC.EXTREME.TEST",
+                    "issue_id": "ISSUE.TEST",
+                    "action_id": "ACTION.EQ.PEAK",
+                    "risk": "high",
+                    "requires_approval": False,
+                    "target": {},
+                    "params": [],
+                    "notes": "",
+                    "extreme": True,
+                    "extreme_reasons": [
+                        {
+                            "gate_id": "GATE.MAX_EQ_BANDS",
+                            "reason_id": "REASON.EQ_BANDS_TOO_MANY",
+                            "details": {},
+                        },
+                        {
+                            "gate_id": "GATE.MAX_EQ_GAIN_DB",
+                            "reason_id": "REASON.EQ_GAIN_TOO_LARGE",
+                            "details": {},
+                        },
+                    ],
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out_path = Path(temp_dir) / "recall.csv"
+            export_recall_csv(report, out_path, include_gates=False)
+            rows = list(csv.reader(out_path.read_text(encoding="utf-8").splitlines()))
+
+        self.assertEqual(rows[1][9], "True")
+        self.assertEqual(rows[1][10], "GATE.MAX_EQ_BANDS|GATE.MAX_EQ_GAIN_DB")
 
     def test_export_report_pdf_exists(self) -> None:
         if reportlab is None:
@@ -220,6 +263,23 @@ class TestExporters(unittest.TestCase):
                 "Review downmix policy matrix",
                 "Check phase correlation",
             ],
+        )
+
+    def test_extreme_helpers(self) -> None:
+        self.assertEqual(
+            pdf_report._extreme_changes_note(
+                [
+                    {"recommendation_id": "REC.1", "extreme": False},
+                    {"recommendation_id": "REC.2", "extreme": True},
+                ]
+            ),
+            "Extreme changes present: review before applying",
+        )
+        self.assertEqual(
+            pdf_report._format_recommendation_id(
+                {"recommendation_id": "REC.2", "extreme": True}
+            ),
+            "REC.2 [EXTREME]",
         )
 
     def test_render_maybe_json_truncates_string_values(self) -> None:

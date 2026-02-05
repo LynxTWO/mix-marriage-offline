@@ -309,6 +309,174 @@ class TestGates(unittest.TestCase):
         self.assertTrue(full_send_rec["eligible_render"])
         self.assertEqual(full_send_report.get("profile_id"), "PROFILE.FULL_SEND")
 
+    def test_profile_turbo_expands_auto_apply_for_gain_vs_assist(self) -> None:
+        assist_report = {
+            "schema_version": "0.1.0",
+            "report_id": "REPORT.TEST.ASSIST",
+            "project_id": "PROJECT.TEST",
+            "generated_at": "2000-01-01T00:00:00Z",
+            "engine_version": "0.1.0",
+            "ontology_version": "0.1.0",
+            "session": {"stems": []},
+            "issues": [],
+            "recommendations": [
+                {
+                    "recommendation_id": "REC.GAIN.TURBO.CHECK",
+                    "action_id": "ACTION.UTILITY.GAIN",
+                    "risk": "low",
+                    "requires_approval": False,
+                    "params": [
+                        {
+                            "param_id": "PARAM.GAIN.DB",
+                            "value": -8.0,
+                            "unit_id": "UNIT.DB",
+                        }
+                    ],
+                }
+            ],
+        }
+        turbo_report = json.loads(json.dumps(assist_report))
+
+        apply_gates_to_report(
+            assist_report,
+            policy_path=Path("ontology/policies/gates.yaml"),
+            profile_id="PROFILE.ASSIST",
+            profiles_path=Path("ontology/policies/authority_profiles.yaml"),
+        )
+        apply_gates_to_report(
+            turbo_report,
+            policy_path=Path("ontology/policies/gates.yaml"),
+            profile_id="PROFILE.TURBO",
+            profiles_path=Path("ontology/policies/authority_profiles.yaml"),
+        )
+
+        assist_rec = assist_report["recommendations"][0]
+        turbo_rec = turbo_report["recommendations"][0]
+
+        self.assertFalse(assist_rec["eligible_auto_apply"])
+        self.assertTrue(turbo_rec["eligible_auto_apply"])
+        self.assertTrue(turbo_rec["eligible_render"])
+        self.assertEqual(turbo_report.get("profile_id"), "PROFILE.TURBO")
+
+    def test_extreme_labeling_triggers_for_exceeding_suggest_threshold(self) -> None:
+        report = {
+            "schema_version": "0.1.0",
+            "report_id": "REPORT.TEST.EXTREME",
+            "project_id": "PROJECT.TEST",
+            "generated_at": "2000-01-01T00:00:00Z",
+            "engine_version": "0.1.0",
+            "ontology_version": "0.1.0",
+            "session": {"stems": []},
+            "issues": [],
+            "recommendations": [
+                {
+                    "recommendation_id": "REC.EQ.EXTREME",
+                    "action_id": "ACTION.EQ.PEAK",
+                    "risk": "low",
+                    "requires_approval": False,
+                    "params": [
+                        {
+                            "param_id": "PARAM.EQ.GAIN_DB",
+                            "value": -8.0,
+                            "unit_id": "UNIT.DB",
+                        }
+                    ],
+                }
+            ],
+        }
+
+        apply_gates_to_report(
+            report,
+            policy_path=Path("ontology/policies/gates.yaml"),
+        )
+
+        rec = report["recommendations"][0]
+        self.assertFalse(rec["eligible_auto_apply"])
+        self.assertFalse(rec["eligible_render"])
+        self.assertTrue(rec["extreme"])
+        self.assertEqual(
+            rec["extreme_reasons"],
+            [
+                {
+                    "gate_id": "GATE.MAX_EQ_GAIN_DB",
+                    "reason_id": "REASON.EQ_GAIN_TOO_LARGE",
+                    "details": {
+                        "param_id": "PARAM.EQ.GAIN_DB",
+                        "value": -8.0,
+                        "limit": 6.0,
+                        "limit_kind": "suggest_abs_max",
+                        "use_abs": True,
+                        "abs_value": 8.0,
+                        "trigger": "exceeds_suggest_limit",
+                    },
+                }
+            ],
+        )
+
+    def test_extreme_labeling_is_deterministic_and_idempotent(self) -> None:
+        report = {
+            "schema_version": "0.1.0",
+            "report_id": "REPORT.TEST.EXTREME.DETERMINISTIC",
+            "project_id": "PROJECT.TEST",
+            "generated_at": "2000-01-01T00:00:00Z",
+            "engine_version": "0.1.0",
+            "ontology_version": "0.1.0",
+            "session": {"stems": []},
+            "issues": [],
+            "recommendations": [
+                {
+                    "recommendation_id": "REC.EQ.EXTREME.MULTI",
+                    "action_id": "ACTION.EQ.PEAK",
+                    "risk": "low",
+                    "requires_approval": False,
+                    "params": [
+                        {
+                            "param_id": "PARAM.EQ.GAIN_DB",
+                            "value": 7.0,
+                            "unit_id": "UNIT.DB",
+                        }
+                    ]
+                    * 13,
+                }
+            ],
+        }
+
+        apply_gates_to_report(
+            report,
+            policy_path=Path("ontology/policies/gates.yaml"),
+        )
+        first_reasons = json.loads(
+            json.dumps(report["recommendations"][0]["extreme_reasons"])
+        )
+
+        apply_gates_to_report(
+            report,
+            policy_path=Path("ontology/policies/gates.yaml"),
+        )
+        second_reasons = report["recommendations"][0]["extreme_reasons"]
+
+        self.assertEqual(first_reasons, second_reasons)
+        self.assertEqual(
+            [(item["gate_id"], item["reason_id"]) for item in second_reasons],
+            sorted(
+                [(item["gate_id"], item["reason_id"]) for item in second_reasons],
+                key=lambda item: (item[0], item[1]),
+            ),
+        )
+        self.assertEqual(
+            len(
+                {
+                    (
+                        item["gate_id"],
+                        item["reason_id"],
+                        json.dumps(item["details"], sort_keys=True),
+                    )
+                    for item in second_reasons
+                }
+            ),
+            len(second_reasons),
+        )
+
     def test_schema_validation_with_and_without_profile_id(self) -> None:
         schema = json.loads(Path("schemas/report.schema.json").read_text(encoding="utf-8"))
         validator = jsonschema.Draft202012Validator(schema)
