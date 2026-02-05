@@ -12,5 +12,16 @@ class SafeRenderer(RendererPlugin):
         self,
         session: Dict[str, Any],
         recommendations: List[Recommendation],
+        output_dir: Any = None,
     ) -> RenderManifest:
-        return {"renderer_id": self.plugin_id, "outputs": [], "notes": "stub"}
+        received_ids = [
+            rec_id
+            for rec in recommendations
+            if isinstance(rec, dict) and isinstance((rec_id := rec.get("recommendation_id")), str)
+        ]
+        return {
+            "renderer_id": self.plugin_id,
+            "outputs": [],
+            "notes": "stub",
+            "received_recommendation_ids": received_ids,
+        }

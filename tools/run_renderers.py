@@ -1,0 +1,96 @@
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import sys
+from pathlib import Path
+from typing import Any, Dict
+
+
+def _load_validate_plugins_module() -> Any:
+    tools_dir = Path(__file__).resolve().parent
+    module_path = tools_dir / "validate_plugins.py"
+    spec = importlib.util.spec_from_file_location("validate_plugins", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Failed to load validate_plugins module from {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_report(path: Path) -> Dict[str, Any]:
+    with path.open("r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict):
+        raise ValueError("Report JSON must be an object.")
+    return data
+
+
+def _write_manifest(path: Path, manifest: Dict[str, Any]) -> None:
+    with path.open("w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Run MMO renderer pipeline.")
+    parser.add_argument("--report", required=True, help="Path to input report JSON.")
+    parser.add_argument("--plugins", default="plugins", help="Path to plugins directory.")
+    parser.add_argument(
+        "--out-manifest",
+        required=True,
+        help="Path to output render manifest JSON.",
+    )
+    parser.add_argument(
+        "--out-dir",
+        default=None,
+        help="Optional output directory for renderer artifacts.",
+    )
+    parser.add_argument(
+        "--schema",
+        default="schemas/plugin.schema.json",
+        help="Path to the plugin manifest schema.",
+    )
+    args = parser.parse_args()
+
+    repo_root = Path(__file__).resolve().parents[1]
+    plugins_dir = Path(args.plugins)
+    schema_path = Path(args.schema)
+
+    validate_module = _load_validate_plugins_module()
+    validation = validate_module.validate_plugins(plugins_dir, schema_path)
+    print(json.dumps(validation, indent=2))
+    if validation["issue_counts"]["error"] > 0:
+        return 1
+
+    src_root = repo_root / "src"
+    if str(src_root) not in sys.path:
+        sys.path.insert(0, str(src_root))
+
+    from mmo.core.gates import apply_gates_to_report
+    from mmo.core.pipeline import load_plugins, run_renderers
+
+    report_path = Path(args.report)
+    output_path = Path(args.out_manifest)
+    report = _load_report(report_path)
+
+    apply_gates_to_report(
+        report,
+        policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+    )
+
+    plugins = load_plugins(plugins_dir)
+    manifests = run_renderers(report, plugins, output_dir=Path(args.out_dir) if args.out_dir else None)
+
+    render_manifest = {
+        "schema_version": "0.1.0",
+        "report_id": report.get("report_id", ""),
+        "renderer_manifests": manifests,
+    }
+    _write_manifest(output_path, render_manifest)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

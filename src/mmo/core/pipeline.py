@@ -96,6 +96,12 @@ def _coerce_list(value: Any) -> List[Any]:
     return []
 
 
+def _coerce_str(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    return ""
+
+
 def _call_detector(detector: Any, session: Dict[str, Any], features: Dict[str, Any]) -> List[Dict[str, Any]]:
     if hasattr(detector, "detect"):
         return detector.detect(session, features) or []
@@ -115,6 +121,51 @@ def _call_resolver(
     if callable(resolver):
         return resolver(session, features, issues) or []
     raise TypeError("Resolver plugin is not callable and has no resolve().")
+
+
+def _call_renderer(
+    renderer: Any,
+    session: Dict[str, Any],
+    recommendations: List[Dict[str, Any]],
+    output_dir: Path | None,
+) -> Dict[str, Any]:
+    def _invoke(fn: Any) -> Dict[str, Any]:
+        try:
+            return fn(session, recommendations, output_dir) or {}
+        except TypeError:
+            return fn(session, recommendations) or {}
+
+    if hasattr(renderer, "render"):
+        return _invoke(renderer.render)
+    if callable(renderer):
+        return _invoke(renderer)
+    raise TypeError("Renderer plugin is not callable and has no render().")
+
+
+def _gate_summary(gate_results: Any) -> str:
+    if not isinstance(gate_results, list):
+        return ""
+    context_order = {"suggest": 0, "auto_apply": 1, "render": 2}
+    rows: List[tuple[int, str, str, str, str]] = []
+    for result in gate_results:
+        if not isinstance(result, dict):
+            continue
+        context = _coerce_str(result.get("context"))
+        outcome = _coerce_str(result.get("outcome"))
+        gate_id = _coerce_str(result.get("gate_id"))
+        reason_id = _coerce_str(result.get("reason_id"))
+        rows.append(
+            (
+                context_order.get(context, 99),
+                gate_id,
+                reason_id,
+                context,
+                outcome,
+            )
+        )
+    rows.sort(key=lambda item: (item[0], item[1], item[2]))
+    parts = [f"{context}:{outcome}({gate_id}|{reason_id})" for _, gate_id, reason_id, context, outcome in rows]
+    return ";".join(parts)
 
 
 def run_detectors(session_report: Dict[str, Any], plugins: Sequence[PluginEntry]) -> None:
@@ -142,3 +193,49 @@ def run_resolvers(session_report: Dict[str, Any], plugins: Sequence[PluginEntry]
         if plugin_recs:
             recommendations.extend(plugin_recs)
     session_report["recommendations"] = recommendations
+
+
+def run_renderers(
+    report: Dict[str, Any],
+    plugins: Sequence[PluginEntry],
+    *,
+    output_dir: Path | None = None,
+) -> List[Dict[str, Any]]:
+    session = report.get("session") if isinstance(report, dict) else {}
+    if not isinstance(session, dict):
+        session = {}
+    recommendations = report.get("recommendations") if isinstance(report, dict) else []
+    recs = _coerce_list(recommendations)
+    recs = [rec for rec in recs if isinstance(rec, dict)]
+    eligible = [rec for rec in recs if rec.get("eligible_render") is True]
+    blocked = [rec for rec in recs if rec.get("eligible_render") is not True]
+
+    skipped: List[Dict[str, Any]] = []
+    for rec in blocked:
+        skipped.append(
+            {
+                "recommendation_id": _coerce_str(rec.get("recommendation_id")),
+                "action_id": _coerce_str(rec.get("action_id")),
+                "reason": "blocked_by_gates",
+                "gate_summary": _gate_summary(rec.get("gate_results")),
+            }
+        )
+    skipped.sort(key=lambda item: (item["recommendation_id"], item["action_id"]))
+
+    manifests: List[Dict[str, Any]] = []
+    for plugin in plugins:
+        if plugin.plugin_type != "renderer":
+            continue
+        manifest = _call_renderer(plugin.instance, session, eligible, output_dir)
+        if not isinstance(manifest, dict):
+            manifest = {
+                "renderer_id": plugin.plugin_id,
+                "outputs": [],
+                "notes": "Renderer returned non-dict manifest.",
+            }
+        if "renderer_id" not in manifest:
+            manifest["renderer_id"] = plugin.plugin_id
+        manifest["skipped"] = list(skipped)
+        manifests.append(manifest)
+
+    return manifests
