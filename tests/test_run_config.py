@@ -100,6 +100,23 @@ class TestRunConfig(unittest.TestCase):
             "POLICY.DOWNMIX.CINEMA_FOLDOWN_V0",
         )
 
+    def test_normalize_preset_id_string_only(self) -> None:
+        normalized = normalize_run_config(
+            {
+                "schema_version": "0.1.0",
+                "preset_id": " PRESET.SAFE_CLEANUP ",
+            }
+        )
+        self.assertEqual(normalized.get("preset_id"), "PRESET.SAFE_CLEANUP")
+
+        with self.assertRaisesRegex(ValueError, "preset_id must be a string"):
+            normalize_run_config(
+                {
+                    "schema_version": "0.1.0",
+                    "preset_id": 123,
+                }
+            )
+
     def test_cli_analyze_config_override_and_report_stamp(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         schema = json.loads((repo_root / "schemas" / "report.schema.json").read_text(encoding="utf-8"))
@@ -143,6 +160,8 @@ class TestRunConfig(unittest.TestCase):
                         "dummy_stems",
                         "--out-report",
                         str(out_report),
+                        "--preset",
+                        "PRESET.SAFE_CLEANUP",
                         "--config",
                         str(config_path),
                         "--profile",
@@ -160,6 +179,7 @@ class TestRunConfig(unittest.TestCase):
             self.assertIn("run_config", report)
             run_config = report["run_config"]
             self.assertEqual(run_config.get("schema_version"), "0.1.0")
+            self.assertEqual(run_config.get("preset_id"), "PRESET.SAFE_CLEANUP")
             self.assertEqual(run_config.get("profile_id"), "PROFILE.ASSIST")
             self.assertEqual(run_config.get("meters"), "truth")
 

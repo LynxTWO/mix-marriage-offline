@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from mmo.core.presets import list_presets, load_preset_run_config
 from mmo.core.run_config import (
     RUN_CONFIG_SCHEMA_VERSION,
     load_run_config,
@@ -179,11 +180,24 @@ def _set_nested(path: list[str], payload: dict[str, Any], value: Any) -> None:
 def _load_and_merge_run_config(
     config_path: str | None,
     cli_overrides: dict[str, Any],
+    *,
+    preset_id: str | None = None,
+    presets_dir: Path | None = None,
 ) -> dict[str, Any]:
-    base_cfg: dict[str, Any] = {}
+    merged_cfg: dict[str, Any] = {}
+    if preset_id:
+        if presets_dir is None:
+            raise ValueError("presets_dir is required when preset_id is provided.")
+        preset_cfg = load_preset_run_config(presets_dir, preset_id)
+        merged_cfg = merge_run_config(merged_cfg, preset_cfg)
     if config_path:
-        base_cfg = load_run_config(Path(config_path))
-    return merge_run_config(base_cfg, cli_overrides)
+        file_cfg = load_run_config(Path(config_path))
+        merged_cfg = merge_run_config(merged_cfg, file_cfg)
+    merged_cfg = merge_run_config(merged_cfg, cli_overrides)
+    if preset_id:
+        merged_cfg["preset_id"] = preset_id.strip()
+        return normalize_run_config(merged_cfg)
+    return merged_cfg
 
 
 def _config_string(config: dict[str, Any], key: str, default: str) -> str:
@@ -238,13 +252,20 @@ def _stamp_report_run_config(report_path: Path, run_config: dict[str, Any]) -> N
     _write_json_file(report_path, report)
 
 
-def _analyze_run_config(*, profile_id: str, meters: str | None) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "schema_version": RUN_CONFIG_SCHEMA_VERSION,
-        "profile_id": profile_id,
-    }
+def _analyze_run_config(
+    *,
+    profile_id: str,
+    meters: str | None,
+    preset_id: str | None = None,
+    base_run_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = dict(base_run_config or {})
+    payload["schema_version"] = RUN_CONFIG_SCHEMA_VERSION
+    payload["profile_id"] = profile_id
     if meters is not None:
         payload["meters"] = meters
+    if preset_id is not None:
+        payload["preset_id"] = preset_id
     return normalize_run_config(payload)
 
 
@@ -257,21 +278,24 @@ def _downmix_qa_run_config(
     source_layout_id: str,
     target_layout_id: str,
     policy_id: str | None,
+    preset_id: str | None = None,
+    base_run_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    payload: dict[str, Any] = dict(base_run_config or {})
     downmix_payload: dict[str, Any] = {
         "source_layout_id": source_layout_id,
         "target_layout_id": target_layout_id,
     }
     if policy_id is not None:
         downmix_payload["policy_id"] = policy_id
-    payload: dict[str, Any] = {
-        "schema_version": RUN_CONFIG_SCHEMA_VERSION,
-        "profile_id": profile_id,
-        "meters": meters,
-        "max_seconds": max_seconds,
-        "truncate_values": truncate_values,
-        "downmix": downmix_payload,
-    }
+    payload["schema_version"] = RUN_CONFIG_SCHEMA_VERSION
+    payload["profile_id"] = profile_id
+    payload["meters"] = meters
+    payload["max_seconds"] = max_seconds
+    payload["truncate_values"] = truncate_values
+    payload["downmix"] = downmix_payload
+    if preset_id is not None:
+        payload["preset_id"] = preset_id
     return normalize_run_config(payload)
 
 
@@ -589,6 +613,42 @@ def _run_bundle(
     return 0
 
 
+def _build_preset_show_payload(*, presets_dir: Path, preset_id: str) -> dict[str, Any]:
+    normalized_preset_id = preset_id.strip() if isinstance(preset_id, str) else ""
+    if not normalized_preset_id:
+        raise ValueError("preset_id must be a non-empty string.")
+
+    presets = list_presets(presets_dir)
+    preset_entry = next(
+        (
+            item
+            for item in presets
+            if isinstance(item, dict) and item.get("preset_id") == normalized_preset_id
+        ),
+        None,
+    )
+    if preset_entry is None:
+        available = ", ".join(
+            item["preset_id"]
+            for item in presets
+            if isinstance(item, dict) and isinstance(item.get("preset_id"), str)
+        )
+        if available:
+            raise ValueError(
+                f"Unknown preset_id: {normalized_preset_id}. Available presets: {available}"
+            )
+        raise ValueError(
+            f"Unknown preset_id: {normalized_preset_id}. No presets are available."
+        )
+
+    payload = dict(preset_entry)
+    payload["run_config"] = load_preset_run_config(
+        presets_dir,
+        normalized_preset_id,
+    )
+    return payload
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="MMO command-line tools.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -621,6 +681,11 @@ def main(argv: list[str] | None = None) -> int:
         "--config",
         default=None,
         help="Optional path to a run config JSON file.",
+    )
+    analyze_parser.add_argument(
+        "--preset",
+        default=None,
+        help="Optional preset ID from presets/index.json.",
     )
     analyze_parser.add_argument(
         "--meters",
@@ -692,6 +757,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to a run config JSON file.",
     )
     render_parser.add_argument(
+        "--preset",
+        default=None,
+        help="Optional preset ID from presets/index.json.",
+    )
+    render_parser.add_argument(
         "--plugins",
         default="plugins",
         help="Path to plugins directory.",
@@ -723,6 +793,16 @@ def main(argv: list[str] | None = None) -> int:
         "--report",
         required=True,
         help="Path to report JSON.",
+    )
+    apply_parser.add_argument(
+        "--config",
+        default=None,
+        help="Optional path to a run config JSON file.",
+    )
+    apply_parser.add_argument(
+        "--preset",
+        default=None,
+        help="Optional preset ID from presets/index.json.",
     )
     apply_parser.add_argument(
         "--plugins",
@@ -771,6 +851,27 @@ def main(argv: list[str] | None = None) -> int:
         "--out",
         required=True,
         help="Path to output UI bundle JSON.",
+    )
+
+    presets_parser = subparsers.add_parser("presets", help="Run config preset tools.")
+    presets_subparsers = presets_parser.add_subparsers(dest="presets_command", required=True)
+    presets_list_parser = presets_subparsers.add_parser("list", help="List available presets.")
+    presets_list_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for the preset list.",
+    )
+    presets_show_parser = presets_subparsers.add_parser("show", help="Show one preset.")
+    presets_show_parser.add_argument(
+        "preset_id",
+        help="Preset ID (e.g., PRESET.SAFE_CLEANUP).",
+    )
+    presets_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for preset details.",
     )
 
     downmix_parser = subparsers.add_parser("downmix", help="Downmix policy tools.")
@@ -903,6 +1004,11 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Optional path to a run config JSON file.",
     )
+    downmix_qa_parser.add_argument(
+        "--preset",
+        default=None,
+        help="Optional preset ID from presets/index.json.",
+    )
     downmix_list_parser = downmix_subparsers.add_parser(
         "list", help="List available downmix layouts, policies, and conversions."
     )
@@ -941,6 +1047,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to a run config JSON file.",
     )
     downmix_render_parser.add_argument(
+        "--preset",
+        default=None,
+        help="Optional preset ID from presets/index.json.",
+    )
+    downmix_render_parser.add_argument(
         "--plugins",
         default="plugins",
         help="Path to plugins directory.",
@@ -965,6 +1076,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(raw_argv)
     repo_root = Path(__file__).resolve().parents[2]
     tools_dir = repo_root / "tools"
+    presets_dir = repo_root / "presets"
 
     if args.command == "scan":
         return _run_scan(
@@ -981,13 +1093,19 @@ def main(argv: list[str] | None = None) -> int:
         if _flag_present(raw_argv, "--meters"):
             analyze_overrides["meters"] = args.meters
         try:
-            merged_run_config = _load_and_merge_run_config(args.config, analyze_overrides)
+            merged_run_config = _load_and_merge_run_config(
+                args.config,
+                analyze_overrides,
+                preset_id=args.preset,
+                presets_dir=presets_dir,
+            )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 1
 
         effective_profile = _config_string(merged_run_config, "profile_id", args.profile)
         effective_meters = _config_optional_string(merged_run_config, "meters", args.meters)
+        effective_preset_id = _config_optional_string(merged_run_config, "preset_id", None)
         out_report_path = Path(args.out_report)
         exit_code = _run_analyze(
             tools_dir,
@@ -1004,7 +1122,12 @@ def main(argv: list[str] | None = None) -> int:
         try:
             _stamp_report_run_config(
                 out_report_path,
-                _analyze_run_config(profile_id=effective_profile, meters=effective_meters),
+                _analyze_run_config(
+                    profile_id=effective_profile,
+                    meters=effective_meters,
+                    preset_id=effective_preset_id,
+                    base_run_config=merged_run_config,
+                ),
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
@@ -1040,7 +1163,12 @@ def main(argv: list[str] | None = None) -> int:
         if _flag_present(raw_argv, "--out-dir"):
             _set_nested(["render", "out_dir"], render_overrides, args.out_dir)
         try:
-            merged_run_config = _load_and_merge_run_config(args.config, render_overrides)
+            merged_run_config = _load_and_merge_run_config(
+                args.config,
+                render_overrides,
+                preset_id=args.preset,
+                presets_dir=presets_dir,
+            )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 1
@@ -1065,15 +1193,44 @@ def main(argv: list[str] | None = None) -> int:
             print(str(exc), file=sys.stderr)
             return 1
     if args.command == "apply":
+        apply_overrides: dict[str, Any] = {}
+        if _flag_present(raw_argv, "--profile"):
+            apply_overrides["profile_id"] = args.profile
+        if _flag_present(raw_argv, "--out-dir"):
+            _set_nested(["render", "out_dir"], apply_overrides, args.out_dir)
+        try:
+            merged_run_config = _load_and_merge_run_config(
+                args.config,
+                apply_overrides,
+                preset_id=args.preset,
+                presets_dir=presets_dir,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+        profile_id = _config_string(merged_run_config, "profile_id", args.profile)
+        out_dir = _config_nested_optional_string(
+            merged_run_config,
+            "render",
+            "out_dir",
+            args.out_dir,
+        )
+        if not out_dir:
+            print(
+                "Missing output directory. Provide --out-dir or set render.out_dir in --config/--preset.",
+                file=sys.stderr,
+            )
+            return 1
         try:
             return _run_apply_command(
                 repo_root=repo_root,
                 report_path=Path(args.report),
                 plugins_dir=Path(args.plugins),
                 out_manifest_path=Path(args.out_manifest),
-                out_dir=Path(args.out_dir),
+                out_dir=Path(out_dir),
                 out_report_path=Path(args.out_report) if args.out_report else None,
-                profile_id=args.profile,
+                profile_id=profile_id,
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
@@ -1091,6 +1248,41 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 1
+    if args.command == "presets":
+        if args.presets_command == "list":
+            try:
+                presets = list_presets(presets_dir)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(presets, indent=2, sort_keys=True))
+            else:
+                for item in presets:
+                    preset_id = item.get("preset_id", "")
+                    label = item.get("label", "")
+                    print(f"{preset_id}  {label}")
+            return 0
+        if args.presets_command == "show":
+            try:
+                payload = _build_preset_show_payload(
+                    presets_dir=presets_dir,
+                    preset_id=args.preset_id,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(f"{payload.get('preset_id', '')}  {payload.get('label', '')}")
+                print(payload.get("description", ""))
+                run_config = payload.get("run_config")
+                if isinstance(run_config, dict):
+                    print(json.dumps(run_config, indent=2, sort_keys=True))
+            return 0
+        print("Unknown presets command.", file=sys.stderr)
+        return 2
     if args.command == "downmix":
         from mmo.dsp.downmix import (  # noqa: WPS433
             load_layouts,
@@ -1134,13 +1326,19 @@ def main(argv: list[str] | None = None) -> int:
                     args.policy,
                 )
             try:
-                merged_run_config = _load_and_merge_run_config(args.config, downmix_qa_overrides)
+                merged_run_config = _load_and_merge_run_config(
+                    args.config,
+                    downmix_qa_overrides,
+                    preset_id=args.preset,
+                    presets_dir=presets_dir,
+                )
             except ValueError as exc:
                 print(str(exc), file=sys.stderr)
                 return 1
 
             effective_profile = _config_string(merged_run_config, "profile_id", args.profile)
             effective_meters = _config_string(merged_run_config, "meters", args.meters)
+            effective_preset_id = _config_optional_string(merged_run_config, "preset_id", None)
             effective_max_seconds = _config_float(
                 merged_run_config,
                 "max_seconds",
@@ -1227,6 +1425,8 @@ def main(argv: list[str] | None = None) -> int:
                     source_layout_id=effective_source_layout,
                     target_layout_id=effective_target_layout,
                     policy_id=effective_policy,
+                    preset_id=effective_preset_id,
+                    base_run_config=merged_run_config,
                 )
                 out_path = Path(args.emit_report)
                 _write_json_file(out_path, report_payload)
@@ -1334,6 +1534,8 @@ def main(argv: list[str] | None = None) -> int:
                 merged_run_config = _load_and_merge_run_config(
                     args.config,
                     downmix_render_overrides,
+                    preset_id=args.preset,
+                    presets_dir=presets_dir,
                 )
             except ValueError as exc:
                 print(str(exc), file=sys.stderr)

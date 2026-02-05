@@ -1,0 +1,23 @@
+{
+  "schema_version": "0.1.0",
+  "presets": [
+    {
+      "preset_id": "PRESET.DRAFT_MIX",
+      "file": "draft_mix.json",
+      "label": "Draft mix",
+      "description": "Fast drafting checks and truth meters for iteration."
+    },
+    {
+      "preset_id": "PRESET.SAFE_CLEANUP",
+      "file": "safe_cleanup.json",
+      "label": "Safe cleanup",
+      "description": "Conservative checks and exports. No aggressive auto-apply."
+    },
+    {
+      "preset_id": "PRESET.TURBO_DRAFT",
+      "file": "turbo_draft.json",
+      "label": "Turbo draft",
+      "description": "Aggressive drafting profile with truth meters for quick passes."
+    }
+  ]
+}

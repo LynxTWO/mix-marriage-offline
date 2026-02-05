@@ -8,6 +8,7 @@ RUN_CONFIG_SCHEMA_VERSION = "0.1.0"
 
 _TOP_LEVEL_KEYS = {
     "schema_version",
+    "preset_id",
     "profile_id",
     "meters",
     "max_seconds",
@@ -135,6 +136,10 @@ def _validate_normalized(cfg: dict[str, Any]) -> None:
     if profile_id is not None and not isinstance(profile_id, str):
         raise ValueError("profile_id must be a string.")
 
+    preset_id = cfg.get("preset_id")
+    if preset_id is not None and not isinstance(preset_id, str):
+        raise ValueError("preset_id must be a string.")
+
     meters = cfg.get("meters")
     if meters is not None and not isinstance(meters, str):
         raise ValueError("meters must be a string.")
@@ -171,6 +176,12 @@ def normalize_run_config(cfg: dict[str, Any]) -> dict[str, Any]:
             continue
         if key == "schema_version":
             normalized[key] = _coerce_optional_string(value)
+        elif key == "preset_id":
+            if not isinstance(value, str):
+                raise ValueError("preset_id must be a string.")
+            preset_id = value.strip()
+            if preset_id:
+                normalized[key] = preset_id
         elif key == "profile_id":
             normalized[key] = _coerce_optional_string(value)
         elif key == "meters":

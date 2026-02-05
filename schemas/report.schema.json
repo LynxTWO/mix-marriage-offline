@@ -293,6 +293,7 @@
       "required": ["schema_version"],
       "properties": {
         "schema_version": { "const": "0.1.0" },
+        "preset_id": { "type": "string" },
         "profile_id": { "type": "string" },
         "meters": { "type": "string" },
         "max_seconds": { "type": "number", "minimum": 0 },
