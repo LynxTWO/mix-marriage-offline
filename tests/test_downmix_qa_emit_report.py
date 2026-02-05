@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from typing import Optional
 
+import jsonschema
+
 from mmo.exporters import pdf_report
 
 try:
@@ -153,11 +155,22 @@ class TestDownmixQaEmitReport(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             report_path = self._emit_report(temp_path)
+            repo_root = Path(__file__).resolve().parents[1]
 
             payload = json.loads(report_path.read_text(encoding="utf-8"))
+            schema = json.loads(
+                (repo_root / "schemas" / "report.schema.json").read_text(encoding="utf-8")
+            )
+            jsonschema.Draft202012Validator(schema).validate(payload)
             for key in ["session", "issues", "recommendations", "downmix_qa"]:
                 self.assertIn(key, payload)
             self.assertEqual(payload.get("recommendations"), [])
+            run_config = payload.get("run_config")
+            self.assertIsInstance(run_config, dict)
+            if not isinstance(run_config, dict):
+                return
+            self.assertEqual(run_config.get("schema_version"), "0.1.0")
+            self.assertEqual(run_config.get("profile_id"), "PROFILE.ASSIST")
 
             downmix_qa = payload.get("downmix_qa", {})
             self.assertIn("src_path", downmix_qa)
@@ -178,6 +191,10 @@ class TestDownmixQaEmitReport(unittest.TestCase):
             self.assertIn("target_layout_id", summary_map)
             self.assertIn("seconds_compared", summary_map)
             self.assertIn("max_seconds", summary_map)
+            downmix_cfg = run_config.get("downmix", {})
+            self.assertIsInstance(downmix_cfg, dict)
+            self.assertEqual(downmix_cfg.get("source_layout_id"), "LAYOUT.5_1")
+            self.assertEqual(downmix_cfg.get("target_layout_id"), "LAYOUT.2_0")
 
     def test_downmix_qa_emit_report_pdf_export(self) -> None:
         if reportlab is None:

@@ -32,6 +32,7 @@
       "items": { "$ref": "#/$defs/plugin_run" }
     },
     "artifacts": { "$ref": "#/$defs/artifacts" },
+    "run_config": { "$ref": "#/$defs/run_config" },
     "downmix_qa": {
       "type": "object",
       "properties": {
@@ -269,6 +270,34 @@
         "outcome": { "type": "string", "enum": ["allow", "suggest_only", "reject"] },
         "reason_id": { "type": "string", "pattern": "^REASON\\." },
         "details": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "run_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version"],
+      "properties": {
+        "schema_version": { "const": "0.1.0" },
+        "profile_id": { "type": "string" },
+        "meters": { "type": "string" },
+        "max_seconds": { "type": "number", "minimum": 0 },
+        "truncate_values": { "type": "integer", "minimum": 0 },
+        "downmix": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source_layout_id": { "type": "string" },
+            "target_layout_id": { "type": "string" },
+            "policy_id": { "type": "string" }
+          }
+        },
+        "render": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "out_dir": { "type": "string" }
+          }
+        }
       }
     }
   }

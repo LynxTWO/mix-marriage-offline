@@ -7,6 +7,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from mmo.core.run_config import (
+    RUN_CONFIG_SCHEMA_VERSION,
+    load_run_config,
+    merge_run_config,
+    normalize_run_config,
+)
+
 try:
     import jsonschema
 except ImportError:  # pragma: no cover - environment issue
@@ -105,6 +112,128 @@ def _load_report(report_path: Path) -> dict:
     if not isinstance(data, dict):
         raise ValueError("Report JSON must be an object.")
     return data
+
+
+def _write_json_file(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _flag_present(raw_argv: list[str], flag: str) -> bool:
+    return any(arg == flag or arg.startswith(f"{flag}=") for arg in raw_argv)
+
+
+def _set_nested(path: list[str], payload: dict[str, Any], value: Any) -> None:
+    target = payload
+    for part in path[:-1]:
+        existing = target.get(part)
+        if not isinstance(existing, dict):
+            existing = {}
+            target[part] = existing
+        target = existing
+    target[path[-1]] = value
+
+
+def _load_and_merge_run_config(
+    config_path: str | None,
+    cli_overrides: dict[str, Any],
+) -> dict[str, Any]:
+    base_cfg: dict[str, Any] = {}
+    if config_path:
+        base_cfg = load_run_config(Path(config_path))
+    return merge_run_config(base_cfg, cli_overrides)
+
+
+def _config_string(config: dict[str, Any], key: str, default: str) -> str:
+    value = config.get(key)
+    if isinstance(value, str) and value:
+        return value
+    return default
+
+
+def _config_optional_string(
+    config: dict[str, Any],
+    key: str,
+    default: str | None,
+) -> str | None:
+    value = config.get(key)
+    if isinstance(value, str):
+        return value
+    return default
+
+
+def _config_float(config: dict[str, Any], key: str, default: float) -> float:
+    value = config.get(key)
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return default
+
+
+def _config_int(config: dict[str, Any], key: str, default: int) -> int:
+    value = config.get(key)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    return default
+
+
+def _config_nested_optional_string(
+    config: dict[str, Any],
+    section: str,
+    key: str,
+    default: str | None,
+) -> str | None:
+    section_data = config.get(section)
+    if isinstance(section_data, dict):
+        value = section_data.get(key)
+        if isinstance(value, str):
+            return value
+    return default
+
+
+def _stamp_report_run_config(report_path: Path, run_config: dict[str, Any]) -> None:
+    report = _load_report(report_path)
+    report["run_config"] = normalize_run_config(run_config)
+    _write_json_file(report_path, report)
+
+
+def _analyze_run_config(*, profile_id: str, meters: str | None) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "schema_version": RUN_CONFIG_SCHEMA_VERSION,
+        "profile_id": profile_id,
+    }
+    if meters is not None:
+        payload["meters"] = meters
+    return normalize_run_config(payload)
+
+
+def _downmix_qa_run_config(
+    *,
+    profile_id: str,
+    meters: str,
+    max_seconds: float,
+    truncate_values: int,
+    source_layout_id: str,
+    target_layout_id: str,
+    policy_id: str | None,
+) -> dict[str, Any]:
+    downmix_payload: dict[str, Any] = {
+        "source_layout_id": source_layout_id,
+        "target_layout_id": target_layout_id,
+    }
+    if policy_id is not None:
+        downmix_payload["policy_id"] = policy_id
+    payload: dict[str, Any] = {
+        "schema_version": RUN_CONFIG_SCHEMA_VERSION,
+        "profile_id": profile_id,
+        "meters": meters,
+        "max_seconds": max_seconds,
+        "truncate_values": truncate_values,
+        "downmix": downmix_payload,
+    }
+    return normalize_run_config(payload)
 
 
 def _validate_render_manifest(render_manifest: dict[str, Any], schema_path: Path) -> None:
@@ -250,6 +379,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to the output report JSON after running the pipeline.",
     )
     analyze_parser.add_argument(
+        "--config",
+        default=None,
+        help="Optional path to a run config JSON file.",
+    )
+    analyze_parser.add_argument(
         "--meters",
         choices=["basic", "truth"],
         default=None,
@@ -280,6 +414,11 @@ def main(argv: list[str] | None = None) -> int:
         "export", help="Export CSV/PDF artifacts from a report JSON."
     )
     export_parser.add_argument("--report", required=True, help="Path to report JSON.")
+    export_parser.add_argument(
+        "--config",
+        default=None,
+        help="Optional path to a run config JSON file.",
+    )
     export_parser.add_argument("--csv", default=None, help="Optional output CSV path.")
     export_parser.add_argument("--pdf", default=None, help="Optional output PDF path.")
     export_parser.add_argument(
@@ -307,6 +446,11 @@ def main(argv: list[str] | None = None) -> int:
         "--report",
         required=True,
         help="Path to report JSON.",
+    )
+    render_parser.add_argument(
+        "--config",
+        default=None,
+        help="Optional path to a run config JSON file.",
     )
     render_parser.add_argument(
         "--plugins",
@@ -381,7 +525,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     downmix_qa_parser.add_argument(
         "--source-layout",
-        required=True,
+        default=None,
         help="Source layout ID (e.g., LAYOUT.5_1).",
     )
     downmix_qa_parser.add_argument(
@@ -457,6 +601,11 @@ def main(argv: list[str] | None = None) -> int:
             "(default: PROFILE.ASSIST)."
         ),
     )
+    downmix_qa_parser.add_argument(
+        "--config",
+        default=None,
+        help="Optional path to a run config JSON file.",
+    )
     downmix_list_parser = downmix_subparsers.add_parser(
         "list", help="List available downmix layouts, policies, and conversions."
     )
@@ -490,6 +639,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to report JSON.",
     )
     downmix_render_parser.add_argument(
+        "--config",
+        default=None,
+        help="Optional path to a run config JSON file.",
+    )
+    downmix_render_parser.add_argument(
         "--plugins",
         default="plugins",
         help="Path to plugins directory.",
@@ -510,7 +664,8 @@ def main(argv: list[str] | None = None) -> int:
         help="Authority profile ID for render gating (default: PROFILE.ASSIST).",
     )
 
-    args = parser.parse_args(argv)
+    raw_argv = list(argv) if argv is not None else sys.argv[1:]
+    args = parser.parse_args(raw_argv)
     repo_root = Path(__file__).resolve().parents[2]
     tools_dir = repo_root / "tools"
 
@@ -523,17 +678,55 @@ def main(argv: list[str] | None = None) -> int:
             args.peak,
         )
     if args.command == "analyze":
-        return _run_analyze(
+        analyze_overrides: dict[str, Any] = {}
+        if _flag_present(raw_argv, "--profile"):
+            analyze_overrides["profile_id"] = args.profile
+        if _flag_present(raw_argv, "--meters"):
+            analyze_overrides["meters"] = args.meters
+        try:
+            merged_run_config = _load_and_merge_run_config(args.config, analyze_overrides)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+        effective_profile = _config_string(merged_run_config, "profile_id", args.profile)
+        effective_meters = _config_optional_string(merged_run_config, "meters", args.meters)
+        out_report_path = Path(args.out_report)
+        exit_code = _run_analyze(
             tools_dir,
             Path(args.stems_dir),
-            Path(args.out_report),
-            args.meters,
+            out_report_path,
+            effective_meters,
             args.peak,
             args.plugins,
             args.keep_scan,
-            args.profile,
+            effective_profile,
         )
+        if exit_code != 0:
+            return exit_code
+        try:
+            _stamp_report_run_config(
+                out_report_path,
+                _analyze_run_config(profile_id=effective_profile, meters=effective_meters),
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        return 0
     if args.command == "export":
+        export_overrides: dict[str, Any] = {}
+        if _flag_present(raw_argv, "--truncate-values"):
+            export_overrides["truncate_values"] = args.truncate_values
+        try:
+            merged_run_config = _load_and_merge_run_config(args.config, export_overrides)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        truncate_values = _config_int(
+            merged_run_config,
+            "truncate_values",
+            args.truncate_values,
+        )
         return _run_export(
             tools_dir,
             Path(args.report),
@@ -541,17 +734,34 @@ def main(argv: list[str] | None = None) -> int:
             args.pdf,
             no_measurements=args.no_measurements,
             no_gates=args.no_gates,
-            truncate_values=args.truncate_values,
+            truncate_values=truncate_values,
         )
     if args.command == "render":
+        render_overrides: dict[str, Any] = {}
+        if _flag_present(raw_argv, "--profile"):
+            render_overrides["profile_id"] = args.profile
+        if _flag_present(raw_argv, "--out-dir"):
+            _set_nested(["render", "out_dir"], render_overrides, args.out_dir)
+        try:
+            merged_run_config = _load_and_merge_run_config(args.config, render_overrides)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        profile_id = _config_string(merged_run_config, "profile_id", args.profile)
+        out_dir = _config_nested_optional_string(
+            merged_run_config,
+            "render",
+            "out_dir",
+            args.out_dir,
+        )
         try:
             return _run_render_command(
                 repo_root=repo_root,
                 report_path=Path(args.report),
                 plugins_dir=Path(args.plugins),
                 out_manifest_path=Path(args.out_manifest),
-                out_dir=Path(args.out_dir) if args.out_dir else None,
-                profile_id=args.profile,
+                out_dir=Path(out_dir) if out_dir else None,
+                profile_id=profile_id,
                 command_label="render",
             )
         except ValueError as exc:
@@ -572,31 +782,103 @@ def main(argv: list[str] | None = None) -> int:
         from mmo.exporters.downmix_qa_pdf import export_downmix_qa_pdf  # noqa: WPS433
 
         if args.downmix_command == "qa":
+            downmix_qa_overrides: dict[str, Any] = {}
+            if _flag_present(raw_argv, "--profile"):
+                downmix_qa_overrides["profile_id"] = args.profile
+            if _flag_present(raw_argv, "--meters"):
+                downmix_qa_overrides["meters"] = args.meters
+            if _flag_present(raw_argv, "--max-seconds"):
+                downmix_qa_overrides["max_seconds"] = args.max_seconds
+            if _flag_present(raw_argv, "--truncate-values"):
+                downmix_qa_overrides["truncate_values"] = args.truncate_values
+            if _flag_present(raw_argv, "--source-layout"):
+                _set_nested(
+                    ["downmix", "source_layout_id"],
+                    downmix_qa_overrides,
+                    args.source_layout,
+                )
+            if _flag_present(raw_argv, "--target-layout"):
+                _set_nested(
+                    ["downmix", "target_layout_id"],
+                    downmix_qa_overrides,
+                    args.target_layout,
+                )
+            if _flag_present(raw_argv, "--policy"):
+                _set_nested(
+                    ["downmix", "policy_id"],
+                    downmix_qa_overrides,
+                    args.policy,
+                )
+            try:
+                merged_run_config = _load_and_merge_run_config(args.config, downmix_qa_overrides)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            effective_profile = _config_string(merged_run_config, "profile_id", args.profile)
+            effective_meters = _config_string(merged_run_config, "meters", args.meters)
+            effective_max_seconds = _config_float(
+                merged_run_config,
+                "max_seconds",
+                args.max_seconds,
+            )
+            effective_truncate_values = _config_int(
+                merged_run_config,
+                "truncate_values",
+                args.truncate_values,
+            )
+            effective_source_layout = _config_nested_optional_string(
+                merged_run_config,
+                "downmix",
+                "source_layout_id",
+                args.source_layout,
+            )
+            effective_target_layout = _config_nested_optional_string(
+                merged_run_config,
+                "downmix",
+                "target_layout_id",
+                args.target_layout,
+            )
+            if not effective_target_layout:
+                effective_target_layout = args.target_layout
+            effective_policy = _config_nested_optional_string(
+                merged_run_config,
+                "downmix",
+                "policy_id",
+                args.policy,
+            )
+
+            if not effective_source_layout:
+                print(
+                    "Missing source layout. Provide --source-layout or set downmix.source_layout_id in --config.",
+                    file=sys.stderr,
+                )
+                return 1
             layouts_path = repo_root / "ontology" / "layouts.yaml"
             try:
                 layouts = load_layouts(layouts_path)
             except ValueError as exc:
                 print(str(exc), file=sys.stderr)
                 return 1
-            if args.source_layout not in layouts:
-                print(f"Unknown source layout: {args.source_layout}", file=sys.stderr)
+            if effective_source_layout not in layouts:
+                print(f"Unknown source layout: {effective_source_layout}", file=sys.stderr)
                 return 1
-            if args.target_layout not in layouts:
-                print(f"Unknown target layout: {args.target_layout}", file=sys.stderr)
+            if effective_target_layout not in layouts:
+                print(f"Unknown target layout: {effective_target_layout}", file=sys.stderr)
                 return 1
             try:
                 report = run_downmix_qa(
                     Path(args.src),
                     Path(args.ref),
-                    source_layout_id=args.source_layout,
-                    target_layout_id=args.target_layout,
-                    policy_id=args.policy,
+                    source_layout_id=effective_source_layout,
+                    target_layout_id=effective_target_layout,
+                    policy_id=effective_policy,
                     tolerance_lufs=args.tolerance_lufs,
                     tolerance_true_peak_db=args.tolerance_true_peak,
                     tolerance_corr=args.tolerance_corr,
                     repo_root=repo_root,
-                    meters=args.meters,
-                    max_seconds=args.max_seconds,
+                    meters=effective_meters,
+                    max_seconds=effective_max_seconds,
                 )
             except ValueError as exc:
                 print(str(exc), file=sys.stderr)
@@ -610,15 +892,20 @@ def main(argv: list[str] | None = None) -> int:
                 report_payload = build_minimal_report_for_downmix_qa(
                     repo_root=repo_root,
                     qa_payload=report,
-                    profile_id=args.profile,
+                    profile_id=effective_profile,
                     profiles_path=repo_root / "ontology" / "policies" / "authority_profiles.yaml",
                 )
-                out_path = Path(args.emit_report)
-                out_path.parent.mkdir(parents=True, exist_ok=True)
-                out_path.write_text(
-                    json.dumps(report_payload, indent=2, sort_keys=True) + "\n",
-                    encoding="utf-8",
+                report_payload["run_config"] = _downmix_qa_run_config(
+                    profile_id=effective_profile,
+                    meters=effective_meters,
+                    max_seconds=effective_max_seconds,
+                    truncate_values=effective_truncate_values,
+                    source_layout_id=effective_source_layout,
+                    target_layout_id=effective_target_layout,
+                    policy_id=effective_policy,
                 )
+                out_path = Path(args.emit_report)
+                _write_json_file(out_path, report_payload)
 
             if args.format == "json":
                 output = json.dumps(report, indent=2, sort_keys=True) + "\n"
@@ -638,7 +925,7 @@ def main(argv: list[str] | None = None) -> int:
                 export_downmix_qa_pdf(
                     report,
                     out_path,
-                    truncate_values=args.truncate_values,
+                    truncate_values=effective_truncate_values,
                 )
             else:
                 print(f"Unsupported format: {args.format}", file=sys.stderr)
@@ -714,14 +1001,35 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.downmix_command == "render":
+            downmix_render_overrides: dict[str, Any] = {}
+            if _flag_present(raw_argv, "--profile"):
+                downmix_render_overrides["profile_id"] = args.profile
+            if _flag_present(raw_argv, "--out-dir"):
+                _set_nested(["render", "out_dir"], downmix_render_overrides, args.out_dir)
+            try:
+                merged_run_config = _load_and_merge_run_config(
+                    args.config,
+                    downmix_render_overrides,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            profile_id = _config_string(merged_run_config, "profile_id", args.profile)
+            out_dir = _config_nested_optional_string(
+                merged_run_config,
+                "render",
+                "out_dir",
+                args.out_dir,
+            )
             try:
                 return _run_downmix_render(
                     repo_root=repo_root,
                     report_path=Path(args.report),
                     plugins_dir=Path(args.plugins),
                     out_manifest_path=Path(args.out_manifest),
-                    out_dir=Path(args.out_dir) if args.out_dir else None,
-                    profile_id=args.profile,
+                    out_dir=Path(out_dir) if out_dir else None,
+                    profile_id=profile_id,
                 )
             except ValueError as exc:
                 print(str(exc), file=sys.stderr)

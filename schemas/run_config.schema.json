@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/run_config.schema.json",
+  "title": "MMO Run Config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "profile_id": { "type": "string" },
+    "meters": { "type": "string" },
+    "max_seconds": { "type": "number", "minimum": 0 },
+    "truncate_values": { "type": "integer", "minimum": 0 },
+    "downmix": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_layout_id": { "type": "string" },
+        "target_layout_id": { "type": "string" },
+        "policy_id": { "type": "string" }
+      }
+    },
+    "render": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "out_dir": { "type": "string" }
+      }
+    }
+  }
+}
