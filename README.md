@@ -55,6 +55,17 @@ If you want to contribute early, these two docs define the spine of the project.
 
 ---
 
+## Documentation
+
+Start here: [docs/README.md](docs/README.md)
+
+Key reads:
+- Product vision: [docs/09-product-vision.md](docs/09-product-vision.md)
+- Authority modes: [docs/10-authority-profiles.md](docs/10-authority-profiles.md)
+- GUI vision: [docs/11-gui-vision.md](docs/11-gui-vision.md)
+
+---
+
 ## Core ideas
 ### Objective core vs subjective plugins
 MMO keeps two worlds separate on purpose:
