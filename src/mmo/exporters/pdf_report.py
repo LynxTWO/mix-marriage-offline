@@ -567,6 +567,9 @@ def export_report_pdf(
     story.append(Paragraph(f"generated_at: {_safe_str(report.get('generated_at'))}", styles["Normal"]))
     story.append(Paragraph(f"engine_version: {_safe_str(report.get('engine_version'))}", styles["Normal"]))
     story.append(Paragraph(f"ontology_version: {_safe_str(report.get('ontology_version'))}", styles["Normal"]))
+    profile_id = _safe_str(report.get("profile_id"))
+    if profile_id:
+        story.append(Paragraph(f"Authority profile: {profile_id}", styles["Normal"]))
     story.append(Spacer(1, 12))
 
     issues = report.get("issues", [])

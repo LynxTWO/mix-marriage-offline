@@ -52,8 +52,10 @@ def export_recall_csv(
 
     with out_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
+        profile_id = report.get("profile_id", "")
         header = [
             "recommendation_id",
+            "profile_id",
             "issue_id",
             "action_id",
             "risk",
@@ -77,6 +79,7 @@ def export_recall_csv(
         ):
             row = [
                 rec.get("recommendation_id", ""),
+                profile_id,
                 rec.get("issue_id", ""),
                 rec.get("action_id", ""),
                 rec.get("risk", ""),

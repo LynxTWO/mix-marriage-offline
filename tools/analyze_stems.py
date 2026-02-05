@@ -40,6 +40,7 @@ def _run_pipeline(
     report_path: Path,
     output_path: Path,
     plugins_dir: str,
+    profile_id: str,
 ) -> int:
     command = [
         sys.executable,
@@ -51,6 +52,8 @@ def _run_pipeline(
         "--out",
         str(output_path),
     ]
+    if profile_id:
+        command.extend(["--profile", profile_id])
     return _run_command(command)
 
 
@@ -149,6 +152,11 @@ def main() -> int:
         action="store_true",
         help="Keep the intermediate scan report JSON instead of deleting it.",
     )
+    parser.add_argument(
+        "--profile",
+        default="PROFILE.ASSIST",
+        help="Authority profile ID for gate eligibility (default: PROFILE.ASSIST).",
+    )
     args = parser.parse_args()
 
     tools_dir = Path(__file__).resolve().parent
@@ -173,6 +181,7 @@ def main() -> int:
         scan_report,
         out_report,
         args.plugins,
+        args.profile,
     )
     if exit_code != 0:
         return exit_code

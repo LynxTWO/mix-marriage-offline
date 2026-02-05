@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import copy
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Sequence
+from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 try:
     import yaml
@@ -24,6 +25,60 @@ def load_gates_policy(policy_path: Path) -> Dict[str, Any]:
     if not isinstance(gates, dict):
         raise ValueError(f"Gates policy missing gates mapping: {policy_path}")
     return gates
+
+
+def load_authority_profiles(policy_path: Path) -> Dict[str, Any]:
+    if yaml is None:
+        raise RuntimeError("PyYAML is required to load authority profiles.")
+    with policy_path.open("r", encoding="utf-8") as handle:
+        data = yaml.safe_load(handle)
+    if not isinstance(data, dict):
+        raise ValueError(f"Authority profiles policy must be a mapping: {policy_path}")
+    profiles = data.get("profiles")
+    if not isinstance(profiles, dict):
+        raise ValueError(f"Authority profiles policy missing profiles mapping: {policy_path}")
+    return profiles
+
+
+def _deep_merge_profile_overrides(base: Any, override: Any) -> Any:
+    if isinstance(base, dict) and isinstance(override, dict):
+        merged: Dict[str, Any] = {}
+
+        for key, base_value in base.items():
+            if key in override:
+                merged[key] = _deep_merge_profile_overrides(base_value, override[key])
+            else:
+                merged[key] = copy.deepcopy(base_value)
+
+        for key in sorted(key for key in override.keys() if key not in base):
+            merged[key] = copy.deepcopy(override[key])
+
+        return merged
+
+    if isinstance(override, list):
+        return copy.deepcopy(override)
+
+    return copy.deepcopy(override)
+
+
+def apply_profile_overrides(
+    gates_policy: Dict[str, Any],
+    profile_id: str,
+    profiles_policy: Dict[str, Any],
+) -> Dict[str, Any]:
+    profile = profiles_policy.get(profile_id)
+    if not isinstance(profile, dict):
+        raise ValueError(f"Unknown authority profile id: {profile_id}")
+
+    overrides = profile.get("overrides")
+    if not isinstance(overrides, dict) or not overrides:
+        return copy.deepcopy(gates_policy)
+
+    gates_overrides = overrides.get("gates")
+    if not isinstance(gates_overrides, dict) or not gates_overrides:
+        return copy.deepcopy(gates_policy)
+
+    return _deep_merge_profile_overrides(gates_policy, gates_overrides)
 
 
 def _coerce_number(value: Any) -> float | None:
@@ -678,8 +733,16 @@ def apply_gates_to_report(
     *,
     policy_path: Path,
     approvals: set[str] | None = None,
+    profile_id: str | None = None,
+    profiles_path: Path | None = None,
 ) -> None:
     policy = load_gates_policy(policy_path)
+    selected_profile_id = _coerce_str(profile_id)
+    if selected_profile_id:
+        resolved_profiles_path = profiles_path or (policy_path.parent / "authority_profiles.yaml")
+        profiles_policy = load_authority_profiles(resolved_profiles_path)
+        policy = apply_profile_overrides(policy, selected_profile_id, profiles_policy)
+        report["profile_id"] = selected_profile_id
     recommendations = report.get("recommendations")
     if not isinstance(recommendations, list):
         return

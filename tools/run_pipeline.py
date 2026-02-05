@@ -43,6 +43,11 @@ def main() -> int:
         default="schemas/plugin.schema.json",
         help="Path to the plugin manifest schema.",
     )
+    parser.add_argument(
+        "--profile",
+        default="PROFILE.ASSIST",
+        help="Authority profile ID for gate eligibility (default: PROFILE.ASSIST).",
+    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -72,6 +77,8 @@ def main() -> int:
     apply_gates_to_report(
         report,
         policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+        profile_id=args.profile,
+        profiles_path=repo_root / "ontology" / "policies" / "authority_profiles.yaml",
     )
 
     _write_report(output_path, report)

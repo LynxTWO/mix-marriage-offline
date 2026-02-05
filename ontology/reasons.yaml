@@ -27,6 +27,11 @@ reasons:
     kind: "authority"
     description: "Diagnostic guidance actions are never eligible for auto-apply or render."
 
+  REASON.PROFILE_AUTO_APPLY_DISABLED:
+    label: "Auto-apply disabled by profile"
+    kind: "authority"
+    description: "The selected authority profile disables auto-apply for this action."
+
   REASON.GAIN_TOO_LARGE:
     label: "Gain change too large"
     kind: "param_limit"

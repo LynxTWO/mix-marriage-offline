@@ -47,6 +47,7 @@ def _run_analyze(
     include_peak: bool,
     plugins_dir: str,
     keep_scan: bool,
+    profile_id: str,
 ) -> int:
     command = [
         sys.executable,
@@ -63,6 +64,8 @@ def _run_analyze(
         command.append("--peak")
     if keep_scan:
         command.append("--keep-scan")
+    if profile_id:
+        command.extend(["--profile", profile_id])
     return _run_command(command)
 
 
@@ -140,6 +143,7 @@ def _run_downmix_render(
     plugins_dir: Path,
     out_manifest_path: Path,
     out_dir: Path | None,
+    profile_id: str,
 ) -> int:
     from mmo.core.gates import apply_gates_to_report  # noqa: WPS433
     from mmo.core.pipeline import load_plugins, run_renderers  # noqa: WPS433
@@ -148,6 +152,8 @@ def _run_downmix_render(
     apply_gates_to_report(
         report,
         policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+        profile_id=profile_id,
+        profiles_path=repo_root / "ontology" / "policies" / "authority_profiles.yaml",
     )
 
     recommendations = report.get("recommendations")
@@ -242,6 +248,11 @@ def main(argv: list[str] | None = None) -> int:
         "--keep-scan",
         action="store_true",
         help="Keep the intermediate scan report JSON instead of deleting it.",
+    )
+    analyze_parser.add_argument(
+        "--profile",
+        default="PROFILE.ASSIST",
+        help="Authority profile ID for gate eligibility (default: PROFILE.ASSIST).",
     )
 
     export_parser = subparsers.add_parser(
@@ -384,6 +395,14 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Optional output path for a full MMO report JSON embedding downmix QA.",
     )
+    downmix_qa_parser.add_argument(
+        "--profile",
+        default="PROFILE.ASSIST",
+        help=(
+            "Authority profile ID used for gate eligibility when --emit-report is set "
+            "(default: PROFILE.ASSIST)."
+        ),
+    )
     downmix_list_parser = downmix_subparsers.add_parser(
         "list", help="List available downmix layouts, policies, and conversions."
     )
@@ -431,6 +450,11 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Optional output directory for renderer artifacts.",
     )
+    downmix_render_parser.add_argument(
+        "--profile",
+        default="PROFILE.ASSIST",
+        help="Authority profile ID for render gating (default: PROFILE.ASSIST).",
+    )
 
     args = parser.parse_args(argv)
     repo_root = Path(__file__).resolve().parents[2]
@@ -453,6 +477,7 @@ def main(argv: list[str] | None = None) -> int:
             args.peak,
             args.plugins,
             args.keep_scan,
+            args.profile,
         )
     if args.command == "export":
         return _run_export(
@@ -517,6 +542,8 @@ def main(argv: list[str] | None = None) -> int:
                 report_payload = build_minimal_report_for_downmix_qa(
                     repo_root=repo_root,
                     qa_payload=report,
+                    profile_id=args.profile,
+                    profiles_path=repo_root / "ontology" / "policies" / "authority_profiles.yaml",
                 )
                 out_path = Path(args.emit_report)
                 out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -626,6 +653,7 @@ def main(argv: list[str] | None = None) -> int:
                     plugins_dir=Path(args.plugins),
                     out_manifest_path=Path(args.out_manifest),
                     out_dir=Path(args.out_dir) if args.out_dir else None,
+                    profile_id=args.profile,
                 )
             except ValueError as exc:
                 print(str(exc), file=sys.stderr)

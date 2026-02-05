@@ -249,6 +249,8 @@ def build_minimal_report_for_downmix_qa(
     *,
     repo_root: Path,
     qa_payload: dict,
+    profile_id: str | None = None,
+    profiles_path: Path | None = None,
 ) -> dict:
     downmix_qa_raw = qa_payload.get("downmix_qa", {})
     if not isinstance(downmix_qa_raw, dict):
@@ -289,6 +291,8 @@ def build_minimal_report_for_downmix_qa(
         "recommendations": [],
         "downmix_qa": downmix_qa,
     }
+    if isinstance(profile_id, str) and profile_id.strip():
+        report["profile_id"] = profile_id.strip()
     merge_downmix_qa_issues_into_report(report)
     if issues:
         recommendations = report["recommendations"]
@@ -381,6 +385,8 @@ def build_minimal_report_for_downmix_qa(
         apply_gates_to_report(
             report,
             policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+            profile_id=profile_id,
+            profiles_path=profiles_path,
         )
         enrich_blocked_downmix_render_diagnostics(report)
     return report

@@ -31,6 +31,7 @@ class TestExporters(unittest.TestCase):
             rows[0],
             [
                 "recommendation_id",
+                "profile_id",
                 "issue_id",
                 "action_id",
                 "risk",
@@ -59,6 +60,7 @@ class TestExporters(unittest.TestCase):
             rows[0],
             [
                 "recommendation_id",
+                "profile_id",
                 "issue_id",
                 "action_id",
                 "risk",
@@ -71,6 +73,7 @@ class TestExporters(unittest.TestCase):
 
     def test_export_recall_csv_gate_summary_includes_gate_id(self) -> None:
         report = {
+            "profile_id": "PROFILE.GUIDE",
             "recommendations": [
                 {
                     "recommendation_id": "REC.GATE.TEST",
@@ -100,6 +103,7 @@ class TestExporters(unittest.TestCase):
             rows = list(csv.reader(out_path.read_text(encoding="utf-8").splitlines()))
 
         self.assertIn("gate_summary", rows[0])
+        self.assertEqual(rows[1][1], "PROFILE.GUIDE")
         self.assertIn("render:reject(GATE.MAX_GAIN_DB|REASON.GAIN_TOO_LARGE)", rows[1][-1])
 
     def test_export_report_pdf_exists(self) -> None:

@@ -220,6 +220,119 @@ class TestGates(unittest.TestCase):
         self.assertEqual(rec["gate_results"][0]["details"]["limit"], 4.0)
         self.assertEqual(rec["gate_results"][0]["details"]["limit_kind"], "auto_apply_max")
 
+    def test_profile_guide_disables_auto_apply_but_not_render(self) -> None:
+        report = {
+            "schema_version": "0.1.0",
+            "report_id": "REPORT.TEST",
+            "project_id": "PROJECT.TEST",
+            "generated_at": "2000-01-01T00:00:00Z",
+            "engine_version": "0.1.0",
+            "ontology_version": "0.1.0",
+            "session": {"stems": []},
+            "issues": [],
+            "recommendations": [
+                {
+                    "recommendation_id": "REC.GAIN.SMALL",
+                    "action_id": "ACTION.UTILITY.GAIN",
+                    "risk": "low",
+                    "requires_approval": False,
+                    "params": [
+                        {
+                            "param_id": "PARAM.GAIN.DB",
+                            "value": -2.0,
+                            "unit_id": "UNIT.DB",
+                        }
+                    ],
+                }
+            ],
+        }
+
+        apply_gates_to_report(
+            report,
+            policy_path=Path("ontology/policies/gates.yaml"),
+            profile_id="PROFILE.GUIDE",
+            profiles_path=Path("ontology/policies/authority_profiles.yaml"),
+        )
+
+        rec = report["recommendations"][0]
+        self.assertEqual(report.get("profile_id"), "PROFILE.GUIDE")
+        self.assertFalse(rec["eligible_auto_apply"])
+        self.assertTrue(rec["eligible_render"])
+        self.assertEqual(
+            [(result["context"], result["reason_id"]) for result in rec["gate_results"]],
+            [("auto_apply", "REASON.PROFILE_AUTO_APPLY_DISABLED")],
+        )
+
+    def test_profile_full_send_expands_auto_apply_for_gain(self) -> None:
+        base_report = {
+            "schema_version": "0.1.0",
+            "report_id": "REPORT.TEST",
+            "project_id": "PROJECT.TEST",
+            "generated_at": "2000-01-01T00:00:00Z",
+            "engine_version": "0.1.0",
+            "ontology_version": "0.1.0",
+            "session": {"stems": []},
+            "issues": [],
+            "recommendations": [
+                {
+                    "recommendation_id": "REC.GAIN.LARGE",
+                    "action_id": "ACTION.UTILITY.GAIN",
+                    "risk": "low",
+                    "requires_approval": False,
+                    "params": [
+                        {
+                            "param_id": "PARAM.GAIN.DB",
+                            "value": -8.0,
+                            "unit_id": "UNIT.DB",
+                        }
+                    ],
+                }
+            ],
+        }
+        full_send_report = json.loads(json.dumps(base_report))
+
+        apply_gates_to_report(
+            base_report,
+            policy_path=Path("ontology/policies/gates.yaml"),
+        )
+        apply_gates_to_report(
+            full_send_report,
+            policy_path=Path("ontology/policies/gates.yaml"),
+            profile_id="PROFILE.FULL_SEND",
+            profiles_path=Path("ontology/policies/authority_profiles.yaml"),
+        )
+
+        default_rec = base_report["recommendations"][0]
+        full_send_rec = full_send_report["recommendations"][0]
+        self.assertFalse(default_rec["eligible_auto_apply"])
+        self.assertTrue(full_send_rec["eligible_auto_apply"])
+        self.assertTrue(full_send_rec["eligible_render"])
+        self.assertEqual(full_send_report.get("profile_id"), "PROFILE.FULL_SEND")
+
+    def test_schema_validation_with_and_without_profile_id(self) -> None:
+        schema = json.loads(Path("schemas/report.schema.json").read_text(encoding="utf-8"))
+        validator = jsonschema.Draft202012Validator(schema)
+
+        report_without_profile = {
+            "schema_version": "0.1.0",
+            "report_id": "REPORT.NO.PROFILE",
+            "project_id": "PROJECT.TEST",
+            "generated_at": "2000-01-01T00:00:00Z",
+            "engine_version": "0.1.0",
+            "ontology_version": "0.1.0",
+            "session": {"stems": []},
+            "issues": [],
+            "recommendations": [],
+        }
+        report_with_profile = {
+            **report_without_profile,
+            "report_id": "REPORT.WITH.PROFILE",
+            "profile_id": "PROFILE.ASSIST",
+        }
+
+        validator.validate(report_without_profile)
+        validator.validate(report_with_profile)
+
 
 if __name__ == "__main__":
     unittest.main()

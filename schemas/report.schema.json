@@ -9,6 +9,7 @@
     "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
     "report_id": { "type": "string", "minLength": 1 },
     "project_id": { "type": "string", "minLength": 1 },
+    "profile_id": { "type": "string", "minLength": 1 },
     "generated_at": { "type": "string", "format": "date-time" },
     "registry_file": { "type": "string" },
     "engine_version": { "type": "string" },

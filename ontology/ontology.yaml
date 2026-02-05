@@ -58,6 +58,7 @@ includes:
 
   policies:
     gates: "policies/gates.yaml"
+    authority_profiles: "policies/authority_profiles.yaml"
     downmix: "policies/downmix.yaml"
     # Optional future expansion (kept here so the loader can discover policy packs):
     downmix_packs_dir: "policies/downmix_policies/"

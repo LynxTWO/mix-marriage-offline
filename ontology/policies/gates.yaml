@@ -80,6 +80,18 @@ gates:
       render: "reject"
     violation_reason_id: "REASON.DIAGNOSTIC_SUGGEST_ONLY"
 
+  GATE.PROFILE_DISABLE_AUTO_APPLY:
+    label: "Profile disables auto-apply"
+    description: "Profile-level control that can force all ACTION.* recommendations to suggest/render only."
+    kind: "action_prefix_limit"
+    applies_to_actions_prefixes: ["ACTION."]
+    default_enabled: false
+    enforcement:
+      suggest: "allow"
+      auto_apply: "reject"
+      render: "allow"
+    violation_reason_id: "REASON.PROFILE_AUTO_APPLY_DISABLED"
+
   # -------------------------
   # Param limits (bounded authority defaults)
   # -------------------------
