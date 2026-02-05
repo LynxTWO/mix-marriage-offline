@@ -1,5 +1,8 @@
+import json
 import unittest
 from pathlib import Path
+
+import jsonschema
 
 from mmo.core.gates import apply_gates_to_report
 from mmo.core.pipeline import load_plugins, run_renderers
@@ -65,6 +68,16 @@ class TestRendererRunner(unittest.TestCase):
         self.assertIn("GATE.MAX_GAIN_DB", skipped[0]["gate_summary"])
 
         self.assertEqual(manifest.get("received_recommendation_ids"), [eligible_id])
+
+        schema_path = Path("schemas/render_manifest.schema.json")
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        jsonschema.Draft202012Validator(schema).validate(
+            {
+                "schema_version": "0.1.0",
+                "report_id": report["report_id"],
+                "renderer_manifests": manifests,
+            }
+        )
 
 
 if __name__ == "__main__":

@@ -25,10 +25,36 @@ class Recommendation(TypedDict, total=False):
     evidence: List[Dict[str, Any]]
 
 
+class RenderOutput(TypedDict, total=False):
+    output_id: str
+    file_path: str
+    action_id: str
+    recommendation_id: str
+    target_stem_id: str
+    target_bus_id: str
+    layout_id: str
+    format: str
+    sample_rate_hz: int
+    bit_depth: int
+    channel_count: int
+    sha256: str
+    notes: str
+    metadata: Dict[str, Any]
+
+
+class RenderSkipped(TypedDict, total=False):
+    recommendation_id: str
+    action_id: str
+    reason: str
+    gate_summary: str
+
+
 class RenderManifest(TypedDict, total=False):
     renderer_id: str
-    outputs: List[Dict[str, Any]]
+    outputs: List[RenderOutput]
     notes: str
+    received_recommendation_ids: List[str]
+    skipped: List[RenderSkipped]
 
 
 class DetectorPlugin(ABC):
