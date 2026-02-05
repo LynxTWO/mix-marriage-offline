@@ -183,6 +183,60 @@ def _sample_render_manifest(report_id: str) -> dict:
     }
 
 
+def _sample_apply_manifest(report_id: str) -> dict:
+    return {
+        "schema_version": "0.1.0",
+        "context": "auto_apply",
+        "report_id": report_id,
+        "renderer_manifests": [
+            {
+                "renderer_id": "PLUGIN.RENDERER.SAFE",
+                "outputs": [
+                    {
+                        "output_id": "OUT.APPLY.001",
+                        "file_path": "applied/safe-001.wav",
+                    }
+                ],
+                "skipped": [
+                    {
+                        "recommendation_id": "REC.UI.BUNDLE.004",
+                        "action_id": "ACTION.DIAGNOSTIC.CHECK_PHASE_CORRELATION",
+                        "reason": "blocked_by_gates",
+                        "gate_summary": "auto_apply: reject GATE.EXAMPLE",
+                    }
+                ],
+            },
+            {
+                "renderer_id": "PLUGIN.RENDERER.GAIN_TRIM",
+                "outputs": [
+                    {
+                        "output_id": "OUT.APPLY.002",
+                        "file_path": "applied/gain-001.wav",
+                    },
+                    {
+                        "output_id": "OUT.APPLY.003",
+                        "file_path": "applied/gain-002.wav",
+                    },
+                ],
+                "skipped": [
+                    {
+                        "recommendation_id": "REC.UI.BUNDLE.002",
+                        "action_id": "ACTION.UTILITY.GAIN",
+                        "reason": "unsupported_target",
+                        "gate_summary": "auto_apply: suggest_only GATE.EXAMPLE",
+                    }
+                ],
+            },
+        ],
+    }
+
+
+def _sample_applied_report() -> dict:
+    applied = _sample_report()
+    applied["report_id"] = "REPORT.UI.BUNDLE.TEST.APPLIED"
+    return applied
+
+
 class TestUiBundle(unittest.TestCase):
     def test_build_ui_bundle_dashboard_and_schema(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -219,6 +273,33 @@ class TestUiBundle(unittest.TestCase):
 
         second_bundle = build_ui_bundle(report, None)
         self.assertEqual(bundle["dashboard"], second_bundle["dashboard"])
+
+    def test_build_ui_bundle_with_apply_payload_and_schema(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        apply_manifest = _sample_apply_manifest(report["report_id"])
+        applied_report = _sample_applied_report()
+
+        bundle = build_ui_bundle(
+            report,
+            None,
+            apply_manifest=apply_manifest,
+            applied_report=applied_report,
+        )
+        validator.validate(bundle)
+
+        self.assertIn("apply_manifest", bundle)
+        self.assertIn("applied_report", bundle)
+        self.assertEqual(
+            bundle["dashboard"]["apply"],
+            {
+                "eligible_count": 2,
+                "blocked_count": 2,
+                "outputs_count": 3,
+                "skipped_count": 2,
+            },
+        )
 
     def test_cli_bundle_writes_schema_valid_payload(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -263,6 +344,71 @@ class TestUiBundle(unittest.TestCase):
                 bundle["dashboard"]["eligible_counts"],
                 {"auto_apply": 2, "render": 2},
             )
+
+    def test_cli_bundle_with_apply_payload_writes_schema_valid_payload(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        render_manifest = _sample_render_manifest(report["report_id"])
+        apply_manifest = _sample_apply_manifest(report["report_id"])
+        applied_report = _sample_applied_report()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            report_path = temp_path / "report.json"
+            render_manifest_path = temp_path / "render_manifest.json"
+            apply_manifest_path = temp_path / "apply_manifest.json"
+            applied_report_path = temp_path / "applied_report.json"
+            out_bundle_path = temp_path / "ui_bundle.json"
+
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            render_manifest_path.write_text(
+                json.dumps(render_manifest, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            apply_manifest_path.write_text(
+                json.dumps(apply_manifest, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            applied_report_path.write_text(
+                json.dumps(applied_report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            exit_code = main(
+                [
+                    "bundle",
+                    "--report",
+                    str(report_path),
+                    "--render-manifest",
+                    str(render_manifest_path),
+                    "--apply-manifest",
+                    str(apply_manifest_path),
+                    "--applied-report",
+                    str(applied_report_path),
+                    "--out",
+                    str(out_bundle_path),
+                ]
+            )
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(out_bundle_path.exists())
+
+            bundle = json.loads(out_bundle_path.read_text(encoding="utf-8"))
+            validator.validate(bundle)
+            self.assertEqual(
+                bundle["dashboard"]["apply"],
+                {
+                    "eligible_count": 2,
+                    "blocked_count": 2,
+                    "outputs_count": 3,
+                    "skipped_count": 2,
+                },
+            )
+            self.assertIn("apply_manifest", bundle)
+            self.assertIn("applied_report", bundle)
 
 
 if __name__ == "__main__":

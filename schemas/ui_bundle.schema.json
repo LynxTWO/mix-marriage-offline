@@ -10,6 +10,8 @@
     "generated_at_utc": { "type": "string", "format": "date-time" },
     "report": { "$ref": "report.schema.json" },
     "render_manifest": { "$ref": "render_manifest.schema.json" },
+    "apply_manifest": { "$ref": "apply_manifest.schema.json" },
+    "applied_report": { "$ref": "report.schema.json" },
     "dashboard": { "$ref": "#/$defs/dashboard" }
   },
   "$defs": {
@@ -43,6 +45,22 @@
         "min_corr": { "type": ["number", "null"] }
       }
     },
+    "apply_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eligible_count",
+        "blocked_count",
+        "outputs_count",
+        "skipped_count"
+      ],
+      "properties": {
+        "eligible_count": { "type": "integer", "minimum": 0 },
+        "blocked_count": { "type": "integer", "minimum": 0 },
+        "outputs_count": { "type": "integer", "minimum": 0 },
+        "skipped_count": { "type": "integer", "minimum": 0 }
+      }
+    },
     "dashboard": {
       "type": "object",
       "additionalProperties": false,
@@ -63,7 +81,8 @@
         "eligible_counts": { "$ref": "#/$defs/eligibility_counts" },
         "blocked_counts": { "$ref": "#/$defs/eligibility_counts" },
         "extreme_count": { "type": "integer", "minimum": 0 },
-        "downmix_qa": { "$ref": "#/$defs/downmix_qa_summary" }
+        "downmix_qa": { "$ref": "#/$defs/downmix_qa_summary" },
+        "apply": { "$ref": "#/$defs/apply_summary" }
       }
     }
   }

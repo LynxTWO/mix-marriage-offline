@@ -50,6 +50,16 @@ def _recommendations(report: dict[str, Any]) -> list[dict[str, Any]]:
     return _iter_dict_list(report.get("recommendations"))
 
 
+def _list_length(value: Any) -> int:
+    return len(value) if isinstance(value, list) else 0
+
+
+def _renderer_manifests(manifest: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(manifest, dict):
+        return []
+    return _iter_dict_list(manifest.get("renderer_manifests"))
+
+
 def _count_if_true(recommendations: list[dict[str, Any]], field: str) -> int:
     return sum(1 for rec in recommendations if rec.get(field) is True)
 
@@ -117,7 +127,27 @@ def _downmix_qa_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_ui_bundle(report: dict[str, Any], render_manifest: dict[str, Any] | None) -> dict[str, Any]:
+def _apply_summary(report: dict[str, Any], apply_manifest: dict[str, Any]) -> dict[str, int]:
+    recommendations = _recommendations(report)
+    renderer_manifests = _renderer_manifests(apply_manifest)
+    return {
+        "eligible_count": _count_if_true(recommendations, "eligible_auto_apply"),
+        "blocked_count": _count_if_not_true(recommendations, "eligible_auto_apply"),
+        "outputs_count": sum(
+            _list_length(manifest.get("outputs")) for manifest in renderer_manifests
+        ),
+        "skipped_count": sum(
+            _list_length(manifest.get("skipped")) for manifest in renderer_manifests
+        ),
+    }
+
+
+def build_ui_bundle(
+    report: dict[str, Any],
+    render_manifest: dict[str, Any] | None,
+    apply_manifest: dict[str, Any] | None = None,
+    applied_report: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     recommendations = _recommendations(report)
     dashboard = {
         "profile_id": _profile_id(report),
@@ -133,6 +163,8 @@ def build_ui_bundle(report: dict[str, Any], render_manifest: dict[str, Any] | No
         "extreme_count": _count_if_true(recommendations, "extreme"),
         "downmix_qa": _downmix_qa_summary(report),
     }
+    if apply_manifest is not None:
+        dashboard["apply"] = _apply_summary(report, apply_manifest)
 
     payload: dict[str, Any] = {
         "schema_version": UI_BUNDLE_SCHEMA_VERSION,
@@ -142,4 +174,8 @@ def build_ui_bundle(report: dict[str, Any], render_manifest: dict[str, Any] | No
     }
     if render_manifest is not None:
         payload["render_manifest"] = render_manifest
+    if apply_manifest is not None:
+        payload["apply_manifest"] = apply_manifest
+    if applied_report is not None:
+        payload["applied_report"] = applied_report
     return payload

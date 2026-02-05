@@ -595,15 +595,28 @@ def _run_bundle(
     report_path: Path,
     out_path: Path,
     render_manifest_path: Path | None,
+    apply_manifest_path: Path | None,
+    applied_report_path: Path | None,
 ) -> int:
     from mmo.core.ui_bundle import build_ui_bundle  # noqa: WPS433
 
     report = _load_report(report_path)
     render_manifest: dict[str, Any] | None = None
+    apply_manifest: dict[str, Any] | None = None
+    applied_report: dict[str, Any] | None = None
     if render_manifest_path is not None:
         render_manifest = _load_json_object(render_manifest_path, label="Render manifest")
+    if apply_manifest_path is not None:
+        apply_manifest = _load_json_object(apply_manifest_path, label="Apply manifest")
+    if applied_report_path is not None:
+        applied_report = _load_json_object(applied_report_path, label="Applied report")
 
-    bundle = build_ui_bundle(report, render_manifest)
+    bundle = build_ui_bundle(
+        report,
+        render_manifest,
+        apply_manifest=apply_manifest,
+        applied_report=applied_report,
+    )
     _validate_json_payload(
         bundle,
         schema_path=repo_root / "schemas" / "ui_bundle.schema.json",
@@ -835,7 +848,10 @@ def main(argv: list[str] | None = None) -> int:
 
     bundle_parser = subparsers.add_parser(
         "bundle",
-        help="Build a single UI bundle JSON from report + optional render manifest.",
+        help=(
+            "Build a single UI bundle JSON from report + optional render/apply manifests "
+            "and optional applied report."
+        ),
     )
     bundle_parser.add_argument(
         "--report",
@@ -846,6 +862,16 @@ def main(argv: list[str] | None = None) -> int:
         "--render-manifest",
         default=None,
         help="Optional path to render manifest JSON.",
+    )
+    bundle_parser.add_argument(
+        "--apply-manifest",
+        default=None,
+        help="Optional path to apply manifest JSON.",
+    )
+    bundle_parser.add_argument(
+        "--applied-report",
+        default=None,
+        help="Optional path to applied report JSON.",
     )
     bundle_parser.add_argument(
         "--out",
@@ -1244,6 +1270,8 @@ def main(argv: list[str] | None = None) -> int:
                 render_manifest_path=(
                     Path(args.render_manifest) if args.render_manifest else None
                 ),
+                apply_manifest_path=Path(args.apply_manifest) if args.apply_manifest else None,
+                applied_report_path=Path(args.applied_report) if args.applied_report else None,
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
