@@ -107,11 +107,50 @@ def _run_export(
     return _run_command(command)
 
 
-def _load_report(report_path: Path) -> dict:
-    data = json.loads(report_path.read_text(encoding="utf-8"))
+def _load_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise ValueError(f"Failed to read {label} JSON from {path}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} JSON is not valid JSON: {path}") from exc
     if not isinstance(data, dict):
-        raise ValueError("Report JSON must be an object.")
+        raise ValueError(f"{label} JSON must be an object.")
     return data
+
+
+def _load_report(report_path: Path) -> dict[str, Any]:
+    return _load_json_object(report_path, label="Report")
+
+
+def _load_json_schema(schema_path: Path) -> dict[str, Any]:
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Failed to load schema from {schema_path}: {exc}") from exc
+    if not isinstance(schema, dict):
+        raise ValueError(f"Schema JSON must be an object: {schema_path}")
+    return schema
+
+
+def _build_schema_registry(schemas_dir: Path) -> Any:
+    try:
+        from referencing import Registry, Resource  # noqa: WPS433
+        from referencing.jsonschema import DRAFT202012  # noqa: WPS433
+    except ImportError as exc:  # pragma: no cover - environment issue
+        raise ValueError(
+            "jsonschema referencing support is unavailable; cannot validate schema refs."
+        ) from exc
+
+    registry = Registry()
+    for schema_file in sorted(schemas_dir.glob("*.schema.json")):
+        schema = _load_json_schema(schema_file)
+        resource = Resource.from_contents(schema, default_specification=DRAFT202012)
+        registry = registry.with_resource(schema_file.resolve().as_uri(), resource)
+        schema_id = schema.get("$id")
+        if isinstance(schema_id, str) and schema_id:
+            registry = registry.with_resource(schema_id, resource)
+    return registry
 
 
 def _write_json_file(path: Path, payload: dict[str, Any]) -> None:
@@ -236,33 +275,47 @@ def _downmix_qa_run_config(
     return normalize_run_config(payload)
 
 
-def _validate_render_manifest(render_manifest: dict[str, Any], schema_path: Path) -> None:
+def _validate_json_payload(
+    payload: dict[str, Any],
+    *,
+    schema_path: Path,
+    payload_name: str,
+) -> None:
     if jsonschema is None:
         print(
-            "jsonschema is not installed; cannot validate render manifest.",
+            f"jsonschema is not installed; cannot validate {payload_name}.",
             file=sys.stderr,
         )
         raise SystemExit(1)
 
     try:
-        schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        schema = _load_json_schema(schema_path)
+        registry = _build_schema_registry(schema_path.parent)
+    except ValueError as exc:
         print(
-            f"Failed to load render manifest schema from {schema_path}: {exc}",
+            str(exc),
             file=sys.stderr,
         )
         raise SystemExit(1)
 
-    validator = jsonschema.Draft202012Validator(schema)
-    errors = sorted(validator.iter_errors(render_manifest), key=lambda err: list(err.path))
+    validator = jsonschema.Draft202012Validator(schema, registry=registry)
+    errors = sorted(validator.iter_errors(payload), key=lambda err: list(err.path))
     if not errors:
         return
 
-    print("Render manifest schema validation failed:", file=sys.stderr)
+    print(f"{payload_name} schema validation failed:", file=sys.stderr)
     for err in errors:
         path = ".".join(str(item) for item in err.path) or "$"
         print(f"- {path}: {err.message}", file=sys.stderr)
     raise SystemExit(1)
+
+
+def _validate_render_manifest(render_manifest: dict[str, Any], schema_path: Path) -> None:
+    _validate_json_payload(
+        render_manifest,
+        schema_path=schema_path,
+        payload_name="Render manifest",
+    )
 
 
 def _run_render_command(
@@ -348,6 +401,30 @@ def _run_downmix_render(
         profile_id=profile_id,
         command_label="downmix render",
     )
+
+
+def _run_bundle(
+    *,
+    repo_root: Path,
+    report_path: Path,
+    out_path: Path,
+    render_manifest_path: Path | None,
+) -> int:
+    from mmo.core.ui_bundle import build_ui_bundle  # noqa: WPS433
+
+    report = _load_report(report_path)
+    render_manifest: dict[str, Any] | None = None
+    if render_manifest_path is not None:
+        render_manifest = _load_json_object(render_manifest_path, label="Render manifest")
+
+    bundle = build_ui_bundle(report, render_manifest)
+    _validate_json_payload(
+        bundle,
+        schema_path=repo_root / "schemas" / "ui_bundle.schema.json",
+        payload_name="UI bundle",
+    )
+    _write_json_file(out_path, bundle)
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -474,6 +551,26 @@ def main(argv: list[str] | None = None) -> int:
         "--profile",
         default="PROFILE.ASSIST",
         help="Authority profile ID for render gating (default: PROFILE.ASSIST).",
+    )
+
+    bundle_parser = subparsers.add_parser(
+        "bundle",
+        help="Build a single UI bundle JSON from report + optional render manifest.",
+    )
+    bundle_parser.add_argument(
+        "--report",
+        required=True,
+        help="Path to report JSON.",
+    )
+    bundle_parser.add_argument(
+        "--render-manifest",
+        default=None,
+        help="Optional path to render manifest JSON.",
+    )
+    bundle_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output UI bundle JSON.",
     )
 
     downmix_parser = subparsers.add_parser("downmix", help="Downmix policy tools.")
@@ -763,6 +860,19 @@ def main(argv: list[str] | None = None) -> int:
                 out_dir=Path(out_dir) if out_dir else None,
                 profile_id=profile_id,
                 command_label="render",
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+    if args.command == "bundle":
+        try:
+            return _run_bundle(
+                repo_root=repo_root,
+                report_path=Path(args.report),
+                out_path=Path(args.out),
+                render_manifest_path=(
+                    Path(args.render_manifest) if args.render_manifest else None
+                ),
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)

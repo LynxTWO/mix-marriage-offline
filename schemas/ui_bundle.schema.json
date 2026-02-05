@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/ui_bundle.schema.json",
+  "title": "MMO UI Bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generated_at_utc", "report", "dashboard"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "generated_at_utc": { "type": "string", "format": "date-time" },
+    "report": { "$ref": "report.schema.json" },
+    "render_manifest": { "$ref": "render_manifest.schema.json" },
+    "dashboard": { "$ref": "#/$defs/dashboard" }
+  },
+  "$defs": {
+    "top_issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue_id", "severity", "summary"],
+      "properties": {
+        "issue_id": { "type": "string", "pattern": "^ISSUE\\." },
+        "severity": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "summary": { "type": "string" }
+      }
+    },
+    "eligibility_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["auto_apply", "render"],
+      "properties": {
+        "auto_apply": { "type": "integer", "minimum": 0 },
+        "render": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "downmix_qa_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["has_issues", "max_delta_lufs", "max_delta_true_peak", "min_corr"],
+      "properties": {
+        "has_issues": { "type": "boolean" },
+        "max_delta_lufs": { "type": ["number", "null"] },
+        "max_delta_true_peak": { "type": ["number", "null"] },
+        "min_corr": { "type": ["number", "null"] }
+      }
+    },
+    "dashboard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_id",
+        "top_issues",
+        "eligible_counts",
+        "blocked_counts",
+        "extreme_count",
+        "downmix_qa"
+      ],
+      "properties": {
+        "profile_id": { "type": "string" },
+        "top_issues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/top_issue" }
+        },
+        "eligible_counts": { "$ref": "#/$defs/eligibility_counts" },
+        "blocked_counts": { "$ref": "#/$defs/eligibility_counts" },
+        "extreme_count": { "type": "integer", "minimum": 0 },
+        "downmix_qa": { "$ref": "#/$defs/downmix_qa_summary" }
+      }
+    }
+  }
+}
