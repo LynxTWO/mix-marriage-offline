@@ -61,6 +61,7 @@
       "required": ["stems"],
       "properties": {
         "session_id": { "type": "string" },
+        "stems_dir": { "type": "string", "minLength": 1 },
         "stems": {
           "type": "array",
           "minItems": 0,

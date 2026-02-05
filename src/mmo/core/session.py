@@ -42,12 +42,13 @@ def discover_stem_files(stems_dir: Path) -> list[Path]:
 
 
 def build_session_from_stems_dir(stems_dir: Path) -> dict:
-    stems = discover_stem_files(stems_dir)
+    resolved_stems_dir = stems_dir.resolve()
+    stems = discover_stem_files(resolved_stems_dir)
     stem_entries = []
 
     for path in stems:
         try:
-            rel_path = path.relative_to(stems_dir)
+            rel_path = path.relative_to(resolved_stems_dir)
             file_path = rel_path.as_posix()
         except ValueError:
             file_path = path.resolve().as_posix()
@@ -93,4 +94,7 @@ def build_session_from_stems_dir(stems_dir: Path) -> dict:
                     stem_entry["wav_channel_mask"] = channel_mask
         stem_entries.append(stem_entry)
 
-    return {"stems": stem_entries}
+    return {
+        "stems_dir": resolved_stems_dir.as_posix(),
+        "stems": stem_entries,
+    }

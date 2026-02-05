@@ -136,7 +136,7 @@ def _validate_render_manifest(render_manifest: dict[str, Any], schema_path: Path
     raise SystemExit(1)
 
 
-def _run_downmix_render(
+def _run_render_command(
     *,
     repo_root: Path,
     report_path: Path,
@@ -144,6 +144,7 @@ def _run_downmix_render(
     out_manifest_path: Path,
     out_dir: Path | None,
     profile_id: str,
+    command_label: str,
 ) -> int:
     from mmo.core.gates import apply_gates_to_report  # noqa: WPS433
     from mmo.core.pipeline import load_plugins, run_renderers  # noqa: WPS433
@@ -164,7 +165,7 @@ def _run_downmix_render(
     eligible = [rec for rec in recs if rec.get("eligible_render") is True]
     blocked = [rec for rec in recs if rec.get("eligible_render") is not True]
     print(
-        "downmix render:"
+        f"{command_label}:"
         f" total_recommendations={len(recs)}"
         f" eligible_render={len(eligible)}"
         f" blocked={len(blocked)}",
@@ -177,7 +178,7 @@ def _run_downmix_render(
     ]
     renderer_ids_text = ",".join(renderer_plugin_ids) if renderer_plugin_ids else "<none>"
     print(
-        f"downmix render: renderer_plugin_ids={renderer_ids_text}",
+        f"{command_label}: renderer_plugin_ids={renderer_ids_text}",
         file=sys.stderr,
     )
 
@@ -198,6 +199,26 @@ def _run_downmix_render(
         encoding="utf-8",
     )
     return 0
+
+
+def _run_downmix_render(
+    *,
+    repo_root: Path,
+    report_path: Path,
+    plugins_dir: Path,
+    out_manifest_path: Path,
+    out_dir: Path | None,
+    profile_id: str,
+) -> int:
+    return _run_render_command(
+        repo_root=repo_root,
+        report_path=report_path,
+        plugins_dir=plugins_dir,
+        out_manifest_path=out_manifest_path,
+        out_dir=out_dir,
+        profile_id=profile_id,
+        command_label="downmix render",
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -276,6 +297,39 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=200,
         help="Truncate PDF cell values to this length.",
+    )
+
+    render_parser = subparsers.add_parser(
+        "render",
+        help="Run renderer plugins for render-eligible recommendations.",
+    )
+    render_parser.add_argument(
+        "--report",
+        required=True,
+        help="Path to report JSON.",
+    )
+    render_parser.add_argument(
+        "--plugins",
+        default="plugins",
+        help="Path to plugins directory.",
+    )
+    render_parser.add_argument(
+        "--out-manifest",
+        required=True,
+        help="Path to output render manifest JSON.",
+    )
+    render_parser.add_argument(
+        "--out-dir",
+        default=None,
+        help=(
+            "Optional output directory for renderer artifacts. "
+            "Required for plugins that produce real render files."
+        ),
+    )
+    render_parser.add_argument(
+        "--profile",
+        default="PROFILE.ASSIST",
+        help="Authority profile ID for render gating (default: PROFILE.ASSIST).",
     )
 
     downmix_parser = subparsers.add_parser("downmix", help="Downmix policy tools.")
@@ -489,6 +543,20 @@ def main(argv: list[str] | None = None) -> int:
             no_gates=args.no_gates,
             truncate_values=args.truncate_values,
         )
+    if args.command == "render":
+        try:
+            return _run_render_command(
+                repo_root=repo_root,
+                report_path=Path(args.report),
+                plugins_dir=Path(args.plugins),
+                out_manifest_path=Path(args.out_manifest),
+                out_dir=Path(args.out_dir) if args.out_dir else None,
+                profile_id=args.profile,
+                command_label="render",
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
     if args.command == "downmix":
         from mmo.dsp.downmix import (  # noqa: WPS433
             load_layouts,

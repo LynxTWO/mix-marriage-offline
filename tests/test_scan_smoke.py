@@ -40,6 +40,10 @@ class TestScanSessionSmoke(unittest.TestCase):
             )
 
             report = json.loads(result.stdout)
+            self.assertEqual(
+                report.get("session", {}).get("stems_dir"),
+                stems_dir.resolve().as_posix(),
+            )
             stems = report.get("session", {}).get("stems", [])
             self.assertGreaterEqual(len(stems), 1)
             has_measurements = any(

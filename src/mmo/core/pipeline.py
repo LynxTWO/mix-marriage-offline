@@ -168,6 +168,49 @@ def _gate_summary(gate_results: Any) -> str:
     return ";".join(parts)
 
 
+def _normalize_skipped_entry(entry: Any) -> Dict[str, str] | None:
+    if not isinstance(entry, dict):
+        return None
+    return {
+        "recommendation_id": _coerce_str(entry.get("recommendation_id")),
+        "action_id": _coerce_str(entry.get("action_id")),
+        "reason": _coerce_str(entry.get("reason")),
+        "gate_summary": _coerce_str(entry.get("gate_summary")),
+    }
+
+
+def _skipped_sort_key(entry: Dict[str, str]) -> tuple[str, str, str, int, str]:
+    gate_summary = entry["gate_summary"]
+    return (
+        entry["recommendation_id"],
+        entry["action_id"],
+        entry["reason"],
+        0 if gate_summary else 1,
+        gate_summary,
+    )
+
+
+def _merge_skipped_entries(*skipped_groups: Iterable[Any]) -> List[Dict[str, str]]:
+    normalized: List[Dict[str, str]] = []
+    for group in skipped_groups:
+        for item in group:
+            normalized_item = _normalize_skipped_entry(item)
+            if normalized_item is not None:
+                normalized.append(normalized_item)
+
+    normalized.sort(key=_skipped_sort_key)
+    merged: List[Dict[str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for item in normalized:
+        key = (item["recommendation_id"], item["action_id"], item["reason"])
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(item)
+
+    return merged
+
+
 def run_detectors(session_report: Dict[str, Any], plugins: Sequence[PluginEntry]) -> None:
     session = session_report.get("session") or {}
     features = session_report.get("features") or {}
@@ -210,9 +253,9 @@ def run_renderers(
     eligible = [rec for rec in recs if rec.get("eligible_render") is True]
     blocked = [rec for rec in recs if rec.get("eligible_render") is not True]
 
-    skipped: List[Dict[str, Any]] = []
+    blocked_skipped: List[Dict[str, Any]] = []
     for rec in blocked:
-        skipped.append(
+        blocked_skipped.append(
             {
                 "recommendation_id": _coerce_str(rec.get("recommendation_id")),
                 "action_id": _coerce_str(rec.get("action_id")),
@@ -220,7 +263,7 @@ def run_renderers(
                 "gate_summary": _gate_summary(rec.get("gate_results")),
             }
         )
-    skipped.sort(key=lambda item: (item["recommendation_id"], item["action_id"]))
+    blocked_skipped = _merge_skipped_entries(blocked_skipped)
 
     manifests: List[Dict[str, Any]] = []
     for plugin in plugins:
@@ -235,7 +278,8 @@ def run_renderers(
             }
         if "renderer_id" not in manifest:
             manifest["renderer_id"] = plugin.plugin_id
-        manifest["skipped"] = list(skipped)
+        plugin_skipped = _coerce_list(manifest.get("skipped"))
+        manifest["skipped"] = _merge_skipped_entries(blocked_skipped, plugin_skipped)
         manifests.append(manifest)
 
     return manifests

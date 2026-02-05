@@ -1,0 +1,12 @@
+plugin_id: "PLUGIN.RENDERER.GAIN_TRIM"
+plugin_type: "renderer"
+name: "Gain Trim Renderer"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Render conservative stem-level gain/trim recommendations to WAV PCM outputs."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "plugins.renderers.gain_trim_renderer:GainTrimRenderer"
+capabilities:
+  - "ACTION.UTILITY.GAIN"
+  - "ACTION.UTILITY.TRIM"
