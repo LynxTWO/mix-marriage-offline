@@ -197,35 +197,35 @@ def build_minimal_report_for_downmix_qa(
             isinstance(rec, dict) and rec.get("recommendation_id") == rec_id
             for rec in recommendations
         )
+        measurement_map: Dict[str, Dict[str, Any]] = {}
+        for item in measurements:
+            if not isinstance(item, dict):
+                continue
+            evidence_id = item.get("evidence_id")
+            if isinstance(evidence_id, str) and evidence_id:
+                measurement_map[evidence_id] = item
+
+        param_specs = [
+            ("EVID.DOWNMIX.QA.LUFS_DELTA", "PARAM.DOWNMIX.QA.LUFS_DELTA", "UNIT.LUFS"),
+            (
+                "EVID.DOWNMIX.QA.TRUE_PEAK_DELTA",
+                "PARAM.DOWNMIX.QA.TRUE_PEAK_DELTA",
+                "UNIT.DBTP",
+            ),
+            ("EVID.DOWNMIX.QA.CORR_DELTA", "PARAM.DOWNMIX.QA.CORR_DELTA", "UNIT.CORRELATION"),
+        ]
+        delta_params: List[Dict[str, Any]] = []
+        for evidence_id, param_id, unit_id in param_specs:
+            measurement = measurement_map.get(evidence_id)
+            if not measurement:
+                continue
+            param_entry = {"param_id": param_id, "value": measurement.get("value")}
+            unit_value = measurement.get("unit_id") or unit_id
+            if unit_value:
+                param_entry["unit_id"] = unit_value
+            delta_params.append(param_entry)
+
         if not has_rec:
-            measurement_map: Dict[str, Dict[str, Any]] = {}
-            for item in measurements:
-                if not isinstance(item, dict):
-                    continue
-                evidence_id = item.get("evidence_id")
-                if isinstance(evidence_id, str) and evidence_id:
-                    measurement_map[evidence_id] = item
-
-            param_specs = [
-                ("EVID.DOWNMIX.QA.LUFS_DELTA", "PARAM.DOWNMIX.QA.LUFS_DELTA", "UNIT.LUFS"),
-                (
-                    "EVID.DOWNMIX.QA.TRUE_PEAK_DELTA",
-                    "PARAM.DOWNMIX.QA.TRUE_PEAK_DELTA",
-                    "UNIT.DBTP",
-                ),
-                ("EVID.DOWNMIX.QA.CORR_DELTA", "PARAM.DOWNMIX.QA.CORR_DELTA", "UNIT.CORRELATION"),
-            ]
-            params: List[Dict[str, Any]] = []
-            for evidence_id, param_id, unit_id in param_specs:
-                measurement = measurement_map.get(evidence_id)
-                if not measurement:
-                    continue
-                param_entry = {"param_id": param_id, "value": measurement.get("value")}
-                unit_value = measurement.get("unit_id") or unit_id
-                if unit_value:
-                    param_entry["unit_id"] = unit_value
-                params.append(param_entry)
-
             recommendations.append(
                 {
                     "recommendation_id": rec_id,
@@ -233,10 +233,48 @@ def build_minimal_report_for_downmix_qa(
                     "risk": "low",
                     "requires_approval": False,
                     "target": {"scope": "session"},
-                    "params": params,
+                    "params": list(delta_params),
                     "notes": (
                         "Downmix QA deltas exceeded thresholds; review matrix/policy/export."
                     ),
+                }
+            )
+
+        render_rec_id = "REC.DOWNMIX.RENDER.001"
+        has_render = any(
+            isinstance(rec, dict) and rec.get("recommendation_id") == render_rec_id
+            for rec in recommendations
+        )
+        policy_id = downmix_qa_raw.get("policy_id")
+        if isinstance(policy_id, str) and policy_id.strip() and not has_render:
+            target_layout_id = "LAYOUT.2_0"
+            log_payload = downmix_qa_raw.get("log")
+            parsed_log = None
+            if isinstance(log_payload, str) and log_payload:
+                try:
+                    parsed_log = json.loads(log_payload)
+                except json.JSONDecodeError:
+                    parsed_log = None
+            elif isinstance(log_payload, dict):
+                parsed_log = log_payload
+            if isinstance(parsed_log, dict):
+                candidate = parsed_log.get("target_layout_id")
+                if isinstance(candidate, str) and candidate:
+                    target_layout_id = candidate
+
+            render_params: List[Dict[str, Any]] = [
+                {"param_id": "PARAM.DOWNMIX.POLICY_ID", "value": policy_id},
+                {"param_id": "PARAM.DOWNMIX.TARGET_LAYOUT_ID", "value": target_layout_id},
+            ]
+            render_params.extend(delta_params)
+            recommendations.append(
+                {
+                    "recommendation_id": render_rec_id,
+                    "action_id": "ACTION.DOWNMIX.RENDER",
+                    "risk": "low",
+                    "requires_approval": False,
+                    "target": {"scope": "session"},
+                    "params": render_params,
                 }
             )
 

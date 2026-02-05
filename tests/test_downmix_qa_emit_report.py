@@ -217,9 +217,14 @@ class TestDownmixQaEmitReport(unittest.TestCase):
 
             payload = json.loads(report_path.read_text(encoding="utf-8"))
             recommendations = payload.get("recommendations", [])
-            self.assertEqual(len(recommendations), 1)
-            rec = recommendations[0]
-            self.assertEqual(rec.get("action_id"), "ACTION.DIAGNOSTIC.CHECK_DOWNMIX_QA")
+            self.assertEqual(len(recommendations), 2)
+            diagnostic_recs = [
+                rec
+                for rec in recommendations
+                if rec.get("action_id") == "ACTION.DIAGNOSTIC.CHECK_DOWNMIX_QA"
+            ]
+            self.assertEqual(len(diagnostic_recs), 1)
+            rec = diagnostic_recs[0]
             gate_results = rec.get("gate_results", [])
             gate_ids = {result.get("gate_id") for result in gate_results}
             self.assertIn("GATE.DOWNMIX_QA_CORR_DELTA_LIMIT", gate_ids)
@@ -233,6 +238,37 @@ class TestDownmixQaEmitReport(unittest.TestCase):
                 any(
                     result.get("context") == "suggest" and result.get("outcome") == "reject"
                     for result in corr_gate_results
+                )
+            )
+
+            render_recs = [
+                rec
+                for rec in recommendations
+                if rec.get("action_id") == "ACTION.DOWNMIX.RENDER"
+            ]
+            self.assertEqual(len(render_recs), 1)
+            render_rec = render_recs[0]
+            render_params = render_rec.get("params", [])
+            param_ids = {
+                param.get("param_id")
+                for param in render_params
+                if isinstance(param, dict)
+            }
+            self.assertIn("PARAM.DOWNMIX.POLICY_ID", param_ids)
+            self.assertIn("PARAM.DOWNMIX.TARGET_LAYOUT_ID", param_ids)
+            render_gate_results = render_rec.get("gate_results", [])
+            render_gate_ids = {result.get("gate_id") for result in render_gate_results}
+            self.assertIn("GATE.DOWNMIX_QA_CORR_DELTA_LIMIT", render_gate_ids)
+            self.assertFalse(render_rec.get("eligible_render", True))
+            corr_render_results = [
+                result
+                for result in render_gate_results
+                if result.get("gate_id") == "GATE.DOWNMIX_QA_CORR_DELTA_LIMIT"
+            ]
+            self.assertTrue(
+                any(
+                    result.get("context") == "render" and result.get("outcome") == "reject"
+                    for result in corr_render_results
                 )
             )
 

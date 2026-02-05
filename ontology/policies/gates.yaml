@@ -180,7 +180,7 @@ gates:
       warn:
         suggest: "suggest_only"
         auto_apply: "suggest_only"
-        render: "reject"
+        render: "allow"
       fail:
         suggest: "reject"
         auto_apply: "reject"
@@ -201,7 +201,7 @@ gates:
       warn:
         suggest: "suggest_only"
         auto_apply: "suggest_only"
-        render: "reject"
+        render: "allow"
       fail:
         suggest: "reject"
         auto_apply: "reject"
@@ -222,7 +222,7 @@ gates:
       warn:
         suggest: "suggest_only"
         auto_apply: "suggest_only"
-        render: "reject"
+        render: "allow"
       fail:
         suggest: "reject"
         auto_apply: "reject"

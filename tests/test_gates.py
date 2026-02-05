@@ -166,11 +166,10 @@ class TestGates(unittest.TestCase):
             {
                 ("suggest", "suggest_only"),
                 ("auto_apply", "suggest_only"),
-                ("render", "reject"),
             },
         )
         self.assertFalse(rec["eligible_auto_apply"])
-        self.assertFalse(rec["eligible_render"])
+        self.assertTrue(rec["eligible_render"])
 
 
 if __name__ == "__main__":
