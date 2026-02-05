@@ -46,7 +46,7 @@ class TestRendererRunner(unittest.TestCase):
                     "params": [
                         {
                             "param_id": "PARAM.GAIN.DB",
-                            "value": -8.0,
+                            "value": -20.0,
                         }
                     ],
                 },

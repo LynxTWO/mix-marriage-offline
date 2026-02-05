@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Sequence
 
 try:
     import yaml
@@ -114,22 +114,103 @@ def _evaluate_requires_approval(
     return results
 
 
-def _limit_values_for_gate(
+def _read_limit_value(limits: Dict[str, Any], limit_key: str) -> float | None:
+    raw_limit = limits.get(limit_key)
+    if isinstance(raw_limit, dict):
+        return _coerce_number(raw_limit.get("value"))
+    return _coerce_number(raw_limit)
+
+
+def _resolve_param_limit(
     limits: Dict[str, Any],
+    context: str,
     *,
+    fallback_context: str | None = None,
+) -> tuple[float | None, str | None, bool]:
+    abs_key = f"{context}_abs_max"
+    abs_value = _read_limit_value(limits, abs_key)
+    if abs_value is not None:
+        return abs_value, abs_key, True
+
+    max_key = f"{context}_max"
+    max_value = _read_limit_value(limits, max_key)
+    if max_value is not None:
+        return max_value, max_key, False
+
+    if fallback_context is None:
+        return None, None, False
+
+    fallback_abs_key = f"{fallback_context}_abs_max"
+    fallback_abs_value = _read_limit_value(limits, fallback_abs_key)
+    if fallback_abs_value is not None:
+        return fallback_abs_value, fallback_abs_key, True
+
+    fallback_max_key = f"{fallback_context}_max"
+    fallback_max_value = _read_limit_value(limits, fallback_max_key)
+    if fallback_max_value is not None:
+        return fallback_max_value, fallback_max_key, False
+
+    return None, None, False
+
+
+def _resolve_count_limit(
+    limits: Dict[str, Any],
+    context: str,
+    *,
+    fallback_context: str | None = None,
+) -> tuple[float | None, str | None]:
+    limit_key = f"{context}_max"
+    limit_value = _read_limit_value(limits, limit_key)
+    if limit_value is not None:
+        return limit_value, limit_key
+
+    if fallback_context is None:
+        return None, None
+
+    fallback_key = f"{fallback_context}_max"
+    fallback_value = _read_limit_value(limits, fallback_key)
+    if fallback_value is not None:
+        return fallback_value, fallback_key
+
+    return None, None
+
+
+def _gate_result_details_for_param(
+    *,
+    param_id: str,
+    value: float,
+    limit_value: float,
+    limit_kind: str,
     use_abs: bool,
-) -> Tuple[float | None, float | None]:
+) -> Dict[str, Any]:
+    details: Dict[str, Any] = {
+        "param_id": param_id,
+        "value": value,
+        "limit": limit_value,
+        "limit_kind": limit_kind,
+        "use_abs": use_abs,
+    }
     if use_abs:
-        auto_apply_key = "auto_apply_abs_max"
-        hard_key = "hard_abs_max"
-    else:
-        auto_apply_key = "auto_apply_max"
-        hard_key = "hard_max"
-    auto_apply = limits.get(auto_apply_key, {})
-    hard = limits.get(hard_key, {})
-    auto_apply_value = _coerce_number(auto_apply.get("value")) if isinstance(auto_apply, dict) else None
-    hard_value = _coerce_number(hard.get("value")) if isinstance(hard, dict) else None
-    return auto_apply_value, hard_value
+        details["abs_value"] = abs(value)
+    return details
+
+
+def _sort_gate_results(
+    gate_results: List[GateResult],
+    contexts: Sequence[Context],
+) -> List[GateResult]:
+    context_order = {context: index for index, context in enumerate(contexts)}
+
+    def _sort_key(result: GateResult) -> tuple[int, str, str]:
+        context = _coerce_str(result.get("context")) or ""
+        gate_id = _coerce_str(result.get("gate_id")) or ""
+        details = result.get("details")
+        param_id = ""
+        if isinstance(details, dict):
+            param_id = _coerce_str(details.get("param_id")) or ""
+        return (context_order.get(context, len(context_order)), gate_id, param_id)
+
+    return sorted(gate_results, key=_sort_key)
 
 
 def _evaluate_param_limits(
@@ -148,9 +229,20 @@ def _evaluate_param_limits(
     if not isinstance(limits, dict):
         return []
 
-    use_abs = any(key.endswith("_abs_max") for key in limits.keys())
-    auto_apply_limit, hard_limit = _limit_values_for_gate(limits, use_abs=use_abs)
-    if auto_apply_limit is None and hard_limit is None:
+    hard_limit, hard_limit_kind, hard_use_abs = _resolve_param_limit(limits, "hard")
+    suggest_limit, _, _ = _resolve_param_limit(limits, "suggest")
+    auto_apply_limit, _, _ = _resolve_param_limit(limits, "auto_apply")
+    render_limit, _, _ = _resolve_param_limit(
+        limits,
+        "render",
+        fallback_context="auto_apply",
+    )
+    if (
+        hard_limit is None
+        and suggest_limit is None
+        and auto_apply_limit is None
+        and render_limit is None
+    ):
         return []
 
     reason_id = gate.get("violation_reason_id")
@@ -162,40 +254,77 @@ def _evaluate_param_limits(
         value = _coerce_number(param.get("value"))
         if value is None:
             continue
-        value_comp = abs(value) if use_abs else value
-        limit_kind = None
-        outcome = None
-        limit_value = None
-        if hard_limit is not None and value_comp > hard_limit:
-            outcome = "reject"
-            limit_value = hard_limit
-            limit_kind = "hard_abs_max" if use_abs else "hard_max"
-        elif auto_apply_limit is not None and value_comp > auto_apply_limit:
-            outcome = "suggest_only"
-            limit_value = auto_apply_limit
-            limit_kind = "auto_apply_abs_max" if use_abs else "auto_apply_max"
 
-        if outcome is None:
+        if (
+            hard_limit is not None
+            and hard_limit_kind is not None
+            and (abs(value) if hard_use_abs else value) > hard_limit
+        ):
+            for context in contexts:
+                if context not in {"suggest", "auto_apply", "render"}:
+                    continue
+                results.append(
+                    {
+                        "gate_id": gate_id,
+                        "context": context,
+                        "outcome": "reject",
+                        "reason_id": reason_id,
+                        "details": _gate_result_details_for_param(
+                            param_id=param_id,
+                            value=value,
+                            limit_value=hard_limit,
+                            limit_kind=hard_limit_kind,
+                            use_abs=hard_use_abs,
+                        ),
+                    }
+                )
             continue
 
         for context in contexts:
-            if outcome == "suggest_only" and context == "suggest":
+            limit_value: float | None
+            limit_kind: str | None
+            use_abs: bool
+
+            if context == "suggest":
+                limit_value, limit_kind, use_abs = _resolve_param_limit(limits, "suggest")
+                outcome = "suggest_only"
+            elif context == "auto_apply":
+                limit_value, limit_kind, use_abs = _resolve_param_limit(limits, "auto_apply")
+                outcome = "suggest_only"
+            elif context == "render":
+                limit_value, limit_kind, use_abs = _resolve_param_limit(
+                    limits,
+                    "render",
+                    fallback_context="auto_apply",
+                )
+                outcome = "reject"
+            else:
                 continue
+
+            if limit_value is None or limit_kind is None:
+                continue
+
+            comparison_value = abs(value) if use_abs else value
+            if comparison_value <= limit_value:
+                continue
+
             results.append(
                 {
                     "gate_id": gate_id,
                     "context": context,
                     "outcome": outcome,
                     "reason_id": reason_id,
-                    "details": {
-                        "param_id": param_id,
-                        "value": value,
-                        "limit": limit_value,
-                        "limit_kind": limit_kind,
-                    },
+                    "details": _gate_result_details_for_param(
+                        param_id=param_id,
+                        value=value,
+                        limit_value=limit_value,
+                        limit_kind=limit_kind,
+                        use_abs=use_abs,
+                    ),
                 }
             )
-    return results
+
+    return _sort_gate_results(results, contexts)
 
 
 def _evaluate_count_limit(
@@ -217,36 +346,70 @@ def _evaluate_count_limit(
     if not isinstance(limits, dict):
         return []
 
-    auto_apply_limit = limits.get("auto_apply_max")
-    hard_limit = limits.get("hard_max")
-    auto_apply_value = _coerce_number(auto_apply_limit.get("value")) if isinstance(auto_apply_limit, dict) else None
-    hard_value = _coerce_number(hard_limit.get("value")) if isinstance(hard_limit, dict) else None
-    if auto_apply_value is None and hard_value is None:
+    hard_value, hard_limit_kind = _resolve_count_limit(limits, "hard")
+    suggest_value, _ = _resolve_count_limit(limits, "suggest")
+    auto_apply_value, _ = _resolve_count_limit(limits, "auto_apply")
+    render_value, _ = _resolve_count_limit(
+        limits,
+        "render",
+        fallback_context="auto_apply",
+    )
+    if (
+        hard_value is None
+        and suggest_value is None
+        and auto_apply_value is None
+        and render_value is None
+    ):
         return []
 
     count = sum(
         1 for param in _iter_params(rec) if param.get("param_id") == "PARAM.EQ.GAIN_DB"
     )
-    outcome = None
-    limit_kind = None
-    limit_value = None
-    if hard_value is not None and count > hard_value:
-        outcome = "reject"
-        limit_kind = "hard_max"
-        limit_value = hard_value
-    elif auto_apply_value is not None and count > auto_apply_value:
-        outcome = "suggest_only"
-        limit_kind = "auto_apply_max"
-        limit_value = auto_apply_value
-
-    if outcome is None:
-        return []
 
     reason_id = gate.get("violation_reason_id")
     results: List[GateResult] = []
+    if hard_value is not None and hard_limit_kind is not None and count > hard_value:
+        for context in contexts:
+            if context not in {"suggest", "auto_apply", "render"}:
+                continue
+            results.append(
+                {
+                    "gate_id": gate_id,
+                    "context": context,
+                    "outcome": "reject",
+                    "reason_id": reason_id,
+                    "details": {
+                        "param_id": "PARAM.EQ.GAIN_DB",
+                        "value": count,
+                        "limit": hard_value,
+                        "limit_kind": hard_limit_kind,
+                    },
+                }
+            )
+        return _sort_gate_results(results, contexts)
+
     for context in contexts:
-        if outcome == "suggest_only" and context == "suggest":
+        limit_value: float | None
+        limit_kind: str | None
+        if context == "suggest":
+            limit_value, limit_kind = _resolve_count_limit(limits, "suggest")
+            outcome = "suggest_only"
+        elif context == "auto_apply":
+            limit_value, limit_kind = _resolve_count_limit(limits, "auto_apply")
+            outcome = "suggest_only"
+        elif context == "render":
+            limit_value, limit_kind = _resolve_count_limit(
+                limits,
+                "render",
+                fallback_context="auto_apply",
+            )
+            outcome = "reject"
+        else:
             continue
+
+        if limit_value is None or limit_kind is None or count <= limit_value:
+            continue
+
         results.append(
             {
                 "gate_id": gate_id,
@@ -261,7 +424,8 @@ def _evaluate_count_limit(
                 },
             }
         )
-    return results
+
+    return _sort_gate_results(results, contexts)
 
 
 def _evaluate_action_prefix_limit(
@@ -495,6 +659,8 @@ def evaluate_recommendation_gates(
             )
             continue
         # Other gates are currently stubbed (deterministic allow)
+
+    gate_results = _sort_gate_results(gate_results, contexts)
 
     eligible_auto_apply = True
     eligible_render = True

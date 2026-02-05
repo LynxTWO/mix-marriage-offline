@@ -91,6 +91,7 @@ gates:
     applies_to_params: ["PARAM.GAIN.DB", "PARAM.GAIN.TRIM_DB", "PARAM.SURROUND.GAIN_DB"]
     limits:
       auto_apply_abs_max: { value: 3.0, unit_id: "UNIT.DB" }
+      render_abs_max:     { value: 12.0, unit_id: "UNIT.DB" }
       suggest_abs_max:    { value: 12.0, unit_id: "UNIT.DB" }
       hard_abs_max:       { value: 24.0, unit_id: "UNIT.DB" }
     enforcement:
@@ -107,6 +108,7 @@ gates:
     applies_to_params: ["PARAM.DELAY.MS"]
     limits:
       auto_apply_max: { value: 10.0, unit_id: "UNIT.MS" }
+      render_max:     { value: 50.0, unit_id: "UNIT.MS" }
       suggest_max:    { value: 50.0, unit_id: "UNIT.MS" }
       hard_max:       { value: 200.0, unit_id: "UNIT.MS" }
     enforcement:
@@ -123,6 +125,7 @@ gates:
     applies_to_params: ["PARAM.EQ.GAIN_DB"]
     limits:
       auto_apply_abs_max: { value: 2.0, unit_id: "UNIT.DB" }
+      render_abs_max:     { value: 6.0, unit_id: "UNIT.DB" }
       suggest_abs_max:    { value: 6.0, unit_id: "UNIT.DB" }
       hard_abs_max:       { value: 18.0, unit_id: "UNIT.DB" }
     enforcement:
@@ -139,6 +142,7 @@ gates:
     applies_to_actions_prefixes: ["ACTION.EQ."]
     limits:
       auto_apply_max: { value: 4, unit_id: "UNIT.COUNT" }
+      render_max:     { value: 12, unit_id: "UNIT.COUNT" }
       suggest_max:    { value: 12, unit_id: "UNIT.COUNT" }
       hard_max:       { value: 32, unit_id: "UNIT.COUNT" }
     enforcement:
@@ -155,6 +159,7 @@ gates:
     applies_to_params: ["PARAM.COMP.RATIO"]
     limits:
       auto_apply_max: { value: 3.0, unit_id: "UNIT.RATIO" }
+      render_max:     { value: 8.0, unit_id: "UNIT.RATIO" }
       suggest_max:    { value: 8.0, unit_id: "UNIT.RATIO" }
       hard_max:       { value: 20.0, unit_id: "UNIT.RATIO" }
     enforcement:

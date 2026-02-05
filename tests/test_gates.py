@@ -70,14 +70,19 @@ class TestGates(unittest.TestCase):
 
         gate_results_large = recommendations[1]["gate_results"]
         self.assertFalse(recommendations[1]["eligible_auto_apply"])
-        self.assertFalse(recommendations[1]["eligible_render"])
+        self.assertTrue(recommendations[1]["eligible_render"])
         self.assertEqual(
             [(result["context"], result["reason_id"]) for result in gate_results_large],
             [
                 ("auto_apply", "REASON.GAIN_TOO_LARGE"),
-                ("render", "REASON.GAIN_TOO_LARGE"),
             ],
         )
+        self.assertEqual(gate_results_large[0]["details"]["param_id"], "PARAM.GAIN.DB")
+        self.assertEqual(gate_results_large[0]["details"]["value"], -8.0)
+        self.assertEqual(gate_results_large[0]["details"]["abs_value"], 8.0)
+        self.assertEqual(gate_results_large[0]["details"]["limit"], 3.0)
+        self.assertEqual(gate_results_large[0]["details"]["limit_kind"], "auto_apply_abs_max")
+        self.assertTrue(gate_results_large[0]["details"]["use_abs"])
 
         gate_results_polarity = recommendations[2]["gate_results"]
         self.assertFalse(recommendations[2]["eligible_auto_apply"])
@@ -170,6 +175,50 @@ class TestGates(unittest.TestCase):
         )
         self.assertFalse(rec["eligible_auto_apply"])
         self.assertTrue(rec["eligible_render"])
+
+    def test_count_limit_can_block_auto_apply_but_allow_render(self) -> None:
+        report = {
+            "schema_version": "0.1.0",
+            "report_id": "REPORT.TEST",
+            "project_id": "PROJECT.TEST",
+            "generated_at": "2000-01-01T00:00:00Z",
+            "engine_version": "0.1.0",
+            "ontology_version": "0.1.0",
+            "session": {},
+            "issues": [],
+            "recommendations": [
+                {
+                    "recommendation_id": "REC.EQ.BANDS.SIX",
+                    "action_id": "ACTION.EQ.PEAK",
+                    "risk": "low",
+                    "requires_approval": False,
+                    "params": [
+                        {
+                            "param_id": "PARAM.EQ.GAIN_DB",
+                            "value": 1.0,
+                            "unit_id": "UNIT.DB",
+                        }
+                        for _ in range(6)
+                    ],
+                }
+            ],
+        }
+
+        policy_path = Path("ontology/policies/gates.yaml")
+        apply_gates_to_report(report, policy_path=policy_path)
+
+        rec = report["recommendations"][0]
+        self.assertFalse(rec["eligible_auto_apply"])
+        self.assertTrue(rec["eligible_render"])
+        self.assertEqual(
+            [
+                (result["context"], result["outcome"], result["reason_id"])
+                for result in rec["gate_results"]
+            ],
+            [("auto_apply", "suggest_only", "REASON.EQ_BANDS_TOO_MANY")],
+        )
+        self.assertEqual(rec["gate_results"][0]["details"]["limit"], 4.0)
+        self.assertEqual(rec["gate_results"][0]["details"]["limit_kind"], "auto_apply_max")
 
 
 if __name__ == "__main__":
