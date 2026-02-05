@@ -87,6 +87,16 @@ evidence:
     description: "Short explanation for why a stem is treated as lossy."
     value_type: "string"
 
+  EVID.VALIDATION.WAV_AUDIO_FORMAT:
+    label: "WAV audio format code"
+    description: "Raw WAV fmt audio_format code from the file header."
+    value_type: "integer"
+
+  EVID.VALIDATION.WAV_AUDIO_FORMAT_RESOLVED:
+    label: "WAV resolved audio format code"
+    description: "WAV codec code after WAVE_FORMAT_EXTENSIBLE subtype resolution."
+    value_type: "integer"
+
   EVID.VALIDATION.CHANNEL_LAYOUT_REASON:
     label: "Channel layout reason"
     description: "Short explanation for why channel layout metadata is ambiguous."

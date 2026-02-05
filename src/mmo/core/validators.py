@@ -208,6 +208,71 @@ def validate_session(
                     )
 
         if ext in wav_exts:
+            wav_audio_format = stem.get("wav_audio_format")
+            wav_audio_format_resolved = stem.get(
+                "wav_audio_format_resolved", wav_audio_format
+            )
+            audio_format_int = (
+                int(wav_audio_format)
+                if isinstance(wav_audio_format, (int, float))
+                else None
+            )
+            resolved_int = (
+                int(wav_audio_format_resolved)
+                if isinstance(wav_audio_format_resolved, (int, float))
+                else None
+            )
+            if resolved_int is not None and resolved_int not in (1, 3):
+                evidence = _evidence_file(stem)
+                if audio_format_int is not None:
+                    evidence.append(
+                        {
+                            "evidence_id": "EVID.VALIDATION.WAV_AUDIO_FORMAT",
+                            "value": audio_format_int,
+                        }
+                    )
+                evidence.append(
+                    {
+                        "evidence_id": "EVID.VALIDATION.WAV_AUDIO_FORMAT_RESOLVED",
+                        "value": resolved_int,
+                    }
+                )
+                if resolved_int == 0x0055 or audio_format_int == 0x0055:
+                    evidence.append(
+                        {
+                            "evidence_id": "EVID.VALIDATION.LOSSY_REASON",
+                            "value": (
+                                "MP3-in-WAV is still lossy; the WAV container does not "
+                                "restore discarded audio detail. Re-export stems "
+                                "losslessly (WAV/FLAC/WavPack), aligned and same length."
+                            ),
+                        }
+                    )
+                    issues.append(
+                        {
+                            "issue_id": "ISSUE.VALIDATION.LOSSY_STEMS_DETECTED",
+                            "severity": 90 if strict else 60,
+                            "confidence": 1.0,
+                            "target": target,
+                            "evidence": evidence,
+                            "message": lossy_message,
+                        }
+                    )
+                else:
+                    issues.append(
+                        {
+                            "issue_id": "ISSUE.VALIDATION.UNSUPPORTED_AUDIO_FORMAT",
+                            "severity": 90 if strict else 60,
+                            "confidence": 1.0,
+                            "target": target,
+                            "evidence": evidence,
+                            "message": (
+                                "WAV container with non-PCM codec detected; export "
+                                "PCM WAV (or FLAC/WavPack)."
+                            ),
+                        }
+                    )
+
             required_values = [
                 stem.get("channel_count"),
                 stem.get("sample_rate_hz"),
