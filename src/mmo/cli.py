@@ -466,13 +466,12 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.command == "downmix":
         from mmo.dsp.downmix import (  # noqa: WPS433
-            load_downmix_registry,
             load_layouts,
-            load_policy_pack,
             render_matrix,
             resolve_downmix_matrix,
         )
         from mmo.core.downmix_qa import run_downmix_qa  # noqa: WPS433
+        from mmo.core.downmix_inventory import build_downmix_list_payload  # noqa: WPS433
         from mmo.exporters.downmix_qa_csv import (  # noqa: WPS433
             export_downmix_qa_csv,
             render_downmix_qa_csv,
@@ -558,15 +557,6 @@ def main(argv: list[str] | None = None) -> int:
             return 1 if has_error else 0
 
         if args.downmix_command == "list":
-            layouts_path = repo_root / "ontology" / "layouts.yaml"
-            registry_path = repo_root / "ontology" / "policies" / "downmix.yaml"
-            try:
-                layouts = load_layouts(layouts_path)
-                registry = load_downmix_registry(registry_path)
-            except (ValueError, RuntimeError) as exc:
-                print(str(exc), file=sys.stderr)
-                return 1
-
             want_layouts = args.layouts
             want_policies = args.policies
             want_conversions = args.conversions
@@ -575,92 +565,16 @@ def main(argv: list[str] | None = None) -> int:
                 want_policies = True
                 want_conversions = True
 
-            payload: dict[str, list[dict[str, object]]] = {
-                "layouts": [],
-                "policies": [],
-                "conversions": [],
-            }
-
-            if want_layouts:
-                layout_rows: list[dict[str, object]] = []
-                for layout_id in sorted(layouts.keys()):
-                    info = layouts[layout_id]
-                    row: dict[str, object] = {"id": layout_id}
-                    label = info.get("label")
-                    if isinstance(label, str) and label:
-                        row["name"] = label
-                    channel_count = info.get("channel_count")
-                    if isinstance(channel_count, int):
-                        row["channels"] = channel_count
-                    channel_order = info.get("channel_order")
-                    if isinstance(channel_order, list):
-                        row["speakers"] = list(channel_order)
-                    layout_rows.append(row)
-                payload["layouts"] = layout_rows
-
-            policies = registry.get("downmix", {}).get("policies", {})
-            if want_policies:
-                policy_rows: list[dict[str, object]] = []
-                if isinstance(policies, dict):
-                    for policy_id in sorted(policies.keys()):
-                        entry = policies.get(policy_id, {})
-                        row: dict[str, object] = {"id": policy_id}
-                        description = entry.get("description") if isinstance(entry, dict) else None
-                        if isinstance(description, str) and description:
-                            row["description"] = description
-                        policy_rows.append(row)
-                payload["policies"] = policy_rows
-
-            if want_conversions:
-                conversion_map: dict[tuple[str, str], set[str]] = {}
-                conversions = registry.get("downmix", {}).get("conversions", [])
-                if isinstance(conversions, list):
-                    for entry in conversions:
-                        if not isinstance(entry, dict):
-                            continue
-                        source = entry.get("source_layout_id")
-                        target = entry.get("target_layout_id")
-                        if not (isinstance(source, str) and isinstance(target, str)):
-                            continue
-                        conversion_map.setdefault((source, target), set())
-                        policy_id = entry.get("policy_id")
-                        if isinstance(policy_id, str):
-                            conversion_map[(source, target)].add(policy_id)
-
-                if isinstance(policies, dict):
-                    for policy_id in sorted(policies.keys()):
-                        try:
-                            pack = load_policy_pack(registry, policy_id, repo_root)
-                        except ValueError as exc:
-                            print(str(exc), file=sys.stderr)
-                            return 1
-                        matrices = (
-                            pack.get("downmix_policy_pack", {}).get("matrices", {})
-                            if isinstance(pack, dict)
-                            else {}
-                        )
-                        if not isinstance(matrices, dict):
-                            continue
-                        for matrix in matrices.values():
-                            if not isinstance(matrix, dict):
-                                continue
-                            source = matrix.get("source_layout_id")
-                            target = matrix.get("target_layout_id")
-                            if not (isinstance(source, str) and isinstance(target, str)):
-                                continue
-                            conversion_map.setdefault((source, target), set()).add(policy_id)
-
-                conversion_rows: list[dict[str, object]] = []
-                for (source, target) in sorted(conversion_map.keys()):
-                    policy_ids = sorted(conversion_map[(source, target)])
-                    conversion_rows.append(
-                        {
-                            "source_layout_id": source,
-                            "target_layout_id": target,
-                            "policy_ids_available": policy_ids,
-                        }
-                    )
-                payload["conversions"] = conversion_rows
+            try:
+                payload = build_downmix_list_payload(
+                    repo_root=repo_root,
+                    include_layouts=want_layouts,
+                    include_policies=want_policies,
+                    include_conversions=want_conversions,
+                )
+            except (ValueError, RuntimeError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
 
             if args.format == "json":
                 output = json.dumps(payload, indent=2, sort_keys=True) + "\n"
