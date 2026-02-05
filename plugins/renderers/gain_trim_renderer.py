@@ -5,8 +5,10 @@ import random
 import struct
 import wave
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterator, List, Sequence
 
+from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples
+from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.io import read_wav_metadata, sha256_file
 from mmo.dsp.meters import iter_wav_float64_samples
 from mmo.plugins.interfaces import Recommendation, RenderManifest, RendererPlugin
@@ -16,6 +18,10 @@ _ALLOWED_ACTIONS = {
     "ACTION.UTILITY.GAIN": "PARAM.GAIN.DB",
     "ACTION.UTILITY.TRIM": "PARAM.GAIN.TRIM_DB",
 }
+_WAV_EXTENSIONS = {".wav", ".wave"}
+_LOSSLESS_FFMPEG_EXTENSIONS = {".flac", ".wv", ".aif", ".aiff"}
+_LOSSY_EXTENSIONS = {".mp3", ".aac", ".ogg", ".opus", ".m4a"}
+_VALID_OUTPUT_BIT_DEPTHS = {16, 24, 32}
 _FLOAT_MAX = math.nextafter(1.0, 0.0)
 
 
@@ -31,6 +37,17 @@ def _coerce_float(value: Any) -> float | None:
     if isinstance(value, str) and value.strip():
         try:
             return float(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _coerce_int(value: Any) -> int | None:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return int(value)
         except ValueError:
             return None
     return None
@@ -144,8 +161,26 @@ def _int_samples_to_bytes(samples: list[int], bits_per_sample: int) -> bytes:
     raise ValueError(f"Unsupported bits per sample: {bits_per_sample}")
 
 
-def _render_gain_trim(
+def _output_bit_depth(input_bits_per_sample: Any) -> int:
+    bits = _coerce_int(input_bits_per_sample)
+    if bits in _VALID_OUTPUT_BIT_DEPTHS:
+        return bits
+    return 24
+
+
+def _iter_wav_samples_for_render(source_path: Path) -> Iterator[list[float]]:
+    yield from iter_wav_float64_samples(source_path, error_context="render gain/trim")
+
+
+def _iter_ffmpeg_samples_for_render(
     source_path: Path,
+    ffmpeg_cmd: Sequence[str],
+) -> Iterator[list[float]]:
+    yield from iter_ffmpeg_float64_samples(source_path, ffmpeg_cmd)
+
+
+def _render_gain_trim(
+    float_samples_iter: Iterator[list[float]],
     output_path: Path,
     gain_db: float,
     *,
@@ -162,9 +197,7 @@ def _render_gain_trim(
         out_handle.setsampwidth(bits_per_sample // 8)
         out_handle.setframerate(sample_rate_hz)
 
-        for float_samples in iter_wav_float64_samples(
-            source_path, error_context="render gain/trim"
-        ):
+        for float_samples in float_samples_iter:
             int_samples = _dithered_int_samples(
                 float_samples,
                 bits_per_sample,
@@ -225,6 +258,22 @@ def _rendered_relative_path(source_relative_path: Path) -> Path:
     )
 
 
+def _append_skipped(
+    skipped: List[Dict[str, str]],
+    contributions: List[Dict[str, Any]],
+    reason: str,
+) -> None:
+    for rec in contributions:
+        skipped.append(
+            {
+                "recommendation_id": rec["recommendation_id"],
+                "action_id": rec["action_id"],
+                "reason": reason,
+                "gate_summary": "",
+            }
+        )
+
+
 def _sorted_skipped(skipped: List[Dict[str, str]]) -> List[Dict[str, str]]:
     seen: set[tuple[str, str, str]] = set()
     items = sorted(
@@ -282,6 +331,7 @@ class GainTrimRenderer(RendererPlugin):
 
         stems_dir = _resolve_stems_dir(session)
         stems_by_id = _stem_index(session)
+        ffmpeg_cmd: Sequence[str] | None = None
 
         grouped_by_stem: Dict[str, List[Dict[str, Any]]] = {}
         for rec in applicable:
@@ -293,15 +343,7 @@ class GainTrimRenderer(RendererPlugin):
             contributions = grouped_by_stem[stem_id]
             stem = stems_by_id.get(stem_id)
             if stem is None:
-                for rec in contributions:
-                    skipped.append(
-                        {
-                            "recommendation_id": rec["recommendation_id"],
-                            "action_id": rec["action_id"],
-                            "reason": "missing_stem",
-                            "gate_summary": "",
-                        }
-                    )
+                _append_skipped(skipped, contributions, "missing_stem")
                 continue
 
             source_path, source_relative_path, resolve_reason = (
@@ -309,83 +351,92 @@ class GainTrimRenderer(RendererPlugin):
             )
             if resolve_reason is not None or source_path is None or source_relative_path is None:
                 reason = resolve_reason or "missing_stem_file_path"
-                for rec in contributions:
-                    skipped.append(
-                        {
-                            "recommendation_id": rec["recommendation_id"],
-                            "action_id": rec["action_id"],
-                            "reason": reason,
-                            "gate_summary": "",
-                        }
-                    )
-                continue
-
-            if source_path.suffix.lower() not in {".wav", ".wave"}:
-                for rec in contributions:
-                    skipped.append(
-                        {
-                            "recommendation_id": rec["recommendation_id"],
-                            "action_id": rec["action_id"],
-                            "reason": "unsupported_format",
-                            "gate_summary": "",
-                        }
-                    )
-                continue
-
-            try:
-                metadata = read_wav_metadata(source_path)
-            except ValueError:
-                for rec in contributions:
-                    skipped.append(
-                        {
-                            "recommendation_id": rec["recommendation_id"],
-                            "action_id": rec["action_id"],
-                            "reason": "unsupported_format",
-                            "gate_summary": "",
-                        }
-                    )
-                continue
-
-            audio_format = metadata.get("audio_format_resolved")
-            bits_per_sample = metadata.get("bits_per_sample")
-            channels = metadata.get("channels")
-            sample_rate_hz = metadata.get("sample_rate_hz")
-
-            if audio_format != 1 or bits_per_sample not in (16, 24, 32):
-                for rec in contributions:
-                    skipped.append(
-                        {
-                            "recommendation_id": rec["recommendation_id"],
-                            "action_id": rec["action_id"],
-                            "reason": "unsupported_wav_format",
-                            "gate_summary": "",
-                        }
-                    )
-                continue
-            if not isinstance(channels, int) or not isinstance(sample_rate_hz, int):
-                for rec in contributions:
-                    skipped.append(
-                        {
-                            "recommendation_id": rec["recommendation_id"],
-                            "action_id": rec["action_id"],
-                            "reason": "unsupported_wav_format",
-                            "gate_summary": "",
-                        }
-                    )
+                _append_skipped(skipped, contributions, reason)
                 continue
 
             output_relative_path = _rendered_relative_path(source_relative_path)
             output_path = out_dir / output_relative_path
-
             applied_gain_db = sum(float(rec["gain_db"]) for rec in contributions)
-            _render_gain_trim(
-                source_path,
-                output_path,
-                applied_gain_db,
-                bits_per_sample=bits_per_sample,
-                channels=channels,
-                sample_rate_hz=sample_rate_hz,
-            )
+
+            extension = source_path.suffix.lower()
+            channels: int | None = None
+            sample_rate_hz: int | None = None
+            bits_per_sample = 24
+            render_samples_iter: Iterator[list[float]] | None = None
+
+            if extension in _WAV_EXTENSIONS:
+                stem_wav_format = _coerce_int(stem.get("wav_audio_format_resolved"))
+                if stem_wav_format is not None and stem_wav_format not in (1, 3):
+                    _append_skipped(skipped, contributions, "unsupported_wav_format")
+                    continue
+
+                try:
+                    metadata = read_wav_metadata(source_path)
+                except ValueError:
+                    _append_skipped(skipped, contributions, "unsupported_format")
+                    continue
+
+                audio_format = metadata.get("audio_format_resolved")
+                input_bits = metadata.get("bits_per_sample")
+                channels = _coerce_int(metadata.get("channels"))
+                sample_rate_hz = _coerce_int(metadata.get("sample_rate_hz"))
+
+                if audio_format == 1:
+                    if input_bits not in _VALID_OUTPUT_BIT_DEPTHS:
+                        _append_skipped(skipped, contributions, "unsupported_wav_format")
+                        continue
+                elif audio_format == 3:
+                    if input_bits not in (32, 64):
+                        _append_skipped(skipped, contributions, "unsupported_wav_format")
+                        continue
+                else:
+                    _append_skipped(skipped, contributions, "unsupported_wav_format")
+                    continue
+
+                if channels is None or channels <= 0 or sample_rate_hz is None or sample_rate_hz <= 0:
+                    _append_skipped(skipped, contributions, "unsupported_wav_format")
+                    continue
+
+                bits_per_sample = _output_bit_depth(input_bits)
+                render_samples_iter = _iter_wav_samples_for_render(source_path)
+            elif extension in _LOSSLESS_FFMPEG_EXTENSIONS:
+                if ffmpeg_cmd is None:
+                    ffmpeg_cmd = resolve_ffmpeg_cmd()
+                if ffmpeg_cmd is None:
+                    _append_skipped(skipped, contributions, "missing_ffmpeg")
+                    continue
+
+                channels = _coerce_int(stem.get("channel_count"))
+                sample_rate_hz = _coerce_int(stem.get("sample_rate_hz"))
+                if channels is None or channels <= 0 or sample_rate_hz is None or sample_rate_hz <= 0:
+                    _append_skipped(skipped, contributions, "missing_metadata")
+                    continue
+
+                bits_per_sample = _output_bit_depth(stem.get("bits_per_sample"))
+                render_samples_iter = _iter_ffmpeg_samples_for_render(source_path, ffmpeg_cmd)
+            elif extension in _LOSSY_EXTENSIONS:
+                _append_skipped(skipped, contributions, "lossy_input")
+                continue
+            else:
+                _append_skipped(skipped, contributions, "unsupported_format")
+                continue
+
+            if render_samples_iter is None or channels is None or sample_rate_hz is None:
+                _append_skipped(skipped, contributions, "unsupported_format")
+                continue
+
+            try:
+                _render_gain_trim(
+                    render_samples_iter,
+                    output_path,
+                    applied_gain_db,
+                    bits_per_sample=bits_per_sample,
+                    channels=channels,
+                    sample_rate_hz=sample_rate_hz,
+                )
+            except ValueError:
+                _append_skipped(skipped, contributions, "unsupported_format")
+                continue
             output_sha256 = sha256_file(output_path)
 
             recommendation_ids = sorted(rec["recommendation_id"] for rec in contributions)
