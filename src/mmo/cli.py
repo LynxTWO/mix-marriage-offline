@@ -22,6 +22,7 @@ from mmo.core.presets import (
     load_preset_pack,
     load_preset_run_config,
 )
+from mmo.core.listen_pack import build_listen_pack
 from mmo.core.run_config import (
     RUN_CONFIG_SCHEMA_VERSION,
     diff_run_config,
@@ -1216,6 +1217,45 @@ def _print_lock_verify_summary(verify_result: dict[str, Any]) -> None:
         )
 
 
+def _build_validated_listen_pack(
+    *,
+    repo_root: Path,
+    presets_dir: Path,
+    variant_result: dict[str, Any],
+) -> dict[str, Any]:
+    listen_pack = build_listen_pack(variant_result, presets_dir)
+    _validate_json_payload(
+        listen_pack,
+        schema_path=repo_root / "schemas" / "listen_pack.schema.json",
+        payload_name="Listen pack",
+    )
+    return listen_pack
+
+
+def _run_variants_listen_pack_command(
+    *,
+    repo_root: Path,
+    presets_dir: Path,
+    variant_result_path: Path,
+    out_path: Path,
+) -> int:
+    try:
+        variant_result = _load_json_object(variant_result_path, label="Variant result")
+        listen_pack = _build_validated_listen_pack(
+            repo_root=repo_root,
+            presets_dir=presets_dir,
+            variant_result=variant_result,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    except SystemExit as exc:
+        return int(exc.code) if isinstance(exc.code, int) else 1
+
+    _write_json_file(out_path, listen_pack)
+    return 0
+
+
 def _run_variants_workflow(
     *,
     repo_root: Path,
@@ -1240,6 +1280,7 @@ def _run_variants_workflow(
     render_output_formats: str | None = None,
     apply_output_formats: str | None = None,
     format_set_values: list[str] | None = None,
+    listen_pack: bool = False,
     cache_enabled: bool = True,
     cache_dir: Path | None = None,
 ) -> int:
@@ -1386,6 +1427,21 @@ def _run_variants_workflow(
         return int(exc.code) if isinstance(exc.code, int) else 1
 
     _write_json_file(result_path, result)
+    if listen_pack:
+        listen_pack_path = out_dir / "listen_pack.json"
+        try:
+            listen_pack_payload = _build_validated_listen_pack(
+                repo_root=repo_root,
+                presets_dir=presets_dir,
+                variant_result=result,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+        _write_json_file(listen_pack_path, listen_pack_payload)
+
     results = result.get("results")
     if not isinstance(results, list):
         return 1
@@ -2089,6 +2145,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Build a UI bundle for each variant.",
     )
     variants_run_parser.add_argument(
+        "--listen-pack",
+        action="store_true",
+        help="Also write listen_pack.json for musician audition guidance.",
+    )
+    variants_run_parser.add_argument(
         "--profile",
         default=None,
         help="Authority profile ID override for each variant.",
@@ -2163,6 +2224,20 @@ def main(argv: list[str] | None = None) -> int:
         "--cache-dir",
         default=None,
         help="Optional cache directory (default: <repo_root>/.mmo_cache).",
+    )
+    variants_listen_pack_parser = variants_subparsers.add_parser(
+        "listen-pack",
+        help="Build a deterministic listen pack index from a variant_result JSON.",
+    )
+    variants_listen_pack_parser.add_argument(
+        "--variant-result",
+        required=True,
+        help="Path to variant_result JSON.",
+    )
+    variants_listen_pack_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output listen_pack JSON.",
     )
 
     plugins_parser = subparsers.add_parser("plugins", help="Plugin registry tools.")
@@ -2899,6 +2974,13 @@ def main(argv: list[str] | None = None) -> int:
             print(str(exc), file=sys.stderr)
             return 1
     if args.command == "variants":
+        if args.variants_command == "listen-pack":
+            return _run_variants_listen_pack_command(
+                repo_root=repo_root,
+                presets_dir=presets_dir,
+                variant_result_path=Path(args.variant_result),
+                out_path=Path(args.out),
+            )
         if args.variants_command != "run":
             print("Unknown variants command.", file=sys.stderr)
             return 2
@@ -2926,6 +3008,7 @@ def main(argv: list[str] | None = None) -> int:
             render_output_formats=args.render_output_formats,
             apply_output_formats=args.apply_output_formats,
             format_set_values=list(args.format_set) if isinstance(args.format_set, list) else None,
+            listen_pack=args.listen_pack,
             cache_enabled=args.cache == "on",
             cache_dir=Path(args.cache_dir) if args.cache_dir else None,
         )

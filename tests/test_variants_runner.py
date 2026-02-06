@@ -80,6 +80,9 @@ class TestVariantsRunner(unittest.TestCase):
         repo_root = Path(__file__).resolve().parents[1]
         plan_validator = _schema_validator(repo_root / "schemas" / "variant_plan.schema.json")
         result_validator = _schema_validator(repo_root / "schemas" / "variant_result.schema.json")
+        listen_pack_validator = _schema_validator(
+            repo_root / "schemas" / "listen_pack.schema.json"
+        )
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -100,19 +103,28 @@ class TestVariantsRunner(unittest.TestCase):
                     "--preset",
                     "PRESET.VIBE.WARM_INTIMATE",
                     "--bundle",
+                    "--listen-pack",
                 ]
             )
             self.assertEqual(exit_code, 0)
 
             plan_path = out_dir / "variant_plan.json"
             result_path = out_dir / "variant_result.json"
+            listen_pack_path = out_dir / "listen_pack.json"
             self.assertTrue(plan_path.exists())
             self.assertTrue(result_path.exists())
+            self.assertTrue(listen_pack_path.exists())
 
             plan = json.loads(plan_path.read_text(encoding="utf-8"))
             result = json.loads(result_path.read_text(encoding="utf-8"))
+            listen_pack = json.loads(listen_pack_path.read_text(encoding="utf-8"))
             plan_validator.validate(plan)
             result_validator.validate(result)
+            listen_pack_validator.validate(listen_pack)
+            listen_entries = listen_pack.get("entries")
+            self.assertIsInstance(listen_entries, list)
+            if isinstance(listen_entries, list):
+                self.assertEqual(len(listen_entries), 2)
 
             variants = plan.get("variants")
             self.assertIsInstance(variants, list)
