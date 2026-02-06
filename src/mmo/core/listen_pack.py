@@ -34,6 +34,14 @@ def _coerce_dict_list(value: Any) -> list[dict[str, Any]]:
     return [item for item in value if isinstance(item, dict)]
 
 
+def _coerce_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
 def _optional_posix_path(value: Any) -> str | None:
     normalized = _coerce_str(value).strip()
     if not normalized or "\\" in normalized:
@@ -227,6 +235,56 @@ def _profile_note(profile_id: str) -> str:
     return "Level-match against other variants before choosing."
 
 
+def _routing_note(report: dict[str, Any]) -> str:
+    routing_plan = _coerce_dict(report.get("routing_plan"))
+    source_layout_id = _coerce_str(routing_plan.get("source_layout_id")).strip()
+    target_layout_id = _coerce_str(routing_plan.get("target_layout_id")).strip()
+    if not source_layout_id or not target_layout_id:
+        return ""
+    return f"Routing plan: {source_layout_id} -> {target_layout_id} (safe mapping)"
+
+
+def _format_signed(value: float, *, precision: int) -> str:
+    rendered = f"{value:+.{precision}f}".rstrip("0").rstrip(".")
+    if rendered in {"+0", "-0"}:
+        return "0"
+    return rendered
+
+
+def _downmix_qa_note(report: dict[str, Any]) -> str:
+    downmix_qa = _coerce_dict(report.get("downmix_qa"))
+    if not downmix_qa:
+        return ""
+
+    issues = _coerce_dict_list(downmix_qa.get("issues"))
+    status = "issues present" if issues else "clean"
+
+    measurements = _coerce_dict_list(downmix_qa.get("measurements"))
+    deltas: dict[str, float] = {}
+    for measurement in measurements:
+        evidence_id = _coerce_str(measurement.get("evidence_id")).strip()
+        value = _coerce_float(measurement.get("value"))
+        if value is None:
+            continue
+        if evidence_id == "EVID.DOWNMIX.QA.LUFS_DELTA":
+            deltas["LUFS Δ"] = value
+        elif evidence_id == "EVID.DOWNMIX.QA.TRUE_PEAK_DELTA":
+            deltas["TP Δ"] = value
+        elif evidence_id == "EVID.DOWNMIX.QA.CORR_DELTA":
+            deltas["Corr"] = value
+
+    parts: list[str] = []
+    if "LUFS Δ" in deltas:
+        parts.append(f"LUFS Δ {_format_signed(deltas['LUFS Δ'], precision=2)}")
+    if "TP Δ" in deltas:
+        parts.append(f"TP Δ {_format_signed(deltas['TP Δ'], precision=2)}")
+    if "Corr" in deltas:
+        parts.append(f"Corr {_format_signed(deltas['Corr'], precision=3)}")
+    if parts:
+        return f"Downmix QA: {status} ({', '.join(parts)})"
+    return f"Downmix QA: {status}"
+
+
 def _notes(
     *,
     preset_id: str,
@@ -234,6 +292,8 @@ def _notes(
     profile_id: str,
     translation_risk: str,
     translation_risk_high_any: bool,
+    routing_note: str,
+    downmix_qa_note: str,
 ) -> list[str]:
     notes: list[str] = []
     if translation_risk_high_any and preset_id in {
@@ -246,6 +306,10 @@ def _notes(
     else:
         notes.append("Start with this if its direction fits the song.")
 
+    if routing_note:
+        notes.append(routing_note)
+    if downmix_qa_note:
+        notes.append(downmix_qa_note)
     if overlay:
         notes.append(_overlay_note(overlay))
     notes.append(_profile_note(profile_id))
@@ -319,6 +383,8 @@ def build_listen_pack(variant_result: dict[str, Any], presets_dir: Path) -> dict
         format_set_name = _format_set_name(plan_variant, variant_slug)
         translation_risk = _translation_risk(bundle, report)
         bundle_translation_risk = _bundle_translation_risk(bundle)
+        entry_routing_note = _routing_note(report)
+        entry_downmix_qa_note = _downmix_qa_note(report)
         entry_sort_key = _variant_sort_key(base_variant_id, variant_slug)
 
         entries_raw.append(
@@ -339,6 +405,8 @@ def build_listen_pack(variant_result: dict[str, Any], presets_dir: Path) -> dict
                 "paths": paths,
                 "translation_risk": translation_risk,
                 "bundle_translation_risk": bundle_translation_risk,
+                "routing_note": entry_routing_note,
+                "downmix_qa_note": entry_downmix_qa_note,
             }
         )
 
@@ -378,6 +446,8 @@ def build_listen_pack(variant_result: dict[str, Any], presets_dir: Path) -> dict
                 profile_id=_coerce_str(item.get("profile_id")),
                 translation_risk=_coerce_str(item.get("translation_risk")),
                 translation_risk_high_any=translation_risk_high_any,
+                routing_note=_coerce_str(item.get("routing_note")),
+                downmix_qa_note=_coerce_str(item.get("downmix_qa_note")),
             ),
         }
 

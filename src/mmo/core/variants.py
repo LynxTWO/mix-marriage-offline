@@ -14,11 +14,16 @@ from mmo.core.cache_store import (
     save_cached_report,
     try_load_cached_report,
 )
+from mmo.core.downmix_qa import run_downmix_qa
 from mmo.core.gates import apply_gates_to_report
 from mmo.core.lockfile import build_lockfile
 from mmo.core.pipeline import load_plugins, run_detectors, run_renderers, run_resolvers
 from mmo.core.preset_recommendations import derive_preset_recommendations
 from mmo.core.presets import list_presets, load_preset_run_config
+from mmo.core.report_builders import (
+    enrich_blocked_downmix_render_diagnostics,
+    merge_downmix_qa_issues_into_report,
+)
 from mmo.core.routing import apply_routing_plan_to_report
 from mmo.core.run_config import (
     RUN_CONFIG_SCHEMA_VERSION,
@@ -36,8 +41,19 @@ VARIANT_SCHEMA_VERSION = "0.1.0"
 _DEFAULT_PROFILE_ID = "PROFILE.ASSIST"
 _DEFAULT_GENERATED_AT = "2000-01-01T00:00:00Z"
 _DEFAULT_TRUNCATE_VALUES = 200
+_DEFAULT_QA_METERS = "truth"
+_DEFAULT_QA_MAX_SECONDS = 120.0
 _VARIANT_SLUG_RE = re.compile(r"[^a-z0-9]+")
-_VARIANT_STEP_KEYS = ("analyze", "export_pdf", "export_csv", "apply", "render", "bundle")
+_VARIANT_STEP_KEYS = (
+    "analyze",
+    "routing",
+    "downmix_qa",
+    "export_pdf",
+    "export_csv",
+    "apply",
+    "render",
+    "bundle",
+)
 _OUTPUT_FORMAT_ORDER = tuple(LOSSLESS_OUTPUT_FORMATS)
 _SCAN_SESSION_BUILDERS: dict[str, Callable[..., dict[str, Any]]] = {}
 
@@ -58,6 +74,19 @@ def _coerce_dict_list(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _coerce_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
 
 
 def _json_clone(value: Any) -> Any:
@@ -93,6 +122,195 @@ def _normalize_steps(steps: dict[str, Any] | None) -> dict[str, bool]:
         normalized[key] = source.get(key) is True if isinstance(source, dict) else False
     normalized["analyze"] = True
     return normalized
+
+
+def _layout_ids_from_variant_and_run_config(
+    variant: dict[str, Any],
+    run_config: dict[str, Any],
+) -> tuple[str | None, str | None]:
+    downmix_cfg = _coerce_dict(run_config.get("downmix"))
+    source_layout_id = _coerce_str(variant.get("source_layout_id")).strip()
+    target_layout_id = _coerce_str(variant.get("target_layout_id")).strip()
+    if not source_layout_id:
+        source_layout_id = _coerce_str(downmix_cfg.get("source_layout_id")).strip()
+    if not target_layout_id:
+        target_layout_id = _coerce_str(downmix_cfg.get("target_layout_id")).strip()
+    return (
+        source_layout_id or None,
+        target_layout_id or None,
+    )
+
+
+def _with_variant_layout_overrides(
+    run_config: dict[str, Any],
+    variant: dict[str, Any],
+) -> dict[str, Any]:
+    normalized = normalize_run_config(run_config)
+    source_layout_id, target_layout_id = _layout_ids_from_variant_and_run_config(
+        variant,
+        normalized,
+    )
+    if source_layout_id is None and target_layout_id is None:
+        return normalized
+
+    payload = _json_clone(normalized)
+    downmix_cfg = _coerce_dict(payload.get("downmix"))
+    if source_layout_id is not None:
+        downmix_cfg["source_layout_id"] = source_layout_id
+    if target_layout_id is not None:
+        downmix_cfg["target_layout_id"] = target_layout_id
+    payload["downmix"] = downmix_cfg
+    return normalize_run_config(payload)
+
+
+def _qa_meters_for_variant(variant: dict[str, Any], run_config: dict[str, Any]) -> str:
+    candidate = _coerce_str(variant.get("qa_meters")).strip().lower()
+    if candidate in {"basic", "truth"}:
+        return candidate
+    candidate = _coerce_str(run_config.get("meters")).strip().lower()
+    if candidate in {"basic", "truth"}:
+        return candidate
+    return _DEFAULT_QA_METERS
+
+
+def _qa_max_seconds_for_variant(variant: dict[str, Any], run_config: dict[str, Any]) -> float:
+    variant_value = _coerce_float(variant.get("qa_max_seconds"))
+    if variant_value is not None and variant_value >= 0.0:
+        return variant_value
+    run_config_value = _coerce_float(run_config.get("max_seconds"))
+    if run_config_value is not None and run_config_value >= 0.0:
+        return run_config_value
+    return _DEFAULT_QA_MAX_SECONDS
+
+
+def _qa_ref_path_for_variant(variant: dict[str, Any]) -> Path | None:
+    qa_ref_raw = _coerce_str(variant.get("qa_ref_path")).strip()
+    if not qa_ref_raw:
+        return None
+    return Path(qa_ref_raw)
+
+
+def _source_path_for_downmix_qa(report: dict[str, Any], stems_dir: Path) -> Path | None:
+    session = _coerce_dict(report.get("session"))
+    stems = session.get("stems")
+    if not isinstance(stems, list):
+        return None
+
+    rows: list[tuple[str, str, int]] = []
+    for index, stem in enumerate(stems):
+        if not isinstance(stem, dict):
+            continue
+        stem_id = _coerce_str(stem.get("stem_id")).strip() or f"stem_{index:04d}"
+        file_path = _coerce_str(stem.get("file_path")).strip()
+        if not file_path:
+            continue
+        rows.append((stem_id, file_path, index))
+
+    if not rows:
+        return None
+    rows.sort(key=lambda row: (row[0], row[1], row[2]))
+
+    first_candidate: Path | None = None
+    for _, file_path, _ in rows:
+        candidate = Path(file_path)
+        if not candidate.is_absolute():
+            candidate = stems_dir / candidate
+        if first_candidate is None:
+            first_candidate = candidate
+        if candidate.exists():
+            return candidate
+    return first_candidate
+
+
+def _run_variant_downmix_qa(
+    *,
+    report: dict[str, Any],
+    variant: dict[str, Any],
+    stems_dir: Path,
+    run_config: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, Any]:
+    qa_ref_path = _qa_ref_path_for_variant(variant)
+    if qa_ref_path is None:
+        raise ValueError("qa_ref_path is required when steps.downmix_qa is true.")
+
+    source_layout_id, target_layout_id = _layout_ids_from_variant_and_run_config(
+        variant,
+        run_config,
+    )
+    if not source_layout_id:
+        raise ValueError("source_layout_id is required when steps.downmix_qa is true.")
+    if not target_layout_id:
+        target_layout_id = "LAYOUT.2_0"
+
+    src_path = _source_path_for_downmix_qa(report, stems_dir)
+    if src_path is None:
+        raise ValueError("No session stem file_path available for downmix QA source.")
+
+    downmix_cfg = _coerce_dict(run_config.get("downmix"))
+    policy_id = _coerce_str(downmix_cfg.get("policy_id")).strip() or None
+    qa_meters = _qa_meters_for_variant(variant, run_config)
+    qa_max_seconds = _qa_max_seconds_for_variant(variant, run_config)
+
+    return run_downmix_qa(
+        src_path,
+        qa_ref_path,
+        source_layout_id=source_layout_id,
+        target_layout_id=target_layout_id,
+        policy_id=policy_id,
+        repo_root=repo_root,
+        meters=qa_meters,
+        max_seconds=qa_max_seconds,
+    )
+
+
+def _apply_variant_routing_step(
+    *,
+    report: dict[str, Any],
+    variant: dict[str, Any],
+    run_config: dict[str, Any],
+    enabled: bool,
+) -> None:
+    if not enabled:
+        report.pop("routing_plan", None)
+        return
+
+    source_layout_id, target_layout_id = _layout_ids_from_variant_and_run_config(
+        variant,
+        run_config,
+    )
+    if not source_layout_id or not target_layout_id:
+        raise ValueError(
+            "source_layout_id and target_layout_id are required when steps.routing is true."
+        )
+
+    routing_run_config = _json_clone(run_config)
+    downmix_cfg = _coerce_dict(routing_run_config.get("downmix"))
+    downmix_cfg["source_layout_id"] = source_layout_id
+    downmix_cfg["target_layout_id"] = target_layout_id
+    routing_run_config["downmix"] = downmix_cfg
+    apply_routing_plan_to_report(report, normalize_run_config(routing_run_config))
+
+
+def _refresh_report_after_downmix_qa(
+    *,
+    report: dict[str, Any],
+    repo_root: Path,
+    profile_id: str,
+) -> None:
+    apply_gates_to_report(
+        report,
+        policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+        profile_id=profile_id,
+        profiles_path=repo_root / "ontology" / "policies" / "authority_profiles.yaml",
+    )
+    enrich_blocked_downmix_render_diagnostics(report)
+    if isinstance(report.get("mix_complexity"), dict):
+        report["vibe_signals"] = derive_vibe_signals(report)
+        report["preset_recommendations"] = derive_preset_recommendations(
+            report,
+            repo_root / "presets",
+        )
 
 
 def _normalize_run_config_patch(patch: dict[str, Any] | None) -> dict[str, Any]:
@@ -484,12 +702,38 @@ def build_variant_plan(
     steps: dict[str, Any] | None = None,
     format_sets: list[tuple[str, list[str]]] | None = None,
     presets_dir: Path,
+    source_layout_id: str | None = None,
+    target_layout_id: str | None = None,
+    qa_ref_path: Path | None = None,
+    qa_meters: str | None = None,
+    qa_max_seconds: float | None = None,
 ) -> dict[str, Any]:
     resolved_stems_dir = stems_dir.resolve()
     resolved_out_dir = out_dir.resolve()
     base_run_config = _default_base_run_config()
     normalized_steps = _normalize_steps(steps)
     normalized_cli_overrides = _normalize_run_config_patch(cli_run_config_overrides)
+    normalized_source_layout_id = _coerce_str(source_layout_id).strip()
+    normalized_target_layout_id = _coerce_str(target_layout_id).strip()
+    normalized_qa_ref_path = ""
+    if isinstance(qa_ref_path, Path):
+        normalized_qa_ref_path = _path_to_posix(qa_ref_path.resolve())
+    elif isinstance(qa_ref_path, str):
+        qa_ref_candidate = qa_ref_path.strip()
+        if qa_ref_candidate:
+            normalized_qa_ref_path = _path_to_posix(Path(qa_ref_candidate).resolve())
+
+    normalized_qa_meters = _coerce_str(qa_meters).strip().lower()
+    if normalized_qa_meters and normalized_qa_meters not in {"basic", "truth"}:
+        raise ValueError("qa_meters must be one of: basic, truth.")
+
+    normalized_qa_max_seconds: float | None = None
+    if qa_max_seconds is not None:
+        qa_max_seconds_value = _coerce_float(qa_max_seconds)
+        if qa_max_seconds_value is None or qa_max_seconds_value < 0.0:
+            raise ValueError("qa_max_seconds must be >= 0.")
+        normalized_qa_max_seconds = qa_max_seconds_value
+
     normalized_format_sets = sorted(
         _normalize_format_sets(format_sets),
         key=lambda item: item[0],
@@ -576,6 +820,17 @@ def build_variant_plan(
         if isinstance(config_path, Path):
             variant_entry["config_path"] = _path_to_posix(config_path)
 
+        if normalized_source_layout_id:
+            variant_entry["source_layout_id"] = normalized_source_layout_id
+        if normalized_target_layout_id:
+            variant_entry["target_layout_id"] = normalized_target_layout_id
+        if normalized_qa_ref_path:
+            variant_entry["qa_ref_path"] = normalized_qa_ref_path
+        if normalized_qa_meters:
+            variant_entry["qa_meters"] = normalized_qa_meters
+        if normalized_qa_max_seconds is not None:
+            variant_entry["qa_max_seconds"] = normalized_qa_max_seconds
+
         variants.append(variant_entry)
 
     return {
@@ -654,6 +909,10 @@ def run_variant_plan(
                 variant=variant,
                 presets_dir=presets_dir,
             )
+            effective_run_config = _with_variant_layout_overrides(
+                effective_run_config,
+                variant,
+            )
             analysis_cache_run_config = _analysis_run_config(effective_run_config)
         except Exception as exc:  # pragma: no cover - defensive surface
             errors.append(f"run_config: {exc}")
@@ -683,10 +942,6 @@ def run_variant_plan(
                         rewritten_report = rewrite_report_stems_dir(cached_report, stems_dir)
                         rewritten_report["run_config"] = normalize_run_config(
                             effective_run_config
-                        )
-                        apply_routing_plan_to_report(
-                            rewritten_report,
-                            rewritten_report["run_config"],
                         )
                         if report_schema_is_valid(rewritten_report, report_schema_path):
                             report = rewritten_report
@@ -725,7 +980,6 @@ def run_variant_plan(
                             repo_root / "presets",
                         )
                     report["run_config"] = normalize_run_config(effective_run_config)
-                    apply_routing_plan_to_report(report, report["run_config"])
                     _write_json(report_path, report)
 
                     if (
@@ -751,6 +1005,42 @@ def run_variant_plan(
                                 pass
                 except Exception as exc:  # pragma: no cover - defensive surface
                     errors.append(f"analyze: {exc}")
+
+        if report is not None and effective_run_config is not None:
+            try:
+                _apply_variant_routing_step(
+                    report=report,
+                    variant=variant,
+                    run_config=effective_run_config,
+                    enabled=steps["routing"],
+                )
+            except ValueError as exc:
+                errors.append(f"routing: {exc}")
+
+        if report is not None and effective_run_config is not None and steps["downmix_qa"]:
+            try:
+                qa_payload = _run_variant_downmix_qa(
+                    report=report,
+                    variant=variant,
+                    stems_dir=stems_dir,
+                    run_config=effective_run_config,
+                    repo_root=repo_root,
+                )
+                report["downmix_qa"] = _coerce_dict(qa_payload.get("downmix_qa"))
+                merge_downmix_qa_issues_into_report(report)
+                _refresh_report_after_downmix_qa(
+                    report=report,
+                    repo_root=repo_root,
+                    profile_id=_profile_id_from_config(effective_run_config),
+                )
+            except Exception as exc:  # pragma: no cover - defensive surface
+                errors.append(f"downmix_qa: {exc}")
+
+        if report is not None:
+            try:
+                _write_json(report_path, report)
+            except OSError as exc:  # pragma: no cover - defensive surface
+                errors.append(f"report: {exc}")
 
         if report is not None and steps["export_csv"]:
             try:

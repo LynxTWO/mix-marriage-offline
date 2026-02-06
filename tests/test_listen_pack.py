@@ -33,6 +33,8 @@ def _schema_validator(schema_path: Path) -> jsonschema.Draft202012Validator:
 def _variant_steps_payload() -> dict[str, Any]:
     return {
         "analyze": True,
+        "routing": False,
+        "downmix_qa": False,
         "export_pdf": False,
         "export_csv": False,
         "apply": False,

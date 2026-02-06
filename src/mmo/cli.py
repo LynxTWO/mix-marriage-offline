@@ -1286,8 +1286,13 @@ def _run_variants_workflow(
     profile: str | None = None,
     meters: str | None = None,
     max_seconds: float | None = None,
+    routing: bool = False,
     source_layout: str | None = None,
     target_layout: str | None = None,
+    downmix_qa: bool = False,
+    qa_ref: str | None = None,
+    qa_meters: str | None = None,
+    qa_max_seconds: float | None = None,
     policy_id: str | None = None,
     truncate_values: int | None = None,
     output_formats: str | None = None,
@@ -1325,6 +1330,15 @@ def _run_variants_workflow(
             run_config_overrides,
             policy_id,
         )
+    if downmix_qa and not qa_ref:
+        print(
+            "Missing --qa-ref. Provide a stereo reference path when --downmix-qa is enabled.",
+            file=sys.stderr,
+        )
+        return 1
+    if qa_max_seconds is not None and qa_max_seconds < 0:
+        print("--qa-max-seconds must be >= 0.", file=sys.stderr)
+        return 1
 
     shared_output_formats: list[str] | None = None
     if output_formats is not None:
@@ -1379,6 +1393,8 @@ def _run_variants_workflow(
 
     steps = {
         "analyze": True,
+        "routing": routing,
+        "downmix_qa": downmix_qa,
         "export_pdf": export_pdf,
         "export_csv": export_csv,
         "apply": apply,
@@ -1399,6 +1415,11 @@ def _run_variants_workflow(
             steps=steps,
             format_sets=format_sets,
             presets_dir=presets_dir,
+            source_layout_id=source_layout,
+            target_layout_id=target_layout,
+            qa_ref_path=Path(qa_ref) if qa_ref else None,
+            qa_meters=qa_meters,
+            qa_max_seconds=qa_max_seconds,
         )
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
@@ -2203,6 +2224,11 @@ def main(argv: list[str] | None = None) -> int:
         help="max_seconds override in run_config for each variant.",
     )
     variants_run_parser.add_argument(
+        "--routing",
+        action="store_true",
+        help="Build and persist routing_plan for each variant.",
+    )
+    variants_run_parser.add_argument(
         "--target-layout",
         default=None,
         help="downmix.target_layout_id override in run_config for each variant.",
@@ -2216,6 +2242,28 @@ def main(argv: list[str] | None = None) -> int:
         "--policy-id",
         default=None,
         help="downmix.policy_id override in run_config for each variant.",
+    )
+    variants_run_parser.add_argument(
+        "--downmix-qa",
+        action="store_true",
+        help="Run downmix QA for each variant after analyze and merge into report.",
+    )
+    variants_run_parser.add_argument(
+        "--qa-ref",
+        default=None,
+        help="Path to stereo QA reference used when --downmix-qa is enabled.",
+    )
+    variants_run_parser.add_argument(
+        "--qa-meters",
+        choices=["basic", "truth"],
+        default=None,
+        help="Meter pack for downmix QA (basic or truth).",
+    )
+    variants_run_parser.add_argument(
+        "--qa-max-seconds",
+        type=float,
+        default=None,
+        help="max_seconds override for downmix QA only.",
     )
     variants_run_parser.add_argument(
         "--truncate-values",
@@ -2753,6 +2801,11 @@ def main(argv: list[str] | None = None) -> int:
                 profile=args.profile,
                 meters=args.meters,
                 max_seconds=args.max_seconds,
+                routing=False,
+                downmix_qa=False,
+                qa_ref=None,
+                qa_meters=None,
+                qa_max_seconds=None,
                 truncate_values=args.truncate_values,
                 output_formats=args.output_formats,
                 format_set_values=format_set_values if format_set_values else None,
@@ -3087,8 +3140,13 @@ def main(argv: list[str] | None = None) -> int:
             profile=args.profile,
             meters=args.meters,
             max_seconds=args.max_seconds,
+            routing=args.routing,
             source_layout=args.source_layout,
             target_layout=args.target_layout,
+            downmix_qa=args.downmix_qa,
+            qa_ref=args.qa_ref,
+            qa_meters=args.qa_meters,
+            qa_max_seconds=args.qa_max_seconds,
             policy_id=args.policy_id,
             truncate_values=args.truncate_values,
             output_formats=args.output_formats,

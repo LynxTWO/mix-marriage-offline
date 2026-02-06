@@ -78,9 +78,20 @@
     "variant_steps": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["analyze", "export_pdf", "export_csv", "apply", "render", "bundle"],
+      "required": [
+        "analyze",
+        "routing",
+        "downmix_qa",
+        "export_pdf",
+        "export_csv",
+        "apply",
+        "render",
+        "bundle"
+      ],
       "properties": {
         "analyze": { "type": "boolean" },
+        "routing": { "type": "boolean" },
+        "downmix_qa": { "type": "boolean" },
         "export_pdf": { "type": "boolean" },
         "export_csv": { "type": "boolean" },
         "apply": { "type": "boolean" },
@@ -116,6 +127,14 @@
         "label": { "type": "string", "minLength": 1 },
         "preset_id": { "type": "string", "minLength": 1 },
         "config_path": { "$ref": "#/$defs/posix_path" },
+        "source_layout_id": { "type": "string", "minLength": 1 },
+        "target_layout_id": { "type": "string", "minLength": 1 },
+        "qa_ref_path": { "$ref": "#/$defs/posix_path" },
+        "qa_meters": {
+          "type": "string",
+          "enum": ["basic", "truth"]
+        },
+        "qa_max_seconds": { "type": "number", "minimum": 0 },
         "run_config_overrides": { "$ref": "#/$defs/run_config_patch" },
         "steps": { "$ref": "#/$defs/variant_steps" }
       }
