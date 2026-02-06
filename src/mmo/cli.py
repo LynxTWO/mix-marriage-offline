@@ -6,7 +6,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from mmo.core.cache_keys import cache_key, hash_lockfile, hash_run_config
 from mmo.core.cache_store import (
@@ -48,6 +48,7 @@ from mmo.core.run_config import (
 )
 from mmo.core.variants import build_variant_plan, run_variant_plan
 from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS
+from mmo.ui.tui import choose_from_list, multi_toggle, render_header, yes_no
 
 try:
     import jsonschema
@@ -63,6 +64,16 @@ _FORMAT_SET_NAME_RE = re.compile(r"^[a-z0-9_]+$")
 _RUN_COMMAND_EPILOG = (
     "One button for musicians: analyze your stems, then optionally export notes, "
     "apply safe fixes, render lossless files, and build a UI bundle in one pass."
+)
+_UI_OVERLAY_CHIPS: tuple[str, ...] = (
+    "Warm",
+    "Air",
+    "Punch",
+    "Glue",
+    "Wide",
+    "Safe",
+    "Live",
+    "Vocal",
 )
 
 
@@ -2124,6 +2135,677 @@ def _render_project_text(project: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+_UIInputProvider = Callable[[str], str]
+_UIOutputWriter = Callable[[str], None]
+
+
+def _ui_count_list(value: Any) -> int:
+    if isinstance(value, list):
+        return len(value)
+    return 0
+
+
+def _ui_lockfile_status(
+    *,
+    stems_dir: Path,
+    project_payload: dict[str, Any],
+    nerd: bool,
+) -> str:
+    from mmo.core.lockfile import verify_lockfile  # noqa: WPS433
+
+    lockfile_path_value = project_payload.get("lockfile_path")
+    if not isinstance(lockfile_path_value, str) or not lockfile_path_value.strip():
+        return "missing"
+
+    lockfile_path = Path(lockfile_path_value)
+    if not lockfile_path.exists():
+        if nerd:
+            return f"missing ({lockfile_path.resolve().as_posix()})"
+        return "missing"
+
+    try:
+        lock_payload = _load_json_object(lockfile_path, label="Lockfile")
+        verify_result = verify_lockfile(stems_dir, lock_payload)
+    except ValueError as exc:
+        if nerd:
+            return f"invalid ({exc})"
+        return "invalid"
+
+    if verify_result.get("ok") is True:
+        return "in sync"
+
+    missing_count = _ui_count_list(verify_result.get("missing"))
+    extra_count = _ui_count_list(verify_result.get("extra"))
+    changed_count = _ui_count_list(verify_result.get("changed"))
+    return (
+        "drift"
+        f" (missing={missing_count}, extra={extra_count}, changed={changed_count})"
+    )
+
+
+def _ui_last_run_pointer_rows(project_payload: dict[str, Any]) -> list[tuple[str, str]]:
+    last_run = project_payload.get("last_run")
+    if not isinstance(last_run, dict):
+        return []
+
+    rows: list[tuple[str, str]] = []
+    key_map = [
+        ("mode", "mode"),
+        ("out_dir", "out_dir"),
+        ("deliverables_index_path", "deliverables_index"),
+        ("listen_pack_path", "listen_pack"),
+        ("variant_plan_path", "variant_plan"),
+        ("variant_result_path", "variant_result"),
+    ]
+    for key, label in key_map:
+        value = last_run.get(key)
+        if isinstance(value, str) and value.strip():
+            rows.append((label, value.strip()))
+    return rows
+
+
+def _ui_report_path_from_variant_result(variant_result_path: Path) -> Path | None:
+    try:
+        payload = _load_json_object(variant_result_path, label="Variant result")
+    except ValueError:
+        return None
+
+    results = payload.get("results")
+    if not isinstance(results, list):
+        return None
+
+    normalized_results = sorted(
+        [item for item in results if isinstance(item, dict)],
+        key=lambda item: str(item.get("variant_id", "")),
+    )
+    for item in normalized_results:
+        report_path_value = item.get("report_path")
+        if not isinstance(report_path_value, str) or not report_path_value.strip():
+            continue
+        report_path = Path(report_path_value.strip())
+        if not report_path.is_absolute():
+            out_dir_value = item.get("out_dir")
+            if isinstance(out_dir_value, str) and out_dir_value.strip():
+                report_path = Path(out_dir_value.strip()) / report_path
+            else:
+                report_path = variant_result_path.parent / report_path
+        if report_path.exists():
+            return report_path.resolve()
+    return None
+
+
+def _ui_report_path_from_project(project_payload: dict[str, Any]) -> Path | None:
+    last_run = project_payload.get("last_run")
+    if not isinstance(last_run, dict):
+        return None
+
+    mode = last_run.get("mode")
+    out_dir_value = last_run.get("out_dir")
+    if mode == "single" and isinstance(out_dir_value, str) and out_dir_value.strip():
+        candidate = Path(out_dir_value.strip()) / "report.json"
+        if candidate.exists():
+            return candidate.resolve()
+
+    variant_result_candidates: list[Path] = []
+    variant_result_path_value = last_run.get("variant_result_path")
+    if isinstance(variant_result_path_value, str) and variant_result_path_value.strip():
+        variant_result_candidates.append(Path(variant_result_path_value.strip()))
+    if isinstance(out_dir_value, str) and out_dir_value.strip():
+        variant_result_candidates.append(Path(out_dir_value.strip()) / "variant_result.json")
+
+    for candidate in variant_result_candidates:
+        if not candidate.exists():
+            continue
+        report_path = _ui_report_path_from_variant_result(candidate)
+        if report_path is not None:
+            return report_path
+    return None
+
+
+def _ui_workflow_help_short_map(repo_root: Path) -> dict[str, str]:
+    from mmo.core.help_registry import load_help_registry, resolve_help_entries  # noqa: WPS433
+
+    help_ids = ["HELP.WORKFLOW.RUN", "HELP.WORKFLOW.VARIANTS_RUN"]
+    try:
+        registry = load_help_registry(repo_root / "ontology" / "help.yaml")
+        resolved = resolve_help_entries(help_ids, registry)
+    except (RuntimeError, ValueError):
+        return {}
+
+    payload: dict[str, str] = {}
+    for help_id in help_ids:
+        entry = resolved.get(help_id)
+        if not isinstance(entry, dict):
+            continue
+        short = entry.get("short")
+        if not isinstance(short, str):
+            continue
+        normalized_short = short.strip()
+        if not normalized_short or normalized_short == "Missing help entry":
+            continue
+        payload[help_id] = normalized_short
+    return payload
+
+
+def _ui_render_preview_text(payload: dict[str, Any], *, nerd: bool) -> str:
+    if nerd:
+        lines = [_render_preset_preview_text(payload)]
+        effective_run_config = payload.get("effective_run_config")
+        if isinstance(effective_run_config, dict):
+            profile_id = effective_run_config.get("profile_id")
+            meters = effective_run_config.get("meters")
+            max_seconds = effective_run_config.get("max_seconds")
+            lines.append("")
+            lines.append(f"profile_id: {profile_id}")
+            lines.append(f"meters: {meters}")
+            lines.append(f"max_seconds: {max_seconds}")
+            lines.append("effective_run_config:")
+            lines.append(json.dumps(effective_run_config, indent=2, sort_keys=True))
+        return "\n".join(lines)
+
+    label = payload.get("label")
+    overlay = payload.get("overlay")
+    help_payload = payload.get("help")
+    warnings = payload.get("warnings")
+
+    normalized_label = label if isinstance(label, str) and label.strip() else "Preset"
+    normalized_overlay = overlay if isinstance(overlay, str) and overlay.strip() else "None"
+    short = ""
+    cues: list[str] = []
+    watch_out_for: list[str] = []
+    if isinstance(help_payload, dict):
+        short_value = help_payload.get("short")
+        if isinstance(short_value, str):
+            short = short_value
+        cues = _string_list(help_payload.get("cues"))
+        watch_out_for = _string_list(help_payload.get("watch_out_for"))
+    warning_rows = _string_list(warnings)
+    for warning in warning_rows:
+        if warning not in watch_out_for:
+            watch_out_for.append(warning)
+
+    lines = [
+        f"{normalized_label}  [{normalized_overlay}]",
+        f"What it does: {short}",
+        "Try it when:",
+    ]
+    for cue in cues[:4]:
+        lines.append(f"  - {cue}")
+    lines.append("Watch out for:")
+    for item in watch_out_for[:4]:
+        lines.append(f"  - {item}")
+    return "\n".join(lines)
+
+
+def _ui_first_variant_bundle_path(out_dir: Path) -> Path | None:
+    variant_result_path = out_dir / "variant_result.json"
+    if variant_result_path.exists():
+        try:
+            payload = _load_json_object(variant_result_path, label="Variant result")
+        except ValueError:
+            payload = {}
+        results = payload.get("results")
+        if isinstance(results, list):
+            normalized_results = sorted(
+                [item for item in results if isinstance(item, dict)],
+                key=lambda item: str(item.get("variant_id", "")),
+            )
+            for item in normalized_results:
+                bundle_path_value = item.get("bundle_path")
+                if not isinstance(bundle_path_value, str) or not bundle_path_value.strip():
+                    continue
+                candidate = Path(bundle_path_value.strip())
+                if candidate.exists():
+                    return candidate.resolve()
+    for candidate in sorted(out_dir.glob("VARIANT.*__*/ui_bundle.json")):
+        if candidate.exists():
+            return candidate.resolve()
+    return None
+
+
+def _run_ui_workflow(
+    *,
+    repo_root: Path,
+    tools_dir: Path,
+    presets_dir: Path,
+    stems_dir: Path,
+    out_dir: Path,
+    project_path: Path | None,
+    nerd: bool,
+    input_provider: _UIInputProvider = input,
+    output: _UIOutputWriter = print,
+) -> int:
+    resolved_stems_dir = stems_dir.resolve()
+    resolved_out_dir = out_dir.resolve()
+    resolved_project_path = project_path.resolve() if project_path is not None else None
+
+    project_payload: dict[str, Any] | None = None
+    if resolved_project_path is not None:
+        try:
+            project_payload = load_project(resolved_project_path)
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+    render_header(
+        "MMO UI Launcher",
+        subtitle="Preset picker -> preview -> run",
+        output=output,
+    )
+    output(f"Stems dir: {resolved_stems_dir.as_posix()}")
+    output(f"Output dir: {resolved_out_dir.as_posix()}")
+    if project_payload is not None and resolved_project_path is not None:
+        output(f"Project: {resolved_project_path.as_posix()}")
+        output(
+            "Lockfile status: "
+            + _ui_lockfile_status(
+                stems_dir=resolved_stems_dir,
+                project_payload=project_payload,
+                nerd=nerd,
+            )
+        )
+        pointer_rows = _ui_last_run_pointer_rows(project_payload)
+        if pointer_rows:
+            output("Last run pointers:")
+            for label, value in pointer_rows:
+                output(f"- {label}: {value}")
+        else:
+            output("Last run pointers: none")
+    else:
+        output("Project: none")
+
+    try:
+        all_presets = list_presets(presets_dir)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    if not all_presets:
+        print("No presets are available.", file=sys.stderr)
+        return 1
+
+    render_header("Choose a vibe preset", output=output)
+    overlay_values = {
+        item.get("overlay").strip()
+        for item in all_presets
+        if isinstance(item, dict)
+        and isinstance(item.get("overlay"), str)
+        and item.get("overlay", "").strip()
+    }
+    chips = [chip for chip in _UI_OVERLAY_CHIPS if chip in overlay_values]
+    if chips:
+        output("Overlay chips: " + " ".join(f"[{chip}]" for chip in chips))
+
+    recommendation_report_path: Path | None = None
+    if project_payload is not None:
+        recommendation_report_path = _ui_report_path_from_project(project_payload)
+    if recommendation_report_path is None:
+        out_report_path = resolved_out_dir / "report.json"
+        if out_report_path.exists():
+            recommendation_report_path = out_report_path
+    if recommendation_report_path is None:
+        quick_report_path = resolved_out_dir / ".ui_recommend_report.json"
+        output("No prior report found. Running a quick scan for recommendations...")
+        quick_report_path.parent.mkdir(parents=True, exist_ok=True)
+        exit_code = _run_analyze(
+            tools_dir,
+            resolved_stems_dir,
+            quick_report_path,
+            None,
+            False,
+            str(repo_root / "plugins"),
+            False,
+            "PROFILE.ASSIST",
+        )
+        if exit_code == 0 and quick_report_path.exists():
+            recommendation_report_path = quick_report_path
+
+    recommendations: list[dict[str, Any]] = []
+    if recommendation_report_path is not None:
+        try:
+            recommendations = _build_preset_recommendations_payload(
+                report_path=recommendation_report_path,
+                presets_dir=presets_dir,
+                n=3,
+            )
+        except ValueError:
+            recommendations = []
+
+    preset_by_id: dict[str, dict[str, Any]] = {}
+    for item in all_presets:
+        if not isinstance(item, dict):
+            continue
+        preset_id = item.get("preset_id")
+        if isinstance(preset_id, str):
+            preset_by_id[preset_id] = item
+
+    recommended_ids: list[str] = []
+    for item in recommendations:
+        preset_id = item.get("preset_id")
+        if isinstance(preset_id, str) and preset_id in preset_by_id:
+            recommended_ids.append(preset_id)
+    if recommended_ids:
+        output("Recommended:")
+        for preset_id in recommended_ids:
+            preset = preset_by_id[preset_id]
+            label = preset.get("label", "")
+            overlay = preset.get("overlay", "")
+            recommendation = next(
+                (
+                    row
+                    for row in recommendations
+                    if isinstance(row, dict) and row.get("preset_id") == preset_id
+                ),
+                {},
+            )
+            reasons = (
+                recommendation.get("reasons")
+                if isinstance(recommendation, dict)
+                else []
+            )
+            first_reason = ""
+            if isinstance(reasons, list):
+                for reason in reasons:
+                    if isinstance(reason, str) and reason.strip():
+                        first_reason = reason.strip()
+                        break
+            if nerd:
+                output(f"- {preset_id} | {label} | overlay={overlay}")
+            else:
+                overlay_suffix = f" [{overlay}]" if isinstance(overlay, str) and overlay else ""
+                output(f"- {label}{overlay_suffix}")
+            if first_reason:
+                output(f"  reason: {first_reason}")
+
+    filter_mode_index = choose_from_list(
+        "Filter presets",
+        ["No filter", "By tag", "By category"],
+        default_index=0,
+        input_provider=input_provider,
+        output=output,
+    )
+    filter_tag: str | None = None
+    filter_category: str | None = None
+
+    if filter_mode_index == 1:
+        tags = sorted(
+            {
+                tag
+                for item in all_presets
+                if isinstance(item, dict)
+                for tag in _string_list(item.get("tags"))
+            }
+        )
+        if tags:
+            selected_tag_index = choose_from_list(
+                "Choose tag",
+                tags,
+                default_index=0,
+                input_provider=input_provider,
+                output=output,
+            )
+            filter_tag = tags[selected_tag_index]
+    elif filter_mode_index == 2:
+        categories = sorted(
+            {
+                item.get("category").strip()
+                for item in all_presets
+                if isinstance(item, dict)
+                and isinstance(item.get("category"), str)
+                and item.get("category", "").strip()
+            }
+        )
+        if categories:
+            selected_category_index = choose_from_list(
+                "Choose category",
+                categories,
+                default_index=0,
+                input_provider=input_provider,
+                output=output,
+            )
+            filter_category = categories[selected_category_index]
+
+    filtered_presets = list_presets(
+        presets_dir,
+        tag=filter_tag,
+        category=filter_category,
+    )
+    if not filtered_presets:
+        output("No presets matched that filter. Showing all presets instead.")
+        filtered_presets = list(all_presets)
+
+    option_labels: list[str] = []
+    for item in filtered_presets:
+        preset_id = item.get("preset_id")
+        label = item.get("label", "")
+        overlay = item.get("overlay", "")
+        category = item.get("category", "")
+        recommended_suffix = (
+            " (Recommended)"
+            if isinstance(preset_id, str) and preset_id in recommended_ids
+            else ""
+        )
+        if nerd:
+            option_labels.append(
+                f"{label} ({preset_id}) [{category}] overlay={overlay}{recommended_suffix}"
+            )
+        else:
+            overlay_suffix = (
+                f" [{overlay}]"
+                if isinstance(overlay, str) and overlay.strip()
+                else ""
+            )
+            option_labels.append(f"{label}{overlay_suffix}{recommended_suffix}")
+
+    default_preset_index = 0
+    for index, item in enumerate(filtered_presets):
+        preset_id = item.get("preset_id")
+        if isinstance(preset_id, str) and preset_id in recommended_ids:
+            default_preset_index = index
+            break
+
+    selected_preset_index = choose_from_list(
+        "Choose preset",
+        option_labels,
+        default_index=default_preset_index,
+        input_provider=input_provider,
+        output=output,
+    )
+    selected_preset = filtered_presets[selected_preset_index]
+    selected_preset_id = selected_preset.get("preset_id", "")
+    if not isinstance(selected_preset_id, str) or not selected_preset_id.strip():
+        print("Selected preset is missing preset_id.", file=sys.stderr)
+        return 1
+
+    try:
+        preview_payload = _build_preset_preview_payload(
+            repo_root=repo_root,
+            presets_dir=presets_dir,
+            preset_id=selected_preset_id,
+            config_path=None,
+            cli_overrides={},
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    except SystemExit as exc:
+        return int(exc.code) if isinstance(exc.code, int) else 1
+
+    render_header("Preset preview", output=output)
+    output(_ui_render_preview_text(preview_payload, nerd=nerd))
+
+    help_short_map = _ui_workflow_help_short_map(repo_root)
+    run_help_text = help_short_map.get("HELP.WORKFLOW.RUN")
+    if isinstance(run_help_text, str) and run_help_text:
+        output("")
+        output(f"Run workflow: {run_help_text}")
+
+    use_variants = yes_no(
+        "Use variants mode (needed for listen pack)?",
+        default=False,
+        input_provider=input_provider,
+        output=output,
+    )
+    if use_variants:
+        variants_help_text = help_short_map.get("HELP.WORKFLOW.VARIANTS_RUN")
+        if isinstance(variants_help_text, str) and variants_help_text:
+            output(f"Variants workflow: {variants_help_text}")
+
+    step_options: list[dict[str, Any]] = [
+        {"key": "analyze", "label": "Analyze", "enabled": True, "locked": True},
+        {"key": "export_pdf", "label": "Export PDF", "enabled": False},
+        {"key": "export_csv", "label": "Export CSV", "enabled": False},
+        {"key": "apply", "label": "Apply (auto-apply)", "enabled": False},
+        {"key": "render", "label": "Render (render suggestions)", "enabled": False},
+        {"key": "bundle", "label": "Bundle", "enabled": True, "locked": True},
+        {"key": "deliverables_index", "label": "Deliverables index", "enabled": True},
+    ]
+    if use_variants:
+        step_options.append(
+            {"key": "listen_pack", "label": "Listen pack", "enabled": False}
+        )
+    step_state = multi_toggle(
+        "Choose steps",
+        step_options,
+        input_provider=input_provider,
+        output=output,
+    )
+
+    export_pdf = step_state.get("export_pdf") is True
+    export_csv = step_state.get("export_csv") is True
+    apply = step_state.get("apply") is True
+    render = step_state.get("render") is True
+    deliverables_index = step_state.get("deliverables_index") is True
+    listen_pack = use_variants and step_state.get("listen_pack") is True
+
+    render_header("Run", output=output)
+    if use_variants:
+        exit_code = _run_variants_workflow(
+            repo_root=repo_root,
+            presets_dir=presets_dir,
+            stems_dir=resolved_stems_dir,
+            out_dir=resolved_out_dir,
+            preset_values=[selected_preset_id],
+            config_values=None,
+            apply=apply,
+            render=render,
+            export_pdf=export_pdf,
+            export_csv=export_csv,
+            bundle=True,
+            profile=None,
+            meters=None,
+            max_seconds=None,
+            routing=False,
+            source_layout=None,
+            target_layout=None,
+            downmix_qa=False,
+            qa_ref=None,
+            qa_meters=None,
+            qa_max_seconds=None,
+            policy_id=None,
+            truncate_values=None,
+            output_formats=None,
+            render_output_formats=None,
+            apply_output_formats=None,
+            format_set_values=None,
+            listen_pack=listen_pack,
+            deliverables_index=deliverables_index,
+            project_path=resolved_project_path,
+            cache_enabled=True,
+            cache_dir=None,
+        )
+        run_mode = "variants"
+    else:
+        exit_code = _run_one_shot_workflow(
+            repo_root=repo_root,
+            tools_dir=tools_dir,
+            presets_dir=presets_dir,
+            stems_dir=resolved_stems_dir,
+            out_dir=resolved_out_dir,
+            preset_id=selected_preset_id,
+            config_path=None,
+            project_path=resolved_project_path,
+            profile=None,
+            meters=None,
+            max_seconds=None,
+            truncate_values=None,
+            export_pdf=export_pdf,
+            export_csv=export_csv,
+            apply=apply,
+            render=render,
+            bundle=True,
+            deliverables_index=deliverables_index,
+            output_formats=None,
+            cache_enabled=True,
+            cache_dir=None,
+        )
+        run_mode = "single"
+    if exit_code != 0:
+        return exit_code
+
+    if resolved_project_path is not None and project_payload is not None:
+        try:
+            project_payload = update_project_last_run(
+                project_payload,
+                _project_last_run_payload(mode=run_mode, out_dir=resolved_out_dir),
+            )
+            run_config_defaults = _project_run_config_defaults(
+                mode=run_mode,
+                out_dir=resolved_out_dir,
+            )
+            if isinstance(run_config_defaults, dict):
+                project_payload["run_config_defaults"] = run_config_defaults
+
+            try:
+                from mmo.core.lockfile import build_lockfile  # noqa: WPS433
+
+                lock_payload = build_lockfile(resolved_stems_dir)
+            except ValueError:
+                lock_payload = None
+            if isinstance(lock_payload, dict):
+                lockfile_path = resolved_out_dir / "lockfile.json"
+                _write_json_file(lockfile_path, lock_payload)
+                project_payload["lockfile_path"] = lockfile_path.as_posix()
+                project_payload["lock_hash"] = hash_lockfile(lock_payload)
+
+            write_project(resolved_project_path, project_payload)
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+    render_header("Finish", output=output)
+    if use_variants:
+        bundle_path = _ui_first_variant_bundle_path(resolved_out_dir)
+    else:
+        bundle_path = resolved_out_dir / "ui_bundle.json"
+        if not bundle_path.exists():
+            bundle_path = None
+
+    if bundle_path is not None:
+        output(f"ui_bundle.json: {bundle_path.resolve().as_posix()}")
+    else:
+        output("ui_bundle.json: not generated")
+
+    deliverables_index_path = resolved_out_dir / "deliverables_index.json"
+    if deliverables_index_path.exists():
+        output(
+            "deliverables_index.json: "
+            + deliverables_index_path.resolve().as_posix()
+        )
+    else:
+        output("deliverables_index.json: not generated")
+
+    if listen_pack:
+        listen_pack_path = resolved_out_dir / "listen_pack.json"
+        if listen_pack_path.exists():
+            output(f"listen_pack.json: {listen_pack_path.resolve().as_posix()}")
+
+    if use_variants:
+        output("Tip: open deliverables_index.json, then the first variant ui_bundle.json.")
+    else:
+        output("Tip: open ui_bundle.json first, then check report.json for details.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="MMO command-line tools.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -2312,6 +2994,31 @@ def main(argv: list[str] | None = None) -> int:
         "--variants",
         action="store_true",
         help="Force delegation to variants mode, even for a single preset/config.",
+    )
+
+    ui_parser = subparsers.add_parser(
+        "ui",
+        help="Interactive terminal launcher for musicians.",
+    )
+    ui_parser.add_argument(
+        "--stems",
+        required=True,
+        help="Path to a directory of audio stems.",
+    )
+    ui_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to the deterministic output directory.",
+    )
+    ui_parser.add_argument(
+        "--project",
+        default=None,
+        help="Optional project JSON path for lockfile and last-run context.",
+    )
+    ui_parser.add_argument(
+        "--nerd",
+        action="store_true",
+        help="Show IDs, meter details, and full internal paths.",
     )
 
     export_parser = subparsers.add_parser(
@@ -3408,6 +4115,16 @@ def main(argv: list[str] | None = None) -> int:
 
         print("Unknown project command.", file=sys.stderr)
         return 2
+    if args.command == "ui":
+        return _run_ui_workflow(
+            repo_root=repo_root,
+            tools_dir=tools_dir,
+            presets_dir=presets_dir,
+            stems_dir=Path(args.stems),
+            out_dir=Path(args.out),
+            project_path=Path(args.project) if args.project else None,
+            nerd=args.nerd,
+        )
     if args.command == "run":
         exit_code, _ = _run_workflow_from_run_args(
             repo_root=repo_root,
