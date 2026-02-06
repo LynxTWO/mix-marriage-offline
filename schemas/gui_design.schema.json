@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/gui_design.schema.json",
+  "title": "MMO GUI Design Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "theme",
+    "layout_rules",
+    "copy_rules",
+    "components",
+    "examples"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "theme": { "$ref": "#/$defs/theme" },
+    "layout_rules": { "$ref": "#/$defs/layout_rules" },
+    "copy_rules": { "$ref": "#/$defs/copy_rules" },
+    "components": { "$ref": "#/$defs/components" },
+    "examples": { "$ref": "#/$defs/examples" }
+  },
+  "$defs": {
+    "hex_color": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$"
+    },
+    "palette": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "background",
+        "surface",
+        "surface_alt",
+        "text",
+        "text_muted",
+        "accent_primary",
+        "accent_secondary",
+        "danger",
+        "warning",
+        "ok",
+        "info"
+      ],
+      "properties": {
+        "background": { "$ref": "#/$defs/hex_color" },
+        "surface": { "$ref": "#/$defs/hex_color" },
+        "surface_alt": { "$ref": "#/$defs/hex_color" },
+        "text": { "$ref": "#/$defs/hex_color" },
+        "text_muted": { "$ref": "#/$defs/hex_color" },
+        "accent_primary": { "$ref": "#/$defs/hex_color" },
+        "accent_secondary": { "$ref": "#/$defs/hex_color" },
+        "danger": { "$ref": "#/$defs/hex_color" },
+        "warning": { "$ref": "#/$defs/hex_color" },
+        "ok": { "$ref": "#/$defs/hex_color" },
+        "info": { "$ref": "#/$defs/hex_color" }
+      }
+    },
+    "typography": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ui_font", "mono_font", "display_font", "fallback_fonts"],
+      "properties": {
+        "ui_font": { "type": "string", "minLength": 1 },
+        "mono_font": { "type": "string", "minLength": 1 },
+        "display_font": { "type": "string", "minLength": 1 },
+        "fallback_fonts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "spacing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_px", "radius_px", "card_padding_px"],
+      "properties": {
+        "base_px": { "type": "integer", "minimum": 1 },
+        "radius_px": { "type": "integer", "minimum": 0 },
+        "card_padding_px": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "icons": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["style"],
+      "properties": {
+        "style": { "type": "string", "minLength": 1 }
+      }
+    },
+    "theme": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["palette", "typography", "spacing", "icons"],
+      "properties": {
+        "palette": { "$ref": "#/$defs/palette" },
+        "typography": { "$ref": "#/$defs/typography" },
+        "spacing": { "$ref": "#/$defs/spacing" },
+        "icons": { "$ref": "#/$defs/icons" }
+      }
+    },
+    "layout_rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_nav_depth",
+        "prefer_search_over_menus",
+        "keep_primary_actions_visible",
+        "progressive_disclosure"
+      ],
+      "properties": {
+        "max_nav_depth": { "type": "integer", "minimum": 1 },
+        "prefer_search_over_menus": { "type": "boolean" },
+        "keep_primary_actions_visible": { "type": "boolean" },
+        "progressive_disclosure": { "type": "boolean" }
+      }
+    },
+    "copy_rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "audience",
+        "avoid_jargon_when_possible",
+        "include_why_line_for_actions",
+        "warnings_are_actionable"
+      ],
+      "properties": {
+        "audience": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "avoid_jargon_when_possible": { "type": "boolean" },
+        "include_why_line_for_actions": { "type": "boolean" },
+        "warnings_are_actionable": { "type": "boolean" }
+      }
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["badges", "panels"],
+      "properties": {
+        "badges": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "panels": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "examples": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chips"],
+      "properties": {
+        "chips": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

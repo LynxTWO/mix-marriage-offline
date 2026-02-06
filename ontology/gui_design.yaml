@@ -1,0 +1,60 @@
+schema_version: "0.1.0"
+theme:
+  palette:
+    background: "#0F1117"
+    surface: "#151A23"
+    surface_alt: "#1C2230"
+    text: "#EDEFF5"
+    text_muted: "#A9B0C3"
+    accent_primary: "#C28840"
+    accent_secondary: "#8C5A3C"
+    danger: "#D24B4B"
+    warning: "#E0B84A"
+    ok: "#4AD28A"
+    info: "#4AA3D2"
+  typography:
+    ui_font: "Inter"
+    mono_font: "JetBrains Mono"
+    display_font: "Cabin Sketch"
+    fallback_fonts:
+      - "Amatic SC Bold"
+      - "DK Crayon Crumble"
+  spacing:
+    base_px: 8
+    radius_px: 16
+    card_padding_px: 16
+  icons:
+    style: "rounded"
+layout_rules:
+  max_nav_depth: 2
+  prefer_search_over_menus: true
+  keep_primary_actions_visible: true
+  progressive_disclosure: true
+copy_rules:
+  audience:
+    - "artist"
+    - "engineer"
+  avoid_jargon_when_possible: true
+  include_why_line_for_actions: true
+  warnings_are_actionable: true
+components:
+  badges:
+    - "EXTREME"
+    - "BLOCKED"
+    - "SAFE"
+    - "INFO"
+  panels:
+    - "Dashboard"
+    - "Signals"
+    - "Actions"
+    - "Deliverables"
+    - "Compare"
+examples:
+  chips:
+    - "Warm"
+    - "Air"
+    - "Punch"
+    - "Glue"
+    - "Wide"
+    - "Safe"
+    - "Live"
