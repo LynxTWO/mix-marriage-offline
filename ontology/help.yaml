@@ -108,6 +108,24 @@ entries:
       - "If turnaround speed matters more than conservative behavior."
     watch_out_for:
       - "Expect more extreme changes; review EXTREME flags closely."
+  HELP.OUTPUT_FORMATS.LOSSLESS:
+    title: "Lossless output formats"
+    short: "Use WAV, FLAC, or WV for high-fidelity render/apply outputs."
+    long: |
+      Lossless output formats keep your audio data intact when MMO writes
+      rendered or auto-applied files. Use WAV for broad compatibility, FLAC
+      for smaller files with lossless compression, or WV when your workflow
+      already uses WavPack.
+
+      This setting affects export quality, not artistic decisions. Pick one
+      format for handoff simplicity, or compare multiple formats only when
+      your delivery requirements call for it.
+    cues:
+      - "If you need clean stems for mastering or collaboration handoff."
+      - "If you want to avoid lossy artifacts while reviewing fixes."
+    watch_out_for:
+      - "More formats mean more files and longer render/apply runtime."
+      - "Confirm your DAW and collaborators support the chosen format."
   HELP.PRESET.DRAFT_MIX:
     title: "Draft mix"
     short: "Quick drafting checks with truth meters for iteration speed."
@@ -280,3 +298,21 @@ entries:
       - "If you need repeatable variant folder names for tooling."
     watch_out_for:
       - "Multiple variants can increase runtime, especially with truth meters."
+  HELP.WORKFLOW.RUN:
+    title: "One-shot run workflow"
+    short: "Run analyze/export/apply/render/bundle in one musician-friendly command."
+    long: |
+      Run workflow is the single-command path for moving from stems to final
+      machine-readable artifacts. It always writes deterministic filenames in
+      one output folder so you can hand off or re-open results without guesswork.
+
+      Start with `mmo run` when you want one pass for analysis, optional exports,
+      optional render/apply outputs, and an optional UI bundle. If you pass
+      multiple presets/configs (or format sets), run auto-switches to variants
+      mode so each outcome stays isolated in deterministic subfolders.
+    cues:
+      - "If you want one command to run the whole workflow end-to-end."
+      - "If you need predictable output paths for tooling or handoff."
+    watch_out_for:
+      - "Rendering/applying lossless formats can increase runtime and disk use."
+      - "Multiple presets/configs switch to variants output structure."

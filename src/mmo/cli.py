@@ -43,6 +43,10 @@ _PRESET_PREVIEW_DEFAULT_MAX_SECONDS = 120.0
 _PRESET_PREVIEW_DEFAULT_TARGET_LAYOUT_ID = "LAYOUT.2_0"
 _OUTPUT_FORMAT_ORDER = tuple(LOSSLESS_OUTPUT_FORMATS)
 _FORMAT_SET_NAME_RE = re.compile(r"^[a-z0-9_]+$")
+_RUN_COMMAND_EPILOG = (
+    "One button for musicians: analyze your stems, then optionally export notes, "
+    "apply safe fixes, render lossless files, and build a UI bundle in one pass."
+)
 
 
 def _run_command(command: list[str]) -> int:
@@ -1212,6 +1216,472 @@ def _print_lock_verify_summary(verify_result: dict[str, Any]) -> None:
         )
 
 
+def _run_variants_workflow(
+    *,
+    repo_root: Path,
+    presets_dir: Path,
+    stems_dir: Path,
+    out_dir: Path,
+    preset_values: list[str] | None,
+    config_values: list[str] | None,
+    apply: bool,
+    render: bool,
+    export_pdf: bool,
+    export_csv: bool,
+    bundle: bool,
+    profile: str | None = None,
+    meters: str | None = None,
+    max_seconds: float | None = None,
+    source_layout: str | None = None,
+    target_layout: str | None = None,
+    policy_id: str | None = None,
+    truncate_values: int | None = None,
+    output_formats: str | None = None,
+    render_output_formats: str | None = None,
+    apply_output_formats: str | None = None,
+    format_set_values: list[str] | None = None,
+    cache_enabled: bool = True,
+    cache_dir: Path | None = None,
+) -> int:
+    run_config_overrides: dict[str, Any] = {}
+    if profile is not None:
+        run_config_overrides["profile_id"] = profile
+    if meters is not None:
+        run_config_overrides["meters"] = meters
+    if max_seconds is not None:
+        run_config_overrides["max_seconds"] = max_seconds
+    if truncate_values is not None:
+        run_config_overrides["truncate_values"] = truncate_values
+    if source_layout is not None:
+        _set_nested(
+            ["downmix", "source_layout_id"],
+            run_config_overrides,
+            source_layout,
+        )
+    if target_layout is not None:
+        _set_nested(
+            ["downmix", "target_layout_id"],
+            run_config_overrides,
+            target_layout,
+        )
+    if policy_id is not None:
+        _set_nested(
+            ["downmix", "policy_id"],
+            run_config_overrides,
+            policy_id,
+        )
+
+    shared_output_formats: list[str] | None = None
+    if output_formats is not None:
+        try:
+            shared_output_formats = _parse_output_formats_csv(output_formats)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+    resolved_render_output_formats = (
+        list(shared_output_formats) if isinstance(shared_output_formats, list) else None
+    )
+    if render_output_formats is not None:
+        try:
+            resolved_render_output_formats = _parse_output_formats_csv(
+                render_output_formats
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+    resolved_apply_output_formats = (
+        list(shared_output_formats) if isinstance(shared_output_formats, list) else None
+    )
+    if apply_output_formats is not None:
+        try:
+            resolved_apply_output_formats = _parse_output_formats_csv(apply_output_formats)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+    if resolved_render_output_formats is not None:
+        _set_nested(
+            ["render", "output_formats"],
+            run_config_overrides,
+            resolved_render_output_formats,
+        )
+    if resolved_apply_output_formats is not None:
+        _set_nested(
+            ["apply", "output_formats"],
+            run_config_overrides,
+            resolved_apply_output_formats,
+        )
+
+    format_sets: list[tuple[str, list[str]]] | None = None
+    if isinstance(format_set_values, list) and format_set_values:
+        try:
+            format_sets = _parse_output_format_sets(format_set_values)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+    steps = {
+        "analyze": True,
+        "export_pdf": export_pdf,
+        "export_csv": export_csv,
+        "apply": apply,
+        "render": render,
+        "bundle": bundle,
+    }
+    try:
+        plan = build_variant_plan(
+            stems_dir=stems_dir,
+            out_dir=out_dir,
+            preset_ids=list(preset_values) if isinstance(preset_values, list) else None,
+            config_paths=(
+                [Path(item) for item in config_values]
+                if isinstance(config_values, list)
+                else None
+            ),
+            cli_run_config_overrides=run_config_overrides,
+            steps=steps,
+            format_sets=format_sets,
+            presets_dir=presets_dir,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    plan_path = out_dir / "variant_plan.json"
+    result_path = out_dir / "variant_result.json"
+    try:
+        _validate_json_payload(
+            plan,
+            schema_path=repo_root / "schemas" / "variant_plan.schema.json",
+            payload_name="Variant plan",
+        )
+    except SystemExit as exc:
+        return int(exc.code) if isinstance(exc.code, int) else 1
+
+    _write_json_file(plan_path, plan)
+    variants = plan.get("variants")
+    if isinstance(variants, list) and len(variants) > 1:
+        print("Youll get one folder per variant.")
+
+    try:
+        result = run_variant_plan(
+            plan,
+            repo_root=repo_root,
+            cache_enabled=cache_enabled,
+            cache_dir=cache_dir,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    try:
+        _validate_json_payload(
+            result,
+            schema_path=repo_root / "schemas" / "variant_result.schema.json",
+            payload_name="Variant result",
+        )
+    except SystemExit as exc:
+        return int(exc.code) if isinstance(exc.code, int) else 1
+
+    _write_json_file(result_path, result)
+    results = result.get("results")
+    if not isinstance(results, list):
+        return 1
+    has_failure = any(
+        isinstance(item, dict) and item.get("ok") is not True
+        for item in results
+    )
+    return 1 if has_failure else 0
+
+
+def _run_one_shot_workflow(
+    *,
+    repo_root: Path,
+    tools_dir: Path,
+    presets_dir: Path,
+    stems_dir: Path,
+    out_dir: Path,
+    preset_id: str | None,
+    config_path: str | None,
+    profile: str | None,
+    meters: str | None,
+    max_seconds: float | None,
+    truncate_values: int | None,
+    export_pdf: bool,
+    export_csv: bool,
+    apply: bool,
+    render: bool,
+    bundle: bool,
+    output_formats: str | None,
+    cache_enabled: bool,
+    cache_dir: Path | None,
+) -> int:
+    run_overrides: dict[str, Any] = {}
+    if profile is not None:
+        run_overrides["profile_id"] = profile
+    if meters is not None:
+        run_overrides["meters"] = meters
+    if max_seconds is not None:
+        run_overrides["max_seconds"] = max_seconds
+    if truncate_values is not None:
+        run_overrides["truncate_values"] = truncate_values
+    if output_formats is not None:
+        try:
+            parsed_output_formats = _parse_output_formats_csv(output_formats)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        _set_nested(["render", "output_formats"], run_overrides, parsed_output_formats)
+        _set_nested(["apply", "output_formats"], run_overrides, parsed_output_formats)
+
+    try:
+        merged_run_config = _load_and_merge_run_config(
+            config_path,
+            run_overrides,
+            preset_id=preset_id,
+            presets_dir=presets_dir,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    effective_profile = _config_string(merged_run_config, "profile_id", "PROFILE.ASSIST")
+    effective_meters = _config_optional_string(merged_run_config, "meters", None)
+    effective_preset_id = _config_optional_string(merged_run_config, "preset_id", None)
+    effective_run_config = _analyze_run_config(
+        profile_id=effective_profile,
+        meters=effective_meters,
+        preset_id=effective_preset_id,
+        base_run_config=merged_run_config,
+    )
+    effective_truncate_values = _config_int(merged_run_config, "truncate_values", 200)
+    render_output_formats = _config_nested_output_formats(
+        merged_run_config,
+        "render",
+        ["wav"],
+    )
+    apply_output_formats = _config_nested_output_formats(
+        merged_run_config,
+        "apply",
+        ["wav"],
+    )
+
+    report_path = out_dir / "report.json"
+    pdf_path = out_dir / "report.pdf"
+    csv_path = out_dir / "recall.csv"
+    apply_manifest_path = out_dir / "apply_manifest.json"
+    applied_report_path = out_dir / "applied_report.json"
+    render_manifest_path = out_dir / "render_manifest.json"
+    bundle_path = out_dir / "ui_bundle.json"
+    render_out_dir = out_dir / "render"
+    apply_out_dir = out_dir / "apply"
+
+    report_schema_path = repo_root / "schemas" / "report.schema.json"
+    plugins_dir = str(repo_root / "plugins")
+    lock_payload: dict[str, Any] | None = None
+    cache_key_value: str | None = None
+    report_payload: dict[str, Any] | None = None
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if cache_enabled:
+        from mmo.core.lockfile import build_lockfile  # noqa: WPS433
+
+        try:
+            lock_payload = build_lockfile(stems_dir)
+            cache_key_value = _analysis_cache_key(lock_payload, effective_run_config)
+        except ValueError:
+            cache_enabled = False
+            lock_payload = None
+            cache_key_value = None
+
+        if lock_payload is not None:
+            cached_report = try_load_cached_report(
+                cache_dir,
+                lock_payload,
+                effective_run_config,
+            )
+            if (
+                isinstance(cached_report, dict)
+                and report_schema_is_valid(cached_report, report_schema_path)
+            ):
+                rewritten_report = rewrite_report_stems_dir(cached_report, stems_dir)
+                rewritten_report["run_config"] = normalize_run_config(effective_run_config)
+                if report_schema_is_valid(rewritten_report, report_schema_path):
+                    try:
+                        _validate_json_payload(
+                            rewritten_report,
+                            schema_path=report_schema_path,
+                            payload_name="Report",
+                        )
+                    except SystemExit as exc:
+                        return int(exc.code) if isinstance(exc.code, int) else 1
+                    _write_json_file(report_path, rewritten_report)
+                    report_payload = rewritten_report
+                    print(f"analysis cache: hit {cache_key_value}")
+            if report_payload is None:
+                print(f"analysis cache: miss {cache_key_value}")
+
+    if report_payload is None:
+        exit_code = _run_analyze(
+            tools_dir,
+            stems_dir,
+            report_path,
+            effective_meters,
+            False,
+            plugins_dir,
+            False,
+            effective_profile,
+        )
+        if exit_code != 0:
+            return exit_code
+        try:
+            report_payload = _load_report(report_path)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        report_payload["run_config"] = normalize_run_config(effective_run_config)
+        try:
+            _validate_json_payload(
+                report_payload,
+                schema_path=report_schema_path,
+                payload_name="Report",
+            )
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+        _write_json_file(report_path, report_payload)
+
+    if cache_enabled and lock_payload is not None and report_payload is not None:
+        if report_schema_is_valid(report_payload, report_schema_path):
+            if _should_skip_analysis_cache_save(report_payload, effective_run_config):
+                print(f"analysis cache: skip-save {cache_key_value} (time-cap stop)")
+            else:
+                try:
+                    save_cached_report(
+                        cache_dir,
+                        lock_payload,
+                        effective_run_config,
+                        report_payload,
+                    )
+                except OSError:
+                    pass
+
+    exit_code = _run_export(
+        tools_dir,
+        report_path,
+        str(csv_path) if export_csv else None,
+        str(pdf_path) if export_pdf else None,
+        no_measurements=False,
+        no_gates=False,
+        truncate_values=effective_truncate_values,
+    )
+    if exit_code != 0:
+        return exit_code
+
+    if apply:
+        try:
+            exit_code = _run_apply_command(
+                repo_root=repo_root,
+                report_path=report_path,
+                plugins_dir=Path(plugins_dir),
+                out_manifest_path=apply_manifest_path,
+                out_dir=apply_out_dir,
+                out_report_path=None,
+                profile_id=effective_profile,
+                output_formats=apply_output_formats,
+                run_config=effective_run_config,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        if exit_code != 0:
+            return exit_code
+
+        try:
+            apply_manifest = _load_json_object(apply_manifest_path, label="Apply manifest")
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        renderer_manifests_raw = apply_manifest.get("renderer_manifests")
+        if not isinstance(renderer_manifests_raw, list):
+            print("Apply manifest renderer_manifests must be a list.", file=sys.stderr)
+            return 1
+        renderer_manifests = [
+            item for item in renderer_manifests_raw if isinstance(item, dict)
+        ]
+        if report_payload is None:
+            print("Report payload is unavailable after analysis.", file=sys.stderr)
+            return 1
+        applied_report = _build_applied_report(
+            report_payload,
+            out_dir=apply_out_dir,
+            renderer_manifests=renderer_manifests,
+        )
+        try:
+            _validate_json_payload(
+                applied_report,
+                schema_path=report_schema_path,
+                payload_name="Applied report",
+            )
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+        _write_json_file(applied_report_path, applied_report)
+
+    if render:
+        try:
+            exit_code = _run_render_command(
+                repo_root=repo_root,
+                report_path=report_path,
+                plugins_dir=Path(plugins_dir),
+                out_manifest_path=render_manifest_path,
+                out_dir=render_out_dir,
+                profile_id=effective_profile,
+                command_label="render",
+                output_formats=render_output_formats,
+                run_config=effective_run_config,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        if exit_code != 0:
+            return exit_code
+
+    if bundle:
+        try:
+            exit_code = _run_bundle(
+                repo_root=repo_root,
+                report_path=report_path,
+                out_path=bundle_path,
+                render_manifest_path=render_manifest_path if render else None,
+                apply_manifest_path=apply_manifest_path if apply else None,
+                applied_report_path=applied_report_path if apply else None,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        if exit_code != 0:
+            return exit_code
+
+    summary: list[tuple[str, Path]] = [("report", report_path)]
+    if export_pdf:
+        summary.append(("report_pdf", pdf_path))
+    if export_csv:
+        summary.append(("recall_csv", csv_path))
+    if apply:
+        summary.append(("apply_manifest", apply_manifest_path))
+        summary.append(("applied_report", applied_report_path))
+    if render:
+        summary.append(("render_manifest", render_manifest_path))
+    if bundle:
+        summary.append(("ui_bundle", bundle_path))
+
+    print("run complete:")
+    for label, path in summary:
+        print(f"- {label}: {path.resolve().as_posix()}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="MMO command-line tools.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1286,6 +1756,115 @@ def main(argv: list[str] | None = None) -> int:
         "--cache-dir",
         default=None,
         help="Optional cache directory (default: <repo_root>/.mmo_cache).",
+    )
+
+    run_parser = subparsers.add_parser(
+        "run",
+        help=(
+            "One-shot workflow: analyze plus optional export/apply/render/bundle "
+            "artifacts in one deterministic output folder."
+        ),
+        epilog=_RUN_COMMAND_EPILOG,
+    )
+    run_parser.add_argument(
+        "--stems",
+        required=True,
+        help="Path to a directory of audio stems.",
+    )
+    run_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to the deterministic output directory.",
+    )
+    run_parser.add_argument(
+        "--preset",
+        action="append",
+        default=[],
+        help="Optional preset ID from presets/index.json. May be provided multiple times.",
+    )
+    run_parser.add_argument(
+        "--config",
+        action="append",
+        default=[],
+        help="Optional run config JSON path. May be provided multiple times.",
+    )
+    run_parser.add_argument(
+        "--profile",
+        default=None,
+        help="Authority profile ID override.",
+    )
+    run_parser.add_argument(
+        "--meters",
+        choices=["basic", "truth"],
+        default=None,
+        help="Enable additional meter packs (basic or truth).",
+    )
+    run_parser.add_argument(
+        "--max-seconds",
+        type=float,
+        default=None,
+        help="max_seconds override in run_config.",
+    )
+    run_parser.add_argument(
+        "--export-pdf",
+        action="store_true",
+        help="Export report PDF.",
+    )
+    run_parser.add_argument(
+        "--export-csv",
+        action="store_true",
+        help="Export recall CSV.",
+    )
+    run_parser.add_argument(
+        "--truncate-values",
+        type=int,
+        default=None,
+        help="truncate_values override in run_config.",
+    )
+    run_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Run auto-apply renderer flow.",
+    )
+    run_parser.add_argument(
+        "--render",
+        action="store_true",
+        help="Run render-eligible renderer flow.",
+    )
+    run_parser.add_argument(
+        "--output-formats",
+        default=None,
+        help="Comma-separated lossless output formats (wav,flac,wv).",
+    )
+    run_parser.add_argument(
+        "--bundle",
+        action="store_true",
+        help="Build a UI bundle JSON.",
+    )
+    run_parser.add_argument(
+        "--cache",
+        choices=["on", "off"],
+        default="on",
+        help="Reuse cached analysis by lockfile + run_config hash (default: on).",
+    )
+    run_parser.add_argument(
+        "--cache-dir",
+        default=None,
+        help="Optional cache directory (default: <repo_root>/.mmo_cache).",
+    )
+    run_parser.add_argument(
+        "--format-set",
+        action="append",
+        default=[],
+        help=(
+            "Repeatable output format set in <name>:<csv> form. "
+            "When present, run delegates to variants mode."
+        ),
+    )
+    run_parser.add_argument(
+        "--variants",
+        action="store_true",
+        help="Force delegation to variants mode, even for a single preset/config.",
     )
 
     export_parser = subparsers.add_parser(
@@ -2010,6 +2589,59 @@ def main(argv: list[str] | None = None) -> int:
             args.meters,
             args.peak,
         )
+    if args.command == "run":
+        preset_values = list(args.preset) if isinstance(args.preset, list) else []
+        config_values = list(args.config) if isinstance(args.config, list) else []
+        format_set_values = list(args.format_set) if isinstance(args.format_set, list) else []
+        should_delegate_to_variants = (
+            args.variants
+            or len(preset_values) > 1
+            or len(config_values) > 1
+            or bool(format_set_values)
+        )
+        if should_delegate_to_variants:
+            return _run_variants_workflow(
+                repo_root=repo_root,
+                presets_dir=presets_dir,
+                stems_dir=Path(args.stems),
+                out_dir=Path(args.out),
+                preset_values=preset_values if preset_values else None,
+                config_values=config_values if config_values else None,
+                apply=args.apply,
+                render=args.render,
+                export_pdf=args.export_pdf,
+                export_csv=args.export_csv,
+                bundle=args.bundle,
+                profile=args.profile,
+                meters=args.meters,
+                max_seconds=args.max_seconds,
+                truncate_values=args.truncate_values,
+                output_formats=args.output_formats,
+                format_set_values=format_set_values if format_set_values else None,
+                cache_enabled=args.cache == "on",
+                cache_dir=Path(args.cache_dir) if args.cache_dir else None,
+            )
+        return _run_one_shot_workflow(
+            repo_root=repo_root,
+            tools_dir=tools_dir,
+            presets_dir=presets_dir,
+            stems_dir=Path(args.stems),
+            out_dir=Path(args.out),
+            preset_id=preset_values[0] if preset_values else None,
+            config_path=config_values[0] if config_values else None,
+            profile=args.profile,
+            meters=args.meters,
+            max_seconds=args.max_seconds,
+            truncate_values=args.truncate_values,
+            export_pdf=args.export_pdf,
+            export_csv=args.export_csv,
+            apply=args.apply,
+            render=args.render,
+            bundle=args.bundle,
+            output_formats=args.output_formats,
+            cache_enabled=args.cache == "on",
+            cache_dir=Path(args.cache_dir) if args.cache_dir else None,
+        )
     if args.command == "analyze":
         analyze_overrides: dict[str, Any] = {}
         if _flag_present(raw_argv, "--profile"):
@@ -2271,154 +2903,32 @@ def main(argv: list[str] | None = None) -> int:
             print("Unknown variants command.", file=sys.stderr)
             return 2
 
-        run_config_overrides: dict[str, Any] = {}
-        if args.profile is not None:
-            run_config_overrides["profile_id"] = args.profile
-        if args.meters is not None:
-            run_config_overrides["meters"] = args.meters
-        if args.max_seconds is not None:
-            run_config_overrides["max_seconds"] = args.max_seconds
-        if args.truncate_values is not None:
-            run_config_overrides["truncate_values"] = args.truncate_values
-        if args.source_layout is not None:
-            _set_nested(
-                ["downmix", "source_layout_id"],
-                run_config_overrides,
-                args.source_layout,
-            )
-        if args.target_layout is not None:
-            _set_nested(
-                ["downmix", "target_layout_id"],
-                run_config_overrides,
-                args.target_layout,
-            )
-        if args.policy_id is not None:
-            _set_nested(
-                ["downmix", "policy_id"],
-                run_config_overrides,
-                args.policy_id,
-            )
-        shared_output_formats: list[str] | None = None
-        if args.output_formats is not None:
-            try:
-                shared_output_formats = _parse_output_formats_csv(args.output_formats)
-            except ValueError as exc:
-                print(str(exc), file=sys.stderr)
-                return 1
-
-        render_output_formats = (
-            list(shared_output_formats) if isinstance(shared_output_formats, list) else None
+        return _run_variants_workflow(
+            repo_root=repo_root,
+            presets_dir=presets_dir,
+            stems_dir=Path(args.stems),
+            out_dir=Path(args.out),
+            preset_values=list(args.preset) if isinstance(args.preset, list) else None,
+            config_values=list(args.config) if isinstance(args.config, list) else None,
+            apply=args.apply,
+            render=args.render,
+            export_pdf=args.export_pdf,
+            export_csv=args.export_csv,
+            bundle=args.bundle,
+            profile=args.profile,
+            meters=args.meters,
+            max_seconds=args.max_seconds,
+            source_layout=args.source_layout,
+            target_layout=args.target_layout,
+            policy_id=args.policy_id,
+            truncate_values=args.truncate_values,
+            output_formats=args.output_formats,
+            render_output_formats=args.render_output_formats,
+            apply_output_formats=args.apply_output_formats,
+            format_set_values=list(args.format_set) if isinstance(args.format_set, list) else None,
+            cache_enabled=args.cache == "on",
+            cache_dir=Path(args.cache_dir) if args.cache_dir else None,
         )
-        if args.render_output_formats is not None:
-            try:
-                render_output_formats = _parse_output_formats_csv(args.render_output_formats)
-            except ValueError as exc:
-                print(str(exc), file=sys.stderr)
-                return 1
-
-        apply_output_formats = (
-            list(shared_output_formats) if isinstance(shared_output_formats, list) else None
-        )
-        if args.apply_output_formats is not None:
-            try:
-                apply_output_formats = _parse_output_formats_csv(args.apply_output_formats)
-            except ValueError as exc:
-                print(str(exc), file=sys.stderr)
-                return 1
-
-        if render_output_formats is not None:
-            _set_nested(
-                ["render", "output_formats"],
-                run_config_overrides,
-                render_output_formats,
-            )
-        if apply_output_formats is not None:
-            _set_nested(
-                ["apply", "output_formats"],
-                run_config_overrides,
-                apply_output_formats,
-            )
-
-        format_sets: list[tuple[str, list[str]]] | None = None
-        if isinstance(args.format_set, list) and args.format_set:
-            try:
-                format_sets = _parse_output_format_sets(args.format_set)
-            except ValueError as exc:
-                print(str(exc), file=sys.stderr)
-                return 1
-
-        steps = {
-            "analyze": True,
-            "export_pdf": args.export_pdf,
-            "export_csv": args.export_csv,
-            "apply": args.apply,
-            "render": args.render,
-            "bundle": args.bundle,
-        }
-        try:
-            plan = build_variant_plan(
-                stems_dir=Path(args.stems),
-                out_dir=Path(args.out),
-                preset_ids=list(args.preset) if isinstance(args.preset, list) else None,
-                config_paths=(
-                    [Path(item) for item in args.config]
-                    if isinstance(args.config, list)
-                    else None
-                ),
-                cli_run_config_overrides=run_config_overrides,
-                steps=steps,
-                format_sets=format_sets,
-                presets_dir=presets_dir,
-            )
-        except ValueError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
-
-        plan_path = Path(args.out) / "variant_plan.json"
-        result_path = Path(args.out) / "variant_result.json"
-        try:
-            _validate_json_payload(
-                plan,
-                schema_path=repo_root / "schemas" / "variant_plan.schema.json",
-                payload_name="Variant plan",
-            )
-        except SystemExit as exc:
-            return int(exc.code) if isinstance(exc.code, int) else 1
-
-        _write_json_file(plan_path, plan)
-        variants = plan.get("variants")
-        if isinstance(variants, list) and len(variants) > 1:
-            print("Youll get one folder per variant.")
-
-        try:
-            result = run_variant_plan(
-                plan,
-                repo_root=repo_root,
-                cache_enabled=args.cache == "on",
-                cache_dir=Path(args.cache_dir) if args.cache_dir else None,
-            )
-        except ValueError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
-
-        try:
-            _validate_json_payload(
-                result,
-                schema_path=repo_root / "schemas" / "variant_result.schema.json",
-                payload_name="Variant result",
-            )
-        except SystemExit as exc:
-            return int(exc.code) if isinstance(exc.code, int) else 1
-
-        _write_json_file(result_path, result)
-        results = result.get("results")
-        if not isinstance(results, list):
-            return 1
-        has_failure = any(
-            isinstance(item, dict) and item.get("ok") is not True
-            for item in results
-        )
-        return 1 if has_failure else 0
     if args.command == "plugins":
         if args.plugins_command == "list":
             try:
