@@ -221,6 +221,14 @@ def _sample_report() -> dict:
                 "mid_band_hz": {"low_hz": 300.0, "high_hz": 3000.0},
             },
         },
+        "vibe_signals": {
+            "density_level": "low",
+            "masking_level": "medium",
+            "translation_risk": "high",
+            "notes": [
+                "Translation risk is elevated. Fix clipping/lossy files and check mono."
+            ],
+        },
     }
 
 
@@ -326,6 +334,17 @@ class TestUiBundle(unittest.TestCase):
                 "density_mean": 1.75,
                 "density_peak": 3,
                 "top_masking_pairs_count": 2,
+            },
+        )
+        self.assertEqual(
+            dashboard["vibe_signals"],
+            {
+                "density_level": "low",
+                "masking_level": "medium",
+                "translation_risk": "high",
+                "notes": [
+                    "Translation risk is elevated. Fix clipping/lossy files and check mono."
+                ],
             },
         )
         help_payload = bundle.get("help")

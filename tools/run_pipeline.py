@@ -66,6 +66,7 @@ def main() -> int:
 
     from mmo.core.gates import apply_gates_to_report
     from mmo.core.pipeline import load_plugins, run_detectors, run_resolvers
+    from mmo.core.vibe_signals import derive_vibe_signals
 
     report_path = Path(args.report)
     output_path = Path(args.out)
@@ -80,6 +81,8 @@ def main() -> int:
         profile_id=args.profile,
         profiles_path=repo_root / "ontology" / "policies" / "authority_profiles.yaml",
     )
+    if isinstance(report.get("mix_complexity"), dict):
+        report["vibe_signals"] = derive_vibe_signals(report)
 
     _write_report(output_path, report)
     return 0

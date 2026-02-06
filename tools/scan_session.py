@@ -28,6 +28,7 @@ if str(SRC_DIR) not in sys.path:
 from mmo import __version__ as engine_version  # noqa: E402
 from mmo.core.session import build_session_from_stems_dir  # noqa: E402
 from mmo.core.validators import validate_session  # noqa: E402
+from mmo.core.vibe_signals import derive_vibe_signals  # noqa: E402
 from mmo.dsp.decoders import detect_format_from_path  # noqa: E402
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd  # noqa: E402
 from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples  # noqa: E402
@@ -874,6 +875,7 @@ def build_report(
     }
     if mix_complexity is not None:
         report["mix_complexity"] = mix_complexity
+        report["vibe_signals"] = derive_vibe_signals(report)
     return report
 
 

@@ -305,6 +305,31 @@ class TestExporters(unittest.TestCase):
         self.assertEqual(rows[1]["stem_a"], "e")
         self.assertEqual(rows[2]["stem_a"], "g")
 
+    def test_vibe_signals_lines(self) -> None:
+        lines = pdf_report._vibe_signals_lines(
+            {
+                "density_level": "high",
+                "masking_level": "medium",
+                "translation_risk": "high",
+                "notes": [
+                    "Lots of layers hitting at once. Make space with arrangement or gentle carving.",
+                    "Translation risk is elevated. Fix clipping/lossy files and check mono.",
+                ],
+            }
+        )
+        self.assertEqual(
+            lines[0],
+            "Density: high | Masking: medium | Translation risk: high",
+        )
+        self.assertIn(
+            "- Lots of layers hitting at once. Make space with arrangement or gentle carving.",
+            lines,
+        )
+        self.assertIn(
+            "- Translation risk is elevated. Fix clipping/lossy files and check mono.",
+            lines,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

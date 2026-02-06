@@ -54,7 +54,8 @@
       "required": ["src_path", "ref_path", "issues", "measurements", "log"],
       "additionalProperties": true
     },
-    "mix_complexity": { "$ref": "#/$defs/mix_complexity" }
+    "mix_complexity": { "$ref": "#/$defs/mix_complexity" },
+    "vibe_signals": { "$ref": "#/$defs/vibe_signals" }
   },
   "$defs": {
     "session": {
@@ -383,6 +384,20 @@
         "masking_risk": {
           "type": "object",
           "additionalProperties": true
+        }
+      }
+    },
+    "vibe_signals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["density_level", "masking_level", "translation_risk", "notes"],
+      "properties": {
+        "density_level": { "type": "string", "enum": ["low", "medium", "high"] },
+        "masking_level": { "type": "string", "enum": ["low", "medium", "high"] },
+        "translation_risk": { "type": "string", "enum": ["low", "medium", "high"] },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
         }
       }
     }

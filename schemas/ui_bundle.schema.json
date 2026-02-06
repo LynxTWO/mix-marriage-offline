@@ -81,6 +81,20 @@
         "top_masking_pairs_count": { "type": "integer", "minimum": 0 }
       }
     },
+    "vibe_signals_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["density_level", "masking_level", "translation_risk", "notes"],
+      "properties": {
+        "density_level": { "type": "string", "enum": ["low", "medium", "high"] },
+        "masking_level": { "type": "string", "enum": ["low", "medium", "high"] },
+        "translation_risk": { "type": "string", "enum": ["low", "medium", "high"] },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
     "apply_summary": {
       "type": "object",
       "additionalProperties": false,
@@ -120,6 +134,7 @@
         "extreme_count": { "type": "integer", "minimum": 0 },
         "downmix_qa": { "$ref": "#/$defs/downmix_qa_summary" },
         "mix_complexity": { "$ref": "#/$defs/mix_complexity_summary" },
+        "vibe_signals": { "$ref": "#/$defs/vibe_signals_summary" },
         "apply": { "$ref": "#/$defs/apply_summary" }
       }
     }

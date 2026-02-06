@@ -68,6 +68,12 @@ class TestScanSessionSmoke(unittest.TestCase):
             self.assertIn("density_mean", mix_complexity)
             self.assertIn("density_peak", mix_complexity)
             self.assertIn("top_masking_pairs", mix_complexity)
+            vibe_signals = report.get("vibe_signals", {})
+            self.assertIsInstance(vibe_signals, dict)
+            self.assertIn(vibe_signals.get("density_level"), {"low", "medium", "high"})
+            self.assertIn(vibe_signals.get("masking_level"), {"low", "medium", "high"})
+            self.assertIn(vibe_signals.get("translation_risk"), {"low", "medium", "high"})
+            self.assertIsInstance(vibe_signals.get("notes"), list)
 
 
 if __name__ == "__main__":

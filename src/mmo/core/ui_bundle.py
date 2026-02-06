@@ -6,6 +6,7 @@ from typing import Any
 
 UI_BUNDLE_SCHEMA_VERSION = "0.1.0"
 TOP_ISSUE_LIMIT = 5
+_RISK_LEVELS = {"low", "medium", "high"}
 
 
 def _utc_now_iso() -> str:
@@ -203,6 +204,34 @@ def _mix_complexity_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _vibe_signals_summary(report: dict[str, Any]) -> dict[str, Any] | None:
+    vibe_signals = report.get("vibe_signals")
+    if not isinstance(vibe_signals, dict):
+        return None
+
+    density_level = vibe_signals.get("density_level")
+    masking_level = vibe_signals.get("masking_level")
+    translation_risk = vibe_signals.get("translation_risk")
+    if (
+        density_level not in _RISK_LEVELS
+        or masking_level not in _RISK_LEVELS
+        or translation_risk not in _RISK_LEVELS
+    ):
+        return None
+
+    notes = vibe_signals.get("notes")
+    note_items: list[str] = []
+    if isinstance(notes, list):
+        note_items = [item for item in notes if isinstance(item, str)]
+
+    return {
+        "density_level": density_level,
+        "masking_level": masking_level,
+        "translation_risk": translation_risk,
+        "notes": note_items,
+    }
+
+
 def _apply_summary(report: dict[str, Any], apply_manifest: dict[str, Any]) -> dict[str, int]:
     recommendations = _recommendations(report)
     renderer_manifests = _renderer_manifests(apply_manifest)
@@ -243,6 +272,9 @@ def build_ui_bundle(
         "downmix_qa": _downmix_qa_summary(report),
         "mix_complexity": _mix_complexity_summary(report),
     }
+    vibe_signals_summary = _vibe_signals_summary(report)
+    if vibe_signals_summary is not None:
+        dashboard["vibe_signals"] = vibe_signals_summary
     if apply_manifest is not None:
         dashboard["apply"] = _apply_summary(report, apply_manifest)
 

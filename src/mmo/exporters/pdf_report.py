@@ -585,6 +585,22 @@ def _mix_complexity_top_pairs(
     return rows[: max(0, int(limit))]
 
 
+def _vibe_signals_lines(vibe_signals: Dict[str, Any]) -> List[str]:
+    density_level = _safe_str(vibe_signals.get("density_level"))
+    masking_level = _safe_str(vibe_signals.get("masking_level"))
+    translation_risk = _safe_str(vibe_signals.get("translation_risk"))
+    lines = [
+        "Density: "
+        f"{density_level} | Masking: {masking_level} | Translation risk: {translation_risk}"
+    ]
+    notes = vibe_signals.get("notes")
+    if isinstance(notes, list):
+        for note in notes:
+            if isinstance(note, str) and note:
+                lines.append(f"- {note}")
+    return lines
+
+
 def export_report_pdf(
     report: Dict[str, Any],
     out_path: Path,
@@ -706,6 +722,14 @@ def export_report_pdf(
                 )
         else:
             story.append(Paragraph("- No masking-risk pairs detected.", styles["Normal"]))
+
+    vibe_signals = report.get("vibe_signals")
+    if isinstance(vibe_signals, dict):
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Vibe Signals", styles["Heading2"]))
+        story.append(Spacer(1, 6))
+        for line in _vibe_signals_lines(vibe_signals):
+            story.append(Paragraph(line, styles["Normal"]))
 
     downmix_qa = report.get("downmix_qa")
     has_downmix_qa = isinstance(downmix_qa, dict)
