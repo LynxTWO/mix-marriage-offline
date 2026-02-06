@@ -27,6 +27,7 @@ from mmo.core.run_config import (
 )
 from mmo.core.ui_bundle import build_ui_bundle
 from mmo.core.vibe_signals import derive_vibe_signals
+from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS
 from mmo.exporters.csv_recall import export_recall_csv
 from mmo.exporters.pdf_report import export_report_pdf
 
@@ -36,6 +37,7 @@ _DEFAULT_GENERATED_AT = "2000-01-01T00:00:00Z"
 _DEFAULT_TRUNCATE_VALUES = 200
 _VARIANT_SLUG_RE = re.compile(r"[^a-z0-9]+")
 _VARIANT_STEP_KEYS = ("analyze", "export_pdf", "export_csv", "apply", "render", "bundle")
+_OUTPUT_FORMAT_ORDER = tuple(LOSSLESS_OUTPUT_FORMATS)
 _SCAN_SESSION_BUILDERS: dict[str, Callable[..., dict[str, Any]]] = {}
 
 
@@ -260,14 +262,119 @@ def _truncate_values_from_config(run_config: dict[str, Any]) -> int:
     return _DEFAULT_TRUNCATE_VALUES
 
 
+def _normalize_output_formats(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    selected: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        normalized = item.strip().lower()
+        if normalized in _OUTPUT_FORMAT_ORDER:
+            selected.add(normalized)
+    return [fmt for fmt in _OUTPUT_FORMAT_ORDER if fmt in selected]
+
+
 def _output_formats_from_config(run_config: dict[str, Any], section: str) -> list[str]:
     section_config = _coerce_dict(run_config.get(section))
-    formats = section_config.get("output_formats")
-    if isinstance(formats, list):
-        selected = [item for item in formats if isinstance(item, str) and item]
-        if selected:
-            return selected
+    selected = _normalize_output_formats(section_config.get("output_formats"))
+    if selected:
+        return selected
     return ["wav"]
+
+
+def _output_formats_from_steps(steps: dict[str, Any], key: str) -> list[str]:
+    return _normalize_output_formats(steps.get(key))
+
+
+def _effective_output_formats(
+    *,
+    steps: dict[str, Any],
+    run_config: dict[str, Any],
+    step_key: str,
+    section: str,
+) -> list[str]:
+    selected = _output_formats_from_steps(steps, step_key)
+    if selected:
+        return selected
+    return _output_formats_from_config(run_config, section)
+
+
+def _analysis_run_config(run_config: dict[str, Any]) -> dict[str, Any]:
+    normalized = normalize_run_config(run_config)
+    analysis_cfg = _json_clone(normalized)
+
+    render_cfg = _coerce_dict(analysis_cfg.get("render"))
+    render_cfg.pop("out_dir", None)
+    render_cfg.pop("output_formats", None)
+    if render_cfg:
+        analysis_cfg["render"] = render_cfg
+    else:
+        analysis_cfg.pop("render", None)
+
+    apply_cfg = _coerce_dict(analysis_cfg.get("apply"))
+    apply_cfg.pop("output_formats", None)
+    if apply_cfg:
+        analysis_cfg["apply"] = apply_cfg
+    else:
+        analysis_cfg.pop("apply", None)
+
+    return normalize_run_config(analysis_cfg)
+
+
+def _normalize_format_sets(
+    format_sets: list[tuple[str, list[str]]] | None,
+) -> list[tuple[str, list[str]]]:
+    if not isinstance(format_sets, list):
+        return []
+    normalized: list[tuple[str, list[str]]] = []
+    for item in format_sets:
+        if not isinstance(item, (list, tuple)) or len(item) != 2:
+            continue
+        name = _sanitize_slug(_coerce_str(item[0]))
+        output_formats = _normalize_output_formats(item[1])
+        if not name or not output_formats:
+            continue
+        normalized.append((name, output_formats))
+    return normalized
+
+
+def _label_with_format_set(label: str, format_set_name: str | None) -> str:
+    if not isinstance(format_set_name, str) or not format_set_name:
+        return label
+    return f"{label} [{format_set_name}]"
+
+
+def _slug_with_format_set(slug_seed: str, format_set_name: str | None) -> str:
+    if not isinstance(format_set_name, str) or not format_set_name:
+        return slug_seed
+    return f"{slug_seed}__{format_set_name}"
+
+
+def _step_formats_for_format_set(
+    *,
+    output_formats: list[str] | None,
+    normalized_steps: dict[str, bool],
+) -> tuple[list[str], list[str]]:
+    if not output_formats:
+        return ([], [])
+    render_formats = list(output_formats) if normalized_steps.get("render") else []
+    apply_formats = list(output_formats) if normalized_steps.get("apply") else []
+    return (render_formats, apply_formats)
+
+
+def _variant_steps_payload(
+    *,
+    normalized_steps: dict[str, bool],
+    render_output_formats: list[str],
+    apply_output_formats: list[str],
+) -> dict[str, Any]:
+    payload: dict[str, Any] = dict(normalized_steps)
+    if render_output_formats:
+        payload["render_output_formats"] = render_output_formats
+    if apply_output_formats:
+        payload["apply_output_formats"] = apply_output_formats
+    return payload
 
 
 def _variant_out_dir_from_overrides(variant: dict[str, Any]) -> Path:
@@ -374,6 +481,7 @@ def build_variant_plan(
     config_paths: list[Path] | None = None,
     cli_run_config_overrides: dict[str, Any] | None = None,
     steps: dict[str, Any] | None = None,
+    format_sets: list[tuple[str, list[str]]] | None = None,
     presets_dir: Path,
 ) -> dict[str, Any]:
     resolved_stems_dir = stems_dir.resolve()
@@ -381,6 +489,10 @@ def build_variant_plan(
     base_run_config = _default_base_run_config()
     normalized_steps = _normalize_steps(steps)
     normalized_cli_overrides = _normalize_run_config_patch(cli_run_config_overrides)
+    normalized_format_sets = sorted(
+        _normalize_format_sets(format_sets),
+        key=lambda item: item[0],
+    )
     overlays = _preset_overlay_map(presets_dir)
 
     presets = _normalize_preset_ids(preset_ids)
@@ -391,18 +503,40 @@ def build_variant_plan(
     raw_variants: list[dict[str, Any]] = []
     for preset_id in preset_axis:
         for config_path in config_axis:
-            raw_variants.append(
-                {
-                    "preset_id": preset_id,
-                    "config_path": config_path,
-                    "label": _variant_label(preset_id=preset_id, config_path=config_path),
-                    "slug_seed": _slug_seed(
-                        preset_id=preset_id,
-                        config_path=config_path,
-                        overlay_map=overlays,
-                    ),
-                }
+            base_label = _variant_label(preset_id=preset_id, config_path=config_path)
+            base_slug_seed = _slug_seed(
+                preset_id=preset_id,
+                config_path=config_path,
+                overlay_map=overlays,
             )
+            if not normalized_format_sets:
+                raw_variants.append(
+                    {
+                        "preset_id": preset_id,
+                        "config_path": config_path,
+                        "label": base_label,
+                        "slug_seed": base_slug_seed,
+                        "render_output_formats": [],
+                        "apply_output_formats": [],
+                    }
+                )
+                continue
+
+            for format_set_name, format_set_formats in normalized_format_sets:
+                render_output_formats, apply_output_formats = _step_formats_for_format_set(
+                    output_formats=format_set_formats,
+                    normalized_steps=normalized_steps,
+                )
+                raw_variants.append(
+                    {
+                        "preset_id": preset_id,
+                        "config_path": config_path,
+                        "label": _label_with_format_set(base_label, format_set_name),
+                        "slug_seed": _slug_with_format_set(base_slug_seed, format_set_name),
+                        "render_output_formats": render_output_formats,
+                        "apply_output_formats": apply_output_formats,
+                    }
+                )
 
     variants: list[dict[str, Any]] = []
     slug_counts: dict[str, int] = {}
@@ -417,11 +551,16 @@ def build_variant_plan(
 
         variant_id = f"VARIANT.{index:03d}"
         variant_out_dir = resolved_out_dir / f"{variant_id}__{variant_slug}"
+        step_payload = _variant_steps_payload(
+            normalized_steps=normalized_steps,
+            render_output_formats=_normalize_output_formats(item.get("render_output_formats")),
+            apply_output_formats=_normalize_output_formats(item.get("apply_output_formats")),
+        )
         variant_entry: dict[str, Any] = {
             "variant_id": variant_id,
             "variant_slug": variant_slug,
             "label": _coerce_str(item.get("label")) or "default",
-            "steps": dict(normalized_steps),
+            "steps": step_payload,
             "run_config_overrides": _with_variant_out_dir(
                 normalized_cli_overrides,
                 variant_out_dir=variant_out_dir,
@@ -482,7 +621,8 @@ def run_variant_plan(
     for variant in variant_entries:
         variant_id = _coerce_str(variant.get("variant_id")).strip() or "VARIANT.000"
         variant_slug = _coerce_str(variant.get("variant_slug")).strip() or "variant"
-        steps = _normalize_steps(_coerce_dict(variant.get("steps")))
+        raw_steps = _coerce_dict(variant.get("steps"))
+        steps = _normalize_steps(raw_steps)
         errors: list[str] = []
 
         try:
@@ -505,6 +645,7 @@ def run_variant_plan(
         apply_manifest: dict[str, Any] | None = None
         applied_report: dict[str, Any] | None = None
         analysis_cache_key: str | None = None
+        analysis_cache_run_config: dict[str, Any] | None = None
 
         try:
             effective_run_config = _merge_effective_run_config(
@@ -512,6 +653,7 @@ def run_variant_plan(
                 variant=variant,
                 presets_dir=presets_dir,
             )
+            analysis_cache_run_config = _analysis_run_config(effective_run_config)
         except Exception as exc:  # pragma: no cover - defensive surface
             errors.append(f"run_config: {exc}")
 
@@ -520,9 +662,10 @@ def run_variant_plan(
             profile_id = _profile_id_from_config(effective_run_config)
             if cache_enabled and analysis_lock is not None:
                 try:
+                    cache_run_config = analysis_cache_run_config or effective_run_config
                     analysis_cache_key = _analysis_cache_key(
                         analysis_lock,
-                        effective_run_config,
+                        cache_run_config,
                     )
                 except ValueError as exc:
                     errors.append(f"cache: {exc}")
@@ -530,7 +673,7 @@ def run_variant_plan(
                     cached_report = try_load_cached_report(
                         cache_dir,
                         analysis_lock,
-                        effective_run_config,
+                        cache_run_config,
                     )
                     if (
                         isinstance(cached_report, dict)
@@ -595,7 +738,7 @@ def run_variant_plan(
                                 save_cached_report(
                                     cache_dir,
                                     analysis_lock,
-                                    effective_run_config,
+                                    analysis_cache_run_config or effective_run_config,
                                     report,
                                 )
                             except OSError:
@@ -631,13 +774,17 @@ def run_variant_plan(
         render_root = variant_out_dir / "render"
         apply_root = variant_out_dir / "apply"
         profile_id = _profile_id_from_config(effective_run_config or {})
-        render_output_formats = _output_formats_from_config(
-            effective_run_config or {},
-            "render",
+        render_output_formats = _effective_output_formats(
+            steps=raw_steps,
+            run_config=effective_run_config or {},
+            step_key="render_output_formats",
+            section="render",
         )
-        apply_output_formats = _output_formats_from_config(
-            effective_run_config or {},
-            "apply",
+        apply_output_formats = _effective_output_formats(
+            steps=raw_steps,
+            run_config=effective_run_config or {},
+            step_key="apply_output_formats",
+            section="apply",
         )
 
         if report is not None and steps["render"]:
@@ -668,6 +815,7 @@ def run_variant_plan(
                 render_manifest_path = variant_out_dir / "render_manifest.json"
                 _write_json(render_manifest_path, render_manifest)
                 variant_result["render_manifest_path"] = _path_to_posix(render_manifest_path)
+                variant_result["render_output_formats"] = list(render_output_formats)
             except Exception as exc:  # pragma: no cover - defensive surface
                 errors.append(f"render: {exc}")
 
@@ -708,6 +856,7 @@ def run_variant_plan(
                 _write_json(applied_report_path, applied_report)
                 variant_result["apply_manifest_path"] = _path_to_posix(apply_manifest_path)
                 variant_result["applied_report_path"] = _path_to_posix(applied_report_path)
+                variant_result["apply_output_formats"] = list(apply_output_formats)
             except Exception as exc:  # pragma: no cover - defensive surface
                 errors.append(f"apply: {exc}")
 

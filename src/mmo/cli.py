@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -41,6 +42,7 @@ _PRESET_PREVIEW_DEFAULT_METERS = "truth"
 _PRESET_PREVIEW_DEFAULT_MAX_SECONDS = 120.0
 _PRESET_PREVIEW_DEFAULT_TARGET_LAYOUT_ID = "LAYOUT.2_0"
 _OUTPUT_FORMAT_ORDER = tuple(LOSSLESS_OUTPUT_FORMATS)
+_FORMAT_SET_NAME_RE = re.compile(r"^[a-z0-9_]+$")
 
 
 def _run_command(command: list[str]) -> int:
@@ -298,6 +300,35 @@ def _parse_output_formats_csv(raw_value: str) -> list[str]:
         raise ValueError("output formats must include at least one value.")
 
     return [fmt for fmt in _OUTPUT_FORMAT_ORDER if fmt in selected]
+
+
+def _parse_output_format_set(raw_value: str) -> tuple[str, list[str]]:
+    if not isinstance(raw_value, str):
+        raise ValueError("format-set must use <name>:<csv> syntax.")
+
+    name_raw, separator, formats_raw = raw_value.partition(":")
+    if separator != ":":
+        raise ValueError("format-set must use <name>:<csv> syntax.")
+
+    name = name_raw.strip().lower()
+    if not name:
+        raise ValueError("format-set name is required.")
+    if _FORMAT_SET_NAME_RE.fullmatch(name) is None:
+        raise ValueError("format-set name must match ^[a-z0-9_]+$.")
+
+    return (name, _parse_output_formats_csv(formats_raw))
+
+
+def _parse_output_format_sets(values: list[str]) -> list[tuple[str, list[str]]]:
+    normalized: list[tuple[str, list[str]]] = []
+    seen_names: set[str] = set()
+    for raw in values:
+        name, output_formats = _parse_output_format_set(raw)
+        if name in seen_names:
+            raise ValueError(f"Duplicate format-set name {name!r}.")
+        seen_names.add(name)
+        normalized.append((name, output_formats))
+    return normalized
 
 
 def _config_nested_output_formats(
@@ -1525,6 +1556,25 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     variants_run_parser.add_argument(
+        "--render-output-formats",
+        default=None,
+        help="Comma-separated lossless output formats for render variant steps.",
+    )
+    variants_run_parser.add_argument(
+        "--apply-output-formats",
+        default=None,
+        help="Comma-separated lossless output formats for apply variant steps.",
+    )
+    variants_run_parser.add_argument(
+        "--format-set",
+        action="append",
+        default=[],
+        help=(
+            "Repeatable output format set in <name>:<csv> form. "
+            "Each set expands every base variant into a deterministic sub-variant."
+        ),
+    )
+    variants_run_parser.add_argument(
         "--cache",
         choices=["on", "off"],
         default="on",
@@ -2248,22 +2298,54 @@ def main(argv: list[str] | None = None) -> int:
                 run_config_overrides,
                 args.policy_id,
             )
+        shared_output_formats: list[str] | None = None
         if args.output_formats is not None:
             try:
-                variants_output_formats = _parse_output_formats_csv(args.output_formats)
+                shared_output_formats = _parse_output_formats_csv(args.output_formats)
             except ValueError as exc:
                 print(str(exc), file=sys.stderr)
                 return 1
+
+        render_output_formats = (
+            list(shared_output_formats) if isinstance(shared_output_formats, list) else None
+        )
+        if args.render_output_formats is not None:
+            try:
+                render_output_formats = _parse_output_formats_csv(args.render_output_formats)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+        apply_output_formats = (
+            list(shared_output_formats) if isinstance(shared_output_formats, list) else None
+        )
+        if args.apply_output_formats is not None:
+            try:
+                apply_output_formats = _parse_output_formats_csv(args.apply_output_formats)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+        if render_output_formats is not None:
             _set_nested(
                 ["render", "output_formats"],
                 run_config_overrides,
-                variants_output_formats,
+                render_output_formats,
             )
+        if apply_output_formats is not None:
             _set_nested(
                 ["apply", "output_formats"],
                 run_config_overrides,
-                variants_output_formats,
+                apply_output_formats,
             )
+
+        format_sets: list[tuple[str, list[str]]] | None = None
+        if isinstance(args.format_set, list) and args.format_set:
+            try:
+                format_sets = _parse_output_format_sets(args.format_set)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
 
         steps = {
             "analyze": True,
@@ -2285,6 +2367,7 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 cli_run_config_overrides=run_config_overrides,
                 steps=steps,
+                format_sets=format_sets,
                 presets_dir=presets_dir,
             )
         except ValueError as exc:
