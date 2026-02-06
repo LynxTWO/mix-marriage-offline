@@ -930,6 +930,16 @@ def main(argv: list[str] | None = None) -> int:
         default="text",
         help="Output format for the preset list.",
     )
+    presets_list_parser.add_argument(
+        "--tag",
+        default=None,
+        help="Optional tag filter (matches entries in tags).",
+    )
+    presets_list_parser.add_argument(
+        "--category",
+        default=None,
+        help="Optional category filter (e.g., VIBE, WORKFLOW).",
+    )
     presets_show_parser = presets_subparsers.add_parser("show", help="Show one preset.")
     presets_show_parser.add_argument(
         "preset_id",
@@ -1347,7 +1357,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "presets":
         if args.presets_command == "list":
             try:
-                presets = list_presets(presets_dir)
+                presets = list_presets(
+                    presets_dir,
+                    tag=args.tag,
+                    category=args.category,
+                )
             except ValueError as exc:
                 print(str(exc), file=sys.stderr)
                 return 1
@@ -1357,7 +1371,9 @@ def main(argv: list[str] | None = None) -> int:
                 for item in presets:
                     preset_id = item.get("preset_id", "")
                     label = item.get("label", "")
-                    print(f"{preset_id}  {label}")
+                    category = item.get("category")
+                    category_suffix = f" [{category}]" if isinstance(category, str) else ""
+                    print(f"{preset_id}  {label}{category_suffix}")
             return 0
         if args.presets_command == "show":
             try:

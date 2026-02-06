@@ -37,6 +37,60 @@ class TestCliPresets(unittest.TestCase):
                 preset_ids.append(preset_id)
         self.assertEqual(preset_ids, sorted(preset_ids))
 
+    def test_presets_list_text_includes_label_and_is_sorted(self) -> None:
+        result = subprocess.run(
+            [
+                os.fspath(os.getenv("PYTHON", "") or sys.executable),
+                "-m",
+                "mmo",
+                "presets",
+                "list",
+                "--format",
+                "text",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+        lines = [line for line in result.stdout.splitlines() if line.strip()]
+        self.assertTrue(lines, "Expected at least one preset line in text output.")
+
+        preset_ids: list[str] = []
+        for line in lines:
+            preset_id, separator, rest = line.partition("  ")
+            self.assertEqual(separator, "  ", msg=f"Missing label separator in line: {line}")
+            self.assertTrue(rest.strip(), msg=f"Missing label in line: {line}")
+            preset_ids.append(preset_id)
+        self.assertEqual(preset_ids, sorted(preset_ids))
+        self.assertIn("PRESET.SAFE_CLEANUP  Safe cleanup [WORKFLOW]", lines)
+
+    def test_presets_list_tag_filter_works(self) -> None:
+        result = subprocess.run(
+            [
+                os.fspath(os.getenv("PYTHON", "") or sys.executable),
+                "-m",
+                "mmo",
+                "presets",
+                "list",
+                "--tag",
+                "translation",
+                "--format",
+                "json",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+        payload = json.loads(result.stdout)
+        self.assertEqual(
+            [item.get("preset_id") for item in payload if isinstance(item, dict)],
+            ["PRESET.SAFE_CLEANUP", "PRESET.VIBE.VOCAL_FORWARD"],
+        )
+
     def test_presets_show_json_includes_preset_id(self) -> None:
         result = subprocess.run(
             [

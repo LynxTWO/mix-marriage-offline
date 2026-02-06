@@ -11,13 +11,52 @@
       "preset_id": "PRESET.SAFE_CLEANUP",
       "file": "safe_cleanup.json",
       "label": "Safe cleanup",
-      "description": "Conservative checks and exports. No aggressive auto-apply."
+      "description": "Conservative checks and exports. No aggressive auto-apply.",
+      "category": "WORKFLOW",
+      "tags": ["conservative", "translation", "prep"],
+      "goals": [
+        "clean technical issues",
+        "avoid extremes",
+        "ready for mixing"
+      ],
+      "warnings": [
+        "does not change tone",
+        "no aggressive auto-apply"
+      ]
     },
     {
       "preset_id": "PRESET.TURBO_DRAFT",
       "file": "turbo_draft.json",
       "label": "Turbo draft",
-      "description": "Aggressive drafting profile with truth meters for quick passes."
+      "description": "Aggressive drafting profile with truth meters for quick passes.",
+      "category": "VIBE",
+      "tags": ["fast", "aggressive", "auto"],
+      "goals": [
+        "quick draft",
+        "reduce obvious problems",
+        "move fast"
+      ],
+      "warnings": [
+        "may apply extreme changes",
+        "review EXTREME flags"
+      ]
+    },
+    {
+      "preset_id": "PRESET.VIBE.VOCAL_FORWARD",
+      "file": "vibe_vocal_forward.json",
+      "label": "Vocal forward",
+      "description": "Prioritize vocal intelligibility and reduce common translation risks.",
+      "category": "VIBE",
+      "tags": ["vocal", "clarity", "translation"],
+      "goals": [
+        "improve vocal clarity",
+        "avoid masking",
+        "protect mono"
+      ],
+      "warnings": [
+        "may reduce width",
+        "review extremes"
+      ]
     }
   ]
 }

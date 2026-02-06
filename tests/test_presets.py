@@ -42,6 +42,29 @@ class TestPresets(unittest.TestCase):
         preset_ids = [item.get("preset_id") for item in first]
         self.assertEqual(preset_ids, sorted(preset_ids))
 
+    def test_list_presets_filtering_deterministic_sorted_order(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        presets_dir = repo_root / "presets"
+
+        tag_first = list_presets(presets_dir, tag="translation")
+        tag_second = list_presets(presets_dir, tag="translation")
+        self.assertEqual(tag_first, tag_second)
+        tag_ids = [item.get("preset_id") for item in tag_first]
+        self.assertEqual(tag_ids, sorted(tag_ids))
+        self.assertEqual(
+            tag_ids,
+            ["PRESET.SAFE_CLEANUP", "PRESET.VIBE.VOCAL_FORWARD"],
+        )
+
+        category_ids = [
+            item.get("preset_id")
+            for item in list_presets(presets_dir, category="vibe")
+        ]
+        self.assertEqual(
+            category_ids,
+            ["PRESET.TURBO_DRAFT", "PRESET.VIBE.VOCAL_FORWARD"],
+        )
+
     def test_load_preset_run_config_stamps_preset_id(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         presets_dir = repo_root / "presets"

@@ -17,7 +17,20 @@
           "preset_id": { "type": "string" },
           "file": { "type": "string" },
           "label": { "type": "string" },
-          "description": { "type": "string" }
+          "description": { "type": "string" },
+          "category": { "type": "string" },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "goals": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "warnings": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
         }
       }
     }
