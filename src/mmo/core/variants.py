@@ -851,6 +851,9 @@ def run_variant_plan(
     plan: dict[str, Any],
     repo_root: Path,
     *,
+    project_path: Path | None = None,
+    deliverables_index_path: Path | None = None,
+    listen_pack_path: Path | None = None,
     cache_enabled: bool = True,
     cache_dir: Path | None = None,
 ) -> dict[str, Any]:
@@ -1180,6 +1183,9 @@ def run_variant_plan(
                     apply_manifest=apply_manifest,
                     applied_report=applied_report,
                     help_registry_path=repo_root / "ontology" / "help.yaml",
+                    project_path=project_path,
+                    deliverables_index_path=deliverables_index_path,
+                    listen_pack_path=listen_pack_path,
                 )
                 bundle_path = variant_out_dir / "ui_bundle.json"
                 _write_json(bundle_path, bundle)

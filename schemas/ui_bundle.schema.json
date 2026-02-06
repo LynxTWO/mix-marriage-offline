@@ -13,9 +13,16 @@
     "apply_manifest": { "$ref": "apply_manifest.schema.json" },
     "applied_report": { "$ref": "report.schema.json" },
     "help": { "$ref": "#/$defs/help_payload" },
-    "dashboard": { "$ref": "#/$defs/dashboard" }
+    "dashboard": { "$ref": "#/$defs/dashboard" },
+    "project": { "$ref": "#/$defs/project_summary" },
+    "gui_design": { "$ref": "#/$defs/gui_design_summary" },
+    "pointers": { "$ref": "#/$defs/pointers" }
   },
   "$defs": {
+    "posix_abs_path": {
+      "type": "string",
+      "pattern": "^(?:[A-Za-z]:/|/).+"
+    },
     "help_entry": {
       "type": "object",
       "additionalProperties": false,
@@ -140,6 +147,118 @@
           "items": { "type": "string", "minLength": 1 }
         },
         "output_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "project_last_run_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "out_dir"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["single", "variants"]
+        },
+        "out_dir": { "$ref": "#/$defs/posix_abs_path" },
+        "deliverables_index_path": { "$ref": "#/$defs/posix_abs_path" },
+        "listen_pack_path": { "$ref": "#/$defs/posix_abs_path" },
+        "variant_plan_path": { "$ref": "#/$defs/posix_abs_path" },
+        "variant_result_path": { "$ref": "#/$defs/posix_abs_path" }
+      }
+    },
+    "project_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project_id", "stems_dir", "last_run", "updated_at_utc"],
+      "properties": {
+        "project_id": { "type": "string", "minLength": 1 },
+        "stems_dir": { "$ref": "#/$defs/posix_abs_path" },
+        "last_run": {
+          "oneOf": [
+            { "$ref": "#/$defs/project_last_run_summary" },
+            { "type": "null" }
+          ]
+        },
+        "updated_at_utc": { "type": "string", "format": "date-time" }
+      }
+    },
+    "gui_palette": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "background",
+        "surface",
+        "surface_alt",
+        "text",
+        "text_muted",
+        "accent_primary",
+        "accent_secondary",
+        "danger",
+        "warning",
+        "ok",
+        "info"
+      ],
+      "properties": {
+        "background": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "surface": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "surface_alt": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "text": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "text_muted": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "accent_primary": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "accent_secondary": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "danger": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "warning": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "ok": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "info": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
+      }
+    },
+    "gui_typography": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ui_font", "mono_font", "display_font", "fallback_fonts"],
+      "properties": {
+        "ui_font": { "type": "string", "minLength": 1 },
+        "mono_font": { "type": "string", "minLength": 1 },
+        "display_font": { "type": "string", "minLength": 1 },
+        "fallback_fonts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "gui_layout_rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_nav_depth",
+        "prefer_search_over_menus",
+        "keep_primary_actions_visible",
+        "progressive_disclosure"
+      ],
+      "properties": {
+        "max_nav_depth": { "type": "integer", "minimum": 1 },
+        "prefer_search_over_menus": { "type": "boolean" },
+        "keep_primary_actions_visible": { "type": "boolean" },
+        "progressive_disclosure": { "type": "boolean" }
+      }
+    },
+    "gui_design_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["palette", "typography", "layout_rules"],
+      "properties": {
+        "palette": { "$ref": "#/$defs/gui_palette" },
+        "typography": { "$ref": "#/$defs/gui_typography" },
+        "layout_rules": { "$ref": "#/$defs/gui_layout_rules" }
+      }
+    },
+    "pointers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deliverables_index_path": { "$ref": "#/$defs/posix_abs_path" },
+        "listen_pack_path": { "$ref": "#/$defs/posix_abs_path" },
+        "project_path": { "$ref": "#/$defs/posix_abs_path" }
       }
     },
     "dashboard": {

@@ -31,6 +31,10 @@ def _coerce_str(value: Any) -> str:
     return ""
 
 
+def _path_to_posix(path: Path) -> str:
+    return path.resolve().as_posix()
+
+
 def _iter_dict_list(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
@@ -405,13 +409,81 @@ def _apply_summary(report: dict[str, Any], apply_manifest: dict[str, Any]) -> di
     }
 
 
+def _project_last_run_summary(last_run: Any) -> dict[str, Any] | None:
+    if not isinstance(last_run, dict):
+        return None
+
+    summary: dict[str, Any] = {}
+    mode = last_run.get("mode")
+    out_dir = last_run.get("out_dir")
+    if isinstance(mode, str):
+        summary["mode"] = mode
+    if isinstance(out_dir, str):
+        summary["out_dir"] = out_dir
+    for key in (
+        "deliverables_index_path",
+        "listen_pack_path",
+        "variant_plan_path",
+        "variant_result_path",
+    ):
+        value = last_run.get(key)
+        if isinstance(value, str):
+            summary[key] = value
+
+    if "mode" not in summary or "out_dir" not in summary:
+        return None
+    return summary
+
+
+def _project_summary(project_payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "project_id": _coerce_str(project_payload.get("project_id")).strip(),
+        "stems_dir": _coerce_str(project_payload.get("stems_dir")).strip(),
+        "last_run": _project_last_run_summary(project_payload.get("last_run")),
+        "updated_at_utc": _coerce_str(project_payload.get("updated_at_utc")).strip(),
+    }
+
+
+def _gui_design_summary(gui_design_payload: dict[str, Any]) -> dict[str, Any]:
+    theme = gui_design_payload.get("theme")
+    theme_mapping = theme if isinstance(theme, dict) else {}
+    palette = theme_mapping.get("palette")
+    typography = theme_mapping.get("typography")
+    layout_rules = gui_design_payload.get("layout_rules")
+    return {
+        "palette": palette if isinstance(palette, dict) else {},
+        "typography": typography if isinstance(typography, dict) else {},
+        "layout_rules": layout_rules if isinstance(layout_rules, dict) else {},
+    }
+
+
+def _bundle_pointers(
+    *,
+    project_path: Path | None,
+    deliverables_index_path: Path | None,
+    listen_pack_path: Path | None,
+) -> dict[str, str]:
+    pointers: dict[str, str] = {}
+    if deliverables_index_path is not None:
+        pointers["deliverables_index_path"] = _path_to_posix(deliverables_index_path)
+    if listen_pack_path is not None:
+        pointers["listen_pack_path"] = _path_to_posix(listen_pack_path)
+    if project_path is not None:
+        pointers["project_path"] = _path_to_posix(project_path)
+    return pointers
+
+
 def build_ui_bundle(
     report: dict[str, Any],
     render_manifest: dict[str, Any] | None,
     apply_manifest: dict[str, Any] | None = None,
     applied_report: dict[str, Any] | None = None,
     help_registry_path: Path = Path("ontology/help.yaml"),
+    project_path: Path | None = None,
+    deliverables_index_path: Path | None = None,
+    listen_pack_path: Path | None = None,
 ) -> dict[str, Any]:
+    from mmo.core.gui_design import load_gui_design  # noqa: WPS433
     from mmo.core.help_registry import load_help_registry, resolve_help_entries  # noqa: WPS433
 
     recommendations = _recommendations(report)
@@ -447,6 +519,9 @@ def build_ui_bundle(
         "generated_at_utc": _utc_now_iso(),
         "report": report,
         "dashboard": dashboard,
+        "gui_design": _gui_design_summary(
+            load_gui_design(_repo_root() / "ontology" / "gui_design.yaml")
+        ),
     }
 
     help_ids = _collect_help_ids(
@@ -463,4 +538,17 @@ def build_ui_bundle(
         payload["apply_manifest"] = apply_manifest
     if applied_report is not None:
         payload["applied_report"] = applied_report
+
+    if project_path is not None:
+        from mmo.core.project_file import load_project  # noqa: WPS433
+
+        payload["project"] = _project_summary(load_project(project_path))
+
+    pointers = _bundle_pointers(
+        project_path=project_path,
+        deliverables_index_path=deliverables_index_path,
+        listen_pack_path=listen_pack_path,
+    )
+    if pointers:
+        payload["pointers"] = pointers
     return payload

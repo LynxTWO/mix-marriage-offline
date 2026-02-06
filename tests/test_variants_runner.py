@@ -83,6 +83,9 @@ class TestVariantsRunner(unittest.TestCase):
         listen_pack_validator = _schema_validator(
             repo_root / "schemas" / "listen_pack.schema.json"
         )
+        deliverables_index_validator = _schema_validator(
+            repo_root / "schemas" / "deliverables_index.schema.json"
+        )
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -104,6 +107,7 @@ class TestVariantsRunner(unittest.TestCase):
                     "PRESET.VIBE.WARM_INTIMATE",
                     "--bundle",
                     "--listen-pack",
+                    "--deliverables-index",
                 ]
             )
             self.assertEqual(exit_code, 0)
@@ -111,16 +115,20 @@ class TestVariantsRunner(unittest.TestCase):
             plan_path = out_dir / "variant_plan.json"
             result_path = out_dir / "variant_result.json"
             listen_pack_path = out_dir / "listen_pack.json"
+            deliverables_index_path = out_dir / "deliverables_index.json"
             self.assertTrue(plan_path.exists())
             self.assertTrue(result_path.exists())
             self.assertTrue(listen_pack_path.exists())
+            self.assertTrue(deliverables_index_path.exists())
 
             plan = json.loads(plan_path.read_text(encoding="utf-8"))
             result = json.loads(result_path.read_text(encoding="utf-8"))
             listen_pack = json.loads(listen_pack_path.read_text(encoding="utf-8"))
+            deliverables_index = json.loads(deliverables_index_path.read_text(encoding="utf-8"))
             plan_validator.validate(plan)
             result_validator.validate(result)
             listen_pack_validator.validate(listen_pack)
+            deliverables_index_validator.validate(deliverables_index)
             listen_entries = listen_pack.get("entries")
             self.assertIsInstance(listen_entries, list)
             if isinstance(listen_entries, list):
@@ -175,6 +183,13 @@ class TestVariantsRunner(unittest.TestCase):
                 seen_presets.add(preset_id)
 
                 bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    bundle.get("pointers"),
+                    {
+                        "listen_pack_path": listen_pack_path.resolve().as_posix(),
+                        "deliverables_index_path": deliverables_index_path.resolve().as_posix(),
+                    },
+                )
                 help_entries = bundle.get("help")
                 self.assertIsInstance(help_entries, dict)
                 if not isinstance(help_entries, dict):

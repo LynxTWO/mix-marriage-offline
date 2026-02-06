@@ -773,6 +773,9 @@ def _run_bundle(
     render_manifest_path: Path | None,
     apply_manifest_path: Path | None,
     applied_report_path: Path | None,
+    project_path: Path | None,
+    deliverables_index_path: Path | None,
+    listen_pack_path: Path | None,
 ) -> int:
     from mmo.core.ui_bundle import build_ui_bundle  # noqa: WPS433
 
@@ -793,6 +796,9 @@ def _run_bundle(
         apply_manifest=apply_manifest,
         applied_report=applied_report,
         help_registry_path=repo_root / "ontology" / "help.yaml",
+        project_path=project_path,
+        deliverables_index_path=deliverables_index_path,
+        listen_pack_path=listen_pack_path,
     )
     _validate_json_payload(
         bundle,
@@ -1421,6 +1427,7 @@ def _run_variants_workflow(
     format_set_values: list[str] | None = None,
     listen_pack: bool = False,
     deliverables_index: bool = False,
+    project_path: Path | None = None,
     cache_enabled: bool = True,
     cache_dir: Path | None = None,
 ) -> int:
@@ -1548,6 +1555,8 @@ def _run_variants_workflow(
 
     plan_path = out_dir / "variant_plan.json"
     result_path = out_dir / "variant_result.json"
+    listen_pack_path = out_dir / "listen_pack.json"
+    deliverables_index_path = out_dir / "deliverables_index.json"
     try:
         _validate_json_payload(
             plan,
@@ -1563,11 +1572,21 @@ def _run_variants_workflow(
         print("Youll get one folder per variant.")
 
     try:
+        run_variant_plan_kwargs: dict[str, Any] = {
+            "cache_enabled": cache_enabled,
+            "cache_dir": cache_dir,
+        }
+        if project_path is not None:
+            run_variant_plan_kwargs["project_path"] = project_path
+        if deliverables_index:
+            run_variant_plan_kwargs["deliverables_index_path"] = deliverables_index_path
+        if listen_pack:
+            run_variant_plan_kwargs["listen_pack_path"] = listen_pack_path
+
         result = run_variant_plan(
             plan,
             repo_root=repo_root,
-            cache_enabled=cache_enabled,
-            cache_dir=cache_dir,
+            **run_variant_plan_kwargs,
         )
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
@@ -1584,7 +1603,6 @@ def _run_variants_workflow(
 
     _write_json_file(result_path, result)
     if listen_pack:
-        listen_pack_path = out_dir / "listen_pack.json"
         try:
             listen_pack_payload = _build_validated_listen_pack(
                 repo_root=repo_root,
@@ -1598,7 +1616,6 @@ def _run_variants_workflow(
             return int(exc.code) if isinstance(exc.code, int) else 1
         _write_json_file(listen_pack_path, listen_pack_payload)
     if deliverables_index:
-        deliverables_index_path = out_dir / "deliverables_index.json"
         try:
             deliverables_index_payload = _build_validated_deliverables_index_variants(
                 repo_root=repo_root,
@@ -1631,6 +1648,7 @@ def _run_one_shot_workflow(
     out_dir: Path,
     preset_id: str | None,
     config_path: str | None,
+    project_path: Path | None,
     profile: str | None,
     meters: str | None,
     max_seconds: float | None,
@@ -1702,6 +1720,7 @@ def _run_one_shot_workflow(
     applied_report_path = out_dir / "applied_report.json"
     render_manifest_path = out_dir / "render_manifest.json"
     bundle_path = out_dir / "ui_bundle.json"
+    deliverables_index_path = out_dir / "deliverables_index.json"
     render_out_dir = out_dir / "render"
     apply_out_dir = out_dir / "apply"
 
@@ -1885,6 +1904,11 @@ def _run_one_shot_workflow(
                 render_manifest_path=render_manifest_path if render else None,
                 apply_manifest_path=apply_manifest_path if apply else None,
                 applied_report_path=applied_report_path if apply else None,
+                project_path=project_path,
+                deliverables_index_path=(
+                    deliverables_index_path if deliverables_index else None
+                ),
+                listen_pack_path=None,
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
@@ -1892,7 +1916,6 @@ def _run_one_shot_workflow(
         if exit_code != 0:
             return exit_code
 
-    deliverables_index_path = out_dir / "deliverables_index.json"
     if deliverables_index:
         try:
             deliverables_index_payload = _build_validated_deliverables_index_single(
@@ -1945,6 +1968,10 @@ def _run_workflow_from_run_args(
     preset_values = list(args.preset) if isinstance(args.preset, list) else []
     config_values = list(args.config) if isinstance(args.config, list) else []
     format_set_values = list(args.format_set) if isinstance(args.format_set, list) else []
+    project_path: Path | None = None
+    project_path_value = getattr(args, "project", None)
+    if isinstance(project_path_value, str) and project_path_value.strip():
+        project_path = Path(project_path_value)
     should_delegate_to_variants = (
         args.variants
         or len(preset_values) > 1
@@ -1976,6 +2003,7 @@ def _run_workflow_from_run_args(
             output_formats=args.output_formats,
             format_set_values=format_set_values if format_set_values else None,
             deliverables_index=args.deliverables_index,
+            project_path=project_path,
             cache_enabled=args.cache == "on",
             cache_dir=Path(args.cache_dir) if args.cache_dir else None,
         )
@@ -1989,6 +2017,7 @@ def _run_workflow_from_run_args(
         out_dir=out_dir,
         preset_id=preset_values[0] if preset_values else None,
         config_path=config_values[0] if config_values else None,
+        project_path=project_path,
         profile=args.profile,
         meters=args.meters,
         max_seconds=args.max_seconds,
@@ -2460,6 +2489,21 @@ def main(argv: list[str] | None = None) -> int:
         "--applied-report",
         default=None,
         help="Optional path to applied report JSON.",
+    )
+    bundle_parser.add_argument(
+        "--project",
+        default=None,
+        help="Optional path to project JSON for embedding project summary metadata.",
+    )
+    bundle_parser.add_argument(
+        "--deliverables-index",
+        default=None,
+        help="Optional path to deliverables_index JSON for GUI pointer metadata.",
+    )
+    bundle_parser.add_argument(
+        "--listen-pack",
+        default=None,
+        help="Optional path to listen_pack JSON for GUI pointer metadata.",
     )
     bundle_parser.add_argument(
         "--out",
@@ -3650,6 +3694,11 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 apply_manifest_path=Path(args.apply_manifest) if args.apply_manifest else None,
                 applied_report_path=Path(args.applied_report) if args.applied_report else None,
+                project_path=Path(args.project) if args.project else None,
+                deliverables_index_path=(
+                    Path(args.deliverables_index) if args.deliverables_index else None
+                ),
+                listen_pack_path=Path(args.listen_pack) if args.listen_pack else None,
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)

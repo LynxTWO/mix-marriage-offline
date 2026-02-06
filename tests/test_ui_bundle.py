@@ -6,6 +6,7 @@ from pathlib import Path
 import jsonschema
 
 from mmo.cli import main
+from mmo.core.project_file import new_project, update_project_last_run, write_project
 from mmo.core.ui_bundle import build_ui_bundle
 
 
@@ -449,6 +450,74 @@ class TestUiBundle(unittest.TestCase):
             preset_help["title"],
             "Warm intimate",
         )
+
+    def test_build_ui_bundle_embeds_project_gui_design_and_pointers(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            stems_dir.mkdir(parents=True, exist_ok=True)
+            out_dir = temp_path / "out"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            deliverables_index_path = out_dir / "deliverables_index.json"
+            listen_pack_path = out_dir / "listen_pack.json"
+            project_path = temp_path / "project.json"
+
+            project_payload = new_project(stems_dir, notes=None)
+            project_payload = update_project_last_run(
+                project_payload,
+                {
+                    "mode": "single",
+                    "out_dir": out_dir.resolve().as_posix(),
+                    "deliverables_index_path": deliverables_index_path.resolve().as_posix(),
+                    "listen_pack_path": listen_pack_path.resolve().as_posix(),
+                },
+            )
+            write_project(project_path, project_payload)
+
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                project_path=project_path,
+                deliverables_index_path=deliverables_index_path,
+                listen_pack_path=listen_pack_path,
+            )
+
+        validator.validate(bundle)
+        self.assertEqual(
+            bundle.get("project"),
+            {
+                "project_id": project_payload["project_id"],
+                "stems_dir": project_payload["stems_dir"],
+                "last_run": project_payload["last_run"],
+                "updated_at_utc": project_payload["updated_at_utc"],
+            },
+        )
+        self.assertEqual(
+            bundle.get("pointers"),
+            {
+                "project_path": project_path.resolve().as_posix(),
+                "deliverables_index_path": deliverables_index_path.resolve().as_posix(),
+                "listen_pack_path": listen_pack_path.resolve().as_posix(),
+            },
+        )
+
+        gui_design = bundle.get("gui_design")
+        self.assertIsInstance(gui_design, dict)
+        if not isinstance(gui_design, dict):
+            return
+        self.assertIn("palette", gui_design)
+        self.assertIn("typography", gui_design)
+        self.assertIn("layout_rules", gui_design)
+        palette = gui_design.get("palette")
+        self.assertIsInstance(palette, dict)
+        if isinstance(palette, dict):
+            self.assertEqual(palette.get("background"), "#0F1117")
 
     def test_cli_bundle_writes_schema_valid_payload(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

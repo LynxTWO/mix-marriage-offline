@@ -64,6 +64,7 @@ class TestCliRun(unittest.TestCase):
                     "PRESET.SAFE_CLEANUP",
                     "--export-csv",
                     "--bundle",
+                    "--deliverables-index",
                     "--cache",
                     "off",
                 ]
@@ -73,14 +74,20 @@ class TestCliRun(unittest.TestCase):
             report_path = out_dir / "report.json"
             csv_path = out_dir / "recall.csv"
             bundle_path = out_dir / "ui_bundle.json"
+            deliverables_index_path = out_dir / "deliverables_index.json"
             self.assertTrue(report_path.exists())
             self.assertTrue(csv_path.exists())
             self.assertTrue(bundle_path.exists())
+            self.assertTrue(deliverables_index_path.exists())
 
             report_payload = json.loads(report_path.read_text(encoding="utf-8"))
             bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
             report_validator.validate(report_payload)
             bundle_validator.validate(bundle_payload)
+            self.assertEqual(
+                bundle_payload.get("pointers"),
+                {"deliverables_index_path": deliverables_index_path.resolve().as_posix()},
+            )
 
     def test_run_apply_and_render_write_schema_valid_manifests(self) -> None:
         if resolve_ffmpeg_cmd() is None:
