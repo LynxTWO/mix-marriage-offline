@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/lockfile.schema.json",
+  "title": "MMO Lockfile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "root_dir", "files"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "root_dir": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^\\\\]+$"
+    },
+    "files": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/file_entry" }
+    }
+  },
+  "$defs": {
+    "file_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rel_path", "size_bytes", "sha256"],
+      "properties": {
+        "rel_path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

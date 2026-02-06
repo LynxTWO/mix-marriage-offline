@@ -177,6 +177,16 @@ def _set_nested(path: list[str], payload: dict[str, Any], value: Any) -> None:
     target[path[-1]] = value
 
 
+def _rel_path_if_under_root(root_dir: Path, target_path: Path) -> str | None:
+    resolved_root = root_dir.resolve()
+    resolved_target = target_path.resolve()
+    try:
+        rel_path = resolved_target.relative_to(resolved_root)
+    except ValueError:
+        return None
+    return rel_path.as_posix()
+
+
 def _load_and_merge_run_config(
     config_path: str | None,
     cli_overrides: dict[str, Any],
@@ -662,6 +672,38 @@ def _build_preset_show_payload(*, presets_dir: Path, preset_id: str) -> dict[str
     return payload
 
 
+def _print_lock_verify_summary(verify_result: dict[str, Any]) -> None:
+    missing = verify_result.get("missing", [])
+    extra = verify_result.get("extra", [])
+    changed = verify_result.get("changed", [])
+    ok = bool(verify_result.get("ok"))
+
+    status = "ok" if ok else "drift detected"
+    print(f"lock verify: {status}")
+    print(
+        "summary:"
+        f" missing={len(missing)}"
+        f" extra={len(extra)}"
+        f" changed={len(changed)}"
+    )
+
+    for rel in missing:
+        print(f"- missing: {rel}")
+    for rel in extra:
+        print(f"- extra: {rel}")
+    for item in changed:
+        if not isinstance(item, dict):
+            continue
+        rel = item.get("rel", "")
+        expected_sha = item.get("expected_sha", "")
+        actual_sha = item.get("actual_sha", "")
+        print(
+            f"- changed: {rel}"
+            f" expected_sha={expected_sha}"
+            f" actual_sha={actual_sha}"
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="MMO command-line tools.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -898,6 +940,32 @@ def main(argv: list[str] | None = None) -> int:
         choices=["json", "text"],
         default="text",
         help="Output format for preset details.",
+    )
+
+    lock_parser = subparsers.add_parser("lock", help="Project lockfile tools.")
+    lock_subparsers = lock_parser.add_subparsers(dest="lock_command", required=True)
+    lock_write_parser = lock_subparsers.add_parser(
+        "write", help="Write a deterministic lockfile for a stems directory."
+    )
+    lock_write_parser.add_argument("stems_dir", help="Path to a directory of input files.")
+    lock_write_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output lockfile JSON.",
+    )
+    lock_verify_parser = lock_subparsers.add_parser(
+        "verify", help="Verify a stems directory against a lockfile."
+    )
+    lock_verify_parser.add_argument("stems_dir", help="Path to a directory of input files.")
+    lock_verify_parser.add_argument(
+        "--lock",
+        required=True,
+        help="Path to lockfile JSON.",
+    )
+    lock_verify_parser.add_argument(
+        "--out",
+        default=None,
+        help="Optional output path for verification result JSON.",
     )
 
     downmix_parser = subparsers.add_parser("downmix", help="Downmix policy tools.")
@@ -1310,6 +1378,75 @@ def main(argv: list[str] | None = None) -> int:
                     print(json.dumps(run_config, indent=2, sort_keys=True))
             return 0
         print("Unknown presets command.", file=sys.stderr)
+        return 2
+    if args.command == "lock":
+        from mmo.core.lockfile import build_lockfile, verify_lockfile  # noqa: WPS433
+
+        schema_path = repo_root / "schemas" / "lockfile.schema.json"
+        stems_dir = Path(args.stems_dir)
+
+        if args.lock_command == "write":
+            exclude_rel_paths: set[str] = set()
+            out_rel_path = _rel_path_if_under_root(stems_dir, Path(args.out))
+            if out_rel_path:
+                exclude_rel_paths.add(out_rel_path)
+            try:
+                lock_payload = build_lockfile(
+                    stems_dir,
+                    exclude_rel_paths=exclude_rel_paths,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            try:
+                _validate_json_payload(
+                    lock_payload,
+                    schema_path=schema_path,
+                    payload_name="Lockfile",
+                )
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+            _write_json_file(Path(args.out), lock_payload)
+            return 0
+
+        if args.lock_command == "verify":
+            exclude_rel_paths: set[str] = set()
+            lock_rel_path = _rel_path_if_under_root(stems_dir, Path(args.lock))
+            if lock_rel_path:
+                exclude_rel_paths.add(lock_rel_path)
+            if args.out:
+                out_rel_path = _rel_path_if_under_root(stems_dir, Path(args.out))
+                if out_rel_path:
+                    exclude_rel_paths.add(out_rel_path)
+            try:
+                lock_payload = _load_json_object(Path(args.lock), label="Lockfile")
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            try:
+                _validate_json_payload(
+                    lock_payload,
+                    schema_path=schema_path,
+                    payload_name="Lockfile",
+                )
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+            try:
+                verify_result = verify_lockfile(
+                    stems_dir,
+                    lock_payload,
+                    exclude_rel_paths=exclude_rel_paths,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            _print_lock_verify_summary(verify_result)
+            if args.out:
+                _write_json_file(Path(args.out), verify_result)
+            return 0 if verify_result.get("ok") else 1
+
+        print("Unknown lock command.", file=sys.stderr)
         return 2
     if args.command == "downmix":
         from mmo.dsp.downmix import (  # noqa: WPS433
