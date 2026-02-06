@@ -168,6 +168,95 @@ def _output_bit_depth(input_bits_per_sample: Any) -> int:
     return 24
 
 
+def _db_to_linear(gain_db: float) -> float:
+    return math.pow(10.0, gain_db / 20.0)
+
+
+def _routing_plan(session: Dict[str, Any]) -> Dict[str, Any] | None:
+    value = session.get("routing_plan")
+    if isinstance(value, dict):
+        return value
+    return None
+
+
+def _routing_routes_by_stem(routing_plan: Dict[str, Any] | None) -> Dict[str, Dict[str, Any]]:
+    if not isinstance(routing_plan, dict):
+        return {}
+    routes = routing_plan.get("routes")
+    if not isinstance(routes, list):
+        return {}
+
+    indexed: Dict[str, Dict[str, Any]] = {}
+    for route in routes:
+        if not isinstance(route, dict):
+            continue
+        stem_id = _coerce_str(route.get("stem_id"))
+        if not stem_id or stem_id in indexed:
+            continue
+        indexed[stem_id] = route
+    return indexed
+
+
+def _route_notes(route: Dict[str, Any]) -> List[str]:
+    notes_raw = route.get("notes")
+    if not isinstance(notes_raw, list):
+        return []
+    notes: List[str] = []
+    for note in notes_raw:
+        if isinstance(note, str) and note:
+            notes.append(note)
+    return notes
+
+
+def _route_mapping_entries(
+    route: Dict[str, Any],
+    *,
+    source_channels: int,
+    target_channels: int,
+) -> List[tuple[int, int, float]] | None:
+    mapping_raw = route.get("mapping")
+    if not isinstance(mapping_raw, list):
+        return None
+    if not mapping_raw:
+        return []
+
+    entries: List[tuple[int, int, float]] = []
+    for raw_entry in mapping_raw:
+        if not isinstance(raw_entry, dict):
+            return None
+        src_ch = _coerce_int(raw_entry.get("src_ch"))
+        dst_ch = _coerce_int(raw_entry.get("dst_ch"))
+        if src_ch is None or dst_ch is None:
+            return None
+        if src_ch < 0 or src_ch >= source_channels:
+            return None
+        if dst_ch < 0 or dst_ch >= target_channels:
+            return None
+        gain_db = _coerce_float(raw_entry.get("gain_db"))
+        gain_scalar = _db_to_linear(gain_db if gain_db is not None else 0.0)
+        entries.append((src_ch, dst_ch, gain_scalar))
+    return entries
+
+
+def _apply_route_mapping(
+    aligned_samples: list[float],
+    *,
+    source_channels: int,
+    target_channels: int,
+    mapping: List[tuple[int, int, float]],
+) -> list[float]:
+    frame_count = len(aligned_samples) // source_channels
+    routed_samples = [0.0] * (frame_count * target_channels)
+    for frame_index in range(frame_count):
+        source_offset = frame_index * source_channels
+        target_offset = frame_index * target_channels
+        for src_ch, dst_ch, gain_scalar in mapping:
+            routed_samples[target_offset + dst_ch] += (
+                aligned_samples[source_offset + src_ch] * gain_scalar
+            )
+    return routed_samples
+
+
 def _iter_wav_samples_for_render(source_path: Path) -> Iterator[list[float]]:
     yield from iter_wav_float64_samples(source_path, error_context="render gain/trim")
 
@@ -187,25 +276,41 @@ def _render_gain_trim(
     bits_per_sample: int,
     channels: int,
     sample_rate_hz: int,
+    target_channels: int | None = None,
+    route_mapping: List[tuple[int, int, float]] | None = None,
 ) -> None:
-    gain_scalar = math.pow(10.0, gain_db / 20.0)
+    gain_scalar = _db_to_linear(gain_db)
     rng = random.Random(0)
     pending_samples: list[float] = []
-    frame_width = channels
+    source_frame_width = channels
+    output_frame_width = channels if target_channels is None else target_channels
+    if output_frame_width <= 0:
+        raise ValueError("target channel count must be > 0")
+    if route_mapping is None and output_frame_width != source_frame_width:
+        raise ValueError("target channel count mismatch without route mapping")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(output_path), "wb") as out_handle:
-        out_handle.setnchannels(channels)
+        out_handle.setnchannels(output_frame_width)
         out_handle.setsampwidth(bits_per_sample // 8)
         out_handle.setframerate(sample_rate_hz)
 
         for float_samples in float_samples_iter:
             pending_samples.extend(float_samples)
-            aligned_sample_count = (len(pending_samples) // frame_width) * frame_width
+            aligned_sample_count = (
+                len(pending_samples) // source_frame_width
+            ) * source_frame_width
             if aligned_sample_count <= 0:
                 continue
             aligned_samples = pending_samples[:aligned_sample_count]
             pending_samples = pending_samples[aligned_sample_count:]
+            if route_mapping is not None:
+                aligned_samples = _apply_route_mapping(
+                    aligned_samples,
+                    source_channels=source_frame_width,
+                    target_channels=output_frame_width,
+                    mapping=route_mapping,
+                )
 
             int_samples = _dithered_int_samples(
                 aligned_samples,
@@ -343,6 +448,18 @@ class GainTrimRenderer(RendererPlugin):
 
         stems_dir = _resolve_stems_dir(session)
         stems_by_id = _stem_index(session)
+        routing_plan = _routing_plan(session)
+        routing_routes = _routing_routes_by_stem(routing_plan)
+        routing_source_layout_id = (
+            _coerce_str(routing_plan.get("source_layout_id"))
+            if isinstance(routing_plan, dict)
+            else ""
+        )
+        routing_target_layout_id = (
+            _coerce_str(routing_plan.get("target_layout_id"))
+            if isinstance(routing_plan, dict)
+            else ""
+        )
         ffmpeg_cmd: Sequence[str] | None = None
 
         grouped_by_stem: Dict[str, List[Dict[str, Any]]] = {}
@@ -437,6 +554,38 @@ class GainTrimRenderer(RendererPlugin):
                 _append_skipped(skipped, contributions, "unsupported_format")
                 continue
 
+            output_channels = channels
+            route_mapping: List[tuple[int, int, float]] | None = None
+            route_notes: List[str] = []
+            routing_applied = False
+            route = routing_routes.get(stem_id)
+            if isinstance(route, dict):
+                route_target_channels = _coerce_int(route.get("target_channels"))
+                route_stem_channels = _coerce_int(route.get("stem_channels"))
+                if (
+                    route_target_channels is not None
+                    and route_target_channels > 0
+                    and route_target_channels != channels
+                ):
+                    if (
+                        route_stem_channels is not None
+                        and route_stem_channels > 0
+                        and route_stem_channels != channels
+                    ):
+                        _append_skipped(skipped, contributions, "no_safe_routing")
+                        continue
+                    route_mapping = _route_mapping_entries(
+                        route,
+                        source_channels=channels,
+                        target_channels=route_target_channels,
+                    )
+                    if not route_mapping:
+                        _append_skipped(skipped, contributions, "no_safe_routing")
+                        continue
+                    output_channels = route_target_channels
+                    route_notes = _route_notes(route)
+                    routing_applied = True
+
             try:
                 _render_gain_trim(
                     render_samples_iter,
@@ -445,6 +594,8 @@ class GainTrimRenderer(RendererPlugin):
                     bits_per_sample=bits_per_sample,
                     channels=channels,
                     sample_rate_hz=sample_rate_hz,
+                    target_channels=output_channels,
+                    route_mapping=route_mapping,
                 )
             except ValueError:
                 _append_skipped(skipped, contributions, "unsupported_format")
@@ -461,6 +612,19 @@ class GainTrimRenderer(RendererPlugin):
             if len(recommendation_ids) > 1:
                 notes = f"Contributing recommendation IDs: {','.join(recommendation_ids)}"
 
+            metadata: Dict[str, Any] = {
+                "applied_gain_db": applied_gain_db,
+                "contributing_recommendation_ids": recommendation_ids,
+            }
+            if routing_applied:
+                metadata["routing_applied"] = True
+                if routing_source_layout_id:
+                    metadata["source_layout_id"] = routing_source_layout_id
+                if routing_target_layout_id:
+                    metadata["target_layout_id"] = routing_target_layout_id
+                if route_notes:
+                    metadata["routing_notes"] = route_notes
+
             outputs.append(
                 {
                     "output_id": f"OUTPUT.GAIN_TRIM.{stem_id}.{output_sha256[:12]}",
@@ -471,13 +635,10 @@ class GainTrimRenderer(RendererPlugin):
                     "format": "wav",
                     "sample_rate_hz": sample_rate_hz,
                     "bit_depth": bits_per_sample,
-                    "channel_count": channels,
+                    "channel_count": output_channels,
                     "sha256": output_sha256,
                     "notes": notes,
-                    "metadata": {
-                        "applied_gain_db": applied_gain_db,
-                        "contributing_recommendation_ids": recommendation_ids,
-                    },
+                    "metadata": metadata,
                 }
             )
 

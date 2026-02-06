@@ -32,7 +32,15 @@ def _build_report(
     stems_dir: Path,
     recommendation_id: str,
     gain_db: float,
+    channel_count: int | None = None,
 ) -> dict:
+    stem_payload = {
+        "stem_id": "kick",
+        "file_path": "drums/kick.wav",
+    }
+    if isinstance(channel_count, int):
+        stem_payload["channel_count"] = channel_count
+
     return {
         "schema_version": "0.1.0",
         "report_id": report_id,
@@ -42,12 +50,7 @@ def _build_report(
         "ontology_version": "0.1.0",
         "session": {
             "stems_dir": stems_dir.resolve().as_posix(),
-            "stems": [
-                {
-                    "stem_id": "kick",
-                    "file_path": "drums/kick.wav",
-                }
-            ],
+            "stems": [stem_payload],
         },
         "issues": [],
         "recommendations": [
@@ -80,6 +83,75 @@ def _find_renderer_manifest(manifest: dict, renderer_id: str) -> dict | None:
 
 
 class TestCliApply(unittest.TestCase):
+    def test_apply_builds_routing_plan_from_cli_layout_flags(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            source_path = stems_dir / "drums" / "kick.wav"
+            report_path = temp_path / "report.json"
+            out_manifest_path = temp_path / "apply_manifest.json"
+            out_dir = temp_path / "applied"
+            _write_wav_16bit(source_path)
+
+            report = _build_report(
+                report_id="REPORT.CLI.APPLY.ROUTING.CLI",
+                stems_dir=stems_dir,
+                recommendation_id="REC.APPLY.GAIN.ROUTING.CLI",
+                gain_db=-2.0,
+                channel_count=1,
+            )
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            exit_code = main(
+                [
+                    "apply",
+                    "--report",
+                    str(report_path),
+                    "--plugins",
+                    str(repo_root / "plugins"),
+                    "--out-manifest",
+                    str(out_manifest_path),
+                    "--out-dir",
+                    str(out_dir),
+                    "--source-layout",
+                    "LAYOUT.1_0",
+                    "--target-layout",
+                    "LAYOUT.2_0",
+                ]
+            )
+            self.assertEqual(exit_code, 0)
+            manifest = json.loads(out_manifest_path.read_text(encoding="utf-8"))
+            gain_manifest = _find_renderer_manifest(manifest, "PLUGIN.RENDERER.GAIN_TRIM")
+            self.assertIsNotNone(gain_manifest)
+            if gain_manifest is None:
+                return
+
+            outputs = gain_manifest.get("outputs")
+            self.assertIsInstance(outputs, list)
+            self.assertEqual(len(outputs), 1)
+            if not isinstance(outputs, list) or not outputs:
+                return
+
+            output = outputs[0]
+            self.assertEqual(output.get("channel_count"), 2)
+            metadata = output.get("metadata")
+            self.assertIsInstance(metadata, dict)
+            if not isinstance(metadata, dict):
+                return
+            self.assertTrue(metadata.get("routing_applied"))
+            self.assertEqual(metadata.get("source_layout_id"), "LAYOUT.1_0")
+            self.assertEqual(metadata.get("target_layout_id"), "LAYOUT.2_0")
+
+            output_file = out_dir / Path(output["file_path"])
+            self.assertTrue(output_file.exists())
+            with wave.open(str(output_file), "rb") as handle:
+                self.assertEqual(handle.getnchannels(), 2)
+
     def test_apply_writes_output_and_manifest_hash(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         schema = json.loads(

@@ -27,6 +27,7 @@ from mmo.core.routing import (
     apply_routing_plan_to_report,
     build_routing_plan,
     render_routing_plan,
+    routing_layout_ids_from_run_config,
 )
 from mmo.core.run_config import (
     RUN_CONFIG_SCHEMA_VERSION,
@@ -573,7 +574,8 @@ def _run_render_command(
     if run_config is not None:
         normalized_run_config = normalize_run_config(run_config)
         report["run_config"] = normalized_run_config
-        apply_routing_plan_to_report(report, normalized_run_config)
+        if routing_layout_ids_from_run_config(normalized_run_config) is not None:
+            apply_routing_plan_to_report(report, normalized_run_config)
     apply_gates_to_report(
         report,
         policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
@@ -669,7 +671,8 @@ def _run_apply_command(
     if run_config is not None:
         normalized_run_config = normalize_run_config(run_config)
         report["run_config"] = normalized_run_config
-        apply_routing_plan_to_report(report, normalized_run_config)
+        if routing_layout_ids_from_run_config(normalized_run_config) is not None:
+            apply_routing_plan_to_report(report, normalized_run_config)
     apply_gates_to_report(
         report,
         policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
@@ -2011,6 +2014,16 @@ def main(argv: list[str] | None = None) -> int:
         default="PROFILE.ASSIST",
         help="Authority profile ID for render gating (default: PROFILE.ASSIST).",
     )
+    render_parser.add_argument(
+        "--source-layout",
+        default=None,
+        help="downmix.source_layout_id override in run_config.",
+    )
+    render_parser.add_argument(
+        "--target-layout",
+        default=None,
+        help="downmix.target_layout_id override in run_config.",
+    )
 
     apply_parser = subparsers.add_parser(
         "apply",
@@ -2055,6 +2068,16 @@ def main(argv: list[str] | None = None) -> int:
         "--profile",
         default="PROFILE.ASSIST",
         help="Authority profile ID for auto-apply gating (default: PROFILE.ASSIST).",
+    )
+    apply_parser.add_argument(
+        "--source-layout",
+        default=None,
+        help="downmix.source_layout_id override in run_config.",
+    )
+    apply_parser.add_argument(
+        "--target-layout",
+        default=None,
+        help="downmix.target_layout_id override in run_config.",
     )
     apply_parser.add_argument(
         "--out-report",
@@ -2887,6 +2910,18 @@ def main(argv: list[str] | None = None) -> int:
         render_overrides: dict[str, Any] = {}
         if _flag_present(raw_argv, "--profile"):
             render_overrides["profile_id"] = args.profile
+        if _flag_present(raw_argv, "--source-layout"):
+            _set_nested(
+                ["downmix", "source_layout_id"],
+                render_overrides,
+                args.source_layout,
+            )
+        if _flag_present(raw_argv, "--target-layout"):
+            _set_nested(
+                ["downmix", "target_layout_id"],
+                render_overrides,
+                args.target_layout,
+            )
         if _flag_present(raw_argv, "--out-dir"):
             _set_nested(["render", "out_dir"], render_overrides, args.out_dir)
         if _flag_present(raw_argv, "--output-formats"):
@@ -2941,6 +2976,18 @@ def main(argv: list[str] | None = None) -> int:
         apply_overrides: dict[str, Any] = {}
         if _flag_present(raw_argv, "--profile"):
             apply_overrides["profile_id"] = args.profile
+        if _flag_present(raw_argv, "--source-layout"):
+            _set_nested(
+                ["downmix", "source_layout_id"],
+                apply_overrides,
+                args.source_layout,
+            )
+        if _flag_present(raw_argv, "--target-layout"):
+            _set_nested(
+                ["downmix", "target_layout_id"],
+                apply_overrides,
+                args.target_layout,
+            )
         if _flag_present(raw_argv, "--out-dir"):
             _set_nested(["render", "out_dir"], apply_overrides, args.out_dir)
         if _flag_present(raw_argv, "--output-formats"):

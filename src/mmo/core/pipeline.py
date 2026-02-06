@@ -648,6 +648,11 @@ def run_renderers(
     session = report.get("session") if isinstance(report, dict) else {}
     if not isinstance(session, dict):
         session = {}
+    session_for_plugins = session
+    routing_plan = report.get("routing_plan") if isinstance(report, dict) else None
+    if isinstance(routing_plan, dict):
+        session_for_plugins = dict(session)
+        session_for_plugins["routing_plan"] = routing_plan
     recommendations = report.get("recommendations") if isinstance(report, dict) else []
     recs = _coerce_list(recommendations)
     recs = [rec for rec in recs if isinstance(rec, dict)]
@@ -711,7 +716,7 @@ def run_renderers(
             )
             continue
 
-        manifest = _call_renderer(plugin.instance, session, eligible, output_dir)
+        manifest = _call_renderer(plugin.instance, session_for_plugins, eligible, output_dir)
         if not isinstance(manifest, dict):
             manifest = {
                 "renderer_id": plugin.plugin_id,
