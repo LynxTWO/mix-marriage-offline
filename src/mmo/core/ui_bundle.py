@@ -25,6 +25,12 @@ def _numeric_value(value: Any) -> float | None:
     return None
 
 
+def _coerce_str(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    return ""
+
+
 def _iter_dict_list(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
@@ -64,6 +70,91 @@ def _renderer_manifests(manifest: dict[str, Any] | None) -> list[dict[str, Any]]
     if not isinstance(manifest, dict):
         return []
     return _iter_dict_list(manifest.get("renderer_manifests"))
+
+
+def _manifest_deliverables(manifest: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(manifest, dict):
+        return []
+    return _iter_dict_list(manifest.get("deliverables"))
+
+
+def _normalized_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    normalized = [
+        item.strip()
+        for item in value
+        if isinstance(item, str) and item.strip()
+    ]
+    return sorted(set(normalized))
+
+
+def _dashboard_deliverable_entry(
+    deliverable: dict[str, Any],
+    *,
+    id_prefix: str = "",
+    label_suffix: str = "",
+) -> dict[str, Any] | None:
+    deliverable_id = _coerce_str(deliverable.get("deliverable_id")).strip()
+    if not deliverable_id:
+        return None
+
+    label = _coerce_str(deliverable.get("label")).strip() or "Deliverable"
+    output_count = 0
+    output_ids = deliverable.get("output_ids")
+    if isinstance(output_ids, list):
+        output_count = sum(
+            1
+            for item in output_ids
+            if isinstance(item, str) and item.strip()
+        )
+
+    mapped: dict[str, Any] = {
+        "deliverable_id": f"{id_prefix}{deliverable_id}",
+        "label": f"{label}{label_suffix}",
+        "output_count": output_count,
+    }
+
+    target_layout_id = _coerce_str(deliverable.get("target_layout_id")).strip()
+    if target_layout_id:
+        mapped["target_layout_id"] = target_layout_id
+
+    channel_count = deliverable.get("channel_count")
+    if isinstance(channel_count, int) and not isinstance(channel_count, bool) and channel_count >= 1:
+        mapped["channel_count"] = channel_count
+
+    formats = _normalized_string_list(deliverable.get("formats"))
+    if formats:
+        mapped["formats"] = formats
+
+    return mapped
+
+
+def _dashboard_deliverables(
+    render_manifest: dict[str, Any] | None,
+    apply_manifest: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    mapped: list[dict[str, Any]] = []
+    for deliverable in _manifest_deliverables(render_manifest):
+        item = _dashboard_deliverable_entry(deliverable)
+        if item is not None:
+            mapped.append(item)
+    for deliverable in _manifest_deliverables(apply_manifest):
+        item = _dashboard_deliverable_entry(
+            deliverable,
+            id_prefix="APPLY.",
+            label_suffix=" (apply)",
+        )
+        if item is not None:
+            mapped.append(item)
+
+    mapped.sort(
+        key=lambda item: (
+            _coerce_str(item.get("deliverable_id")).strip(),
+            _coerce_str(item.get("label")).strip(),
+        )
+    )
+    return mapped
 
 
 def _count_if_true(recommendations: list[dict[str, Any]], field: str) -> int:
@@ -347,6 +438,9 @@ def build_ui_bundle(
         dashboard["preset_recommendations"] = preset_recommendations
     if apply_manifest is not None:
         dashboard["apply"] = _apply_summary(report, apply_manifest)
+    dashboard_deliverables = _dashboard_deliverables(render_manifest, apply_manifest)
+    if dashboard_deliverables:
+        dashboard["deliverables"] = dashboard_deliverables
 
     payload: dict[str, Any] = {
         "schema_version": UI_BUNDLE_SCHEMA_VERSION,

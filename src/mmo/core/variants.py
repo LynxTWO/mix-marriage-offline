@@ -17,7 +17,13 @@ from mmo.core.cache_store import (
 from mmo.core.downmix_qa import run_downmix_qa
 from mmo.core.gates import apply_gates_to_report
 from mmo.core.lockfile import build_lockfile
-from mmo.core.pipeline import load_plugins, run_detectors, run_renderers, run_resolvers
+from mmo.core.pipeline import (
+    build_deliverables_for_renderer_manifests,
+    load_plugins,
+    run_detectors,
+    run_renderers,
+    run_resolvers,
+)
 from mmo.core.preset_recommendations import derive_preset_recommendations
 from mmo.core.presets import list_presets, load_preset_run_config
 from mmo.core.report_builders import (
@@ -1103,11 +1109,16 @@ def run_variant_plan(
                     context="render",
                     output_formats=render_output_formats,
                 )
+                render_deliverables = build_deliverables_for_renderer_manifests(
+                    renderer_manifests
+                )
                 render_manifest = {
                     "schema_version": VARIANT_SCHEMA_VERSION,
                     "report_id": _coerce_str(render_report.get("report_id")),
                     "renderer_manifests": renderer_manifests,
                 }
+                if render_deliverables:
+                    render_manifest["deliverables"] = render_deliverables
                 render_manifest_path = variant_out_dir / "render_manifest.json"
                 _write_json(render_manifest_path, render_manifest)
                 variant_result["render_manifest_path"] = _path_to_posix(render_manifest_path)
@@ -1135,12 +1146,17 @@ def run_variant_plan(
                     context="auto_apply",
                     output_formats=apply_output_formats,
                 )
+                apply_deliverables = build_deliverables_for_renderer_manifests(
+                    renderer_manifests
+                )
                 apply_manifest = {
                     "schema_version": VARIANT_SCHEMA_VERSION,
                     "context": "auto_apply",
                     "report_id": _coerce_str(apply_report.get("report_id")),
                     "renderer_manifests": renderer_manifests,
                 }
+                if apply_deliverables:
+                    apply_manifest["deliverables"] = apply_deliverables
                 apply_manifest_path = variant_out_dir / "apply_manifest.json"
                 _write_json(apply_manifest_path, apply_manifest)
                 applied_report = _build_applied_report(

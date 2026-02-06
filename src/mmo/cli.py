@@ -568,7 +568,11 @@ def _run_render_command(
     run_config: dict[str, Any] | None = None,
 ) -> int:
     from mmo.core.gates import apply_gates_to_report  # noqa: WPS433
-    from mmo.core.pipeline import load_plugins, run_renderers  # noqa: WPS433
+    from mmo.core.pipeline import (  # noqa: WPS433
+        build_deliverables_for_renderer_manifests,
+        load_plugins,
+        run_renderers,
+    )
 
     report = _load_report(report_path)
     if run_config is not None:
@@ -614,11 +618,14 @@ def _run_render_command(
         output_dir=out_dir,
         output_formats=output_formats,
     )
+    deliverables = build_deliverables_for_renderer_manifests(manifests)
     render_manifest = {
         "schema_version": "0.1.0",
         "report_id": report.get("report_id", ""),
         "renderer_manifests": manifests,
     }
+    if deliverables:
+        render_manifest["deliverables"] = deliverables
     _validate_render_manifest(
         render_manifest,
         repo_root / "schemas" / "render_manifest.schema.json",
@@ -665,7 +672,11 @@ def _run_apply_command(
     run_config: dict[str, Any] | None = None,
 ) -> int:
     from mmo.core.gates import apply_gates_to_report  # noqa: WPS433
-    from mmo.core.pipeline import load_plugins, run_renderers  # noqa: WPS433
+    from mmo.core.pipeline import (  # noqa: WPS433
+        build_deliverables_for_renderer_manifests,
+        load_plugins,
+        run_renderers,
+    )
 
     report = _load_report(report_path)
     if run_config is not None:
@@ -713,12 +724,15 @@ def _run_apply_command(
         context="auto_apply",
         output_formats=output_formats,
     )
+    deliverables = build_deliverables_for_renderer_manifests(renderer_manifests)
     apply_manifest = {
         "schema_version": "0.1.0",
         "context": "auto_apply",
         "report_id": report.get("report_id", ""),
         "renderer_manifests": renderer_manifests,
     }
+    if deliverables:
+        apply_manifest["deliverables"] = deliverables
     _validate_apply_manifest(
         apply_manifest,
         repo_root / "schemas" / "apply_manifest.schema.json",

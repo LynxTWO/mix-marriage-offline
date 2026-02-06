@@ -11,6 +11,10 @@
     "renderer_manifests": {
       "type": "array",
       "items": { "$ref": "#/$defs/renderer_manifest" }
+    },
+    "deliverables": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/deliverable" }
     }
   },
   "$defs": {
@@ -67,6 +71,30 @@
         "reason": { "type": "string", "minLength": 1 },
         "gate_summary": { "type": "string" },
         "details": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "deliverable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deliverable_id", "label", "output_ids"],
+      "properties": {
+        "deliverable_id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "target_layout_id": { "type": "string", "minLength": 1 },
+        "channel_count": { "type": "integer", "minimum": 1 },
+        "formats": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "output_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
       }
     }
   }

@@ -126,6 +126,22 @@
         "skipped_count": { "type": "integer", "minimum": 0 }
       }
     },
+    "dashboard_deliverable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deliverable_id", "label", "output_count"],
+      "properties": {
+        "deliverable_id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "target_layout_id": { "type": "string", "minLength": 1 },
+        "channel_count": { "type": "integer", "minimum": 1 },
+        "formats": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "output_count": { "type": "integer", "minimum": 0 }
+      }
+    },
     "dashboard": {
       "type": "object",
       "additionalProperties": false,
@@ -154,7 +170,11 @@
           "type": "array",
           "items": { "$ref": "#/$defs/preset_recommendation_summary" }
         },
-        "apply": { "$ref": "#/$defs/apply_summary" }
+        "apply": { "$ref": "#/$defs/apply_summary" },
+        "deliverables": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dashboard_deliverable" }
+        }
       }
     }
   }

@@ -6,6 +6,10 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence
 
+from mmo.core.deliverables import (
+    build_deliverables_from_outputs,
+    collect_outputs_from_renderer_manifests,
+)
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.io import sha256_file
 from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS, supported_output_formats, transcode_wav_to_format
@@ -617,6 +621,13 @@ def _apply_output_formats_to_manifest(
     rewritten_outputs.sort(key=_output_sort_key)
     manifest["outputs"] = rewritten_outputs
     return transcode_skipped
+
+
+def build_deliverables_for_renderer_manifests(
+    renderer_manifests: Sequence[dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    outputs = collect_outputs_from_renderer_manifests(renderer_manifests)
+    return build_deliverables_from_outputs(outputs)
 
 
 def run_detectors(session_report: Dict[str, Any], plugins: Sequence[PluginEntry]) -> None:
