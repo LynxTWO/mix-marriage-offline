@@ -127,6 +127,33 @@ def _downmix_qa_summary(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _mix_complexity_summary(report: dict[str, Any]) -> dict[str, Any]:
+    mix_complexity = report.get("mix_complexity")
+    if not isinstance(mix_complexity, dict):
+        return {
+            "density_mean": None,
+            "density_peak": None,
+            "top_masking_pairs_count": 0,
+        }
+
+    density_mean = _numeric_value(mix_complexity.get("density_mean"))
+    density_peak_numeric = _numeric_value(mix_complexity.get("density_peak"))
+    density_peak = int(density_peak_numeric) if density_peak_numeric is not None else None
+
+    top_pairs = mix_complexity.get("top_masking_pairs")
+    if isinstance(top_pairs, list):
+        top_masking_pairs_count = len(top_pairs)
+    else:
+        top_count = _numeric_value(mix_complexity.get("top_masking_pairs_count"))
+        top_masking_pairs_count = int(top_count) if top_count is not None else 0
+
+    return {
+        "density_mean": density_mean,
+        "density_peak": density_peak,
+        "top_masking_pairs_count": top_masking_pairs_count,
+    }
+
+
 def _apply_summary(report: dict[str, Any], apply_manifest: dict[str, Any]) -> dict[str, int]:
     recommendations = _recommendations(report)
     renderer_manifests = _renderer_manifests(apply_manifest)
@@ -162,6 +189,7 @@ def build_ui_bundle(
         },
         "extreme_count": _count_if_true(recommendations, "extreme"),
         "downmix_qa": _downmix_qa_summary(report),
+        "mix_complexity": _mix_complexity_summary(report),
     }
     if apply_manifest is not None:
         dashboard["apply"] = _apply_summary(report, apply_manifest)

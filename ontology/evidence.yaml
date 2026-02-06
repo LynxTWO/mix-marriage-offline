@@ -378,6 +378,45 @@ evidence:
       - "freq_range_hz"
 
   # -------------------------
+  # Mix Complexity Evidence
+  # -------------------------
+  EVID.MIX.DENSITY_MEAN:
+    label: "Mix density mean"
+    description: "Average number of active stems per analysis window."
+    value_type: "number"
+    unit_id: "UNIT.COUNT"
+    constraints:
+      min: 0
+
+  EVID.MIX.DENSITY_PEAK:
+    label: "Mix density peak"
+    description: "Maximum number of active stems in any analysis window."
+    value_type: "integer"
+    unit_id: "UNIT.COUNT"
+    constraints:
+      min: 0
+
+  EVID.MIX.DENSITY_TIMELINE:
+    label: "Mix density timeline"
+    description: "Deterministic JSON timeline of active stem counts per window."
+    value_type: "string"
+    unit_id: "UNIT.NONE"
+
+  EVID.MIX.MASKING_RISK_TOP_PAIRS:
+    label: "Top masking risk pairs"
+    description: "Deterministic JSON list of highest-overlap stem pairs."
+    value_type: "string"
+    unit_id: "UNIT.NONE"
+
+  EVID.MIX.MASKING_RISK_TOP_PAIRS_COUNT:
+    label: "Top masking pair count"
+    description: "Number of masking-risk pairs included in the top list."
+    value_type: "integer"
+    unit_id: "UNIT.COUNT"
+    constraints:
+      min: 0
+
+  # -------------------------
   # Stereo / Phase / Imaging
   # -------------------------
   EVID.IMAGE.CORRELATION:

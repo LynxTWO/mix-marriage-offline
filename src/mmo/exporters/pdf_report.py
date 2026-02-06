@@ -568,6 +568,23 @@ def _downmix_qa_summary_table(rows: List[List[str]]) -> Table:
     return table
 
 
+def _mix_complexity_top_pairs(
+    mix_complexity: Dict[str, Any], *, limit: int = 3
+) -> List[Dict[str, Any]]:
+    top_pairs = mix_complexity.get("top_masking_pairs")
+    if not isinstance(top_pairs, list):
+        return []
+    rows = [pair for pair in top_pairs if isinstance(pair, dict)]
+    rows.sort(
+        key=lambda pair: (
+            -(_coerce_number(pair.get("score")) or 0.0),
+            _safe_str(pair.get("stem_a")),
+            _safe_str(pair.get("stem_b")),
+        )
+    )
+    return rows[: max(0, int(limit))]
+
+
 def export_report_pdf(
     report: Dict[str, Any],
     out_path: Path,
@@ -656,6 +673,39 @@ def export_report_pdf(
                 truncate_values=truncate_values,
             )
         )
+
+    mix_complexity = report.get("mix_complexity")
+    if isinstance(mix_complexity, dict):
+        density_mean = _safe_str(mix_complexity.get("density_mean"))
+        density_peak = _safe_str(mix_complexity.get("density_peak"))
+        top_pairs = _mix_complexity_top_pairs(mix_complexity, limit=3)
+
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Mix Complexity", styles["Heading2"]))
+        story.append(Spacer(1, 6))
+        story.append(
+            Paragraph(
+                f"Density mean: {density_mean} | Density peak: {density_peak}",
+                styles["Normal"],
+            )
+        )
+        story.append(Spacer(1, 6))
+        story.append(Paragraph("Top masking risk pairs", styles["Heading3"]))
+        if top_pairs:
+            for pair in top_pairs:
+                stem_a = _safe_str(pair.get("stem_a"))
+                stem_b = _safe_str(pair.get("stem_b"))
+                score = _safe_str(pair.get("score"))
+                start_s = _safe_str(pair.get("start_s"))
+                end_s = _safe_str(pair.get("end_s"))
+                story.append(
+                    Paragraph(
+                        f"- {stem_a} / {stem_b} | score={score} | {start_s}s to {end_s}s",
+                        styles["Normal"],
+                    )
+                )
+        else:
+            story.append(Paragraph("- No masking-risk pairs detected.", styles["Normal"]))
 
     downmix_qa = report.get("downmix_qa")
     has_downmix_qa = isinstance(downmix_qa, dict)

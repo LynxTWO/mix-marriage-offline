@@ -42,6 +42,7 @@ from mmo.dsp.meters import (  # noqa: E402
     compute_dc_offset_wav,
     compute_rms_dbfs_wav,
     compute_sample_peak_dbfs_wav,
+    iter_wav_float64_samples,
 )
 from mmo.dsp.stereo import compute_stereo_correlation_wav  # noqa: E402
 
@@ -585,6 +586,169 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
     return missing_ffmpeg
 
 
+def _to_mono_samples(interleaved: List[float], channels: int) -> List[float]:
+    if channels <= 1:
+        return list(interleaved)
+    usable = len(interleaved) - (len(interleaved) % channels)
+    if usable <= 0:
+        return []
+    mono: List[float] = []
+    scale = 1.0 / float(channels)
+    for index in range(0, usable, channels):
+        frame = interleaved[index : index + channels]
+        mono.append(sum(frame) * scale)
+    return mono
+
+
+def _load_mix_complexity_stems(
+    session: Dict[str, Any], stems_dir: Path
+) -> tuple[List[Dict[str, Any]], bool]:
+    import numpy as np  # noqa: WPS433
+
+    loaded: List[Dict[str, Any]] = []
+    missing_ffmpeg = False
+    ffmpeg_cmd = None
+    stems = session.get("stems", [])
+    for stem in stems:
+        if not isinstance(stem, dict):
+            continue
+        stem_id = stem.get("stem_id")
+        if not isinstance(stem_id, str) or not stem_id:
+            continue
+        channels = stem.get("channel_count")
+        if not isinstance(channels, int) or channels <= 0:
+            continue
+        sample_rate_hz = stem.get("sample_rate_hz")
+        if not isinstance(sample_rate_hz, (int, float)) or sample_rate_hz <= 0:
+            continue
+        file_path = stem.get("file_path")
+        if not isinstance(file_path, str) or not file_path:
+            continue
+
+        stem_path = Path(file_path)
+        if not stem_path.is_absolute():
+            stem_path = stems_dir / stem_path
+        format_id = detect_format_from_path(stem_path)
+        mono_samples: List[float] = []
+
+        if format_id == "wav":
+            try:
+                for chunk in iter_wav_float64_samples(
+                    stem_path, error_context="mix complexity meter"
+                ):
+                    mono_samples.extend(_to_mono_samples(chunk, channels))
+            except ValueError:
+                continue
+        elif format_id in {"flac", "wavpack", "aiff"}:
+            if ffmpeg_cmd is None:
+                ffmpeg_cmd = resolve_ffmpeg_cmd()
+            if ffmpeg_cmd is None:
+                missing_ffmpeg = True
+                continue
+            try:
+                for chunk in iter_ffmpeg_float64_samples(stem_path, ffmpeg_cmd):
+                    mono_samples.extend(_to_mono_samples(chunk, channels))
+            except ValueError:
+                continue
+        else:
+            continue
+
+        loaded.append(
+            {
+                "stem_id": stem_id,
+                "samples": np.asarray(mono_samples, dtype=np.float64),
+                "sample_rate_hz": int(sample_rate_hz),
+            }
+        )
+
+    loaded.sort(key=lambda item: item["stem_id"])
+    return loaded, missing_ffmpeg
+
+
+def _default_mix_complexity_payload() -> Dict[str, Any]:
+    return {
+        "density_mean": 0.0,
+        "density_peak": 0,
+        "density_timeline": [],
+        "top_masking_pairs": [],
+        "top_masking_pairs_count": 0,
+        "sample_rate_hz": None,
+        "included_stem_ids": [],
+        "skipped_stem_ids": [],
+        "density": {
+            "density_mean": 0.0,
+            "density_peak": 0,
+            "density_timeline": [],
+            "timeline_total_windows": 0,
+            "timeline_truncated": False,
+            "window_size": 2048,
+            "hop_size": 1024,
+            "rms_threshold_dbfs": -45.0,
+            "bands_hz": [],
+            "stem_count": 0,
+        },
+        "masking_risk": {
+            "top_pairs": [],
+            "pair_count": 0,
+            "window_size": 2048,
+            "hop_size": 1024,
+            "mid_band_hz": {"low_hz": 300.0, "high_hz": 3000.0},
+        },
+    }
+
+
+def _build_mix_complexity(
+    session: Dict[str, Any], stems_dir: Path
+) -> tuple[Dict[str, Any], bool]:
+    from mmo.meters.meter_masking_risk import compute_masking_risk  # noqa: WPS433
+    from mmo.meters.meter_mix_density import compute_mix_density  # noqa: WPS433
+
+    loaded_stems, missing_ffmpeg = _load_mix_complexity_stems(session, stems_dir)
+    if not loaded_stems:
+        return _default_mix_complexity_payload(), missing_ffmpeg
+
+    sample_rate_counts: Dict[int, int] = {}
+    for item in loaded_stems:
+        sample_rate_hz = int(item["sample_rate_hz"])
+        sample_rate_counts[sample_rate_hz] = sample_rate_counts.get(sample_rate_hz, 0) + 1
+    selected_sample_rate = sorted(
+        sample_rate_counts.items(), key=lambda item: (-item[1], item[0])
+    )[0][0]
+
+    included = [
+        {"stem_id": item["stem_id"], "samples": item["samples"]}
+        for item in loaded_stems
+        if int(item["sample_rate_hz"]) == selected_sample_rate
+    ]
+    included_ids = sorted(item["stem_id"] for item in included)
+    skipped_ids = sorted(
+        item["stem_id"]
+        for item in loaded_stems
+        if int(item["sample_rate_hz"]) != selected_sample_rate
+    )
+
+    density = compute_mix_density(included, sample_rate_hz=selected_sample_rate)
+    masking = compute_masking_risk(
+        included,
+        sample_rate_hz=selected_sample_rate,
+        top_n=3,
+    )
+
+    payload = {
+        "density_mean": density.get("density_mean", 0.0),
+        "density_peak": density.get("density_peak", 0),
+        "density_timeline": density.get("density_timeline", []),
+        "top_masking_pairs": masking.get("top_pairs", []),
+        "top_masking_pairs_count": len(masking.get("top_pairs", [])),
+        "sample_rate_hz": selected_sample_rate,
+        "included_stem_ids": included_ids,
+        "skipped_stem_ids": skipped_ids,
+        "density": density,
+        "masking_risk": masking,
+    }
+    return payload, missing_ffmpeg
+
+
 def _has_optional_dep_issue(issues: List[Dict[str, Any]], dep_name: str) -> bool:
     for issue in issues:
         if not isinstance(issue, dict):
@@ -653,6 +817,8 @@ def build_report(
     if include_peak:
         _add_peak_metrics(session, stems_dir)
     missing_ffmpeg = False
+    mix_complexity: Dict[str, Any] | None = None
+    numpy_available: bool | None = None
     if meters == "basic":
         missing_ffmpeg = _add_basic_meter_measurements(session, stems_dir)
     issues = validate_session(session, strict=strict)
@@ -660,13 +826,33 @@ def build_report(
         try:
             import numpy  # noqa: F401
         except ImportError:
+            numpy_available = False
             _add_optional_dep_issue(
                 issues,
                 dep_name="numpy",
                 hint="Install: pip install .[truth]",
             )
         else:
+            numpy_available = True
             missing_ffmpeg = _add_truth_meter_measurements(session, stems_dir) or missing_ffmpeg
+    if meters in {"basic", "truth"}:
+        if numpy_available is None:
+            try:
+                import numpy  # noqa: F401
+            except ImportError:
+                numpy_available = False
+                _add_optional_dep_issue(
+                    issues,
+                    dep_name="numpy",
+                    hint="Install: pip install .[truth]",
+                )
+            else:
+                numpy_available = True
+        if numpy_available:
+            mix_complexity, mix_missing_ffmpeg = _build_mix_complexity(session, stems_dir)
+            missing_ffmpeg = mix_missing_ffmpeg or missing_ffmpeg
+        else:
+            mix_complexity = _default_mix_complexity_payload()
     if missing_ffmpeg:
         _add_optional_dep_issue(
             issues,
@@ -675,7 +861,7 @@ def build_report(
         )
     stem_hash = _hash_from_stems(session.get("stems", []))
     ontology_version = _load_ontology_version(ROOT_DIR / "ontology" / "ontology.yaml")
-    return {
+    report = {
         "schema_version": "0.1.0",
         "report_id": stem_hash,
         "project_id": stem_hash,
@@ -686,6 +872,9 @@ def build_report(
         "issues": issues,
         "recommendations": [],
     }
+    if mix_complexity is not None:
+        report["mix_complexity"] = mix_complexity
+    return report
 
 
 def main() -> int:

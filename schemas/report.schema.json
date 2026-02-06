@@ -53,7 +53,8 @@
       },
       "required": ["src_path", "ref_path", "issues", "measurements", "log"],
       "additionalProperties": true
-    }
+    },
+    "mix_complexity": { "$ref": "#/$defs/mix_complexity" }
   },
   "$defs": {
     "session": {
@@ -313,6 +314,75 @@
           "properties": {
             "out_dir": { "type": "string" }
           }
+        }
+      }
+    },
+    "density_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_s", "end_s", "active_stems"],
+      "properties": {
+        "start_s": { "type": "number", "minimum": 0 },
+        "end_s": { "type": "number", "minimum": 0 },
+        "active_stems": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "masking_pair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stem_a", "stem_b", "score", "start_s", "end_s", "window_count"],
+      "properties": {
+        "stem_a": { "type": "string", "minLength": 1 },
+        "stem_b": { "type": "string", "minLength": 1 },
+        "score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "start_s": { "type": "number", "minimum": 0 },
+        "end_s": { "type": "number", "minimum": 0 },
+        "window_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "mix_complexity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "density_mean",
+        "density_peak",
+        "density_timeline",
+        "top_masking_pairs",
+        "top_masking_pairs_count",
+        "sample_rate_hz",
+        "included_stem_ids",
+        "skipped_stem_ids",
+        "density",
+        "masking_risk"
+      ],
+      "properties": {
+        "density_mean": { "type": "number", "minimum": 0 },
+        "density_peak": { "type": "integer", "minimum": 0 },
+        "density_timeline": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/density_window" }
+        },
+        "top_masking_pairs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/masking_pair" }
+        },
+        "top_masking_pairs_count": { "type": "integer", "minimum": 0 },
+        "sample_rate_hz": { "type": ["integer", "null"], "minimum": 1 },
+        "included_stem_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "skipped_stem_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "density": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "masking_risk": {
+          "type": "object",
+          "additionalProperties": true
         }
       }
     }

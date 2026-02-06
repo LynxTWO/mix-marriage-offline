@@ -288,6 +288,23 @@ class TestExporters(unittest.TestCase):
         self.assertIn("...(truncated)", rendered)
         self.assertIn('"keep": "ok"', rendered)
 
+    def test_mix_complexity_top_pairs_sorted_and_limited(self) -> None:
+        rows = pdf_report._mix_complexity_top_pairs(
+            {
+                "top_masking_pairs": [
+                    {"stem_a": "a", "stem_b": "b", "score": 0.2},
+                    {"stem_a": "c", "stem_b": "d", "score": 0.9},
+                    {"stem_a": "e", "stem_b": "f", "score": 0.6},
+                    {"stem_a": "g", "stem_b": "h", "score": 0.4},
+                ]
+            },
+            limit=3,
+        )
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0]["stem_a"], "c")
+        self.assertEqual(rows[1]["stem_a"], "e")
+        self.assertEqual(rows[2]["stem_a"], "g")
+
 
 if __name__ == "__main__":
     unittest.main()

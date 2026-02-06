@@ -63,6 +63,11 @@ class TestScanSessionSmoke(unittest.TestCase):
             self.assertIn("EVID.METER.PEAK_DBFS", evidence_ids)
             self.assertIn("EVID.METER.CLIP_SAMPLE_COUNT", evidence_ids)
             self.assertIn("EVID.QUALITY.CLIPPED_SAMPLES_COUNT", evidence_ids)
+            mix_complexity = report.get("mix_complexity", {})
+            self.assertIsInstance(mix_complexity, dict)
+            self.assertIn("density_mean", mix_complexity)
+            self.assertIn("density_peak", mix_complexity)
+            self.assertIn("top_masking_pairs", mix_complexity)
 
 
 if __name__ == "__main__":

@@ -172,6 +172,55 @@ def _sample_report() -> dict:
             ],
             "log": "{}",
         },
+        "mix_complexity": {
+            "density_mean": 1.75,
+            "density_peak": 3,
+            "density_timeline": [
+                {"start_s": 0.0, "end_s": 0.1, "active_stems": 2},
+                {"start_s": 0.1, "end_s": 0.2, "active_stems": 3},
+            ],
+            "top_masking_pairs": [
+                {
+                    "stem_a": "vocals",
+                    "stem_b": "guitar",
+                    "score": 0.82,
+                    "start_s": 0.1,
+                    "end_s": 0.2,
+                    "window_count": 12,
+                },
+                {
+                    "stem_a": "keys",
+                    "stem_b": "guitar",
+                    "score": 0.67,
+                    "start_s": 0.2,
+                    "end_s": 0.3,
+                    "window_count": 12,
+                },
+            ],
+            "top_masking_pairs_count": 2,
+            "sample_rate_hz": 48000,
+            "included_stem_ids": ["guitar", "keys", "vocals"],
+            "skipped_stem_ids": [],
+            "density": {
+                "density_mean": 1.75,
+                "density_peak": 3,
+                "density_timeline": [],
+                "timeline_total_windows": 12,
+                "timeline_truncated": False,
+                "window_size": 2048,
+                "hop_size": 1024,
+                "rms_threshold_dbfs": -45.0,
+                "bands_hz": [],
+                "stem_count": 3,
+            },
+            "masking_risk": {
+                "top_pairs": [],
+                "pair_count": 2,
+                "window_size": 2048,
+                "hop_size": 1024,
+                "mid_band_hz": {"low_hz": 300.0, "high_hz": 3000.0},
+            },
+        },
     }
 
 
@@ -268,6 +317,14 @@ class TestUiBundle(unittest.TestCase):
                 "max_delta_lufs": 2.2,
                 "max_delta_true_peak": 1.7,
                 "min_corr": 0.55,
+            },
+        )
+        self.assertEqual(
+            dashboard["mix_complexity"],
+            {
+                "density_mean": 1.75,
+                "density_peak": 3,
+                "top_masking_pairs_count": 2,
             },
         )
 

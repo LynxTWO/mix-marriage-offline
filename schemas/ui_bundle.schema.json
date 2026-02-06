@@ -45,6 +45,16 @@
         "min_corr": { "type": ["number", "null"] }
       }
     },
+    "mix_complexity_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["density_mean", "density_peak", "top_masking_pairs_count"],
+      "properties": {
+        "density_mean": { "type": ["number", "null"] },
+        "density_peak": { "type": ["integer", "null"], "minimum": 0 },
+        "top_masking_pairs_count": { "type": "integer", "minimum": 0 }
+      }
+    },
     "apply_summary": {
       "type": "object",
       "additionalProperties": false,
@@ -70,7 +80,8 @@
         "eligible_counts",
         "blocked_counts",
         "extreme_count",
-        "downmix_qa"
+        "downmix_qa",
+        "mix_complexity"
       ],
       "properties": {
         "profile_id": { "type": "string" },
@@ -82,6 +93,7 @@
         "blocked_counts": { "$ref": "#/$defs/eligibility_counts" },
         "extreme_count": { "type": "integer", "minimum": 0 },
         "downmix_qa": { "$ref": "#/$defs/downmix_qa_summary" },
+        "mix_complexity": { "$ref": "#/$defs/mix_complexity_summary" },
         "apply": { "$ref": "#/$defs/apply_summary" }
       }
     }

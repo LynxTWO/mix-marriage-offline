@@ -370,6 +370,23 @@ features:
     scopes: ["session"]
 
   # -------------------------
+  # Mix Complexity (objective, non-ML)
+  # -------------------------
+  FEATURE.MIX.DENSITY:
+    label: "Mix density"
+    description: "Deterministic estimate of concurrent active stems over time."
+    unit_id: "UNIT.NONE"
+    value_type: "object"
+    scopes: ["session"]
+
+  FEATURE.MIX.MASKING_RISK:
+    label: "Masking risk"
+    description: "Deterministic midrange spectral overlap ranking between stem pairs."
+    unit_id: "UNIT.NONE"
+    value_type: "object"
+    scopes: ["session"]
+
+  # -------------------------
   # Downmix (render then meter)
   # -------------------------
   FEATURE.DOWNMIX.RESULT.PEAK_DBFS:
