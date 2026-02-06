@@ -23,6 +23,11 @@ from mmo.core.presets import (
     load_preset_run_config,
 )
 from mmo.core.listen_pack import build_listen_pack
+from mmo.core.routing import (
+    apply_routing_plan_to_report,
+    build_routing_plan,
+    render_routing_plan,
+)
 from mmo.core.run_config import (
     RUN_CONFIG_SCHEMA_VERSION,
     diff_run_config,
@@ -359,7 +364,9 @@ def _config_nested_output_formats(
 
 def _stamp_report_run_config(report_path: Path, run_config: dict[str, Any]) -> None:
     report = _load_report(report_path)
-    report["run_config"] = normalize_run_config(run_config)
+    normalized_run_config = normalize_run_config(run_config)
+    report["run_config"] = normalized_run_config
+    apply_routing_plan_to_report(report, normalized_run_config)
     _write_json_file(report_path, report)
 
 
@@ -564,7 +571,9 @@ def _run_render_command(
 
     report = _load_report(report_path)
     if run_config is not None:
-        report["run_config"] = normalize_run_config(run_config)
+        normalized_run_config = normalize_run_config(run_config)
+        report["run_config"] = normalized_run_config
+        apply_routing_plan_to_report(report, normalized_run_config)
     apply_gates_to_report(
         report,
         policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
@@ -658,7 +667,9 @@ def _run_apply_command(
 
     report = _load_report(report_path)
     if run_config is not None:
-        report["run_config"] = normalize_run_config(run_config)
+        normalized_run_config = normalize_run_config(run_config)
+        report["run_config"] = normalized_run_config
+        apply_routing_plan_to_report(report, normalized_run_config)
     apply_gates_to_report(
         report,
         policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
@@ -1564,6 +1575,7 @@ def _run_one_shot_workflow(
             ):
                 rewritten_report = rewrite_report_stems_dir(cached_report, stems_dir)
                 rewritten_report["run_config"] = normalize_run_config(effective_run_config)
+                apply_routing_plan_to_report(rewritten_report, rewritten_report["run_config"])
                 if report_schema_is_valid(rewritten_report, report_schema_path):
                     try:
                         _validate_json_payload(
@@ -1598,6 +1610,7 @@ def _run_one_shot_workflow(
             print(str(exc), file=sys.stderr)
             return 1
         report_payload["run_config"] = normalize_run_config(effective_run_config)
+        apply_routing_plan_to_report(report_payload, report_payload["run_config"])
         try:
             _validate_json_payload(
                 report_payload,
@@ -2650,6 +2663,33 @@ def main(argv: list[str] | None = None) -> int:
         help="Authority profile ID for render gating (default: PROFILE.ASSIST).",
     )
 
+    routing_parser = subparsers.add_parser("routing", help="Layout-aware routing tools.")
+    routing_subparsers = routing_parser.add_subparsers(dest="routing_command", required=True)
+    routing_show_parser = routing_subparsers.add_parser(
+        "show", help="Build and display a deterministic stem routing plan."
+    )
+    routing_show_parser.add_argument(
+        "--stems",
+        required=True,
+        help="Path to a directory of audio stems.",
+    )
+    routing_show_parser.add_argument(
+        "--source-layout",
+        required=True,
+        help="Source layout ID (e.g., LAYOUT.5_1).",
+    )
+    routing_show_parser.add_argument(
+        "--target-layout",
+        required=True,
+        help="Target layout ID (e.g., LAYOUT.2_0).",
+    )
+    routing_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="json",
+        help="Output format for routing plan.",
+    )
+
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
     args = parser.parse_args(raw_argv)
     repo_root = Path(__file__).resolve().parents[2]
@@ -3295,6 +3335,34 @@ def main(argv: list[str] | None = None) -> int:
 
         print("Unknown lock command.", file=sys.stderr)
         return 2
+    if args.command == "routing":
+        from mmo.core.session import build_session_from_stems_dir  # noqa: WPS433
+
+        if args.routing_command != "show":
+            print("Unknown routing command.", file=sys.stderr)
+            return 2
+
+        try:
+            session = build_session_from_stems_dir(Path(args.stems))
+            routing_plan = build_routing_plan(
+                session,
+                source_layout_id=args.source_layout,
+                target_layout_id=args.target_layout,
+            )
+            _validate_json_payload(
+                routing_plan,
+                schema_path=repo_root / "schemas" / "routing_plan.schema.json",
+                payload_name="Routing plan",
+            )
+            output = render_routing_plan(routing_plan, output_format=args.format)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+
+        print(output, end="")
+        return 0
     if args.command == "downmix":
         from mmo.dsp.downmix import (  # noqa: WPS433
             load_layouts,
@@ -3440,6 +3508,7 @@ def main(argv: list[str] | None = None) -> int:
                     preset_id=effective_preset_id,
                     base_run_config=merged_run_config,
                 )
+                apply_routing_plan_to_report(report_payload, report_payload["run_config"])
                 out_path = Path(args.emit_report)
                 _write_json_file(out_path, report_payload)
 

@@ -118,6 +118,81 @@ class TestProfilePlumbing(unittest.TestCase):
             rec = output_report["recommendations"][0]
             self.assertTrue(rec.get("eligible_auto_apply"))
 
+    def test_run_pipeline_emits_routing_plan_when_layouts_are_configured(self) -> None:
+        report = {
+            "schema_version": "0.1.0",
+            "report_id": "REPORT.PIPELINE.ROUTING",
+            "project_id": "PROJECT.TEST",
+            "generated_at": "2000-01-01T00:00:00Z",
+            "engine_version": "0.1.0",
+            "ontology_version": "0.1.0",
+            "session": {
+                "stems": [
+                    {
+                        "stem_id": "lead_vox",
+                        "file_path": "lead_vox.wav",
+                        "channel_count": 1,
+                    }
+                ]
+            },
+            "issues": [],
+            "recommendations": [],
+            "run_config": {
+                "schema_version": "0.1.0",
+                "downmix": {
+                    "source_layout_id": "LAYOUT.1_0",
+                    "target_layout_id": "LAYOUT.2_0",
+                },
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            report_path = temp_path / "report.json"
+            out_path = temp_path / "out.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch(
+                "tools.run_pipeline._load_validate_plugins_module",
+                return_value=_FakeValidatePluginsModule(),
+            ), mock.patch(
+                "mmo.core.pipeline.load_plugins",
+                return_value=[],
+            ), mock.patch(
+                "mmo.core.pipeline.run_detectors",
+                return_value=None,
+            ), mock.patch(
+                "mmo.core.pipeline.run_resolvers",
+                return_value=None,
+            ), mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "run_pipeline.py",
+                    "--report",
+                    str(report_path),
+                    "--plugins",
+                    "plugins",
+                    "--out",
+                    str(out_path),
+                ],
+            ):
+                exit_code = run_pipeline.main()
+
+            self.assertEqual(exit_code, 0)
+            output_report = json.loads(out_path.read_text(encoding="utf-8"))
+            routing_plan = output_report.get("routing_plan")
+            self.assertIsInstance(routing_plan, dict)
+            if not isinstance(routing_plan, dict):
+                return
+            self.assertEqual(routing_plan.get("source_layout_id"), "LAYOUT.1_0")
+            self.assertEqual(routing_plan.get("target_layout_id"), "LAYOUT.2_0")
+            routes = routing_plan.get("routes", [])
+            self.assertEqual(len(routes), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,6 +19,7 @@ from mmo.core.lockfile import build_lockfile
 from mmo.core.pipeline import load_plugins, run_detectors, run_renderers, run_resolvers
 from mmo.core.preset_recommendations import derive_preset_recommendations
 from mmo.core.presets import list_presets, load_preset_run_config
+from mmo.core.routing import apply_routing_plan_to_report
 from mmo.core.run_config import (
     RUN_CONFIG_SCHEMA_VERSION,
     load_run_config,
@@ -683,6 +684,10 @@ def run_variant_plan(
                         rewritten_report["run_config"] = normalize_run_config(
                             effective_run_config
                         )
+                        apply_routing_plan_to_report(
+                            rewritten_report,
+                            rewritten_report["run_config"],
+                        )
                         if report_schema_is_valid(rewritten_report, report_schema_path):
                             report = rewritten_report
                             _write_json(report_path, report)
@@ -720,6 +725,7 @@ def run_variant_plan(
                             repo_root / "presets",
                         )
                     report["run_config"] = normalize_run_config(effective_run_config)
+                    apply_routing_plan_to_report(report, report["run_config"])
                     _write_json(report_path, report)
 
                     if (

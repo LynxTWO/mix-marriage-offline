@@ -33,6 +33,7 @@
     },
     "artifacts": { "$ref": "#/$defs/artifacts" },
     "run_config": { "$ref": "#/$defs/run_config" },
+    "routing_plan": { "$ref": "#/$defs/routing_plan" },
     "downmix_qa": {
       "type": "object",
       "properties": {
@@ -80,6 +81,48 @@
           "items": { "$ref": "#/$defs/bus" }
         },
         "source_layout_id": { "type": "string", "pattern": "^LAYOUT\\." }
+      }
+    },
+    "routing_mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["src_ch", "dst_ch"],
+      "properties": {
+        "src_ch": { "type": "integer", "minimum": 0 },
+        "dst_ch": { "type": "integer", "minimum": 0 },
+        "gain_db": { "type": "number", "default": 0.0 }
+      }
+    },
+    "routing_route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stem_id", "stem_channels", "target_channels", "mapping", "notes"],
+      "properties": {
+        "stem_id": { "type": "string", "minLength": 1 },
+        "stem_channels": { "type": "integer", "minimum": 0 },
+        "target_channels": { "type": "integer", "minimum": 0 },
+        "mapping": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/routing_mapping" }
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "routing_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "source_layout_id", "target_layout_id", "routes"],
+      "properties": {
+        "schema_version": { "const": "0.1.0" },
+        "source_layout_id": { "type": "string", "minLength": 1 },
+        "target_layout_id": { "type": "string", "minLength": 1 },
+        "routes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/routing_route" }
+        }
       }
     },
     "stem": {
