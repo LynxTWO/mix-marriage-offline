@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/variant_result.schema.json",
+  "title": "MMO Variant Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plan", "results"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "plan": { "$ref": "variant_plan.schema.json" },
+    "results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/variant_result_entry" }
+    }
+  },
+  "$defs": {
+    "posix_abs_path": {
+      "type": "string",
+      "pattern": "^(?:[A-Za-z]:/|/).+"
+    },
+    "posix_path": {
+      "type": "string",
+      "pattern": "^[^\\\\]+$"
+    },
+    "variant_result_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["variant_id", "out_dir", "report_path", "ok", "errors"],
+      "properties": {
+        "variant_id": { "type": "string", "pattern": "^VARIANT\\.[0-9]{3}$" },
+        "out_dir": { "$ref": "#/$defs/posix_abs_path" },
+        "report_path": { "$ref": "#/$defs/posix_path" },
+        "apply_manifest_path": { "$ref": "#/$defs/posix_path" },
+        "applied_report_path": { "$ref": "#/$defs/posix_path" },
+        "render_manifest_path": { "$ref": "#/$defs/posix_path" },
+        "bundle_path": { "$ref": "#/$defs/posix_path" },
+        "pdf_path": { "$ref": "#/$defs/posix_path" },
+        "csv_path": { "$ref": "#/$defs/posix_path" },
+        "ok": { "type": "boolean" },
+        "errors": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

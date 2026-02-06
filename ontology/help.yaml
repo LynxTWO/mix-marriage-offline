@@ -265,3 +265,18 @@ entries:
     watch_out_for:
       - "Check mono fold-down and center punch after widening."
       - "Wide effects can feel huge soloed but weak in context."
+  HELP.WORKFLOW.VARIANTS_RUN:
+    title: "Variants run workflow"
+    short: "Run multiple preset/config variants in one deterministic pass."
+    long: |
+      Variants run lets you execute multiple preset/config combinations in
+      one command and collect each output set in a stable folder name.
+
+      This is useful for GUI ingestion and side-by-side comparisons because
+      every run writes a plan, result, report, and optional bundle artifacts
+      with deterministic IDs and filenames.
+    cues:
+      - "If you want multiple reports/bundles from one stems directory."
+      - "If you need repeatable variant folder names for tooling."
+    watch_out_for:
+      - "Multiple variants can increase runtime, especially with truth meters."

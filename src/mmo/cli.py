@@ -20,6 +20,7 @@ from mmo.core.run_config import (
     merge_run_config,
     normalize_run_config,
 )
+from mmo.core.variants import build_variant_plan, run_variant_plan
 
 try:
     import jsonschema
@@ -1277,6 +1278,104 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to output UI bundle JSON.",
     )
 
+    variants_parser = subparsers.add_parser(
+        "variants",
+        help="Run multiple deterministic variants in one command.",
+    )
+    variants_subparsers = variants_parser.add_subparsers(
+        dest="variants_command",
+        required=True,
+    )
+    variants_run_parser = variants_subparsers.add_parser(
+        "run",
+        help="Run one or more preset/config variants and write deterministic artifacts.",
+    )
+    variants_run_parser.add_argument(
+        "--stems",
+        required=True,
+        help="Path to a directory of audio stems.",
+    )
+    variants_run_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to the output directory for all variant artifacts.",
+    )
+    variants_run_parser.add_argument(
+        "--preset",
+        action="append",
+        default=[],
+        help="Optional preset ID; may be provided multiple times.",
+    )
+    variants_run_parser.add_argument(
+        "--config",
+        action="append",
+        default=[],
+        help="Optional run config JSON path; may be provided multiple times.",
+    )
+    variants_run_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Run auto-apply renderer flow for each variant.",
+    )
+    variants_run_parser.add_argument(
+        "--render",
+        action="store_true",
+        help="Run render-eligible renderer flow for each variant.",
+    )
+    variants_run_parser.add_argument(
+        "--export-pdf",
+        action="store_true",
+        help="Export report PDF for each variant.",
+    )
+    variants_run_parser.add_argument(
+        "--export-csv",
+        action="store_true",
+        help="Export report CSV for each variant.",
+    )
+    variants_run_parser.add_argument(
+        "--bundle",
+        action="store_true",
+        help="Build a UI bundle for each variant.",
+    )
+    variants_run_parser.add_argument(
+        "--profile",
+        default=None,
+        help="Authority profile ID override for each variant.",
+    )
+    variants_run_parser.add_argument(
+        "--meters",
+        choices=["basic", "truth"],
+        default=None,
+        help="Enable additional meter packs (basic or truth).",
+    )
+    variants_run_parser.add_argument(
+        "--max-seconds",
+        type=float,
+        default=None,
+        help="max_seconds override in run_config for each variant.",
+    )
+    variants_run_parser.add_argument(
+        "--target-layout",
+        default=None,
+        help="downmix.target_layout_id override in run_config for each variant.",
+    )
+    variants_run_parser.add_argument(
+        "--source-layout",
+        default=None,
+        help="downmix.source_layout_id override in run_config for each variant.",
+    )
+    variants_run_parser.add_argument(
+        "--policy-id",
+        default=None,
+        help="downmix.policy_id override in run_config for each variant.",
+    )
+    variants_run_parser.add_argument(
+        "--truncate-values",
+        type=int,
+        default=None,
+        help="truncate_values override in run_config for each variant.",
+    )
+
     presets_parser = subparsers.add_parser("presets", help="Run config preset tools.")
     presets_subparsers = presets_parser.add_subparsers(dest="presets_command", required=True)
     presets_list_parser = presets_subparsers.add_parser("list", help="List available presets.")
@@ -1847,6 +1946,105 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 1
+    if args.command == "variants":
+        if args.variants_command != "run":
+            print("Unknown variants command.", file=sys.stderr)
+            return 2
+
+        run_config_overrides: dict[str, Any] = {}
+        if args.profile is not None:
+            run_config_overrides["profile_id"] = args.profile
+        if args.meters is not None:
+            run_config_overrides["meters"] = args.meters
+        if args.max_seconds is not None:
+            run_config_overrides["max_seconds"] = args.max_seconds
+        if args.truncate_values is not None:
+            run_config_overrides["truncate_values"] = args.truncate_values
+        if args.source_layout is not None:
+            _set_nested(
+                ["downmix", "source_layout_id"],
+                run_config_overrides,
+                args.source_layout,
+            )
+        if args.target_layout is not None:
+            _set_nested(
+                ["downmix", "target_layout_id"],
+                run_config_overrides,
+                args.target_layout,
+            )
+        if args.policy_id is not None:
+            _set_nested(
+                ["downmix", "policy_id"],
+                run_config_overrides,
+                args.policy_id,
+            )
+
+        steps = {
+            "analyze": True,
+            "export_pdf": args.export_pdf,
+            "export_csv": args.export_csv,
+            "apply": args.apply,
+            "render": args.render,
+            "bundle": args.bundle,
+        }
+        try:
+            plan = build_variant_plan(
+                stems_dir=Path(args.stems),
+                out_dir=Path(args.out),
+                preset_ids=list(args.preset) if isinstance(args.preset, list) else None,
+                config_paths=(
+                    [Path(item) for item in args.config]
+                    if isinstance(args.config, list)
+                    else None
+                ),
+                cli_run_config_overrides=run_config_overrides,
+                steps=steps,
+                presets_dir=presets_dir,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+        plan_path = Path(args.out) / "variant_plan.json"
+        result_path = Path(args.out) / "variant_result.json"
+        try:
+            _validate_json_payload(
+                plan,
+                schema_path=repo_root / "schemas" / "variant_plan.schema.json",
+                payload_name="Variant plan",
+            )
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+
+        _write_json_file(plan_path, plan)
+        variants = plan.get("variants")
+        if isinstance(variants, list) and len(variants) > 1:
+            print("Youll get one folder per variant.")
+
+        try:
+            result = run_variant_plan(plan, repo_root=repo_root)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+        try:
+            _validate_json_payload(
+                result,
+                schema_path=repo_root / "schemas" / "variant_result.schema.json",
+                payload_name="Variant result",
+            )
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+
+        _write_json_file(result_path, result)
+        results = result.get("results")
+        if not isinstance(results, list):
+            return 1
+        has_failure = any(
+            isinstance(item, dict) and item.get("ok") is not True
+            for item in results
+        )
+        return 1 if has_failure else 0
     if args.command == "presets":
         if args.presets_command == "list":
             try:

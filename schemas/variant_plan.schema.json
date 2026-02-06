@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/variant_plan.schema.json",
+  "title": "MMO Variant Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "stems_dir", "base_run_config", "variants"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "stems_dir": { "$ref": "#/$defs/posix_abs_path" },
+    "base_run_config": { "$ref": "run_config.schema.json" },
+    "variants": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/variant" }
+    }
+  },
+  "$defs": {
+    "posix_abs_path": {
+      "type": "string",
+      "pattern": "^(?:[A-Za-z]:/|/).+"
+    },
+    "posix_path": {
+      "type": "string",
+      "pattern": "^[^\\\\]+$"
+    },
+    "run_config_patch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "const": "0.1.0" },
+        "preset_id": { "type": "string" },
+        "profile_id": { "type": "string" },
+        "meters": { "type": "string" },
+        "max_seconds": { "type": "number", "minimum": 0 },
+        "truncate_values": { "type": "integer", "minimum": 0 },
+        "downmix": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source_layout_id": { "type": "string" },
+            "target_layout_id": { "type": "string" },
+            "policy_id": { "type": "string" }
+          }
+        },
+        "render": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "out_dir": { "$ref": "#/$defs/posix_abs_path" }
+          }
+        }
+      }
+    },
+    "variant_steps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["analyze", "export_pdf", "export_csv", "apply", "render", "bundle"],
+      "properties": {
+        "analyze": { "type": "boolean" },
+        "export_pdf": { "type": "boolean" },
+        "export_csv": { "type": "boolean" },
+        "apply": { "type": "boolean" },
+        "render": { "type": "boolean" },
+        "bundle": { "type": "boolean" }
+      }
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["variant_id", "variant_slug", "label", "steps"],
+      "properties": {
+        "variant_id": { "type": "string", "pattern": "^VARIANT\\.[0-9]{3}$" },
+        "variant_slug": { "type": "string", "pattern": "^[a-z0-9_]+(?:__[a-z]+)?$" },
+        "label": { "type": "string", "minLength": 1 },
+        "preset_id": { "type": "string", "minLength": 1 },
+        "config_path": { "$ref": "#/$defs/posix_path" },
+        "run_config_overrides": { "$ref": "#/$defs/run_config_patch" },
+        "steps": { "$ref": "#/$defs/variant_steps" }
+      }
+    }
+  }
+}
