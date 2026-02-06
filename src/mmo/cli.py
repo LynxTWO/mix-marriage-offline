@@ -729,6 +729,20 @@ def _build_preset_pack_list_payload(*, presets_dir: Path) -> list[dict[str, Any]
     return payload
 
 
+def _build_preset_recommendations_payload(
+    *,
+    report_path: Path,
+    presets_dir: Path,
+    n: int,
+) -> list[dict[str, Any]]:
+    from mmo.core.preset_recommendations import derive_preset_recommendations  # noqa: WPS433
+
+    if n <= 0:
+        raise ValueError("--n must be greater than 0.")
+    report = _load_report(report_path)
+    return derive_preset_recommendations(report, presets_dir, n=n)
+
+
 def _build_help_list_payload(*, help_registry_path: Path) -> list[dict[str, str]]:
     from mmo.core.help_registry import load_help_registry  # noqa: WPS433
 
@@ -1045,6 +1059,27 @@ def main(argv: list[str] | None = None) -> int:
         choices=["json", "text"],
         default="text",
         help="Output format for preset details.",
+    )
+    presets_recommend_parser = presets_subparsers.add_parser(
+        "recommend",
+        help="Recommend presets from report vibe and safety signals.",
+    )
+    presets_recommend_parser.add_argument(
+        "--report",
+        required=True,
+        help="Path to report JSON used for deriving recommendations.",
+    )
+    presets_recommend_parser.add_argument(
+        "--n",
+        type=int,
+        default=3,
+        help="Number of presets to suggest (default: 3).",
+    )
+    presets_recommend_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for recommendation details.",
     )
     presets_packs_parser = presets_subparsers.add_parser(
         "packs",
@@ -1540,6 +1575,38 @@ def main(argv: list[str] | None = None) -> int:
                 run_config = payload.get("run_config")
                 if isinstance(run_config, dict):
                     print(json.dumps(run_config, indent=2, sort_keys=True))
+            return 0
+        if args.presets_command == "recommend":
+            try:
+                payload = _build_preset_recommendations_payload(
+                    report_path=Path(args.report),
+                    presets_dir=presets_dir,
+                    n=args.n,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                label_map = _build_preset_label_map(presets_dir=presets_dir)
+                for idx, item in enumerate(payload):
+                    if idx > 0:
+                        print("")
+                    preset_id = item.get("preset_id", "")
+                    label = label_map.get(preset_id, "")
+                    overlay = item.get("overlay")
+                    overlay_suffix = (
+                        f" ({overlay})"
+                        if isinstance(overlay, str) and overlay.strip()
+                        else ""
+                    )
+                    print(f"{preset_id}  {label}{overlay_suffix}")
+                    reasons = item.get("reasons", [])
+                    if isinstance(reasons, list):
+                        for reason in reasons:
+                            if isinstance(reason, str):
+                                print(f"  - {reason}")
             return 0
         if args.presets_command == "packs":
             if args.presets_packs_command == "list":

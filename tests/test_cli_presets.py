@@ -2,7 +2,9 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
+from pathlib import Path
 
 
 class TestCliPresets(unittest.TestCase):
@@ -122,6 +124,91 @@ class TestCliPresets(unittest.TestCase):
         if not isinstance(run_config, dict):
             return
         self.assertEqual(run_config.get("preset_id"), "PRESET.SAFE_CLEANUP")
+
+    def test_presets_recommend_json_outputs_derived_list(self) -> None:
+        report = {
+            "vibe_signals": {
+                "density_level": "low",
+                "masking_level": "medium",
+                "translation_risk": "high",
+                "notes": [],
+            },
+            "recommendations": [{"extreme": True}],
+            "profile_id": "PROFILE.FULL_SEND",
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            report_path = Path(temp_dir) / "report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    os.fspath(os.getenv("PYTHON", "") or sys.executable),
+                    "-m",
+                    "mmo",
+                    "presets",
+                    "recommend",
+                    "--report",
+                    os.fspath(report_path),
+                    "--format",
+                    "json",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(
+            [item.get("preset_id") for item in payload if isinstance(item, dict)],
+            [
+                "PRESET.SAFE_CLEANUP",
+                "PRESET.VIBE.TRANSLATION_SAFE",
+                "PRESET.VIBE.BRIGHT_AIRY",
+            ],
+        )
+        self.assertTrue(
+            all(
+                isinstance(item, dict) and "report_id" not in item
+                for item in payload
+            )
+        )
+
+    def test_presets_recommend_text_includes_overlay_and_reasons(self) -> None:
+        report = {
+            "vibe_signals": {
+                "density_level": "high",
+                "masking_level": "high",
+                "translation_risk": "medium",
+                "notes": [],
+            }
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            report_path = Path(temp_dir) / "report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    os.fspath(os.getenv("PYTHON", "") or sys.executable),
+                    "-m",
+                    "mmo",
+                    "presets",
+                    "recommend",
+                    "--report",
+                    os.fspath(report_path),
+                    "--format",
+                    "text",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("PRESET.VIBE.PUNCHY_TIGHT  Punchy tight (Punch)", result.stdout)
+        self.assertIn("  - ", result.stdout)
 
 
 if __name__ == "__main__":

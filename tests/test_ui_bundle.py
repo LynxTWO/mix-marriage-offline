@@ -347,10 +347,29 @@ class TestUiBundle(unittest.TestCase):
                 ],
             },
         )
+        preset_recommendations = dashboard.get("preset_recommendations")
+        self.assertIsInstance(preset_recommendations, list)
+        if isinstance(preset_recommendations, list):
+            self.assertEqual(
+                [item.get("preset_id") for item in preset_recommendations],
+                [
+                    "PRESET.SAFE_CLEANUP",
+                    "PRESET.VIBE.TRANSLATION_SAFE",
+                    "PRESET.VIBE.BRIGHT_AIRY",
+                ],
+            )
         help_payload = bundle.get("help")
         self.assertIsInstance(help_payload, dict)
         if isinstance(help_payload, dict):
-            self.assertEqual(list(help_payload.keys()), ["HELP.MODE.FULL_SEND"])
+            self.assertIn("HELP.MODE.FULL_SEND", help_payload)
+            recommended_help_ids = [
+                item.get("help_id")
+                for item in dashboard.get("preset_recommendations", [])
+                if isinstance(item, dict) and isinstance(item.get("help_id"), str)
+            ]
+            self.assertTrue(recommended_help_ids)
+            for help_id in recommended_help_ids:
+                self.assertIn(help_id, help_payload)
             self.assertEqual(
                 help_payload["HELP.MODE.FULL_SEND"]["title"],
                 "Full Send mode",
@@ -410,10 +429,16 @@ class TestUiBundle(unittest.TestCase):
         self.assertIsInstance(help_payload, dict)
         if not isinstance(help_payload, dict):
             return
-        self.assertEqual(
-            list(help_payload.keys()),
-            ["HELP.MODE.FULL_SEND", "HELP.PRESET.VIBE.WARM_INTIMATE"],
-        )
+        self.assertIn("HELP.MODE.FULL_SEND", help_payload)
+        self.assertIn("HELP.PRESET.VIBE.WARM_INTIMATE", help_payload)
+        recommended_help_ids = [
+            item.get("help_id")
+            for item in bundle.get("dashboard", {}).get("preset_recommendations", [])
+            if isinstance(item, dict) and isinstance(item.get("help_id"), str)
+        ]
+        self.assertTrue(recommended_help_ids)
+        for help_id in recommended_help_ids:
+            self.assertIn(help_id, help_payload)
         preset_help = help_payload["HELP.PRESET.VIBE.WARM_INTIMATE"]
         self.assertIn("title", preset_help)
         self.assertIn("short", preset_help)

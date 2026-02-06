@@ -66,6 +66,7 @@ def main() -> int:
 
     from mmo.core.gates import apply_gates_to_report
     from mmo.core.pipeline import load_plugins, run_detectors, run_resolvers
+    from mmo.core.preset_recommendations import derive_preset_recommendations
     from mmo.core.vibe_signals import derive_vibe_signals
 
     report_path = Path(args.report)
@@ -83,6 +84,10 @@ def main() -> int:
     )
     if isinstance(report.get("mix_complexity"), dict):
         report["vibe_signals"] = derive_vibe_signals(report)
+        report["preset_recommendations"] = derive_preset_recommendations(
+            report,
+            repo_root / "presets",
+        )
 
     _write_report(output_path, report)
     return 0

@@ -95,6 +95,21 @@
         }
       }
     },
+    "preset_recommendation_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preset_id", "reasons"],
+      "properties": {
+        "preset_id": { "type": "string", "minLength": 1 },
+        "overlay": { "type": "string" },
+        "help_id": { "type": "string" },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        }
+      }
+    },
     "apply_summary": {
       "type": "object",
       "additionalProperties": false,
@@ -135,6 +150,10 @@
         "downmix_qa": { "$ref": "#/$defs/downmix_qa_summary" },
         "mix_complexity": { "$ref": "#/$defs/mix_complexity_summary" },
         "vibe_signals": { "$ref": "#/$defs/vibe_signals_summary" },
+        "preset_recommendations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/preset_recommendation_summary" }
+        },
         "apply": { "$ref": "#/$defs/apply_summary" }
       }
     }

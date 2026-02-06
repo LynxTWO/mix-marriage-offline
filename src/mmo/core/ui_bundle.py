@@ -9,6 +9,10 @@ TOP_ISSUE_LIMIT = 5
 _RISK_LEVELS = {"low", "medium", "high"}
 
 
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
@@ -108,7 +112,59 @@ def _help_id_for_profile(profile_id: str) -> str | None:
     return f"HELP.MODE.{normalized[len('PROFILE.'):]}"
 
 
-def _collect_help_ids(report: dict[str, Any]) -> list[str]:
+def _normalized_preset_recommendations(
+    recommendations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for recommendation in recommendations:
+        preset_id = recommendation.get("preset_id")
+        if not isinstance(preset_id, str) or not preset_id.strip():
+            continue
+
+        reasons_value = recommendation.get("reasons")
+        if not isinstance(reasons_value, list):
+            continue
+        reasons = [
+            reason.strip()
+            for reason in reasons_value
+            if isinstance(reason, str) and reason.strip()
+        ]
+        if not reasons:
+            continue
+
+        item: dict[str, Any] = {
+            "preset_id": preset_id.strip(),
+            "reasons": reasons,
+        }
+
+        overlay = recommendation.get("overlay")
+        if isinstance(overlay, str) and overlay.strip():
+            item["overlay"] = overlay.strip()
+
+        help_id = recommendation.get("help_id")
+        if isinstance(help_id, str) and help_id.strip():
+            item["help_id"] = help_id.strip()
+
+        normalized.append(item)
+    return normalized
+
+
+def _dashboard_preset_recommendations(report: dict[str, Any]) -> list[dict[str, Any]]:
+    if "preset_recommendations" in report:
+        raw = report.get("preset_recommendations")
+        return _normalized_preset_recommendations(_iter_dict_list(raw))
+
+    from mmo.core.preset_recommendations import derive_preset_recommendations  # noqa: WPS433
+
+    derived = derive_preset_recommendations(report, _repo_root() / "presets")
+    return _normalized_preset_recommendations(_iter_dict_list(derived))
+
+
+def _collect_help_ids(
+    report: dict[str, Any],
+    *,
+    preset_recommendations: list[dict[str, Any]],
+) -> list[str]:
     help_ids: set[str] = set()
     profile_help_id = _help_id_for_profile(_profile_id(report))
     if profile_help_id is not None:
@@ -117,6 +173,17 @@ def _collect_help_ids(report: dict[str, Any]) -> list[str]:
     preset_help_id = _help_id_for_preset(_preset_id(report))
     if preset_help_id is not None:
         help_ids.add(preset_help_id)
+
+    for recommendation in preset_recommendations:
+        help_id = recommendation.get("help_id")
+        if isinstance(help_id, str) and help_id.strip():
+            help_ids.add(help_id.strip())
+            continue
+        preset_id = recommendation.get("preset_id")
+        if isinstance(preset_id, str) and preset_id.strip():
+            mapped_help_id = _help_id_for_preset(preset_id)
+            if mapped_help_id is not None:
+                help_ids.add(mapped_help_id)
 
     return sorted(help_ids)
 
@@ -257,6 +324,7 @@ def build_ui_bundle(
     from mmo.core.help_registry import load_help_registry, resolve_help_entries  # noqa: WPS433
 
     recommendations = _recommendations(report)
+    preset_recommendations = _dashboard_preset_recommendations(report)
     dashboard = {
         "profile_id": _profile_id(report),
         "top_issues": _top_issues(report, limit=TOP_ISSUE_LIMIT),
@@ -275,6 +343,8 @@ def build_ui_bundle(
     vibe_signals_summary = _vibe_signals_summary(report)
     if vibe_signals_summary is not None:
         dashboard["vibe_signals"] = vibe_signals_summary
+    if preset_recommendations:
+        dashboard["preset_recommendations"] = preset_recommendations
     if apply_manifest is not None:
         dashboard["apply"] = _apply_summary(report, apply_manifest)
 
@@ -285,7 +355,10 @@ def build_ui_bundle(
         "dashboard": dashboard,
     }
 
-    help_ids = _collect_help_ids(report)
+    help_ids = _collect_help_ids(
+        report,
+        preset_recommendations=preset_recommendations,
+    )
     if help_ids:
         registry = load_help_registry(_resolve_help_registry_path(help_registry_path))
         payload["help"] = resolve_help_entries(help_ids, registry)

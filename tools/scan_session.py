@@ -26,6 +26,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from mmo import __version__ as engine_version  # noqa: E402
+from mmo.core.preset_recommendations import derive_preset_recommendations  # noqa: E402
 from mmo.core.session import build_session_from_stems_dir  # noqa: E402
 from mmo.core.validators import validate_session  # noqa: E402
 from mmo.core.vibe_signals import derive_vibe_signals  # noqa: E402
@@ -876,6 +877,10 @@ def build_report(
     if mix_complexity is not None:
         report["mix_complexity"] = mix_complexity
         report["vibe_signals"] = derive_vibe_signals(report)
+        report["preset_recommendations"] = derive_preset_recommendations(
+            report,
+            ROOT_DIR / "presets",
+        )
     return report
 
 
