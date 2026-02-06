@@ -237,3 +237,45 @@ def merge_run_config(base_cfg: dict[str, Any], cli_overrides: dict[str, Any]) ->
     merged = _deep_merge(base_normalized, overrides_normalized)
     merged["schema_version"] = merged.get("schema_version", RUN_CONFIG_SCHEMA_VERSION)
     return normalize_run_config(merged)
+
+
+def _flatten_run_config_paths(
+    payload: dict[str, Any],
+    *,
+    path_prefix: str = "",
+) -> dict[str, Any]:
+    flattened: dict[str, Any] = {}
+    for key in sorted(payload.keys()):
+        value = payload[key]
+        key_path = f"{path_prefix}.{key}" if path_prefix else key
+        if isinstance(value, dict):
+            flattened.update(_flatten_run_config_paths(value, path_prefix=key_path))
+            continue
+        flattened[key_path] = value
+    return flattened
+
+
+def diff_run_config(before: dict[str, Any], after: dict[str, Any]) -> list[dict[str, Any]]:
+    if not isinstance(before, dict):
+        raise ValueError("before must be an object.")
+    if not isinstance(after, dict):
+        raise ValueError("after must be an object.")
+
+    before_flat = _flatten_run_config_paths(before)
+    after_flat = _flatten_run_config_paths(after)
+    key_paths = sorted(set(before_flat.keys()).union(after_flat.keys()))
+
+    diffs: list[dict[str, Any]] = []
+    for key_path in key_paths:
+        before_value = before_flat.get(key_path)
+        after_value = after_flat.get(key_path)
+        if before_value == after_value:
+            continue
+        diffs.append(
+            {
+                "key_path": key_path,
+                "before": before_value,
+                "after": after_value,
+            }
+        )
+    return diffs

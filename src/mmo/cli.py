@@ -15,6 +15,7 @@ from mmo.core.presets import (
 )
 from mmo.core.run_config import (
     RUN_CONFIG_SCHEMA_VERSION,
+    diff_run_config,
     load_run_config,
     merge_run_config,
     normalize_run_config,
@@ -24,6 +25,11 @@ try:
     import jsonschema
 except ImportError:  # pragma: no cover - environment issue
     jsonschema = None
+
+_PRESET_PREVIEW_DEFAULT_PROFILE_ID = "PROFILE.ASSIST"
+_PRESET_PREVIEW_DEFAULT_METERS = "truth"
+_PRESET_PREVIEW_DEFAULT_MAX_SECONDS = 120.0
+_PRESET_PREVIEW_DEFAULT_TARGET_LAYOUT_ID = "LAYOUT.2_0"
 
 
 def _run_command(command: list[str]) -> int:
@@ -678,6 +684,247 @@ def _build_preset_show_payload(*, presets_dir: Path, preset_id: str) -> dict[str
     return payload
 
 
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
+def _preset_preview_placeholder_help() -> dict[str, Any]:
+    return {
+        "title": "Preset help unavailable",
+        "short": "No musician-language help text is available for this preset yet.",
+        "cues": [
+            "Use this preset as a workflow lens and confirm by ear in context.",
+        ],
+        "watch_out_for": [
+            "Double-check translation on your main playback systems.",
+        ],
+    }
+
+
+def _build_preset_preview_help(
+    *,
+    help_registry_path: Path,
+    help_id: str | None,
+) -> dict[str, Any]:
+    from mmo.core.help_registry import load_help_registry, resolve_help_entries  # noqa: WPS433
+
+    placeholder = _preset_preview_placeholder_help()
+    normalized_help_id = help_id.strip() if isinstance(help_id, str) else ""
+    if not normalized_help_id:
+        return placeholder
+
+    registry = load_help_registry(help_registry_path)
+    resolved = resolve_help_entries([normalized_help_id], registry)
+    entry = resolved.get(normalized_help_id)
+    if not isinstance(entry, dict):
+        return placeholder
+
+    entry_title = entry.get("title")
+    entry_short = entry.get("short")
+    if not isinstance(entry_short, str) or not entry_short.strip():
+        return placeholder
+    if (
+        entry_short == "Missing help entry"
+        and isinstance(entry_title, str)
+        and entry_title == normalized_help_id
+    ):
+        return placeholder
+
+    payload: dict[str, Any] = {
+        "title": entry_title if isinstance(entry_title, str) and entry_title else "",
+        "short": entry_short,
+    }
+    long_text = entry.get("long")
+    if isinstance(long_text, str) and long_text:
+        payload["long"] = long_text
+
+    cues = _string_list(entry.get("cues"))
+    watch_out_for = _string_list(entry.get("watch_out_for"))
+    payload["cues"] = cues if cues else list(placeholder["cues"])
+    payload["watch_out_for"] = (
+        watch_out_for if watch_out_for else list(placeholder["watch_out_for"])
+    )
+    return payload
+
+
+def _build_preset_preview_default_run_config() -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "schema_version": RUN_CONFIG_SCHEMA_VERSION,
+        "profile_id": _PRESET_PREVIEW_DEFAULT_PROFILE_ID,
+        "meters": _PRESET_PREVIEW_DEFAULT_METERS,
+        "max_seconds": _PRESET_PREVIEW_DEFAULT_MAX_SECONDS,
+        "downmix": {
+            "target_layout_id": _PRESET_PREVIEW_DEFAULT_TARGET_LAYOUT_ID,
+        },
+    }
+    return normalize_run_config(payload)
+
+
+def _build_preset_preview_cli_overrides(
+    *,
+    args: argparse.Namespace,
+    raw_argv: list[str],
+) -> dict[str, Any]:
+    cli_overrides: dict[str, Any] = {}
+    if _flag_present(raw_argv, "--profile"):
+        cli_overrides["profile_id"] = args.profile
+    if _flag_present(raw_argv, "--meters"):
+        cli_overrides["meters"] = args.meters
+    if _flag_present(raw_argv, "--max-seconds"):
+        cli_overrides["max_seconds"] = args.max_seconds
+    if _flag_present(raw_argv, "--source-layout"):
+        _set_nested(["downmix", "source_layout_id"], cli_overrides, args.source_layout)
+    if _flag_present(raw_argv, "--target-layout"):
+        _set_nested(["downmix", "target_layout_id"], cli_overrides, args.target_layout)
+    if _flag_present(raw_argv, "--policy-id"):
+        _set_nested(["downmix", "policy_id"], cli_overrides, args.policy_id)
+    return cli_overrides
+
+
+def _build_preset_preview_payload(
+    *,
+    repo_root: Path,
+    presets_dir: Path,
+    preset_id: str,
+    config_path: str | None,
+    cli_overrides: dict[str, Any],
+) -> dict[str, Any]:
+    preset_payload = _build_preset_show_payload(presets_dir=presets_dir, preset_id=preset_id)
+    normalized_preset_id = (
+        preset_payload.get("preset_id", "").strip()
+        if isinstance(preset_payload.get("preset_id"), str)
+        else ""
+    )
+    if not normalized_preset_id:
+        raise ValueError("preset_id must be a non-empty string.")
+
+    preset_cfg = preset_payload.get("run_config")
+    if not isinstance(preset_cfg, dict):
+        raise ValueError("Preset run_config must be an object.")
+
+    base_cfg = _build_preset_preview_default_run_config()
+    config_cfg: dict[str, Any] = {}
+    if config_path:
+        config_cfg = load_run_config(Path(config_path))
+
+    effective_cfg = merge_run_config(base_cfg, preset_cfg)
+    effective_cfg = merge_run_config(effective_cfg, config_cfg)
+    pre_cli_cfg = dict(effective_cfg)
+    effective_cfg = merge_run_config(effective_cfg, cli_overrides)
+    effective_cfg["preset_id"] = normalized_preset_id
+    effective_cfg = normalize_run_config(effective_cfg)
+
+    _validate_json_payload(
+        effective_cfg,
+        schema_path=repo_root / "schemas" / "run_config.schema.json",
+        payload_name="Preset preview effective_run_config",
+    )
+
+    help_payload = _build_preset_preview_help(
+        help_registry_path=repo_root / "ontology" / "help.yaml",
+        help_id=preset_payload.get("help_id")
+        if isinstance(preset_payload.get("help_id"), str)
+        else None,
+    )
+    changes_by_key_path = {
+        item["key_path"]: item
+        for item in diff_run_config(base_cfg, effective_cfg)
+        if isinstance(item.get("key_path"), str)
+    }
+    cli_override_key_paths = {
+        item["key_path"]
+        for item in diff_run_config({}, cli_overrides)
+        if isinstance(item.get("key_path"), str)
+    }
+    for item in diff_run_config(pre_cli_cfg, effective_cfg):
+        key_path = item.get("key_path")
+        if not isinstance(key_path, str):
+            continue
+        if key_path not in cli_override_key_paths:
+            continue
+        if key_path in changes_by_key_path:
+            continue
+        changes_by_key_path[key_path] = item
+    changes_by_key_path.pop("preset_id", None)
+    changes_from_defaults = [
+        changes_by_key_path[key_path]
+        for key_path in sorted(changes_by_key_path.keys())
+    ]
+
+    label = preset_payload.get("label")
+    overlay = preset_payload.get("overlay")
+    category = preset_payload.get("category")
+    payload: dict[str, Any] = {
+        "preset_id": normalized_preset_id,
+        "label": label if isinstance(label, str) else "",
+        "overlay": overlay if isinstance(overlay, str) else "",
+        "category": category if isinstance(category, str) else "",
+        "tags": _string_list(preset_payload.get("tags")),
+        "goals": _string_list(preset_payload.get("goals")),
+        "warnings": _string_list(preset_payload.get("warnings")),
+        "help": help_payload,
+        "effective_run_config": effective_cfg,
+        "changes_from_defaults": changes_from_defaults,
+    }
+    return payload
+
+
+def _render_preset_preview_text(payload: dict[str, Any]) -> str:
+    preset_id = payload.get("preset_id")
+    label = payload.get("label")
+    category = payload.get("category")
+    overlay = payload.get("overlay")
+    help_payload = payload.get("help")
+    changes = payload.get("changes_from_defaults")
+
+    normalized_preset_id = preset_id if isinstance(preset_id, str) else ""
+    normalized_label = label if isinstance(label, str) else ""
+    normalized_category = category if isinstance(category, str) and category else "UNCATEGORIZED"
+    normalized_overlay = overlay if isinstance(overlay, str) and overlay else "none"
+
+    short_text = ""
+    cues: list[str] = []
+    watch_out_for: list[str] = []
+    if isinstance(help_payload, dict):
+        short = help_payload.get("short")
+        if isinstance(short, str):
+            short_text = short
+        cues = _string_list(help_payload.get("cues"))
+        watch_out_for = _string_list(help_payload.get("watch_out_for"))
+
+    lines = [
+        f"{normalized_label} ({normalized_preset_id}) [{normalized_category}]",
+        f"Overlay: {normalized_overlay}",
+        f"Short: {short_text}",
+        "When to use:",
+    ]
+    for cue in cues:
+        lines.append(f"  - {cue}")
+
+    lines.append("Watch out for:")
+    for item in watch_out_for:
+        lines.append(f"  - {item}")
+
+    lines.append("What changes if you use this preset:")
+    if isinstance(changes, list) and changes:
+        for item in changes:
+            if not isinstance(item, dict):
+                continue
+            key_path = item.get("key_path")
+            if not isinstance(key_path, str) or not key_path:
+                continue
+            before_value = json.dumps(item.get("before"), sort_keys=True)
+            after_value = json.dumps(item.get("after"), sort_keys=True)
+            lines.append(f"  - {key_path}: {before_value} -> {after_value}")
+    else:
+        lines.append(
+            "This preset is a workflow lens. It doesnt change settings, it changes what you focus on."
+        )
+    return "\n".join(lines)
+
+
 def _build_preset_label_map(*, presets_dir: Path) -> dict[str, str]:
     labels: dict[str, str] = {}
     for item in list_presets(presets_dir):
@@ -1059,6 +1306,69 @@ def main(argv: list[str] | None = None) -> int:
         choices=["json", "text"],
         default="text",
         help="Output format for preset details.",
+    )
+    presets_preview_parser = presets_subparsers.add_parser(
+        "preview",
+        help="Preview musician guidance and merged run_config changes for a preset.",
+    )
+    presets_preview_parser.add_argument(
+        "preset_id",
+        help="Preset ID (e.g., PRESET.SAFE_CLEANUP).",
+    )
+    presets_preview_parser.add_argument(
+        "--config",
+        default=None,
+        help="Optional path to a run config JSON file.",
+    )
+    presets_preview_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for preview details.",
+    )
+    presets_preview_parser.add_argument(
+        "--profile",
+        default=_PRESET_PREVIEW_DEFAULT_PROFILE_ID,
+        help=(
+            "Profile override for previewed merge results "
+            f"(default: {_PRESET_PREVIEW_DEFAULT_PROFILE_ID})."
+        ),
+    )
+    presets_preview_parser.add_argument(
+        "--meters",
+        choices=["basic", "truth"],
+        default=_PRESET_PREVIEW_DEFAULT_METERS,
+        help=(
+            "Meters override for previewed merge results "
+            f"(default: {_PRESET_PREVIEW_DEFAULT_METERS})."
+        ),
+    )
+    presets_preview_parser.add_argument(
+        "--max-seconds",
+        type=float,
+        default=_PRESET_PREVIEW_DEFAULT_MAX_SECONDS,
+        help=(
+            "max_seconds override for previewed merge results "
+            f"(default: {_PRESET_PREVIEW_DEFAULT_MAX_SECONDS})."
+        ),
+    )
+    presets_preview_parser.add_argument(
+        "--source-layout",
+        default=None,
+        help="downmix.source_layout_id override for previewed merge results.",
+    )
+    presets_preview_parser.add_argument(
+        "--target-layout",
+        default=_PRESET_PREVIEW_DEFAULT_TARGET_LAYOUT_ID,
+        help=(
+            "downmix.target_layout_id override for previewed merge results "
+            f"(default: {_PRESET_PREVIEW_DEFAULT_TARGET_LAYOUT_ID})."
+        ),
+    )
+    presets_preview_parser.add_argument(
+        "--policy-id",
+        default=None,
+        help="downmix.policy_id override for previewed merge results.",
     )
     presets_recommend_parser = presets_subparsers.add_parser(
         "recommend",
@@ -1575,6 +1885,29 @@ def main(argv: list[str] | None = None) -> int:
                 run_config = payload.get("run_config")
                 if isinstance(run_config, dict):
                     print(json.dumps(run_config, indent=2, sort_keys=True))
+            return 0
+        if args.presets_command == "preview":
+            cli_overrides = _build_preset_preview_cli_overrides(
+                args=args,
+                raw_argv=raw_argv,
+            )
+            try:
+                payload = _build_preset_preview_payload(
+                    repo_root=repo_root,
+                    presets_dir=presets_dir,
+                    preset_id=args.preset_id,
+                    config_path=args.config,
+                    cli_overrides=cli_overrides,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_preset_preview_text(payload))
             return 0
         if args.presets_command == "recommend":
             try:

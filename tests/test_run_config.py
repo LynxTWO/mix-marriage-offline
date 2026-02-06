@@ -7,7 +7,12 @@ from unittest import mock
 import jsonschema
 
 from mmo.cli import main
-from mmo.core.run_config import load_run_config, merge_run_config, normalize_run_config
+from mmo.core.run_config import (
+    diff_run_config,
+    load_run_config,
+    merge_run_config,
+    normalize_run_config,
+)
 
 
 def _minimal_report_payload() -> dict:
@@ -116,6 +121,59 @@ class TestRunConfig(unittest.TestCase):
                     "preset_id": 123,
                 }
             )
+
+    def test_diff_run_config_is_sorted_and_tracks_nested_paths(self) -> None:
+        before = normalize_run_config(
+            {
+                "schema_version": "0.1.0",
+                "profile_id": "PROFILE.TURBO",
+                "meters": "truth",
+                "max_seconds": 120,
+                "downmix": {
+                    "source_layout_id": "LAYOUT.5_1",
+                    "target_layout_id": "LAYOUT.2_0",
+                },
+            }
+        )
+        after = normalize_run_config(
+            {
+                "schema_version": "0.1.0",
+                "profile_id": "PROFILE.ASSIST",
+                "meters": "basic",
+                "max_seconds": 90,
+                "downmix": {
+                    "target_layout_id": "LAYOUT.2_0",
+                    "policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
+                },
+            }
+        )
+        diffs = diff_run_config(before, after)
+        self.assertEqual(
+            [item.get("key_path") for item in diffs],
+            [
+                "downmix.policy_id",
+                "downmix.source_layout_id",
+                "max_seconds",
+                "meters",
+                "profile_id",
+            ],
+        )
+        self.assertIn(
+            {
+                "key_path": "downmix.source_layout_id",
+                "before": "LAYOUT.5_1",
+                "after": None,
+            },
+            diffs,
+        )
+        self.assertIn(
+            {
+                "key_path": "downmix.policy_id",
+                "before": None,
+                "after": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
+            },
+            diffs,
+        )
 
     def test_cli_analyze_config_override_and_report_stamp(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
