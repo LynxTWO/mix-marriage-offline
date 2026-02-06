@@ -1906,7 +1906,7 @@ def main(argv: list[str] | None = None) -> int:
     run_parser.add_argument(
         "--output-formats",
         default=None,
-        help="Comma-separated lossless output formats (wav,flac,wv).",
+        help="Comma-separated lossless output formats (wav,flac,wv,aiff,alac).",
     )
     run_parser.add_argument(
         "--bundle",
@@ -2007,7 +2007,7 @@ def main(argv: list[str] | None = None) -> int:
     render_parser.add_argument(
         "--output-formats",
         default=None,
-        help="Comma-separated lossless output formats (wav,flac,wv).",
+        help="Comma-separated lossless output formats (wav,flac,wv,aiff,alac).",
     )
     render_parser.add_argument(
         "--profile",
@@ -2062,7 +2062,7 @@ def main(argv: list[str] | None = None) -> int:
     apply_parser.add_argument(
         "--output-formats",
         default=None,
-        help="Comma-separated lossless output formats (wav,flac,wv).",
+        help="Comma-separated lossless output formats (wav,flac,wv,aiff,alac).",
     )
     apply_parser.add_argument(
         "--profile",
@@ -2227,7 +2227,7 @@ def main(argv: list[str] | None = None) -> int:
         "--output-formats",
         default=None,
         help=(
-            "Comma-separated lossless output formats (wav,flac,wv) "
+            "Comma-separated lossless output formats (wav,flac,wv,aiff,alac) "
             "for both render and apply variant steps."
         ),
     )

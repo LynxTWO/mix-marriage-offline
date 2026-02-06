@@ -4,10 +4,12 @@ import subprocess
 from pathlib import Path
 from typing import Sequence
 
-LOSSLESS_OUTPUT_FORMATS = ("wav", "flac", "wv")
-_CODEC_BY_FORMAT = {
-    "flac": "flac",
-    "wv": "wavpack",
+LOSSLESS_OUTPUT_FORMATS = ("wav", "flac", "wv", "aiff", "alac")
+_FFMPEG_ENCODE_ARGS_BY_FORMAT: dict[str, tuple[str, ...]] = {
+    "flac": ("-c:a", "flac"),
+    "wv": ("-c:a", "wavpack"),
+    "aiff": ("-f", "aiff", "-c:a", "pcm_s24be"),
+    "alac": ("-c:a", "alac", "-f", "ipod"),
 }
 
 
@@ -25,8 +27,8 @@ def transcode_wav_to_format(
     if fmt == "wav":
         raise ValueError("Format 'wav' does not require transcoding.")
 
-    codec = _CODEC_BY_FORMAT.get(fmt)
-    if codec is None:
+    encode_args = _FFMPEG_ENCODE_ARGS_BY_FORMAT.get(fmt)
+    if encode_args is None:
         supported = ", ".join(sorted(supported_output_formats()))
         raise ValueError(f"Unsupported output format: {format!r}. Supported: {supported}.")
 
@@ -57,8 +59,7 @@ def transcode_wav_to_format(
         "+bitexact",
         "-threads",
         "1",
-        "-c:a",
-        codec,
+        *encode_args,
         str(output_path),
     ]
     completed = subprocess.run(

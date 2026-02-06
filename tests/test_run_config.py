@@ -126,17 +126,19 @@ class TestRunConfig(unittest.TestCase):
         normalized = normalize_run_config(
             {
                 "schema_version": "0.1.0",
-                "render": {"output_formats": ["wv", "wav", "flac", "wav"]},
-                "apply": {"output_formats": ["wv", "flac"]},
+                "render": {
+                    "output_formats": ["alac", "wv", "aiff", "wav", "flac", "aiff"]
+                },
+                "apply": {"output_formats": ["alac", "aiff"]},
             }
         )
         self.assertEqual(
             normalized.get("render", {}).get("output_formats"),
-            ["wav", "flac", "wv"],
+            ["wav", "flac", "wv", "aiff", "alac"],
         )
         self.assertEqual(
             normalized.get("apply", {}).get("output_formats"),
-            ["flac", "wv"],
+            ["aiff", "alac"],
         )
 
     def test_normalize_output_formats_rejects_lossy_format(self) -> None:

@@ -48,7 +48,7 @@
         "target_stem_id": { "type": "string", "minLength": 1 },
         "target_bus_id": { "type": "string", "minLength": 1 },
         "layout_id": { "type": "string", "pattern": "^LAYOUT\\." },
-        "format": { "type": "string", "enum": ["wav", "flac", "wv"] },
+        "format": { "type": "string", "enum": ["wav", "flac", "wv", "aiff", "alac"] },
         "codec": { "type": "string", "minLength": 1 },
         "sample_rate_hz": { "type": "integer", "minimum": 1 },
         "bit_depth": { "type": "integer", "minimum": 1 },

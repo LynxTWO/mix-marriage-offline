@@ -21,6 +21,15 @@ _CODEC_BY_FORMAT = {
     "wav": "pcm",
     "flac": "flac",
     "wv": "wavpack",
+    "aiff": "pcm_s24be",
+    "alac": "alac",
+}
+_FILE_SUFFIX_BY_FORMAT = {
+    "wav": "wav",
+    "flac": "flac",
+    "wv": "wv",
+    "aiff": "aiff",
+    "alac": "m4a",
 }
 
 
@@ -430,7 +439,8 @@ def _resolve_output_artifact_path(file_path: str, output_dir: Path | None) -> Pa
     return output_dir / path
 
 
-def _replace_output_extension(file_path: str, new_suffix: str) -> str:
+def _replace_output_extension(file_path: str, output_format: str) -> str:
+    new_suffix = _FILE_SUFFIX_BY_FORMAT.get(output_format, output_format)
     replaced = Path(file_path).with_suffix(f".{new_suffix}")
     if replaced.is_absolute():
         return str(replaced)

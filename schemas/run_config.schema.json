@@ -32,7 +32,7 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "enum": ["wav", "flac", "wv"]
+            "enum": ["wav", "flac", "wv", "aiff", "alac"]
           }
         }
       }
@@ -47,7 +47,7 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "enum": ["wav", "flac", "wv"]
+            "enum": ["wav", "flac", "wv", "aiff", "alac"]
           }
         }
       }

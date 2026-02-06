@@ -9,7 +9,7 @@ from unittest import mock
 
 import jsonschema
 
-from mmo.cli import main
+from mmo.cli import _parse_output_formats_csv, main
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.io import sha256_file
 
@@ -80,7 +80,7 @@ def _gain_trim_manifest(payload: dict) -> dict | None:
 
 
 class TestLosslessOutputFormats(unittest.TestCase):
-    def test_render_output_formats_wav_flac_wv(self) -> None:
+    def test_render_output_formats_wav_aiff_alac(self) -> None:
         if resolve_ffmpeg_cmd() is None:
             self.skipTest("ffmpeg not available")
 
@@ -122,7 +122,7 @@ class TestLosslessOutputFormats(unittest.TestCase):
                     "--out-dir",
                     str(out_dir),
                     "--output-formats",
-                    "wav,flac,wv",
+                    "wav,aiff,alac",
                 ]
             )
             self.assertEqual(exit_code, 0)
@@ -142,9 +142,27 @@ class TestLosslessOutputFormats(unittest.TestCase):
             self.assertEqual(len(outputs), 3)
 
             formats = {item.get("format") for item in outputs if isinstance(item, dict)}
-            self.assertEqual(formats, {"wav", "flac", "wv"})
+            self.assertEqual(formats, {"wav", "aiff", "alac"})
             stem_ids = {item.get("target_stem_id") for item in outputs if isinstance(item, dict)}
             self.assertEqual(stem_ids, {"kick"})
+
+            codec_by_format = {
+                item.get("format"): item.get("codec")
+                for item in outputs
+                if isinstance(item, dict)
+            }
+            self.assertEqual(codec_by_format.get("aiff"), "pcm_s24be")
+            self.assertEqual(codec_by_format.get("alac"), "alac")
+            self.assertIsNone(codec_by_format.get("wav"))
+
+            path_by_format = {
+                item.get("format"): Path(str(item.get("file_path", "")))
+                for item in outputs
+                if isinstance(item, dict)
+            }
+            self.assertEqual(path_by_format.get("wav", Path("")).suffix, ".wav")
+            self.assertEqual(path_by_format.get("aiff", Path("")).suffix, ".aiff")
+            self.assertEqual(path_by_format.get("alac", Path("")).suffix, ".m4a")
 
             for output in outputs:
                 if not isinstance(output, dict):
@@ -152,6 +170,13 @@ class TestLosslessOutputFormats(unittest.TestCase):
                 output_file = out_dir / Path(str(output.get("file_path", "")))
                 self.assertTrue(output_file.exists())
                 self.assertEqual(output.get("sha256"), sha256_file(output_file))
+
+    def test_cli_parser_rejects_lossy_mp3_output(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "Unsupported output format 'mp3'",
+        ):
+            _parse_output_formats_csv("wav,mp3")
 
     def test_render_skip_non_wav_when_ffmpeg_missing(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
