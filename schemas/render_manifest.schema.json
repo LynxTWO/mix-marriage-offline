@@ -65,7 +65,8 @@
         "recommendation_id": { "type": "string", "minLength": 1 },
         "action_id": { "type": "string", "pattern": "^ACTION\\." },
         "reason": { "type": "string", "minLength": 1 },
-        "gate_summary": { "type": "string" }
+        "gate_summary": { "type": "string" },
+        "details": { "type": "object", "additionalProperties": true }
       }
     }
   }

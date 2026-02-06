@@ -72,6 +72,7 @@ class RenderSkipped(TypedDict, total=False):
     action_id: str
     reason: str
     gate_summary: str
+    details: Dict[str, Any]
 
 
 class RenderManifest(TypedDict, total=False):

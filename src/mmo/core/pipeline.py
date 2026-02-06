@@ -160,6 +160,19 @@ def _coerce_str(value: Any) -> str:
     return ""
 
 
+def _coerce_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
+
+
 def _call_detector(detector: Any, session: Dict[str, Any], features: Dict[str, Any]) -> List[Dict[str, Any]]:
     if hasattr(detector, "detect"):
         return detector.detect(session, features) or []
@@ -228,30 +241,41 @@ def _gate_summary(gate_results: Any, *, context: str | None = None) -> str:
     return ";".join(parts)
 
 
-def _normalize_skipped_entry(entry: Any) -> Dict[str, str] | None:
+def _normalize_skipped_entry(entry: Any) -> Dict[str, Any] | None:
     if not isinstance(entry, dict):
         return None
-    return {
+    normalized = {
         "recommendation_id": _coerce_str(entry.get("recommendation_id")),
         "action_id": _coerce_str(entry.get("action_id")),
         "reason": _coerce_str(entry.get("reason")),
         "gate_summary": _coerce_str(entry.get("gate_summary")),
     }
+    details = entry.get("details")
+    if isinstance(details, dict):
+        normalized["details"] = dict(details)
+    return normalized
 
 
-def _skipped_sort_key(entry: Dict[str, str]) -> tuple[str, str, str, int, str]:
-    gate_summary = entry["gate_summary"]
+def _skipped_sort_key(entry: Dict[str, Any]) -> tuple[str, str, str, int, str, str]:
+    gate_summary = _coerce_str(entry.get("gate_summary"))
+    details = entry.get("details")
+    details_token = ""
+    if isinstance(details, dict):
+        details_token = ";".join(
+            f"{_coerce_str(key)}={details[key]!r}" for key in sorted(details)
+        )
     return (
-        entry["recommendation_id"],
-        entry["action_id"],
-        entry["reason"],
+        _coerce_str(entry.get("recommendation_id")),
+        _coerce_str(entry.get("action_id")),
+        _coerce_str(entry.get("reason")),
         0 if gate_summary else 1,
         gate_summary,
+        details_token,
     )
 
 
-def _merge_skipped_entries(*skipped_groups: Iterable[Any]) -> List[Dict[str, str]]:
-    normalized: List[Dict[str, str]] = []
+def _merge_skipped_entries(*skipped_groups: Iterable[Any]) -> List[Dict[str, Any]]:
+    normalized: List[Dict[str, Any]] = []
     for group in skipped_groups:
         for item in group:
             normalized_item = _normalize_skipped_entry(item)
@@ -259,16 +283,64 @@ def _merge_skipped_entries(*skipped_groups: Iterable[Any]) -> List[Dict[str, str
                 normalized.append(normalized_item)
 
     normalized.sort(key=_skipped_sort_key)
-    merged: List[Dict[str, str]] = []
+    merged: List[Dict[str, Any]] = []
     seen: set[tuple[str, str, str]] = set()
     for item in normalized:
-        key = (item["recommendation_id"], item["action_id"], item["reason"])
+        key = (
+            _coerce_str(item.get("recommendation_id")),
+            _coerce_str(item.get("action_id")),
+            _coerce_str(item.get("reason")),
+        )
         if key in seen:
             continue
         seen.add(key)
         merged.append(item)
 
     return merged
+
+
+def _stem_channel_count_index(session: Dict[str, Any]) -> Dict[str, int]:
+    stems = session.get("stems")
+    if not isinstance(stems, list):
+        return {}
+
+    channels_by_stem_id: Dict[str, int] = {}
+    for stem in stems:
+        if not isinstance(stem, dict):
+            continue
+        stem_id = _coerce_str(stem.get("stem_id"))
+        if not stem_id or stem_id in channels_by_stem_id:
+            continue
+        channel_count = _coerce_int(stem.get("channel_count"))
+        if channel_count is None or channel_count < 1:
+            continue
+        channels_by_stem_id[stem_id] = channel_count
+    return channels_by_stem_id
+
+
+def _required_channels_for_recommendations(
+    session: Dict[str, Any],
+    recommendations: Sequence[Dict[str, Any]],
+) -> int:
+    channels_by_stem_id = _stem_channel_count_index(session)
+    if not channels_by_stem_id:
+        return 0
+
+    required_channels = 0
+    for rec in recommendations:
+        target = rec.get("target")
+        if not isinstance(target, dict):
+            continue
+        if target.get("scope") != "stem":
+            continue
+        stem_id = _coerce_str(target.get("stem_id"))
+        if not stem_id:
+            continue
+        stem_channels = channels_by_stem_id.get(stem_id)
+        if stem_channels is None:
+            continue
+        required_channels = max(required_channels, stem_channels)
+    return required_channels
 
 
 def _recommendation_index(
@@ -430,7 +502,7 @@ def _make_transcoded_output(
 
 
 def _append_transcode_skip(
-    skipped: List[Dict[str, str]],
+    skipped: List[Dict[str, Any]],
     output: Dict[str, Any],
     *,
     reason: str,
@@ -451,13 +523,13 @@ def _apply_output_formats_to_manifest(
     output_dir: Path | None,
     desired_formats: tuple[str, ...],
     ffmpeg_cmd: Sequence[str] | None,
-) -> List[Dict[str, str]]:
+) -> List[Dict[str, Any]]:
     outputs = _coerce_list(manifest.get("outputs"))
     non_wav_formats = tuple(fmt for fmt in desired_formats if fmt != "wav")
     keep_wav = "wav" in desired_formats
 
     rewritten_outputs: List[Dict[str, Any]] = []
-    transcode_skipped: List[Dict[str, str]] = []
+    transcode_skipped: List[Dict[str, Any]] = []
     for output in outputs:
         if not isinstance(output, dict):
             continue
@@ -594,6 +666,7 @@ def run_renderers(
             }
         )
     blocked_skipped = _merge_skipped_entries(blocked_skipped)
+    required_channels = _required_channels_for_recommendations(session, eligible)
     desired_formats = _normalize_output_formats(output_formats)
     needs_encode = any(fmt != "wav" for fmt in desired_formats)
     ffmpeg_cmd = resolve_ffmpeg_cmd() if needs_encode else None
@@ -602,6 +675,42 @@ def run_renderers(
     for plugin in plugins:
         if plugin.plugin_type != "renderer":
             continue
+
+        plugin_max_channels = None
+        if plugin.capabilities is not None:
+            plugin_max_channels = plugin.capabilities.max_channels
+        if (
+            isinstance(plugin_max_channels, int)
+            and not isinstance(plugin_max_channels, bool)
+            and plugin_max_channels >= 1
+            and required_channels > plugin_max_channels
+        ):
+            channel_limit_skipped = [
+                {
+                    "recommendation_id": _coerce_str(rec.get("recommendation_id")),
+                    "action_id": _coerce_str(rec.get("action_id")),
+                    "reason": "plugin_channel_limit",
+                    "gate_summary": "",
+                    "details": {
+                        "plugin_id": plugin.plugin_id,
+                        "required_channels": required_channels,
+                        "max_channels": plugin_max_channels,
+                    },
+                }
+                for rec in eligible
+            ]
+            manifests.append(
+                {
+                    "renderer_id": plugin.plugin_id,
+                    "outputs": [],
+                    "skipped": _merge_skipped_entries(
+                        blocked_skipped,
+                        channel_limit_skipped,
+                    ),
+                }
+            )
+            continue
+
         manifest = _call_renderer(plugin.instance, session, eligible, output_dir)
         if not isinstance(manifest, dict):
             manifest = {

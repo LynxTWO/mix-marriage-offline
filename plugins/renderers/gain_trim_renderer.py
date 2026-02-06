@@ -190,6 +190,8 @@ def _render_gain_trim(
 ) -> None:
     gain_scalar = math.pow(10.0, gain_db / 20.0)
     rng = random.Random(0)
+    pending_samples: list[float] = []
+    frame_width = channels
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(output_path), "wb") as out_handle:
@@ -198,13 +200,23 @@ def _render_gain_trim(
         out_handle.setframerate(sample_rate_hz)
 
         for float_samples in float_samples_iter:
+            pending_samples.extend(float_samples)
+            aligned_sample_count = (len(pending_samples) // frame_width) * frame_width
+            if aligned_sample_count <= 0:
+                continue
+            aligned_samples = pending_samples[:aligned_sample_count]
+            pending_samples = pending_samples[aligned_sample_count:]
+
             int_samples = _dithered_int_samples(
-                float_samples,
+                aligned_samples,
                 bits_per_sample,
                 gain_scalar,
                 rng,
             )
             out_handle.writeframes(_int_samples_to_bytes(int_samples, bits_per_sample))
+
+        if pending_samples:
+            raise ValueError("decoder returned non-frame-aligned sample data")
 
 
 def _resolve_stems_dir(session: Dict[str, Any]) -> Path | None:
