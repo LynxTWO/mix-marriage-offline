@@ -47,13 +47,11 @@
       "pattern": "^[A-Za-z0-9_\\.]+:[A-Za-z0-9_\\.]+$"
     },
     "capabilities": {
-      "type": "array",
-      "description": "Ontology IDs the plugin may emit or act upon.",
-      "items": {
-        "type": "string",
-        "pattern": "^(ISSUE\\.|ACTION\\.|FEATURE\\.).+"
-      },
-      "uniqueItems": true
+      "description": "Optional plugin capability metadata.",
+      "oneOf": [
+        { "$ref": "#/$defs/legacy_capability_ids" },
+        { "$ref": "#/$defs/plugin_capabilities" }
+      ]
     },
     "numeric_precision": {
       "type": "string",
@@ -70,6 +68,45 @@
       "type": "object",
       "description": "Optional JSON Schema fragment describing plugin-specific configuration.",
       "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "legacy_capability_ids": {
+      "type": "array",
+      "description": "Legacy ontology IDs the plugin may emit or act upon.",
+      "items": {
+        "type": "string",
+        "pattern": "^(ISSUE\\.|ACTION\\.|FEATURE\\.).+"
+      },
+      "uniqueItems": true
+    },
+    "plugin_capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_channels": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "supported_layout_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        },
+        "supported_contexts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["suggest", "auto_apply", "render"]
+          },
+          "uniqueItems": true
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        }
+      }
     }
   }
 }

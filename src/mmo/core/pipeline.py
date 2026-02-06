@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence
 
+from mmo.plugins.interfaces import PLUGIN_SUPPORTED_CONTEXTS, PluginCapabilities
+
 try:
     import yaml
 except ImportError:  # pragma: no cover - environment issue
@@ -17,6 +19,7 @@ class PluginEntry:
     plugin_id: str
     plugin_type: str
     version: str | None
+    capabilities: PluginCapabilities | None
     instance: Any
     manifest_path: Path
     manifest: Dict[str, Any]
@@ -64,6 +67,44 @@ def _load_entrypoint(entrypoint: str) -> Any:
     return symbol() if callable(symbol) else symbol
 
 
+def _coerce_plugin_capabilities(value: Any) -> PluginCapabilities | None:
+    if not isinstance(value, dict):
+        return None
+
+    max_channels: int | None = None
+    raw_max_channels = value.get("max_channels")
+    if (
+        isinstance(raw_max_channels, int)
+        and not isinstance(raw_max_channels, bool)
+        and raw_max_channels >= 1
+    ):
+        max_channels = raw_max_channels
+
+    def _coerce_string_tuple(raw_value: Any) -> tuple[str, ...] | None:
+        if not isinstance(raw_value, list):
+            return None
+        return tuple(item for item in raw_value if isinstance(item, str))
+
+    supported_layout_ids = _coerce_string_tuple(value.get("supported_layout_ids"))
+
+    supported_contexts_raw = _coerce_string_tuple(value.get("supported_contexts"))
+    supported_contexts: tuple[str, ...] | None = None
+    if supported_contexts_raw is not None:
+        supported_contexts = tuple(
+            context
+            for context in supported_contexts_raw
+            if context in PLUGIN_SUPPORTED_CONTEXTS
+        )
+
+    notes = _coerce_string_tuple(value.get("notes"))
+    return PluginCapabilities(
+        max_channels=max_channels,
+        supported_layout_ids=supported_layout_ids,
+        supported_contexts=supported_contexts,
+        notes=notes,
+    )
+
+
 def load_plugins(plugins_dir: Path) -> List[PluginEntry]:
     entries: List[PluginEntry] = []
     for manifest_path in _collect_manifests(plugins_dir):
@@ -75,12 +116,19 @@ def load_plugins(plugins_dir: Path) -> List[PluginEntry]:
             raise ValueError(f"Manifest missing plugin_id/plugin_type: {manifest_path}")
         if not isinstance(entrypoint, str):
             raise ValueError(f"Manifest missing entrypoint: {manifest_path}")
+        capabilities = _coerce_plugin_capabilities(data.get("capabilities"))
         instance = _load_entrypoint(entrypoint)
+        if capabilities is not None:
+            try:
+                setattr(instance, "plugin_capabilities", capabilities)
+            except Exception:
+                pass
         entries.append(
             PluginEntry(
                 plugin_id=plugin_id,
                 plugin_type=plugin_type,
                 version=data.get("version"),
+                capabilities=capabilities,
                 instance=instance,
                 manifest_path=manifest_path,
                 manifest=data,

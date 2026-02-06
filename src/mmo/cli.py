@@ -1050,6 +1050,46 @@ def _build_help_show_payload(*, help_registry_path: Path, help_id: str) -> dict[
     return payload
 
 
+def _build_plugins_list_payload(*, plugins_dir: Path) -> list[dict[str, Any]]:
+    from mmo.core.pipeline import load_plugins  # noqa: WPS433
+
+    plugins = load_plugins(plugins_dir)
+    payload: list[dict[str, Any]] = []
+    for plugin in plugins:
+        row: dict[str, Any] = {
+            "plugin_id": plugin.plugin_id,
+            "plugin_type": plugin.plugin_type,
+            "version": plugin.version or "",
+            "capabilities": {},
+        }
+        if plugin.capabilities is not None:
+            row["capabilities"] = plugin.capabilities.to_dict()
+        payload.append(row)
+    return payload
+
+
+def _render_plugins_list_text(payload: list[dict[str, Any]]) -> str:
+    lines: list[str] = []
+    for row in payload:
+        plugin_id = row.get("plugin_id", "")
+        capabilities = row.get("capabilities")
+        max_channels = "-"
+        contexts = "-"
+        if isinstance(capabilities, dict):
+            max_channels_value = capabilities.get("max_channels")
+            if isinstance(max_channels_value, int):
+                max_channels = str(max_channels_value)
+            supported_contexts = capabilities.get("supported_contexts")
+            if isinstance(supported_contexts, list):
+                contexts_list = [
+                    item for item in supported_contexts if isinstance(item, str) and item
+                ]
+                if contexts_list:
+                    contexts = ",".join(contexts_list)
+        lines.append(f"{plugin_id} (max_channels={max_channels}) contexts={contexts}")
+    return "\n".join(lines)
+
+
 def _print_lock_verify_summary(verify_result: dict[str, Any]) -> None:
     missing = verify_result.get("missing", [])
     extra = verify_result.get("extra", [])
@@ -1417,6 +1457,24 @@ def main(argv: list[str] | None = None) -> int:
         "--cache-dir",
         default=None,
         help="Optional cache directory (default: <repo_root>/.mmo_cache).",
+    )
+
+    plugins_parser = subparsers.add_parser("plugins", help="Plugin registry tools.")
+    plugins_subparsers = plugins_parser.add_subparsers(dest="plugins_command", required=True)
+    plugins_list_parser = plugins_subparsers.add_parser(
+        "list",
+        help="List discovered plugins and capability metadata.",
+    )
+    plugins_list_parser.add_argument(
+        "--plugins",
+        default="plugins",
+        help="Path to plugins directory.",
+    )
+    plugins_list_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for the plugin list.",
     )
 
     presets_parser = subparsers.add_parser("presets", help="Run config preset tools.")
@@ -2149,6 +2207,22 @@ def main(argv: list[str] | None = None) -> int:
             for item in results
         )
         return 1 if has_failure else 0
+    if args.command == "plugins":
+        if args.plugins_command == "list":
+            try:
+                payload = _build_plugins_list_payload(plugins_dir=Path(args.plugins))
+            except (RuntimeError, ValueError, AttributeError, OSError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            if args.format == "json":
+                print(json.dumps({"plugins": payload}, indent=2, sort_keys=True))
+            else:
+                print(_render_plugins_list_text(payload))
+            return 0
+
+        print("Unknown plugins command.", file=sys.stderr)
+        return 2
     if args.command == "presets":
         if args.presets_command == "list":
             try:

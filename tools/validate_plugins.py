@@ -25,6 +25,8 @@ ISSUE_PLUGIN_SCHEMA_INVALID = "ISSUE.VALIDATION.PLUGIN_SCHEMA_INVALID"
 ISSUE_PLUGIN_ENTRYPOINT_INVALID = "ISSUE.VALIDATION.PLUGIN_ENTRYPOINT_INVALID"
 ISSUE_PLUGIN_ID_TYPE_MISMATCH = "ISSUE.VALIDATION.PLUGIN_ID_TYPE_MISMATCH"
 ISSUE_PLUGIN_ID_DUPLICATE = "ISSUE.VALIDATION.PLUGIN_ID_DUPLICATE"
+ISSUE_PLUGIN_CAPABILITIES_INVALID = "ISSUE.VALIDATION.PLUGIN_CAPABILITIES_INVALID"
+ISSUE_PLUGIN_LAYOUT_ID_UNKNOWN = "ISSUE.VALIDATION.PLUGIN_LAYOUT_ID_UNKNOWN"
 
 PLUGIN_PREFIX_BY_TYPE = {
     "detector": "PLUGIN.DETECTOR.",
@@ -194,6 +196,134 @@ def _validate_id_prefix(
         )
 
 
+def _load_layout_ids(layouts_path: Path, issues: List[Dict[str, Any]]) -> Optional[set[str]]:
+    data = _load_yaml(layouts_path, issues)
+    if not isinstance(data, dict):
+        _add_issue(
+            issues,
+            ISSUE_PLUGIN_CAPABILITIES_INVALID,
+            "error",
+            "Failed to load layout registry for plugin capability checks.",
+            {"file_path": str(layouts_path)},
+        )
+        return None
+    layouts = data.get("layouts")
+    if not isinstance(layouts, dict):
+        _add_issue(
+            issues,
+            ISSUE_PLUGIN_CAPABILITIES_INVALID,
+            "error",
+            "layouts.yaml is missing the layouts mapping.",
+            {"file_path": str(layouts_path)},
+        )
+        return None
+    return {
+        layout_id
+        for layout_id in layouts.keys()
+        if isinstance(layout_id, str) and not layout_id.startswith("_")
+    }
+
+
+def _validate_capabilities(
+    capabilities: Dict[str, Any],
+    manifest_path: Path,
+    layout_ids: Optional[set[str]],
+    issues: List[Dict[str, Any]],
+) -> None:
+    max_channels = capabilities.get("max_channels")
+    if (
+        max_channels is not None
+        and (
+            not isinstance(max_channels, int)
+            or isinstance(max_channels, bool)
+            or max_channels < 1
+        )
+    ):
+        _add_issue(
+            issues,
+            ISSUE_PLUGIN_CAPABILITIES_INVALID,
+            "error",
+            "capabilities.max_channels must be an integer >= 1.",
+            {
+                "file_path": str(manifest_path),
+                "max_channels": max_channels,
+            },
+        )
+
+    supported_layout_ids = capabilities.get("supported_layout_ids")
+    if supported_layout_ids is not None:
+        if not isinstance(supported_layout_ids, list):
+            _add_issue(
+                issues,
+                ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                "error",
+                "capabilities.supported_layout_ids must be a list of layout IDs.",
+                {"file_path": str(manifest_path)},
+            )
+        else:
+            for layout_id in supported_layout_ids:
+                if not isinstance(layout_id, str):
+                    _add_issue(
+                        issues,
+                        ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                        "error",
+                        "capabilities.supported_layout_ids must contain only strings.",
+                        {"file_path": str(manifest_path), "layout_id": layout_id},
+                    )
+                    continue
+                if layout_ids is not None and layout_id not in layout_ids:
+                    _add_issue(
+                        issues,
+                        ISSUE_PLUGIN_LAYOUT_ID_UNKNOWN,
+                        "error",
+                        "capabilities.supported_layout_ids references an unknown layout ID.",
+                        {"file_path": str(manifest_path), "layout_id": layout_id},
+                    )
+
+    supported_contexts = capabilities.get("supported_contexts")
+    if supported_contexts is not None:
+        allowed_contexts = {"suggest", "auto_apply", "render"}
+        if not isinstance(supported_contexts, list):
+            _add_issue(
+                issues,
+                ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                "error",
+                "capabilities.supported_contexts must be a list of strings.",
+                {"file_path": str(manifest_path)},
+            )
+        else:
+            for context in supported_contexts:
+                if not isinstance(context, str) or context not in allowed_contexts:
+                    _add_issue(
+                        issues,
+                        ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                        "error",
+                        "capabilities.supported_contexts contains an invalid context.",
+                        {"file_path": str(manifest_path), "context": context},
+                    )
+
+    notes = capabilities.get("notes")
+    if notes is not None:
+        if not isinstance(notes, list):
+            _add_issue(
+                issues,
+                ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                "error",
+                "capabilities.notes must be a list of strings.",
+                {"file_path": str(manifest_path)},
+            )
+        else:
+            for note in notes:
+                if not isinstance(note, str):
+                    _add_issue(
+                        issues,
+                        ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                        "error",
+                        "capabilities.notes must contain only strings.",
+                        {"file_path": str(manifest_path)},
+                    )
+
+
 def validate_plugins(plugins_dir: Path, schema_path: Path) -> Dict[str, Any]:
     issues: List[Dict[str, Any]] = []
 
@@ -203,6 +333,9 @@ def validate_plugins(plugins_dir: Path, schema_path: Path) -> Dict[str, Any]:
 
     manifest_paths = _collect_manifests(plugins_dir)
     plugin_id_index: Dict[str, List[str]] = {}
+    layout_ids: Optional[set[str]] = None
+    loaded_layout_ids = False
+    layouts_path = Path(__file__).resolve().parents[1] / "ontology" / "layouts.yaml"
 
     for manifest_path in manifest_paths:
         data = _load_yaml(manifest_path, issues)
@@ -229,6 +362,18 @@ def validate_plugins(plugins_dir: Path, schema_path: Path) -> Dict[str, Any]:
                     "error",
                     "Manifest entrypoint is missing or invalid.",
                     {"file_path": str(manifest_path)},
+                )
+
+            capabilities = data.get("capabilities")
+            if isinstance(capabilities, dict):
+                if not loaded_layout_ids:
+                    layout_ids = _load_layout_ids(layouts_path, issues)
+                    loaded_layout_ids = True
+                _validate_capabilities(
+                    capabilities,
+                    manifest_path,
+                    layout_ids,
+                    issues,
                 )
 
     for plugin_id, paths in sorted(plugin_id_index.items()):

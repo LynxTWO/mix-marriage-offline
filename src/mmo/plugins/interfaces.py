@@ -1,7 +1,31 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, Dict, List, TypedDict
+
+
+PLUGIN_SUPPORTED_CONTEXTS = ("suggest", "auto_apply", "render")
+
+
+@dataclass(frozen=True)
+class PluginCapabilities:
+    max_channels: int | None = None
+    supported_layout_ids: tuple[str, ...] | None = None
+    supported_contexts: tuple[str, ...] | None = None
+    notes: tuple[str, ...] | None = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {}
+        if isinstance(self.max_channels, int):
+            payload["max_channels"] = self.max_channels
+        if self.supported_layout_ids is not None:
+            payload["supported_layout_ids"] = list(self.supported_layout_ids)
+        if self.supported_contexts is not None:
+            payload["supported_contexts"] = list(self.supported_contexts)
+        if self.notes is not None:
+            payload["notes"] = list(self.notes)
+        return payload
 
 
 class Issue(TypedDict, total=False):

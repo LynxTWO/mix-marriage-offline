@@ -8,5 +8,9 @@ mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
 entrypoint: "plugins.renderers.gain_trim_renderer:GainTrimRenderer"
 capabilities:
-  - "ACTION.UTILITY.GAIN"
-  - "ACTION.UTILITY.TRIM"
+  max_channels: 32
+  supported_contexts:
+    - "render"
+    - "auto_apply"
+  notes:
+    - "Deterministic gain/trim rendering; no boosts."

@@ -8,4 +8,9 @@ mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
 entrypoint: "plugins.renderers.safe_renderer:SafeRenderer"
 capabilities:
-  - "ACTION.DOWNMIX.RENDER"
+  max_channels: 32
+  supported_contexts:
+    - "render"
+    - "auto_apply"
+  notes:
+    - "Deterministic gain/trim rendering; no boosts."
