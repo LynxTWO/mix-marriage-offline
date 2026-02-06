@@ -6,7 +6,16 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
+from mmo.core.cache_keys import cache_key, hash_lockfile, hash_run_config
+from mmo.core.cache_store import (
+    report_has_time_cap_stop_condition,
+    report_schema_is_valid,
+    rewrite_report_stems_dir,
+    save_cached_report,
+    try_load_cached_report,
+)
 from mmo.core.gates import apply_gates_to_report
+from mmo.core.lockfile import build_lockfile
 from mmo.core.pipeline import load_plugins, run_detectors, run_renderers, run_resolvers
 from mmo.core.preset_recommendations import derive_preset_recommendations
 from mmo.core.presets import list_presets, load_preset_run_config
@@ -59,6 +68,19 @@ def _path_to_posix(path: Path) -> str:
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _analysis_cache_key(lock: dict[str, Any], cfg: dict[str, Any]) -> str:
+    lock_hash = hash_lockfile(lock)
+    cfg_hash = hash_run_config(cfg)
+    return cache_key(lock_hash, cfg_hash)
+
+
+def _should_skip_analysis_cache_save(report: dict[str, Any], run_config: dict[str, Any]) -> bool:
+    meters = run_config.get("meters")
+    if meters != "truth":
+        return False
+    return report_has_time_cap_stop_condition(report)
 
 
 def _normalize_steps(steps: dict[str, Any] | None) -> dict[str, bool]:
@@ -414,7 +436,13 @@ def build_variant_plan(
     }
 
 
-def run_variant_plan(plan: dict[str, Any], repo_root: Path) -> dict[str, Any]:
+def run_variant_plan(
+    plan: dict[str, Any],
+    repo_root: Path,
+    *,
+    cache_enabled: bool = True,
+    cache_dir: Path | None = None,
+) -> dict[str, Any]:
     if not isinstance(plan, dict):
         raise ValueError("plan must be an object.")
 
@@ -430,8 +458,15 @@ def run_variant_plan(plan: dict[str, Any], repo_root: Path) -> dict[str, Any]:
 
     variant_entries = _coerce_dict_list(plan.get("variants"))
     presets_dir = repo_root / "presets"
+    report_schema_path = repo_root / "schemas" / "report.schema.json"
     plugins = load_plugins(repo_root / "plugins")
     scan_builder = _load_scan_builder(repo_root)
+    analysis_lock: dict[str, Any] | None = None
+    if cache_enabled:
+        try:
+            analysis_lock = build_lockfile(stems_dir)
+        except ValueError:
+            analysis_lock = None
 
     results: list[dict[str, Any]] = []
     for variant in variant_entries:
@@ -459,6 +494,7 @@ def run_variant_plan(plan: dict[str, Any], repo_root: Path) -> dict[str, Any]:
         render_manifest: dict[str, Any] | None = None
         apply_manifest: dict[str, Any] | None = None
         applied_report: dict[str, Any] | None = None
+        analysis_cache_key: str | None = None
 
         try:
             effective_run_config = _merge_effective_run_config(
@@ -470,40 +506,92 @@ def run_variant_plan(plan: dict[str, Any], repo_root: Path) -> dict[str, Any]:
             errors.append(f"run_config: {exc}")
 
         if effective_run_config is not None and steps["analyze"]:
-            try:
-                meters = _meters_from_config(effective_run_config)
-                profile_id = _profile_id_from_config(effective_run_config)
-                report = scan_builder(
-                    stems_dir,
-                    _DEFAULT_GENERATED_AT,
-                    strict=False,
-                    include_peak=False,
-                    meters=meters,
-                )
-                if not isinstance(report, dict):
-                    raise ValueError("scan builder returned a non-object report.")
-
-                run_detectors(report, plugins)
-                run_resolvers(report, plugins)
-                apply_gates_to_report(
-                    report,
-                    policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
-                    profile_id=profile_id,
-                    profiles_path=repo_root
-                    / "ontology"
-                    / "policies"
-                    / "authority_profiles.yaml",
-                )
-                if isinstance(report.get("mix_complexity"), dict):
-                    report["vibe_signals"] = derive_vibe_signals(report)
-                    report["preset_recommendations"] = derive_preset_recommendations(
-                        report,
-                        repo_root / "presets",
+            meters = _meters_from_config(effective_run_config)
+            profile_id = _profile_id_from_config(effective_run_config)
+            if cache_enabled and analysis_lock is not None:
+                try:
+                    analysis_cache_key = _analysis_cache_key(
+                        analysis_lock,
+                        effective_run_config,
                     )
-                report["run_config"] = normalize_run_config(effective_run_config)
-                _write_json(report_path, report)
-            except Exception as exc:  # pragma: no cover - defensive surface
-                errors.append(f"analyze: {exc}")
+                except ValueError as exc:
+                    errors.append(f"cache: {exc}")
+                else:
+                    cached_report = try_load_cached_report(
+                        cache_dir,
+                        analysis_lock,
+                        effective_run_config,
+                    )
+                    if (
+                        isinstance(cached_report, dict)
+                        and report_schema_is_valid(cached_report, report_schema_path)
+                    ):
+                        rewritten_report = rewrite_report_stems_dir(cached_report, stems_dir)
+                        rewritten_report["run_config"] = normalize_run_config(
+                            effective_run_config
+                        )
+                        if report_schema_is_valid(rewritten_report, report_schema_path):
+                            report = rewritten_report
+                            _write_json(report_path, report)
+                            print(f"analysis cache: hit {analysis_cache_key} ({variant_id})")
+                    if report is None and analysis_cache_key is not None:
+                        print(f"analysis cache: miss {analysis_cache_key} ({variant_id})")
+
+            if report is None:
+                try:
+                    report = scan_builder(
+                        stems_dir,
+                        _DEFAULT_GENERATED_AT,
+                        strict=False,
+                        include_peak=False,
+                        meters=meters,
+                    )
+                    if not isinstance(report, dict):
+                        raise ValueError("scan builder returned a non-object report.")
+
+                    run_detectors(report, plugins)
+                    run_resolvers(report, plugins)
+                    apply_gates_to_report(
+                        report,
+                        policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+                        profile_id=profile_id,
+                        profiles_path=repo_root
+                        / "ontology"
+                        / "policies"
+                        / "authority_profiles.yaml",
+                    )
+                    if isinstance(report.get("mix_complexity"), dict):
+                        report["vibe_signals"] = derive_vibe_signals(report)
+                        report["preset_recommendations"] = derive_preset_recommendations(
+                            report,
+                            repo_root / "presets",
+                        )
+                    report["run_config"] = normalize_run_config(effective_run_config)
+                    _write_json(report_path, report)
+
+                    if (
+                        cache_enabled
+                        and analysis_lock is not None
+                        and analysis_cache_key is not None
+                        and report_schema_is_valid(report, report_schema_path)
+                    ):
+                        if _should_skip_analysis_cache_save(report, effective_run_config):
+                            print(
+                                "analysis cache: skip-save "
+                                f"{analysis_cache_key} ({variant_id}) (time-cap stop)"
+                            )
+                        else:
+                            try:
+                                save_cached_report(
+                                    cache_dir,
+                                    analysis_lock,
+                                    effective_run_config,
+                                    report,
+                                )
+                            except OSError:
+                                pass
+                except Exception as exc:  # pragma: no cover - defensive surface
+                    errors.append(f"analyze: {exc}")
 
         if report is not None and steps["export_csv"]:
             try:

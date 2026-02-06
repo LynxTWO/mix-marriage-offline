@@ -9,3 +9,4 @@ rendered/
 out.json
 recall.csv
 local_media/
+.mmo_cache/

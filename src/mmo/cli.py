@@ -7,6 +7,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from mmo.core.cache_keys import cache_key, hash_lockfile, hash_run_config
+from mmo.core.cache_store import (
+    report_has_time_cap_stop_condition,
+    report_schema_is_valid,
+    rewrite_report_stems_dir,
+    save_cached_report,
+    try_load_cached_report,
+)
 from mmo.core.presets import (
     list_preset_packs,
     list_presets,
@@ -319,6 +327,19 @@ def _downmix_qa_run_config(
     if preset_id is not None:
         payload["preset_id"] = preset_id
     return normalize_run_config(payload)
+
+
+def _analysis_cache_key(lock: dict[str, Any], cfg: dict[str, Any]) -> str:
+    lock_hash = hash_lockfile(lock)
+    cfg_hash = hash_run_config(cfg)
+    return cache_key(lock_hash, cfg_hash)
+
+
+def _should_skip_analysis_cache_save(report: dict[str, Any], run_config: dict[str, Any]) -> bool:
+    meters = run_config.get("meters")
+    if meters != "truth":
+        return False
+    return report_has_time_cap_stop_condition(report)
 
 
 def _validate_json_payload(
@@ -1125,6 +1146,17 @@ def main(argv: list[str] | None = None) -> int:
         default="PROFILE.ASSIST",
         help="Authority profile ID for gate eligibility (default: PROFILE.ASSIST).",
     )
+    analyze_parser.add_argument(
+        "--cache",
+        choices=["on", "off"],
+        default="on",
+        help="Reuse cached analysis by lockfile + run_config hash (default: on).",
+    )
+    analyze_parser.add_argument(
+        "--cache-dir",
+        default=None,
+        help="Optional cache directory (default: <repo_root>/.mmo_cache).",
+    )
 
     export_parser = subparsers.add_parser(
         "export", help="Export CSV/PDF artifacts from a report JSON."
@@ -1374,6 +1406,17 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=None,
         help="truncate_values override in run_config for each variant.",
+    )
+    variants_run_parser.add_argument(
+        "--cache",
+        choices=["on", "off"],
+        default="on",
+        help="Reuse cached analysis by lockfile + run_config hash (default: on).",
+    )
+    variants_run_parser.add_argument(
+        "--cache-dir",
+        default=None,
+        help="Optional cache directory (default: <repo_root>/.mmo_cache).",
     )
 
     presets_parser = subparsers.add_parser("presets", help="Run config preset tools.")
@@ -1802,10 +1845,51 @@ def main(argv: list[str] | None = None) -> int:
         effective_profile = _config_string(merged_run_config, "profile_id", args.profile)
         effective_meters = _config_optional_string(merged_run_config, "meters", args.meters)
         effective_preset_id = _config_optional_string(merged_run_config, "preset_id", None)
+        stems_dir = Path(args.stems_dir)
         out_report_path = Path(args.out_report)
+        effective_run_config = _analyze_run_config(
+            profile_id=effective_profile,
+            meters=effective_meters,
+            preset_id=effective_preset_id,
+            base_run_config=merged_run_config,
+        )
+        cache_enabled = args.cache == "on"
+        cache_dir = Path(args.cache_dir) if args.cache_dir else None
+        report_schema_path = repo_root / "schemas" / "report.schema.json"
+        lock_payload: dict[str, Any] | None = None
+        cache_key_value: str | None = None
+
+        if cache_enabled:
+            from mmo.core.lockfile import build_lockfile  # noqa: WPS433
+
+            try:
+                lock_payload = build_lockfile(stems_dir)
+                cache_key_value = _analysis_cache_key(lock_payload, effective_run_config)
+            except ValueError:
+                cache_enabled = False
+                lock_payload = None
+                cache_key_value = None
+
+            if lock_payload is not None:
+                cached_report = try_load_cached_report(
+                    cache_dir,
+                    lock_payload,
+                    effective_run_config,
+                )
+                if (
+                    isinstance(cached_report, dict)
+                    and report_schema_is_valid(cached_report, report_schema_path)
+                ):
+                    rewritten_report = rewrite_report_stems_dir(cached_report, stems_dir)
+                    if report_schema_is_valid(rewritten_report, report_schema_path):
+                        _write_json_file(out_report_path, rewritten_report)
+                        print(f"analysis cache: hit {cache_key_value}")
+                        return 0
+                print(f"analysis cache: miss {cache_key_value}")
+
         exit_code = _run_analyze(
             tools_dir,
-            Path(args.stems_dir),
+            stems_dir,
             out_report_path,
             effective_meters,
             args.peak,
@@ -1818,16 +1902,31 @@ def main(argv: list[str] | None = None) -> int:
         try:
             _stamp_report_run_config(
                 out_report_path,
-                _analyze_run_config(
-                    profile_id=effective_profile,
-                    meters=effective_meters,
-                    preset_id=effective_preset_id,
-                    base_run_config=merged_run_config,
-                ),
+                effective_run_config,
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 1
+
+        if cache_enabled and lock_payload is not None:
+            try:
+                report_payload = _load_report(out_report_path)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if report_schema_is_valid(report_payload, report_schema_path):
+                if _should_skip_analysis_cache_save(report_payload, effective_run_config):
+                    print(f"analysis cache: skip-save {cache_key_value} (time-cap stop)")
+                else:
+                    try:
+                        save_cached_report(
+                            cache_dir,
+                            lock_payload,
+                            effective_run_config,
+                            report_payload,
+                        )
+                    except OSError:
+                        pass
         return 0
     if args.command == "export":
         export_overrides: dict[str, Any] = {}
@@ -2022,7 +2121,12 @@ def main(argv: list[str] | None = None) -> int:
             print("Youll get one folder per variant.")
 
         try:
-            result = run_variant_plan(plan, repo_root=repo_root)
+            result = run_variant_plan(
+                plan,
+                repo_root=repo_root,
+                cache_enabled=args.cache == "on",
+                cache_dir=Path(args.cache_dir) if args.cache_dir else None,
+            )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 1
