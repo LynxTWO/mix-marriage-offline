@@ -12,6 +12,7 @@
       "file": "safe_cleanup.json",
       "label": "Safe cleanup",
       "description": "Conservative checks and exports. No aggressive auto-apply.",
+      "help_id": "HELP.PRESET.SAFE_CLEANUP",
       "category": "WORKFLOW",
       "tags": ["conservative", "translation", "prep"],
       "goals": [
@@ -29,6 +30,8 @@
       "file": "turbo_draft.json",
       "label": "Turbo draft",
       "description": "Aggressive drafting profile with truth meters for quick passes.",
+      "help_id": "HELP.PRESET.TURBO_DRAFT",
+      "overlay": "Fast",
       "category": "VIBE",
       "tags": ["fast", "aggressive", "auto"],
       "goals": [
@@ -46,6 +49,8 @@
       "file": "vibe_bright_airy.json",
       "label": "Bright airy",
       "description": "Lift openness and sparkle while keeping detail controlled.",
+      "help_id": "HELP.PRESET.VIBE.BRIGHT_AIRY",
+      "overlay": "Air",
       "category": "VIBE",
       "tags": ["airy", "bright", "open", "indie-pop", "dream-pop"],
       "goals": [
@@ -63,6 +68,8 @@
       "file": "vibe_dense_glue.json",
       "label": "Dense glue",
       "description": "Drive assertive cohesion and thickness for impact-first mixes.",
+      "help_id": "HELP.PRESET.VIBE.DENSE_GLUE",
+      "overlay": "Glue",
       "category": "VIBE",
       "tags": ["dense", "glue", "cohesive", "rock", "alt-pop"],
       "goals": [
@@ -81,6 +88,8 @@
       "file": "vibe_punchy_tight.json",
       "label": "Punchy tight",
       "description": "Push transient definition and low-end discipline for punch.",
+      "help_id": "HELP.PRESET.VIBE.PUNCHY_TIGHT",
+      "overlay": "Punch",
       "category": "VIBE",
       "tags": ["punchy", "tight", "transient", "hip-hop", "edm"],
       "goals": [
@@ -98,6 +107,8 @@
       "file": "vibe_translation_safe.json",
       "label": "Translation safe",
       "description": "Favor reliable playback translation across phones, buds, and speakers.",
+      "help_id": "HELP.PRESET.VIBE.TRANSLATION_SAFE",
+      "overlay": "Safe",
       "category": "VIBE",
       "tags": ["translation", "safe", "balanced", "acoustic", "podcast"],
       "goals": [
@@ -115,6 +126,8 @@
       "file": "vibe_vocal_forward.json",
       "label": "Vocal forward",
       "description": "Prioritize vocal intelligibility and reduce common translation risks.",
+      "help_id": "HELP.PRESET.VIBE.VOCAL_FORWARD",
+      "overlay": "Vocal",
       "category": "VIBE",
       "tags": ["vocal", "clarity", "translation"],
       "goals": [
@@ -132,6 +145,8 @@
       "file": "vibe_warm_intimate.json",
       "label": "Warm intimate",
       "description": "Lean into closeness, body, and warmth without losing clarity.",
+      "help_id": "HELP.PRESET.VIBE.WARM_INTIMATE",
+      "overlay": "Warm",
       "category": "VIBE",
       "tags": ["warm", "intimate", "vocal", "singer-songwriter", "lo-fi"],
       "goals": [
@@ -149,6 +164,8 @@
       "file": "vibe_wide_cinematic.json",
       "label": "Wide cinematic",
       "description": "Build spacious width and depth while preserving a stable center.",
+      "help_id": "HELP.PRESET.VIBE.WIDE_CINEMATIC",
+      "overlay": "Wide",
       "category": "VIBE",
       "tags": ["wide", "cinematic", "spacious", "ambient", "soundtrack"],
       "goals": [

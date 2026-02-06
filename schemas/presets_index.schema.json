@@ -18,6 +18,11 @@
           "file": { "type": "string" },
           "label": { "type": "string" },
           "description": { "type": "string" },
+          "help_id": {
+            "type": "string",
+            "pattern": "^HELP\\.[A-Z0-9_.]+$"
+          },
+          "overlay": { "type": "string" },
           "category": { "type": "string" },
           "tags": {
             "type": "array",

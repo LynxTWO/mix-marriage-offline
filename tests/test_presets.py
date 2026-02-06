@@ -1,10 +1,16 @@
 import json
+import re
 import unittest
 from pathlib import Path
 
 import jsonschema
 
-from mmo.core.presets import list_presets, load_preset_index, load_preset_run_config
+from mmo.core.presets import (
+    get_preset_help_id,
+    list_presets,
+    load_preset_index,
+    load_preset_run_config,
+)
 
 
 class TestPresets(unittest.TestCase):
@@ -85,6 +91,49 @@ class TestPresets(unittest.TestCase):
         run_config = load_preset_run_config(presets_dir, "PRESET.SAFE_CLEANUP")
         self.assertEqual(run_config.get("schema_version"), "0.1.0")
         self.assertEqual(run_config.get("preset_id"), "PRESET.SAFE_CLEANUP")
+
+    def test_vibe_presets_include_help_id_and_overlay(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        presets_dir = repo_root / "presets"
+        preset_items = list_presets(presets_dir)
+        vibe_presets = [
+            item
+            for item in preset_items
+            if isinstance(item, dict) and item.get("category") == "VIBE"
+        ]
+
+        self.assertTrue(vibe_presets)
+        for preset in vibe_presets:
+            preset_id = preset.get("preset_id")
+            self.assertIsInstance(preset_id, str)
+            if not isinstance(preset_id, str):
+                continue
+
+            help_id = preset.get("help_id")
+            self.assertIsInstance(help_id, str, msg=f"Missing help_id for {preset_id}")
+            if isinstance(help_id, str):
+                self.assertRegex(help_id, re.compile(r"^HELP\.[A-Z0-9_.]+$"))
+                self.assertEqual(get_preset_help_id(preset_id), help_id)
+
+            overlay = preset.get("overlay")
+            self.assertIsInstance(overlay, str, msg=f"Missing overlay for {preset_id}")
+            if isinstance(overlay, str):
+                words = [word for word in overlay.split() if word]
+                self.assertGreaterEqual(len(words), 1)
+                self.assertLessEqual(len(words), 3)
+
+        by_id = {
+            item.get("preset_id"): item
+            for item in preset_items
+            if isinstance(item, dict)
+        }
+        safe_cleanup = by_id.get("PRESET.SAFE_CLEANUP")
+        self.assertIsInstance(safe_cleanup, dict)
+        if isinstance(safe_cleanup, dict):
+            self.assertEqual(
+                safe_cleanup.get("help_id"),
+                "HELP.PRESET.SAFE_CLEANUP",
+            )
 
 
 if __name__ == "__main__":

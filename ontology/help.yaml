@@ -122,109 +122,146 @@ entries:
       - "Draft-focused results still need final translation validation."
   HELP.PRESET.SAFE_CLEANUP:
     title: "Safe cleanup"
-    short: "A careful first pass to catch technical problems without changing the vibe."
+    short: "Technical cleanup pass for safer playback before creative tone moves."
     long: |
-      Use this when you want a clean foundation before you start shaping sound.
-      It focuses on safety (clipping/loudness), consistency, and translation checks.
-      Nothing aggressive is pushed automatically unless you explicitly choose it.
+      Safe Cleanup is a prep pass. It clears obvious technical problems so your
+      next creative decisions happen on stable ground.
+
+      Think of it as tidying the room before the session starts. It can improve
+      reliability, but it does not pick your taste for tone, groove, or emotion.
     cues:
-      - "If your mix feels messy but you do not want it processed."
-      - "If you are about to start mixing and want a clean baseline."
+      - "If your mix has clipping, loudness drift, or translation surprises."
+      - "If you want to start from a clean baseline before sound-design moves."
+      - "If you are prepping stems for collaboration or client review."
     watch_out_for:
-      - "This does not add punch or glue. It is about stability and translation."
+      - "It does not add glue, punch, or width by itself."
+      - "You still need artistic choices for vibe and arrangement."
   HELP.PRESET.TURBO_DRAFT:
     title: "Turbo draft"
-    short: "Aggressive drafting profile for rapid momentum."
+    short: "Fast, bold draft pass when you need direction in minutes."
     long: |
-      Turbo Draft favors speed and broad action coverage so you can hear
-      directional changes quickly. It is useful for roughing in a shape
-      before refining with a more conservative preset.
+      Turbo Draft trades subtlety for momentum. It is built to move a rough
+      mix quickly so you can hear direction and make decisions faster.
+
+      Use it for exploration, not final polish. It can reveal options and
+      problems fast, but it cannot decide what fits the song emotionally.
     cues:
-      - "If you want immediate movement on obvious mix issues."
-      - "If you are prototyping direction under time pressure."
+      - "If deadlines are tight and you need a fast first version."
+      - "If you want to stress-test how far a mix can be pushed."
+      - "If you prefer refining from a bold sketch instead of from zero."
     watch_out_for:
-      - "Can introduce strong moves that require deliberate review later."
+      - "Expect stronger moves and review EXTREME flags carefully."
+      - "Always follow with a calmer pass before delivery."
+      - "Speed does not guarantee good taste."
   HELP.PRESET.VIBE.BRIGHT_AIRY:
     title: "Bright airy"
-    short: "Pushes openness and sparkle while keeping detail controlled."
+    short: "Adds top-end lift and openness for a more breathable mix."
     long: |
-      Bright Airy aims to lift high-frequency clarity and space perception.
-      It works well when a mix feels closed-in, dull, or overly dense in
-      upper mids and highs.
+      Bright Airy nudges the mix toward shimmer and space. It can help vocals,
+      cymbals, and detail lines feel less boxed-in.
+
+      Reach for it when a mix feels dull, but keep perspective. Extra air can
+      sound exciting at first and still be too sharp on real-world playback.
     cues:
-      - "If the mix feels veiled or lacks openness."
-      - "If vocals and top-end detail need more air."
+      - "If your top end feels veiled even after level balancing."
+      - "If vocals need more breath and consonant clarity."
+      - "If reverbs feel cloudy instead of open."
     watch_out_for:
-      - "Extra brightness can reveal harshness and sibilance."
+      - "Too much lift can expose harshness and sibilance."
+      - "It cannot fix poor source tone or arrangement masking on its own."
   HELP.PRESET.VIBE.DENSE_GLUE:
     title: "Dense glue"
-    short: "Builds thickness and cohesion for impact-first mixes."
+    short: "Pushes cohesion and weight for a thicker, glued presentation."
     long: |
-      Dense Glue emphasizes collective weight and forward energy.
-      It can help disconnected elements feel unified and more assertive,
-      especially in dense arrangements.
+      Dense Glue pulls elements toward a shared center so the mix feels more
+      connected and forceful. It suits tracks that need weight and unity.
+
+      Use it when parts feel separate, not when detail is already crowded.
+      Glue helps shape energy, but it will not rescue weak song choices.
     cues:
-      - "If elements feel separate and lack shared center of gravity."
-      - "If you want a thicker, more driven presentation."
+      - "If drums, bass, and instruments feel disconnected."
+      - "If the chorus needs more forward body and impact."
+      - "If the mix feels thin despite good level balance."
     watch_out_for:
-      - "Can reduce micro-dynamics or build low-mid congestion."
+      - "Can reduce micro-dynamics and blur transient detail."
+      - "Watch for low-mid buildup and ear fatigue."
   HELP.PRESET.VIBE.PUNCHY_TIGHT:
     title: "Punchy tight"
-    short: "Prioritizes transient impact and low-end discipline."
+    short: "Focuses attack and low-end control for tighter groove impact."
     long: |
-      Punchy Tight is tuned for attack clarity and controlled bass behavior.
-      It is useful when the groove feels soft or blurred and needs firmer
-      transient definition.
+      Punchy Tight emphasizes attack shape and bass discipline. It helps kicks,
+      snares, and rhythmic accents read with more confidence.
+
+      This preset is for groove definition, not loudness tricks. It can make
+      a mix feel cleaner and faster, but balance still decides musical feel.
     cues:
-      - "If kicks and snares do not cut through confidently."
-      - "If low end feels loose or smeared."
+      - "If kick and snare attacks feel soft or smeared."
+      - "If bass feels late, boomy, or unfocused."
+      - "If rhythmic sections lose energy on small speakers."
     watch_out_for:
-      - "Can feel aggressive if source material is already sharp."
+      - "Can feel sharp if transients are already aggressive."
+      - "Do not chase punch so hard that tone becomes thin."
   HELP.PRESET.VIBE.TRANSLATION_SAFE:
     title: "Translation safe"
-    short: "Prioritizes reliable playback across common listening systems."
+    short: "Balances tone choices for steadier playback across everyday systems."
     long: |
-      Translation Safe biases decisions toward consistency on phones,
-      earbuds, cars, and speakers. It intentionally avoids risky extremes
-      so your mix holds up across everyday environments.
+      Translation Safe favors decisions that survive many playback systems.
+      It aims for dependable results on earbuds, cars, laptops, and phones.
+
+      Choose it when reliability matters more than dramatic color. It can
+      prevent obvious mistakes, but it cannot make every listener agree.
     cues:
-      - "If cross-device consistency matters more than dramatic tone moves."
-      - "If your mix will be heard on many consumer playback systems."
+      - "If your release must hold up on mixed consumer playback."
+      - "If client feedback often mentions device-to-device inconsistency."
+      - "If you want fewer surprises after export and upload."
     watch_out_for:
-      - "Reliability focus may feel less exciting than vibe-heavy presets."
+      - "It may feel less flashy than style-first presets."
+      - "Safe translation is not the same as artistic character."
   HELP.PRESET.VIBE.VOCAL_FORWARD:
     title: "Vocal forward"
-    short: "Pushes vocal intelligibility while limiting translation risks."
+    short: "Brings lead vocal focus forward while keeping the band stable."
     long: |
-      Vocal Forward focuses attention and clarity around lead vocals.
-      It helps when lyrics are masked by instrumentation or when center
-      intelligibility drops on small playback systems.
+      Vocal Forward gives the lead more presence and lyric readability. It is
+      useful when the center feels masked by guitars, keys, or effects.
+
+      Think of it as spotlight control, not a magic fix. If arrangement or
+      performance fights the vocal, you may still need deeper edits.
     cues:
-      - "If vocals are getting buried in dense sections."
-      - "If lyric clarity drops on earbuds or phone speakers."
+      - "If words disappear when the chorus gets dense."
+      - "If vocal clarity falls on phone speakers and earbuds."
+      - "If lead focus shifts too much between sections."
     watch_out_for:
-      - "Can narrow perceived width if over-applied."
+      - "Can narrow perceived width if pushed too hard."
+      - "Avoid over-brightening consonants just to force clarity."
   HELP.PRESET.VIBE.WARM_INTIMATE:
     title: "Warm intimate"
-    short: "Leans into closeness, body, and warmth without losing focus."
+    short: "Leans toward closeness and body for a more human center."
     long: |
-      Warm Intimate supports proximity and emotional closeness.
-      It is useful when material feels cold or distant and needs a more
-      human, present center.
+      Warm Intimate emphasizes proximity and midrange body. It can make vocals
+      and leads feel physically closer and emotionally connected.
+
+      Use it when a mix feels cold or detached. Warmth can support feeling,
+      but too much can hide detail and reduce contrast.
     cues:
-      - "If vocals or leads feel detached from the listener."
-      - "If highs feel brittle and need a softer frame."
+      - "If the mix feels distant even at healthy level."
+      - "If upper mids feel brittle or unfriendly."
+      - "If you want a softer, closer presentation for intimate songs."
     watch_out_for:
-      - "Can darken top-end excitement if pushed too far."
+      - "Can darken sparkle and reduce perceived width."
+      - "It will not fix muddy arrangement choices by itself."
   HELP.PRESET.VIBE.WIDE_CINEMATIC:
     title: "Wide cinematic"
-    short: "Expands space and depth while protecting center stability."
+    short: "Expands width and depth for a larger cinematic soundstage."
     long: |
-      Wide Cinematic aims for a larger soundstage and layered depth cues.
-      It helps when a mix feels narrow, flat, or front-only but still
-      needs a dependable center anchor.
+      Wide Cinematic pushes depth and left-right spread while keeping the lead
+      anchored. It can make arrangements feel taller and more immersive.
+
+      Great width still needs a solid center. This preset can widen the frame,
+      but it cannot replace strong arrangement contrast and focal choices.
     cues:
-      - "If the mix feels boxed in and lacks dimensional width."
-      - "If you want more depth while keeping lead focus stable."
+      - "If the mix feels narrow or front-heavy."
+      - "If you want reverb and ambience to read with more depth."
+      - "If choruses need a bigger stage without losing center focus."
     watch_out_for:
-      - "Check mono fold-down and center impact after widening moves."
+      - "Check mono fold-down and center punch after widening."
+      - "Wide effects can feel huge soloed but weak in context."

@@ -14,7 +14,7 @@ except ImportError:  # pragma: no cover - optional dependency
 _INDEX_REQUIRED_KEYS = {"schema_version", "presets"}
 _INDEX_OPTIONAL_KEYS = {"packs"}
 _PRESET_REQUIRED_KEYS = {"preset_id", "file", "label", "description"}
-_PRESET_OPTIONAL_STRING_KEYS = {"category"}
+_PRESET_OPTIONAL_STRING_KEYS = {"category", "help_id", "overlay"}
 _PRESET_OPTIONAL_STRING_LIST_KEYS = ("tags", "goals", "warnings")
 _PRESET_ALLOWED_KEYS = (
     _PRESET_REQUIRED_KEYS
@@ -363,6 +363,28 @@ def list_presets(
         ],
         key=lambda item: str(item.get("preset_id", "")),
     )
+
+
+def get_preset_help_id(preset_id: str) -> str | None:
+    normalized_preset_id = preset_id.strip() if isinstance(preset_id, str) else ""
+    if not normalized_preset_id:
+        return None
+
+    presets_dir = _repo_root() / "presets"
+    try:
+        presets = list_presets(presets_dir)
+    except ValueError:
+        return None
+
+    for item in presets:
+        if item.get("preset_id") != normalized_preset_id:
+            continue
+        help_id = item.get("help_id")
+        if not isinstance(help_id, str):
+            return None
+        normalized_help_id = help_id.strip()
+        return normalized_help_id or None
+    return None
 
 
 def list_preset_packs(presets_dir: Path) -> list[dict[str, Any]]:

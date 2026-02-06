@@ -92,10 +92,12 @@ def _preset_id(report: dict[str, Any]) -> str:
 
 
 def _help_id_for_preset(preset_id: str) -> str | None:
+    from mmo.core.presets import get_preset_help_id  # noqa: WPS433
+
     normalized = preset_id.strip()
-    if not normalized or not normalized.startswith("PRESET."):
+    if not normalized:
         return None
-    return f"HELP.PRESET.{normalized[len('PRESET.'):]}"
+    return get_preset_help_id(normalized)
 
 
 def _help_id_for_profile(profile_id: str) -> str | None:

@@ -371,13 +371,13 @@ class TestUiBundle(unittest.TestCase):
             },
         )
 
-    def test_build_ui_bundle_help_includes_profile_and_preset(self) -> None:
+    def test_build_ui_bundle_help_includes_profile_and_vibe_preset(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
         report = _sample_report()
         report["run_config"] = {
             "schema_version": "0.1.0",
-            "preset_id": "PRESET.SAFE_CLEANUP",
+            "preset_id": "PRESET.VIBE.WARM_INTIMATE",
         }
 
         bundle = build_ui_bundle(
@@ -393,11 +393,17 @@ class TestUiBundle(unittest.TestCase):
             return
         self.assertEqual(
             list(help_payload.keys()),
-            ["HELP.MODE.FULL_SEND", "HELP.PRESET.SAFE_CLEANUP"],
+            ["HELP.MODE.FULL_SEND", "HELP.PRESET.VIBE.WARM_INTIMATE"],
         )
+        preset_help = help_payload["HELP.PRESET.VIBE.WARM_INTIMATE"]
+        self.assertIn("title", preset_help)
+        self.assertIn("short", preset_help)
+        self.assertIn("long", preset_help)
+        self.assertIn("cues", preset_help)
+        self.assertIn("watch_out_for", preset_help)
         self.assertEqual(
-            help_payload["HELP.PRESET.SAFE_CLEANUP"]["title"],
-            "Safe cleanup",
+            preset_help["title"],
+            "Warm intimate",
         )
 
     def test_cli_bundle_writes_schema_valid_payload(self) -> None:
