@@ -102,6 +102,31 @@ class TestPresetRecommendations(unittest.TestCase):
                 self.assertIsInstance(reason, str)
                 self.assertTrue(reason.strip())
 
+    def test_live_you_are_there_appears_for_balanced_medium_guide_profile(self) -> None:
+        report = {
+            "profile_id": "PROFILE.GUIDE",
+            "vibe_signals": {
+                "density_level": "medium",
+                "masking_level": "medium",
+                "translation_risk": "low",
+                "notes": [],
+            },
+        }
+
+        recommendations = derive_preset_recommendations(report, _presets_dir(), n=3)
+        self.assertEqual(
+            [item.get("preset_id") for item in recommendations],
+            [
+                "PRESET.VIBE.LIVE_YOU_ARE_THERE",
+                "PRESET.SAFE_CLEANUP",
+                "PRESET.TURBO_DRAFT",
+            ],
+        )
+        self.assertIn(
+            "PRESET.VIBE.LIVE_YOU_ARE_THERE",
+            [item.get("preset_id") for item in recommendations[:3]],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

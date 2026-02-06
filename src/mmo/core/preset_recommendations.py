@@ -15,6 +15,7 @@ _CANDIDATE_PRESET_IDS: tuple[str, ...] = (
     "PRESET.VIBE.TRANSLATION_SAFE",
     "PRESET.VIBE.PUNCHY_TIGHT",
     "PRESET.VIBE.DENSE_GLUE",
+    "PRESET.VIBE.LIVE_YOU_ARE_THERE",
     "PRESET.VIBE.VOCAL_FORWARD",
     "PRESET.VIBE.WIDE_CINEMATIC",
     "PRESET.VIBE.WARM_INTIMATE",
@@ -26,6 +27,8 @@ _RULE_TRANSLATION_HIGH = "translation_high"
 _RULE_MASKING_HIGH = "masking_high"
 _RULE_DENSITY_HIGH = "density_high"
 _RULE_DENSITY_LOW_SPACIOUS = "density_low_spacious"
+_RULE_LIVE_BALANCED_MEDIUM = "live_balanced_medium"
+_RULE_GUIDE_PROFILE_LIVE = "guide_profile_live"
 _RULE_EXTREME_AGGRESSIVE_PROFILE = "extreme_aggressive_profile"
 
 _RULE_REASON_TEXT: dict[str, str] = {
@@ -40,6 +43,12 @@ _RULE_REASON_TEXT: dict[str, str] = {
     ),
     _RULE_DENSITY_LOW_SPACIOUS: (
         "There is room in the arrangement. This can add width and emotion cleanly."
+    ),
+    _RULE_LIVE_BALANCED_MEDIUM: (
+        "Density and risk look moderate. This can keep a live feel without over-processing."
+    ),
+    _RULE_GUIDE_PROFILE_LIVE: (
+        "Guide profile is active. This aligns with review-first, dynamics-preserving decisions."
     ),
     _RULE_EXTREME_AGGRESSIVE_PROFILE: (
         "Aggressive mode plus extremes showed up. This is a safer reset pass."
@@ -58,6 +67,9 @@ _PRESET_REASON_TEXT: dict[str, str] = {
     ),
     "PRESET.VIBE.DENSE_GLUE": (
         "Useful for binding layered parts into one controlled center of gravity."
+    ),
+    "PRESET.VIBE.LIVE_YOU_ARE_THERE": (
+        "Use this when preserving transients and room feel matters more than loudness."
     ),
     "PRESET.VIBE.VOCAL_FORWARD": (
         "It helps a lead vocal hold focus when the mids are fighting."
@@ -167,6 +179,8 @@ def _build_reasons(
         _RULE_MASKING_HIGH,
         _RULE_DENSITY_HIGH,
         _RULE_DENSITY_LOW_SPACIOUS,
+        _RULE_LIVE_BALANCED_MEDIUM,
+        _RULE_GUIDE_PROFILE_LIVE,
         _RULE_EXTREME_AGGRESSIVE_PROFILE,
     ):
         if rule_id not in rule_hits:
@@ -312,6 +326,24 @@ def derive_preset_recommendations(
             "PRESET.VIBE.WARM_INTIMATE",
             4,
             rule_id=_RULE_DENSITY_LOW_SPACIOUS,
+        )
+
+    if density_level == MEDIUM and masking_level != HIGH and translation_risk != HIGH:
+        _add_points(
+            scores,
+            rule_hits,
+            "PRESET.VIBE.LIVE_YOU_ARE_THERE",
+            3,
+            rule_id=_RULE_LIVE_BALANCED_MEDIUM,
+        )
+
+    if current_profile_id == "PROFILE.GUIDE":
+        _add_points(
+            scores,
+            rule_hits,
+            "PRESET.VIBE.LIVE_YOU_ARE_THERE",
+            2,
+            rule_id=_RULE_GUIDE_PROFILE_LIVE,
         )
 
     if extreme_count > 0 and current_profile_id in {"PROFILE.TURBO", "PROFILE.FULL_SEND"}:

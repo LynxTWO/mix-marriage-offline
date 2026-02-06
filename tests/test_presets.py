@@ -61,6 +61,7 @@ class TestPresets(unittest.TestCase):
             tag_ids,
             [
                 "PRESET.SAFE_CLEANUP",
+                "PRESET.VIBE.LIVE_YOU_ARE_THERE",
                 "PRESET.VIBE.TRANSLATION_SAFE",
                 "PRESET.VIBE.VOCAL_FORWARD",
             ],
@@ -76,6 +77,7 @@ class TestPresets(unittest.TestCase):
                 "PRESET.TURBO_DRAFT",
                 "PRESET.VIBE.BRIGHT_AIRY",
                 "PRESET.VIBE.DENSE_GLUE",
+                "PRESET.VIBE.LIVE_YOU_ARE_THERE",
                 "PRESET.VIBE.PUNCHY_TIGHT",
                 "PRESET.VIBE.TRANSLATION_SAFE",
                 "PRESET.VIBE.VOCAL_FORWARD",
@@ -134,6 +136,20 @@ class TestPresets(unittest.TestCase):
                 safe_cleanup.get("help_id"),
                 "HELP.PRESET.SAFE_CLEANUP",
             )
+
+        live_you_are_there = by_id.get("PRESET.VIBE.LIVE_YOU_ARE_THERE")
+        self.assertIsInstance(live_you_are_there, dict)
+        if isinstance(live_you_are_there, dict):
+            self.assertEqual(
+                live_you_are_there.get("help_id"),
+                "HELP.PRESET.VIBE.LIVE_YOU_ARE_THERE",
+            )
+            overlay = live_you_are_there.get("overlay")
+            self.assertIsInstance(overlay, str)
+            if isinstance(overlay, str):
+                words = [word for word in overlay.split() if word]
+                self.assertGreaterEqual(len(words), 1)
+                self.assertLessEqual(len(words), 3)
 
 
 if __name__ == "__main__":

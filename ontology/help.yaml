@@ -203,6 +203,31 @@ entries:
     watch_out_for:
       - "Can reduce micro-dynamics and blur transient detail."
       - "Watch for low-mid buildup and ear fatigue."
+  HELP.PRESET.VIBE.LIVE_YOU_ARE_THERE:
+    title: "Live, you-are-there"
+    short: "For mixes that should feel like a real performance in a real space."
+    long: |
+      Live, you-are-there is about realism first. Keep transients, room tone,
+      and natural movement so the listener feels the players in the room.
+
+      Avoid reflex compression and limiting when the groove already breathes.
+      Over-limiting can flatten depth, smear hits, and erase crowd or room cues.
+
+      This preset favors restraint over polish-for-loudness. The goal is honest
+      energy that still feels finished enough for practical listening checks.
+
+      Translation still matters. Verify the mix on earbuds, phones, speakers,
+      and mono fold-down so space survives without losing the song's center.
+    cues:
+      - "If the performance energy already feels right and you want to protect it."
+      - "If room mics, ambience, or audience tone are key to the emotion."
+      - "If the mix gets worse whenever you chase loudness."
+      - "If you want conservative guidance before manual taste decisions."
+    watch_out_for:
+      - "Crowded low-mids can feel live in solo but muddy in context."
+      - "Harsh upper mids can read as excitement at first and fatigue later."
+      - "Too-wide stereo tricks can collapse when checked in mono."
+      - "Do not skip translation checks just because dynamics feel natural."
   HELP.PRESET.VIBE.PUNCHY_TIGHT:
     title: "Punchy tight"
     short: "Focuses attack and low-end control for tighter groove impact."

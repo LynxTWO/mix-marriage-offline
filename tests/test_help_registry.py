@@ -33,6 +33,39 @@ class TestHelpRegistry(unittest.TestCase):
         if not isinstance(entries, dict):
             return
         self.assertIn("HELP.PRESET.SAFE_CLEANUP", entries)
+        self.assertIn("HELP.PRESET.VIBE.LIVE_YOU_ARE_THERE", entries)
+
+    def test_live_you_are_there_help_entry_exists(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        registry = load_help_registry(repo_root / "ontology" / "help.yaml")
+        entries = registry.get("entries")
+        self.assertIsInstance(entries, dict)
+        if not isinstance(entries, dict):
+            return
+
+        entry = entries.get("HELP.PRESET.VIBE.LIVE_YOU_ARE_THERE")
+        self.assertIsInstance(entry, dict)
+        if not isinstance(entry, dict):
+            return
+
+        self.assertEqual(entry.get("title"), "Live, you-are-there")
+        self.assertEqual(
+            entry.get("short"),
+            "For mixes that should feel like a real performance in a real space.",
+        )
+        self.assertIn("long", entry)
+        self.assertIn("cues", entry)
+        self.assertIn("watch_out_for", entry)
+
+        cues = entry.get("cues")
+        self.assertIsInstance(cues, list)
+        if isinstance(cues, list):
+            self.assertGreaterEqual(len(cues), 3)
+
+        watch_out_for = entry.get("watch_out_for")
+        self.assertIsInstance(watch_out_for, list)
+        if isinstance(watch_out_for, list):
+            self.assertGreaterEqual(len(watch_out_for), 2)
 
     def test_resolve_help_entries_is_deterministic_and_handles_missing(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

@@ -92,6 +92,7 @@ class TestCliPresets(unittest.TestCase):
             [item.get("preset_id") for item in payload if isinstance(item, dict)],
             [
                 "PRESET.SAFE_CLEANUP",
+                "PRESET.VIBE.LIVE_YOU_ARE_THERE",
                 "PRESET.VIBE.TRANSLATION_SAFE",
                 "PRESET.VIBE.VOCAL_FORWARD",
             ],

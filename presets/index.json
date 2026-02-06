@@ -84,6 +84,26 @@
       ]
     },
     {
+      "preset_id": "PRESET.VIBE.LIVE_YOU_ARE_THERE",
+      "file": "vibe_live_you_are_there.json",
+      "label": "Live, you-are-there",
+      "description": "Keep dynamics and space. Avoid squashing the room out of the performance.",
+      "help_id": "HELP.PRESET.VIBE.LIVE_YOU_ARE_THERE",
+      "overlay": "Live",
+      "category": "VIBE",
+      "tags": ["live", "dynamic", "natural", "room", "translation"],
+      "goals": [
+        "keep dynamics",
+        "preserve space",
+        "avoid harsh fixes"
+      ],
+      "warnings": [
+        "not the loudest",
+        "dont expect heavy glue",
+        "review any EXTREME flags"
+      ]
+    },
+    {
       "preset_id": "PRESET.VIBE.PUNCHY_TIGHT",
       "file": "vibe_punchy_tight.json",
       "label": "Punchy tight",
@@ -187,6 +207,7 @@
       "preset_ids": [
         "PRESET.VIBE.WARM_INTIMATE",
         "PRESET.VIBE.BRIGHT_AIRY",
+        "PRESET.VIBE.LIVE_YOU_ARE_THERE",
         "PRESET.VIBE.PUNCHY_TIGHT",
         "PRESET.VIBE.WIDE_CINEMATIC",
         "PRESET.VIBE.DENSE_GLUE",

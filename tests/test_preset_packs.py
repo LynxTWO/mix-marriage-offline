@@ -95,6 +95,7 @@ class TestPresetPacks(unittest.TestCase):
         self.assertEqual(lines[0], "PACK.VIBE_STARTER  Vibe starter")
         self.assertIn("PRESET.VIBE.WARM_INTIMATE  Warm intimate", lines)
         self.assertIn("PRESET.VIBE.BRIGHT_AIRY  Bright airy", lines)
+        self.assertIn("PRESET.VIBE.LIVE_YOU_ARE_THERE  Live, you-are-there", lines)
         self.assertIn("PRESET.VIBE.PUNCHY_TIGHT  Punchy tight", lines)
         self.assertIn("PRESET.VIBE.WIDE_CINEMATIC  Wide cinematic", lines)
         self.assertIn("PRESET.VIBE.DENSE_GLUE  Dense glue", lines)
