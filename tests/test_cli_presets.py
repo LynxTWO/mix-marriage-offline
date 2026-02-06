@@ -88,7 +88,11 @@ class TestCliPresets(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(
             [item.get("preset_id") for item in payload if isinstance(item, dict)],
-            ["PRESET.SAFE_CLEANUP", "PRESET.VIBE.VOCAL_FORWARD"],
+            [
+                "PRESET.SAFE_CLEANUP",
+                "PRESET.VIBE.TRANSLATION_SAFE",
+                "PRESET.VIBE.VOCAL_FORWARD",
+            ],
         )
 
     def test_presets_show_json_includes_preset_id(self) -> None:

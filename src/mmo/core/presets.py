@@ -12,6 +12,7 @@ except ImportError:  # pragma: no cover - optional dependency
     jsonschema = None
 
 _INDEX_REQUIRED_KEYS = {"schema_version", "presets"}
+_INDEX_OPTIONAL_KEYS = {"packs"}
 _PRESET_REQUIRED_KEYS = {"preset_id", "file", "label", "description"}
 _PRESET_OPTIONAL_STRING_KEYS = {"category"}
 _PRESET_OPTIONAL_STRING_LIST_KEYS = ("tags", "goals", "warnings")
@@ -20,6 +21,8 @@ _PRESET_ALLOWED_KEYS = (
     | _PRESET_OPTIONAL_STRING_KEYS
     | set(_PRESET_OPTIONAL_STRING_LIST_KEYS)
 )
+_PACK_REQUIRED_KEYS = {"pack_id", "label", "description", "preset_ids"}
+_PACK_ALLOWED_KEYS = _PACK_REQUIRED_KEYS
 
 
 def _repo_root() -> Path:
@@ -101,7 +104,7 @@ def _normalize_optional_string_list_field(item: dict[str, Any], key: str) -> lis
 
 
 def _validate_preset_index_basic(index: dict[str, Any], *, index_path: Path) -> dict[str, Any]:
-    unknown = sorted(set(index.keys()) - _INDEX_REQUIRED_KEYS)
+    unknown = sorted(set(index.keys()) - (_INDEX_REQUIRED_KEYS | _INDEX_OPTIONAL_KEYS))
     if unknown:
         raise ValueError(f"Unknown preset index field(s): {', '.join(unknown)}")
 
@@ -190,10 +193,101 @@ def _validate_preset_index_basic(index: dict[str, Any], *, index_path: Path) -> 
     if actual_ids != sorted_ids:
         raise ValueError(f"Preset index must be sorted by preset_id: {index_path}")
 
-    return {
+    normalized_index: dict[str, Any] = {
         "schema_version": RUN_CONFIG_SCHEMA_VERSION,
         "presets": normalized_presets,
     }
+
+    packs = index.get("packs")
+    if packs is None:
+        return normalized_index
+    if not isinstance(packs, list):
+        raise ValueError("Preset index field 'packs' must be a list when present.")
+
+    known_preset_ids = {item["preset_id"] for item in normalized_presets}
+    normalized_packs: list[dict[str, Any]] = []
+    seen_pack_ids: set[str] = set()
+    for item in packs:
+        if not isinstance(item, dict):
+            raise ValueError("Each preset pack entry must be an object.")
+
+        unknown_pack = sorted(set(item.keys()) - _PACK_ALLOWED_KEYS)
+        if unknown_pack:
+            raise ValueError(f"Unknown preset pack field(s): {', '.join(unknown_pack)}")
+
+        missing_pack = sorted(_PACK_REQUIRED_KEYS - set(item.keys()))
+        if missing_pack:
+            raise ValueError(f"Missing preset pack field(s): {', '.join(missing_pack)}")
+
+        pack_id = item.get("pack_id")
+        label = item.get("label")
+        description = item.get("description")
+        values = {
+            "pack_id": pack_id,
+            "label": label,
+            "description": description,
+        }
+        for key, value in values.items():
+            if not isinstance(value, str):
+                raise ValueError(f"Preset pack field {key} must be a string.")
+            if not value.strip():
+                raise ValueError(f"Preset pack field {key} must not be empty.")
+
+        normalized_pack_id = str(pack_id).strip()
+        if normalized_pack_id in seen_pack_ids:
+            raise ValueError(f"Duplicate pack_id in preset index: {normalized_pack_id}")
+        seen_pack_ids.add(normalized_pack_id)
+
+        preset_ids = item.get("preset_ids")
+        if not isinstance(preset_ids, list):
+            raise ValueError("Preset pack field preset_ids must be a list.")
+
+        normalized_preset_ids: list[str] = []
+        seen_preset_ids: set[str] = set()
+        for idx, preset_id in enumerate(preset_ids):
+            if not isinstance(preset_id, str):
+                raise ValueError(
+                    "Preset pack field preset_ids"
+                    f"[{idx}] must be a string."
+                )
+            normalized_preset_id = preset_id.strip()
+            if not normalized_preset_id:
+                raise ValueError(
+                    "Preset pack field preset_ids"
+                    f"[{idx}] must not be empty."
+                )
+            if normalized_preset_id in seen_preset_ids:
+                raise ValueError(
+                    "Preset pack field preset_ids contains duplicates: "
+                    f"{normalized_preset_id}"
+                )
+            if normalized_preset_id not in known_preset_ids:
+                raise ValueError(
+                    "Preset pack field preset_ids references unknown preset_id: "
+                    f"{normalized_preset_id}"
+                )
+            seen_preset_ids.add(normalized_preset_id)
+            normalized_preset_ids.append(normalized_preset_id)
+
+        if not normalized_preset_ids:
+            raise ValueError("Preset pack field preset_ids must not be empty.")
+
+        normalized_packs.append(
+            {
+                "pack_id": normalized_pack_id,
+                "label": str(label).strip(),
+                "description": str(description).strip(),
+                "preset_ids": normalized_preset_ids,
+            }
+        )
+
+    sorted_pack_ids = sorted(item["pack_id"] for item in normalized_packs)
+    actual_pack_ids = [item["pack_id"] for item in normalized_packs]
+    if actual_pack_ids != sorted_pack_ids:
+        raise ValueError(f"Preset index packs must be sorted by pack_id: {index_path}")
+
+    normalized_index["packs"] = normalized_packs
+    return normalized_index
 
 
 def load_preset_index(presets_dir: Path) -> dict[str, Any]:
@@ -269,6 +363,41 @@ def list_presets(
         ],
         key=lambda item: str(item.get("preset_id", "")),
     )
+
+
+def list_preset_packs(presets_dir: Path) -> list[dict[str, Any]]:
+    index = load_preset_index(presets_dir)
+    packs = index.get("packs", [])
+    if not isinstance(packs, list):
+        return []
+    return sorted(
+        [dict(item) for item in packs if isinstance(item, dict)],
+        key=lambda item: str(item.get("pack_id", "")),
+    )
+
+
+def load_preset_pack(presets_dir: Path, pack_id: str) -> dict[str, Any]:
+    normalized_pack_id = pack_id.strip() if isinstance(pack_id, str) else ""
+    if not normalized_pack_id:
+        raise ValueError("pack_id must be a non-empty string.")
+
+    packs = list_preset_packs(presets_dir)
+    pack_entry = next(
+        (
+            item
+            for item in packs
+            if item.get("pack_id") == normalized_pack_id
+        ),
+        None,
+    )
+    if pack_entry is None:
+        available = ", ".join(item["pack_id"] for item in packs)
+        if available:
+            raise ValueError(
+                f"Unknown pack_id: {normalized_pack_id}. Available packs: {available}"
+            )
+        raise ValueError(f"Unknown pack_id: {normalized_pack_id}. No packs are available.")
+    return dict(pack_entry)
 
 
 def load_preset_run_config(presets_dir: Path, preset_id: str) -> dict[str, Any]:

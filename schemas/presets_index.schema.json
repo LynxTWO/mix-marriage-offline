@@ -33,6 +33,23 @@
           }
         }
       }
+    },
+    "packs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pack_id", "label", "description", "preset_ids"],
+        "properties": {
+          "pack_id": { "type": "string" },
+          "label": { "type": "string" },
+          "description": { "type": "string" },
+          "preset_ids": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
     }
   }
 }

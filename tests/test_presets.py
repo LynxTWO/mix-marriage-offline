@@ -53,7 +53,11 @@ class TestPresets(unittest.TestCase):
         self.assertEqual(tag_ids, sorted(tag_ids))
         self.assertEqual(
             tag_ids,
-            ["PRESET.SAFE_CLEANUP", "PRESET.VIBE.VOCAL_FORWARD"],
+            [
+                "PRESET.SAFE_CLEANUP",
+                "PRESET.VIBE.TRANSLATION_SAFE",
+                "PRESET.VIBE.VOCAL_FORWARD",
+            ],
         )
 
         category_ids = [
@@ -62,7 +66,16 @@ class TestPresets(unittest.TestCase):
         ]
         self.assertEqual(
             category_ids,
-            ["PRESET.TURBO_DRAFT", "PRESET.VIBE.VOCAL_FORWARD"],
+            [
+                "PRESET.TURBO_DRAFT",
+                "PRESET.VIBE.BRIGHT_AIRY",
+                "PRESET.VIBE.DENSE_GLUE",
+                "PRESET.VIBE.PUNCHY_TIGHT",
+                "PRESET.VIBE.TRANSLATION_SAFE",
+                "PRESET.VIBE.VOCAL_FORWARD",
+                "PRESET.VIBE.WARM_INTIMATE",
+                "PRESET.VIBE.WIDE_CINEMATIC",
+            ],
         )
 
     def test_load_preset_run_config_stamps_preset_id(self) -> None:

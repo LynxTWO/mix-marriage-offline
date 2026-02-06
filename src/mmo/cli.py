@@ -7,7 +7,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from mmo.core.presets import list_presets, load_preset_run_config
+from mmo.core.presets import (
+    list_preset_packs,
+    list_presets,
+    load_preset_pack,
+    load_preset_run_config,
+)
 from mmo.core.run_config import (
     RUN_CONFIG_SCHEMA_VERSION,
     load_run_config,
@@ -672,6 +677,57 @@ def _build_preset_show_payload(*, presets_dir: Path, preset_id: str) -> dict[str
     return payload
 
 
+def _build_preset_label_map(*, presets_dir: Path) -> dict[str, str]:
+    labels: dict[str, str] = {}
+    for item in list_presets(presets_dir):
+        if not isinstance(item, dict):
+            continue
+        preset_id = item.get("preset_id")
+        label = item.get("label")
+        if isinstance(preset_id, str) and isinstance(label, str):
+            labels[preset_id] = label
+    return labels
+
+
+def _build_preset_pack_payload(*, presets_dir: Path, pack_id: str) -> dict[str, Any]:
+    payload = load_preset_pack(presets_dir, pack_id)
+    label_map = _build_preset_label_map(presets_dir=presets_dir)
+    presets: list[dict[str, str]] = []
+    for preset_id in payload.get("preset_ids", []):
+        if not isinstance(preset_id, str):
+            continue
+        presets.append(
+            {
+                "preset_id": preset_id,
+                "label": label_map.get(preset_id, ""),
+            }
+        )
+    payload["presets"] = presets
+    return payload
+
+
+def _build_preset_pack_list_payload(*, presets_dir: Path) -> list[dict[str, Any]]:
+    label_map = _build_preset_label_map(presets_dir=presets_dir)
+    payload: list[dict[str, Any]] = []
+    for item in list_preset_packs(presets_dir):
+        if not isinstance(item, dict):
+            continue
+        pack_payload = dict(item)
+        presets: list[dict[str, str]] = []
+        for preset_id in pack_payload.get("preset_ids", []):
+            if not isinstance(preset_id, str):
+                continue
+            presets.append(
+                {
+                    "preset_id": preset_id,
+                    "label": label_map.get(preset_id, ""),
+                }
+            )
+        pack_payload["presets"] = presets
+        payload.append(pack_payload)
+    return payload
+
+
 def _print_lock_verify_summary(verify_result: dict[str, Any]) -> None:
     missing = verify_result.get("missing", [])
     extra = verify_result.get("extra", [])
@@ -950,6 +1006,38 @@ def main(argv: list[str] | None = None) -> int:
         choices=["json", "text"],
         default="text",
         help="Output format for preset details.",
+    )
+    presets_packs_parser = presets_subparsers.add_parser(
+        "packs",
+        help="List and inspect preset packs.",
+    )
+    presets_packs_subparsers = presets_packs_parser.add_subparsers(
+        dest="presets_packs_command",
+        required=True,
+    )
+    presets_packs_list_parser = presets_packs_subparsers.add_parser(
+        "list",
+        help="List preset packs.",
+    )
+    presets_packs_list_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for the preset pack list.",
+    )
+    presets_packs_show_parser = presets_packs_subparsers.add_parser(
+        "show",
+        help="Show one preset pack.",
+    )
+    presets_packs_show_parser.add_argument(
+        "pack_id",
+        help="Pack ID (e.g., PACK.VIBE_STARTER).",
+    )
+    presets_packs_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for preset pack details.",
     )
 
     lock_parser = subparsers.add_parser("lock", help="Project lockfile tools.")
@@ -1393,6 +1481,54 @@ def main(argv: list[str] | None = None) -> int:
                 if isinstance(run_config, dict):
                     print(json.dumps(run_config, indent=2, sort_keys=True))
             return 0
+        if args.presets_command == "packs":
+            if args.presets_packs_command == "list":
+                try:
+                    payload = _build_preset_pack_list_payload(
+                        presets_dir=presets_dir,
+                    )
+                except ValueError as exc:
+                    print(str(exc), file=sys.stderr)
+                    return 1
+                if args.format == "json":
+                    print(json.dumps(payload, indent=2, sort_keys=True))
+                else:
+                    for idx, item in enumerate(payload):
+                        if idx > 0:
+                            print("")
+                        print(f"{item.get('pack_id', '')}  {item.get('label', '')}")
+                        for preset in item.get("presets", []):
+                            if not isinstance(preset, dict):
+                                continue
+                            print(
+                                f"{preset.get('preset_id', '')}"
+                                f"  {preset.get('label', '')}"
+                            )
+                return 0
+            if args.presets_packs_command == "show":
+                try:
+                    payload = _build_preset_pack_payload(
+                        presets_dir=presets_dir,
+                        pack_id=args.pack_id,
+                    )
+                except ValueError as exc:
+                    print(str(exc), file=sys.stderr)
+                    return 1
+                if args.format == "json":
+                    print(json.dumps(payload, indent=2, sort_keys=True))
+                else:
+                    print(f"{payload.get('pack_id', '')}  {payload.get('label', '')}")
+                    print(payload.get("description", ""))
+                    for preset in payload.get("presets", []):
+                        if not isinstance(preset, dict):
+                            continue
+                        print(
+                            f"{preset.get('preset_id', '')}"
+                            f"  {preset.get('label', '')}"
+                        )
+                return 0
+            print("Unknown presets packs command.", file=sys.stderr)
+            return 2
         print("Unknown presets command.", file=sys.stderr)
         return 2
     if args.command == "lock":
