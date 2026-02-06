@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 UI_BUNDLE_SCHEMA_VERSION = "0.1.0"
@@ -78,6 +79,52 @@ def _profile_id(report: dict[str, Any]) -> str:
         if isinstance(run_profile, str):
             return run_profile
     return ""
+
+
+def _preset_id(report: dict[str, Any]) -> str:
+    run_config = report.get("run_config")
+    if not isinstance(run_config, dict):
+        return ""
+    preset_id = run_config.get("preset_id")
+    if isinstance(preset_id, str):
+        return preset_id
+    return ""
+
+
+def _help_id_for_preset(preset_id: str) -> str | None:
+    normalized = preset_id.strip()
+    if not normalized or not normalized.startswith("PRESET."):
+        return None
+    return f"HELP.PRESET.{normalized[len('PRESET.'):]}"
+
+
+def _help_id_for_profile(profile_id: str) -> str | None:
+    normalized = profile_id.strip()
+    if not normalized or not normalized.startswith("PROFILE."):
+        return None
+    return f"HELP.MODE.{normalized[len('PROFILE.'):]}"
+
+
+def _collect_help_ids(report: dict[str, Any]) -> list[str]:
+    help_ids: set[str] = set()
+    profile_help_id = _help_id_for_profile(_profile_id(report))
+    if profile_help_id is not None:
+        help_ids.add(profile_help_id)
+
+    preset_help_id = _help_id_for_preset(_preset_id(report))
+    if preset_help_id is not None:
+        help_ids.add(preset_help_id)
+
+    return sorted(help_ids)
+
+
+def _resolve_help_registry_path(help_registry_path: Path) -> Path:
+    if help_registry_path.exists() or help_registry_path.is_absolute():
+        return help_registry_path
+    repo_relative = Path(__file__).resolve().parents[3] / help_registry_path
+    if repo_relative.exists():
+        return repo_relative
+    return help_registry_path
 
 
 def _collect_downmix_metric_values(downmix_qa: dict[str, Any], evidence_id: str) -> list[float]:
@@ -174,7 +221,10 @@ def build_ui_bundle(
     render_manifest: dict[str, Any] | None,
     apply_manifest: dict[str, Any] | None = None,
     applied_report: dict[str, Any] | None = None,
+    help_registry_path: Path = Path("ontology/help.yaml"),
 ) -> dict[str, Any]:
+    from mmo.core.help_registry import load_help_registry, resolve_help_entries  # noqa: WPS433
+
     recommendations = _recommendations(report)
     dashboard = {
         "profile_id": _profile_id(report),
@@ -200,6 +250,12 @@ def build_ui_bundle(
         "report": report,
         "dashboard": dashboard,
     }
+
+    help_ids = _collect_help_ids(report)
+    if help_ids:
+        registry = load_help_registry(_resolve_help_registry_path(help_registry_path))
+        payload["help"] = resolve_help_entries(help_ids, registry)
+
     if render_manifest is not None:
         payload["render_manifest"] = render_manifest
     if apply_manifest is not None:

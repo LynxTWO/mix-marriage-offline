@@ -631,6 +631,7 @@ def _run_bundle(
         render_manifest,
         apply_manifest=apply_manifest,
         applied_report=applied_report,
+        help_registry_path=repo_root / "ontology" / "help.yaml",
     )
     _validate_json_payload(
         bundle,
@@ -725,6 +726,44 @@ def _build_preset_pack_list_payload(*, presets_dir: Path) -> list[dict[str, Any]
             )
         pack_payload["presets"] = presets
         payload.append(pack_payload)
+    return payload
+
+
+def _build_help_list_payload(*, help_registry_path: Path) -> list[dict[str, str]]:
+    from mmo.core.help_registry import load_help_registry  # noqa: WPS433
+
+    registry = load_help_registry(help_registry_path)
+    entries = registry.get("entries")
+    if not isinstance(entries, dict):
+        return []
+
+    payload: list[dict[str, str]] = []
+    for help_id in sorted(
+        key for key in entries.keys() if isinstance(key, str) and key.strip()
+    ):
+        entry = entries.get(help_id)
+        title = ""
+        if isinstance(entry, dict):
+            title_value = entry.get("title")
+            if isinstance(title_value, str):
+                title = title_value
+        payload.append({"help_id": help_id, "title": title})
+    return payload
+
+
+def _build_help_show_payload(*, help_registry_path: Path, help_id: str) -> dict[str, Any]:
+    from mmo.core.help_registry import load_help_registry, resolve_help_entries  # noqa: WPS433
+
+    normalized_help_id = help_id.strip() if isinstance(help_id, str) else ""
+    if not normalized_help_id:
+        raise ValueError("help_id must be a non-empty string.")
+
+    registry = load_help_registry(help_registry_path)
+    resolved = resolve_help_entries([normalized_help_id], registry)
+    entry = resolved.get(normalized_help_id)
+    payload: dict[str, Any] = {"help_id": normalized_help_id}
+    if isinstance(entry, dict):
+        payload.update(entry)
     return payload
 
 
@@ -1038,6 +1077,27 @@ def main(argv: list[str] | None = None) -> int:
         choices=["json", "text"],
         default="text",
         help="Output format for preset pack details.",
+    )
+
+    help_parser = subparsers.add_parser("help", help="Registry help tools.")
+    help_subparsers = help_parser.add_subparsers(dest="help_command", required=True)
+    help_list_parser = help_subparsers.add_parser("list", help="List help entries.")
+    help_list_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for the help list.",
+    )
+    help_show_parser = help_subparsers.add_parser("show", help="Show one help entry.")
+    help_show_parser.add_argument(
+        "help_id",
+        help="Help ID (e.g., HELP.PRESET.SAFE_CLEANUP).",
+    )
+    help_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for help details.",
     )
 
     lock_parser = subparsers.add_parser("lock", help="Project lockfile tools.")
@@ -1530,6 +1590,60 @@ def main(argv: list[str] | None = None) -> int:
             print("Unknown presets packs command.", file=sys.stderr)
             return 2
         print("Unknown presets command.", file=sys.stderr)
+        return 2
+    if args.command == "help":
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+        if args.help_command == "list":
+            try:
+                payload = _build_help_list_payload(
+                    help_registry_path=help_registry_path,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                for item in payload:
+                    print(f"{item.get('help_id', '')}  {item.get('title', '')}")
+            return 0
+        if args.help_command == "show":
+            try:
+                payload = _build_help_show_payload(
+                    help_registry_path=help_registry_path,
+                    help_id=args.help_id,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(payload.get("title", ""))
+                print(payload.get("short", ""))
+                long_text = payload.get("long")
+                if isinstance(long_text, str) and long_text:
+                    print("")
+                    print(long_text)
+
+                cues = payload.get("cues")
+                if isinstance(cues, list) and cues:
+                    print("")
+                    print("Cues:")
+                    for cue in cues:
+                        if isinstance(cue, str):
+                            print(f"- {cue}")
+
+                watch_out_for = payload.get("watch_out_for")
+                if isinstance(watch_out_for, list) and watch_out_for:
+                    print("")
+                    print("Watch out for:")
+                    for item in watch_out_for:
+                        if isinstance(item, str):
+                            print(f"- {item}")
+            return 0
+        print("Unknown help command.", file=sys.stderr)
         return 2
     if args.command == "lock":
         from mmo.core.lockfile import build_lockfile, verify_lockfile  # noqa: WPS433

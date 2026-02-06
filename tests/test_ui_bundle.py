@@ -291,8 +291,9 @@ class TestUiBundle(unittest.TestCase):
         repo_root = Path(__file__).resolve().parents[1]
         validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
         report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
 
-        bundle = build_ui_bundle(report, None)
+        bundle = build_ui_bundle(report, None, help_registry_path=help_registry_path)
         validator.validate(bundle)
 
         dashboard = bundle["dashboard"]
@@ -327,9 +328,18 @@ class TestUiBundle(unittest.TestCase):
                 "top_masking_pairs_count": 2,
             },
         )
+        help_payload = bundle.get("help")
+        self.assertIsInstance(help_payload, dict)
+        if isinstance(help_payload, dict):
+            self.assertEqual(list(help_payload.keys()), ["HELP.MODE.FULL_SEND"])
+            self.assertEqual(
+                help_payload["HELP.MODE.FULL_SEND"]["title"],
+                "Full Send mode",
+            )
 
-        second_bundle = build_ui_bundle(report, None)
+        second_bundle = build_ui_bundle(report, None, help_registry_path=help_registry_path)
         self.assertEqual(bundle["dashboard"], second_bundle["dashboard"])
+        self.assertEqual(bundle.get("help"), second_bundle.get("help"))
 
     def test_build_ui_bundle_with_apply_payload_and_schema(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -337,17 +347,20 @@ class TestUiBundle(unittest.TestCase):
         report = _sample_report()
         apply_manifest = _sample_apply_manifest(report["report_id"])
         applied_report = _sample_applied_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
 
         bundle = build_ui_bundle(
             report,
             None,
             apply_manifest=apply_manifest,
             applied_report=applied_report,
+            help_registry_path=help_registry_path,
         )
         validator.validate(bundle)
 
         self.assertIn("apply_manifest", bundle)
         self.assertIn("applied_report", bundle)
+        self.assertIn("help", bundle)
         self.assertEqual(
             bundle["dashboard"]["apply"],
             {
@@ -356,6 +369,35 @@ class TestUiBundle(unittest.TestCase):
                 "outputs_count": 3,
                 "skipped_count": 2,
             },
+        )
+
+    def test_build_ui_bundle_help_includes_profile_and_preset(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        report["run_config"] = {
+            "schema_version": "0.1.0",
+            "preset_id": "PRESET.SAFE_CLEANUP",
+        }
+
+        bundle = build_ui_bundle(
+            report,
+            None,
+            help_registry_path=repo_root / "ontology" / "help.yaml",
+        )
+        validator.validate(bundle)
+
+        help_payload = bundle.get("help")
+        self.assertIsInstance(help_payload, dict)
+        if not isinstance(help_payload, dict):
+            return
+        self.assertEqual(
+            list(help_payload.keys()),
+            ["HELP.MODE.FULL_SEND", "HELP.PRESET.SAFE_CLEANUP"],
+        )
+        self.assertEqual(
+            help_payload["HELP.PRESET.SAFE_CLEANUP"]["title"],
+            "Safe cleanup",
         )
 
     def test_cli_bundle_writes_schema_valid_payload(self) -> None:

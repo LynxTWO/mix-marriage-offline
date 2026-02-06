@@ -12,9 +12,35 @@
     "render_manifest": { "$ref": "render_manifest.schema.json" },
     "apply_manifest": { "$ref": "apply_manifest.schema.json" },
     "applied_report": { "$ref": "report.schema.json" },
+    "help": { "$ref": "#/$defs/help_payload" },
     "dashboard": { "$ref": "#/$defs/dashboard" }
   },
   "$defs": {
+    "help_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "short"],
+      "properties": {
+        "title": { "type": "string" },
+        "short": { "type": "string" },
+        "long": { "type": "string" },
+        "cues": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "watch_out_for": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "help_payload": {
+      "type": "object",
+      "patternProperties": {
+        "^HELP\\.[A-Z0-9_.]+$": { "$ref": "#/$defs/help_entry" }
+      },
+      "additionalProperties": false
+    },
     "top_issue": {
       "type": "object",
       "additionalProperties": false,

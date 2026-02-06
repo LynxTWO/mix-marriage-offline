@@ -1,0 +1,230 @@
+schema_version: "0.1.0"
+entries:
+  HELP.METER.BASIC:
+    title: "Basic meters"
+    short: "Fast metering pass for quick checks while you iterate."
+    long: |
+      Use basic meters when you want speed and broad technical coverage.
+      It gives a practical signal on obvious level and consistency issues
+      without running the heavier truth-focused analysis path.
+    cues:
+      - "If you want fast feedback while building a draft."
+      - "If you are making many quick revisions and checking often."
+    watch_out_for:
+      - "Basic mode is quick, but less strict for translation decisions."
+  HELP.METER.CORRELATION:
+    title: "Stereo correlation"
+    short: "Checks how similar left and right channels are over time."
+    long: |
+      Correlation helps flag mono-compatibility risks and unstable width.
+      Strongly negative or unstable values can indicate phase cancellation
+      that may collapse badly on mono playback.
+    cues:
+      - "If your mix sounds wide but collapses in mono."
+      - "If center elements feel unstable on small speakers."
+    watch_out_for:
+      - "Very wide tricks can look exciting but reduce mono reliability."
+  HELP.METER.LUFS:
+    title: "LUFS loudness"
+    short: "Measures perceived loudness so level decisions are consistent."
+    long: |
+      LUFS tracks perceived loudness more reliably than peak-only readings.
+      It helps compare versions fairly and keeps your decisions grounded
+      when balancing sections, references, and translation targets.
+    cues:
+      - "If two versions feel different even with similar peak levels."
+      - "If balance changes after exporting or format conversion."
+    watch_out_for:
+      - "Chasing LUFS alone can flatten dynamics if over-prioritized."
+  HELP.METER.TRUE_PEAK:
+    title: "True peak"
+    short: "Estimates inter-sample peaks that can clip after conversion."
+    long: |
+      True peak catches overs that sample peaks can miss, especially when
+      material is encoded or played back through different reconstruction
+      paths. It is a safety check for clean translation.
+    cues:
+      - "If exports distort even though sample peaks look safe."
+      - "If you are preparing final deliverables for multiple platforms."
+    watch_out_for:
+      - "Limiter settings that pass sample peak can still miss true-peak overs."
+  HELP.METER.TRUTH:
+    title: "Truth meters"
+    short: "Deeper metering pass for reliable translation and final checks."
+    long: |
+      Truth meters run a more rigorous analysis path than basic mode.
+      Use this for confidence when finalizing decisions, validating renders,
+      or checking critical translation constraints before delivery.
+    cues:
+      - "If you are validating near-final or final versions."
+      - "If technical safety and translation confidence are top priority."
+    watch_out_for:
+      - "Truth mode is slower; use basic mode for rapid iteration loops."
+  HELP.MODE.ASSIST:
+    title: "Assist mode"
+    short: "Conservative default mode with practical safeguards."
+    long: |
+      Assist is balanced for everyday workflow: useful suggestions with
+      controlled automation. It aims to reduce obvious technical risks
+      without pushing aggressive moves by default.
+    cues:
+      - "If you want safe momentum and consistent outcomes."
+      - "If you are not sure which mode to start with."
+    watch_out_for:
+      - "It favors stability over dramatic tone shaping."
+  HELP.MODE.FULL_SEND:
+    title: "Full Send mode"
+    short: "More permissive mode for bigger moves while honoring hard stops."
+    long: |
+      Full Send relaxes some eligibility limits so stronger processing can
+      move forward automatically. Core safety barriers still apply, but
+      this mode is intentionally less conservative than Assist.
+    cues:
+      - "If you want faster progress with bolder defaults."
+      - "If you accept a higher review burden for stronger moves."
+    watch_out_for:
+      - "Bigger moves can overshoot intent; review outputs carefully."
+  HELP.MODE.GUIDE:
+    title: "Guide mode"
+    short: "Recommendation-first mode with no auto-apply."
+    long: |
+      Guide keeps everything advisory so you can review each decision
+      manually. It is useful when you want maximum control, training value,
+      or client-facing traceability over every change.
+    cues:
+      - "If you want suggestions only and no automatic writes."
+      - "If you are teaching, learning, or auditing decisions."
+    watch_out_for:
+      - "Progress can be slower because all actions stay manual."
+  HELP.MODE.TURBO:
+    title: "Turbo mode"
+    short: "Fast, aggressive automation for draft momentum."
+    long: |
+      Turbo pushes broad auto-apply eligibility to accelerate drafts.
+      It is optimized for speed and iteration, not subtlety, and can
+      trigger stronger processing decisions than Assist or Full Send.
+    cues:
+      - "If you need a fast first pass to expose big problems."
+      - "If turnaround speed matters more than conservative behavior."
+    watch_out_for:
+      - "Expect more extreme changes; review EXTREME flags closely."
+  HELP.PRESET.DRAFT_MIX:
+    title: "Draft mix"
+    short: "Quick drafting checks with truth meters for iteration speed."
+    long: |
+      Draft Mix is designed to keep you moving while still using robust
+      meter coverage. It is useful when you want practical guidance early
+      without fully committing to aggressive processing.
+    cues:
+      - "If you are shaping arrangement and balance in early passes."
+      - "If you need frequent check-ins during creative iteration."
+    watch_out_for:
+      - "Draft-focused results still need final translation validation."
+  HELP.PRESET.SAFE_CLEANUP:
+    title: "Safe cleanup"
+    short: "A careful first pass to catch technical problems without changing the vibe."
+    long: |
+      Use this when you want a clean foundation before you start shaping sound.
+      It focuses on safety (clipping/loudness), consistency, and translation checks.
+      Nothing aggressive is pushed automatically unless you explicitly choose it.
+    cues:
+      - "If your mix feels messy but you do not want it processed."
+      - "If you are about to start mixing and want a clean baseline."
+    watch_out_for:
+      - "This does not add punch or glue. It is about stability and translation."
+  HELP.PRESET.TURBO_DRAFT:
+    title: "Turbo draft"
+    short: "Aggressive drafting profile for rapid momentum."
+    long: |
+      Turbo Draft favors speed and broad action coverage so you can hear
+      directional changes quickly. It is useful for roughing in a shape
+      before refining with a more conservative preset.
+    cues:
+      - "If you want immediate movement on obvious mix issues."
+      - "If you are prototyping direction under time pressure."
+    watch_out_for:
+      - "Can introduce strong moves that require deliberate review later."
+  HELP.PRESET.VIBE.BRIGHT_AIRY:
+    title: "Bright airy"
+    short: "Pushes openness and sparkle while keeping detail controlled."
+    long: |
+      Bright Airy aims to lift high-frequency clarity and space perception.
+      It works well when a mix feels closed-in, dull, or overly dense in
+      upper mids and highs.
+    cues:
+      - "If the mix feels veiled or lacks openness."
+      - "If vocals and top-end detail need more air."
+    watch_out_for:
+      - "Extra brightness can reveal harshness and sibilance."
+  HELP.PRESET.VIBE.DENSE_GLUE:
+    title: "Dense glue"
+    short: "Builds thickness and cohesion for impact-first mixes."
+    long: |
+      Dense Glue emphasizes collective weight and forward energy.
+      It can help disconnected elements feel unified and more assertive,
+      especially in dense arrangements.
+    cues:
+      - "If elements feel separate and lack shared center of gravity."
+      - "If you want a thicker, more driven presentation."
+    watch_out_for:
+      - "Can reduce micro-dynamics or build low-mid congestion."
+  HELP.PRESET.VIBE.PUNCHY_TIGHT:
+    title: "Punchy tight"
+    short: "Prioritizes transient impact and low-end discipline."
+    long: |
+      Punchy Tight is tuned for attack clarity and controlled bass behavior.
+      It is useful when the groove feels soft or blurred and needs firmer
+      transient definition.
+    cues:
+      - "If kicks and snares do not cut through confidently."
+      - "If low end feels loose or smeared."
+    watch_out_for:
+      - "Can feel aggressive if source material is already sharp."
+  HELP.PRESET.VIBE.TRANSLATION_SAFE:
+    title: "Translation safe"
+    short: "Prioritizes reliable playback across common listening systems."
+    long: |
+      Translation Safe biases decisions toward consistency on phones,
+      earbuds, cars, and speakers. It intentionally avoids risky extremes
+      so your mix holds up across everyday environments.
+    cues:
+      - "If cross-device consistency matters more than dramatic tone moves."
+      - "If your mix will be heard on many consumer playback systems."
+    watch_out_for:
+      - "Reliability focus may feel less exciting than vibe-heavy presets."
+  HELP.PRESET.VIBE.VOCAL_FORWARD:
+    title: "Vocal forward"
+    short: "Pushes vocal intelligibility while limiting translation risks."
+    long: |
+      Vocal Forward focuses attention and clarity around lead vocals.
+      It helps when lyrics are masked by instrumentation or when center
+      intelligibility drops on small playback systems.
+    cues:
+      - "If vocals are getting buried in dense sections."
+      - "If lyric clarity drops on earbuds or phone speakers."
+    watch_out_for:
+      - "Can narrow perceived width if over-applied."
+  HELP.PRESET.VIBE.WARM_INTIMATE:
+    title: "Warm intimate"
+    short: "Leans into closeness, body, and warmth without losing focus."
+    long: |
+      Warm Intimate supports proximity and emotional closeness.
+      It is useful when material feels cold or distant and needs a more
+      human, present center.
+    cues:
+      - "If vocals or leads feel detached from the listener."
+      - "If highs feel brittle and need a softer frame."
+    watch_out_for:
+      - "Can darken top-end excitement if pushed too far."
+  HELP.PRESET.VIBE.WIDE_CINEMATIC:
+    title: "Wide cinematic"
+    short: "Expands space and depth while protecting center stability."
+    long: |
+      Wide Cinematic aims for a larger soundstage and layered depth cues.
+      It helps when a mix feels narrow, flat, or front-only but still
+      needs a dependable center anchor.
+    cues:
+      - "If the mix feels boxed in and lacks dimensional width."
+      - "If you want more depth while keeping lead focus stable."
+    watch_out_for:
+      - "Check mono fold-down and center impact after widening moves."
