@@ -27,6 +27,12 @@ from mmo.core.presets import (
     load_preset_run_config,
 )
 from mmo.core.listen_pack import build_listen_pack
+from mmo.core.project_file import (
+    load_project,
+    new_project,
+    update_project_last_run,
+    write_project,
+)
 from mmo.core.routing import (
     apply_routing_plan_to_report,
     build_routing_plan,
@@ -1927,6 +1933,168 @@ def _run_one_shot_workflow(
     return 0
 
 
+def _run_workflow_from_run_args(
+    *,
+    repo_root: Path,
+    tools_dir: Path,
+    presets_dir: Path,
+    stems_dir: Path,
+    out_dir: Path,
+    args: argparse.Namespace,
+) -> tuple[int, str]:
+    preset_values = list(args.preset) if isinstance(args.preset, list) else []
+    config_values = list(args.config) if isinstance(args.config, list) else []
+    format_set_values = list(args.format_set) if isinstance(args.format_set, list) else []
+    should_delegate_to_variants = (
+        args.variants
+        or len(preset_values) > 1
+        or len(config_values) > 1
+        or bool(format_set_values)
+    )
+    if should_delegate_to_variants:
+        exit_code = _run_variants_workflow(
+            repo_root=repo_root,
+            presets_dir=presets_dir,
+            stems_dir=stems_dir,
+            out_dir=out_dir,
+            preset_values=preset_values if preset_values else None,
+            config_values=config_values if config_values else None,
+            apply=args.apply,
+            render=args.render,
+            export_pdf=args.export_pdf,
+            export_csv=args.export_csv,
+            bundle=args.bundle,
+            profile=args.profile,
+            meters=args.meters,
+            max_seconds=args.max_seconds,
+            routing=False,
+            downmix_qa=False,
+            qa_ref=None,
+            qa_meters=None,
+            qa_max_seconds=None,
+            truncate_values=args.truncate_values,
+            output_formats=args.output_formats,
+            format_set_values=format_set_values if format_set_values else None,
+            deliverables_index=args.deliverables_index,
+            cache_enabled=args.cache == "on",
+            cache_dir=Path(args.cache_dir) if args.cache_dir else None,
+        )
+        return exit_code, "variants"
+
+    exit_code = _run_one_shot_workflow(
+        repo_root=repo_root,
+        tools_dir=tools_dir,
+        presets_dir=presets_dir,
+        stems_dir=stems_dir,
+        out_dir=out_dir,
+        preset_id=preset_values[0] if preset_values else None,
+        config_path=config_values[0] if config_values else None,
+        profile=args.profile,
+        meters=args.meters,
+        max_seconds=args.max_seconds,
+        truncate_values=args.truncate_values,
+        export_pdf=args.export_pdf,
+        export_csv=args.export_csv,
+        apply=args.apply,
+        render=args.render,
+        bundle=args.bundle,
+        deliverables_index=args.deliverables_index,
+        output_formats=args.output_formats,
+        cache_enabled=args.cache == "on",
+        cache_dir=Path(args.cache_dir) if args.cache_dir else None,
+    )
+    return exit_code, "single"
+
+
+def _project_last_run_payload(*, mode: str, out_dir: Path) -> dict[str, Any]:
+    resolved_out_dir = out_dir.resolve()
+    payload: dict[str, Any] = {
+        "mode": mode,
+        "out_dir": resolved_out_dir.as_posix(),
+    }
+
+    deliverables_index_path = resolved_out_dir / "deliverables_index.json"
+    if deliverables_index_path.exists():
+        payload["deliverables_index_path"] = deliverables_index_path.as_posix()
+
+    listen_pack_path = resolved_out_dir / "listen_pack.json"
+    if listen_pack_path.exists():
+        payload["listen_pack_path"] = listen_pack_path.as_posix()
+
+    if mode == "variants":
+        variant_plan_path = resolved_out_dir / "variant_plan.json"
+        variant_result_path = resolved_out_dir / "variant_result.json"
+        if variant_plan_path.exists():
+            payload["variant_plan_path"] = variant_plan_path.as_posix()
+        if variant_result_path.exists():
+            payload["variant_result_path"] = variant_result_path.as_posix()
+    return payload
+
+
+def _project_run_config_defaults(
+    *,
+    mode: str,
+    out_dir: Path,
+) -> dict[str, Any] | None:
+    resolved_out_dir = out_dir.resolve()
+    try:
+        if mode == "single":
+            report_path = resolved_out_dir / "report.json"
+            if not report_path.exists():
+                return None
+            report = _load_json_object(report_path, label="Report")
+            run_config = report.get("run_config")
+            if isinstance(run_config, dict):
+                return normalize_run_config(run_config)
+            return None
+
+        if mode == "variants":
+            plan_path = resolved_out_dir / "variant_plan.json"
+            if not plan_path.exists():
+                return None
+            variant_plan = _load_json_object(plan_path, label="Variant plan")
+            base_run_config = variant_plan.get("base_run_config")
+            if isinstance(base_run_config, dict):
+                return normalize_run_config(base_run_config)
+            return None
+    except ValueError:
+        return None
+    return None
+
+
+def _render_project_text(project: dict[str, Any]) -> str:
+    lines = [
+        f"project_id: {project.get('project_id', '')}",
+        f"stems_dir: {project.get('stems_dir', '')}",
+        f"created_at_utc: {project.get('created_at_utc', '')}",
+        f"updated_at_utc: {project.get('updated_at_utc', '')}",
+    ]
+
+    lockfile_path = project.get("lockfile_path")
+    if isinstance(lockfile_path, str):
+        lines.append(f"lockfile_path: {lockfile_path}")
+
+    lock_hash = project.get("lock_hash")
+    if isinstance(lock_hash, str):
+        lines.append(f"lock_hash: {lock_hash}")
+
+    last_run = project.get("last_run")
+    if isinstance(last_run, dict):
+        lines.append("last_run:")
+        lines.append(json.dumps(last_run, indent=2, sort_keys=True))
+
+    run_config_defaults = project.get("run_config_defaults")
+    if isinstance(run_config_defaults, dict):
+        lines.append("run_config_defaults:")
+        lines.append(json.dumps(run_config_defaults, indent=2, sort_keys=True))
+
+    notes = project.get("notes")
+    if isinstance(notes, str):
+        lines.append(f"notes: {notes}")
+
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="MMO command-line tools.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -2726,6 +2894,154 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional output path for verification result JSON.",
     )
 
+    project_parser = subparsers.add_parser("project", help="Project file tools.")
+    project_subparsers = project_parser.add_subparsers(dest="project_command", required=True)
+    project_new_parser = project_subparsers.add_parser(
+        "new",
+        help="Create a new MMO project file.",
+    )
+    project_new_parser.add_argument(
+        "--stems",
+        required=True,
+        help="Path to a directory of audio stems.",
+    )
+    project_new_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output project JSON.",
+    )
+    project_new_parser.add_argument(
+        "--notes",
+        default=None,
+        help="Optional project notes string.",
+    )
+
+    project_show_parser = project_subparsers.add_parser(
+        "show",
+        help="Display one project file.",
+    )
+    project_show_parser.add_argument(
+        "--project",
+        required=True,
+        help="Path to a project JSON file.",
+    )
+    project_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for project display.",
+    )
+
+    project_run_parser = project_subparsers.add_parser(
+        "run",
+        help="Run workflow from a project file and update the project in place.",
+    )
+    project_run_parser.add_argument(
+        "--project",
+        required=True,
+        help="Path to a project JSON file.",
+    )
+    project_run_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to the deterministic output directory.",
+    )
+    project_run_parser.add_argument(
+        "--preset",
+        action="append",
+        default=[],
+        help="Optional preset ID from presets/index.json. May be provided multiple times.",
+    )
+    project_run_parser.add_argument(
+        "--config",
+        action="append",
+        default=[],
+        help="Optional run config JSON path. May be provided multiple times.",
+    )
+    project_run_parser.add_argument(
+        "--profile",
+        default=None,
+        help="Authority profile ID override.",
+    )
+    project_run_parser.add_argument(
+        "--meters",
+        choices=["basic", "truth"],
+        default=None,
+        help="Enable additional meter packs (basic or truth).",
+    )
+    project_run_parser.add_argument(
+        "--max-seconds",
+        type=float,
+        default=None,
+        help="max_seconds override in run_config.",
+    )
+    project_run_parser.add_argument(
+        "--export-pdf",
+        action="store_true",
+        help="Export report PDF.",
+    )
+    project_run_parser.add_argument(
+        "--export-csv",
+        action="store_true",
+        help="Export recall CSV.",
+    )
+    project_run_parser.add_argument(
+        "--truncate-values",
+        type=int,
+        default=None,
+        help="truncate_values override in run_config.",
+    )
+    project_run_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Run auto-apply renderer flow.",
+    )
+    project_run_parser.add_argument(
+        "--render",
+        action="store_true",
+        help="Run render-eligible renderer flow.",
+    )
+    project_run_parser.add_argument(
+        "--output-formats",
+        default=None,
+        help="Comma-separated lossless output formats (wav,flac,wv,aiff,alac).",
+    )
+    project_run_parser.add_argument(
+        "--bundle",
+        action="store_true",
+        help="Build a UI bundle JSON.",
+    )
+    project_run_parser.add_argument(
+        "--deliverables-index",
+        action="store_true",
+        help="Also write deliverables_index.json summarizing file deliverables.",
+    )
+    project_run_parser.add_argument(
+        "--cache",
+        choices=["on", "off"],
+        default="on",
+        help="Reuse cached analysis by lockfile + run_config hash (default: on).",
+    )
+    project_run_parser.add_argument(
+        "--cache-dir",
+        default=None,
+        help="Optional cache directory (default: <repo_root>/.mmo_cache).",
+    )
+    project_run_parser.add_argument(
+        "--format-set",
+        action="append",
+        default=[],
+        help=(
+            "Repeatable output format set in <name>:<csv> form. "
+            "When present, run delegates to variants mode."
+        ),
+    )
+    project_run_parser.add_argument(
+        "--variants",
+        action="store_true",
+        help="Force delegation to variants mode, even for a single preset/config.",
+    )
+
     downmix_parser = subparsers.add_parser("downmix", help="Downmix policy tools.")
     downmix_subparsers = downmix_parser.add_subparsers(dest="downmix_command", required=True)
     downmix_show_parser = downmix_subparsers.add_parser(
@@ -2965,66 +3281,99 @@ def main(argv: list[str] | None = None) -> int:
             args.meters,
             args.peak,
         )
-    if args.command == "run":
-        preset_values = list(args.preset) if isinstance(args.preset, list) else []
-        config_values = list(args.config) if isinstance(args.config, list) else []
-        format_set_values = list(args.format_set) if isinstance(args.format_set, list) else []
-        should_delegate_to_variants = (
-            args.variants
-            or len(preset_values) > 1
-            or len(config_values) > 1
-            or bool(format_set_values)
-        )
-        if should_delegate_to_variants:
-            return _run_variants_workflow(
+    if args.command == "project":
+        if args.project_command == "new":
+            try:
+                project_payload = new_project(
+                    Path(args.stems),
+                    notes=args.notes,
+                )
+                write_project(Path(args.out), project_payload)
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            return 0
+
+        if args.project_command == "show":
+            try:
+                project_payload = load_project(Path(args.project))
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(project_payload, indent=2, sort_keys=True))
+            else:
+                print(_render_project_text(project_payload))
+            return 0
+
+        if args.project_command == "run":
+            project_path = Path(args.project)
+            out_dir = Path(args.out)
+            try:
+                project_payload = load_project(project_path)
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            stems_dir_value = project_payload.get("stems_dir")
+            if not isinstance(stems_dir_value, str) or not stems_dir_value:
+                print("Project stems_dir must be a non-empty string.", file=sys.stderr)
+                return 1
+            stems_dir = Path(stems_dir_value)
+
+            exit_code, run_mode = _run_workflow_from_run_args(
                 repo_root=repo_root,
+                tools_dir=tools_dir,
                 presets_dir=presets_dir,
-                stems_dir=Path(args.stems),
-                out_dir=Path(args.out),
-                preset_values=preset_values if preset_values else None,
-                config_values=config_values if config_values else None,
-                apply=args.apply,
-                render=args.render,
-                export_pdf=args.export_pdf,
-                export_csv=args.export_csv,
-                bundle=args.bundle,
-                profile=args.profile,
-                meters=args.meters,
-                max_seconds=args.max_seconds,
-                routing=False,
-                downmix_qa=False,
-                qa_ref=None,
-                qa_meters=None,
-                qa_max_seconds=None,
-                truncate_values=args.truncate_values,
-                output_formats=args.output_formats,
-                format_set_values=format_set_values if format_set_values else None,
-                deliverables_index=args.deliverables_index,
-                cache_enabled=args.cache == "on",
-                cache_dir=Path(args.cache_dir) if args.cache_dir else None,
+                stems_dir=stems_dir,
+                out_dir=out_dir,
+                args=args,
             )
-        return _run_one_shot_workflow(
+            if exit_code != 0:
+                return exit_code
+
+            try:
+                project_payload = update_project_last_run(
+                    project_payload,
+                    _project_last_run_payload(mode=run_mode, out_dir=out_dir),
+                )
+                run_config_defaults = _project_run_config_defaults(
+                    mode=run_mode,
+                    out_dir=out_dir,
+                )
+                if isinstance(run_config_defaults, dict):
+                    project_payload["run_config_defaults"] = run_config_defaults
+
+                try:
+                    from mmo.core.lockfile import build_lockfile  # noqa: WPS433
+
+                    lock_payload = build_lockfile(stems_dir)
+                except ValueError:
+                    lock_payload = None
+                if isinstance(lock_payload, dict):
+                    lockfile_path = out_dir.resolve() / "lockfile.json"
+                    _write_json_file(lockfile_path, lock_payload)
+                    project_payload["lockfile_path"] = lockfile_path.as_posix()
+                    project_payload["lock_hash"] = hash_lockfile(lock_payload)
+
+                write_project(project_path, project_payload)
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            return 0
+
+        print("Unknown project command.", file=sys.stderr)
+        return 2
+    if args.command == "run":
+        exit_code, _ = _run_workflow_from_run_args(
             repo_root=repo_root,
             tools_dir=tools_dir,
             presets_dir=presets_dir,
             stems_dir=Path(args.stems),
             out_dir=Path(args.out),
-            preset_id=preset_values[0] if preset_values else None,
-            config_path=config_values[0] if config_values else None,
-            profile=args.profile,
-            meters=args.meters,
-            max_seconds=args.max_seconds,
-            truncate_values=args.truncate_values,
-            export_pdf=args.export_pdf,
-            export_csv=args.export_csv,
-            apply=args.apply,
-            render=args.render,
-            bundle=args.bundle,
-            deliverables_index=args.deliverables_index,
-            output_formats=args.output_formats,
-            cache_enabled=args.cache == "on",
-            cache_dir=Path(args.cache_dir) if args.cache_dir else None,
+            args=args,
         )
+        return exit_code
     if args.command == "analyze":
         analyze_overrides: dict[str, Any] = {}
         if _flag_present(raw_argv, "--profile"):
