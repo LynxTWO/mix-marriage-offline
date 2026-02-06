@@ -16,6 +16,10 @@ from mmo.core.cache_store import (
     save_cached_report,
     try_load_cached_report,
 )
+from mmo.core.deliverables_index import (
+    build_deliverables_index_single,
+    build_deliverables_index_variants,
+)
 from mmo.core.presets import (
     list_preset_packs,
     list_presets,
@@ -1260,6 +1264,102 @@ def _build_validated_listen_pack(
     return listen_pack
 
 
+def _build_validated_deliverables_index_single(
+    *,
+    repo_root: Path,
+    out_dir: Path,
+    report_path: Path,
+    apply_manifest_path: Path | None,
+    render_manifest_path: Path | None,
+    bundle_path: Path | None,
+    pdf_path: Path | None,
+    csv_path: Path | None,
+) -> dict[str, Any]:
+    deliverables_index = build_deliverables_index_single(
+        out_dir=out_dir,
+        report_path=report_path,
+        apply_manifest_path=apply_manifest_path,
+        render_manifest_path=render_manifest_path,
+        bundle_path=bundle_path,
+        pdf_path=pdf_path,
+        csv_path=csv_path,
+    )
+    _validate_json_payload(
+        deliverables_index,
+        schema_path=repo_root / "schemas" / "deliverables_index.schema.json",
+        payload_name="Deliverables index",
+    )
+    return deliverables_index
+
+
+def _build_validated_deliverables_index_variants(
+    *,
+    repo_root: Path,
+    root_out_dir: Path,
+    variant_result: dict[str, Any],
+) -> dict[str, Any]:
+    deliverables_index = build_deliverables_index_variants(
+        root_out_dir=root_out_dir,
+        variant_result=variant_result,
+    )
+    _validate_json_payload(
+        deliverables_index,
+        schema_path=repo_root / "schemas" / "deliverables_index.schema.json",
+        payload_name="Deliverables index",
+    )
+    return deliverables_index
+
+
+def _existing_file(path: Path) -> Path | None:
+    if path.exists():
+        return path
+    return None
+
+
+def _run_deliverables_index_command(
+    *,
+    repo_root: Path,
+    out_dir: Path,
+    out_path: Path,
+    variant_result_path: Path | None,
+) -> int:
+    resolved_out_dir = out_dir.resolve()
+    try:
+        if variant_result_path is not None:
+            variant_result = _load_json_object(variant_result_path, label="Variant result")
+            payload = _build_validated_deliverables_index_variants(
+                repo_root=repo_root,
+                root_out_dir=resolved_out_dir,
+                variant_result=variant_result,
+            )
+        else:
+            report_path = _existing_file(resolved_out_dir / "report.json")
+            if report_path is None:
+                print(
+                    "Missing report.json in --out-dir. Cannot build single deliverables index.",
+                    file=sys.stderr,
+                )
+                return 1
+            payload = _build_validated_deliverables_index_single(
+                repo_root=repo_root,
+                out_dir=resolved_out_dir,
+                report_path=report_path,
+                apply_manifest_path=_existing_file(resolved_out_dir / "apply_manifest.json"),
+                render_manifest_path=_existing_file(resolved_out_dir / "render_manifest.json"),
+                bundle_path=_existing_file(resolved_out_dir / "ui_bundle.json"),
+                pdf_path=_existing_file(resolved_out_dir / "report.pdf"),
+                csv_path=_existing_file(resolved_out_dir / "recall.csv"),
+            )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    except SystemExit as exc:
+        return int(exc.code) if isinstance(exc.code, int) else 1
+
+    _write_json_file(out_path, payload)
+    return 0
+
+
 def _run_variants_listen_pack_command(
     *,
     repo_root: Path,
@@ -1314,6 +1414,7 @@ def _run_variants_workflow(
     apply_output_formats: str | None = None,
     format_set_values: list[str] | None = None,
     listen_pack: bool = False,
+    deliverables_index: bool = False,
     cache_enabled: bool = True,
     cache_dir: Path | None = None,
 ) -> int:
@@ -1490,6 +1591,20 @@ def _run_variants_workflow(
         except SystemExit as exc:
             return int(exc.code) if isinstance(exc.code, int) else 1
         _write_json_file(listen_pack_path, listen_pack_payload)
+    if deliverables_index:
+        deliverables_index_path = out_dir / "deliverables_index.json"
+        try:
+            deliverables_index_payload = _build_validated_deliverables_index_variants(
+                repo_root=repo_root,
+                root_out_dir=out_dir,
+                variant_result=result,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+        _write_json_file(deliverables_index_path, deliverables_index_payload)
 
     results = result.get("results")
     if not isinstance(results, list):
@@ -1519,6 +1634,7 @@ def _run_one_shot_workflow(
     apply: bool,
     render: bool,
     bundle: bool,
+    deliverables_index: bool,
     output_formats: str | None,
     cache_enabled: bool,
     cache_dir: Path | None,
@@ -1770,6 +1886,26 @@ def _run_one_shot_workflow(
         if exit_code != 0:
             return exit_code
 
+    deliverables_index_path = out_dir / "deliverables_index.json"
+    if deliverables_index:
+        try:
+            deliverables_index_payload = _build_validated_deliverables_index_single(
+                repo_root=repo_root,
+                out_dir=out_dir,
+                report_path=report_path,
+                apply_manifest_path=apply_manifest_path if apply else None,
+                render_manifest_path=render_manifest_path if render else None,
+                bundle_path=bundle_path if bundle else None,
+                pdf_path=pdf_path if export_pdf else None,
+                csv_path=csv_path if export_csv else None,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+        _write_json_file(deliverables_index_path, deliverables_index_payload)
+
     summary: list[tuple[str, Path]] = [("report", report_path)]
     if export_pdf:
         summary.append(("report_pdf", pdf_path))
@@ -1782,6 +1918,8 @@ def _run_one_shot_workflow(
         summary.append(("render_manifest", render_manifest_path))
     if bundle:
         summary.append(("ui_bundle", bundle_path))
+    if deliverables_index:
+        summary.append(("deliverables_index", deliverables_index_path))
 
     print("run complete:")
     for label, path in summary:
@@ -1947,6 +2085,11 @@ def main(argv: list[str] | None = None) -> int:
         "--bundle",
         action="store_true",
         help="Build a UI bundle JSON.",
+    )
+    run_parser.add_argument(
+        "--deliverables-index",
+        action="store_true",
+        help="Also write deliverables_index.json summarizing file deliverables.",
     )
     run_parser.add_argument(
         "--cache",
@@ -2221,6 +2364,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Also write listen_pack.json for musician audition guidance.",
     )
     variants_run_parser.add_argument(
+        "--deliverables-index",
+        action="store_true",
+        help="Also write deliverables_index.json for all variant outputs.",
+    )
+    variants_run_parser.add_argument(
         "--profile",
         default=None,
         help="Authority profile ID override for each variant.",
@@ -2336,6 +2484,34 @@ def main(argv: list[str] | None = None) -> int:
         "--out",
         required=True,
         help="Path to output listen_pack JSON.",
+    )
+
+    deliverables_parser = subparsers.add_parser(
+        "deliverables",
+        help="Deliverables index tools.",
+    )
+    deliverables_subparsers = deliverables_parser.add_subparsers(
+        dest="deliverables_command",
+        required=True,
+    )
+    deliverables_index_parser = deliverables_subparsers.add_parser(
+        "index",
+        help="Build a deterministic deliverables index JSON.",
+    )
+    deliverables_index_parser.add_argument(
+        "--out-dir",
+        required=True,
+        help="Path to output directory that contains run artifacts.",
+    )
+    deliverables_index_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output deliverables_index JSON.",
+    )
+    deliverables_index_parser.add_argument(
+        "--variant-result",
+        default=None,
+        help="Optional variant_result JSON path (switches to variants mode).",
     )
 
     plugins_parser = subparsers.add_parser("plugins", help="Plugin registry tools.")
@@ -2823,6 +2999,7 @@ def main(argv: list[str] | None = None) -> int:
                 truncate_values=args.truncate_values,
                 output_formats=args.output_formats,
                 format_set_values=format_set_values if format_set_values else None,
+                deliverables_index=args.deliverables_index,
                 cache_enabled=args.cache == "on",
                 cache_dir=Path(args.cache_dir) if args.cache_dir else None,
             )
@@ -2843,6 +3020,7 @@ def main(argv: list[str] | None = None) -> int:
             apply=args.apply,
             render=args.render,
             bundle=args.bundle,
+            deliverables_index=args.deliverables_index,
             output_formats=args.output_formats,
             cache_enabled=args.cache == "on",
             cache_dir=Path(args.cache_dir) if args.cache_dir else None,
@@ -3127,6 +3305,18 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 1
+    if args.command == "deliverables":
+        if args.deliverables_command != "index":
+            print("Unknown deliverables command.", file=sys.stderr)
+            return 2
+        return _run_deliverables_index_command(
+            repo_root=repo_root,
+            out_dir=Path(args.out_dir),
+            out_path=Path(args.out),
+            variant_result_path=(
+                Path(args.variant_result) if args.variant_result else None
+            ),
+        )
     if args.command == "variants":
         if args.variants_command == "listen-pack":
             return _run_variants_listen_pack_command(
@@ -3168,6 +3358,7 @@ def main(argv: list[str] | None = None) -> int:
             apply_output_formats=args.apply_output_formats,
             format_set_values=list(args.format_set) if isinstance(args.format_set, list) else None,
             listen_pack=args.listen_pack,
+            deliverables_index=args.deliverables_index,
             cache_enabled=args.cache == "on",
             cache_dir=Path(args.cache_dir) if args.cache_dir else None,
         )
