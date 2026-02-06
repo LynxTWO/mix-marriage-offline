@@ -29,6 +29,7 @@ from mmo.core.run_config import (
     normalize_run_config,
 )
 from mmo.core.variants import build_variant_plan, run_variant_plan
+from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS
 
 try:
     import jsonschema
@@ -39,6 +40,7 @@ _PRESET_PREVIEW_DEFAULT_PROFILE_ID = "PROFILE.ASSIST"
 _PRESET_PREVIEW_DEFAULT_METERS = "truth"
 _PRESET_PREVIEW_DEFAULT_MAX_SECONDS = 120.0
 _PRESET_PREVIEW_DEFAULT_TARGET_LAYOUT_ID = "LAYOUT.2_0"
+_OUTPUT_FORMAT_ORDER = tuple(LOSSLESS_OUTPUT_FORMATS)
 
 
 def _run_command(command: list[str]) -> int:
@@ -276,6 +278,49 @@ def _config_nested_optional_string(
     return default
 
 
+def _parse_output_formats_csv(raw_value: str) -> list[str]:
+    if not isinstance(raw_value, str):
+        raise ValueError("output formats must be a comma-separated string.")
+
+    selected: set[str] = set()
+    for item in raw_value.split(","):
+        normalized = item.strip().lower()
+        if not normalized:
+            continue
+        if normalized not in _OUTPUT_FORMAT_ORDER:
+            allowed = ",".join(_OUTPUT_FORMAT_ORDER)
+            raise ValueError(
+                f"Unsupported output format {normalized!r}. Allowed: {allowed}."
+            )
+        selected.add(normalized)
+
+    if not selected:
+        raise ValueError("output formats must include at least one value.")
+
+    return [fmt for fmt in _OUTPUT_FORMAT_ORDER if fmt in selected]
+
+
+def _config_nested_output_formats(
+    config: dict[str, Any],
+    section: str,
+    default: list[str] | None = None,
+) -> list[str]:
+    fallback = list(default) if isinstance(default, list) and default else ["wav"]
+    section_data = config.get(section)
+    if not isinstance(section_data, dict):
+        return fallback
+    value = section_data.get("output_formats")
+    if not isinstance(value, list):
+        return fallback
+    normalized: list[str] = []
+    for item in value:
+        if isinstance(item, str) and item:
+            normalized.append(item)
+    if not normalized:
+        return fallback
+    return normalized
+
+
 def _stamp_report_run_config(report_path: Path, run_config: dict[str, Any]) -> None:
     report = _load_report(report_path)
     report["run_config"] = normalize_run_config(run_config)
@@ -475,11 +520,15 @@ def _run_render_command(
     out_dir: Path | None,
     profile_id: str,
     command_label: str,
+    output_formats: list[str] | None = None,
+    run_config: dict[str, Any] | None = None,
 ) -> int:
     from mmo.core.gates import apply_gates_to_report  # noqa: WPS433
     from mmo.core.pipeline import load_plugins, run_renderers  # noqa: WPS433
 
     report = _load_report(report_path)
+    if run_config is not None:
+        report["run_config"] = normalize_run_config(run_config)
     apply_gates_to_report(
         report,
         policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
@@ -512,7 +561,12 @@ def _run_render_command(
         file=sys.stderr,
     )
 
-    manifests = run_renderers(report, plugins, output_dir=out_dir)
+    manifests = run_renderers(
+        report,
+        plugins,
+        output_dir=out_dir,
+        output_formats=output_formats,
+    )
     render_manifest = {
         "schema_version": "0.1.0",
         "report_id": report.get("report_id", ""),
@@ -560,11 +614,15 @@ def _run_apply_command(
     out_dir: Path,
     out_report_path: Path | None,
     profile_id: str,
+    output_formats: list[str] | None = None,
+    run_config: dict[str, Any] | None = None,
 ) -> int:
     from mmo.core.gates import apply_gates_to_report  # noqa: WPS433
     from mmo.core.pipeline import load_plugins, run_renderers  # noqa: WPS433
 
     report = _load_report(report_path)
+    if run_config is not None:
+        report["run_config"] = normalize_run_config(run_config)
     apply_gates_to_report(
         report,
         policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
@@ -603,6 +661,7 @@ def _run_apply_command(
         output_dir=out_dir,
         eligibility_field="eligible_auto_apply",
         context="auto_apply",
+        output_formats=output_formats,
     )
     apply_manifest = {
         "schema_version": "0.1.0",
@@ -1264,6 +1323,11 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     render_parser.add_argument(
+        "--output-formats",
+        default=None,
+        help="Comma-separated lossless output formats (wav,flac,wv).",
+    )
+    render_parser.add_argument(
         "--profile",
         default="PROFILE.ASSIST",
         help="Authority profile ID for render gating (default: PROFILE.ASSIST).",
@@ -1302,6 +1366,11 @@ def main(argv: list[str] | None = None) -> int:
         "--out-dir",
         required=True,
         help="Output directory for applied renderer artifacts.",
+    )
+    apply_parser.add_argument(
+        "--output-formats",
+        default=None,
+        help="Comma-separated lossless output formats (wav,flac,wv).",
     )
     apply_parser.add_argument(
         "--profile",
@@ -1446,6 +1515,14 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=None,
         help="truncate_values override in run_config for each variant.",
+    )
+    variants_run_parser.add_argument(
+        "--output-formats",
+        default=None,
+        help=(
+            "Comma-separated lossless output formats (wav,flac,wv) "
+            "for both render and apply variant steps."
+        ),
     )
     variants_run_parser.add_argument(
         "--cache",
@@ -2015,6 +2092,17 @@ def main(argv: list[str] | None = None) -> int:
             render_overrides["profile_id"] = args.profile
         if _flag_present(raw_argv, "--out-dir"):
             _set_nested(["render", "out_dir"], render_overrides, args.out_dir)
+        if _flag_present(raw_argv, "--output-formats"):
+            try:
+                render_output_formats = _parse_output_formats_csv(args.output_formats)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            _set_nested(
+                ["render", "output_formats"],
+                render_overrides,
+                render_output_formats,
+            )
         try:
             merged_run_config = _load_and_merge_run_config(
                 args.config,
@@ -2032,6 +2120,11 @@ def main(argv: list[str] | None = None) -> int:
             "out_dir",
             args.out_dir,
         )
+        output_formats = _config_nested_output_formats(
+            merged_run_config,
+            "render",
+            ["wav"],
+        )
         try:
             return _run_render_command(
                 repo_root=repo_root,
@@ -2041,6 +2134,8 @@ def main(argv: list[str] | None = None) -> int:
                 out_dir=Path(out_dir) if out_dir else None,
                 profile_id=profile_id,
                 command_label="render",
+                output_formats=output_formats,
+                run_config=merged_run_config,
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
@@ -2051,6 +2146,17 @@ def main(argv: list[str] | None = None) -> int:
             apply_overrides["profile_id"] = args.profile
         if _flag_present(raw_argv, "--out-dir"):
             _set_nested(["render", "out_dir"], apply_overrides, args.out_dir)
+        if _flag_present(raw_argv, "--output-formats"):
+            try:
+                apply_output_formats = _parse_output_formats_csv(args.output_formats)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            _set_nested(
+                ["apply", "output_formats"],
+                apply_overrides,
+                apply_output_formats,
+            )
         try:
             merged_run_config = _load_and_merge_run_config(
                 args.config,
@@ -2069,6 +2175,11 @@ def main(argv: list[str] | None = None) -> int:
             "out_dir",
             args.out_dir,
         )
+        output_formats = _config_nested_output_formats(
+            merged_run_config,
+            "apply",
+            ["wav"],
+        )
         if not out_dir:
             print(
                 "Missing output directory. Provide --out-dir or set render.out_dir in --config/--preset.",
@@ -2084,6 +2195,8 @@ def main(argv: list[str] | None = None) -> int:
                 out_dir=Path(out_dir),
                 out_report_path=Path(args.out_report) if args.out_report else None,
                 profile_id=profile_id,
+                output_formats=output_formats,
+                run_config=merged_run_config,
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
@@ -2134,6 +2247,22 @@ def main(argv: list[str] | None = None) -> int:
                 ["downmix", "policy_id"],
                 run_config_overrides,
                 args.policy_id,
+            )
+        if args.output_formats is not None:
+            try:
+                variants_output_formats = _parse_output_formats_csv(args.output_formats)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            _set_nested(
+                ["render", "output_formats"],
+                run_config_overrides,
+                variants_output_formats,
+            )
+            _set_nested(
+                ["apply", "output_formats"],
+                run_config_overrides,
+                variants_output_formats,
             )
 
         steps = {

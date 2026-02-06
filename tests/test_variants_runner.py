@@ -5,12 +5,14 @@ import tempfile
 import unittest
 import wave
 from pathlib import Path
+from unittest import mock
 
 import jsonschema
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
 from mmo.cli import main
+from mmo.core import variants as variants_module
 from mmo.core.variants import build_variant_plan
 
 
@@ -173,6 +175,65 @@ class TestVariantsRunner(unittest.TestCase):
             self.assertEqual(
                 seen_presets,
                 {"PRESET.SAFE_CLEANUP", "PRESET.VIBE.WARM_INTIMATE"},
+            )
+
+    def test_variants_run_output_formats_propagate(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            out_dir = temp_path / "variants_out"
+            _write_wav_16bit(stems_dir / "drums" / "kick.wav")
+
+            with mock.patch(
+                "mmo.core.variants.run_renderers",
+                wraps=variants_module.run_renderers,
+            ) as patched_run_renderers:
+                exit_code = main(
+                    [
+                        "variants",
+                        "run",
+                        "--stems",
+                        str(stems_dir),
+                        "--out",
+                        str(out_dir),
+                        "--preset",
+                        "PRESET.SAFE_CLEANUP",
+                        "--render",
+                        "--apply",
+                        "--output-formats",
+                        "wav,flac",
+                    ]
+                )
+            self.assertEqual(exit_code, 0)
+
+            plan = json.loads((out_dir / "variant_plan.json").read_text(encoding="utf-8"))
+            variants = plan.get("variants")
+            self.assertIsInstance(variants, list)
+            if not isinstance(variants, list) or not variants:
+                return
+            overrides = variants[0].get("run_config_overrides")
+            self.assertIsInstance(overrides, dict)
+            if not isinstance(overrides, dict):
+                return
+            self.assertEqual(
+                overrides.get("render", {}).get("output_formats"),
+                ["wav", "flac"],
+            )
+            self.assertEqual(
+                overrides.get("apply", {}).get("output_formats"),
+                ["wav", "flac"],
+            )
+            contexts_and_formats = [
+                (
+                    call.kwargs.get("context"),
+                    call.kwargs.get("output_formats"),
+                )
+                for call in patched_run_renderers.call_args_list
+                if call.kwargs.get("context") in {"render", "auto_apply"}
+            ]
+            self.assertEqual(
+                contexts_and_formats,
+                [("render", ["wav", "flac"]), ("auto_apply", ["wav", "flac"])],
             )
 
 

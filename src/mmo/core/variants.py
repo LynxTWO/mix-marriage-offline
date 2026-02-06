@@ -260,6 +260,16 @@ def _truncate_values_from_config(run_config: dict[str, Any]) -> int:
     return _DEFAULT_TRUNCATE_VALUES
 
 
+def _output_formats_from_config(run_config: dict[str, Any], section: str) -> list[str]:
+    section_config = _coerce_dict(run_config.get(section))
+    formats = section_config.get("output_formats")
+    if isinstance(formats, list):
+        selected = [item for item in formats if isinstance(item, str) and item]
+        if selected:
+            return selected
+    return ["wav"]
+
+
 def _variant_out_dir_from_overrides(variant: dict[str, Any]) -> Path:
     overrides = _coerce_dict(variant.get("run_config_overrides"))
     render_cfg = _coerce_dict(overrides.get("render"))
@@ -621,6 +631,14 @@ def run_variant_plan(
         render_root = variant_out_dir / "render"
         apply_root = variant_out_dir / "apply"
         profile_id = _profile_id_from_config(effective_run_config or {})
+        render_output_formats = _output_formats_from_config(
+            effective_run_config or {},
+            "render",
+        )
+        apply_output_formats = _output_formats_from_config(
+            effective_run_config or {},
+            "apply",
+        )
 
         if report is not None and steps["render"]:
             try:
@@ -640,6 +658,7 @@ def run_variant_plan(
                     output_dir=render_root,
                     eligibility_field="eligible_render",
                     context="render",
+                    output_formats=render_output_formats,
                 )
                 render_manifest = {
                     "schema_version": VARIANT_SCHEMA_VERSION,
@@ -670,6 +689,7 @@ def run_variant_plan(
                     output_dir=apply_root,
                     eligibility_field="eligible_auto_apply",
                     context="auto_apply",
+                    output_formats=apply_output_formats,
                 )
                 apply_manifest = {
                     "schema_version": VARIANT_SCHEMA_VERSION,

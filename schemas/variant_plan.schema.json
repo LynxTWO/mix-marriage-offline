@@ -46,7 +46,31 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "out_dir": { "$ref": "#/$defs/posix_abs_path" }
+            "out_dir": { "$ref": "#/$defs/posix_abs_path" },
+            "output_formats": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": ["wav", "flac", "wv"]
+              }
+            }
+          }
+        },
+        "apply": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "output_formats": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": ["wav", "flac", "wv"]
+              }
+            }
           }
         }
       }

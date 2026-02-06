@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS, supported_output_formats
+
 RUN_CONFIG_SCHEMA_VERSION = "0.1.0"
 
 _TOP_LEVEL_KEYS = {
@@ -15,9 +17,12 @@ _TOP_LEVEL_KEYS = {
     "truncate_values",
     "downmix",
     "render",
+    "apply",
 }
 _DOWNMIX_KEYS = {"source_layout_id", "target_layout_id", "policy_id"}
-_RENDER_KEYS = {"out_dir"}
+_RENDER_KEYS = {"out_dir", "output_formats"}
+_APPLY_KEYS = {"output_formats"}
+_OUTPUT_FORMAT_ORDER = tuple(LOSSLESS_OUTPUT_FORMATS)
 
 
 def _coerce_non_negative_float(value: Any, field_name: str) -> float:
@@ -99,6 +104,36 @@ def _normalize_render(value: Any) -> dict[str, Any]:
     for key in sorted(value.keys()):
         if value[key] is None:
             continue
+        if key == "output_formats":
+            normalized[key] = _normalize_output_formats(
+                value[key],
+                field_name="render.output_formats",
+            )
+            continue
+        normalized[key] = _coerce_optional_string(value[key])
+    return normalized
+
+
+def _normalize_apply(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("apply must be an object.")
+
+    unknown = sorted(set(value.keys()) - _APPLY_KEYS)
+    if unknown:
+        raise ValueError(f"Unknown apply field(s): {', '.join(unknown)}")
+
+    normalized: dict[str, Any] = {}
+    for key in sorted(value.keys()):
+        if value[key] is None:
+            continue
+        if key == "output_formats":
+            normalized[key] = _normalize_output_formats(
+                value[key],
+                field_name="apply.output_formats",
+            )
+            continue
         normalized[key] = _coerce_optional_string(value[key])
     return normalized
 
@@ -160,6 +195,36 @@ def _validate_normalized(cfg: dict[str, Any]) -> None:
     if render is not None and not isinstance(render, dict):
         raise ValueError("render must be an object.")
 
+    apply = cfg.get("apply")
+    if apply is not None and not isinstance(apply, dict):
+        raise ValueError("apply must be an object.")
+
+
+def _normalize_output_formats(value: Any, *, field_name: str) -> list[str]:
+    if not isinstance(value, list):
+        raise ValueError(f"{field_name} must be an array.")
+
+    supported = supported_output_formats()
+    selected: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            raise ValueError(f"{field_name} values must be strings.")
+        normalized = item.strip().lower()
+        if not normalized:
+            raise ValueError(f"{field_name} values must be non-empty strings.")
+        if normalized not in supported:
+            allowed = ", ".join(_OUTPUT_FORMAT_ORDER)
+            raise ValueError(
+                f"{field_name} contains unsupported format {normalized!r}. "
+                f"Allowed: {allowed}."
+            )
+        selected.add(normalized)
+
+    if not selected:
+        raise ValueError(f"{field_name} must include at least one format.")
+
+    return [fmt for fmt in _OUTPUT_FORMAT_ORDER if fmt in selected]
+
 
 def normalize_run_config(cfg: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(cfg, dict):
@@ -198,6 +263,10 @@ def normalize_run_config(cfg: dict[str, Any]) -> dict[str, Any]:
             render = _normalize_render(value)
             if render:
                 normalized[key] = render
+        elif key == "apply":
+            apply = _normalize_apply(value)
+            if apply:
+                normalized[key] = apply
 
     _validate_normalized(normalized)
     return normalized

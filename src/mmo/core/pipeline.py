@@ -6,12 +6,22 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence
 
+from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
+from mmo.dsp.io import sha256_file
+from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS, supported_output_formats, transcode_wav_to_format
 from mmo.plugins.interfaces import PLUGIN_SUPPORTED_CONTEXTS, PluginCapabilities
 
 try:
     import yaml
 except ImportError:  # pragma: no cover - environment issue
     yaml = None
+
+_OUTPUT_FORMAT_ORDER = tuple(LOSSLESS_OUTPUT_FORMATS)
+_CODEC_BY_FORMAT = {
+    "wav": "pcm",
+    "flac": "flac",
+    "wv": "wavpack",
+}
 
 
 @dataclass(frozen=True)
@@ -311,6 +321,222 @@ def _annotate_manifest_output_extremes(
         metadata["extreme"] = is_extreme
 
 
+def _normalize_output_formats(output_formats: Sequence[str] | None) -> tuple[str, ...]:
+    if output_formats is None:
+        return ("wav",)
+    if isinstance(output_formats, str) or not isinstance(output_formats, Sequence):
+        raise ValueError("output_formats must be a sequence.")
+
+    supported = supported_output_formats()
+    selected: set[str] = set()
+    for raw in output_formats:
+        if not isinstance(raw, str):
+            raise ValueError("output_formats values must be strings.")
+        normalized = raw.strip().lower()
+        if not normalized:
+            raise ValueError("output_formats values must be non-empty strings.")
+        if normalized not in supported:
+            allowed = ", ".join(_OUTPUT_FORMAT_ORDER)
+            raise ValueError(
+                f"Unsupported output format {normalized!r}. Allowed: {allowed}."
+            )
+        selected.add(normalized)
+
+    if not selected:
+        raise ValueError("output_formats must include at least one format.")
+    return tuple(fmt for fmt in _OUTPUT_FORMAT_ORDER if fmt in selected)
+
+
+def _resolve_output_artifact_path(file_path: str, output_dir: Path | None) -> Path | None:
+    if not file_path:
+        return None
+    path = Path(file_path)
+    if path.is_absolute():
+        return path
+    if output_dir is None:
+        return None
+    return output_dir / path
+
+
+def _replace_output_extension(file_path: str, new_suffix: str) -> str:
+    replaced = Path(file_path).with_suffix(f".{new_suffix}")
+    if replaced.is_absolute():
+        return str(replaced)
+    return replaced.as_posix()
+
+
+def _transcode_output_id(source_output: Dict[str, Any], fmt: str, sha256: str) -> str:
+    stem_token = _coerce_str(source_output.get("target_stem_id"))
+    if not stem_token:
+        stem_token = _coerce_str(source_output.get("target_bus_id"))
+    if not stem_token:
+        stem_token = "artifact"
+    return f"OUTPUT.TRANSCODE.{stem_token}.{fmt}.{sha256[:8]}"
+
+
+def _output_sort_key(output: Dict[str, Any]) -> tuple[str, str, str, str]:
+    return (
+        _coerce_str(output.get("target_stem_id")),
+        _coerce_str(output.get("format")),
+        _coerce_str(output.get("file_path")),
+        _coerce_str(output.get("output_id")),
+    )
+
+
+def _make_transcoded_output(
+    source_output: Dict[str, Any],
+    *,
+    output_format: str,
+    file_path: str,
+    sha256: str,
+) -> Dict[str, Any]:
+    transcoded: Dict[str, Any] = {
+        "output_id": _transcode_output_id(source_output, output_format, sha256),
+        "file_path": file_path,
+        "format": output_format,
+        "sha256": sha256,
+    }
+
+    for key in (
+        "action_id",
+        "recommendation_id",
+        "target_stem_id",
+        "target_bus_id",
+        "layout_id",
+        "sample_rate_hz",
+        "bit_depth",
+        "channel_count",
+        "notes",
+    ):
+        if key in source_output:
+            transcoded[key] = source_output[key]
+
+    codec = _CODEC_BY_FORMAT.get(output_format)
+    if codec:
+        transcoded["codec"] = codec
+
+    metadata = source_output.get("metadata")
+    transcoded_metadata: Dict[str, Any] = {}
+    if isinstance(metadata, dict):
+        transcoded_metadata.update(metadata)
+    transcoded_metadata["transcode_from_output_id"] = _coerce_str(
+        source_output.get("output_id")
+    )
+    transcoded_metadata["transcode_from_format"] = _coerce_str(
+        source_output.get("format")
+    ) or "wav"
+    transcoded["metadata"] = transcoded_metadata
+    return transcoded
+
+
+def _append_transcode_skip(
+    skipped: List[Dict[str, str]],
+    output: Dict[str, Any],
+    *,
+    reason: str,
+) -> None:
+    skipped.append(
+        {
+            "recommendation_id": _coerce_str(output.get("recommendation_id")),
+            "action_id": _coerce_str(output.get("action_id")),
+            "reason": reason,
+            "gate_summary": "",
+        }
+    )
+
+
+def _apply_output_formats_to_manifest(
+    manifest: Dict[str, Any],
+    *,
+    output_dir: Path | None,
+    desired_formats: tuple[str, ...],
+    ffmpeg_cmd: Sequence[str] | None,
+) -> List[Dict[str, str]]:
+    outputs = _coerce_list(manifest.get("outputs"))
+    non_wav_formats = tuple(fmt for fmt in desired_formats if fmt != "wav")
+    keep_wav = "wav" in desired_formats
+
+    rewritten_outputs: List[Dict[str, Any]] = []
+    transcode_skipped: List[Dict[str, str]] = []
+    for output in outputs:
+        if not isinstance(output, dict):
+            continue
+        source_format = _coerce_str(output.get("format")).strip().lower()
+        if source_format == "wav":
+            if keep_wav:
+                rewritten_outputs.append(output)
+
+            if not non_wav_formats:
+                continue
+
+            source_file_path = _coerce_str(output.get("file_path"))
+            source_path = _resolve_output_artifact_path(source_file_path, output_dir)
+            if source_path is None or not source_path.exists():
+                _append_transcode_skip(
+                    transcode_skipped,
+                    output,
+                    reason="missing_source_artifact",
+                )
+                continue
+
+            if ffmpeg_cmd is None:
+                _append_transcode_skip(
+                    transcode_skipped,
+                    output,
+                    reason="missing_ffmpeg_for_encode",
+                )
+                continue
+
+            for target_format in non_wav_formats:
+                target_file_path = _replace_output_extension(
+                    source_file_path,
+                    target_format,
+                )
+                target_path = _resolve_output_artifact_path(target_file_path, output_dir)
+                if target_path is None:
+                    _append_transcode_skip(
+                        transcode_skipped,
+                        output,
+                        reason="missing_source_artifact",
+                    )
+                    continue
+                try:
+                    transcode_wav_to_format(
+                        ffmpeg_cmd,
+                        source_path,
+                        target_path,
+                        target_format,
+                    )
+                except (OSError, ValueError):
+                    _append_transcode_skip(
+                        transcode_skipped,
+                        output,
+                        reason="encode_failed",
+                    )
+                    continue
+                output_sha256 = sha256_file(target_path)
+                rewritten_outputs.append(
+                    _make_transcoded_output(
+                        output,
+                        output_format=target_format,
+                        file_path=target_file_path,
+                        sha256=output_sha256,
+                    )
+                )
+            continue
+
+        if source_format in desired_formats:
+            rewritten_outputs.append(output)
+            continue
+
+        if source_format not in supported_output_formats():
+            rewritten_outputs.append(output)
+
+    rewritten_outputs.sort(key=_output_sort_key)
+    manifest["outputs"] = rewritten_outputs
+    return transcode_skipped
+
+
 def run_detectors(session_report: Dict[str, Any], plugins: Sequence[PluginEntry]) -> None:
     session = session_report.get("session") or {}
     features = session_report.get("features") or {}
@@ -345,6 +571,7 @@ def run_renderers(
     *,
     eligibility_field: str = "eligible_render",
     context: str = "render",
+    output_formats: Sequence[str] | None = None,
 ) -> List[Dict[str, Any]]:
     session = report.get("session") if isinstance(report, dict) else {}
     if not isinstance(session, dict):
@@ -367,6 +594,9 @@ def run_renderers(
             }
         )
     blocked_skipped = _merge_skipped_entries(blocked_skipped)
+    desired_formats = _normalize_output_formats(output_formats)
+    needs_encode = any(fmt != "wav" for fmt in desired_formats)
+    ffmpeg_cmd = resolve_ffmpeg_cmd() if needs_encode else None
 
     manifests: List[Dict[str, Any]] = []
     for plugin in plugins:
@@ -383,7 +613,17 @@ def run_renderers(
             manifest["renderer_id"] = plugin.plugin_id
         _annotate_manifest_output_extremes(manifest, recs_by_id)
         plugin_skipped = _coerce_list(manifest.get("skipped"))
-        manifest["skipped"] = _merge_skipped_entries(blocked_skipped, plugin_skipped)
+        transcode_skipped = _apply_output_formats_to_manifest(
+            manifest,
+            output_dir=output_dir,
+            desired_formats=desired_formats,
+            ffmpeg_cmd=ffmpeg_cmd,
+        )
+        manifest["skipped"] = _merge_skipped_entries(
+            blocked_skipped,
+            plugin_skipped,
+            transcode_skipped,
+        )
         manifests.append(manifest)
 
     return manifests

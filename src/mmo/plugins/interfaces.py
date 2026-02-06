@@ -58,6 +58,7 @@ class RenderOutput(TypedDict, total=False):
     target_bus_id: str
     layout_id: str
     format: str
+    codec: str
     sample_rate_hz: int
     bit_depth: int
     channel_count: int

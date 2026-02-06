@@ -122,6 +122,35 @@ class TestRunConfig(unittest.TestCase):
                 }
             )
 
+    def test_normalize_output_formats_deduplicates_and_orders(self) -> None:
+        normalized = normalize_run_config(
+            {
+                "schema_version": "0.1.0",
+                "render": {"output_formats": ["wv", "wav", "flac", "wav"]},
+                "apply": {"output_formats": ["wv", "flac"]},
+            }
+        )
+        self.assertEqual(
+            normalized.get("render", {}).get("output_formats"),
+            ["wav", "flac", "wv"],
+        )
+        self.assertEqual(
+            normalized.get("apply", {}).get("output_formats"),
+            ["flac", "wv"],
+        )
+
+    def test_normalize_output_formats_rejects_lossy_format(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "unsupported format",
+        ):
+            normalize_run_config(
+                {
+                    "schema_version": "0.1.0",
+                    "render": {"output_formats": ["wav", "mp3"]},
+                }
+            )
+
     def test_diff_run_config_is_sorted_and_tracks_nested_paths(self) -> None:
         before = normalize_run_config(
             {
