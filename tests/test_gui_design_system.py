@@ -44,6 +44,26 @@ class TestGuiDesignSystem(unittest.TestCase):
         payload = load_gui_design(repo_root / "ontology" / "gui_design.yaml")
         self.assertEqual(payload["layout_rules"]["max_nav_depth"], 2)
 
+    def test_gui_design_screen_templates_include_dashboard_and_compare(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        payload = load_gui_design(repo_root / "ontology" / "gui_design.yaml")
+        templates = payload["screen_templates"]
+        self.assertIn("DASHBOARD", templates)
+        self.assertIn("COMPARE", templates)
+
+    def test_gui_design_glossary_has_required_preferred_terms(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        payload = load_gui_design(repo_root / "ontology" / "gui_design.yaml")
+        preferred_terms = set(payload["glossary"]["preferred_terms"])
+        required_terms = {"Vibe", "Signals", "Deliverables", "Safety", "Extreme"}
+        self.assertTrue(required_terms.issubset(preferred_terms))
+
+    def test_gui_design_micro_interactions_animation_duration_is_two_hundred(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        payload = load_gui_design(repo_root / "ontology" / "gui_design.yaml")
+        duration_ms = payload["micro_interactions"]["animations"]["duration_ms"]
+        self.assertEqual(duration_ms, 200)
+
 
 if __name__ == "__main__":
     unittest.main()

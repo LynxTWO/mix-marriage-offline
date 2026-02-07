@@ -10,7 +10,10 @@
     "layout_rules",
     "copy_rules",
     "components",
-    "examples"
+    "examples",
+    "screen_templates",
+    "glossary",
+    "micro_interactions"
   ],
   "properties": {
     "schema_version": { "const": "0.1.0" },
@@ -18,12 +21,24 @@
     "layout_rules": { "$ref": "#/$defs/layout_rules" },
     "copy_rules": { "$ref": "#/$defs/copy_rules" },
     "components": { "$ref": "#/$defs/components" },
-    "examples": { "$ref": "#/$defs/examples" }
+    "examples": { "$ref": "#/$defs/examples" },
+    "screen_templates": { "$ref": "#/$defs/screen_templates" },
+    "glossary": { "$ref": "#/$defs/glossary" },
+    "micro_interactions": { "$ref": "#/$defs/micro_interactions" }
   },
   "$defs": {
     "hex_color": {
       "type": "string",
       "pattern": "^#[0-9A-Fa-f]{6}$"
+    },
+    "nonempty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nonempty_string_array": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/nonempty_string" }
     },
     "palette": {
       "type": "object",
@@ -60,14 +75,10 @@
       "additionalProperties": false,
       "required": ["ui_font", "mono_font", "display_font", "fallback_fonts"],
       "properties": {
-        "ui_font": { "type": "string", "minLength": 1 },
-        "mono_font": { "type": "string", "minLength": 1 },
-        "display_font": { "type": "string", "minLength": 1 },
-        "fallback_fonts": {
-          "type": "array",
-          "minItems": 1,
-          "items": { "type": "string", "minLength": 1 }
-        }
+        "ui_font": { "$ref": "#/$defs/nonempty_string" },
+        "mono_font": { "$ref": "#/$defs/nonempty_string" },
+        "display_font": { "$ref": "#/$defs/nonempty_string" },
+        "fallback_fonts": { "$ref": "#/$defs/nonempty_string_array" }
       }
     },
     "spacing": {
@@ -85,7 +96,7 @@
       "additionalProperties": false,
       "required": ["style"],
       "properties": {
-        "style": { "type": "string", "minLength": 1 }
+        "style": { "$ref": "#/$defs/nonempty_string" }
       }
     },
     "theme": {
@@ -128,7 +139,7 @@
         "audience": {
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string", "minLength": 1 },
+          "items": { "$ref": "#/$defs/nonempty_string" },
           "uniqueItems": true
         },
         "avoid_jargon_when_possible": { "type": "boolean" },
@@ -141,16 +152,8 @@
       "additionalProperties": false,
       "required": ["badges", "panels"],
       "properties": {
-        "badges": {
-          "type": "array",
-          "minItems": 1,
-          "items": { "type": "string", "minLength": 1 }
-        },
-        "panels": {
-          "type": "array",
-          "minItems": 1,
-          "items": { "type": "string", "minLength": 1 }
-        }
+        "badges": { "$ref": "#/$defs/nonempty_string_array" },
+        "panels": { "$ref": "#/$defs/nonempty_string_array" }
       }
     },
     "examples": {
@@ -158,11 +161,147 @@
       "additionalProperties": false,
       "required": ["chips"],
       "properties": {
-        "chips": {
+        "chips": { "$ref": "#/$defs/nonempty_string_array" }
+      }
+    },
+    "screen_template_states": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["success", "warning", "blocked"],
+      "properties": {
+        "success": { "$ref": "#/$defs/nonempty_string" },
+        "warning": { "$ref": "#/$defs/nonempty_string" },
+        "blocked": { "$ref": "#/$defs/nonempty_string" }
+      }
+    },
+    "screen_template": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "purpose",
+        "primary_panels",
+        "nerd_panels",
+        "states",
+        "example_copy"
+      ],
+      "properties": {
+        "purpose": { "$ref": "#/$defs/nonempty_string" },
+        "primary_panels": {
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string", "minLength": 1 }
+          "items": { "$ref": "#/$defs/nonempty_string" },
+          "uniqueItems": true
+        },
+        "nerd_panels": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nonempty_string" },
+          "uniqueItems": true
+        },
+        "states": { "$ref": "#/$defs/screen_template_states" },
+        "example_copy": { "$ref": "#/$defs/nonempty_string" }
+      }
+    },
+    "screen_templates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["DASHBOARD", "PRESETS", "RUN", "RESULTS", "COMPARE"],
+      "properties": {
+        "DASHBOARD": { "$ref": "#/$defs/screen_template" },
+        "PRESETS": { "$ref": "#/$defs/screen_template" },
+        "RUN": { "$ref": "#/$defs/screen_template" },
+        "RESULTS": { "$ref": "#/$defs/screen_template" },
+        "COMPARE": { "$ref": "#/$defs/screen_template" }
+      }
+    },
+    "translate_term": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["term", "preferred", "nerd_label"],
+      "properties": {
+        "term": { "$ref": "#/$defs/nonempty_string" },
+        "preferred": { "$ref": "#/$defs/nonempty_string" },
+        "nerd_label": { "$ref": "#/$defs/nonempty_string" }
+      }
+    },
+    "glossary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preferred_terms", "translate_terms", "avoid_terms"],
+      "properties": {
+        "preferred_terms": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nonempty_string" },
+          "uniqueItems": true
+        },
+        "translate_terms": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/translate_term" }
+        },
+        "avoid_terms": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nonempty_string" },
+          "uniqueItems": true
         }
+      }
+    },
+    "hover_help": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "include_why"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "include_why": { "type": "boolean" }
+      }
+    },
+    "animations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "duration_ms", "reduced_motion_respected"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "duration_ms": { "type": "integer", "minimum": 0 },
+        "reduced_motion_respected": { "type": "boolean" }
+      }
+    },
+    "feedback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["show_progress", "show_why", "show_changes"],
+      "properties": {
+        "show_progress": { "type": "boolean" },
+        "show_why": { "type": "boolean" },
+        "show_changes": { "type": "boolean" }
+      }
+    },
+    "badges": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed"],
+      "properties": {
+        "allowed": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["EXTREME", "BLOCKED", "SAFE", "INFO"]
+          }
+        }
+      }
+    },
+    "micro_interactions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hover_help", "animations", "feedback", "badges"],
+      "properties": {
+        "hover_help": { "$ref": "#/$defs/hover_help" },
+        "animations": { "$ref": "#/$defs/animations" },
+        "feedback": { "$ref": "#/$defs/feedback" },
+        "badges": { "$ref": "#/$defs/badges" }
       }
     }
   }

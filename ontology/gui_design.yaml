@@ -58,3 +58,128 @@ examples:
     - "Wide"
     - "Safe"
     - "Live"
+screen_templates:
+  DASHBOARD:
+    purpose: "Orient users quickly with Vibe Signals, Safety status, deliverables readiness, and the next safe action."
+    primary_panels:
+      - "Vibe Signals"
+      - "Safety"
+      - "Deliverables"
+      - "Next Actions"
+    nerd_panels:
+      - "Policy IDs and thresholds"
+      - "Raw detector diagnostics"
+      - "Rule-level rationale"
+    states:
+      success: "Safety checks pass and deliverables are ready."
+      warning: "At least one risk signal needs review before export."
+      blocked: "A hard blocker prevents run or export until resolved."
+    example_copy: "Safety checks passed. Your vibe is intact and ready to render."
+  PRESETS:
+    purpose: "Help users browse, preview, and apply sonic directions with a clear summary of what each preset changes."
+    primary_panels:
+      - "Browse and filter"
+      - "Preview with help"
+      - "What it changes"
+      - "Apply and Run"
+    nerd_panels:
+      - "Parameter deltas"
+      - "Policy references"
+      - "Threshold detail"
+    states:
+      success: "Preset is previewed and ready to apply."
+      warning: "Preset pushes risky regions and should be reviewed."
+      blocked: "Preset cannot be applied due to hard constraints."
+    example_copy: "This preset adds width and air while keeping your vocal upfront."
+  RUN:
+    purpose: "Control execution with clear step toggles, output formats, progress visibility, and cache awareness."
+    primary_panels:
+      - "Step toggles"
+      - "Output formats"
+      - "Progress"
+      - "Cache indicators"
+    nerd_panels:
+      - "Stage timings"
+      - "Cache key detail"
+      - "Execution metadata"
+    states:
+      success: "Run completed and outputs are ready."
+      warning: "Run completed with caveats that need review."
+      blocked: "Run cannot proceed until blockers are fixed."
+    example_copy: "Run complete. Cached analysis sped this pass up."
+  RESULTS:
+    purpose: "Present deliverables and listening guidance with clear extreme flags and direct export actions."
+    primary_panels:
+      - "Deliverables cards"
+      - "Audition guidance"
+      - "Extreme flags"
+      - "Export buttons"
+    nerd_panels:
+      - "Metric traces"
+      - "Issue IDs"
+      - "Threshold rationale"
+    states:
+      success: "Deliverables pass checks and can be exported."
+      warning: "Deliverables are usable but need focused review."
+      blocked: "Export is blocked until required fixes are made."
+    example_copy: "Start with the chorus audition marker to hear the biggest change."
+  COMPARE:
+    purpose: "Support A/B decisions with objective differences, warnings, and a concise summary of what changed."
+    primary_panels:
+      - "A/B selection"
+      - "Objective diffs"
+      - "Warnings"
+      - "What changed summary"
+    nerd_panels:
+      - "Per-metric deltas"
+      - "Detector IDs"
+      - "Threshold comparisons"
+    states:
+      success: "Differences are clear and ready for decision."
+      warning: "Differences introduce safety or translation risk."
+      blocked: "Comparison cannot run due to missing or incompatible inputs."
+    example_copy: "Version B feels wider with similar loudness and safer headroom."
+glossary:
+  preferred_terms:
+    - "Vibe"
+    - "Signals"
+    - "Deliverables"
+    - "Safety"
+    - "Extreme"
+    - "Preview"
+    - "Compare"
+    - "Apply"
+    - "Render"
+    - "Why"
+  translate_terms:
+    - term: "LUFS"
+      preferred: "Loudness"
+      nerd_label: "LUFS"
+    - term: "Correlation"
+      preferred: "Stereo coherence"
+      nerd_label: "Correlation"
+    - term: "Gate"
+      preferred: "Safety check"
+      nerd_label: "Gate"
+  avoid_terms:
+    - "LUFS"
+    - "Correlation"
+    - "Gate"
+micro_interactions:
+  hover_help:
+    enabled: true
+    include_why: true
+  animations:
+    enabled: true
+    duration_ms: 200
+    reduced_motion_respected: true
+  feedback:
+    show_progress: true
+    show_why: true
+    show_changes: true
+  badges:
+    allowed:
+      - "EXTREME"
+      - "BLOCKED"
+      - "SAFE"
+      - "INFO"
