@@ -51,6 +51,7 @@ from mmo.core.run_config import (
     merge_run_config,
     normalize_run_config,
 )
+from mmo.core.timeline import load_timeline
 from mmo.core.variants import build_variant_plan, run_variant_plan
 from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS
 from mmo.ui.tui import choose_from_list, multi_toggle, render_header, yes_no
@@ -183,6 +184,30 @@ def _load_json_object(path: Path, *, label: str) -> dict[str, Any]:
 
 def _load_report(report_path: Path) -> dict[str, Any]:
     return _load_json_object(report_path, label="Report")
+
+
+def _load_timeline_payload(timeline_path: Path | None) -> dict[str, Any] | None:
+    if timeline_path is None:
+        return None
+    return load_timeline(timeline_path)
+
+
+def _render_timeline_text(timeline: dict[str, Any]) -> str:
+    lines = [f"schema_version: {timeline.get('schema_version', '')}", "sections:"]
+    raw_sections = timeline.get("sections")
+    if not isinstance(raw_sections, list) or not raw_sections:
+        lines.append("- (none)")
+        return "\n".join(lines)
+
+    for section in raw_sections:
+        if not isinstance(section, dict):
+            continue
+        section_id = section.get("id", "")
+        label = section.get("label", "")
+        start_s = section.get("start_s", "")
+        end_s = section.get("end_s", "")
+        lines.append(f"- {section_id}  {label}  {start_s}..{end_s}")
+    return "\n".join(lines)
 
 
 def _load_json_schema(schema_path: Path) -> dict[str, Any]:
@@ -792,6 +817,7 @@ def _run_bundle(
     project_path: Path | None,
     deliverables_index_path: Path | None,
     listen_pack_path: Path | None,
+    timeline_path: Path | None,
 ) -> int:
     from mmo.core.ui_bundle import build_ui_bundle  # noqa: WPS433
 
@@ -815,6 +841,7 @@ def _run_bundle(
         project_path=project_path,
         deliverables_index_path=deliverables_index_path,
         listen_pack_path=listen_pack_path,
+        timeline_path=timeline_path,
     )
     _validate_json_payload(
         bundle,
@@ -1444,6 +1471,7 @@ def _run_variants_workflow(
     listen_pack: bool = False,
     deliverables_index: bool = False,
     project_path: Path | None = None,
+    timeline_path: Path | None = None,
     cache_enabled: bool = True,
     cache_dir: Path | None = None,
 ) -> int:
@@ -1483,6 +1511,16 @@ def _run_variants_workflow(
     if qa_max_seconds is not None and qa_max_seconds < 0:
         print("--qa-max-seconds must be >= 0.", file=sys.stderr)
         return 1
+
+    resolved_timeline_path: Path | None = None
+    normalized_timeline: dict[str, Any] | None = None
+    if timeline_path is not None:
+        resolved_timeline_path = timeline_path.resolve()
+        try:
+            normalized_timeline = _load_timeline_payload(resolved_timeline_path)
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
 
     shared_output_formats: list[str] | None = None
     if output_formats is not None:
@@ -1598,6 +1636,10 @@ def _run_variants_workflow(
             run_variant_plan_kwargs["deliverables_index_path"] = deliverables_index_path
         if listen_pack:
             run_variant_plan_kwargs["listen_pack_path"] = listen_pack_path
+        if normalized_timeline is not None:
+            run_variant_plan_kwargs["timeline"] = normalized_timeline
+        if resolved_timeline_path is not None:
+            run_variant_plan_kwargs["timeline_path"] = resolved_timeline_path
 
         result = run_variant_plan(
             plan,
@@ -1665,6 +1707,7 @@ def _run_one_shot_workflow(
     preset_id: str | None,
     config_path: str | None,
     project_path: Path | None,
+    timeline_path: Path | None,
     profile: str | None,
     meters: str | None,
     max_seconds: float | None,
@@ -1679,6 +1722,16 @@ def _run_one_shot_workflow(
     cache_enabled: bool,
     cache_dir: Path | None,
 ) -> int:
+    resolved_timeline_path: Path | None = None
+    timeline_payload: dict[str, Any] | None = None
+    if timeline_path is not None:
+        resolved_timeline_path = timeline_path.resolve()
+        try:
+            timeline_payload = _load_timeline_payload(resolved_timeline_path)
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
     run_overrides: dict[str, Any] = {}
     if profile is not None:
         run_overrides["profile_id"] = profile
@@ -1831,6 +1884,18 @@ def _run_one_shot_workflow(
                 except OSError:
                     pass
 
+    if timeline_payload is not None and report_payload is not None:
+        report_payload["timeline"] = timeline_payload
+        try:
+            _validate_json_payload(
+                report_payload,
+                schema_path=report_schema_path,
+                payload_name="Report",
+            )
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+        _write_json_file(report_path, report_payload)
+
     exit_code = _run_export(
         tools_dir,
         report_path,
@@ -1925,6 +1990,7 @@ def _run_one_shot_workflow(
                     deliverables_index_path if deliverables_index else None
                 ),
                 listen_pack_path=None,
+                timeline_path=resolved_timeline_path,
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
@@ -1988,6 +2054,10 @@ def _run_workflow_from_run_args(
     project_path_value = getattr(args, "project", None)
     if isinstance(project_path_value, str) and project_path_value.strip():
         project_path = Path(project_path_value)
+    timeline_path: Path | None = None
+    timeline_path_value = getattr(args, "timeline", None)
+    if isinstance(timeline_path_value, str) and timeline_path_value.strip():
+        timeline_path = Path(timeline_path_value)
     should_delegate_to_variants = (
         args.variants
         or len(preset_values) > 1
@@ -2020,6 +2090,7 @@ def _run_workflow_from_run_args(
             format_set_values=format_set_values if format_set_values else None,
             deliverables_index=args.deliverables_index,
             project_path=project_path,
+            timeline_path=timeline_path,
             cache_enabled=args.cache == "on",
             cache_dir=Path(args.cache_dir) if args.cache_dir else None,
         )
@@ -2034,6 +2105,7 @@ def _run_workflow_from_run_args(
         preset_id=preset_values[0] if preset_values else None,
         config_path=config_values[0] if config_values else None,
         project_path=project_path,
+        timeline_path=timeline_path,
         profile=args.profile,
         meters=args.meters,
         max_seconds=args.max_seconds,
@@ -2114,6 +2186,10 @@ def _render_project_text(project: dict[str, Any]) -> str:
         f"created_at_utc: {project.get('created_at_utc', '')}",
         f"updated_at_utc: {project.get('updated_at_utc', '')}",
     ]
+
+    timeline_path = project.get("timeline_path")
+    if isinstance(timeline_path, str):
+        lines.append(f"timeline_path: {timeline_path}")
 
     lockfile_path = project.get("lockfile_path")
     if isinstance(lockfile_path, str):
@@ -2729,6 +2805,7 @@ def _run_ui_workflow(
             preset_id=selected_preset_id,
             config_path=None,
             project_path=resolved_project_path,
+            timeline_path=None,
             profile=None,
             meters=None,
             max_seconds=None,
@@ -2964,6 +3041,11 @@ def main(argv: list[str] | None = None) -> int:
         "--output-formats",
         default=None,
         help="Comma-separated lossless output formats (wav,flac,wv,aiff,alac).",
+    )
+    run_parser.add_argument(
+        "--timeline",
+        default=None,
+        help="Optional path to a timeline JSON with section markers.",
     )
     run_parser.add_argument(
         "--bundle",
@@ -3410,6 +3492,11 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     variants_run_parser.add_argument(
+        "--timeline",
+        default=None,
+        help="Optional path to a timeline JSON with section markers.",
+    )
+    variants_run_parser.add_argument(
         "--cache",
         choices=["on", "off"],
         default="on",
@@ -3788,6 +3875,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Comma-separated lossless output formats (wav,flac,wv,aiff,alac).",
     )
     project_run_parser.add_argument(
+        "--timeline",
+        default=None,
+        help="Optional path to a timeline JSON with section markers.",
+    )
+    project_run_parser.add_argument(
         "--bundle",
         action="store_true",
         help="Build a UI bundle JSON.",
@@ -4048,6 +4140,36 @@ def main(argv: list[str] | None = None) -> int:
         help="Output format for routing plan.",
     )
 
+    timeline_parser = subparsers.add_parser("timeline", help="Timeline marker tools.")
+    timeline_subparsers = timeline_parser.add_subparsers(
+        dest="timeline_command",
+        required=True,
+    )
+    timeline_validate_parser = timeline_subparsers.add_parser(
+        "validate",
+        help="Validate and normalize a timeline JSON.",
+    )
+    timeline_validate_parser.add_argument(
+        "--timeline",
+        required=True,
+        help="Path to timeline JSON.",
+    )
+    timeline_show_parser = timeline_subparsers.add_parser(
+        "show",
+        help="Show a normalized timeline JSON.",
+    )
+    timeline_show_parser.add_argument(
+        "--timeline",
+        required=True,
+        help="Path to timeline JSON.",
+    )
+    timeline_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for timeline display.",
+    )
+
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
     args = parser.parse_args(raw_argv)
     repo_root = Path(__file__).resolve().parents[2]
@@ -4101,6 +4223,13 @@ def main(argv: list[str] | None = None) -> int:
                 print("Project stems_dir must be a non-empty string.", file=sys.stderr)
                 return 1
             stems_dir = Path(stems_dir_value)
+            project_timeline_path = project_payload.get("timeline_path")
+            if (
+                getattr(args, "timeline", None) in {None, ""}
+                and isinstance(project_timeline_path, str)
+                and project_timeline_path.strip()
+            ):
+                args.timeline = project_timeline_path
 
             exit_code, run_mode = _run_workflow_from_run_args(
                 repo_root=repo_root,
@@ -4124,6 +4253,10 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 if isinstance(run_config_defaults, dict):
                     project_payload["run_config_defaults"] = run_config_defaults
+
+                timeline_value = getattr(args, "timeline", None)
+                if isinstance(timeline_value, str) and timeline_value.strip():
+                    project_payload["timeline_path"] = Path(timeline_value).resolve().as_posix()
 
                 try:
                     from mmo.core.lockfile import build_lockfile  # noqa: WPS433
@@ -4486,6 +4619,7 @@ def main(argv: list[str] | None = None) -> int:
                     Path(args.deliverables_index) if args.deliverables_index else None
                 ),
                 listen_pack_path=Path(args.listen_pack) if args.listen_pack else None,
+                timeline_path=None,
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
@@ -4544,6 +4678,7 @@ def main(argv: list[str] | None = None) -> int:
             format_set_values=list(args.format_set) if isinstance(args.format_set, list) else None,
             listen_pack=args.listen_pack,
             deliverables_index=args.deliverables_index,
+            timeline_path=Path(args.timeline) if args.timeline else None,
             cache_enabled=args.cache == "on",
             cache_dir=Path(args.cache_dir) if args.cache_dir else None,
         )
@@ -4830,6 +4965,25 @@ def main(argv: list[str] | None = None) -> int:
 
         print("Unknown lock command.", file=sys.stderr)
         return 2
+    if args.command == "timeline":
+        if args.timeline_command not in {"validate", "show"}:
+            print("Unknown timeline command.", file=sys.stderr)
+            return 2
+        try:
+            timeline_payload = load_timeline(Path(args.timeline))
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+        if args.timeline_command == "validate":
+            print("Timeline is valid.")
+            return 0
+
+        if args.format == "json":
+            print(json.dumps(timeline_payload, indent=2, sort_keys=True))
+        else:
+            print(_render_timeline_text(timeline_payload))
+        return 0
     if args.command == "routing":
         from mmo.core.session import build_session_from_stems_dir  # noqa: WPS433
 

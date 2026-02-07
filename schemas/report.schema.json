@@ -34,6 +34,7 @@
     "artifacts": { "$ref": "#/$defs/artifacts" },
     "run_config": { "$ref": "#/$defs/run_config" },
     "routing_plan": { "$ref": "#/$defs/routing_plan" },
+    "timeline": { "$ref": "timeline.schema.json" },
     "downmix_qa": {
       "type": "object",
       "properties": {

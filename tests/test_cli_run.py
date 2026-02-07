@@ -89,6 +89,95 @@ class TestCliRun(unittest.TestCase):
                 {"deliverables_index_path": deliverables_index_path.resolve().as_posix()},
             )
 
+    def test_run_with_timeline_includes_report_timeline_and_bundle_pointer(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        report_validator = _schema_validator(repo_root / "schemas" / "report.schema.json")
+        bundle_validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            out_dir = temp_path / "out"
+            timeline_path = temp_path / "timeline.json"
+            _write_wav_16bit(stems_dir / "drums" / "kick.wav")
+            timeline_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "0.1.0",
+                        "sections": [
+                            {
+                                "id": "SEC.002",
+                                "label": "Verse 1",
+                                "start_s": 12.0,
+                                "end_s": 32.0,
+                            },
+                            {
+                                "id": "SEC.001",
+                                "label": "Intro",
+                                "start_s": 0.0,
+                                "end_s": 12.0,
+                            },
+                        ],
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            exit_code = main(
+                [
+                    "run",
+                    "--stems",
+                    str(stems_dir),
+                    "--out",
+                    str(out_dir),
+                    "--preset",
+                    "PRESET.SAFE_CLEANUP",
+                    "--timeline",
+                    str(timeline_path),
+                    "--bundle",
+                    "--cache",
+                    "off",
+                ]
+            )
+            self.assertEqual(exit_code, 0)
+
+            report_path = out_dir / "report.json"
+            bundle_path = out_dir / "ui_bundle.json"
+            self.assertTrue(report_path.exists())
+            self.assertTrue(bundle_path.exists())
+
+            report_payload = json.loads(report_path.read_text(encoding="utf-8"))
+            bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+            report_validator.validate(report_payload)
+            bundle_validator.validate(bundle_payload)
+            self.assertEqual(
+                report_payload.get("timeline"),
+                {
+                    "schema_version": "0.1.0",
+                    "sections": [
+                        {
+                            "id": "SEC.001",
+                            "label": "Intro",
+                            "start_s": 0.0,
+                            "end_s": 12.0,
+                        },
+                        {
+                            "id": "SEC.002",
+                            "label": "Verse 1",
+                            "start_s": 12.0,
+                            "end_s": 32.0,
+                        },
+                    ],
+                },
+            )
+            self.assertEqual(
+                bundle_payload.get("pointers"),
+                {"timeline_path": timeline_path.resolve().as_posix()},
+            )
+
     def test_run_apply_and_render_write_schema_valid_manifests(self) -> None:
         if resolve_ffmpeg_cmd() is None:
             self.skipTest("ffmpeg not available")

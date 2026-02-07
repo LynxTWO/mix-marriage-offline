@@ -37,6 +37,7 @@ from mmo.core.run_config import (
     merge_run_config,
     normalize_run_config,
 )
+from mmo.core.timeline import normalize_timeline
 from mmo.core.ui_bundle import build_ui_bundle
 from mmo.core.vibe_signals import derive_vibe_signals
 from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS
@@ -854,6 +855,8 @@ def run_variant_plan(
     project_path: Path | None = None,
     deliverables_index_path: Path | None = None,
     listen_pack_path: Path | None = None,
+    timeline: dict[str, Any] | None = None,
+    timeline_path: Path | None = None,
     cache_enabled: bool = True,
     cache_dir: Path | None = None,
 ) -> dict[str, Any]:
@@ -881,6 +884,10 @@ def run_variant_plan(
             analysis_lock = build_lockfile(stems_dir)
         except ValueError:
             analysis_lock = None
+
+    normalized_timeline: dict[str, Any] | None = None
+    if isinstance(timeline, dict):
+        normalized_timeline = normalize_timeline(timeline)
 
     results: list[dict[str, Any]] = []
     for variant in variant_entries:
@@ -1014,6 +1021,9 @@ def run_variant_plan(
                                 pass
                 except Exception as exc:  # pragma: no cover - defensive surface
                     errors.append(f"analyze: {exc}")
+
+        if report is not None and normalized_timeline is not None:
+            report["timeline"] = _json_clone(normalized_timeline)
 
         if report is not None and effective_run_config is not None:
             try:
@@ -1186,6 +1196,7 @@ def run_variant_plan(
                     project_path=project_path,
                     deliverables_index_path=deliverables_index_path,
                     listen_pack_path=listen_pack_path,
+                    timeline_path=timeline_path,
                 )
                 bundle_path = variant_out_dir / "ui_bundle.json"
                 _write_json(bundle_path, bundle)

@@ -189,6 +189,29 @@ class TestProjectFile(unittest.TestCase):
             self.assertIsInstance(project.get("lock_hash"), str)
             self.assertTrue(project["lock_hash"])
 
+    def test_project_schema_accepts_optional_timeline_path(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "project.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            stems_dir.mkdir(parents=True, exist_ok=True)
+            project_path = temp_path / ".mmo_project.json"
+            timeline_path = temp_path / "timeline.json"
+            timeline_path.write_text('{"schema_version":"0.1.0","sections":[]}\n', encoding="utf-8")
+
+            project_payload = new_project(stems_dir, notes=None)
+            project_payload["timeline_path"] = timeline_path.resolve().as_posix()
+            write_project(project_path, project_payload)
+
+            loaded_project = load_project(project_path)
+            validator.validate(loaded_project)
+            self.assertEqual(
+                loaded_project.get("timeline_path"),
+                timeline_path.resolve().as_posix(),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

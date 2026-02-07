@@ -17,6 +17,7 @@
     "created_at_utc": { "type": "string", "format": "date-time" },
     "updated_at_utc": { "type": "string", "format": "date-time" },
     "stems_dir": { "$ref": "#/$defs/posix_abs_path" },
+    "timeline_path": { "$ref": "#/$defs/posix_abs_path" },
     "lockfile_path": { "$ref": "#/$defs/posix_abs_path" },
     "lock_hash": { "type": "string", "minLength": 1 },
     "last_run": { "$ref": "#/$defs/last_run" },

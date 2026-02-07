@@ -204,6 +204,104 @@ class TestVariantsRunner(unittest.TestCase):
                 {"PRESET.SAFE_CLEANUP", "PRESET.VIBE.WARM_INTIMATE"},
             )
 
+    def test_variants_run_with_timeline_embeds_report_timeline_and_bundle_pointer(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            out_dir = temp_path / "variants_out"
+            timeline_path = temp_path / "timeline.json"
+            _write_wav_16bit(stems_dir / "drums" / "kick.wav")
+            timeline_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "0.1.0",
+                        "sections": [
+                            {
+                                "id": "SEC.002",
+                                "label": "Verse 1",
+                                "start_s": 12.0,
+                                "end_s": 32.0,
+                            },
+                            {
+                                "id": "SEC.001",
+                                "label": "Intro",
+                                "start_s": 0.0,
+                                "end_s": 12.0,
+                            },
+                        ],
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            exit_code = main(
+                [
+                    "variants",
+                    "run",
+                    "--stems",
+                    str(stems_dir),
+                    "--out",
+                    str(out_dir),
+                    "--preset",
+                    "PRESET.SAFE_CLEANUP",
+                    "--bundle",
+                    "--timeline",
+                    str(timeline_path),
+                    "--cache",
+                    "off",
+                ]
+            )
+            self.assertEqual(exit_code, 0)
+
+            plan = json.loads((out_dir / "variant_plan.json").read_text(encoding="utf-8"))
+            variants = plan.get("variants")
+            self.assertIsInstance(variants, list)
+            if not isinstance(variants, list) or not variants:
+                return
+            first = variants[0]
+            self.assertIsInstance(first, dict)
+            if not isinstance(first, dict):
+                return
+
+            variant_id = first.get("variant_id")
+            variant_slug = first.get("variant_slug")
+            self.assertIsInstance(variant_id, str)
+            self.assertIsInstance(variant_slug, str)
+            if not isinstance(variant_id, str) or not isinstance(variant_slug, str):
+                return
+
+            variant_dir = out_dir / f"{variant_id}__{variant_slug}"
+            report_payload = json.loads((variant_dir / "report.json").read_text(encoding="utf-8"))
+            bundle_payload = json.loads((variant_dir / "ui_bundle.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                report_payload.get("timeline"),
+                {
+                    "schema_version": "0.1.0",
+                    "sections": [
+                        {
+                            "id": "SEC.001",
+                            "label": "Intro",
+                            "start_s": 0.0,
+                            "end_s": 12.0,
+                        },
+                        {
+                            "id": "SEC.002",
+                            "label": "Verse 1",
+                            "start_s": 12.0,
+                            "end_s": 32.0,
+                        },
+                    ],
+                },
+            )
+            self.assertEqual(
+                bundle_payload.get("pointers"),
+                {"timeline_path": timeline_path.resolve().as_posix()},
+            )
+
     def test_variants_run_output_formats_propagate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
