@@ -601,6 +601,234 @@ def _vibe_signals_lines(vibe_signals: Dict[str, Any]) -> List[str]:
     return lines
 
 
+def _compare_table(rows: List[List[str]]) -> Table:
+    table = Table(rows, repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return table
+
+
+def _compare_list_text(value: Any) -> str:
+    if not isinstance(value, list):
+        return ""
+    items = [_safe_str(item).strip() for item in value]
+    normalized = [item for item in items if item]
+    if not normalized:
+        return "<none>"
+    return ",".join(normalized)
+
+
+def _compare_overview_table(
+    compare_report: Dict[str, Any],
+    *,
+    truncate_values: int,
+) -> Table:
+    diffs = compare_report.get("diffs", {})
+    if not isinstance(diffs, dict):
+        diffs = {}
+    profile_id = diffs.get("profile_id", {})
+    preset_id = diffs.get("preset_id", {})
+    meters = diffs.get("meters", {})
+    output_formats = diffs.get("output_formats", {})
+
+    rows = [
+        ["field", "A", "B"],
+        [
+            "profile_id",
+            truncate_value(_safe_str(profile_id.get("a")), truncate_values),
+            truncate_value(_safe_str(profile_id.get("b")), truncate_values),
+        ],
+        [
+            "preset_id",
+            truncate_value(_safe_str(preset_id.get("a")), truncate_values),
+            truncate_value(_safe_str(preset_id.get("b")), truncate_values),
+        ],
+        [
+            "meters",
+            truncate_value(_safe_str(meters.get("a")), truncate_values),
+            truncate_value(_safe_str(meters.get("b")), truncate_values),
+        ],
+        [
+            "output_formats",
+            truncate_value(_compare_list_text(output_formats.get("a")), truncate_values),
+            truncate_value(_compare_list_text(output_formats.get("b")), truncate_values),
+        ],
+    ]
+    return _compare_table(rows)
+
+
+def export_compare_report_pdf(
+    compare_report: Dict[str, Any],
+    out_path: Path,
+    *,
+    truncate_values: int = 200,
+) -> None:
+    if SimpleDocTemplate is None:
+        raise RuntimeError("reportlab is required for PDF export")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    doc = SimpleDocTemplate(str(out_path), pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+
+    side_a = compare_report.get("a", {})
+    if not isinstance(side_a, dict):
+        side_a = {}
+    side_b = compare_report.get("b", {})
+    if not isinstance(side_b, dict):
+        side_b = {}
+
+    story.append(Paragraph("MMO Compare Report", styles["Title"]))
+    story.append(Spacer(1, 12))
+    story.append(
+        Paragraph(
+            "A: "
+            f"{truncate_value(_safe_str(side_a.get('label')), truncate_values)}"
+            " | report_path: "
+            f"{truncate_value(_safe_str(side_a.get('report_path')), truncate_values)}",
+            styles["Normal"],
+        )
+    )
+    story.append(
+        Paragraph(
+            "B: "
+            f"{truncate_value(_safe_str(side_b.get('label')), truncate_values)}"
+            " | report_path: "
+            f"{truncate_value(_safe_str(side_b.get('report_path')), truncate_values)}",
+            styles["Normal"],
+        )
+    )
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("High-Level Diffs", styles["Heading2"]))
+    story.append(Spacer(1, 6))
+    story.append(
+        _compare_overview_table(
+            compare_report,
+            truncate_values=truncate_values,
+        )
+    )
+    story.append(Spacer(1, 12))
+
+    diffs = compare_report.get("diffs", {})
+    metrics = {}
+    if isinstance(diffs, dict):
+        metrics = diffs.get("metrics", {})
+    if not isinstance(metrics, dict):
+        metrics = {}
+
+    downmix_qa = metrics.get("downmix_qa")
+    if isinstance(downmix_qa, dict):
+        rows = [["metric", "A", "B", "delta"]]
+        for key, label in (
+            ("lufs_delta", "LUFS delta"),
+            ("true_peak_delta", "True peak delta"),
+            ("corr_delta", "Correlation delta"),
+        ):
+            value = downmix_qa.get(key, {})
+            if not isinstance(value, dict):
+                value = {}
+            rows.append(
+                [
+                    label,
+                    _safe_str(value.get("a")),
+                    _safe_str(value.get("b")),
+                    _safe_str(value.get("delta")),
+                ]
+            )
+        story.append(Paragraph("Downmix QA Metrics", styles["Heading2"]))
+        story.append(Spacer(1, 6))
+        story.append(_compare_table(rows))
+        story.append(Spacer(1, 12))
+
+    mix_complexity = metrics.get("mix_complexity")
+    if isinstance(mix_complexity, dict):
+        rows = [["metric", "A", "B", "delta"]]
+        for key, label in (
+            ("density_mean", "Density mean"),
+            ("density_peak", "Density peak"),
+            ("masking_pairs_count", "Masking pairs count"),
+        ):
+            value = mix_complexity.get(key, {})
+            if not isinstance(value, dict):
+                value = {}
+            rows.append(
+                [
+                    label,
+                    _safe_str(value.get("a")),
+                    _safe_str(value.get("b")),
+                    _safe_str(value.get("delta")),
+                ]
+            )
+        story.append(Paragraph("Mix Complexity Metrics", styles["Heading2"]))
+        story.append(Spacer(1, 6))
+        story.append(_compare_table(rows))
+        story.append(Spacer(1, 12))
+
+    change_flags = metrics.get("change_flags", {})
+    if isinstance(change_flags, dict):
+        extreme_count = change_flags.get("extreme_count", {})
+        if not isinstance(extreme_count, dict):
+            extreme_count = {}
+        translation_risk = change_flags.get("translation_risk", {})
+        if not isinstance(translation_risk, dict):
+            translation_risk = {}
+        rows = [
+            ["flag", "A", "B", "delta_or_shift"],
+            [
+                "extreme_count",
+                _safe_str(extreme_count.get("a")),
+                _safe_str(extreme_count.get("b")),
+                _safe_str(extreme_count.get("delta")),
+            ],
+            [
+                "translation_risk",
+                _safe_str(translation_risk.get("a")),
+                _safe_str(translation_risk.get("b")),
+                _safe_str(translation_risk.get("shift")),
+            ],
+        ]
+        story.append(Paragraph("Change Flags", styles["Heading2"]))
+        story.append(Spacer(1, 6))
+        story.append(_compare_table(rows))
+        story.append(Spacer(1, 12))
+
+    notes = compare_report.get("notes", [])
+    if isinstance(notes, list) and notes:
+        story.append(Paragraph("Notes", styles["Heading2"]))
+        story.append(Spacer(1, 6))
+        for note in notes:
+            if isinstance(note, str) and note:
+                story.append(
+                    Paragraph(
+                        f"- {truncate_value(note, truncate_values)}",
+                        styles["Normal"],
+                    )
+                )
+        story.append(Spacer(1, 12))
+
+    warnings = compare_report.get("warnings", [])
+    if isinstance(warnings, list) and warnings:
+        story.append(Paragraph("Warnings", styles["Heading2"]))
+        story.append(Spacer(1, 6))
+        for warning in warnings:
+            if isinstance(warning, str) and warning:
+                story.append(
+                    Paragraph(
+                        f"- {truncate_value(warning, truncate_values)}",
+                        styles["Normal"],
+                    )
+                )
+
+    doc.build(story)
+
+
 def export_report_pdf(
     report: Dict[str, Any],
     out_path: Path,

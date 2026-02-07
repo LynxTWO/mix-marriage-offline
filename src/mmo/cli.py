@@ -16,6 +16,11 @@ from mmo.core.cache_store import (
     save_cached_report,
     try_load_cached_report,
 )
+from mmo.core.compare import (
+    build_compare_report,
+    default_label_for_compare_input,
+    load_report_from_path_or_dir,
+)
 from mmo.core.deliverables_index import (
     build_deliverables_index_single,
     build_deliverables_index_variants,
@@ -3049,6 +3054,31 @@ def main(argv: list[str] | None = None) -> int:
         help="Truncate PDF cell values to this length.",
     )
 
+    compare_parser = subparsers.add_parser(
+        "compare",
+        help="Compare two reports (or report folders) and summarize what changed.",
+    )
+    compare_parser.add_argument(
+        "--a",
+        required=True,
+        help="Path to side A report JSON, or a directory containing report.json.",
+    )
+    compare_parser.add_argument(
+        "--b",
+        required=True,
+        help="Path to side B report JSON, or a directory containing report.json.",
+    )
+    compare_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output compare_report JSON.",
+    )
+    compare_parser.add_argument(
+        "--pdf",
+        default=None,
+        help="Optional output compare_report PDF path.",
+    )
+
     render_parser = subparsers.add_parser(
         "render",
         help="Run renderer plugins for render-eligible recommendations.",
@@ -4261,6 +4291,46 @@ def main(argv: list[str] | None = None) -> int:
             no_gates=args.no_gates,
             truncate_values=truncate_values,
         )
+    if args.command == "compare":
+        try:
+            report_a, report_path_a = load_report_from_path_or_dir(Path(args.a))
+            report_b, report_path_b = load_report_from_path_or_dir(Path(args.b))
+            compare_report = build_compare_report(
+                report_a,
+                report_b,
+                label_a=default_label_for_compare_input(args.a, report_path=report_path_a),
+                label_b=default_label_for_compare_input(args.b, report_path=report_path_b),
+                report_path_a=report_path_a,
+                report_path_b=report_path_b,
+            )
+            _validate_json_payload(
+                compare_report,
+                schema_path=repo_root / "schemas" / "compare_report.schema.json",
+                payload_name="Compare report",
+            )
+            _write_json_file(Path(args.out), compare_report)
+            if args.pdf:
+                from mmo.exporters.pdf_report import (  # noqa: WPS433
+                    export_compare_report_pdf,
+                )
+
+                try:
+                    export_compare_report_pdf(
+                        compare_report,
+                        Path(args.pdf),
+                    )
+                except RuntimeError:
+                    print(
+                        "PDF export requires reportlab. Install extras: pip install .[pdf]",
+                        file=sys.stderr,
+                    )
+                    return 2
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+        return 0
     if args.command == "render":
         render_overrides: dict[str, Any] = {}
         if _flag_present(raw_argv, "--profile"):
