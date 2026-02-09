@@ -27,6 +27,12 @@ locales:
       COPY.BADGE.BLOCKED:
         text: "Blocked"
         tooltip: "Safety check says no. Fix the cause first."
+      COPY.BADGE.SAFE:
+        text: "Safe"
+        tooltip: "Checks passed for this stage."
+      COPY.BADGE.INFO:
+        text: "Info"
+        tooltip: "Additional context to guide your next decision."
       COPY.ACTION.PREVIEW:
         text: "Preview"
         tooltip: "See what this vibe changes before you commit."
