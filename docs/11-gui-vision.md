@@ -7,6 +7,14 @@ MMO remains offline-first and deterministic. The GUI is a front-end to the same 
 - exports (PDF/CSV)
 - render manifest JSON (schema-valid)
 
+## Scene-first / render-many note
+
+The GUI should center one scene and multiple render targets. Stereo should be presented as one target alongside others, not as the only truth when scene intent is present.
+
+See:
+- [PROJECT_INSTRUCTIONS.md](PROJECT_INSTRUCTIONS.md)
+- [SCENE_AND_RENDER_CONTRACT_OVERVIEW.md](SCENE_AND_RENDER_CONTRACT_OVERVIEW.md)
+
 ## 1) Design goals
 - **Musician-first:** speak in outcomes, not internals.
 - **Fast feedback:** show “what matters now” in one screen.

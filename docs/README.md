@@ -14,6 +14,16 @@ The numeric prefixes reflect a recommended reading order. Gaps may exist as docu
 6. [05-fixtures-and-ci.md](05-fixtures-and-ci.md)  
 7. [06-roadmap.md](06-roadmap.md)  
 8. [07-export-guides.md](07-export-guides.md)  
+9. [08-policy-validation.md](08-policy-validation.md)  
+10. [PROJECT_INSTRUCTIONS.md](PROJECT_INSTRUCTIONS.md)  
+11. [SCENE_AND_RENDER_CONTRACT_OVERVIEW.md](SCENE_AND_RENDER_CONTRACT_OVERVIEW.md)  
+
+## Scene-first contracts
+
+- [PROJECT_INSTRUCTIONS.md](PROJECT_INSTRUCTIONS.md)  
+  Core architecture requirements for mix-once/render-many, Objective Core boundaries, determinism, and plugin semantics.
+- [SCENE_AND_RENDER_CONTRACT_OVERVIEW.md](SCENE_AND_RENDER_CONTRACT_OVERVIEW.md)  
+  MVP scene model plus render target contract, gate expectations, and deterministic backoff behavior.
 
 ## Product vision and UX
 

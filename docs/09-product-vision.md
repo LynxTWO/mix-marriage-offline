@@ -5,6 +5,14 @@ This document describes the long-term product goal for Mix Marriage Offline (MMO
 MMO is not “AI that mixes your song for you.”  
 MMO is a technical co-pilot that makes *good engineering* easier, so humans can stay focused on vibe and intent.
 
+## Scene-first / render-many note
+
+MMO stores mix intent as a scene, then renders that scene to one or more targets (stereo, 5.1, and beyond). Stereo is one target in the render set rather than a universal source of truth when stems plus intent exist.
+
+See:
+- [PROJECT_INSTRUCTIONS.md](PROJECT_INSTRUCTIONS.md)
+- [SCENE_AND_RENDER_CONTRACT_OVERVIEW.md](SCENE_AND_RENDER_CONTRACT_OVERVIEW.md)
+
 ## 1) The promise: “vibe mixing”
 Mixing is two jobs:
 - **Engineering:** gain staging, loudness safety, masking, translation, downmix integrity, phase risk
