@@ -283,13 +283,76 @@ def _collect_help_ids(
     return sorted(help_ids)
 
 
-def _resolve_help_registry_path(help_registry_path: Path) -> Path:
-    if help_registry_path.exists() or help_registry_path.is_absolute():
-        return help_registry_path
-    repo_relative = Path(__file__).resolve().parents[3] / help_registry_path
+def _resolve_repo_path(path: Path) -> Path:
+    if path.exists() or path.is_absolute():
+        return path
+    repo_relative = Path(__file__).resolve().parents[3] / path
     if repo_relative.exists():
         return repo_relative
-    return help_registry_path
+    return path
+
+
+def _screen_template_ui_copy_keys(gui_design_payload: dict[str, Any]) -> list[str]:
+    screen_templates = gui_design_payload.get("screen_templates")
+    if not isinstance(screen_templates, dict):
+        return []
+    return sorted(
+        {
+            f"COPY.NAV.{screen_id.strip().upper()}"
+            for screen_id in screen_templates.keys()
+            if isinstance(screen_id, str) and screen_id.strip()
+        }
+    )
+
+
+def _dashboard_ui_copy_keys(_dashboard: dict[str, Any]) -> set[str]:
+    return {
+        "COPY.PANEL.SIGNALS.TITLE",
+        "COPY.PANEL.DELIVERABLES.TITLE",
+        "COPY.BADGE.EXTREME",
+        "COPY.BADGE.BLOCKED",
+    }
+
+
+def _collect_ui_copy_keys(dashboard: dict[str, Any], gui_design_payload: dict[str, Any]) -> list[str]:
+    keys = _dashboard_ui_copy_keys(dashboard)
+    keys.update(_screen_template_ui_copy_keys(gui_design_payload))
+    return sorted(keys)
+
+
+def _ui_copy_locale_ids(registry: dict[str, Any]) -> list[str]:
+    locales = registry.get("locales")
+    if not isinstance(locales, dict):
+        return []
+    return sorted(
+        locale_id.strip()
+        for locale_id in locales.keys()
+        if isinstance(locale_id, str) and locale_id.strip()
+    )
+
+
+def _resolve_ui_copy_locale(registry: dict[str, Any], requested_locale: str | None) -> str:
+    locale_ids = _ui_copy_locale_ids(registry)
+    normalized_locale = (
+        requested_locale.strip()
+        if isinstance(requested_locale, str) and requested_locale.strip()
+        else ""
+    )
+    if normalized_locale:
+        if locale_ids and normalized_locale not in locale_ids:
+            joined_locales = ", ".join(locale_ids)
+            raise ValueError(
+                f"Unknown ui locale: {normalized_locale}. Available locales: {joined_locales}"
+            )
+        return normalized_locale
+
+    default_locale = registry.get("default_locale")
+    normalized_default = default_locale.strip() if isinstance(default_locale, str) else ""
+    if normalized_default and normalized_default in locale_ids:
+        return normalized_default
+    if locale_ids:
+        return locale_ids[0]
+    return normalized_default or "en-US"
 
 
 def _collect_downmix_metric_values(downmix_qa: dict[str, Any], evidence_id: str) -> list[float]:
@@ -482,6 +545,8 @@ def build_ui_bundle(
     apply_manifest: dict[str, Any] | None = None,
     applied_report: dict[str, Any] | None = None,
     help_registry_path: Path = Path("ontology/help.yaml"),
+    ui_copy_path: Path = Path("ontology/ui_copy.yaml"),
+    ui_locale: str | None = None,
     project_path: Path | None = None,
     deliverables_index_path: Path | None = None,
     listen_pack_path: Path | None = None,
@@ -489,7 +554,9 @@ def build_ui_bundle(
 ) -> dict[str, Any]:
     from mmo.core.gui_design import load_gui_design  # noqa: WPS433
     from mmo.core.help_registry import load_help_registry, resolve_help_entries  # noqa: WPS433
+    from mmo.core.ui_copy import load_ui_copy, resolve_ui_copy  # noqa: WPS433
 
+    gui_design_payload = load_gui_design(_repo_root() / "ontology" / "gui_design.yaml")
     recommendations = _recommendations(report)
     preset_recommendations = _dashboard_preset_recommendations(report)
     dashboard = {
@@ -523,9 +590,7 @@ def build_ui_bundle(
         "generated_at_utc": _utc_now_iso(),
         "report": report,
         "dashboard": dashboard,
-        "gui_design": _gui_design_summary(
-            load_gui_design(_repo_root() / "ontology" / "gui_design.yaml")
-        ),
+        "gui_design": _gui_design_summary(gui_design_payload),
     }
 
     help_ids = _collect_help_ids(
@@ -533,8 +598,21 @@ def build_ui_bundle(
         preset_recommendations=preset_recommendations,
     )
     if help_ids:
-        registry = load_help_registry(_resolve_help_registry_path(help_registry_path))
+        registry = load_help_registry(_resolve_repo_path(help_registry_path))
         payload["help"] = resolve_help_entries(help_ids, registry)
+
+    ui_copy_registry = load_ui_copy(_resolve_repo_path(ui_copy_path))
+    resolved_ui_locale = _resolve_ui_copy_locale(ui_copy_registry, ui_locale)
+    ui_copy_keys = _collect_ui_copy_keys(dashboard, gui_design_payload)
+    if ui_copy_keys:
+        payload["ui_copy"] = {
+            "locale": resolved_ui_locale,
+            "entries": resolve_ui_copy(
+                ui_copy_keys,
+                ui_copy_registry,
+                locale=resolved_ui_locale,
+            ),
+        }
 
     if render_manifest is not None:
         payload["render_manifest"] = render_manifest

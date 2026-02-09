@@ -13,6 +13,7 @@
     "apply_manifest": { "$ref": "apply_manifest.schema.json" },
     "applied_report": { "$ref": "report.schema.json" },
     "help": { "$ref": "#/$defs/help_payload" },
+    "ui_copy": { "$ref": "#/$defs/ui_copy_payload" },
     "dashboard": { "$ref": "#/$defs/dashboard" },
     "project": { "$ref": "#/$defs/project_summary" },
     "gui_design": { "$ref": "#/$defs/gui_design_summary" },
@@ -47,6 +48,36 @@
         "^HELP\\.[A-Z0-9_.]+$": { "$ref": "#/$defs/help_entry" }
       },
       "additionalProperties": false
+    },
+    "ui_copy_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "tooltip": { "type": "string", "minLength": 1 },
+        "long": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": ["label", "tooltip", "message"]
+        }
+      }
+    },
+    "ui_copy_entries": {
+      "type": "object",
+      "patternProperties": {
+        "^COPY\\.[A-Z0-9_.]+$": { "$ref": "#/$defs/ui_copy_entry" }
+      },
+      "additionalProperties": false
+    },
+    "ui_copy_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locale", "entries"],
+      "properties": {
+        "locale": { "type": "string", "minLength": 1 },
+        "entries": { "$ref": "#/$defs/ui_copy_entries" }
+      }
     },
     "top_issue": {
       "type": "object",

@@ -348,6 +348,22 @@ class TestUiBundle(unittest.TestCase):
                 ],
             },
         )
+        ui_copy_payload = bundle.get("ui_copy")
+        self.assertIsInstance(ui_copy_payload, dict)
+        if isinstance(ui_copy_payload, dict):
+            self.assertEqual(ui_copy_payload.get("locale"), "en-US")
+            entries = ui_copy_payload.get("entries")
+            self.assertIsInstance(entries, dict)
+            if isinstance(entries, dict):
+                self.assertIn("COPY.PANEL.SIGNALS.TITLE", entries)
+                self.assertIn("COPY.PANEL.DELIVERABLES.TITLE", entries)
+                self.assertIn("COPY.BADGE.EXTREME", entries)
+                self.assertIn("COPY.BADGE.BLOCKED", entries)
+                self.assertIn("COPY.NAV.DASHBOARD", entries)
+                self.assertIn("COPY.NAV.PRESETS", entries)
+                self.assertIn("COPY.NAV.RUN", entries)
+                self.assertIn("COPY.NAV.RESULTS", entries)
+                self.assertIn("COPY.NAV.COMPARE", entries)
         preset_recommendations = dashboard.get("preset_recommendations")
         self.assertIsInstance(preset_recommendations, list)
         if isinstance(preset_recommendations, list):
@@ -547,6 +563,8 @@ class TestUiBundle(unittest.TestCase):
                     str(report_path),
                     "--render-manifest",
                     str(render_manifest_path),
+                    "--ui-locale",
+                    "en-US",
                     "--out",
                     str(out_bundle_path),
                 ]
@@ -558,6 +576,7 @@ class TestUiBundle(unittest.TestCase):
             validator.validate(bundle)
             self.assertIn("render_manifest", bundle)
             self.assertEqual(bundle["render_manifest"]["report_id"], report["report_id"])
+            self.assertEqual(bundle.get("ui_copy", {}).get("locale"), "en-US")
             self.assertEqual(
                 bundle["dashboard"]["eligible_counts"],
                 {"auto_apply": 2, "render": 2},

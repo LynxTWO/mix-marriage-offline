@@ -818,6 +818,7 @@ def _run_bundle(
     deliverables_index_path: Path | None,
     listen_pack_path: Path | None,
     timeline_path: Path | None,
+    ui_locale: str | None = None,
 ) -> int:
     from mmo.core.ui_bundle import build_ui_bundle  # noqa: WPS433
 
@@ -838,6 +839,8 @@ def _run_bundle(
         apply_manifest=apply_manifest,
         applied_report=applied_report,
         help_registry_path=repo_root / "ontology" / "help.yaml",
+        ui_copy_path=repo_root / "ontology" / "ui_copy.yaml",
+        ui_locale=ui_locale,
         project_path=project_path,
         deliverables_index_path=deliverables_index_path,
         listen_pack_path=listen_pack_path,
@@ -1227,6 +1230,102 @@ def _build_help_show_payload(*, help_registry_path: Path, help_id: str) -> dict[
     resolved = resolve_help_entries([normalized_help_id], registry)
     entry = resolved.get(normalized_help_id)
     payload: dict[str, Any] = {"help_id": normalized_help_id}
+    if isinstance(entry, dict):
+        payload.update(entry)
+    return payload
+
+
+def _ui_copy_locale_ids(registry: dict[str, Any]) -> list[str]:
+    locales = registry.get("locales")
+    if not isinstance(locales, dict):
+        return []
+    return sorted(
+        locale_id.strip()
+        for locale_id in locales.keys()
+        if isinstance(locale_id, str) and locale_id.strip()
+    )
+
+
+def _resolve_ui_copy_locale(*, registry: dict[str, Any], locale: str | None) -> str:
+    locale_ids = _ui_copy_locale_ids(registry)
+    requested_locale = locale.strip() if isinstance(locale, str) else ""
+    if requested_locale:
+        if locale_ids and requested_locale not in locale_ids:
+            joined_locales = ", ".join(locale_ids)
+            raise ValueError(
+                f"Unknown locale: {requested_locale}. Available locales: {joined_locales}"
+            )
+        return requested_locale
+
+    default_locale = registry.get("default_locale")
+    normalized_default = default_locale.strip() if isinstance(default_locale, str) else ""
+    if normalized_default:
+        return normalized_default
+    if locale_ids:
+        return locale_ids[0]
+    raise ValueError("UI copy registry does not define any locales.")
+
+
+def _build_ui_copy_list_payload(
+    *,
+    ui_copy_registry_path: Path,
+    locale: str | None,
+) -> dict[str, Any]:
+    from mmo.core.ui_copy import load_ui_copy, resolve_ui_copy  # noqa: WPS433
+
+    registry = load_ui_copy(ui_copy_registry_path)
+    resolved_locale = _resolve_ui_copy_locale(registry=registry, locale=locale)
+    locales = registry.get("locales")
+    locale_payload = (
+        locales.get(resolved_locale) if isinstance(locales, dict) else None
+    )
+    entries = (
+        locale_payload.get("entries")
+        if isinstance(locale_payload, dict)
+        else None
+    )
+    copy_keys = (
+        [copy_id for copy_id in entries.keys() if isinstance(copy_id, str)]
+        if isinstance(entries, dict)
+        else []
+    )
+    resolved_entries = resolve_ui_copy(
+        copy_keys,
+        registry,
+        locale=resolved_locale,
+    )
+
+    items: list[dict[str, Any]] = []
+    for copy_id in sorted(resolved_entries.keys()):
+        entry = resolved_entries.get(copy_id)
+        row: dict[str, Any] = {"copy_id": copy_id}
+        if isinstance(entry, dict):
+            row.update(entry)
+        items.append(row)
+    return {"locale": resolved_locale, "entries": items}
+
+
+def _build_ui_copy_show_payload(
+    *,
+    ui_copy_registry_path: Path,
+    locale: str | None,
+    copy_id: str,
+) -> dict[str, Any]:
+    from mmo.core.ui_copy import load_ui_copy, resolve_ui_copy  # noqa: WPS433
+
+    normalized_copy_id = copy_id.strip() if isinstance(copy_id, str) else ""
+    if not normalized_copy_id:
+        raise ValueError("copy_id must be a non-empty string.")
+
+    registry = load_ui_copy(ui_copy_registry_path)
+    resolved_locale = _resolve_ui_copy_locale(registry=registry, locale=locale)
+    entry = resolve_ui_copy([normalized_copy_id], registry, locale=resolved_locale).get(
+        normalized_copy_id
+    )
+    payload: dict[str, Any] = {
+        "locale": resolved_locale,
+        "copy_id": normalized_copy_id,
+    }
     if isinstance(entry, dict):
         payload.update(entry)
     return payload
@@ -3325,6 +3424,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to listen_pack JSON for GUI pointer metadata.",
     )
     bundle_parser.add_argument(
+        "--ui-locale",
+        default=None,
+        help="Optional UI copy locale (default: registry default_locale).",
+    )
+    bundle_parser.add_argument(
         "--out",
         required=True,
         help="Path to output UI bundle JSON.",
@@ -3734,6 +3838,46 @@ def main(argv: list[str] | None = None) -> int:
         choices=["json", "text"],
         default="text",
         help="Output format for help details.",
+    )
+
+    ui_copy_parser = subparsers.add_parser("ui-copy", help="UI copy registry tools.")
+    ui_copy_subparsers = ui_copy_parser.add_subparsers(
+        dest="ui_copy_command",
+        required=True,
+    )
+    ui_copy_list_parser = ui_copy_subparsers.add_parser(
+        "list",
+        help="List UI copy entries.",
+    )
+    ui_copy_list_parser.add_argument(
+        "--locale",
+        default=None,
+        help="Optional locale (default: registry default_locale).",
+    )
+    ui_copy_list_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for UI copy list.",
+    )
+    ui_copy_show_parser = ui_copy_subparsers.add_parser(
+        "show",
+        help="Show one UI copy entry.",
+    )
+    ui_copy_show_parser.add_argument(
+        "copy_id",
+        help="Copy key (e.g., COPY.NAV.DASHBOARD).",
+    )
+    ui_copy_show_parser.add_argument(
+        "--locale",
+        default=None,
+        help="Optional locale (default: registry default_locale).",
+    )
+    ui_copy_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for UI copy details.",
     )
 
     lock_parser = subparsers.add_parser("lock", help="Project lockfile tools.")
@@ -4620,6 +4764,7 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 listen_pack_path=Path(args.listen_pack) if args.listen_pack else None,
                 timeline_path=None,
+                ui_locale=args.ui_locale,
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
@@ -4895,6 +5040,60 @@ def main(argv: list[str] | None = None) -> int:
                             print(f"- {item}")
             return 0
         print("Unknown help command.", file=sys.stderr)
+        return 2
+    if args.command == "ui-copy":
+        ui_copy_registry_path = repo_root / "ontology" / "ui_copy.yaml"
+        if args.ui_copy_command == "list":
+            try:
+                payload = _build_ui_copy_list_payload(
+                    ui_copy_registry_path=ui_copy_registry_path,
+                    locale=args.locale,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(f"locale: {payload.get('locale', '')}")
+                for item in payload.get("entries", []):
+                    if not isinstance(item, dict):
+                        continue
+                    print(f"{item.get('copy_id', '')}  {item.get('text', '')}")
+            return 0
+        if args.ui_copy_command == "show":
+            try:
+                payload = _build_ui_copy_show_payload(
+                    ui_copy_registry_path=ui_copy_registry_path,
+                    locale=args.locale,
+                    copy_id=args.copy_id,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(payload.get("copy_id", ""))
+                print(payload.get("text", ""))
+                tooltip = payload.get("tooltip")
+                if isinstance(tooltip, str) and tooltip:
+                    print("")
+                    print(f"Tooltip: {tooltip}")
+                long_text = payload.get("long")
+                if isinstance(long_text, str) and long_text:
+                    print("")
+                    print(long_text)
+                kind = payload.get("kind")
+                if isinstance(kind, str) and kind:
+                    print("")
+                    print(f"Kind: {kind}")
+                locale_value = payload.get("locale")
+                if isinstance(locale_value, str) and locale_value:
+                    print("")
+                    print(f"Locale: {locale_value}")
+            return 0
+        print("Unknown ui-copy command.", file=sys.stderr)
         return 2
     if args.command == "lock":
         from mmo.core.lockfile import build_lockfile, verify_lockfile  # noqa: WPS433
