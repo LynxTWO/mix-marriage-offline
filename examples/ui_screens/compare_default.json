@@ -1,0 +1,153 @@
+{
+  "schema_version": "0.1.0",
+  "screen_id": "COMPARE",
+  "mode": "default",
+  "title": "Compare - A/B decision",
+  "description": "Compare screen with A/B selection, objective Signals, and concise Why summary.",
+  "ui_state": {
+    "selected_tab": "ab",
+    "selected_variant_id": "VARIANT.B",
+    "selected_compare_side": "A"
+  },
+  "bundle": {
+    "schema_version": "0.1.0",
+    "generated_at_utc": "2000-01-01T00:00:00Z",
+    "report": {
+      "schema_version": "0.1.0",
+      "report_id": "REPORT.UI.EXAMPLE.COMPARE.DEFAULT",
+      "project_id": "PROJECT.UI.EXAMPLES",
+      "profile_id": "PROFILE.ASSIST",
+      "generated_at": "2000-01-01T00:00:00Z",
+      "engine_version": "0.1.0",
+      "ontology_version": "0.1.0",
+      "session": {
+        "stems": []
+      },
+      "issues": [],
+      "recommendations": [
+        {
+          "recommendation_id": "REC.UI.EXAMPLE.COMPARE.001",
+          "action_id": "ACTION.DIAGNOSTIC.CHECK_PHASE_CORRELATION",
+          "risk": "low",
+          "requires_approval": false,
+          "params": [],
+          "eligible_auto_apply": true,
+          "eligible_render": true,
+          "extreme": false
+        }
+      ],
+      "run_config": {
+        "schema_version": "0.1.0",
+        "preset_id": "PRESET.VIBE.WIDE_CINEMATIC",
+        "profile_id": "PROFILE.ASSIST",
+        "meters": "truth"
+      }
+    },
+    "dashboard": {
+      "profile_id": "PROFILE.ASSIST",
+      "top_issues": [],
+      "eligible_counts": {
+        "auto_apply": 1,
+        "render": 1
+      },
+      "blocked_counts": {
+        "auto_apply": 0,
+        "render": 0
+      },
+      "extreme_count": 0,
+      "downmix_qa": {
+        "has_issues": false,
+        "max_delta_lufs": 0.5,
+        "max_delta_true_peak": 0.2,
+        "min_corr": 0.86
+      },
+      "mix_complexity": {
+        "density_mean": 1.7,
+        "density_peak": 3,
+        "top_masking_pairs_count": 2
+      },
+      "vibe_signals": {
+        "density_level": "medium",
+        "masking_level": "low",
+        "translation_risk": "low",
+        "notes": [
+          "Compare summarizes what changed without hiding Safety.",
+          "Why: objective differences support quick decisions."
+        ]
+      },
+      "preset_recommendations": [
+        {
+          "preset_id": "PRESET.VIBE.WIDE_CINEMATIC",
+          "overlay": "Wide",
+          "help_id": "HELP.PRESET.VIBE.WIDE_CINEMATIC",
+          "reasons": [
+            "Useful baseline for wider image comparisons.",
+            "Use Compare to verify center clarity and Safety."
+          ]
+        },
+        {
+          "preset_id": "PRESET.VIBE.TRANSLATION_SAFE",
+          "overlay": "Safe",
+          "help_id": "HELP.PRESET.VIBE.TRANSLATION_SAFE",
+          "reasons": [
+            "Reference variant for robust Deliverables.",
+            "Why: keep translation confidence while judging Vibe."
+          ]
+        }
+      ],
+      "deliverables": [
+        {
+          "deliverable_id": "DELIVERABLE.MAIN.STEREO",
+          "label": "Main Stereo",
+          "target_layout_id": "LAYOUT.2_0",
+          "channel_count": 2,
+          "formats": [
+            "wav"
+          ],
+          "output_count": 1
+        }
+      ]
+    },
+    "ui_copy": {
+      "locale": "en-US",
+      "entries": {
+        "COPY.NAV.COMPARE": {
+          "text": "Compare"
+        },
+        "COPY.NAV.RESULTS": {
+          "text": "Results"
+        },
+        "COPY.ACTION.COMPARE": {
+          "text": "Compare"
+        },
+        "COPY.BADGE.INFO": {
+          "text": "Info"
+        },
+        "COPY.BADGE.SAFE": {
+          "text": "Safe"
+        }
+      }
+    },
+    "help": {
+      "HELP.WORKFLOW.VARIANTS_RUN": {
+        "title": "Variants run workflow",
+        "short": "Generate deterministic A/B artifacts."
+      }
+    },
+    "pointers": {
+      "project_path": "C:/mmo/examples/ui/project.json",
+      "deliverables_index_path": "C:/mmo/examples/ui/compare/deliverables_index.json",
+      "listen_pack_path": "C:/mmo/examples/ui/compare/listen_pack.json"
+    }
+  },
+  "design_hints": {
+    "badges_expected": [
+      "SAFE",
+      "INFO"
+    ],
+    "hover_help_ids": [
+      "HELP.WORKFLOW.VARIANTS_RUN",
+      "COPY.ACTION.COMPARE"
+    ]
+  }
+}

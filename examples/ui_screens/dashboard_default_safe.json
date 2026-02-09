@@ -1,0 +1,162 @@
+{
+  "schema_version": "0.1.0",
+  "screen_id": "DASHBOARD",
+  "mode": "default",
+  "title": "Dashboard - Safe baseline",
+  "description": "Default Dashboard view with calm Signals and Safe Deliverables ready to Render.",
+  "ui_state": {
+    "selected_tab": "overview"
+  },
+  "bundle": {
+    "schema_version": "0.1.0",
+    "generated_at_utc": "2000-01-01T00:00:00Z",
+    "report": {
+      "schema_version": "0.1.0",
+      "report_id": "REPORT.UI.EXAMPLE.DASHBOARD.DEFAULT.SAFE",
+      "project_id": "PROJECT.UI.EXAMPLES",
+      "profile_id": "PROFILE.ASSIST",
+      "generated_at": "2000-01-01T00:00:00Z",
+      "engine_version": "0.1.0",
+      "ontology_version": "0.1.0",
+      "session": {
+        "stems": []
+      },
+      "issues": [],
+      "recommendations": [
+        {
+          "recommendation_id": "REC.UI.EXAMPLE.SAFE.001",
+          "action_id": "ACTION.UTILITY.GAIN",
+          "risk": "low",
+          "requires_approval": false,
+          "params": [],
+          "eligible_auto_apply": true,
+          "eligible_render": true,
+          "extreme": false
+        },
+        {
+          "recommendation_id": "REC.UI.EXAMPLE.SAFE.002",
+          "action_id": "ACTION.DOWNMIX.RENDER",
+          "risk": "low",
+          "requires_approval": false,
+          "params": [],
+          "eligible_auto_apply": true,
+          "eligible_render": true,
+          "extreme": false
+        }
+      ],
+      "run_config": {
+        "schema_version": "0.1.0",
+        "preset_id": "PRESET.SAFE_CLEANUP",
+        "profile_id": "PROFILE.ASSIST",
+        "meters": "truth"
+      }
+    },
+    "dashboard": {
+      "profile_id": "PROFILE.ASSIST",
+      "top_issues": [],
+      "eligible_counts": {
+        "auto_apply": 2,
+        "render": 2
+      },
+      "blocked_counts": {
+        "auto_apply": 0,
+        "render": 0
+      },
+      "extreme_count": 0,
+      "downmix_qa": {
+        "has_issues": false,
+        "max_delta_lufs": null,
+        "max_delta_true_peak": null,
+        "min_corr": null
+      },
+      "mix_complexity": {
+        "density_mean": 1.2,
+        "density_peak": 2,
+        "top_masking_pairs_count": 1
+      },
+      "vibe_signals": {
+        "density_level": "low",
+        "masking_level": "low",
+        "translation_risk": "low",
+        "notes": [
+          "Safety checks pass and the Vibe is stable.",
+          "Render can proceed without blockers."
+        ]
+      },
+      "preset_recommendations": [
+        {
+          "preset_id": "PRESET.SAFE_CLEANUP",
+          "overlay": "Safe",
+          "help_id": "HELP.PRESET.SAFE_CLEANUP",
+          "reasons": [
+            "Safety baseline is good for Apply and Render.",
+            "Why: keep translation stable while editing."
+          ]
+        },
+        {
+          "preset_id": "PRESET.VIBE.TRANSLATION_SAFE",
+          "overlay": "Safe",
+          "help_id": "HELP.PRESET.VIBE.TRANSLATION_SAFE",
+          "reasons": [
+            "Supports reliable Deliverables across playback systems.",
+            "Preview first if you want a conservative change."
+          ]
+        }
+      ],
+      "deliverables": [
+        {
+          "deliverable_id": "DELIVERABLE.MAIN.STEREO",
+          "label": "Main Stereo",
+          "target_layout_id": "LAYOUT.2_0",
+          "channel_count": 2,
+          "formats": [
+            "wav"
+          ],
+          "output_count": 1
+        }
+      ]
+    },
+    "ui_copy": {
+      "locale": "en-US",
+      "entries": {
+        "COPY.NAV.DASHBOARD": {
+          "text": "Dashboard"
+        },
+        "COPY.PANEL.SIGNALS.TITLE": {
+          "text": "Signals",
+          "tooltip": "Quick read on your current Vibe and Safety."
+        },
+        "COPY.PANEL.DELIVERABLES.TITLE": {
+          "text": "Deliverables"
+        },
+        "COPY.BADGE.SAFE": {
+          "text": "Safe"
+        },
+        "COPY.ACTION.RUN": {
+          "text": "Run"
+        }
+      }
+    },
+    "help": {
+      "HELP.PRESET.SAFE_CLEANUP": {
+        "title": "Safe cleanup",
+        "short": "Technical cleanup pass for safer playback."
+      }
+    },
+    "pointers": {
+      "deliverables_index_path": "C:/mmo/examples/ui/deliverables_index.json",
+      "listen_pack_path": "C:/mmo/examples/ui/listen_pack.json",
+      "project_path": "C:/mmo/examples/ui/project.json"
+    }
+  },
+  "design_hints": {
+    "badges_expected": [
+      "SAFE",
+      "INFO"
+    ],
+    "hover_help_ids": [
+      "HELP.PRESET.SAFE_CLEANUP",
+      "COPY.PANEL.SIGNALS.TITLE"
+    ]
+  }
+}

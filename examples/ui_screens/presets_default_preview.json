@@ -1,0 +1,150 @@
+{
+  "schema_version": "0.1.0",
+  "screen_id": "PRESETS",
+  "mode": "default",
+  "title": "Presets - Preview detail",
+  "description": "Preset Preview state with Why guidance before Apply and Run.",
+  "ui_state": {
+    "selected_tab": "preview",
+    "selected_preset_id": "PRESET.VIBE.BRIGHT_AIRY"
+  },
+  "bundle": {
+    "schema_version": "0.1.0",
+    "generated_at_utc": "2000-01-01T00:00:00Z",
+    "report": {
+      "schema_version": "0.1.0",
+      "report_id": "REPORT.UI.EXAMPLE.PRESETS.DEFAULT.PREVIEW",
+      "project_id": "PROJECT.UI.EXAMPLES",
+      "profile_id": "PROFILE.ASSIST",
+      "generated_at": "2000-01-01T00:00:00Z",
+      "engine_version": "0.1.0",
+      "ontology_version": "0.1.0",
+      "session": {
+        "stems": []
+      },
+      "issues": [],
+      "recommendations": [
+        {
+          "recommendation_id": "REC.UI.EXAMPLE.PREVIEW.001",
+          "action_id": "ACTION.UTILITY.GAIN",
+          "risk": "medium",
+          "requires_approval": false,
+          "params": [],
+          "eligible_auto_apply": true,
+          "eligible_render": true,
+          "extreme": false
+        }
+      ],
+      "run_config": {
+        "schema_version": "0.1.0",
+        "preset_id": "PRESET.VIBE.BRIGHT_AIRY",
+        "profile_id": "PROFILE.ASSIST",
+        "meters": "truth"
+      }
+    },
+    "dashboard": {
+      "profile_id": "PROFILE.ASSIST",
+      "top_issues": [],
+      "eligible_counts": {
+        "auto_apply": 1,
+        "render": 1
+      },
+      "blocked_counts": {
+        "auto_apply": 0,
+        "render": 0
+      },
+      "extreme_count": 0,
+      "downmix_qa": {
+        "has_issues": false,
+        "max_delta_lufs": 0.6,
+        "max_delta_true_peak": 0.4,
+        "min_corr": 0.84
+      },
+      "mix_complexity": {
+        "density_mean": 1.6,
+        "density_peak": 3,
+        "top_masking_pairs_count": 2
+      },
+      "vibe_signals": {
+        "density_level": "low",
+        "masking_level": "medium",
+        "translation_risk": "low",
+        "notes": [
+          "Preview emphasizes air without forcing Extreme movement.",
+          "Why: keep Safety headroom before Render."
+        ]
+      },
+      "preset_recommendations": [
+        {
+          "preset_id": "PRESET.VIBE.BRIGHT_AIRY",
+          "overlay": "Air",
+          "help_id": "HELP.PRESET.VIBE.BRIGHT_AIRY",
+          "reasons": [
+            "Opens the top end while preserving Deliverables clarity.",
+            "Compare against warm options if brightness feels sharp."
+          ]
+        },
+        {
+          "preset_id": "PRESET.VIBE.WIDE_CINEMATIC",
+          "overlay": "Wide",
+          "help_id": "HELP.PRESET.VIBE.WIDE_CINEMATIC",
+          "reasons": [
+            "Alternative Preview for depth and stereo expansion.",
+            "Why: evaluate width versus mono Safety."
+          ]
+        }
+      ],
+      "deliverables": [
+        {
+          "deliverable_id": "DELIVERABLE.MAIN.STEREO",
+          "label": "Main Stereo",
+          "target_layout_id": "LAYOUT.2_0",
+          "channel_count": 2,
+          "formats": [
+            "wav"
+          ],
+          "output_count": 1
+        }
+      ]
+    },
+    "ui_copy": {
+      "locale": "en-US",
+      "entries": {
+        "COPY.NAV.PRESETS": {
+          "text": "Presets"
+        },
+        "COPY.ACTION.PREVIEW": {
+          "text": "Preview"
+        },
+        "COPY.ACTION.RUN": {
+          "text": "Run"
+        },
+        "COPY.BADGE.INFO": {
+          "text": "Info"
+        },
+        "COPY.BADGE.SAFE": {
+          "text": "Safe"
+        }
+      }
+    },
+    "help": {
+      "HELP.PRESET.VIBE.BRIGHT_AIRY": {
+        "title": "Bright airy",
+        "short": "Adds top-end lift and openness."
+      }
+    },
+    "pointers": {
+      "project_path": "C:/mmo/examples/ui/project.json"
+    }
+  },
+  "design_hints": {
+    "badges_expected": [
+      "SAFE",
+      "INFO"
+    ],
+    "hover_help_ids": [
+      "HELP.PRESET.VIBE.BRIGHT_AIRY",
+      "COPY.ACTION.RUN"
+    ]
+  }
+}

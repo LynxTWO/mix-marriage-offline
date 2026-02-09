@@ -1331,6 +1331,63 @@ def _build_ui_copy_show_payload(
     return payload
 
 
+def _ui_examples_paths(*, ui_examples_dir: Path) -> list[Path]:
+    if not ui_examples_dir.exists():
+        raise ValueError(f"UI examples directory does not exist: {ui_examples_dir}")
+    if not ui_examples_dir.is_dir():
+        raise ValueError(f"UI examples path is not a directory: {ui_examples_dir}")
+    return sorted(ui_examples_dir.glob("*.json"), key=lambda path: path.name)
+
+
+def _build_ui_examples_list_payload(*, ui_examples_dir: Path) -> list[dict[str, Any]]:
+    from mmo.core.ui_screen_examples import load_ui_screen_example  # noqa: WPS433
+
+    rows: list[dict[str, Any]] = []
+    for path in _ui_examples_paths(ui_examples_dir=ui_examples_dir):
+        payload = load_ui_screen_example(path)
+        rows.append(
+            {
+                "filename": path.name,
+                "screen_id": payload.get("screen_id", ""),
+                "mode": payload.get("mode", ""),
+                "title": payload.get("title", ""),
+                "description": payload.get("description", ""),
+            }
+        )
+    return rows
+
+
+def _build_ui_examples_show_payload(
+    *,
+    ui_examples_dir: Path,
+    filename: str,
+) -> dict[str, Any]:
+    from mmo.core.ui_screen_examples import load_ui_screen_example  # noqa: WPS433
+
+    normalized_filename = filename.strip() if isinstance(filename, str) else ""
+    if not normalized_filename:
+        raise ValueError("filename must be a non-empty string.")
+    if normalized_filename != Path(normalized_filename).name:
+        raise ValueError("filename must not include a directory path.")
+    if not normalized_filename.endswith(".json"):
+        raise ValueError("filename must end with .json.")
+
+    candidate = ui_examples_dir / normalized_filename
+    if not candidate.exists():
+        available = ", ".join(
+            path.name for path in _ui_examples_paths(ui_examples_dir=ui_examples_dir)
+        )
+        raise ValueError(
+            f"Unknown ui example filename: {normalized_filename}. "
+            f"Available files: {available}"
+        )
+
+    payload = load_ui_screen_example(candidate)
+    result = dict(payload)
+    result["filename"] = normalized_filename
+    return result
+
+
 def _build_plugins_list_payload(*, plugins_dir: Path) -> list[dict[str, Any]]:
     from mmo.core.pipeline import load_plugins  # noqa: WPS433
 
@@ -3880,6 +3937,39 @@ def main(argv: list[str] | None = None) -> int:
         help="Output format for UI copy details.",
     )
 
+    ui_examples_parser = subparsers.add_parser(
+        "ui-examples",
+        help="Mock UI screen example tools.",
+    )
+    ui_examples_subparsers = ui_examples_parser.add_subparsers(
+        dest="ui_examples_command",
+        required=True,
+    )
+    ui_examples_list_parser = ui_examples_subparsers.add_parser(
+        "list",
+        help="List available UI screen examples.",
+    )
+    ui_examples_list_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for UI example list.",
+    )
+    ui_examples_show_parser = ui_examples_subparsers.add_parser(
+        "show",
+        help="Show one UI screen example.",
+    )
+    ui_examples_show_parser.add_argument(
+        "filename",
+        help="Example filename (for example dashboard_default_safe.json).",
+    )
+    ui_examples_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for UI example details.",
+    )
+
     lock_parser = subparsers.add_parser("lock", help="Project lockfile tools.")
     lock_subparsers = lock_parser.add_subparsers(dest="lock_command", required=True)
     lock_write_parser = lock_subparsers.add_parser(
@@ -5094,6 +5184,50 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"Locale: {locale_value}")
             return 0
         print("Unknown ui-copy command.", file=sys.stderr)
+        return 2
+    if args.command == "ui-examples":
+        ui_examples_dir = repo_root / "examples" / "ui_screens"
+        if args.ui_examples_command == "list":
+            try:
+                payload = _build_ui_examples_list_payload(
+                    ui_examples_dir=ui_examples_dir,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                for item in payload:
+                    if not isinstance(item, dict):
+                        continue
+                    print(
+                        f"{item.get('filename', '')}"
+                        f"  {item.get('screen_id', '')}"
+                        f"  {item.get('mode', '')}"
+                        f"  {item.get('title', '')}"
+                    )
+            return 0
+        if args.ui_examples_command == "show":
+            try:
+                payload = _build_ui_examples_show_payload(
+                    ui_examples_dir=ui_examples_dir,
+                    filename=args.filename,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(f"screen_id: {payload.get('screen_id', '')}")
+                print(f"mode: {payload.get('mode', '')}")
+                print(f"title: {payload.get('title', '')}")
+                print(f"description: {payload.get('description', '')}")
+            return 0
+        print("Unknown ui-examples command.", file=sys.stderr)
         return 2
     if args.command == "lock":
         from mmo.core.lockfile import build_lockfile, verify_lockfile  # noqa: WPS433

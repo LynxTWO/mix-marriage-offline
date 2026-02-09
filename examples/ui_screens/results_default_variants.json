@@ -1,0 +1,197 @@
+{
+  "schema_version": "0.1.0",
+  "screen_id": "RESULTS",
+  "mode": "default",
+  "title": "Results - Variants comparison prep",
+  "description": "Results view for multiple variants with selected Deliverable and Compare-ready state.",
+  "ui_state": {
+    "selected_tab": "variants",
+    "selected_variant_id": "VARIANT.B",
+    "selected_deliverable_id": "DELIVERABLE.MAIN.STEREO",
+    "filters": {
+      "mode": "variants",
+      "sort": "safety_desc"
+    }
+  },
+  "bundle": {
+    "schema_version": "0.1.0",
+    "generated_at_utc": "2000-01-01T00:00:00Z",
+    "report": {
+      "schema_version": "0.1.0",
+      "report_id": "REPORT.UI.EXAMPLE.RESULTS.DEFAULT.VARIANTS",
+      "project_id": "PROJECT.UI.EXAMPLES",
+      "profile_id": "PROFILE.FULL_SEND",
+      "generated_at": "2000-01-01T00:00:00Z",
+      "engine_version": "0.1.0",
+      "ontology_version": "0.1.0",
+      "session": {
+        "stems": []
+      },
+      "issues": [
+        {
+          "issue_id": "ISSUE.DOWNMIX.QA.CORRELATION_MISMATCH",
+          "severity": 60,
+          "confidence": 1.0,
+          "message": "One variant has lower stereo coherence.",
+          "evidence": [
+            {
+              "evidence_id": "EVID.DOWNMIX.QA.CORR_REF",
+              "value": 0.58
+            }
+          ]
+        }
+      ],
+      "recommendations": [
+        {
+          "recommendation_id": "REC.UI.EXAMPLE.RESULTS.VARIANTS.001",
+          "action_id": "ACTION.DOWNMIX.RENDER",
+          "risk": "medium",
+          "requires_approval": false,
+          "params": [],
+          "eligible_auto_apply": false,
+          "eligible_render": true,
+          "extreme": true
+        },
+        {
+          "recommendation_id": "REC.UI.EXAMPLE.RESULTS.VARIANTS.002",
+          "action_id": "ACTION.UTILITY.GAIN",
+          "risk": "low",
+          "requires_approval": false,
+          "params": [],
+          "eligible_auto_apply": true,
+          "eligible_render": true,
+          "extreme": false
+        }
+      ],
+      "run_config": {
+        "schema_version": "0.1.0",
+        "preset_id": "PRESET.TURBO_DRAFT",
+        "profile_id": "PROFILE.FULL_SEND",
+        "meters": "truth"
+      }
+    },
+    "dashboard": {
+      "profile_id": "PROFILE.FULL_SEND",
+      "top_issues": [
+        {
+          "issue_id": "ISSUE.DOWNMIX.QA.CORRELATION_MISMATCH",
+          "severity": 60,
+          "summary": "Variant B widened the image but reduced mono Safety."
+        }
+      ],
+      "eligible_counts": {
+        "auto_apply": 1,
+        "render": 2
+      },
+      "blocked_counts": {
+        "auto_apply": 1,
+        "render": 0
+      },
+      "extreme_count": 1,
+      "downmix_qa": {
+        "has_issues": true,
+        "max_delta_lufs": 1.1,
+        "max_delta_true_peak": 0.7,
+        "min_corr": 0.58
+      },
+      "mix_complexity": {
+        "density_mean": 2.2,
+        "density_peak": 4,
+        "top_masking_pairs_count": 3
+      },
+      "vibe_signals": {
+        "density_level": "medium",
+        "masking_level": "high",
+        "translation_risk": "medium",
+        "notes": [
+          "Variant set includes one Extreme profile worth a focused listen.",
+          "Why: Compare before final export."
+        ]
+      },
+      "preset_recommendations": [
+        {
+          "preset_id": "PRESET.VIBE.WIDE_CINEMATIC",
+          "overlay": "Wide",
+          "help_id": "HELP.PRESET.VIBE.WIDE_CINEMATIC",
+          "reasons": [
+            "Useful when depth is the primary Vibe goal.",
+            "Extreme width should be checked in mono."
+          ]
+        },
+        {
+          "preset_id": "PRESET.VIBE.TRANSLATION_SAFE",
+          "overlay": "Safe",
+          "help_id": "HELP.PRESET.VIBE.TRANSLATION_SAFE",
+          "reasons": [
+            "Safer fallback when variant risk is elevated.",
+            "Why: preserve Deliverables confidence."
+          ]
+        }
+      ],
+      "deliverables": [
+        {
+          "deliverable_id": "DELIVERABLE.MAIN.STEREO",
+          "label": "Main Stereo",
+          "target_layout_id": "LAYOUT.2_0",
+          "channel_count": 2,
+          "formats": [
+            "wav",
+            "flac"
+          ],
+          "output_count": 2
+        },
+        {
+          "deliverable_id": "DELIVERABLE.ALT.STREAMING",
+          "label": "Streaming Alt",
+          "target_layout_id": "LAYOUT.2_0",
+          "channel_count": 2,
+          "formats": [
+            "wav"
+          ],
+          "output_count": 1
+        }
+      ]
+    },
+    "ui_copy": {
+      "locale": "en-US",
+      "entries": {
+        "COPY.NAV.RESULTS": {
+          "text": "Results"
+        },
+        "COPY.NAV.COMPARE": {
+          "text": "Compare"
+        },
+        "COPY.BADGE.EXTREME": {
+          "text": "Extreme"
+        },
+        "COPY.BADGE.INFO": {
+          "text": "Info"
+        },
+        "COPY.ACTION.COMPARE": {
+          "text": "Compare"
+        }
+      }
+    },
+    "help": {
+      "HELP.WORKFLOW.VARIANTS_RUN": {
+        "title": "Variants run workflow",
+        "short": "Run multiple preset/config variants deterministically."
+      }
+    },
+    "pointers": {
+      "project_path": "C:/mmo/examples/ui/project.json",
+      "deliverables_index_path": "C:/mmo/examples/ui/results_variants/deliverables_index.json",
+      "listen_pack_path": "C:/mmo/examples/ui/results_variants/listen_pack.json"
+    }
+  },
+  "design_hints": {
+    "badges_expected": [
+      "EXTREME",
+      "INFO"
+    ],
+    "hover_help_ids": [
+      "HELP.WORKFLOW.VARIANTS_RUN",
+      "COPY.ACTION.COMPARE"
+    ]
+  }
+}

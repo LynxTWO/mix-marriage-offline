@@ -1,0 +1,154 @@
+{
+  "schema_version": "0.1.0",
+  "screen_id": "PRESETS",
+  "mode": "default",
+  "title": "Presets - Browse",
+  "description": "Browse and filter Presets with clear Preview and Safety context.",
+  "ui_state": {
+    "selected_tab": "browse",
+    "selected_preset_id": "PRESET.VIBE.WARM_INTIMATE",
+    "filters": {
+      "query": "Vibe",
+      "safety": "safe"
+    }
+  },
+  "bundle": {
+    "schema_version": "0.1.0",
+    "generated_at_utc": "2000-01-01T00:00:00Z",
+    "report": {
+      "schema_version": "0.1.0",
+      "report_id": "REPORT.UI.EXAMPLE.PRESETS.DEFAULT.BROWSE",
+      "project_id": "PROJECT.UI.EXAMPLES",
+      "profile_id": "PROFILE.ASSIST",
+      "generated_at": "2000-01-01T00:00:00Z",
+      "engine_version": "0.1.0",
+      "ontology_version": "0.1.0",
+      "session": {
+        "stems": []
+      },
+      "issues": [],
+      "recommendations": [
+        {
+          "recommendation_id": "REC.UI.EXAMPLE.PRESETS.001",
+          "action_id": "ACTION.UTILITY.GAIN",
+          "risk": "low",
+          "requires_approval": false,
+          "params": [],
+          "eligible_auto_apply": true,
+          "eligible_render": true,
+          "extreme": false
+        }
+      ],
+      "run_config": {
+        "schema_version": "0.1.0",
+        "preset_id": "PRESET.VIBE.WARM_INTIMATE",
+        "profile_id": "PROFILE.ASSIST",
+        "meters": "truth"
+      }
+    },
+    "dashboard": {
+      "profile_id": "PROFILE.ASSIST",
+      "top_issues": [],
+      "eligible_counts": {
+        "auto_apply": 1,
+        "render": 1
+      },
+      "blocked_counts": {
+        "auto_apply": 0,
+        "render": 0
+      },
+      "extreme_count": 0,
+      "downmix_qa": {
+        "has_issues": false,
+        "max_delta_lufs": null,
+        "max_delta_true_peak": null,
+        "min_corr": null
+      },
+      "mix_complexity": {
+        "density_mean": 1.8,
+        "density_peak": 3,
+        "top_masking_pairs_count": 2
+      },
+      "vibe_signals": {
+        "density_level": "medium",
+        "masking_level": "medium",
+        "translation_risk": "low",
+        "notes": [
+          "Signals suggest a stable base for Preset Preview.",
+          "Why: safe defaults keep quick iteration predictable."
+        ]
+      },
+      "preset_recommendations": [
+        {
+          "preset_id": "PRESET.VIBE.WARM_INTIMATE",
+          "overlay": "Warm",
+          "help_id": "HELP.PRESET.VIBE.WARM_INTIMATE",
+          "reasons": [
+            "Adds body while keeping Safety in range.",
+            "Preview first before Apply."
+          ]
+        },
+        {
+          "preset_id": "PRESET.VIBE.VOCAL_FORWARD",
+          "overlay": "Vocal",
+          "help_id": "HELP.PRESET.VIBE.VOCAL_FORWARD",
+          "reasons": [
+            "Can improve lyric clarity in dense passages.",
+            "Use Compare to confirm the center stays balanced."
+          ]
+        }
+      ],
+      "deliverables": [
+        {
+          "deliverable_id": "DELIVERABLE.MAIN.STEREO",
+          "label": "Main Stereo",
+          "target_layout_id": "LAYOUT.2_0",
+          "channel_count": 2,
+          "formats": [
+            "wav"
+          ],
+          "output_count": 1
+        }
+      ]
+    },
+    "ui_copy": {
+      "locale": "en-US",
+      "entries": {
+        "COPY.NAV.PRESETS": {
+          "text": "Presets"
+        },
+        "COPY.ACTION.PREVIEW": {
+          "text": "Preview"
+        },
+        "COPY.ACTION.RUN": {
+          "text": "Run"
+        },
+        "COPY.BADGE.SAFE": {
+          "text": "Safe"
+        },
+        "COPY.BADGE.INFO": {
+          "text": "Info"
+        }
+      }
+    },
+    "help": {
+      "HELP.PRESET.VIBE.WARM_INTIMATE": {
+        "title": "Warm intimate",
+        "short": "Leans toward closeness and body."
+      }
+    },
+    "pointers": {
+      "project_path": "C:/mmo/examples/ui/project.json"
+    }
+  },
+  "design_hints": {
+    "badges_expected": [
+      "SAFE",
+      "INFO"
+    ],
+    "hover_help_ids": [
+      "HELP.PRESET.VIBE.WARM_INTIMATE",
+      "COPY.ACTION.PREVIEW"
+    ]
+  }
+}

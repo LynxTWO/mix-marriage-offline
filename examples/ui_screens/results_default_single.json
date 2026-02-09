@@ -1,0 +1,153 @@
+{
+  "schema_version": "0.1.0",
+  "screen_id": "RESULTS",
+  "mode": "default",
+  "title": "Results - Single run",
+  "description": "Single-run Results view with one selected Deliverable and listening guidance.",
+  "ui_state": {
+    "selected_tab": "deliverables",
+    "selected_variant_id": "VARIANT.SINGLE",
+    "selected_deliverable_id": "DELIVERABLE.MAIN.STEREO"
+  },
+  "bundle": {
+    "schema_version": "0.1.0",
+    "generated_at_utc": "2000-01-01T00:00:00Z",
+    "report": {
+      "schema_version": "0.1.0",
+      "report_id": "REPORT.UI.EXAMPLE.RESULTS.DEFAULT.SINGLE",
+      "project_id": "PROJECT.UI.EXAMPLES",
+      "profile_id": "PROFILE.ASSIST",
+      "generated_at": "2000-01-01T00:00:00Z",
+      "engine_version": "0.1.0",
+      "ontology_version": "0.1.0",
+      "session": {
+        "stems": []
+      },
+      "issues": [],
+      "recommendations": [
+        {
+          "recommendation_id": "REC.UI.EXAMPLE.RESULTS.SINGLE.001",
+          "action_id": "ACTION.DOWNMIX.RENDER",
+          "risk": "low",
+          "requires_approval": false,
+          "params": [],
+          "eligible_auto_apply": true,
+          "eligible_render": true,
+          "extreme": false
+        }
+      ],
+      "run_config": {
+        "schema_version": "0.1.0",
+        "preset_id": "PRESET.VIBE.TRANSLATION_SAFE",
+        "profile_id": "PROFILE.ASSIST",
+        "meters": "truth"
+      }
+    },
+    "dashboard": {
+      "profile_id": "PROFILE.ASSIST",
+      "top_issues": [],
+      "eligible_counts": {
+        "auto_apply": 1,
+        "render": 1
+      },
+      "blocked_counts": {
+        "auto_apply": 0,
+        "render": 0
+      },
+      "extreme_count": 0,
+      "downmix_qa": {
+        "has_issues": false,
+        "max_delta_lufs": 0.4,
+        "max_delta_true_peak": 0.3,
+        "min_corr": 0.9
+      },
+      "mix_complexity": {
+        "density_mean": 1.5,
+        "density_peak": 3,
+        "top_masking_pairs_count": 1
+      },
+      "vibe_signals": {
+        "density_level": "low",
+        "masking_level": "medium",
+        "translation_risk": "low",
+        "notes": [
+          "Deliverables are ready for listening and export.",
+          "Why: this preset favors stable translation."
+        ]
+      },
+      "preset_recommendations": [
+        {
+          "preset_id": "PRESET.VIBE.TRANSLATION_SAFE",
+          "overlay": "Safe",
+          "help_id": "HELP.PRESET.VIBE.TRANSLATION_SAFE",
+          "reasons": [
+            "Keeps Safety high across consumer playback.",
+            "Compare only if you need more Vibe movement."
+          ]
+        },
+        {
+          "preset_id": "PRESET.VIBE.WARM_INTIMATE",
+          "overlay": "Warm",
+          "help_id": "HELP.PRESET.VIBE.WARM_INTIMATE",
+          "reasons": [
+            "Alternative tonality for close vocal focus.",
+            "Preview before replacing this Deliverable."
+          ]
+        }
+      ],
+      "deliverables": [
+        {
+          "deliverable_id": "DELIVERABLE.MAIN.STEREO",
+          "label": "Main Stereo",
+          "target_layout_id": "LAYOUT.2_0",
+          "channel_count": 2,
+          "formats": [
+            "wav"
+          ],
+          "output_count": 1
+        }
+      ]
+    },
+    "ui_copy": {
+      "locale": "en-US",
+      "entries": {
+        "COPY.NAV.RESULTS": {
+          "text": "Results"
+        },
+        "COPY.PANEL.DELIVERABLES.TITLE": {
+          "text": "Deliverables"
+        },
+        "COPY.BADGE.SAFE": {
+          "text": "Safe"
+        },
+        "COPY.BADGE.INFO": {
+          "text": "Info"
+        },
+        "COPY.ACTION.COMPARE": {
+          "text": "Compare"
+        }
+      }
+    },
+    "help": {
+      "HELP.PRESET.VIBE.TRANSLATION_SAFE": {
+        "title": "Translation safe",
+        "short": "Balances tone for steady playback."
+      }
+    },
+    "pointers": {
+      "project_path": "C:/mmo/examples/ui/project.json",
+      "deliverables_index_path": "C:/mmo/examples/ui/results_single/deliverables_index.json",
+      "listen_pack_path": "C:/mmo/examples/ui/results_single/listen_pack.json"
+    }
+  },
+  "design_hints": {
+    "badges_expected": [
+      "SAFE",
+      "INFO"
+    ],
+    "hover_help_ids": [
+      "HELP.PRESET.VIBE.TRANSLATION_SAFE",
+      "COPY.PANEL.DELIVERABLES.TITLE"
+    ]
+  }
+}

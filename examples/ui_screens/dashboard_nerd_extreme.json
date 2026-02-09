@@ -1,0 +1,185 @@
+{
+  "schema_version": "0.1.0",
+  "screen_id": "DASHBOARD",
+  "mode": "nerd",
+  "title": "Dashboard - Nerd extreme diagnostics",
+  "description": "Nerd Dashboard state exposing policy and threshold detail behind Extreme decisions.",
+  "ui_state": {
+    "selected_tab": "policy_ids",
+    "filters": {
+      "show": "thresholds",
+      "severity_min": "60"
+    }
+  },
+  "bundle": {
+    "schema_version": "0.1.0",
+    "generated_at_utc": "2000-01-01T00:00:00Z",
+    "report": {
+      "schema_version": "0.1.0",
+      "report_id": "REPORT.UI.EXAMPLE.DASHBOARD.NERD.EXTREME",
+      "project_id": "PROJECT.UI.EXAMPLES",
+      "profile_id": "PROFILE.FULL_SEND",
+      "generated_at": "2000-01-01T00:00:00Z",
+      "engine_version": "0.1.0",
+      "ontology_version": "0.1.0",
+      "session": {
+        "stems": []
+      },
+      "issues": [
+        {
+          "issue_id": "ISSUE.VALIDATION.CHANNEL_LAYOUT_AMBIGUOUS",
+          "severity": 65,
+          "confidence": 0.8,
+          "message": "Channel layout ambiguity detected.",
+          "evidence": [
+            {
+              "evidence_id": "EVID.VALIDATION.CHANNEL_LAYOUT_REASON",
+              "value": "mask_layout_conflict"
+            }
+          ]
+        }
+      ],
+      "recommendations": [
+        {
+          "recommendation_id": "REC.UI.EXAMPLE.NERD.001",
+          "action_id": "ACTION.DIAGNOSTIC.CHECK_PHASE_CORRELATION",
+          "risk": "medium",
+          "requires_approval": false,
+          "params": [],
+          "eligible_auto_apply": false,
+          "eligible_render": true,
+          "extreme": true
+        },
+        {
+          "recommendation_id": "REC.UI.EXAMPLE.NERD.002",
+          "action_id": "ACTION.UTILITY.GAIN",
+          "risk": "medium",
+          "requires_approval": false,
+          "params": [],
+          "eligible_auto_apply": false,
+          "eligible_render": true,
+          "extreme": false
+        }
+      ],
+      "run_config": {
+        "schema_version": "0.1.0",
+        "preset_id": "PRESET.VIBE.PUNCHY_TIGHT",
+        "profile_id": "PROFILE.FULL_SEND",
+        "meters": "truth"
+      }
+    },
+    "dashboard": {
+      "profile_id": "PROFILE.FULL_SEND",
+      "top_issues": [
+        {
+          "issue_id": "ISSUE.VALIDATION.CHANNEL_LAYOUT_AMBIGUOUS",
+          "severity": 65,
+          "summary": "Threshold fallback in use; review channel metadata."
+        }
+      ],
+      "eligible_counts": {
+        "auto_apply": 0,
+        "render": 2
+      },
+      "blocked_counts": {
+        "auto_apply": 2,
+        "render": 0
+      },
+      "extreme_count": 1,
+      "downmix_qa": {
+        "has_issues": true,
+        "max_delta_lufs": 1.9,
+        "max_delta_true_peak": 1.1,
+        "min_corr": 0.62
+      },
+      "mix_complexity": {
+        "density_mean": 2.4,
+        "density_peak": 5,
+        "top_masking_pairs_count": 4
+      },
+      "vibe_signals": {
+        "density_level": "high",
+        "masking_level": "medium",
+        "translation_risk": "high",
+        "notes": [
+          "Nerd view shows detector IDs and policy rationale.",
+          "Why: compare threshold crossings before Apply."
+        ]
+      },
+      "preset_recommendations": [
+        {
+          "preset_id": "PRESET.VIBE.PUNCHY_TIGHT",
+          "overlay": "Punch",
+          "help_id": "HELP.PRESET.VIBE.PUNCHY_TIGHT",
+          "reasons": [
+            "Can reduce masking and clarify transient Signals.",
+            "Use Compare after Preview to check Safety."
+          ]
+        },
+        {
+          "preset_id": "PRESET.VIBE.TRANSLATION_SAFE",
+          "overlay": "Safe",
+          "help_id": "HELP.PRESET.VIBE.TRANSLATION_SAFE",
+          "reasons": [
+            "Counterbalances high translation risk.",
+            "Why: keep Deliverables dependable during Render."
+          ]
+        }
+      ],
+      "deliverables": [
+        {
+          "deliverable_id": "DELIVERABLE.MAIN.STEREO",
+          "label": "Main Stereo",
+          "target_layout_id": "LAYOUT.2_0",
+          "channel_count": 2,
+          "formats": [
+            "wav"
+          ],
+          "output_count": 1
+        }
+      ]
+    },
+    "ui_copy": {
+      "locale": "en-US",
+      "entries": {
+        "COPY.NAV.DASHBOARD": {
+          "text": "Dashboard"
+        },
+        "COPY.PANEL.SIGNALS.TITLE": {
+          "text": "Signals"
+        },
+        "COPY.BADGE.EXTREME": {
+          "text": "Extreme"
+        },
+        "COPY.BADGE.BLOCKED": {
+          "text": "Blocked"
+        },
+        "COPY.BADGE.INFO": {
+          "text": "Info"
+        }
+      }
+    },
+    "help": {
+      "HELP.MODE.FULL_SEND": {
+        "title": "Full Send mode",
+        "short": "Bolder mode with hard Safety checks still active."
+      }
+    },
+    "pointers": {
+      "deliverables_index_path": "C:/mmo/examples/ui/nerd/deliverables_index.json",
+      "listen_pack_path": "C:/mmo/examples/ui/nerd/listen_pack.json",
+      "project_path": "C:/mmo/examples/ui/project.json"
+    }
+  },
+  "design_hints": {
+    "badges_expected": [
+      "EXTREME",
+      "BLOCKED",
+      "INFO"
+    ],
+    "hover_help_ids": [
+      "HELP.MODE.FULL_SEND",
+      "COPY.BADGE.BLOCKED"
+    ]
+  }
+}

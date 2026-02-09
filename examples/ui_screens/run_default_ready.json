@@ -1,0 +1,154 @@
+{
+  "schema_version": "0.1.0",
+  "screen_id": "RUN",
+  "mode": "default",
+  "title": "Run - Ready to execute",
+  "description": "Run screen in ready state with Safety-confirmed settings and clear Render intent.",
+  "ui_state": {
+    "selected_tab": "ready",
+    "selected_preset_id": "PRESET.SAFE_CLEANUP"
+  },
+  "bundle": {
+    "schema_version": "0.1.0",
+    "generated_at_utc": "2000-01-01T00:00:00Z",
+    "report": {
+      "schema_version": "0.1.0",
+      "report_id": "REPORT.UI.EXAMPLE.RUN.DEFAULT.READY",
+      "project_id": "PROJECT.UI.EXAMPLES",
+      "profile_id": "PROFILE.ASSIST",
+      "generated_at": "2000-01-01T00:00:00Z",
+      "engine_version": "0.1.0",
+      "ontology_version": "0.1.0",
+      "session": {
+        "stems": []
+      },
+      "issues": [],
+      "recommendations": [
+        {
+          "recommendation_id": "REC.UI.EXAMPLE.RUN.READY.001",
+          "action_id": "ACTION.UTILITY.GAIN",
+          "risk": "low",
+          "requires_approval": false,
+          "params": [],
+          "eligible_auto_apply": true,
+          "eligible_render": true,
+          "extreme": false
+        }
+      ],
+      "run_config": {
+        "schema_version": "0.1.0",
+        "preset_id": "PRESET.SAFE_CLEANUP",
+        "profile_id": "PROFILE.ASSIST",
+        "meters": "truth",
+        "render": {
+          "out_dir": "C:/mmo/examples/ui/run_ready"
+        }
+      }
+    },
+    "dashboard": {
+      "profile_id": "PROFILE.ASSIST",
+      "top_issues": [],
+      "eligible_counts": {
+        "auto_apply": 1,
+        "render": 1
+      },
+      "blocked_counts": {
+        "auto_apply": 0,
+        "render": 0
+      },
+      "extreme_count": 0,
+      "downmix_qa": {
+        "has_issues": false,
+        "max_delta_lufs": null,
+        "max_delta_true_peak": null,
+        "min_corr": null
+      },
+      "mix_complexity": {
+        "density_mean": 1.9,
+        "density_peak": 3,
+        "top_masking_pairs_count": 2
+      },
+      "vibe_signals": {
+        "density_level": "medium",
+        "masking_level": "low",
+        "translation_risk": "medium",
+        "notes": [
+          "Ready state keeps primary actions visible.",
+          "Why: run from a stable baseline before Compare."
+        ]
+      },
+      "preset_recommendations": [
+        {
+          "preset_id": "PRESET.SAFE_CLEANUP",
+          "overlay": "Safe",
+          "help_id": "HELP.PRESET.SAFE_CLEANUP",
+          "reasons": [
+            "Low-risk setup before final Render.",
+            "Apply can proceed without blocker badges."
+          ]
+        },
+        {
+          "preset_id": "PRESET.VIBE.TRANSLATION_SAFE",
+          "overlay": "Safe",
+          "help_id": "HELP.PRESET.VIBE.TRANSLATION_SAFE",
+          "reasons": [
+            "Supports stable Deliverables in mixed playback.",
+            "Preview if you want more Vibe movement."
+          ]
+        }
+      ],
+      "deliverables": [
+        {
+          "deliverable_id": "DELIVERABLE.MAIN.STEREO",
+          "label": "Main Stereo",
+          "target_layout_id": "LAYOUT.2_0",
+          "channel_count": 2,
+          "formats": [
+            "wav"
+          ],
+          "output_count": 1
+        }
+      ]
+    },
+    "ui_copy": {
+      "locale": "en-US",
+      "entries": {
+        "COPY.NAV.RUN": {
+          "text": "Run"
+        },
+        "COPY.ACTION.RUN": {
+          "text": "Run"
+        },
+        "COPY.BADGE.SAFE": {
+          "text": "Safe"
+        },
+        "COPY.BADGE.INFO": {
+          "text": "Info"
+        },
+        "COPY.NAV.RESULTS": {
+          "text": "Results"
+        }
+      }
+    },
+    "help": {
+      "HELP.WORKFLOW.RUN": {
+        "title": "One-shot run workflow",
+        "short": "Analyze/export/apply/render in one command."
+      }
+    },
+    "pointers": {
+      "project_path": "C:/mmo/examples/ui/project.json",
+      "deliverables_index_path": "C:/mmo/examples/ui/run_ready/deliverables_index.json"
+    }
+  },
+  "design_hints": {
+    "badges_expected": [
+      "SAFE",
+      "INFO"
+    ],
+    "hover_help_ids": [
+      "HELP.WORKFLOW.RUN",
+      "COPY.ACTION.RUN"
+    ]
+  }
+}

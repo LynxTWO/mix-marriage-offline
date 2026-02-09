@@ -1,0 +1,182 @@
+{
+  "schema_version": "0.1.0",
+  "screen_id": "DASHBOARD",
+  "mode": "default",
+  "title": "Dashboard - Extreme warning",
+  "description": "Default Dashboard view showing Extreme and Blocked Safety state before Render.",
+  "ui_state": {
+    "selected_tab": "safety"
+  },
+  "bundle": {
+    "schema_version": "0.1.0",
+    "generated_at_utc": "2000-01-01T00:00:00Z",
+    "report": {
+      "schema_version": "0.1.0",
+      "report_id": "REPORT.UI.EXAMPLE.DASHBOARD.DEFAULT.EXTREME",
+      "project_id": "PROJECT.UI.EXAMPLES",
+      "profile_id": "PROFILE.FULL_SEND",
+      "generated_at": "2000-01-01T00:00:00Z",
+      "engine_version": "0.1.0",
+      "ontology_version": "0.1.0",
+      "session": {
+        "stems": []
+      },
+      "issues": [
+        {
+          "issue_id": "ISSUE.VALIDATION.LOSSY_STEMS_DETECTED",
+          "severity": 90,
+          "confidence": 1.0,
+          "message": "Lossy stem detected.",
+          "evidence": [
+            {
+              "evidence_id": "EVID.FILE.EXT",
+              "value": ".mp3"
+            }
+          ]
+        }
+      ],
+      "recommendations": [
+        {
+          "recommendation_id": "REC.UI.EXAMPLE.EXTREME.001",
+          "action_id": "ACTION.UTILITY.GAIN",
+          "risk": "high",
+          "requires_approval": true,
+          "params": [],
+          "eligible_auto_apply": false,
+          "eligible_render": true,
+          "extreme": true
+        },
+        {
+          "recommendation_id": "REC.UI.EXAMPLE.EXTREME.002",
+          "action_id": "ACTION.DOWNMIX.RENDER",
+          "risk": "medium",
+          "requires_approval": false,
+          "params": [],
+          "eligible_auto_apply": false,
+          "eligible_render": true,
+          "extreme": true
+        }
+      ],
+      "run_config": {
+        "schema_version": "0.1.0",
+        "preset_id": "PRESET.TURBO_DRAFT",
+        "profile_id": "PROFILE.FULL_SEND",
+        "meters": "truth"
+      }
+    },
+    "dashboard": {
+      "profile_id": "PROFILE.FULL_SEND",
+      "top_issues": [
+        {
+          "issue_id": "ISSUE.VALIDATION.LOSSY_STEMS_DETECTED",
+          "severity": 90,
+          "summary": "Lossy source blocks safe auto Apply."
+        }
+      ],
+      "eligible_counts": {
+        "auto_apply": 0,
+        "render": 2
+      },
+      "blocked_counts": {
+        "auto_apply": 2,
+        "render": 0
+      },
+      "extreme_count": 2,
+      "downmix_qa": {
+        "has_issues": true,
+        "max_delta_lufs": 2.8,
+        "max_delta_true_peak": 1.6,
+        "min_corr": 0.51
+      },
+      "mix_complexity": {
+        "density_mean": 2.9,
+        "density_peak": 6,
+        "top_masking_pairs_count": 5
+      },
+      "vibe_signals": {
+        "density_level": "high",
+        "masking_level": "high",
+        "translation_risk": "high",
+        "notes": [
+          "Extreme movement is likely; Preview before commit.",
+          "Why: Safety checks require fixes before auto Apply."
+        ]
+      },
+      "preset_recommendations": [
+        {
+          "preset_id": "PRESET.VIBE.DENSE_GLUE",
+          "overlay": "Glue",
+          "help_id": "HELP.PRESET.VIBE.DENSE_GLUE",
+          "reasons": [
+            "Strong Vibe shift is possible when density is high.",
+            "Why: compare against a safer baseline before Render."
+          ]
+        },
+        {
+          "preset_id": "PRESET.TURBO_DRAFT",
+          "overlay": "Safe",
+          "help_id": "HELP.PRESET.TURBO_DRAFT",
+          "reasons": [
+            "Fast iteration is useful when signals are unstable.",
+            "Keep Extreme flags visible in Dashboard."
+          ]
+        }
+      ],
+      "deliverables": [
+        {
+          "deliverable_id": "DELIVERABLE.MAIN.STEREO",
+          "label": "Main Stereo",
+          "target_layout_id": "LAYOUT.2_0",
+          "channel_count": 2,
+          "formats": [
+            "wav",
+            "flac"
+          ],
+          "output_count": 2
+        }
+      ]
+    },
+    "ui_copy": {
+      "locale": "en-US",
+      "entries": {
+        "COPY.NAV.DASHBOARD": {
+          "text": "Dashboard"
+        },
+        "COPY.BADGE.EXTREME": {
+          "text": "Extreme"
+        },
+        "COPY.BADGE.BLOCKED": {
+          "text": "Blocked"
+        },
+        "COPY.BADGE.INFO": {
+          "text": "Info"
+        },
+        "COPY.ACTION.PREVIEW": {
+          "text": "Preview"
+        }
+      }
+    },
+    "help": {
+      "HELP.MODE.FULL_SEND": {
+        "title": "Full Send mode",
+        "short": "More permissive mode for bigger moves."
+      }
+    },
+    "pointers": {
+      "deliverables_index_path": "C:/mmo/examples/ui/extreme/deliverables_index.json",
+      "listen_pack_path": "C:/mmo/examples/ui/extreme/listen_pack.json",
+      "project_path": "C:/mmo/examples/ui/project.json"
+    }
+  },
+  "design_hints": {
+    "badges_expected": [
+      "EXTREME",
+      "BLOCKED",
+      "INFO"
+    ],
+    "hover_help_ids": [
+      "HELP.MODE.FULL_SEND",
+      "COPY.BADGE.EXTREME"
+    ]
+  }
+}
