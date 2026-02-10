@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/intent_params.schema.json",
+  "title": "MMO Scene Intent Parameter Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "params"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "params": {
+      "type": "object",
+      "patternProperties": {
+        "^INTENT\\.[A-Z0-9_.]+$": { "$ref": "#/$defs/intent_param" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "intent_param": {
+      "oneOf": [
+        { "$ref": "#/$defs/number_param" },
+        { "$ref": "#/$defs/enum_param" }
+      ]
+    },
+    "number_param": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "default"],
+      "properties": {
+        "type": { "const": "number" },
+        "unit": { "type": "string", "minLength": 1 },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "default": { "type": ["number", "null"] },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    },
+    "enum_param": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "values", "default"],
+      "properties": {
+        "type": { "const": "enum" },
+        "values": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "default": { "type": ["string", "null"] },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}
