@@ -391,6 +391,18 @@ class TestUiBundle(unittest.TestCase):
                 help_payload["HELP.MODE.FULL_SEND"]["title"],
                 "Full Send mode",
             )
+        render_targets_payload = bundle.get("render_targets")
+        self.assertIsInstance(render_targets_payload, dict)
+        if isinstance(render_targets_payload, dict):
+            targets = render_targets_payload.get("targets")
+            self.assertIsInstance(targets, list)
+            if isinstance(targets, list):
+                target_ids = [
+                    item.get("target_id")
+                    for item in targets
+                    if isinstance(item, dict) and isinstance(item.get("target_id"), str)
+                ]
+                self.assertEqual(target_ids, ["TARGET.STEREO.2_0"])
 
         second_bundle = build_ui_bundle(report, None, help_registry_path=help_registry_path)
         self.assertEqual(bundle["dashboard"], second_bundle["dashboard"])
@@ -400,6 +412,12 @@ class TestUiBundle(unittest.TestCase):
         repo_root = Path(__file__).resolve().parents[1]
         validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
         report = _sample_report()
+        report["routing_plan"] = {
+            "schema_version": "0.1.0",
+            "source_layout_id": "LAYOUT.7_1",
+            "target_layout_id": "LAYOUT.5_1",
+            "routes": [],
+        }
         apply_manifest = _sample_apply_manifest(report["report_id"])
         applied_report = _sample_applied_report()
         help_registry_path = repo_root / "ontology" / "help.yaml"
@@ -425,6 +443,21 @@ class TestUiBundle(unittest.TestCase):
                 "skipped_count": 2,
             },
         )
+        render_targets_payload = bundle.get("render_targets")
+        self.assertIsInstance(render_targets_payload, dict)
+        if isinstance(render_targets_payload, dict):
+            targets = render_targets_payload.get("targets")
+            self.assertIsInstance(targets, list)
+            if isinstance(targets, list):
+                target_ids = [
+                    item.get("target_id")
+                    for item in targets
+                    if isinstance(item, dict) and isinstance(item.get("target_id"), str)
+                ]
+                self.assertEqual(
+                    target_ids,
+                    ["TARGET.STEREO.2_0", "TARGET.SURROUND.5_1"],
+                )
 
     def test_build_ui_bundle_help_includes_profile_and_vibe_preset(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

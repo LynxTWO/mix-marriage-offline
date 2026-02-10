@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/render_targets.schema.json",
+  "title": "MMO Render Targets Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "targets"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "targets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/render_target" }
+    }
+  },
+  "$defs": {
+    "speaker_position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ch", "azimuth_deg", "elevation_deg"],
+      "properties": {
+        "ch": { "type": "integer", "minimum": 0 },
+        "azimuth_deg": { "type": "number" },
+        "elevation_deg": { "type": "number" }
+      }
+    },
+    "render_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_id",
+        "label",
+        "layout_id",
+        "channel_order_ref",
+        "notes"
+      ],
+      "properties": {
+        "target_id": { "type": "string", "pattern": "^TARGET\\.[A-Z0-9_.]+$" },
+        "label": { "type": "string", "minLength": 1 },
+        "layout_id": { "type": "string", "pattern": "^LAYOUT\\.[A-Z0-9_.]+$" },
+        "channel_order_ref": { "type": "string", "minLength": 1 },
+        "speaker_positions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/speaker_position" }
+        },
+        "downmix_policy_id": { "type": "string", "minLength": 1 },
+        "safety_policy_id": { "type": "string", "minLength": 1 },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

@@ -17,6 +17,7 @@
     "dashboard": { "$ref": "#/$defs/dashboard" },
     "project": { "$ref": "#/$defs/project_summary" },
     "gui_design": { "$ref": "#/$defs/gui_design_summary" },
+    "render_targets": { "$ref": "#/$defs/render_targets_payload" },
     "pointers": { "$ref": "#/$defs/pointers" }
   },
   "$defs": {
@@ -281,6 +282,54 @@
         "palette": { "$ref": "#/$defs/gui_palette" },
         "typography": { "$ref": "#/$defs/gui_typography" },
         "layout_rules": { "$ref": "#/$defs/gui_layout_rules" }
+      }
+    },
+    "render_target_speaker_position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ch", "azimuth_deg", "elevation_deg"],
+      "properties": {
+        "ch": { "type": "integer", "minimum": 0 },
+        "azimuth_deg": { "type": "number" },
+        "elevation_deg": { "type": "number" }
+      }
+    },
+    "render_target_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_id",
+        "label",
+        "layout_id",
+        "channel_order_ref",
+        "notes"
+      ],
+      "properties": {
+        "target_id": { "type": "string", "pattern": "^TARGET\\.[A-Z0-9_.]+$" },
+        "label": { "type": "string", "minLength": 1 },
+        "layout_id": { "type": "string", "pattern": "^LAYOUT\\.[A-Z0-9_.]+$" },
+        "channel_order_ref": { "type": "string", "minLength": 1 },
+        "speaker_positions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/render_target_speaker_position" }
+        },
+        "downmix_policy_id": { "type": "string", "minLength": 1 },
+        "safety_policy_id": { "type": "string", "minLength": 1 },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "render_targets_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targets"],
+      "properties": {
+        "targets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/render_target_entry" }
+        }
       }
     },
     "pointers": {

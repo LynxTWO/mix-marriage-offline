@@ -31,6 +31,7 @@ from mmo.core.presets import (
     load_preset_pack,
     load_preset_run_config,
 )
+from mmo.core.render_targets import get_render_target, list_render_targets
 from mmo.core.listen_pack import build_listen_pack
 from mmo.core.project_file import (
     load_project,
@@ -1267,6 +1268,72 @@ def _build_preset_recommendations_payload(
         raise ValueError("--n must be greater than 0.")
     report = _load_report(report_path)
     return derive_preset_recommendations(report, presets_dir, n=n)
+
+
+def _build_render_target_list_payload(*, render_targets_path: Path) -> list[dict[str, Any]]:
+    return list_render_targets(render_targets_path)
+
+
+def _build_render_target_show_payload(
+    *,
+    render_targets_path: Path,
+    target_id: str,
+) -> dict[str, Any]:
+    normalized_target_id = target_id.strip() if isinstance(target_id, str) else ""
+    if not normalized_target_id:
+        raise ValueError("target_id must be a non-empty string.")
+
+    payload = get_render_target(normalized_target_id, render_targets_path)
+    if payload is None:
+        targets = list_render_targets(render_targets_path)
+        available = ", ".join(
+            item["target_id"]
+            for item in targets
+            if isinstance(item.get("target_id"), str)
+        )
+        if available:
+            raise ValueError(
+                f"Unknown target_id: {normalized_target_id}. Available targets: {available}"
+            )
+        raise ValueError(
+            f"Unknown target_id: {normalized_target_id}. No render targets are available."
+        )
+    return payload
+
+
+def _render_target_text(payload: dict[str, Any]) -> str:
+    lines = [
+        _coerce_str(payload.get("target_id")).strip(),
+        f"label: {_coerce_str(payload.get('label')).strip()}",
+        f"layout_id: {_coerce_str(payload.get('layout_id')).strip()}",
+        f"channel_order_ref: {_coerce_str(payload.get('channel_order_ref')).strip()}",
+    ]
+
+    downmix_policy_id = _coerce_str(payload.get("downmix_policy_id")).strip()
+    safety_policy_id = _coerce_str(payload.get("safety_policy_id")).strip()
+    lines.append(f"downmix_policy_id: {downmix_policy_id or '(none)'}")
+    lines.append(f"safety_policy_id: {safety_policy_id or '(none)'}")
+
+    speaker_positions = payload.get("speaker_positions")
+    if isinstance(speaker_positions, list) and speaker_positions:
+        lines.append("speaker_positions:")
+        for position in speaker_positions:
+            if not isinstance(position, dict):
+                continue
+            ch = position.get("ch")
+            azimuth_deg = position.get("azimuth_deg")
+            elevation_deg = position.get("elevation_deg")
+            lines.append(
+                f"- ch={ch} azimuth_deg={azimuth_deg} elevation_deg={elevation_deg}"
+            )
+
+    notes = payload.get("notes")
+    if isinstance(notes, list) and notes:
+        lines.append("notes:")
+        for item in notes:
+            if isinstance(item, str):
+                lines.append(f"- {item}")
+    return "\n".join(lines)
 
 
 def _build_help_list_payload(*, help_registry_path: Path) -> list[dict[str, str]]:
@@ -4018,6 +4085,27 @@ def main(argv: list[str] | None = None) -> int:
         help="Output format for help details.",
     )
 
+    targets_parser = subparsers.add_parser("targets", help="Render target registry tools.")
+    targets_subparsers = targets_parser.add_subparsers(dest="targets_command", required=True)
+    targets_list_parser = targets_subparsers.add_parser("list", help="List render targets.")
+    targets_list_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for the render target list.",
+    )
+    targets_show_parser = targets_subparsers.add_parser("show", help="Show one render target.")
+    targets_show_parser.add_argument(
+        "target_id",
+        help="Render target ID (e.g., TARGET.STEREO.2_0).",
+    )
+    targets_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for render target details.",
+    )
+
     ui_copy_parser = subparsers.add_parser("ui-copy", help="UI copy registry tools.")
     ui_copy_subparsers = ui_copy_parser.add_subparsers(
         dest="ui_copy_command",
@@ -5307,6 +5395,42 @@ def main(argv: list[str] | None = None) -> int:
                             print(f"- {item}")
             return 0
         print("Unknown help command.", file=sys.stderr)
+        return 2
+    if args.command == "targets":
+        render_targets_path = repo_root / "ontology" / "render_targets.yaml"
+        if args.targets_command == "list":
+            try:
+                payload = _build_render_target_list_payload(
+                    render_targets_path=render_targets_path,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                for item in payload:
+                    print(
+                        f"{item.get('target_id', '')}"
+                        f"  {item.get('label', '')}"
+                        f"  {item.get('layout_id', '')}"
+                    )
+            return 0
+        if args.targets_command == "show":
+            try:
+                payload = _build_render_target_show_payload(
+                    render_targets_path=render_targets_path,
+                    target_id=args.target_id,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_target_text(payload))
+            return 0
+        print("Unknown targets command.", file=sys.stderr)
         return 2
     if args.command == "ui-copy":
         ui_copy_registry_path = repo_root / "ontology" / "ui_copy.yaml"

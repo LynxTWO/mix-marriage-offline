@@ -7,6 +7,7 @@ from typing import Any
 UI_BUNDLE_SCHEMA_VERSION = "0.1.0"
 TOP_ISSUE_LIMIT = 5
 _RISK_LEVELS = {"low", "medium", "high"}
+_BASELINE_RENDER_TARGET_ID = "TARGET.STEREO.2_0"
 
 
 def _repo_root() -> Path:
@@ -542,6 +543,69 @@ def _bundle_pointers(
     return pointers
 
 
+def _collect_referenced_target_layout_ids(
+    report: dict[str, Any],
+    dashboard_deliverables: list[dict[str, Any]],
+) -> set[str]:
+    layout_ids: set[str] = set()
+
+    routing_plan = report.get("routing_plan")
+    if isinstance(routing_plan, dict):
+        target_layout_id = _coerce_str(routing_plan.get("target_layout_id")).strip()
+        if target_layout_id:
+            layout_ids.add(target_layout_id)
+
+    run_config = report.get("run_config")
+    if isinstance(run_config, dict):
+        downmix_cfg = run_config.get("downmix")
+        if isinstance(downmix_cfg, dict):
+            target_layout_id = _coerce_str(downmix_cfg.get("target_layout_id")).strip()
+            if target_layout_id:
+                layout_ids.add(target_layout_id)
+
+    for deliverable in dashboard_deliverables:
+        target_layout_id = _coerce_str(deliverable.get("target_layout_id")).strip()
+        if target_layout_id:
+            layout_ids.add(target_layout_id)
+    return layout_ids
+
+
+def _ui_bundle_render_targets(
+    report: dict[str, Any],
+    dashboard_deliverables: list[dict[str, Any]],
+) -> dict[str, Any]:
+    from mmo.core.render_targets import get_render_target, list_render_targets  # noqa: WPS433
+
+    referenced_layout_ids = _collect_referenced_target_layout_ids(
+        report,
+        dashboard_deliverables,
+    )
+    selected_targets: dict[str, dict[str, Any]] = {}
+
+    baseline_target = get_render_target(_BASELINE_RENDER_TARGET_ID)
+    if baseline_target is None:
+        raise ValueError(
+            "Render targets registry is missing baseline target: "
+            f"{_BASELINE_RENDER_TARGET_ID}"
+        )
+    selected_targets[_BASELINE_RENDER_TARGET_ID] = dict(baseline_target)
+
+    for target in list_render_targets():
+        target_id = _coerce_str(target.get("target_id")).strip()
+        layout_id = _coerce_str(target.get("layout_id")).strip()
+        if not target_id or not layout_id:
+            continue
+        if layout_id in referenced_layout_ids:
+            selected_targets[target_id] = dict(target)
+
+    return {
+        "targets": [
+            selected_targets[target_id]
+            for target_id in sorted(selected_targets.keys())
+        ]
+    }
+
+
 def build_ui_bundle(
     report: dict[str, Any],
     render_manifest: dict[str, Any] | None,
@@ -595,6 +659,7 @@ def build_ui_bundle(
         "report": report,
         "dashboard": dashboard,
         "gui_design": _gui_design_summary(gui_design_payload),
+        "render_targets": _ui_bundle_render_targets(report, dashboard_deliverables),
     }
 
     help_ids = _collect_help_ids(
