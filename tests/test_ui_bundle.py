@@ -481,6 +481,7 @@ class TestUiBundle(unittest.TestCase):
             out_dir.mkdir(parents=True, exist_ok=True)
             deliverables_index_path = out_dir / "deliverables_index.json"
             listen_pack_path = out_dir / "listen_pack.json"
+            scene_path = out_dir / "scene.json"
             project_path = temp_path / "project.json"
 
             project_payload = new_project(stems_dir, notes=None)
@@ -502,6 +503,7 @@ class TestUiBundle(unittest.TestCase):
                 project_path=project_path,
                 deliverables_index_path=deliverables_index_path,
                 listen_pack_path=listen_pack_path,
+                scene_path=scene_path,
             )
 
         validator.validate(bundle)
@@ -520,6 +522,7 @@ class TestUiBundle(unittest.TestCase):
                 "project_path": project_path.resolve().as_posix(),
                 "deliverables_index_path": deliverables_index_path.resolve().as_posix(),
                 "listen_pack_path": listen_pack_path.resolve().as_posix(),
+                "scene_path": scene_path.resolve().as_posix(),
             },
         )
 

@@ -210,6 +210,25 @@ def _render_timeline_text(timeline: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _render_scene_text(scene: dict[str, Any]) -> str:
+    source = scene.get("source")
+    source_payload = source if isinstance(source, dict) else {}
+    lines = [
+        f"schema_version: {scene.get('schema_version', '')}",
+        f"scene_id: {scene.get('scene_id', '')}",
+        f"created_from: {source_payload.get('created_from', '')}",
+        f"stems_dir: {source_payload.get('stems_dir', '')}",
+    ]
+
+    objects = scene.get("objects")
+    object_count = len(objects) if isinstance(objects, list) else 0
+    beds = scene.get("beds")
+    bed_count = len(beds) if isinstance(beds, list) else 0
+    lines.append(f"objects: {object_count}")
+    lines.append(f"beds: {bed_count}")
+    return "\n".join(lines)
+
+
 def _load_json_schema(schema_path: Path) -> dict[str, Any]:
     try:
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
@@ -806,6 +825,57 @@ def _run_apply_command(
     return 0
 
 
+def _build_validated_scene_payload(
+    *,
+    repo_root: Path,
+    report: dict[str, Any],
+    timeline_payload: dict[str, Any] | None,
+    lock_hash: str | None,
+    created_from: str,
+) -> dict[str, Any]:
+    from mmo.core.scene import build_scene_from_report  # noqa: WPS433
+
+    scene_payload = build_scene_from_report(
+        report,
+        timeline=timeline_payload,
+        lock_hash=lock_hash,
+    )
+    source_payload = scene_payload.get("source")
+    if isinstance(source_payload, dict):
+        source_payload["created_from"] = created_from
+    _validate_json_payload(
+        scene_payload,
+        schema_path=repo_root / "schemas" / "scene.schema.json",
+        payload_name="Scene",
+    )
+    return scene_payload
+
+
+def _run_scene_build_command(
+    *,
+    repo_root: Path,
+    report_path: Path,
+    out_path: Path,
+    timeline_path: Path | None,
+) -> int:
+    report = _load_report(report_path)
+    _validate_json_payload(
+        report,
+        schema_path=repo_root / "schemas" / "report.schema.json",
+        payload_name="Report",
+    )
+    timeline_payload = _load_timeline_payload(timeline_path)
+    scene_payload = _build_validated_scene_payload(
+        repo_root=repo_root,
+        report=report,
+        timeline_payload=timeline_payload,
+        lock_hash=None,
+        created_from="analyze",
+    )
+    _write_json_file(out_path, scene_payload)
+    return 0
+
+
 def _run_bundle(
     *,
     repo_root: Path,
@@ -817,6 +887,7 @@ def _run_bundle(
     project_path: Path | None,
     deliverables_index_path: Path | None,
     listen_pack_path: Path | None,
+    scene_path: Path | None,
     timeline_path: Path | None,
     ui_locale: str | None = None,
 ) -> int:
@@ -844,6 +915,7 @@ def _run_bundle(
         project_path=project_path,
         deliverables_index_path=deliverables_index_path,
         listen_pack_path=listen_pack_path,
+        scene_path=scene_path,
         timeline_path=timeline_path,
     )
     _validate_json_payload(
@@ -1608,6 +1680,7 @@ def _run_variants_workflow(
     export_pdf: bool,
     export_csv: bool,
     bundle: bool,
+    scene: bool,
     profile: str | None = None,
     meters: str | None = None,
     max_seconds: float | None = None,
@@ -1796,6 +1869,7 @@ def _run_variants_workflow(
             run_variant_plan_kwargs["timeline"] = normalized_timeline
         if resolved_timeline_path is not None:
             run_variant_plan_kwargs["timeline_path"] = resolved_timeline_path
+        run_variant_plan_kwargs["scene"] = scene
 
         result = run_variant_plan(
             plan,
@@ -1873,6 +1947,7 @@ def _run_one_shot_workflow(
     apply: bool,
     render: bool,
     bundle: bool,
+    scene: bool,
     deliverables_index: bool,
     output_formats: str | None,
     cache_enabled: bool,
@@ -1945,6 +2020,7 @@ def _run_one_shot_workflow(
     applied_report_path = out_dir / "applied_report.json"
     render_manifest_path = out_dir / "render_manifest.json"
     bundle_path = out_dir / "ui_bundle.json"
+    scene_path = out_dir / "scene.json"
     deliverables_index_path = out_dir / "deliverables_index.json"
     render_out_dir = out_dir / "render"
     apply_out_dir = out_dir / "apply"
@@ -2052,6 +2128,29 @@ def _run_one_shot_workflow(
             return int(exc.code) if isinstance(exc.code, int) else 1
         _write_json_file(report_path, report_payload)
 
+    if scene:
+        if report_payload is None:
+            print("Report payload is unavailable after analysis.", file=sys.stderr)
+            return 1
+        try:
+            scene_payload = _build_validated_scene_payload(
+                repo_root=repo_root,
+                report=report_payload,
+                timeline_payload=timeline_payload,
+                lock_hash=(
+                    hash_lockfile(lock_payload)
+                    if isinstance(lock_payload, dict)
+                    else None
+                ),
+                created_from="analyze",
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+        _write_json_file(scene_path, scene_payload)
+
     exit_code = _run_export(
         tools_dir,
         report_path,
@@ -2146,6 +2245,7 @@ def _run_one_shot_workflow(
                     deliverables_index_path if deliverables_index else None
                 ),
                 listen_pack_path=None,
+                scene_path=scene_path if scene else None,
                 timeline_path=resolved_timeline_path,
             )
         except ValueError as exc:
@@ -2185,6 +2285,8 @@ def _run_one_shot_workflow(
         summary.append(("render_manifest", render_manifest_path))
     if bundle:
         summary.append(("ui_bundle", bundle_path))
+    if scene:
+        summary.append(("scene", scene_path))
     if deliverables_index:
         summary.append(("deliverables_index", deliverables_index_path))
 
@@ -2233,6 +2335,7 @@ def _run_workflow_from_run_args(
             export_pdf=args.export_pdf,
             export_csv=args.export_csv,
             bundle=args.bundle,
+            scene=getattr(args, "scene", False),
             profile=args.profile,
             meters=args.meters,
             max_seconds=args.max_seconds,
@@ -2271,6 +2374,7 @@ def _run_workflow_from_run_args(
         apply=args.apply,
         render=args.render,
         bundle=args.bundle,
+        scene=getattr(args, "scene", False),
         deliverables_index=args.deliverables_index,
         output_formats=args.output_formats,
         cache_enabled=args.cache == "on",
@@ -2928,6 +3032,7 @@ def _run_ui_workflow(
             export_pdf=export_pdf,
             export_csv=export_csv,
             bundle=True,
+            scene=False,
             profile=None,
             meters=None,
             max_seconds=None,
@@ -2971,6 +3076,7 @@ def _run_ui_workflow(
             apply=apply,
             render=render,
             bundle=True,
+            scene=False,
             deliverables_index=deliverables_index,
             output_formats=None,
             cache_enabled=True,
@@ -3207,6 +3313,11 @@ def main(argv: list[str] | None = None) -> int:
         "--bundle",
         action="store_true",
         help="Build a UI bundle JSON.",
+    )
+    run_parser.add_argument(
+        "--scene",
+        action="store_true",
+        help="Build a scene.json intent artifact.",
     )
     run_parser.add_argument(
         "--deliverables-index",
@@ -3481,6 +3592,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to listen_pack JSON for GUI pointer metadata.",
     )
     bundle_parser.add_argument(
+        "--scene",
+        default=None,
+        help="Optional path to scene JSON for GUI pointer metadata.",
+    )
+    bundle_parser.add_argument(
         "--ui-locale",
         default=None,
         help="Optional UI copy locale (default: registry default_locale).",
@@ -3549,6 +3665,11 @@ def main(argv: list[str] | None = None) -> int:
         "--bundle",
         action="store_true",
         help="Build a UI bundle for each variant.",
+    )
+    variants_run_parser.add_argument(
+        "--scene",
+        action="store_true",
+        help="Build a scene.json intent artifact for each variant.",
     )
     variants_run_parser.add_argument(
         "--listen-pack",
@@ -4119,6 +4240,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Build a UI bundle JSON.",
     )
     project_run_parser.add_argument(
+        "--scene",
+        action="store_true",
+        help="Build a scene.json intent artifact.",
+    )
+    project_run_parser.add_argument(
         "--deliverables-index",
         action="store_true",
         help="Also write deliverables_index.json summarizing file deliverables.",
@@ -4372,6 +4498,55 @@ def main(argv: list[str] | None = None) -> int:
         choices=["json", "text"],
         default="json",
         help="Output format for routing plan.",
+    )
+
+    scene_parser = subparsers.add_parser("scene", help="Scene intent artifact tools.")
+    scene_subparsers = scene_parser.add_subparsers(
+        dest="scene_command",
+        required=True,
+    )
+    scene_build_parser = scene_subparsers.add_parser(
+        "build",
+        help="Build a deterministic scene JSON from a report and optional timeline.",
+    )
+    scene_build_parser.add_argument(
+        "--report",
+        required=True,
+        help="Path to report JSON.",
+    )
+    scene_build_parser.add_argument(
+        "--timeline",
+        default=None,
+        help="Optional path to timeline JSON.",
+    )
+    scene_build_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output scene JSON.",
+    )
+    scene_show_parser = scene_subparsers.add_parser(
+        "show",
+        help="Display a scene JSON.",
+    )
+    scene_show_parser.add_argument(
+        "--scene",
+        required=True,
+        help="Path to scene JSON.",
+    )
+    scene_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for scene display.",
+    )
+    scene_validate_parser = scene_subparsers.add_parser(
+        "validate",
+        help="Validate a scene JSON against schema.",
+    )
+    scene_validate_parser.add_argument(
+        "--scene",
+        required=True,
+        help="Path to scene JSON.",
     )
 
     timeline_parser = subparsers.add_parser("timeline", help="Timeline marker tools.")
@@ -4853,6 +5028,7 @@ def main(argv: list[str] | None = None) -> int:
                     Path(args.deliverables_index) if args.deliverables_index else None
                 ),
                 listen_pack_path=Path(args.listen_pack) if args.listen_pack else None,
+                scene_path=Path(args.scene) if args.scene else None,
                 timeline_path=None,
                 ui_locale=args.ui_locale,
             )
@@ -4895,6 +5071,7 @@ def main(argv: list[str] | None = None) -> int:
             export_pdf=args.export_pdf,
             export_csv=args.export_csv,
             bundle=args.bundle,
+            scene=args.scene,
             profile=args.profile,
             meters=args.meters,
             max_seconds=args.max_seconds,
@@ -5298,6 +5475,46 @@ def main(argv: list[str] | None = None) -> int:
 
         print("Unknown lock command.", file=sys.stderr)
         return 2
+    if args.command == "scene":
+        if args.scene_command == "build":
+            try:
+                return _run_scene_build_command(
+                    repo_root=repo_root,
+                    report_path=Path(args.report),
+                    out_path=Path(args.out),
+                    timeline_path=Path(args.timeline) if args.timeline else None,
+                )
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+
+        if args.scene_command not in {"validate", "show"}:
+            print("Unknown scene command.", file=sys.stderr)
+            return 2
+
+        try:
+            scene_payload = _load_json_object(Path(args.scene), label="Scene")
+            _validate_json_payload(
+                scene_payload,
+                schema_path=repo_root / "schemas" / "scene.schema.json",
+                payload_name="Scene",
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+
+        if args.scene_command == "validate":
+            print("Scene is valid.")
+            return 0
+        if args.format == "json":
+            print(json.dumps(scene_payload, indent=2, sort_keys=True))
+        else:
+            print(_render_scene_text(scene_payload))
+        return 0
     if args.command == "timeline":
         if args.timeline_command not in {"validate", "show"}:
             print("Unknown timeline command.", file=sys.stderr)

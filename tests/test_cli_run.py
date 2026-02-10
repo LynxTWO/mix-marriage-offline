@@ -178,6 +178,48 @@ class TestCliRun(unittest.TestCase):
                 {"timeline_path": timeline_path.resolve().as_posix()},
             )
 
+    def test_run_with_scene_writes_scene_and_bundle_pointer(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        scene_validator = _schema_validator(repo_root / "schemas" / "scene.schema.json")
+        bundle_validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            out_dir = temp_path / "out"
+            _write_wav_16bit(stems_dir / "drums" / "kick.wav")
+
+            exit_code = main(
+                [
+                    "run",
+                    "--stems",
+                    str(stems_dir),
+                    "--out",
+                    str(out_dir),
+                    "--preset",
+                    "PRESET.SAFE_CLEANUP",
+                    "--bundle",
+                    "--scene",
+                    "--cache",
+                    "off",
+                ]
+            )
+            self.assertEqual(exit_code, 0)
+
+            scene_path = out_dir / "scene.json"
+            bundle_path = out_dir / "ui_bundle.json"
+            self.assertTrue(scene_path.exists())
+            self.assertTrue(bundle_path.exists())
+
+            scene_payload = json.loads(scene_path.read_text(encoding="utf-8"))
+            bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+            scene_validator.validate(scene_payload)
+            bundle_validator.validate(bundle_payload)
+            self.assertEqual(
+                bundle_payload.get("pointers"),
+                {"scene_path": scene_path.resolve().as_posix()},
+            )
+
     def test_run_apply_and_render_write_schema_valid_manifests(self) -> None:
         if resolve_ffmpeg_cmd() is None:
             self.skipTest("ffmpeg not available")

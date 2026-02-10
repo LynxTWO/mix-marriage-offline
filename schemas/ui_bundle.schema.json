@@ -289,6 +289,7 @@
       "properties": {
         "deliverables_index_path": { "$ref": "#/$defs/posix_abs_path" },
         "listen_pack_path": { "$ref": "#/$defs/posix_abs_path" },
+        "scene_path": { "$ref": "#/$defs/posix_abs_path" },
         "timeline_path": { "$ref": "#/$defs/posix_abs_path" },
         "project_path": { "$ref": "#/$defs/posix_abs_path" }
       }

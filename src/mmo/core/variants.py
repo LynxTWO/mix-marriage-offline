@@ -37,6 +37,7 @@ from mmo.core.run_config import (
     merge_run_config,
     normalize_run_config,
 )
+from mmo.core.scene import build_scene_from_report
 from mmo.core.timeline import normalize_timeline
 from mmo.core.ui_bundle import build_ui_bundle
 from mmo.core.vibe_signals import derive_vibe_signals
@@ -857,6 +858,7 @@ def run_variant_plan(
     listen_pack_path: Path | None = None,
     timeline: dict[str, Any] | None = None,
     timeline_path: Path | None = None,
+    scene: bool = False,
     cache_enabled: bool = True,
     cache_dir: Path | None = None,
 ) -> dict[str, Any]:
@@ -916,6 +918,7 @@ def run_variant_plan(
         render_manifest: dict[str, Any] | None = None
         apply_manifest: dict[str, Any] | None = None
         applied_report: dict[str, Any] | None = None
+        scene_path: Path | None = None
         analysis_cache_key: str | None = None
         analysis_cache_run_config: dict[str, Any] | None = None
 
@@ -1185,6 +1188,25 @@ def run_variant_plan(
             except Exception as exc:  # pragma: no cover - defensive surface
                 errors.append(f"apply: {exc}")
 
+        if report is not None and scene:
+            try:
+                scene_payload = build_scene_from_report(
+                    report,
+                    timeline=normalized_timeline,
+                    lock_hash=(
+                        hash_lockfile(analysis_lock)
+                        if isinstance(analysis_lock, dict)
+                        else None
+                    ),
+                )
+                source_payload = scene_payload.get("source")
+                if isinstance(source_payload, dict):
+                    source_payload["created_from"] = "variants"
+                scene_path = variant_out_dir / "scene.json"
+                _write_json(scene_path, scene_payload)
+            except Exception as exc:  # pragma: no cover - defensive surface
+                errors.append(f"scene: {exc}")
+
         if report is not None and steps["bundle"]:
             try:
                 bundle = build_ui_bundle(
@@ -1196,6 +1218,7 @@ def run_variant_plan(
                     project_path=project_path,
                     deliverables_index_path=deliverables_index_path,
                     listen_pack_path=listen_pack_path,
+                    scene_path=scene_path,
                     timeline_path=timeline_path,
                 )
                 bundle_path = variant_out_dir / "ui_bundle.json"
