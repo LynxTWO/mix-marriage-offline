@@ -32,6 +32,7 @@ from mmo.core.presets import (
     load_preset_run_config,
 )
 from mmo.core.render_plan import build_render_plan
+from mmo.core.render_plan_bridge import render_plan_to_variant_plan
 from mmo.core.render_targets import get_render_target, list_render_targets
 from mmo.core.scene_locks import get_scene_lock, list_scene_locks
 from mmo.core.intent_params import load_intent_params, validate_scene_intent
@@ -1188,6 +1189,108 @@ def _run_render_plan_build_command(
     )
     _write_json_file(out_path, render_plan_payload)
     return 0
+
+
+def _run_render_plan_to_variants_command(
+    *,
+    repo_root: Path,
+    presets_dir: Path,
+    render_plan_path: Path,
+    scene_path: Path,
+    out_path: Path,
+    out_dir: Path,
+    run: bool,
+    listen_pack: bool,
+    deliverables_index: bool,
+    cache_enabled: bool,
+    cache_dir: Path | None,
+    default_steps: dict[str, Any] | None = None,
+) -> int:
+    scene_payload = _load_json_object(scene_path, label="Scene")
+    _validate_json_payload(
+        scene_payload,
+        schema_path=repo_root / "schemas" / "scene.schema.json",
+        payload_name="Scene",
+    )
+
+    render_plan_payload = _load_json_object(render_plan_path, label="Render plan")
+    _validate_json_payload(
+        render_plan_payload,
+        schema_path=repo_root / "schemas" / "render_plan.schema.json",
+        payload_name="Render plan",
+    )
+
+    scene_for_bridge = json.loads(json.dumps(scene_payload))
+    scene_for_bridge["scene_path"] = scene_path.resolve().as_posix()
+    render_plan_for_bridge = json.loads(json.dumps(render_plan_payload))
+    render_plan_for_bridge["render_plan_path"] = render_plan_path.resolve().as_posix()
+
+    variant_plan = render_plan_to_variant_plan(
+        render_plan_for_bridge,
+        scene_for_bridge,
+        base_out_dir=out_dir.resolve().as_posix(),
+        default_steps=default_steps,
+    )
+    _validate_json_payload(
+        variant_plan,
+        schema_path=repo_root / "schemas" / "variant_plan.schema.json",
+        payload_name="Variant plan",
+    )
+    _write_json_file(out_path, variant_plan)
+
+    if not run:
+        return 0
+
+    resolved_out_dir = out_dir.resolve()
+    variant_result_path = resolved_out_dir / "variant_result.json"
+    listen_pack_path = resolved_out_dir / "listen_pack.json"
+    deliverables_index_path = resolved_out_dir / "deliverables_index.json"
+
+    run_variant_plan_kwargs: dict[str, Any] = {
+        "cache_enabled": cache_enabled,
+        "cache_dir": cache_dir,
+    }
+    if deliverables_index:
+        run_variant_plan_kwargs["deliverables_index_path"] = deliverables_index_path
+    if listen_pack:
+        run_variant_plan_kwargs["listen_pack_path"] = listen_pack_path
+
+    variant_result = run_variant_plan(
+        variant_plan,
+        repo_root=repo_root,
+        **run_variant_plan_kwargs,
+    )
+    _validate_json_payload(
+        variant_result,
+        schema_path=repo_root / "schemas" / "variant_result.schema.json",
+        payload_name="Variant result",
+    )
+    _write_json_file(variant_result_path, variant_result)
+
+    if listen_pack:
+        listen_pack_payload = _build_validated_listen_pack(
+            repo_root=repo_root,
+            presets_dir=presets_dir,
+            variant_result=variant_result,
+        )
+        _write_json_file(listen_pack_path, listen_pack_payload)
+
+    if deliverables_index:
+        deliverables_index_payload = _build_validated_deliverables_index_variants(
+            repo_root=repo_root,
+            root_out_dir=resolved_out_dir,
+            variant_result=variant_result,
+        )
+        _write_json_file(deliverables_index_path, deliverables_index_payload)
+
+    results = variant_result.get("results")
+    if not isinstance(results, list):
+        return 1
+    has_failure = any(
+        isinstance(item, dict) and item.get("ok") is not True
+        for item in results
+    )
+    return 1 if has_failure else 0
 
 
 def _write_routing_plan_artifact(
@@ -5424,6 +5527,56 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Optional downmix policy ID override.",
     )
+    render_plan_to_variants_parser = render_plan_subparsers.add_parser(
+        "to-variants",
+        help="Convert scene + render_plan into a schema-valid executable variant_plan.",
+    )
+    render_plan_to_variants_parser.add_argument(
+        "--render-plan",
+        required=True,
+        help="Path to render_plan JSON.",
+    )
+    render_plan_to_variants_parser.add_argument(
+        "--scene",
+        required=True,
+        help="Path to scene JSON.",
+    )
+    render_plan_to_variants_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output variant_plan JSON.",
+    )
+    render_plan_to_variants_parser.add_argument(
+        "--out-dir",
+        required=True,
+        help="Root output directory used for per-variant artifact folders.",
+    )
+    render_plan_to_variants_parser.add_argument(
+        "--run",
+        action="store_true",
+        help="Immediately execute the generated variant plan.",
+    )
+    render_plan_to_variants_parser.add_argument(
+        "--listen-pack",
+        action="store_true",
+        help="When --run is set, also write listen_pack.json.",
+    )
+    render_plan_to_variants_parser.add_argument(
+        "--deliverables-index",
+        action="store_true",
+        help="When --run is set, also write deliverables_index.json.",
+    )
+    render_plan_to_variants_parser.add_argument(
+        "--cache",
+        choices=["on", "off"],
+        default="on",
+        help="When --run is set, reuse cached analysis by lockfile + run_config hash.",
+    )
+    render_plan_to_variants_parser.add_argument(
+        "--cache-dir",
+        default=None,
+        help="Optional cache directory (default: <repo_root>/.mmo_cache).",
+    )
     render_plan_show_parser = render_plan_subparsers.add_parser(
         "show",
         help="Display a render_plan JSON.",
@@ -6563,6 +6716,27 @@ def main(argv: list[str] | None = None) -> int:
                     policy_id=args.policy_id,
                 )
             except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+
+        if args.render_plan_command == "to-variants":
+            try:
+                return _run_render_plan_to_variants_command(
+                    repo_root=repo_root,
+                    presets_dir=presets_dir,
+                    render_plan_path=Path(args.render_plan),
+                    scene_path=Path(args.scene),
+                    out_path=Path(args.out),
+                    out_dir=Path(args.out_dir),
+                    run=args.run,
+                    listen_pack=args.listen_pack,
+                    deliverables_index=args.deliverables_index,
+                    cache_enabled=args.cache == "on",
+                    cache_dir=Path(args.cache_dir) if args.cache_dir else None,
+                )
+            except ValueError as exc:
                 print(str(exc), file=sys.stderr)
                 return 1
             except SystemExit as exc:

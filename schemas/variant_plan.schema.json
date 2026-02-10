@@ -9,6 +9,7 @@
     "schema_version": { "const": "0.1.0" },
     "stems_dir": { "$ref": "#/$defs/posix_abs_path" },
     "base_run_config": { "$ref": "run_config.schema.json" },
+    "metadata": { "$ref": "#/$defs/metadata" },
     "variants": {
       "type": "array",
       "items": { "$ref": "#/$defs/variant" }
@@ -22,6 +23,14 @@
     "posix_path": {
       "type": "string",
       "pattern": "^[^\\\\]+$"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scene_path": { "$ref": "#/$defs/posix_path" },
+        "render_plan_path": { "$ref": "#/$defs/posix_path" }
+      }
     },
     "run_config_patch": {
       "type": "object",
