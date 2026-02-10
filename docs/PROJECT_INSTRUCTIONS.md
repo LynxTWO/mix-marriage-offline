@@ -69,6 +69,12 @@ Stereo stems with baked pan/width are inference-only:
 - Nerd mode reveals IDs, meters, gates, thresholds, and parameters
 - Both views must represent the same underlying truth and decisions
 
+## Validation
+
+- `make validate`
+- `python tools/validate.py`
+- `python tools/validate_contracts.py`
+
 ## Related docs
 
 - [SCENE_AND_RENDER_CONTRACT_OVERVIEW.md](SCENE_AND_RENDER_CONTRACT_OVERVIEW.md)
