@@ -6,33 +6,53 @@ locks:
     applies_to: ["object", "bed", "scene"]
     severity: "taste"
     help_id: "HELP.LOCK.NO_EXTRA_BASS"
+    hint_short: "No extra bass: keep the low end honest. Add clarity without adding boom."
+    hint_long: "If the mix gets thick or tubby, pull back low-end boosts and saturation before anything else."
+    affected_actions: ["ACTION.EQ.LOW_SHELF", "ACTION.DSP.SATURATION", "ACTION.DSP.COMPRESS"]
+    tags: ["bass", "balance"]
   LOCK.NO_STEREO_WIDENING:
     label: "No stereo widening"
     description: "Avoid artificial width expansion or side-boost tricks."
     applies_to: ["object", "bed", "scene"]
     severity: "hard"
     help_id: "HELP.LOCK.NO_STEREO_WIDENING"
+    hint_short: "No widening: keep the stereo image honest. Don't inflate the sides."
+    affected_actions: ["ACTION.STEREO.WIDEN", "ACTION.STEREO.MS"]
+    tags: ["stereo", "image"]
   LOCK.NO_TOP_END_HYPE:
     label: "No top-end hype"
     description: "Avoid brightness boosts that exaggerate air or sibilance."
     applies_to: ["object", "bed", "scene"]
     severity: "taste"
     help_id: "HELP.LOCK.NO_TOP_END_HYPE"
+    hint_short: "No top-end hype: keep brightness natural. Shine is fine, fizz is not."
+    affected_actions: ["ACTION.EQ.HIGH_SHELF", "ACTION.DSP.EXCITER", "ACTION.DSP.SATURATION"]
+    tags: ["brightness", "tone"]
   LOCK.PRESERVE_CENTER_IMAGE:
     label: "Preserve center image"
     description: "Keep center-focused content stable and anchored."
     applies_to: ["bed", "scene"]
     severity: "hard"
     help_id: "HELP.LOCK.PRESERVE_CENTER_IMAGE"
+    hint_short: "Center stays solid: vocals/snare should not drift or smear."
+    affected_actions: ["ACTION.STEREO.WIDEN", "ACTION.DSP.DELAY", "ACTION.DSP.CHORUS"]
+    tags: ["image", "center", "phase"]
   LOCK.PRESERVE_DYNAMICS:
     label: "Preserve dynamics"
     description: "Avoid squashing transients or flattening the performance."
     applies_to: ["object", "bed", "scene"]
     severity: "hard"
     help_id: "HELP.LOCK.PRESERVE_DYNAMICS"
+    hint_short: "Preserve dynamics: avoid heavy squashing. If you tame peaks, keep the punch."
+    hint_long: "If this starts feeling flat, back off compression/limiting moves. Compare transients and groove."
+    affected_actions: ["ACTION.DSP.COMPRESS", "ACTION.DSP.LIMITER"]
+    tags: ["dynamics"]
   LOCK.PRESERVE_TRANSIENTS:
     label: "Preserve transients"
     description: "Protect attacks and percussive edges from blur or softening."
     applies_to: ["object", "bed", "scene"]
     severity: "taste"
     help_id: "HELP.LOCK.PRESERVE_TRANSIENTS"
+    hint_short: "Preserve transients: keep attacks clear so drums and picks still speak."
+    affected_actions: ["ACTION.DSP.COMPRESS", "ACTION.DSP.TRANSIENT_SHAPER"]
+    tags: ["dynamics", "transients"]

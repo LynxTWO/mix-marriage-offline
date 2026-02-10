@@ -352,12 +352,16 @@ def _sample_scene(*, include_unknown_lock: bool = False) -> dict:
     }
 
 
-def _sample_report_for_scene_overlay_tests() -> dict:
+def _sample_report_for_scene_overlay_tests(
+    *,
+    bass_action_id: str = "ACTION.UTILITY.GAIN",
+    vox_action_id: str = "ACTION.UTILITY.GAIN",
+) -> dict:
     report = _sample_report()
     report["recommendations"] = [
         {
             "recommendation_id": "REC.SCENE.OVERLAY.Z",
-            "action_id": "ACTION.UTILITY.GAIN",
+            "action_id": bass_action_id,
             "risk": "low",
             "requires_approval": False,
             "target": {"scope": "stem", "stem_id": "bass"},
@@ -368,7 +372,7 @@ def _sample_report_for_scene_overlay_tests() -> dict:
         },
         {
             "recommendation_id": "REC.SCENE.OVERLAY.A",
-            "action_id": "ACTION.UTILITY.GAIN",
+            "action_id": vox_action_id,
             "risk": "low",
             "requires_approval": False,
             "target": {"scope": "stem", "stem_id": "vox"},
@@ -695,6 +699,198 @@ class TestUiBundle(unittest.TestCase):
             other_overlay.get("scope"),
             {"scene": True, "object_id": "OBJ.VOX"},
         )
+
+    def test_build_ui_bundle_scene_overlay_lock_notes_include_hint_short(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report_for_scene_overlay_tests(
+            bass_action_id="ACTION.DSP.COMPRESS.BUS",
+        )
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            scene_path = temp_path / "scene.json"
+            scene_path.write_text(
+                json.dumps(_sample_scene(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                scene_path=scene_path,
+            )
+
+        validator.validate(bundle)
+
+        recommendation_overlays = bundle.get("recommendation_overlays")
+        self.assertIsInstance(recommendation_overlays, dict)
+        if not isinstance(recommendation_overlays, dict):
+            return
+        targeted_overlay = recommendation_overlays.get("REC.SCENE.OVERLAY.Z")
+        self.assertIsInstance(targeted_overlay, dict)
+        if not isinstance(targeted_overlay, dict):
+            return
+        lock_notes = targeted_overlay.get("lock_notes")
+        self.assertIsInstance(lock_notes, list)
+        if not isinstance(lock_notes, list):
+            return
+        self.assertEqual(
+            lock_notes,
+            [
+                {
+                    "lock_id": "LOCK.PRESERVE_DYNAMICS",
+                    "severity": "hard",
+                    "note": (
+                        "Preserve dynamics: avoid heavy squashing. "
+                        "If you tame peaks, keep the punch."
+                    ),
+                    "tags": ["dynamics"],
+                }
+            ],
+        )
+
+    def test_build_ui_bundle_scene_overlay_lock_notes_action_filter(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        report["recommendations"] = [
+            {
+                "recommendation_id": "REC.SCENE.ACTION.NON_MATCH",
+                "action_id": "ACTION.UTILITY.GAIN",
+                "risk": "low",
+                "requires_approval": False,
+                "target": {"scope": "stem", "stem_id": "bass"},
+                "params": [],
+                "eligible_auto_apply": True,
+                "eligible_render": True,
+                "extreme": False,
+            },
+            {
+                "recommendation_id": "REC.SCENE.ACTION.MATCH",
+                "action_id": "ACTION.STEREO.WIDEN.CLASSIC",
+                "risk": "low",
+                "requires_approval": False,
+                "target": {"scope": "stem", "stem_id": "bass"},
+                "params": [],
+                "eligible_auto_apply": True,
+                "eligible_render": True,
+                "extreme": False,
+            },
+        ]
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            scene_path = temp_path / "scene.json"
+            scene_path.write_text(
+                json.dumps(_sample_scene(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                scene_path=scene_path,
+            )
+
+        validator.validate(bundle)
+
+        recommendation_overlays = bundle.get("recommendation_overlays")
+        self.assertIsInstance(recommendation_overlays, dict)
+        if not isinstance(recommendation_overlays, dict):
+            return
+
+        non_match_overlay = recommendation_overlays.get("REC.SCENE.ACTION.NON_MATCH")
+        self.assertIsInstance(non_match_overlay, dict)
+        if not isinstance(non_match_overlay, dict):
+            return
+        self.assertNotIn("lock_notes", non_match_overlay)
+
+        match_overlay = recommendation_overlays.get("REC.SCENE.ACTION.MATCH")
+        self.assertIsInstance(match_overlay, dict)
+        if not isinstance(match_overlay, dict):
+            return
+        lock_notes = match_overlay.get("lock_notes")
+        self.assertIsInstance(lock_notes, list)
+        if not isinstance(lock_notes, list):
+            return
+        self.assertEqual(
+            lock_notes,
+            [
+                {
+                    "lock_id": "LOCK.NO_STEREO_WIDENING",
+                    "severity": "hard",
+                    "note": "No widening: keep the stereo image honest. Don't inflate the sides.",
+                    "tags": ["image", "stereo"],
+                }
+            ],
+        )
+
+    def test_build_ui_bundle_scene_overlay_lock_notes_are_sorted_and_stable(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report_for_scene_overlay_tests(
+            bass_action_id="ACTION.DSP.COMPRESS.BUS",
+        )
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        scene_payload = _sample_scene()
+        scene_payload["intent"]["locks"] = ["LOCK.PRESERVE_DYNAMICS", "LOCK.NO_EXTRA_BASS"]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            scene_path = temp_path / "scene.json"
+            scene_path.write_text(
+                json.dumps(scene_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            first_bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                scene_path=scene_path,
+            )
+            second_bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                scene_path=scene_path,
+            )
+
+        validator.validate(first_bundle)
+        validator.validate(second_bundle)
+
+        first_overlays = first_bundle.get("recommendation_overlays")
+        second_overlays = second_bundle.get("recommendation_overlays")
+        self.assertIsInstance(first_overlays, dict)
+        self.assertIsInstance(second_overlays, dict)
+        if not isinstance(first_overlays, dict) or not isinstance(second_overlays, dict):
+            return
+
+        first_overlay = first_overlays.get("REC.SCENE.OVERLAY.Z")
+        second_overlay = second_overlays.get("REC.SCENE.OVERLAY.Z")
+        self.assertIsInstance(first_overlay, dict)
+        self.assertIsInstance(second_overlay, dict)
+        if not isinstance(first_overlay, dict) or not isinstance(second_overlay, dict):
+            return
+
+        first_lock_notes = first_overlay.get("lock_notes")
+        second_lock_notes = second_overlay.get("lock_notes")
+        self.assertIsInstance(first_lock_notes, list)
+        self.assertIsInstance(second_lock_notes, list)
+        if not isinstance(first_lock_notes, list) or not isinstance(second_lock_notes, list):
+            return
+
+        self.assertEqual(first_lock_notes, second_lock_notes)
+        lock_ids = [
+            item.get("lock_id")
+            for item in first_lock_notes
+            if isinstance(item, dict) and isinstance(item.get("lock_id"), str)
+        ]
+        self.assertEqual(lock_ids, ["LOCK.NO_EXTRA_BASS", "LOCK.PRESERVE_DYNAMICS"])
+        self.assertEqual(lock_ids, sorted(lock_ids))
 
     def test_build_ui_bundle_scene_meta_uses_placeholder_for_unknown_lock(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

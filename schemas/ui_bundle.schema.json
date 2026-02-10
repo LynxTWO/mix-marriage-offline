@@ -397,6 +397,20 @@
         "severity": { "type": "string", "enum": ["hard", "taste"] }
       }
     },
+    "recommendation_overlay_lock_note": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lock_id", "severity", "note"],
+      "properties": {
+        "lock_id": { "type": "string", "pattern": "^LOCK\\.[A-Z0-9_.]+$" },
+        "severity": { "type": "string", "enum": ["hard", "taste"] },
+        "note": { "type": "string", "minLength": 1 },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "recommendation_overlay_scope": {
       "type": "object",
       "additionalProperties": false,
@@ -414,6 +428,11 @@
         "locks_in_effect": {
           "type": "array",
           "items": { "$ref": "#/$defs/recommendation_overlay_lock" }
+        },
+        "lock_notes": {
+          "type": "array",
+          "description": "Sorted by lock_id.",
+          "items": { "$ref": "#/$defs/recommendation_overlay_lock_note" }
         },
         "scope": { "$ref": "#/$defs/recommendation_overlay_scope" }
       }

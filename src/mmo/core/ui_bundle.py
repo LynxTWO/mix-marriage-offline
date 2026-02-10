@@ -434,6 +434,58 @@ def _scene_overlay_lock_summary(
     }
 
 
+def _recommendation_action_id(recommendation: dict[str, Any]) -> str:
+    return _coerce_str(recommendation.get("action_id")).strip()
+
+
+def _action_matches_affected_actions(action_id: str, affected_actions: list[str]) -> bool:
+    if not action_id or not affected_actions:
+        return True
+    return any(
+        action_id == candidate or action_id.startswith(candidate)
+        for candidate in affected_actions
+    )
+
+
+def _recommendation_lock_notes(
+    recommendation: dict[str, Any],
+    *,
+    locks_in_effect: list[dict[str, Any]],
+    scene_lock_specs: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    action_id = _recommendation_action_id(recommendation)
+    notes_by_lock_id: dict[str, dict[str, Any]] = {}
+
+    for lock_summary in locks_in_effect:
+        lock_id = _coerce_str(lock_summary.get("lock_id")).strip()
+        if not lock_id:
+            continue
+        lock_spec = scene_lock_specs.get(lock_id)
+        if not isinstance(lock_spec, dict):
+            continue
+
+        hint_short = _coerce_str(lock_spec.get("hint_short")).strip()
+        if not hint_short:
+            continue
+
+        affected_actions = _normalized_string_list(lock_spec.get("affected_actions"))
+        if not _action_matches_affected_actions(action_id, affected_actions):
+            continue
+
+        severity = _coerce_str(lock_summary.get("severity")).strip()
+        if severity not in _SCENE_LOCK_SEVERITIES:
+            severity = "taste"
+
+        notes_by_lock_id[lock_id] = {
+            "lock_id": lock_id,
+            "severity": severity,
+            "note": hint_short,
+            "tags": _normalized_string_list(lock_spec.get("tags")),
+        }
+
+    return [notes_by_lock_id[lock_id] for lock_id in sorted(notes_by_lock_id.keys())]
+
+
 def _scene_lock_ids_used(scene_payload: dict[str, Any]) -> list[str]:
     lock_ids: set[str] = set(_intent_lock_ids(scene_payload.get("intent")))
     for object_payload in _iter_dict_list(scene_payload.get("objects")):
@@ -570,16 +622,26 @@ def _recommendation_overlays_payload(
             if object_id:
                 scope["object_id"] = object_id
 
+        locks_in_effect = [
+            _scene_overlay_lock_summary(lock_id, scene_lock_specs)
+            for lock_id in sorted(lock_ids_in_effect)
+        ]
+        overlay_payload: dict[str, Any] = {
+            "locks_in_effect": locks_in_effect,
+            "scope": scope,
+        }
+        lock_notes = _recommendation_lock_notes(
+            recommendation,
+            locks_in_effect=locks_in_effect,
+            scene_lock_specs=scene_lock_specs,
+        )
+        if lock_notes:
+            overlay_payload["lock_notes"] = lock_notes
+
         recommendation_rows.append(
             (
                 recommendation_id,
-                {
-                    "locks_in_effect": [
-                        _scene_overlay_lock_summary(lock_id, scene_lock_specs)
-                        for lock_id in sorted(lock_ids_in_effect)
-                    ],
-                    "scope": scope,
-                },
+                overlay_payload,
             )
         )
 

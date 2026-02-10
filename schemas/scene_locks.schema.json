@@ -39,6 +39,27 @@
         "help_id": {
           "type": "string",
           "pattern": "^HELP\\.[A-Z0-9_.]+$"
+        },
+        "hint_short": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hint_long": {
+          "type": "string"
+        },
+        "affected_actions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     }
