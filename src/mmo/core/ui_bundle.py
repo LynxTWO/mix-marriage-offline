@@ -269,6 +269,8 @@ def _collect_help_ids(
     report: dict[str, Any],
     *,
     preset_recommendations: list[dict[str, Any]],
+    scene_payload: dict[str, Any] | None = None,
+    scene_locks_registry: dict[str, Any] | None = None,
 ) -> list[str]:
     help_ids: set[str] = set()
     profile_help_id = _help_id_for_profile(_profile_id(report))
@@ -289,6 +291,16 @@ def _collect_help_ids(
             mapped_help_id = _help_id_for_preset(preset_id)
             if mapped_help_id is not None:
                 help_ids.add(mapped_help_id)
+
+    if isinstance(scene_payload, dict) and isinstance(scene_locks_registry, dict):
+        scene_lock_specs = _scene_lock_specs(scene_locks_registry)
+        for lock_id in _scene_lock_ids_used(scene_payload):
+            lock_spec = scene_lock_specs.get(lock_id)
+            if not isinstance(lock_spec, dict):
+                continue
+            lock_help_id = _coerce_str(lock_spec.get("help_id")).strip()
+            if lock_help_id:
+                help_ids.add(lock_help_id)
 
     return sorted(help_ids)
 
@@ -1026,6 +1038,7 @@ def build_ui_bundle(
         "render_targets": _ui_bundle_render_targets(report, dashboard_deliverables),
     }
     scene_payload = _load_scene_payload(scene_path)
+    scene_locks_registry: dict[str, Any] | None = None
     if scene_payload is not None:
         scene_locks_registry = load_scene_locks()
         intent_params_registry = load_intent_params()
@@ -1045,6 +1058,8 @@ def build_ui_bundle(
     help_ids = _collect_help_ids(
         report,
         preset_recommendations=preset_recommendations,
+        scene_payload=scene_payload,
+        scene_locks_registry=scene_locks_registry,
     )
     if help_ids:
         registry = load_help_registry(_resolve_repo_path(help_registry_path))

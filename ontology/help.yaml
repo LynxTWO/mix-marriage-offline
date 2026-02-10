@@ -1,5 +1,81 @@
 schema_version: "0.1.0"
 entries:
+  HELP.LOCK.NO_EXTRA_BASS:
+    title: "No extra bass"
+    short: "Protect the low end from added boom so the groove stays honest."
+    long: |
+      Use this lock when the song already has enough weight. Keep definition
+      and timing in the lows without adding extra thickness that masks kick
+      and bass relationships.
+    cues:
+      - "If your Vibe is right but the low end gets cloudy after processing."
+      - "If kick and bass feel glued together in a bad way."
+      - "If Signals show stable loudness but translation feels boomy."
+    watch_out_for:
+      - "Too much restraint can make the mix feel thin on larger systems."
+      - "Re-check Deliverables on earbuds and speakers before final export."
+  HELP.LOCK.NO_STEREO_WIDENING:
+    title: "No stereo widening"
+    short: "Keep width natural and avoid side inflation tricks."
+    long: |
+      This lock protects image realism. It keeps you from chasing fake width
+      that sounds huge soloed but weakens center focus and mono reliability.
+    cues:
+      - "If vocals and snare should stay planted while ambience stays controlled."
+      - "If mono checks are part of your Safety process."
+      - "If wide FX feel impressive alone but unstable in context."
+    watch_out_for:
+      - "Avoid confusing louder sides with better width."
+      - "Extreme width usually costs center punch."
+  HELP.LOCK.NO_TOP_END_HYPE:
+    title: "No top-end hype"
+    short: "Avoid excessive brightness so detail stays clear, not fizzy."
+    long: |
+      This lock keeps top-end energy musical. It helps prevent brittle highs,
+      sibilance spikes, and excitement that turns to fatigue on real playback.
+    cues:
+      - "If cymbals or consonants jump out more than the song needs."
+      - "If your Signals look clean but long listening feels sharp."
+      - "If reference tracks sound smoother at similar loudness."
+    watch_out_for:
+      - "Too little top can hide air and articulation."
+  HELP.LOCK.PRESERVE_CENTER_IMAGE:
+    title: "Preserve center image"
+    short: "Anchor center elements so lead focus stays stable."
+    long: |
+      Use this lock to keep vocals, snare, and other center anchors from
+      drifting or smearing. It favors clarity of focus over novelty effects.
+    cues:
+      - "If the lead should read clearly on phones, earbuds, and mono."
+      - "If center detail moves around when stereo effects are added."
+      - "If client notes mention weak vocal focus."
+    watch_out_for:
+      - "Over-tight center control can reduce perceived depth."
+  HELP.LOCK.PRESERVE_DYNAMICS:
+    title: "Preserve dynamics"
+    short: "Protect musical lift and punch by avoiding over-squash."
+    long: |
+      This lock keeps performance motion intact. Use it when groove, impact,
+      and phrase contrast matter more than squeezing every dB of loudness.
+    cues:
+      - "If choruses need to hit harder than verses."
+      - "If drums lose life after compression changes."
+      - "If your Vibe depends on movement, not constant density."
+    watch_out_for:
+      - "Too much limiting can feel safer but flatten emotion."
+      - "Check Safety meters without sacrificing musical shape."
+  HELP.LOCK.PRESERVE_TRANSIENTS:
+    title: "Preserve transients"
+    short: "Keep attacks clear so rhythm and articulation still speak."
+    long: |
+      This lock protects the front edge of hits and notes. It helps drums,
+      picks, and accents stay readable when compression or saturation is active.
+    cues:
+      - "If groove feels late or soft after bus processing."
+      - "If kick and snare lose definition at the same loudness."
+      - "If rhythmic detail matters more than sheer density."
+    watch_out_for:
+      - "Over-protecting attacks can make a mix feel pokey."
   HELP.METER.BASIC:
     title: "Basic meters"
     short: "Fast metering pass for quick checks while you iterate."

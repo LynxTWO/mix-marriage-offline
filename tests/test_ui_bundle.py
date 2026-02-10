@@ -635,6 +635,24 @@ class TestUiBundle(unittest.TestCase):
         self.assertEqual(lock_labels.get("LOCK.NO_STEREO_WIDENING"), "No stereo widening")
         self.assertEqual(lock_labels.get("LOCK.PRESERVE_DYNAMICS"), "Preserve dynamics")
 
+        help_payload = bundle.get("help")
+        self.assertIsInstance(help_payload, dict)
+        if not isinstance(help_payload, dict):
+            return
+        self.assertIn("HELP.LOCK.NO_STEREO_WIDENING", help_payload)
+        self.assertIn("HELP.LOCK.PRESERVE_DYNAMICS", help_payload)
+        for help_id in (
+            "HELP.LOCK.NO_STEREO_WIDENING",
+            "HELP.LOCK.PRESERVE_DYNAMICS",
+        ):
+            entry = help_payload.get(help_id)
+            self.assertIsInstance(entry, dict)
+            if not isinstance(entry, dict):
+                continue
+            self.assertIn("title", entry)
+            self.assertIn("short", entry)
+            self.assertIn("long", entry)
+
         intent_param_defs = scene_meta.get("intent_param_defs")
         self.assertIsInstance(intent_param_defs, list)
         if not isinstance(intent_param_defs, list):

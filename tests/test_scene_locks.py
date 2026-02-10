@@ -1,4 +1,5 @@
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -57,6 +58,19 @@ class TestSceneLocksRegistry(unittest.TestCase):
         if isinstance(lock, dict):
             self.assertEqual(lock.get("label"), "Preserve dynamics")
             self.assertEqual(lock.get("severity"), "hard")
+
+    def test_scene_locks_include_help_ids(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        scene_locks_path = repo_root / "ontology" / "scene_locks.yaml"
+
+        help_ids = [
+            item.get("help_id")
+            for item in list_scene_locks(scene_locks_path)
+            if isinstance(item, dict) and isinstance(item.get("help_id"), str)
+        ]
+        self.assertTrue(help_ids)
+        for help_id in help_ids:
+            self.assertRegex(help_id, re.compile(r"^HELP\.LOCK\.[A-Z0-9_.]+$"))
 
     def test_load_scene_locks_rejects_unsorted_lock_ids(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -38,7 +38,7 @@
         },
         "help_id": {
           "type": "string",
-          "pattern": "^HELP\\.[A-Z0-9_.]+$"
+          "minLength": 1
         },
         "hint_short": {
           "type": "string",

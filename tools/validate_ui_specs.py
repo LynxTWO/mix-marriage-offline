@@ -215,11 +215,27 @@ def _known_help_ids(help_payload: Any) -> set[str]:
     }
 
 
+def _scene_lock_help_ids(scene_locks_payload: Any) -> set[str]:
+    if not isinstance(scene_locks_payload, dict):
+        return set()
+    locks = scene_locks_payload.get("locks")
+    if not isinstance(locks, dict):
+        return set()
+    return {
+        help_id.strip()
+        for lock_spec in locks.values()
+        if isinstance(lock_spec, dict)
+        for help_id in [lock_spec.get("help_id")]
+        if isinstance(help_id, str) and help_id.strip()
+    }
+
+
 def validate_ui_specs(
     *,
     gui_design_path: Path,
     ui_copy_path: Path,
     help_path: Path,
+    scene_locks_path: Path,
     gui_design_schema_path: Path,
     ui_copy_schema_path: Path,
     help_schema_path: Path,
@@ -229,6 +245,7 @@ def validate_ui_specs(
     gui_design_payload = _load_yaml(gui_design_path, errors)
     ui_copy_payload = _load_yaml(ui_copy_path, errors)
     help_payload = _load_yaml(help_path, errors)
+    scene_locks_payload = _load_yaml(scene_locks_path, errors)
 
     gui_design_schema = _load_json(gui_design_schema_path, errors)
     ui_copy_schema = _load_json(ui_copy_schema_path, errors)
@@ -243,6 +260,7 @@ def validate_ui_specs(
     missing_ui_copy_keys = sorted(required_ui_copy_keys - available_ui_copy_keys)
 
     referenced_help_ids = _referenced_help_ids(gui_design_payload, ui_copy_payload)
+    referenced_help_ids.update(_scene_lock_help_ids(scene_locks_payload))
     missing_help_ids = sorted(referenced_help_ids - _known_help_ids(help_payload))
 
     missing_glossary_terms = _missing_glossary_terms(gui_design_payload, ui_copy_payload)
@@ -285,6 +303,11 @@ def main() -> int:
         help="Path to help YAML (absolute or relative to --repo-root).",
     )
     parser.add_argument(
+        "--scene-locks",
+        default="ontology/scene_locks.yaml",
+        help="Path to scene locks YAML (absolute or relative to --repo-root).",
+    )
+    parser.add_argument(
         "--gui-design-schema",
         default="schemas/gui_design.schema.json",
         help="Path to GUI design schema (absolute or relative to --repo-root).",
@@ -306,6 +329,7 @@ def main() -> int:
         gui_design_path=_resolve_path(args.gui_design, repo_root=root),
         ui_copy_path=_resolve_path(args.ui_copy, repo_root=root),
         help_path=_resolve_path(args.help_registry, repo_root=root),
+        scene_locks_path=_resolve_path(args.scene_locks, repo_root=root),
         gui_design_schema_path=_resolve_path(args.gui_design_schema, repo_root=root),
         ui_copy_schema_path=_resolve_path(args.ui_copy_schema, repo_root=root),
         help_schema_path=_resolve_path(args.help_schema, repo_root=root),
