@@ -34,6 +34,13 @@ from mmo.core.presets import (
 from mmo.core.render_plan import build_render_plan
 from mmo.core.render_targets import get_render_target, list_render_targets
 from mmo.core.scene_locks import get_scene_lock, list_scene_locks
+from mmo.core.intent_params import load_intent_params, validate_scene_intent
+from mmo.core.scene_editor import (
+    INTENT_PARAM_KEY_TO_ID,
+    add_lock as edit_scene_add_lock,
+    remove_lock as edit_scene_remove_lock,
+    set_intent as edit_scene_set_intent,
+)
 from mmo.core.listen_pack import build_listen_pack
 from mmo.core.project_file import (
     load_project,
@@ -84,6 +91,13 @@ _UI_OVERLAY_CHIPS: tuple[str, ...] = (
     "Safe",
     "Live",
     "Vocal",
+)
+_SCENE_INTENT_KEYS: tuple[str, ...] = (
+    "width",
+    "depth",
+    "azimuth_deg",
+    "loudness_bias",
+    "confidence",
 )
 
 
@@ -893,6 +907,204 @@ def _run_scene_build_command(
     )
     _write_json_file(out_path, scene_payload)
     return 0
+
+
+def _validate_scene_schema(*, repo_root: Path, scene_payload: dict[str, Any]) -> None:
+    _validate_json_payload(
+        scene_payload,
+        schema_path=repo_root / "schemas" / "scene.schema.json",
+        payload_name="Scene",
+    )
+
+
+def _scene_intent_failure_payload(issues: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "issues": issues,
+    }
+
+
+def _validate_scene_intent_rules(
+    *,
+    repo_root: Path,
+    scene_payload: dict[str, Any],
+) -> None:
+    intent_params = load_intent_params(repo_root / "ontology" / "intent_params.yaml")
+    issues = validate_scene_intent(scene_payload, intent_params)
+    if not issues:
+        return
+    print(
+        json.dumps(
+            _scene_intent_failure_payload(issues),
+            indent=2,
+            sort_keys=True,
+        ),
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
+
+def _parse_scene_intent_cli_value(
+    *,
+    repo_root: Path,
+    key: str,
+    raw_value: str,
+) -> Any:
+    normalized_key = _coerce_str(key).strip()
+    param_id = INTENT_PARAM_KEY_TO_ID.get(normalized_key)
+    if param_id is None:
+        keys = ", ".join(sorted(INTENT_PARAM_KEY_TO_ID.keys()))
+        raise ValueError(f"Unsupported scene intent key: {normalized_key!r}. Expected one of: {keys}")
+
+    intent_registry = load_intent_params(repo_root / "ontology" / "intent_params.yaml")
+    params = intent_registry.get("params")
+    if not isinstance(params, dict):
+        raise ValueError("Intent params registry is invalid: params must be an object.")
+    param_spec = params.get(param_id)
+    if not isinstance(param_spec, dict):
+        raise ValueError(f"Intent params registry is missing entry: {param_id}")
+
+    param_type = _coerce_str(param_spec.get("type")).strip()
+    if param_type == "number":
+        try:
+            numeric = float(raw_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"--value must be numeric for key {normalized_key}."
+            ) from exc
+        return numeric
+    if param_type == "enum":
+        normalized = _coerce_str(raw_value).strip()
+        if not normalized:
+            raise ValueError(f"--value must be a non-empty string for key {normalized_key}.")
+        return normalized
+    raise ValueError(f"Unsupported intent param type for {param_id}: {param_type!r}")
+
+
+def _run_scene_locks_edit_command(
+    *,
+    repo_root: Path,
+    scene_path: Path,
+    out_path: Path,
+    operation: str,
+    scope: str,
+    target_id: str | None,
+    lock_id: str,
+) -> int:
+    scene_payload = _load_json_object(scene_path, label="Scene")
+    _validate_scene_schema(repo_root=repo_root, scene_payload=scene_payload)
+
+    if operation == "add":
+        edited = edit_scene_add_lock(scene_payload, scope, target_id, lock_id)
+    elif operation == "remove":
+        edited = edit_scene_remove_lock(scene_payload, scope, target_id, lock_id)
+    else:
+        raise ValueError(f"Unsupported scene lock operation: {operation}")
+
+    _validate_scene_schema(repo_root=repo_root, scene_payload=edited)
+    _validate_scene_intent_rules(repo_root=repo_root, scene_payload=edited)
+    _write_json_file(out_path, edited)
+    return 0
+
+
+def _run_scene_intent_set_command(
+    *,
+    repo_root: Path,
+    scene_path: Path,
+    out_path: Path,
+    scope: str,
+    target_id: str | None,
+    key: str,
+    value: str,
+) -> int:
+    scene_payload = _load_json_object(scene_path, label="Scene")
+    _validate_scene_schema(repo_root=repo_root, scene_payload=scene_payload)
+    normalized_value = _parse_scene_intent_cli_value(
+        repo_root=repo_root,
+        key=key,
+        raw_value=value,
+    )
+
+    edited = edit_scene_set_intent(
+        scene_payload,
+        scope,
+        target_id,
+        key,
+        normalized_value,
+    )
+    _validate_scene_schema(repo_root=repo_root, scene_payload=edited)
+    _validate_scene_intent_rules(repo_root=repo_root, scene_payload=edited)
+    _write_json_file(out_path, edited)
+    return 0
+
+
+def _build_scene_intent_show_payload(scene_payload: dict[str, Any]) -> dict[str, Any]:
+    scene_intent = scene_payload.get("intent")
+    normalized_scene_intent = dict(scene_intent) if isinstance(scene_intent, dict) else {}
+
+    objects: list[dict[str, Any]] = []
+    for entry in scene_payload.get("objects", []):
+        if not isinstance(entry, dict):
+            continue
+        object_id = _coerce_str(entry.get("object_id")).strip()
+        if not object_id:
+            continue
+        intent = entry.get("intent")
+        objects.append(
+            {
+                "object_id": object_id,
+                "intent": dict(intent) if isinstance(intent, dict) else {},
+            }
+        )
+    objects.sort(key=lambda item: item["object_id"])
+
+    beds: list[dict[str, Any]] = []
+    for entry in scene_payload.get("beds", []):
+        if not isinstance(entry, dict):
+            continue
+        bed_id = _coerce_str(entry.get("bed_id")).strip()
+        if not bed_id:
+            continue
+        intent = entry.get("intent")
+        beds.append(
+            {
+                "bed_id": bed_id,
+                "intent": dict(intent) if isinstance(intent, dict) else {},
+            }
+        )
+    beds.sort(key=lambda item: item["bed_id"])
+
+    return {
+        "scene": normalized_scene_intent,
+        "objects": objects,
+        "beds": beds,
+    }
+
+
+def _render_scene_intent_text(payload: dict[str, Any]) -> str:
+    lines = ["scene:"]
+    lines.append(json.dumps(payload.get("scene", {}), sort_keys=True))
+
+    lines.append("objects:")
+    for item in payload.get("objects", []):
+        if not isinstance(item, dict):
+            continue
+        object_id = _coerce_str(item.get("object_id")).strip()
+        intent = item.get("intent")
+        lines.append(
+            f"- {object_id}: {json.dumps(intent if isinstance(intent, dict) else {}, sort_keys=True)}"
+        )
+
+    lines.append("beds:")
+    for item in payload.get("beds", []):
+        if not isinstance(item, dict):
+            continue
+        bed_id = _coerce_str(item.get("bed_id")).strip()
+        intent = item.get("intent")
+        lines.append(
+            f"- {bed_id}: {json.dumps(intent if isinstance(intent, dict) else {}, sort_keys=True)}"
+        )
+    return "\n".join(lines)
 
 
 def _build_validated_render_plan_payload(
@@ -5034,6 +5246,134 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="Path to scene JSON.",
     )
+    scene_locks_parser = scene_subparsers.add_parser(
+        "locks",
+        help="Edit scene locks.",
+    )
+    scene_locks_subparsers = scene_locks_parser.add_subparsers(
+        dest="scene_locks_command",
+        required=True,
+    )
+    scene_locks_add_parser = scene_locks_subparsers.add_parser(
+        "add",
+        help="Add a lock to scene/object/bed intent.",
+    )
+    scene_locks_add_parser.add_argument(
+        "--scene",
+        required=True,
+        help="Path to scene JSON.",
+    )
+    scene_locks_add_parser.add_argument(
+        "--scope",
+        choices=["scene", "object", "bed"],
+        required=True,
+        help="Lock scope.",
+    )
+    scene_locks_add_parser.add_argument(
+        "--id",
+        default=None,
+        help="object_id or bed_id for non-scene scopes.",
+    )
+    scene_locks_add_parser.add_argument(
+        "--lock",
+        required=True,
+        help="Lock ID from ontology/scene_locks.yaml.",
+    )
+    scene_locks_add_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output scene JSON.",
+    )
+    scene_locks_remove_parser = scene_locks_subparsers.add_parser(
+        "remove",
+        help="Remove a lock from scene/object/bed intent.",
+    )
+    scene_locks_remove_parser.add_argument(
+        "--scene",
+        required=True,
+        help="Path to scene JSON.",
+    )
+    scene_locks_remove_parser.add_argument(
+        "--scope",
+        choices=["scene", "object", "bed"],
+        required=True,
+        help="Lock scope.",
+    )
+    scene_locks_remove_parser.add_argument(
+        "--id",
+        default=None,
+        help="object_id or bed_id for non-scene scopes.",
+    )
+    scene_locks_remove_parser.add_argument(
+        "--lock",
+        required=True,
+        help="Lock ID from ontology/scene_locks.yaml.",
+    )
+    scene_locks_remove_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output scene JSON.",
+    )
+
+    scene_intent_parser = scene_subparsers.add_parser(
+        "intent",
+        help="View and edit scene intent fields.",
+    )
+    scene_intent_subparsers = scene_intent_parser.add_subparsers(
+        dest="scene_intent_command",
+        required=True,
+    )
+    scene_intent_set_parser = scene_intent_subparsers.add_parser(
+        "set",
+        help="Set one scene intent field for scene/object/bed.",
+    )
+    scene_intent_set_parser.add_argument(
+        "--scene",
+        required=True,
+        help="Path to scene JSON.",
+    )
+    scene_intent_set_parser.add_argument(
+        "--scope",
+        choices=["scene", "object", "bed"],
+        required=True,
+        help="Intent scope.",
+    )
+    scene_intent_set_parser.add_argument(
+        "--id",
+        default=None,
+        help="object_id or bed_id for non-scene scopes.",
+    )
+    scene_intent_set_parser.add_argument(
+        "--key",
+        choices=list(_SCENE_INTENT_KEYS),
+        required=True,
+        help="Intent field key.",
+    )
+    scene_intent_set_parser.add_argument(
+        "--value",
+        required=True,
+        help="Intent field value.",
+    )
+    scene_intent_set_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output scene JSON.",
+    )
+    scene_intent_show_parser = scene_intent_subparsers.add_parser(
+        "show",
+        help="Show scene/object/bed intent sections.",
+    )
+    scene_intent_show_parser.add_argument(
+        "--scene",
+        required=True,
+        help="Path to scene JSON.",
+    )
+    scene_intent_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for scene intent display.",
+    )
 
     render_plan_parser = subparsers.add_parser(
         "render-plan",
@@ -6126,31 +6466,80 @@ def main(argv: list[str] | None = None) -> int:
             except SystemExit as exc:
                 return int(exc.code) if isinstance(exc.code, int) else 1
 
-        if args.scene_command not in {"validate", "show"}:
-            print("Unknown scene command.", file=sys.stderr)
+        if args.scene_command == "locks":
+            try:
+                return _run_scene_locks_edit_command(
+                    repo_root=repo_root,
+                    scene_path=Path(args.scene),
+                    out_path=Path(args.out),
+                    operation=args.scene_locks_command,
+                    scope=args.scope,
+                    target_id=args.id,
+                    lock_id=args.lock,
+                )
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+
+        if args.scene_command == "intent":
+            if args.scene_intent_command == "set":
+                try:
+                    return _run_scene_intent_set_command(
+                        repo_root=repo_root,
+                        scene_path=Path(args.scene),
+                        out_path=Path(args.out),
+                        scope=args.scope,
+                        target_id=args.id,
+                        key=args.key,
+                        value=args.value,
+                    )
+                except (RuntimeError, ValueError) as exc:
+                    print(str(exc), file=sys.stderr)
+                    return 1
+                except SystemExit as exc:
+                    return int(exc.code) if isinstance(exc.code, int) else 1
+            if args.scene_intent_command == "show":
+                try:
+                    scene_payload = _load_json_object(Path(args.scene), label="Scene")
+                    _validate_scene_schema(repo_root=repo_root, scene_payload=scene_payload)
+                except ValueError as exc:
+                    print(str(exc), file=sys.stderr)
+                    return 1
+                except SystemExit as exc:
+                    return int(exc.code) if isinstance(exc.code, int) else 1
+
+                payload = _build_scene_intent_show_payload(scene_payload)
+                if args.format == "json":
+                    print(json.dumps(payload, indent=2, sort_keys=True))
+                else:
+                    print(_render_scene_intent_text(payload))
+                return 0
+            print("Unknown scene intent command.", file=sys.stderr)
             return 2
 
-        try:
-            scene_payload = _load_json_object(Path(args.scene), label="Scene")
-            _validate_json_payload(
-                scene_payload,
-                schema_path=repo_root / "schemas" / "scene.schema.json",
-                payload_name="Scene",
-            )
-        except ValueError as exc:
-            print(str(exc), file=sys.stderr)
-            return 1
-        except SystemExit as exc:
-            return int(exc.code) if isinstance(exc.code, int) else 1
+        if args.scene_command in {"validate", "show"}:
+            try:
+                scene_payload = _load_json_object(Path(args.scene), label="Scene")
+                _validate_scene_schema(repo_root=repo_root, scene_payload=scene_payload)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
 
-        if args.scene_command == "validate":
-            print("Scene is valid.")
+            if args.scene_command == "validate":
+                print("Scene is valid.")
+                return 0
+            if args.format == "json":
+                print(json.dumps(scene_payload, indent=2, sort_keys=True))
+            else:
+                print(_render_scene_text(scene_payload))
             return 0
-        if args.format == "json":
-            print(json.dumps(scene_payload, indent=2, sort_keys=True))
-        else:
-            print(_render_scene_text(scene_payload))
-        return 0
+
+        print("Unknown scene command.", file=sys.stderr)
+        return 2
     if args.command == "render-plan":
         if args.render_plan_command == "build":
             try:
