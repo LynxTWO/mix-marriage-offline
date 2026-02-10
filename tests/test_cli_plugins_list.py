@@ -62,16 +62,33 @@ class TestCliPluginsList(unittest.TestCase):
             capabilities.get("supported_contexts"),
             ["render", "auto_apply"],
         )
+        self.assertEqual(
+            capabilities.get("scene"),
+            {
+                "supports_objects": True,
+                "supports_beds": True,
+                "supports_locks": True,
+                "requires_speaker_positions": True,
+                "supported_target_ids": [
+                    "TARGET.STEREO.2_0",
+                    "TARGET.SURROUND.5_1",
+                ],
+            },
+        )
 
-    def test_plugins_list_text_shows_max_channels_and_contexts(self) -> None:
+    def test_plugins_list_text_shows_scene_capabilities(self) -> None:
         result = self._run_plugins_list("text")
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertIn(
-            "PLUGIN.RENDERER.SAFE (max_channels=32) contexts=render,auto_apply",
+            (
+                "PLUGIN.RENDERER.SAFE (max_channels=32) contexts=render,auto_apply "
+                "scene=objects,beds,locks,requires_speaker_positions,"
+                "targets=TARGET.STEREO.2_0,TARGET.SURROUND.5_1"
+            ),
             result.stdout,
         )
         self.assertIn(
-            "PLUGIN.RENDERER.GAIN_TRIM (max_channels=32) contexts=render,auto_apply",
+            "PLUGIN.RENDERER.GAIN_TRIM (max_channels=32) contexts=render,auto_apply scene=-",
             result.stdout,
         )
 

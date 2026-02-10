@@ -7,6 +7,7 @@ from tools.validate_plugins import (
     ISSUE_PLUGIN_CAPABILITIES_INVALID,
     ISSUE_PLUGIN_LAYOUT_ID_UNKNOWN,
     ISSUE_PLUGIN_SCHEMA_INVALID,
+    ISSUE_PLUGIN_TARGET_ID_UNKNOWN,
     validate_plugins,
 )
 
@@ -62,6 +63,20 @@ class TestPluginCapabilities(unittest.TestCase):
                 capabilities.notes,
                 ("Deterministic gain/trim rendering; no boosts.",),
             )
+            if plugin_id == "PLUGIN.RENDERER.SAFE":
+                self.assertIsNotNone(capabilities.scene)
+                if capabilities.scene is None:
+                    return
+                self.assertTrue(capabilities.scene.supports_objects)
+                self.assertTrue(capabilities.scene.supports_beds)
+                self.assertTrue(capabilities.scene.supports_locks)
+                self.assertTrue(capabilities.scene.requires_speaker_positions)
+                self.assertEqual(
+                    capabilities.scene.supported_target_ids,
+                    ("TARGET.STEREO.2_0", "TARGET.SURROUND.5_1"),
+                )
+            else:
+                self.assertIsNone(capabilities.scene)
 
     def test_loader_attaches_capabilities_to_plugin_instance(self) -> None:
         plugins = load_plugins(Path("plugins"))
@@ -77,9 +92,43 @@ class TestPluginCapabilities(unittest.TestCase):
             {
                 "max_channels": 32,
                 "notes": ["Deterministic gain/trim rendering; no boosts."],
+                "scene": {
+                    "requires_speaker_positions": True,
+                    "supported_target_ids": [
+                        "TARGET.STEREO.2_0",
+                        "TARGET.SURROUND.5_1",
+                    ],
+                    "supports_beds": True,
+                    "supports_locks": True,
+                    "supports_objects": True,
+                },
                 "supported_contexts": ["render", "auto_apply"],
             },
         )
+
+    def test_validate_plugins_accepts_scene_capabilities(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            plugins_dir = Path(temp_dir)
+            _write_manifest(
+                plugins_dir,
+                plugin_id="PLUGIN.RENDERER.TEMP_SCENE_OK",
+                capabilities_block="\n".join(
+                    [
+                        "  max_channels: 8",
+                        "  scene:",
+                        "    supports_objects: true",
+                        "    supports_beds: true",
+                        "    supports_locks: true",
+                        "    requires_speaker_positions: true",
+                        "    supported_target_ids:",
+                        '      - "TARGET.STEREO.2_0"',
+                    ]
+                ),
+            )
+
+            result = validate_plugins(plugins_dir, Path("schemas/plugin.schema.json"))
+
+        self.assertTrue(result["ok"], msg=result)
 
     def test_validate_plugins_rejects_unknown_supported_layout_id(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -136,6 +185,34 @@ class TestPluginCapabilities(unittest.TestCase):
             ISSUE_PLUGIN_CAPABILITIES_INVALID in issue_ids
             or ISSUE_PLUGIN_SCHEMA_INVALID in issue_ids
         )
+
+    def test_validate_plugins_rejects_unknown_supported_target_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            plugins_dir = Path(temp_dir)
+            _write_manifest(
+                plugins_dir,
+                plugin_id="PLUGIN.RENDERER.TEMP_INVALID_TARGET",
+                capabilities_block="\n".join(
+                    [
+                        "  max_channels: 8",
+                        "  scene:",
+                        "    supports_objects: true",
+                        "    requires_speaker_positions: true",
+                        "    supported_target_ids:",
+                        '      - "TARGET.NOT_REAL"',
+                    ]
+                ),
+            )
+
+            result = validate_plugins(plugins_dir, Path("schemas/plugin.schema.json"))
+
+        self.assertFalse(result["ok"])
+        issue_ids = [
+            issue.get("issue_id")
+            for issue in result.get("issues", [])
+            if isinstance(issue, dict)
+        ]
+        self.assertIn(ISSUE_PLUGIN_TARGET_ID_UNKNOWN, issue_ids)
 
 
 if __name__ == "__main__":

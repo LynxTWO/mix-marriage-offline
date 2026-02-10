@@ -101,9 +101,38 @@
           },
           "uniqueItems": true
         },
+        "scene": {
+          "$ref": "#/$defs/plugin_scene_capabilities"
+        },
         "notes": {
           "type": "array",
           "items": { "type": "string" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "plugin_scene_capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "supports_objects": {
+          "type": "boolean"
+        },
+        "supports_beds": {
+          "type": "boolean"
+        },
+        "supports_locks": {
+          "type": "boolean"
+        },
+        "requires_speaker_positions": {
+          "type": "boolean"
+        },
+        "supported_target_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^TARGET\\..+$"
+          },
           "uniqueItems": true
         }
       }

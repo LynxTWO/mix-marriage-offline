@@ -27,6 +27,7 @@ ISSUE_PLUGIN_ID_TYPE_MISMATCH = "ISSUE.VALIDATION.PLUGIN_ID_TYPE_MISMATCH"
 ISSUE_PLUGIN_ID_DUPLICATE = "ISSUE.VALIDATION.PLUGIN_ID_DUPLICATE"
 ISSUE_PLUGIN_CAPABILITIES_INVALID = "ISSUE.VALIDATION.PLUGIN_CAPABILITIES_INVALID"
 ISSUE_PLUGIN_LAYOUT_ID_UNKNOWN = "ISSUE.VALIDATION.PLUGIN_LAYOUT_ID_UNKNOWN"
+ISSUE_PLUGIN_TARGET_ID_UNKNOWN = "ISSUE.VALIDATION.PLUGIN_TARGET_ID_UNKNOWN"
 
 PLUGIN_PREFIX_BY_TYPE = {
     "detector": "PLUGIN.DETECTOR.",
@@ -224,12 +225,70 @@ def _load_layout_ids(layouts_path: Path, issues: List[Dict[str, Any]]) -> Option
     }
 
 
+def _load_target_layouts(
+    render_targets_path: Path,
+    issues: List[Dict[str, Any]],
+) -> Optional[Dict[str, str | None]]:
+    data = _load_yaml(render_targets_path, issues)
+    if not isinstance(data, dict):
+        _add_issue(
+            issues,
+            ISSUE_PLUGIN_CAPABILITIES_INVALID,
+            "error",
+            "Failed to load render target registry for plugin capability checks.",
+            {"file_path": str(render_targets_path)},
+        )
+        return None
+    targets = data.get("targets")
+    if not isinstance(targets, list):
+        _add_issue(
+            issues,
+            ISSUE_PLUGIN_CAPABILITIES_INVALID,
+            "error",
+            "render_targets.yaml is missing the targets list.",
+            {"file_path": str(render_targets_path)},
+        )
+        return None
+
+    target_layouts: Dict[str, str | None] = {}
+    for item in targets:
+        if not isinstance(item, dict):
+            continue
+        target_id = item.get("target_id")
+        if not isinstance(target_id, str) or not target_id or target_id.startswith("_"):
+            continue
+        layout_id = item.get("layout_id")
+        if isinstance(layout_id, str) and layout_id:
+            target_layouts[target_id] = layout_id
+        else:
+            target_layouts[target_id] = None
+    return target_layouts
+
+
 def _validate_capabilities(
     capabilities: Dict[str, Any],
     manifest_path: Path,
     layout_ids: Optional[set[str]],
+    target_layouts: Optional[Dict[str, str | None]],
     issues: List[Dict[str, Any]],
 ) -> None:
+    allowed_capability_fields = {
+        "max_channels",
+        "supported_layout_ids",
+        "supported_contexts",
+        "scene",
+        "notes",
+    }
+    for field_name in sorted(capabilities.keys()):
+        if field_name not in allowed_capability_fields:
+            _add_issue(
+                issues,
+                ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                "error",
+                f"capabilities contains unsupported field: {field_name}.",
+                {"file_path": str(manifest_path), "field_name": field_name},
+            )
+
     max_channels = capabilities.get("max_channels")
     if (
         max_channels is not None
@@ -251,6 +310,7 @@ def _validate_capabilities(
         )
 
     supported_layout_ids = capabilities.get("supported_layout_ids")
+    layout_values: list[str] = []
     if supported_layout_ids is not None:
         if not isinstance(supported_layout_ids, list):
             _add_issue(
@@ -271,6 +331,7 @@ def _validate_capabilities(
                         {"file_path": str(manifest_path), "layout_id": layout_id},
                     )
                     continue
+                layout_values.append(layout_id)
                 if layout_ids is not None and layout_id not in layout_ids:
                     _add_issue(
                         issues,
@@ -301,6 +362,122 @@ def _validate_capabilities(
                         "capabilities.supported_contexts contains an invalid context.",
                         {"file_path": str(manifest_path), "context": context},
                     )
+
+    scene = capabilities.get("scene")
+    target_ids: list[str] = []
+    requires_speaker_positions = False
+    if scene is not None:
+        if not isinstance(scene, dict):
+            _add_issue(
+                issues,
+                ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                "error",
+                "capabilities.scene must be an object.",
+                {"file_path": str(manifest_path)},
+            )
+        else:
+            allowed_scene_fields = {
+                "supports_objects",
+                "supports_beds",
+                "supports_locks",
+                "requires_speaker_positions",
+                "supported_target_ids",
+            }
+            for field_name in sorted(scene.keys()):
+                if field_name not in allowed_scene_fields:
+                    _add_issue(
+                        issues,
+                        ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                        "error",
+                        f"capabilities.scene contains unsupported field: {field_name}.",
+                        {"file_path": str(manifest_path), "field_name": field_name},
+                    )
+
+            for bool_field_name in (
+                "supports_objects",
+                "supports_beds",
+                "supports_locks",
+                "requires_speaker_positions",
+            ):
+                bool_value = scene.get(bool_field_name)
+                if bool_value is not None and not isinstance(bool_value, bool):
+                    _add_issue(
+                        issues,
+                        ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                        "error",
+                        f"capabilities.scene.{bool_field_name} must be a boolean.",
+                        {
+                            "file_path": str(manifest_path),
+                            "field_name": bool_field_name,
+                            "value": bool_value,
+                        },
+                    )
+
+            requires_speaker_positions = scene.get("requires_speaker_positions") is True
+            supported_target_ids = scene.get("supported_target_ids")
+            if supported_target_ids is not None:
+                if not isinstance(supported_target_ids, list):
+                    _add_issue(
+                        issues,
+                        ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                        "error",
+                        "capabilities.scene.supported_target_ids must be a list of target IDs.",
+                        {"file_path": str(manifest_path)},
+                    )
+                else:
+                    for target_id in supported_target_ids:
+                        if not isinstance(target_id, str):
+                            _add_issue(
+                                issues,
+                                ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                                "error",
+                                (
+                                    "capabilities.scene.supported_target_ids "
+                                    "must contain only strings."
+                                ),
+                                {"file_path": str(manifest_path), "target_id": target_id},
+                            )
+                            continue
+                        target_ids.append(target_id)
+                        if target_layouts is not None and target_id not in target_layouts:
+                            _add_issue(
+                                issues,
+                                ISSUE_PLUGIN_TARGET_ID_UNKNOWN,
+                                "error",
+                                (
+                                    "capabilities.scene.supported_target_ids "
+                                    "references an unknown target ID."
+                                ),
+                                {
+                                    "file_path": str(manifest_path),
+                                    "target_id": target_id,
+                                },
+                            )
+
+    if requires_speaker_positions:
+        has_layout_support = bool(layout_values)
+        has_target_layout_support = False
+        if target_ids:
+            if target_layouts is None:
+                has_target_layout_support = True
+            else:
+                for target_id in target_ids:
+                    target_layout = target_layouts.get(target_id)
+                    if isinstance(target_layout, str) and target_layout:
+                        has_target_layout_support = True
+                        break
+        if not has_layout_support and not has_target_layout_support:
+            _add_issue(
+                issues,
+                ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                "error",
+                (
+                    "capabilities.scene.requires_speaker_positions=true requires either "
+                    "capabilities.supported_layout_ids or layout-backed "
+                    "capabilities.scene.supported_target_ids."
+                ),
+                {"file_path": str(manifest_path)},
+            )
 
     notes = capabilities.get("notes")
     if notes is not None:
@@ -334,8 +511,13 @@ def validate_plugins(plugins_dir: Path, schema_path: Path) -> Dict[str, Any]:
     manifest_paths = _collect_manifests(plugins_dir)
     plugin_id_index: Dict[str, List[str]] = {}
     layout_ids: Optional[set[str]] = None
+    target_layouts: Optional[Dict[str, str | None]] = None
     loaded_layout_ids = False
+    loaded_target_layouts = False
     layouts_path = Path(__file__).resolve().parents[1] / "ontology" / "layouts.yaml"
+    render_targets_path = (
+        Path(__file__).resolve().parents[1] / "ontology" / "render_targets.yaml"
+    )
 
     for manifest_path in manifest_paths:
         data = _load_yaml(manifest_path, issues)
@@ -369,10 +551,14 @@ def validate_plugins(plugins_dir: Path, schema_path: Path) -> Dict[str, Any]:
                 if not loaded_layout_ids:
                     layout_ids = _load_layout_ids(layouts_path, issues)
                     loaded_layout_ids = True
+                if not loaded_target_layouts:
+                    target_layouts = _load_target_layouts(render_targets_path, issues)
+                    loaded_target_layouts = True
                 _validate_capabilities(
                     capabilities,
                     manifest_path,
                     layout_ids,
+                    target_layouts,
                     issues,
                 )
 

@@ -1822,6 +1822,7 @@ def _render_plugins_list_text(payload: list[dict[str, Any]]) -> str:
         capabilities = row.get("capabilities")
         max_channels = "-"
         contexts = "-"
+        scene = "-"
         if isinstance(capabilities, dict):
             max_channels_value = capabilities.get("max_channels")
             if isinstance(max_channels_value, int):
@@ -1833,7 +1834,31 @@ def _render_plugins_list_text(payload: list[dict[str, Any]]) -> str:
                 ]
                 if contexts_list:
                     contexts = ",".join(contexts_list)
-        lines.append(f"{plugin_id} (max_channels={max_channels}) contexts={contexts}")
+            scene_payload = capabilities.get("scene")
+            if isinstance(scene_payload, dict):
+                scene_parts: list[str] = []
+                if scene_payload.get("supports_objects") is True:
+                    scene_parts.append("objects")
+                if scene_payload.get("supports_beds") is True:
+                    scene_parts.append("beds")
+                if scene_payload.get("supports_locks") is True:
+                    scene_parts.append("locks")
+                if scene_payload.get("requires_speaker_positions") is True:
+                    scene_parts.append("requires_speaker_positions")
+                supported_target_ids = scene_payload.get("supported_target_ids")
+                if isinstance(supported_target_ids, list):
+                    target_ids = [
+                        item
+                        for item in supported_target_ids
+                        if isinstance(item, str) and item
+                    ]
+                    if target_ids:
+                        scene_parts.append(f"targets={','.join(target_ids)}")
+                if scene_parts:
+                    scene = ",".join(scene_parts)
+        lines.append(
+            f"{plugin_id} (max_channels={max_channels}) contexts={contexts} scene={scene}"
+        )
     return "\n".join(lines)
 
 

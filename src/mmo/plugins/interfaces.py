@@ -9,10 +9,34 @@ PLUGIN_SUPPORTED_CONTEXTS = ("suggest", "auto_apply", "render")
 
 
 @dataclass(frozen=True)
+class PluginSceneCapabilities:
+    supports_objects: bool | None = None
+    supports_beds: bool | None = None
+    supports_locks: bool | None = None
+    requires_speaker_positions: bool | None = None
+    supported_target_ids: tuple[str, ...] | None = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {}
+        if isinstance(self.supports_objects, bool):
+            payload["supports_objects"] = self.supports_objects
+        if isinstance(self.supports_beds, bool):
+            payload["supports_beds"] = self.supports_beds
+        if isinstance(self.supports_locks, bool):
+            payload["supports_locks"] = self.supports_locks
+        if isinstance(self.requires_speaker_positions, bool):
+            payload["requires_speaker_positions"] = self.requires_speaker_positions
+        if self.supported_target_ids is not None:
+            payload["supported_target_ids"] = list(self.supported_target_ids)
+        return payload
+
+
+@dataclass(frozen=True)
 class PluginCapabilities:
     max_channels: int | None = None
     supported_layout_ids: tuple[str, ...] | None = None
     supported_contexts: tuple[str, ...] | None = None
+    scene: PluginSceneCapabilities | None = None
     notes: tuple[str, ...] | None = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -23,6 +47,10 @@ class PluginCapabilities:
             payload["supported_layout_ids"] = list(self.supported_layout_ids)
         if self.supported_contexts is not None:
             payload["supported_contexts"] = list(self.supported_contexts)
+        if self.scene is not None:
+            scene_payload = self.scene.to_dict()
+            if scene_payload:
+                payload["scene"] = scene_payload
         if self.notes is not None:
             payload["notes"] = list(self.notes)
         return payload

@@ -13,7 +13,11 @@ from mmo.core.deliverables import (
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.io import sha256_file
 from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS, supported_output_formats, transcode_wav_to_format
-from mmo.plugins.interfaces import PLUGIN_SUPPORTED_CONTEXTS, PluginCapabilities
+from mmo.plugins.interfaces import (
+    PLUGIN_SUPPORTED_CONTEXTS,
+    PluginCapabilities,
+    PluginSceneCapabilities,
+)
 
 try:
     import yaml
@@ -108,6 +112,11 @@ def _coerce_plugin_capabilities(value: Any) -> PluginCapabilities | None:
             return None
         return tuple(item for item in raw_value if isinstance(item, str))
 
+    def _coerce_bool(raw_value: Any) -> bool | None:
+        if isinstance(raw_value, bool):
+            return raw_value
+        return None
+
     supported_layout_ids = _coerce_string_tuple(value.get("supported_layout_ids"))
 
     supported_contexts_raw = _coerce_string_tuple(value.get("supported_contexts"))
@@ -119,11 +128,27 @@ def _coerce_plugin_capabilities(value: Any) -> PluginCapabilities | None:
             if context in PLUGIN_SUPPORTED_CONTEXTS
         )
 
+    scene_value = value.get("scene")
+    scene: PluginSceneCapabilities | None = None
+    if isinstance(scene_value, dict):
+        scene = PluginSceneCapabilities(
+            supports_objects=_coerce_bool(scene_value.get("supports_objects")),
+            supports_beds=_coerce_bool(scene_value.get("supports_beds")),
+            supports_locks=_coerce_bool(scene_value.get("supports_locks")),
+            requires_speaker_positions=_coerce_bool(
+                scene_value.get("requires_speaker_positions")
+            ),
+            supported_target_ids=_coerce_string_tuple(
+                scene_value.get("supported_target_ids")
+            ),
+        )
+
     notes = _coerce_string_tuple(value.get("notes"))
     return PluginCapabilities(
         max_channels=max_channels,
         supported_layout_ids=supported_layout_ids,
         supported_contexts=supported_contexts,
+        scene=scene,
         notes=notes,
     )
 

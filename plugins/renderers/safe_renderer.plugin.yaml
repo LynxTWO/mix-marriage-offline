@@ -12,5 +12,13 @@ capabilities:
   supported_contexts:
     - "render"
     - "auto_apply"
+  scene:
+    supports_objects: true
+    supports_beds: true
+    supports_locks: true
+    requires_speaker_positions: true
+    supported_target_ids:
+      - "TARGET.STEREO.2_0"
+      - "TARGET.SURROUND.5_1"
   notes:
     - "Deterministic gain/trim rendering; no boosts."
