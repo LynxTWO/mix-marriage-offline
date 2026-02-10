@@ -1,0 +1,38 @@
+schema_version: "0.1.0"
+locks:
+  LOCK.NO_EXTRA_BASS:
+    label: "No extra bass"
+    description: "Do not add low-end weight beyond what the source already carries."
+    applies_to: ["object", "bed", "scene"]
+    severity: "taste"
+    help_id: "HELP.LOCK.NO_EXTRA_BASS"
+  LOCK.NO_STEREO_WIDENING:
+    label: "No stereo widening"
+    description: "Avoid artificial width expansion or side-boost tricks."
+    applies_to: ["object", "bed", "scene"]
+    severity: "hard"
+    help_id: "HELP.LOCK.NO_STEREO_WIDENING"
+  LOCK.NO_TOP_END_HYPE:
+    label: "No top-end hype"
+    description: "Avoid brightness boosts that exaggerate air or sibilance."
+    applies_to: ["object", "bed", "scene"]
+    severity: "taste"
+    help_id: "HELP.LOCK.NO_TOP_END_HYPE"
+  LOCK.PRESERVE_CENTER_IMAGE:
+    label: "Preserve center image"
+    description: "Keep center-focused content stable and anchored."
+    applies_to: ["bed", "scene"]
+    severity: "hard"
+    help_id: "HELP.LOCK.PRESERVE_CENTER_IMAGE"
+  LOCK.PRESERVE_DYNAMICS:
+    label: "Preserve dynamics"
+    description: "Avoid squashing transients or flattening the performance."
+    applies_to: ["object", "bed", "scene"]
+    severity: "hard"
+    help_id: "HELP.LOCK.PRESERVE_DYNAMICS"
+  LOCK.PRESERVE_TRANSIENTS:
+    label: "Preserve transients"
+    description: "Protect attacks and percussive edges from blur or softening."
+    applies_to: ["object", "bed", "scene"]
+    severity: "taste"
+    help_id: "HELP.LOCK.PRESERVE_TRANSIENTS"

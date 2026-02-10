@@ -33,6 +33,7 @@ from mmo.core.presets import (
 )
 from mmo.core.render_plan import build_render_plan
 from mmo.core.render_targets import get_render_target, list_render_targets
+from mmo.core.scene_locks import get_scene_lock, list_scene_locks
 from mmo.core.listen_pack import build_listen_pack
 from mmo.core.project_file import (
     load_project,
@@ -1453,6 +1454,58 @@ def _render_target_text(payload: dict[str, Any]) -> str:
         for item in notes:
             if isinstance(item, str):
                 lines.append(f"- {item}")
+    return "\n".join(lines)
+
+
+def _build_scene_lock_list_payload(*, scene_locks_path: Path) -> list[dict[str, Any]]:
+    return list_scene_locks(scene_locks_path)
+
+
+def _build_scene_lock_show_payload(
+    *,
+    scene_locks_path: Path,
+    lock_id: str,
+) -> dict[str, Any]:
+    normalized_lock_id = lock_id.strip() if isinstance(lock_id, str) else ""
+    if not normalized_lock_id:
+        raise ValueError("lock_id must be a non-empty string.")
+
+    payload = get_scene_lock(normalized_lock_id, scene_locks_path)
+    if payload is None:
+        locks = list_scene_locks(scene_locks_path)
+        available = ", ".join(
+            item["lock_id"] for item in locks if isinstance(item.get("lock_id"), str)
+        )
+        if available:
+            raise ValueError(
+                f"Unknown lock_id: {normalized_lock_id}. Available locks: {available}"
+            )
+        raise ValueError(
+            f"Unknown lock_id: {normalized_lock_id}. No scene locks are available."
+        )
+    return payload
+
+
+def _render_scene_lock_text(payload: dict[str, Any]) -> str:
+    lines = [
+        _coerce_str(payload.get("lock_id")).strip(),
+        f"label: {_coerce_str(payload.get('label')).strip()}",
+        f"description: {_coerce_str(payload.get('description')).strip()}",
+        f"severity: {_coerce_str(payload.get('severity')).strip()}",
+    ]
+    applies_to = payload.get("applies_to")
+    normalized_applies_to = (
+        [
+            item.strip()
+            for item in applies_to
+            if isinstance(item, str) and item.strip()
+        ]
+        if isinstance(applies_to, list)
+        else []
+    )
+    lines.append(f"applies_to: {', '.join(normalized_applies_to)}")
+    help_id = _coerce_str(payload.get("help_id")).strip()
+    lines.append(f"help_id: {help_id or '(none)'}")
     return "\n".join(lines)
 
 
@@ -4400,6 +4453,27 @@ def main(argv: list[str] | None = None) -> int:
         help="Output format for render target details.",
     )
 
+    locks_parser = subparsers.add_parser("locks", help="Scene lock registry tools.")
+    locks_subparsers = locks_parser.add_subparsers(dest="locks_command", required=True)
+    locks_list_parser = locks_subparsers.add_parser("list", help="List scene locks.")
+    locks_list_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for the scene lock list.",
+    )
+    locks_show_parser = locks_subparsers.add_parser("show", help="Show one scene lock.")
+    locks_show_parser.add_argument(
+        "lock_id",
+        help="Scene lock ID (e.g., LOCK.PRESERVE_DYNAMICS).",
+    )
+    locks_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for scene lock details.",
+    )
+
     ui_copy_parser = subparsers.add_parser("ui-copy", help="UI copy registry tools.")
     ui_copy_subparsers = ui_copy_parser.add_subparsers(
         dest="ui_copy_command",
@@ -5808,6 +5882,42 @@ def main(argv: list[str] | None = None) -> int:
                 print(_render_target_text(payload))
             return 0
         print("Unknown targets command.", file=sys.stderr)
+        return 2
+    if args.command == "locks":
+        scene_locks_path = repo_root / "ontology" / "scene_locks.yaml"
+        if args.locks_command == "list":
+            try:
+                payload = _build_scene_lock_list_payload(
+                    scene_locks_path=scene_locks_path,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                for item in payload:
+                    print(
+                        f"{item.get('lock_id', '')}"
+                        f"  {item.get('label', '')}"
+                        f"  {item.get('severity', '')}"
+                    )
+            return 0
+        if args.locks_command == "show":
+            try:
+                payload = _build_scene_lock_show_payload(
+                    scene_locks_path=scene_locks_path,
+                    lock_id=args.lock_id,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_scene_lock_text(payload))
+            return 0
+        print("Unknown locks command.", file=sys.stderr)
         return 2
     if args.command == "ui-copy":
         ui_copy_registry_path = repo_root / "ontology" / "ui_copy.yaml"
