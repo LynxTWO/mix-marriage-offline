@@ -26,6 +26,8 @@ from mmo.core.pipeline import (
 )
 from mmo.core.preset_recommendations import derive_preset_recommendations
 from mmo.core.presets import list_presets, load_preset_run_config
+from mmo.core.render_plan import build_render_plan
+from mmo.core.render_targets import list_render_targets
 from mmo.core.report_builders import (
     enrich_blocked_downmix_render_diagnostics,
     merge_downmix_qa_issues_into_report,
@@ -51,6 +53,7 @@ _DEFAULT_GENERATED_AT = "2000-01-01T00:00:00Z"
 _DEFAULT_TRUNCATE_VALUES = 200
 _DEFAULT_QA_METERS = "truth"
 _DEFAULT_QA_MAX_SECONDS = 120.0
+_BASELINE_RENDER_TARGET_ID = "TARGET.STEREO.2_0"
 _VARIANT_SLUG_RE = re.compile(r"[^a-z0-9]+")
 _VARIANT_STEP_KEYS = (
     "analyze",
@@ -103,6 +106,64 @@ def _json_clone(value: Any) -> Any:
 
 def _path_to_posix(path: Path) -> str:
     return path.resolve().as_posix()
+
+
+def _default_render_plan_targets_payload(
+    *,
+    report: dict[str, Any],
+    repo_root: Path,
+) -> dict[str, Any]:
+    targets = list_render_targets(repo_root / "ontology" / "render_targets.yaml")
+    by_target_id: dict[str, dict[str, Any]] = {}
+    by_layout_id: dict[str, str] = {}
+    for target in targets:
+        target_id = _coerce_str(target.get("target_id")).strip()
+        layout_id = _coerce_str(target.get("layout_id")).strip()
+        if not target_id:
+            continue
+        by_target_id[target_id] = dict(target)
+        if layout_id and layout_id not in by_layout_id:
+            by_layout_id[layout_id] = target_id
+
+    selected_ids: set[str] = set()
+    if _BASELINE_RENDER_TARGET_ID in by_target_id:
+        selected_ids.add(_BASELINE_RENDER_TARGET_ID)
+
+    run_config = _coerce_dict(report.get("run_config"))
+    downmix_cfg = _coerce_dict(run_config.get("downmix"))
+    target_layout_id = _coerce_str(downmix_cfg.get("target_layout_id")).strip()
+    if target_layout_id:
+        target_id = by_layout_id.get(target_layout_id)
+        if target_id:
+            selected_ids.add(target_id)
+
+    routing_plan = _coerce_dict(report.get("routing_plan"))
+    routing_target_layout_id = _coerce_str(routing_plan.get("target_layout_id")).strip()
+    if routing_target_layout_id:
+        target_id = by_layout_id.get(routing_target_layout_id)
+        if target_id:
+            selected_ids.add(target_id)
+
+    if not selected_ids and by_target_id:
+        selected_ids.add(sorted(by_target_id.keys())[0])
+
+    return {
+        "targets": [
+            by_target_id[target_id]
+            for target_id in sorted(selected_ids)
+            if target_id in by_target_id
+        ]
+    }
+
+
+def _render_plan_policies_from_report(report: dict[str, Any]) -> dict[str, str]:
+    policies: dict[str, str] = {}
+    run_config = _coerce_dict(report.get("run_config"))
+    downmix_cfg = _coerce_dict(run_config.get("downmix"))
+    downmix_policy_id = _coerce_str(downmix_cfg.get("policy_id")).strip()
+    if downmix_policy_id:
+        policies["downmix_policy_id"] = downmix_policy_id
+    return policies
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -859,6 +920,7 @@ def run_variant_plan(
     timeline: dict[str, Any] | None = None,
     timeline_path: Path | None = None,
     scene: bool = False,
+    render_plan: bool = False,
     cache_enabled: bool = True,
     cache_dir: Path | None = None,
 ) -> dict[str, Any]:
@@ -918,7 +980,9 @@ def run_variant_plan(
         render_manifest: dict[str, Any] | None = None
         apply_manifest: dict[str, Any] | None = None
         applied_report: dict[str, Any] | None = None
+        scene_payload: dict[str, Any] | None = None
         scene_path: Path | None = None
+        render_plan_path: Path | None = None
         analysis_cache_key: str | None = None
         analysis_cache_run_config: dict[str, Any] | None = None
 
@@ -1188,7 +1252,7 @@ def run_variant_plan(
             except Exception as exc:  # pragma: no cover - defensive surface
                 errors.append(f"apply: {exc}")
 
-        if report is not None and scene:
+        if report is not None and (scene or render_plan):
             try:
                 scene_payload = build_scene_from_report(
                     report,
@@ -1207,6 +1271,57 @@ def run_variant_plan(
             except Exception as exc:  # pragma: no cover - defensive surface
                 errors.append(f"scene: {exc}")
 
+        if report is not None and render_plan:
+            if scene_payload is None or scene_path is None:
+                errors.append("render_plan: scene payload is unavailable.")
+            else:
+                try:
+                    render_targets_payload = _default_render_plan_targets_payload(
+                        report=report,
+                        repo_root=repo_root,
+                    )
+                    routing_plan_payload = report.get("routing_plan")
+                    routing_plan_artifact_path: Path | None = None
+                    if isinstance(routing_plan_payload, dict):
+                        routing_plan_artifact_path = variant_out_dir / "routing_plan.json"
+                        _write_json(routing_plan_artifact_path, routing_plan_payload)
+
+                    render_plan_contexts: list[str] = []
+                    if steps["render"]:
+                        render_plan_contexts.append("render")
+                    if steps["apply"]:
+                        render_plan_contexts.append("auto_apply")
+                    if not render_plan_contexts:
+                        render_plan_contexts = ["render"]
+
+                    render_plan_format_set: set[str] = set()
+                    if steps["render"]:
+                        render_plan_format_set.update(render_output_formats)
+                    if steps["apply"]:
+                        render_plan_format_set.update(apply_output_formats)
+                    if not render_plan_format_set:
+                        render_plan_format_set.update(render_output_formats)
+                    render_plan_output_formats = sorted(render_plan_format_set)
+
+                    scene_for_plan = _json_clone(scene_payload)
+                    scene_for_plan["scene_path"] = _path_to_posix(scene_path)
+                    render_plan_payload = build_render_plan(
+                        scene_for_plan,
+                        render_targets_payload,
+                        routing_plan_path=(
+                            _path_to_posix(routing_plan_artifact_path)
+                            if isinstance(routing_plan_artifact_path, Path)
+                            else None
+                        ),
+                        output_formats=render_plan_output_formats,
+                        contexts=render_plan_contexts,
+                        policies=_render_plan_policies_from_report(report),
+                    )
+                    render_plan_path = variant_out_dir / "render_plan.json"
+                    _write_json(render_plan_path, render_plan_payload)
+                except Exception as exc:  # pragma: no cover - defensive surface
+                    errors.append(f"render_plan: {exc}")
+
         if report is not None and steps["bundle"]:
             try:
                 bundle = build_ui_bundle(
@@ -1219,6 +1334,7 @@ def run_variant_plan(
                     deliverables_index_path=deliverables_index_path,
                     listen_pack_path=listen_pack_path,
                     scene_path=scene_path,
+                    render_plan_path=render_plan_path,
                     timeline_path=timeline_path,
                 )
                 bundle_path = variant_out_dir / "ui_bundle.json"

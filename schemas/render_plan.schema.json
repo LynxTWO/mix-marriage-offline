@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/render_plan.schema.json",
+  "title": "MMO Render Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "scene_path",
+    "targets",
+    "policies",
+    "jobs"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "plan_id": { "type": "string", "pattern": "^PLAN\\.[A-Za-z0-9_.-]+\\.[0-9a-f]{8}$" },
+    "scene_path": { "$ref": "#/$defs/posix_path" },
+    "targets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/target_id" }
+    },
+    "policies": { "$ref": "#/$defs/policies" },
+    "jobs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/job" }
+    }
+  },
+  "$defs": {
+    "posix_path": {
+      "type": "string",
+      "pattern": "^[^\\\\]+$",
+      "minLength": 1
+    },
+    "target_id": {
+      "type": "string",
+      "pattern": "^TARGET\\.[A-Z0-9_.]+$"
+    },
+    "layout_id": {
+      "type": "string",
+      "pattern": "^LAYOUT\\.[A-Z0-9_.]+$"
+    },
+    "policies": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gates_policy_id": { "type": "string", "minLength": 1 },
+        "downmix_policy_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "target_id",
+        "target_layout_id",
+        "output_formats",
+        "contexts",
+        "notes"
+      ],
+      "properties": {
+        "job_id": { "type": "string", "pattern": "^JOB\\.[0-9]{3}$" },
+        "target_id": { "$ref": "#/$defs/target_id" },
+        "target_layout_id": { "$ref": "#/$defs/layout_id" },
+        "routing_plan_path": { "$ref": "#/$defs/posix_path" },
+        "output_formats": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["wav", "flac", "wv", "aiff", "alac"]
+          }
+        },
+        "contexts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["render", "auto_apply"]
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

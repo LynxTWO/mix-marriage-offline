@@ -363,6 +363,78 @@ class TestVariantsRunner(unittest.TestCase):
                 {"scene_path": scene_path.resolve().as_posix()},
             )
 
+    def test_variants_run_with_scene_and_render_plan_writes_bundle_pointers(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        scene_validator = _schema_validator(repo_root / "schemas" / "scene.schema.json")
+        render_plan_validator = _schema_validator(
+            repo_root / "schemas" / "render_plan.schema.json"
+        )
+        bundle_validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            out_dir = temp_path / "variants_out"
+            _write_wav_16bit(stems_dir / "drums" / "kick.wav")
+
+            exit_code = main(
+                [
+                    "variants",
+                    "run",
+                    "--stems",
+                    str(stems_dir),
+                    "--out",
+                    str(out_dir),
+                    "--preset",
+                    "PRESET.SAFE_CLEANUP",
+                    "--bundle",
+                    "--scene",
+                    "--render-plan",
+                    "--cache",
+                    "off",
+                ]
+            )
+            self.assertEqual(exit_code, 0)
+
+            plan = json.loads((out_dir / "variant_plan.json").read_text(encoding="utf-8"))
+            variants = plan.get("variants")
+            self.assertIsInstance(variants, list)
+            if not isinstance(variants, list) or not variants:
+                return
+            first = variants[0]
+            self.assertIsInstance(first, dict)
+            if not isinstance(first, dict):
+                return
+
+            variant_id = first.get("variant_id")
+            variant_slug = first.get("variant_slug")
+            self.assertIsInstance(variant_id, str)
+            self.assertIsInstance(variant_slug, str)
+            if not isinstance(variant_id, str) or not isinstance(variant_slug, str):
+                return
+
+            variant_dir = out_dir / f"{variant_id}__{variant_slug}"
+            scene_path = variant_dir / "scene.json"
+            render_plan_path = variant_dir / "render_plan.json"
+            bundle_path = variant_dir / "ui_bundle.json"
+            self.assertTrue(scene_path.exists())
+            self.assertTrue(render_plan_path.exists())
+            self.assertTrue(bundle_path.exists())
+
+            scene_payload = json.loads(scene_path.read_text(encoding="utf-8"))
+            render_plan_payload = json.loads(render_plan_path.read_text(encoding="utf-8"))
+            bundle_payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+            scene_validator.validate(scene_payload)
+            render_plan_validator.validate(render_plan_payload)
+            bundle_validator.validate(bundle_payload)
+            self.assertEqual(
+                bundle_payload.get("pointers"),
+                {
+                    "scene_path": scene_path.resolve().as_posix(),
+                    "render_plan_path": render_plan_path.resolve().as_posix(),
+                },
+            )
+
     def test_variants_run_output_formats_propagate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

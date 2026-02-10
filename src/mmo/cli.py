@@ -31,6 +31,7 @@ from mmo.core.presets import (
     load_preset_pack,
     load_preset_run_config,
 )
+from mmo.core.render_plan import build_render_plan
 from mmo.core.render_targets import get_render_target, list_render_targets
 from mmo.core.listen_pack import build_listen_pack
 from mmo.core.project_file import (
@@ -66,6 +67,7 @@ _PRESET_PREVIEW_DEFAULT_PROFILE_ID = "PROFILE.ASSIST"
 _PRESET_PREVIEW_DEFAULT_METERS = "truth"
 _PRESET_PREVIEW_DEFAULT_MAX_SECONDS = 120.0
 _PRESET_PREVIEW_DEFAULT_TARGET_LAYOUT_ID = "LAYOUT.2_0"
+_BASELINE_RENDER_TARGET_ID = "TARGET.STEREO.2_0"
 _OUTPUT_FORMAT_ORDER = tuple(LOSSLESS_OUTPUT_FORMATS)
 _FORMAT_SET_NAME_RE = re.compile(r"^[a-z0-9_]+$")
 _RUN_COMMAND_EPILOG = (
@@ -227,6 +229,21 @@ def _render_scene_text(scene: dict[str, Any]) -> str:
     bed_count = len(beds) if isinstance(beds, list) else 0
     lines.append(f"objects: {object_count}")
     lines.append(f"beds: {bed_count}")
+    return "\n".join(lines)
+
+
+def _render_render_plan_text(render_plan: dict[str, Any]) -> str:
+    lines = [
+        f"schema_version: {render_plan.get('schema_version', '')}",
+        f"plan_id: {render_plan.get('plan_id', '')}",
+        f"scene_path: {render_plan.get('scene_path', '')}",
+    ]
+    targets = render_plan.get("targets")
+    target_count = len(targets) if isinstance(targets, list) else 0
+    jobs = render_plan.get("jobs")
+    job_count = len(jobs) if isinstance(jobs, list) else 0
+    lines.append(f"targets: {target_count}")
+    lines.append(f"jobs: {job_count}")
     return "\n".join(lines)
 
 
@@ -877,6 +894,107 @@ def _run_scene_build_command(
     return 0
 
 
+def _build_validated_render_plan_payload(
+    *,
+    repo_root: Path,
+    scene_payload: dict[str, Any],
+    scene_path: Path,
+    render_targets_payload: dict[str, Any],
+    routing_plan_path: Path | None,
+    output_formats: list[str],
+    contexts: list[str],
+    policies: dict[str, Any] | None,
+) -> dict[str, Any]:
+    scene_for_plan = json.loads(json.dumps(scene_payload))
+    scene_for_plan["scene_path"] = scene_path.resolve().as_posix()
+    render_plan_payload = build_render_plan(
+        scene_for_plan,
+        render_targets_payload,
+        routing_plan_path=(
+            routing_plan_path.resolve().as_posix()
+            if isinstance(routing_plan_path, Path)
+            else None
+        ),
+        output_formats=output_formats,
+        contexts=contexts,
+        policies=policies,
+    )
+    _validate_json_payload(
+        render_plan_payload,
+        schema_path=repo_root / "schemas" / "render_plan.schema.json",
+        payload_name="Render plan",
+    )
+    return render_plan_payload
+
+
+def _run_render_plan_build_command(
+    *,
+    repo_root: Path,
+    scene_path: Path,
+    target_ids: list[str],
+    out_path: Path,
+    routing_plan_path: Path | None,
+    output_formats: list[str],
+    contexts: list[str],
+    policy_id: str | None,
+) -> int:
+    scene_payload = _load_json_object(scene_path, label="Scene")
+    _validate_json_payload(
+        scene_payload,
+        schema_path=repo_root / "schemas" / "scene.schema.json",
+        payload_name="Scene",
+    )
+
+    resolved_routing_plan_path: Path | None = None
+    if routing_plan_path is not None:
+        routing_plan_payload = _load_json_object(routing_plan_path, label="Routing plan")
+        _validate_json_payload(
+            routing_plan_payload,
+            schema_path=repo_root / "schemas" / "routing_plan.schema.json",
+            payload_name="Routing plan",
+        )
+        resolved_routing_plan_path = routing_plan_path
+
+    render_targets_payload = _build_selected_render_targets_payload(
+        target_ids=target_ids,
+        render_targets_path=repo_root / "ontology" / "render_targets.yaml",
+    )
+    policies: dict[str, str] = {}
+    normalized_policy_id = _coerce_str(policy_id).strip()
+    if normalized_policy_id:
+        policies["downmix_policy_id"] = normalized_policy_id
+    render_plan_payload = _build_validated_render_plan_payload(
+        repo_root=repo_root,
+        scene_payload=scene_payload,
+        scene_path=scene_path,
+        render_targets_payload=render_targets_payload,
+        routing_plan_path=resolved_routing_plan_path,
+        output_formats=output_formats,
+        contexts=contexts,
+        policies=policies,
+    )
+    _write_json_file(out_path, render_plan_payload)
+    return 0
+
+
+def _write_routing_plan_artifact(
+    *,
+    repo_root: Path,
+    report_payload: dict[str, Any],
+    out_path: Path,
+) -> Path | None:
+    routing_plan_payload = report_payload.get("routing_plan")
+    if not isinstance(routing_plan_payload, dict):
+        return None
+    _validate_json_payload(
+        routing_plan_payload,
+        schema_path=repo_root / "schemas" / "routing_plan.schema.json",
+        payload_name="Routing plan",
+    )
+    _write_json_file(out_path, routing_plan_payload)
+    return out_path
+
+
 def _run_bundle(
     *,
     repo_root: Path,
@@ -889,6 +1007,7 @@ def _run_bundle(
     deliverables_index_path: Path | None,
     listen_pack_path: Path | None,
     scene_path: Path | None,
+    render_plan_path: Path | None,
     timeline_path: Path | None,
     ui_locale: str | None = None,
 ) -> int:
@@ -917,6 +1036,7 @@ def _run_bundle(
         deliverables_index_path=deliverables_index_path,
         listen_pack_path=listen_pack_path,
         scene_path=scene_path,
+        render_plan_path=render_plan_path,
         timeline_path=timeline_path,
     )
     _validate_json_payload(
@@ -1336,6 +1456,103 @@ def _render_target_text(payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _parse_target_ids_csv(raw_value: str) -> list[str]:
+    if not isinstance(raw_value, str):
+        raise ValueError("targets must be a comma-separated string.")
+
+    selected: set[str] = set()
+    for item in raw_value.split(","):
+        normalized = item.strip()
+        if normalized:
+            selected.add(normalized)
+
+    if not selected:
+        raise ValueError("targets must include at least one target ID.")
+    return sorted(selected)
+
+
+def _build_selected_render_targets_payload(
+    *,
+    target_ids: list[str],
+    render_targets_path: Path,
+) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    for target_id in sorted(target_ids):
+        payload = get_render_target(target_id, render_targets_path)
+        if payload is None:
+            available = ", ".join(
+                item["target_id"]
+                for item in list_render_targets(render_targets_path)
+                if isinstance(item.get("target_id"), str)
+            )
+            if available:
+                raise ValueError(f"Unknown target_id: {target_id}. Available targets: {available}")
+            raise ValueError(f"Unknown target_id: {target_id}. No render targets are available.")
+        rows.append(dict(payload))
+    return {"targets": rows}
+
+
+def _default_render_plan_targets_payload(
+    *,
+    report: dict[str, Any],
+    render_targets_path: Path,
+) -> dict[str, Any]:
+    targets = list_render_targets(render_targets_path)
+    by_target_id: dict[str, dict[str, Any]] = {}
+    by_layout_id: dict[str, str] = {}
+    for target in targets:
+        target_id = _coerce_str(target.get("target_id")).strip()
+        layout_id = _coerce_str(target.get("layout_id")).strip()
+        if not target_id:
+            continue
+        by_target_id[target_id] = dict(target)
+        if layout_id and layout_id not in by_layout_id:
+            by_layout_id[layout_id] = target_id
+
+    selected_ids: set[str] = set()
+    if _BASELINE_RENDER_TARGET_ID in by_target_id:
+        selected_ids.add(_BASELINE_RENDER_TARGET_ID)
+
+    run_config = report.get("run_config")
+    if isinstance(run_config, dict):
+        downmix_cfg = run_config.get("downmix")
+        if isinstance(downmix_cfg, dict):
+            layout_id = _coerce_str(downmix_cfg.get("target_layout_id")).strip()
+            target_id = by_layout_id.get(layout_id)
+            if target_id:
+                selected_ids.add(target_id)
+
+    routing_plan = report.get("routing_plan")
+    if isinstance(routing_plan, dict):
+        layout_id = _coerce_str(routing_plan.get("target_layout_id")).strip()
+        target_id = by_layout_id.get(layout_id)
+        if target_id:
+            selected_ids.add(target_id)
+
+    if not selected_ids and by_target_id:
+        selected_ids.add(sorted(by_target_id.keys())[0])
+
+    return {
+        "targets": [
+            by_target_id[target_id]
+            for target_id in sorted(selected_ids)
+            if target_id in by_target_id
+        ]
+    }
+
+
+def _render_plan_policies_from_report(report: dict[str, Any]) -> dict[str, str]:
+    policies: dict[str, str] = {}
+    run_config = report.get("run_config")
+    if isinstance(run_config, dict):
+        downmix_cfg = run_config.get("downmix")
+        if isinstance(downmix_cfg, dict):
+            policy_id = _coerce_str(downmix_cfg.get("policy_id")).strip()
+            if policy_id:
+                policies["downmix_policy_id"] = policy_id
+    return policies
+
+
 def _build_help_list_payload(*, help_registry_path: Path) -> list[dict[str, str]]:
     from mmo.core.help_registry import load_help_registry  # noqa: WPS433
 
@@ -1748,6 +1965,7 @@ def _run_variants_workflow(
     export_csv: bool,
     bundle: bool,
     scene: bool,
+    render_plan: bool = False,
     profile: str | None = None,
     meters: str | None = None,
     max_seconds: float | None = None,
@@ -1937,6 +2155,7 @@ def _run_variants_workflow(
         if resolved_timeline_path is not None:
             run_variant_plan_kwargs["timeline_path"] = resolved_timeline_path
         run_variant_plan_kwargs["scene"] = scene
+        run_variant_plan_kwargs["render_plan"] = render_plan
 
         result = run_variant_plan(
             plan,
@@ -2015,10 +2234,11 @@ def _run_one_shot_workflow(
     render: bool,
     bundle: bool,
     scene: bool,
-    deliverables_index: bool,
-    output_formats: str | None,
-    cache_enabled: bool,
-    cache_dir: Path | None,
+    render_plan: bool = False,
+    deliverables_index: bool = False,
+    output_formats: str | None = None,
+    cache_enabled: bool = True,
+    cache_dir: Path | None = None,
 ) -> int:
     resolved_timeline_path: Path | None = None
     timeline_payload: dict[str, Any] | None = None
@@ -2088,6 +2308,8 @@ def _run_one_shot_workflow(
     render_manifest_path = out_dir / "render_manifest.json"
     bundle_path = out_dir / "ui_bundle.json"
     scene_path = out_dir / "scene.json"
+    render_plan_path = out_dir / "render_plan.json"
+    routing_plan_path = out_dir / "routing_plan.json"
     deliverables_index_path = out_dir / "deliverables_index.json"
     render_out_dir = out_dir / "render"
     apply_out_dir = out_dir / "apply"
@@ -2097,6 +2319,7 @@ def _run_one_shot_workflow(
     lock_payload: dict[str, Any] | None = None
     cache_key_value: str | None = None
     report_payload: dict[str, Any] | None = None
+    scene_payload: dict[str, Any] | None = None
 
     out_dir.mkdir(parents=True, exist_ok=True)
     if cache_enabled:
@@ -2195,7 +2418,7 @@ def _run_one_shot_workflow(
             return int(exc.code) if isinstance(exc.code, int) else 1
         _write_json_file(report_path, report_payload)
 
-    if scene:
+    if scene or render_plan:
         if report_payload is None:
             print("Report payload is unavailable after analysis.", file=sys.stderr)
             return 1
@@ -2217,6 +2440,57 @@ def _run_one_shot_workflow(
         except SystemExit as exc:
             return int(exc.code) if isinstance(exc.code, int) else 1
         _write_json_file(scene_path, scene_payload)
+
+    if render_plan:
+        if report_payload is None or scene_payload is None:
+            print("Scene/report payload is unavailable for render plan.", file=sys.stderr)
+            return 1
+        try:
+            render_targets_payload = _default_render_plan_targets_payload(
+                report=report_payload,
+                render_targets_path=repo_root / "ontology" / "render_targets.yaml",
+            )
+            routing_plan_artifact_path = _write_routing_plan_artifact(
+                repo_root=repo_root,
+                report_payload=report_payload,
+                out_path=routing_plan_path,
+            )
+
+            render_plan_contexts: list[str] = []
+            if render:
+                render_plan_contexts.append("render")
+            if apply:
+                render_plan_contexts.append("auto_apply")
+            if not render_plan_contexts:
+                render_plan_contexts = ["render"]
+
+            render_plan_format_set: set[str] = set()
+            if render:
+                render_plan_format_set.update(render_output_formats)
+            if apply:
+                render_plan_format_set.update(apply_output_formats)
+            if not render_plan_format_set:
+                render_plan_format_set.update(render_output_formats)
+            render_plan_output_formats = [
+                fmt for fmt in _OUTPUT_FORMAT_ORDER if fmt in render_plan_format_set
+            ]
+
+            render_plan_payload = _build_validated_render_plan_payload(
+                repo_root=repo_root,
+                scene_payload=scene_payload,
+                scene_path=scene_path,
+                render_targets_payload=render_targets_payload,
+                routing_plan_path=routing_plan_artifact_path,
+                output_formats=render_plan_output_formats,
+                contexts=render_plan_contexts,
+                policies=_render_plan_policies_from_report(report_payload),
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+        _write_json_file(render_plan_path, render_plan_payload)
 
     exit_code = _run_export(
         tools_dir,
@@ -2312,7 +2586,8 @@ def _run_one_shot_workflow(
                     deliverables_index_path if deliverables_index else None
                 ),
                 listen_pack_path=None,
-                scene_path=scene_path if scene else None,
+                scene_path=scene_path if scene_payload is not None else None,
+                render_plan_path=render_plan_path if render_plan else None,
                 timeline_path=resolved_timeline_path,
             )
         except ValueError as exc:
@@ -2352,8 +2627,10 @@ def _run_one_shot_workflow(
         summary.append(("render_manifest", render_manifest_path))
     if bundle:
         summary.append(("ui_bundle", bundle_path))
-    if scene:
+    if scene_payload is not None:
         summary.append(("scene", scene_path))
+    if render_plan:
+        summary.append(("render_plan", render_plan_path))
     if deliverables_index:
         summary.append(("deliverables_index", deliverables_index_path))
 
@@ -2403,6 +2680,7 @@ def _run_workflow_from_run_args(
             export_csv=args.export_csv,
             bundle=args.bundle,
             scene=getattr(args, "scene", False),
+            render_plan=getattr(args, "render_plan", False),
             profile=args.profile,
             meters=args.meters,
             max_seconds=args.max_seconds,
@@ -2442,6 +2720,7 @@ def _run_workflow_from_run_args(
         render=args.render,
         bundle=args.bundle,
         scene=getattr(args, "scene", False),
+        render_plan=getattr(args, "render_plan", False),
         deliverables_index=args.deliverables_index,
         output_formats=args.output_formats,
         cache_enabled=args.cache == "on",
@@ -3387,6 +3666,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Build a scene.json intent artifact.",
     )
     run_parser.add_argument(
+        "--render-plan",
+        action="store_true",
+        help="Build a render_plan.json artifact (auto-builds scene.json if needed).",
+    )
+    run_parser.add_argument(
         "--deliverables-index",
         action="store_true",
         help="Also write deliverables_index.json summarizing file deliverables.",
@@ -3664,6 +3948,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to scene JSON for GUI pointer metadata.",
     )
     bundle_parser.add_argument(
+        "--render-plan",
+        default=None,
+        help="Optional path to render_plan JSON for GUI pointer metadata.",
+    )
+    bundle_parser.add_argument(
         "--ui-locale",
         default=None,
         help="Optional UI copy locale (default: registry default_locale).",
@@ -3737,6 +4026,11 @@ def main(argv: list[str] | None = None) -> int:
         "--scene",
         action="store_true",
         help="Build a scene.json intent artifact for each variant.",
+    )
+    variants_run_parser.add_argument(
+        "--render-plan",
+        action="store_true",
+        help="Build a render_plan.json artifact for each variant (auto-builds scene.json).",
     )
     variants_run_parser.add_argument(
         "--listen-pack",
@@ -4333,6 +4627,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Build a scene.json intent artifact.",
     )
     project_run_parser.add_argument(
+        "--render-plan",
+        action="store_true",
+        help="Build a render_plan.json artifact (auto-builds scene.json if needed).",
+    )
+    project_run_parser.add_argument(
         "--deliverables-index",
         action="store_true",
         help="Also write deliverables_index.json summarizing file deliverables.",
@@ -4635,6 +4934,80 @@ def main(argv: list[str] | None = None) -> int:
         "--scene",
         required=True,
         help="Path to scene JSON.",
+    )
+
+    render_plan_parser = subparsers.add_parser(
+        "render-plan",
+        help="Render plan artifact tools.",
+    )
+    render_plan_subparsers = render_plan_parser.add_subparsers(
+        dest="render_plan_command",
+        required=True,
+    )
+    render_plan_build_parser = render_plan_subparsers.add_parser(
+        "build",
+        help="Build a deterministic render_plan JSON from scene + targets.",
+    )
+    render_plan_build_parser.add_argument(
+        "--scene",
+        required=True,
+        help="Path to scene JSON.",
+    )
+    render_plan_build_parser.add_argument(
+        "--targets",
+        required=True,
+        help="Comma-separated target IDs (e.g., TARGET.STEREO.2_0,TARGET.SURROUND.5_1).",
+    )
+    render_plan_build_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output render_plan JSON.",
+    )
+    render_plan_build_parser.add_argument(
+        "--routing-plan",
+        default=None,
+        help="Optional path to routing_plan JSON.",
+    )
+    render_plan_build_parser.add_argument(
+        "--output-formats",
+        default="wav",
+        help="Comma-separated lossless output formats (wav,flac,wv,aiff,alac).",
+    )
+    render_plan_build_parser.add_argument(
+        "--context",
+        action="append",
+        choices=["render", "auto_apply"],
+        default=[],
+        help="Repeatable render context.",
+    )
+    render_plan_build_parser.add_argument(
+        "--policy-id",
+        default=None,
+        help="Optional downmix policy ID override.",
+    )
+    render_plan_show_parser = render_plan_subparsers.add_parser(
+        "show",
+        help="Display a render_plan JSON.",
+    )
+    render_plan_show_parser.add_argument(
+        "--render-plan",
+        required=True,
+        help="Path to render_plan JSON.",
+    )
+    render_plan_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for render_plan display.",
+    )
+    render_plan_validate_parser = render_plan_subparsers.add_parser(
+        "validate",
+        help="Validate a render_plan JSON against schema.",
+    )
+    render_plan_validate_parser.add_argument(
+        "--render-plan",
+        required=True,
+        help="Path to render_plan JSON.",
     )
 
     timeline_parser = subparsers.add_parser("timeline", help="Timeline marker tools.")
@@ -5117,6 +5490,9 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 listen_pack_path=Path(args.listen_pack) if args.listen_pack else None,
                 scene_path=Path(args.scene) if args.scene else None,
+                render_plan_path=(
+                    Path(args.render_plan) if getattr(args, "render_plan", None) else None
+                ),
                 timeline_path=None,
                 ui_locale=args.ui_locale,
             )
@@ -5160,6 +5536,7 @@ def main(argv: list[str] | None = None) -> int:
             export_csv=args.export_csv,
             bundle=args.bundle,
             scene=args.scene,
+            render_plan=getattr(args, "render_plan", False),
             profile=args.profile,
             meters=args.meters,
             max_seconds=args.max_seconds,
@@ -5638,6 +6015,62 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(scene_payload, indent=2, sort_keys=True))
         else:
             print(_render_scene_text(scene_payload))
+        return 0
+    if args.command == "render-plan":
+        if args.render_plan_command == "build":
+            try:
+                target_ids = _parse_target_ids_csv(args.targets)
+                output_formats = _parse_output_formats_csv(args.output_formats)
+                contexts = (
+                    list(args.context)
+                    if isinstance(args.context, list) and args.context
+                    else ["render"]
+                )
+                return _run_render_plan_build_command(
+                    repo_root=repo_root,
+                    scene_path=Path(args.scene),
+                    target_ids=target_ids,
+                    out_path=Path(args.out),
+                    routing_plan_path=(
+                        Path(args.routing_plan) if args.routing_plan else None
+                    ),
+                    output_formats=output_formats,
+                    contexts=contexts,
+                    policy_id=args.policy_id,
+                )
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+
+        if args.render_plan_command not in {"validate", "show"}:
+            print("Unknown render-plan command.", file=sys.stderr)
+            return 2
+
+        try:
+            render_plan_payload = _load_json_object(
+                Path(args.render_plan),
+                label="Render plan",
+            )
+            _validate_json_payload(
+                render_plan_payload,
+                schema_path=repo_root / "schemas" / "render_plan.schema.json",
+                payload_name="Render plan",
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+
+        if args.render_plan_command == "validate":
+            print("Render plan is valid.")
+            return 0
+        if args.format == "json":
+            print(json.dumps(render_plan_payload, indent=2, sort_keys=True))
+        else:
+            print(_render_render_plan_text(render_plan_payload))
         return 0
     if args.command == "timeline":
         if args.timeline_command not in {"validate", "show"}:

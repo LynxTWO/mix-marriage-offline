@@ -177,10 +177,11 @@ class TestVariantsSurroundReady(unittest.TestCase):
                 repo_root: Path,
                 *,
                 scene: bool = False,
+                render_plan: bool = False,
                 cache_enabled: bool = True,
                 cache_dir: Path | None = None,
             ) -> dict[str, Any]:
-                del repo_root, scene, cache_enabled, cache_dir
+                del repo_root, scene, render_plan, cache_enabled, cache_dir
                 variants = plan.get("variants")
                 if not isinstance(variants, list):
                     variants = []
