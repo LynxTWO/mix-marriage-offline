@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from mmo.core.speaker_positions import load_speaker_positions
 from mmo.dsp.downmix import load_layouts
 
 try:
@@ -118,32 +119,153 @@ def _validate_layout_ids(targets: list[dict[str, Any]], *, path: Path) -> None:
     raise ValueError(f"Render target layout_id is unknown in {path}: {details}")
 
 
-def _validate_speaker_positions(targets: list[dict[str, Any]], *, path: Path) -> None:
-    for target in targets:
-        target_id = target.get("target_id", "<unknown>")
-        positions = target.get("speaker_positions")
-        if not isinstance(positions, list):
+def _speaker_positions_layouts() -> dict[str, dict[str, Any]]:
+    registry_path = _repo_root() / "ontology" / "speaker_positions.yaml"
+    try:
+        registry = load_speaker_positions(registry_path)
+    except (RuntimeError, ValueError) as exc:
+        raise ValueError(
+            f"Failed to load speaker positions from {registry_path}: {exc}"
+        ) from exc
+    layouts = registry.get("layouts")
+    if not isinstance(layouts, dict):
+        return {}
+    return {
+        layout_id: dict(layout)
+        for layout_id, layout in layouts.items()
+        if isinstance(layout_id, str) and isinstance(layout, dict)
+    }
+
+
+def _normalize_speaker_positions(
+    positions: list[dict[str, Any]],
+    *,
+    target_id: str,
+    path: Path,
+) -> list[dict[str, Any]]:
+    channels: list[int] = []
+    normalized: list[dict[str, Any]] = []
+    for position in positions:
+        ch = position.get("ch")
+        azimuth_deg = position.get("azimuth_deg")
+        elevation_deg = position.get("elevation_deg")
+        if (
+            isinstance(ch, bool)
+            or not isinstance(ch, int)
+            or isinstance(azimuth_deg, bool)
+            or not isinstance(azimuth_deg, (int, float))
+            or isinstance(elevation_deg, bool)
+            or not isinstance(elevation_deg, (int, float))
+        ):
             continue
+        channels.append(ch)
+        normalized.append(
+            {
+                "ch": ch,
+                "azimuth_deg": float(azimuth_deg),
+                "elevation_deg": float(elevation_deg),
+            }
+        )
 
-        channels: list[int] = []
-        for position in positions:
-            if not isinstance(position, dict):
-                continue
-            ch = position.get("ch")
-            if isinstance(ch, bool) or not isinstance(ch, int):
-                continue
-            channels.append(ch)
+    if channels != sorted(channels):
+        raise ValueError(
+            "Render target speaker_positions must be sorted by ch: "
+            f"{target_id} ({path})"
+        )
+    if len(channels) != len(set(channels)):
+        raise ValueError(
+            "Render target speaker_positions must be deterministic "
+            f"(duplicate ch values): {target_id} ({path})"
+        )
 
-        if channels != sorted(channels):
+    normalized.sort(key=lambda item: int(item["ch"]))
+    return normalized
+
+
+def _resolve_target_speaker_positions(
+    target: dict[str, Any],
+    *,
+    speaker_layouts: dict[str, dict[str, Any]],
+    path: Path,
+) -> list[dict[str, Any]]:
+    target_id = target.get("target_id")
+    layout_id = target.get("layout_id")
+    normalized_target_id = target_id if isinstance(target_id, str) else "<unknown>"
+    normalized_layout_id = layout_id.strip() if isinstance(layout_id, str) else ""
+
+    speaker_positions_ref = target.get("speaker_positions_ref")
+    if isinstance(speaker_positions_ref, str) and speaker_positions_ref.strip():
+        ref_layout_id = speaker_positions_ref.strip()
+        if normalized_layout_id and ref_layout_id != normalized_layout_id:
             raise ValueError(
-                "Render target speaker_positions must be sorted by ch: "
-                f"{target_id} ({path})"
+                "Render target speaker_positions_ref must match layout_id: "
+                f"{normalized_target_id} ({path})"
             )
-        if len(channels) != len(set(channels)):
+
+        ref_layout = speaker_layouts.get(ref_layout_id)
+        if not isinstance(ref_layout, dict):
             raise ValueError(
-                "Render target speaker_positions must be deterministic "
-                f"(duplicate ch values): {target_id} ({path})"
+                "Render target speaker_positions_ref is unknown: "
+                f"{normalized_target_id} -> {ref_layout_id} ({path})"
             )
+
+        channels = ref_layout.get("channels")
+        if not isinstance(channels, list):
+            raise ValueError(
+                "Speaker positions registry entry must include channels: "
+                f"{ref_layout_id} ({path})"
+            )
+
+        resolved_positions: list[dict[str, Any]] = []
+        for channel in channels:
+            if not isinstance(channel, dict):
+                continue
+            resolved_positions.append(
+                {
+                    "ch": channel.get("ch"),
+                    "azimuth_deg": channel.get("azimuth_deg"),
+                    "elevation_deg": channel.get("elevation_deg"),
+                }
+            )
+        return _normalize_speaker_positions(
+            resolved_positions,
+            target_id=normalized_target_id,
+            path=path,
+        )
+
+    speaker_positions = target.get("speaker_positions")
+    if isinstance(speaker_positions, list):
+        return _normalize_speaker_positions(
+            [item for item in speaker_positions if isinstance(item, dict)],
+            target_id=normalized_target_id,
+            path=path,
+        )
+
+    raise ValueError(
+        "Render target must define speaker_positions or speaker_positions_ref: "
+        f"{normalized_target_id} ({path})"
+    )
+
+
+def _resolve_speaker_positions(
+    targets: list[dict[str, Any]],
+    *,
+    path: Path,
+) -> list[dict[str, Any]]:
+    speaker_layouts = _speaker_positions_layouts()
+    resolved_targets: list[dict[str, Any]] = []
+    for target in targets:
+        if not isinstance(target, dict):
+            continue
+        resolved_target = dict(target)
+        resolved_target["speaker_positions"] = _resolve_target_speaker_positions(
+            target,
+            speaker_layouts=speaker_layouts,
+            path=path,
+        )
+        resolved_target.pop("speaker_positions_ref", None)
+        resolved_targets.append(resolved_target)
+    return resolved_targets
 
 
 def load_render_targets(path: Path | None = None) -> dict[str, Any]:
@@ -158,8 +280,12 @@ def load_render_targets(path: Path | None = None) -> dict[str, Any]:
     targets = _targets_list(payload)
     _validate_target_order(targets, path=resolved_path)
     _validate_layout_ids(targets, path=resolved_path)
-    _validate_speaker_positions(targets, path=resolved_path)
-    return payload
+    normalized_payload = dict(payload)
+    normalized_payload["targets"] = _resolve_speaker_positions(
+        targets,
+        path=resolved_path,
+    )
+    return normalized_payload
 
 
 def list_render_targets(path: Path | None = None) -> list[dict[str, Any]]:

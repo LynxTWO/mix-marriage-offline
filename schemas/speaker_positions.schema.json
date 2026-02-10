@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/speaker_positions.schema.json",
+  "title": "MMO Speaker Positions Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "layouts"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "layouts": {
+      "type": "object",
+      "propertyNames": { "type": "string", "minLength": 1 },
+      "additionalProperties": { "$ref": "#/$defs/layout_entry" }
+    }
+  },
+  "$defs": {
+    "channel_position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ch", "name", "azimuth_deg", "elevation_deg"],
+      "properties": {
+        "ch": { "type": "integer", "minimum": 0 },
+        "name": { "type": "string", "minLength": 1 },
+        "azimuth_deg": { "type": "number" },
+        "elevation_deg": { "type": "number" }
+      }
+    },
+    "layout_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channels"],
+      "properties": {
+        "channels": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/channel_position" }
+        }
+      }
+    }
+  }
+}

@@ -42,13 +42,27 @@
           "type": "array",
           "items": { "$ref": "#/$defs/speaker_position" }
         },
+        "speaker_positions_ref": {
+          "type": "string",
+          "pattern": "^LAYOUT\\.[A-Z0-9_.]+$"
+        },
         "downmix_policy_id": { "type": "string", "minLength": 1 },
         "safety_policy_id": { "type": "string", "minLength": 1 },
         "notes": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
         }
-      }
+      },
+      "oneOf": [
+        {
+          "required": ["speaker_positions"],
+          "not": { "required": ["speaker_positions_ref"] }
+        },
+        {
+          "required": ["speaker_positions_ref"],
+          "not": { "required": ["speaker_positions"] }
+        }
+      ]
     }
   }
 }

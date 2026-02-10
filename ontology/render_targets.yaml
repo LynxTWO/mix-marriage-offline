@@ -4,13 +4,7 @@ targets:
     label: "Stereo"
     layout_id: "LAYOUT.2_0"
     channel_order_ref: "ontology/layouts.yaml:SPK.L/SPK.R"
-    speaker_positions:
-      - ch: 0
-        azimuth_deg: -30.0
-        elevation_deg: 0.0
-      - ch: 1
-        azimuth_deg: 30.0
-        elevation_deg: 0.0
+    speaker_positions_ref: "LAYOUT.2_0"
     downmix_policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
     safety_policy_id: "POLICY.GATES.CORE_V0"
     notes:
@@ -20,25 +14,7 @@ targets:
     label: "Surround 5.1"
     layout_id: "LAYOUT.5_1"
     channel_order_ref: "ontology/layouts.yaml:SPK.L/SPK.R/SPK.C/SPK.LFE/SPK.LS/SPK.RS"
-    speaker_positions:
-      - ch: 0
-        azimuth_deg: -30.0
-        elevation_deg: 0.0
-      - ch: 1
-        azimuth_deg: 30.0
-        elevation_deg: 0.0
-      - ch: 2
-        azimuth_deg: 0.0
-        elevation_deg: 0.0
-      - ch: 3
-        azimuth_deg: 0.0
-        elevation_deg: 0.0
-      - ch: 4
-        azimuth_deg: -110.0
-        elevation_deg: 0.0
-      - ch: 5
-        azimuth_deg: 110.0
-        elevation_deg: 0.0
+    speaker_positions_ref: "LAYOUT.5_1"
     downmix_policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
     safety_policy_id: "POLICY.GATES.CORE_V0"
     notes:
@@ -48,31 +24,7 @@ targets:
     label: "Surround 7.1"
     layout_id: "LAYOUT.7_1"
     channel_order_ref: "ontology/layouts.yaml:SPK.L/SPK.R/SPK.C/SPK.LFE/SPK.LS/SPK.RS/SPK.LRS/SPK.RRS"
-    speaker_positions:
-      - ch: 0
-        azimuth_deg: -30.0
-        elevation_deg: 0.0
-      - ch: 1
-        azimuth_deg: 30.0
-        elevation_deg: 0.0
-      - ch: 2
-        azimuth_deg: 0.0
-        elevation_deg: 0.0
-      - ch: 3
-        azimuth_deg: 0.0
-        elevation_deg: 0.0
-      - ch: 4
-        azimuth_deg: -90.0
-        elevation_deg: 0.0
-      - ch: 5
-        azimuth_deg: 90.0
-        elevation_deg: 0.0
-      - ch: 6
-        azimuth_deg: -150.0
-        elevation_deg: 0.0
-      - ch: 7
-        azimuth_deg: 150.0
-        elevation_deg: 0.0
+    speaker_positions_ref: "LAYOUT.7_1"
     downmix_policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
     safety_policy_id: "POLICY.GATES.CORE_V0"
     notes:

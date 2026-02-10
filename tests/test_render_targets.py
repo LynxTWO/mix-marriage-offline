@@ -10,7 +10,32 @@ from mmo.core.render_targets import (
     list_render_targets,
     load_render_targets,
 )
+from mmo.core.speaker_positions import get_layout_positions
 from mmo.dsp.downmix import load_layouts
+
+
+def _geometry_rows(positions: object) -> list[tuple[int, float, float]]:
+    if not isinstance(positions, list):
+        return []
+
+    rows: list[tuple[int, float, float]] = []
+    for position in positions:
+        if not isinstance(position, dict):
+            continue
+        ch = position.get("ch")
+        azimuth_deg = position.get("azimuth_deg")
+        elevation_deg = position.get("elevation_deg")
+        if (
+            isinstance(ch, bool)
+            or not isinstance(ch, int)
+            or isinstance(azimuth_deg, bool)
+            or not isinstance(azimuth_deg, (int, float))
+            or isinstance(elevation_deg, bool)
+            or not isinstance(elevation_deg, (int, float))
+        ):
+            continue
+        rows.append((ch, float(azimuth_deg), float(elevation_deg)))
+    return rows
 
 
 class TestRenderTargetsRegistry(unittest.TestCase):
@@ -41,6 +66,33 @@ class TestRenderTargetsRegistry(unittest.TestCase):
             layout_id = target.get("layout_id")
             if isinstance(layout_id, str):
                 self.assertIn(layout_id, layouts)
+
+    def test_load_render_targets_resolves_speaker_positions_refs(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        registry = load_render_targets(repo_root / "ontology" / "render_targets.yaml")
+        targets = registry.get("targets")
+        self.assertIsInstance(targets, list)
+        if not isinstance(targets, list):
+            return
+
+        speaker_positions_path = repo_root / "ontology" / "speaker_positions.yaml"
+        for target in targets:
+            if not isinstance(target, dict):
+                continue
+            layout_id = target.get("layout_id")
+            if not isinstance(layout_id, str):
+                continue
+
+            resolved_positions = _geometry_rows(target.get("speaker_positions"))
+            canonical_positions = _geometry_rows(
+                get_layout_positions(layout_id, speaker_positions_path)
+            )
+            self.assertEqual(resolved_positions, canonical_positions)
+            self.assertEqual(
+                [ch for ch, _, _ in resolved_positions],
+                sorted(ch for ch, _, _ in resolved_positions),
+            )
+            self.assertNotIn("speaker_positions_ref", target)
 
     def test_list_and_get_render_targets_are_deterministic(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
