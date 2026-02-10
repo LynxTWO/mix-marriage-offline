@@ -295,6 +295,92 @@ def _sample_applied_report() -> dict:
     return applied
 
 
+def _sample_scene(*, include_unknown_lock: bool = False) -> dict:
+    object_locks = ["LOCK.NO_STEREO_WIDENING"]
+    if include_unknown_lock:
+        object_locks.append("LOCK.UNKNOWN.TEST")
+
+    return {
+        "schema_version": "0.1.0",
+        "scene_id": "SCENE.UI.BUNDLE.TEST",
+        "source": {
+            "stems_dir": "C:/tmp/stems",
+            "created_from": "analyze",
+        },
+        "intent": {
+            "confidence": 0.75,
+            "locks": ["LOCK.PRESERVE_DYNAMICS"],
+        },
+        "objects": [
+            {
+                "object_id": "OBJ.BASS",
+                "stem_id": "bass",
+                "label": "Bass",
+                "channel_count": 1,
+                "intent": {
+                    "confidence": 0.9,
+                    "locks": object_locks,
+                },
+                "notes": [],
+            },
+            {
+                "object_id": "OBJ.VOX",
+                "stem_id": "vox",
+                "label": "Vox",
+                "channel_count": 1,
+                "intent": {
+                    "confidence": 0.9,
+                    "locks": [],
+                },
+                "notes": [],
+            },
+        ],
+        "beds": [
+            {
+                "bed_id": "BED.FIELD.001",
+                "label": "Field",
+                "kind": "field",
+                "intent": {
+                    "diffuse": 0.5,
+                    "confidence": 0.0,
+                    "locks": [],
+                },
+                "notes": [],
+            }
+        ],
+        "metadata": {},
+    }
+
+
+def _sample_report_for_scene_overlay_tests() -> dict:
+    report = _sample_report()
+    report["recommendations"] = [
+        {
+            "recommendation_id": "REC.SCENE.OVERLAY.Z",
+            "action_id": "ACTION.UTILITY.GAIN",
+            "risk": "low",
+            "requires_approval": False,
+            "target": {"scope": "stem", "stem_id": "bass"},
+            "params": [],
+            "eligible_auto_apply": True,
+            "eligible_render": True,
+            "extreme": False,
+        },
+        {
+            "recommendation_id": "REC.SCENE.OVERLAY.A",
+            "action_id": "ACTION.UTILITY.GAIN",
+            "risk": "low",
+            "requires_approval": False,
+            "target": {"scope": "stem", "stem_id": "vox"},
+            "params": [],
+            "eligible_auto_apply": True,
+            "eligible_render": True,
+            "extreme": False,
+        },
+    ]
+    return report
+
+
 class TestUiBundle(unittest.TestCase):
     def test_build_ui_bundle_dashboard_and_schema(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -499,6 +585,187 @@ class TestUiBundle(unittest.TestCase):
             preset_help["title"],
             "Warm intimate",
         )
+
+    def test_build_ui_bundle_scene_meta_and_recommendation_overlays(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report_for_scene_overlay_tests()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            scene_path = temp_path / "scene.json"
+            scene_path.write_text(
+                json.dumps(_sample_scene(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                scene_path=scene_path,
+            )
+
+        validator.validate(bundle)
+
+        scene_meta = bundle.get("scene_meta")
+        self.assertIsInstance(scene_meta, dict)
+        if not isinstance(scene_meta, dict):
+            return
+
+        locks_used = scene_meta.get("locks_used")
+        self.assertIsInstance(locks_used, list)
+        if not isinstance(locks_used, list):
+            return
+        lock_ids = [
+            item.get("lock_id")
+            for item in locks_used
+            if isinstance(item, dict) and isinstance(item.get("lock_id"), str)
+        ]
+        self.assertEqual(lock_ids, ["LOCK.NO_STEREO_WIDENING", "LOCK.PRESERVE_DYNAMICS"])
+        lock_labels = {
+            item.get("lock_id"): item.get("label")
+            for item in locks_used
+            if isinstance(item, dict)
+        }
+        self.assertEqual(lock_labels.get("LOCK.NO_STEREO_WIDENING"), "No stereo widening")
+        self.assertEqual(lock_labels.get("LOCK.PRESERVE_DYNAMICS"), "Preserve dynamics")
+
+        intent_param_defs = scene_meta.get("intent_param_defs")
+        self.assertIsInstance(intent_param_defs, list)
+        if not isinstance(intent_param_defs, list):
+            return
+        param_ids = [
+            item.get("param_id")
+            for item in intent_param_defs
+            if isinstance(item, dict) and isinstance(item.get("param_id"), str)
+        ]
+        self.assertEqual(param_ids, sorted(param_ids))
+        self.assertIn("INTENT.WIDTH", param_ids)
+        self.assertIn("INTENT.DEPTH", param_ids)
+        self.assertIn("INTENT.CONFIDENCE", param_ids)
+
+        recommendation_overlays = bundle.get("recommendation_overlays")
+        self.assertIsInstance(recommendation_overlays, dict)
+        if not isinstance(recommendation_overlays, dict):
+            return
+        self.assertEqual(
+            list(recommendation_overlays.keys()),
+            sorted(recommendation_overlays.keys()),
+        )
+
+        targeted_overlay = recommendation_overlays.get("REC.SCENE.OVERLAY.Z")
+        self.assertIsInstance(targeted_overlay, dict)
+        if not isinstance(targeted_overlay, dict):
+            return
+        targeted_locks = targeted_overlay.get("locks_in_effect")
+        self.assertIsInstance(targeted_locks, list)
+        if not isinstance(targeted_locks, list):
+            return
+        targeted_lock_ids = [
+            item.get("lock_id")
+            for item in targeted_locks
+            if isinstance(item, dict) and isinstance(item.get("lock_id"), str)
+        ]
+        self.assertEqual(
+            targeted_lock_ids,
+            ["LOCK.NO_STEREO_WIDENING", "LOCK.PRESERVE_DYNAMICS"],
+        )
+        self.assertEqual(targeted_lock_ids, sorted(targeted_lock_ids))
+        self.assertEqual(
+            targeted_overlay.get("scope"),
+            {"scene": True, "object_id": "OBJ.BASS"},
+        )
+
+        other_overlay = recommendation_overlays.get("REC.SCENE.OVERLAY.A")
+        self.assertIsInstance(other_overlay, dict)
+        if not isinstance(other_overlay, dict):
+            return
+        other_locks = other_overlay.get("locks_in_effect")
+        self.assertIsInstance(other_locks, list)
+        if not isinstance(other_locks, list):
+            return
+        other_lock_ids = [
+            item.get("lock_id")
+            for item in other_locks
+            if isinstance(item, dict) and isinstance(item.get("lock_id"), str)
+        ]
+        self.assertEqual(other_lock_ids, ["LOCK.PRESERVE_DYNAMICS"])
+        self.assertEqual(
+            other_overlay.get("scope"),
+            {"scene": True, "object_id": "OBJ.VOX"},
+        )
+
+    def test_build_ui_bundle_scene_meta_uses_placeholder_for_unknown_lock(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report_for_scene_overlay_tests()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            scene_path = temp_path / "scene.json"
+            scene_path.write_text(
+                json.dumps(
+                    _sample_scene(include_unknown_lock=True),
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                scene_path=scene_path,
+            )
+
+        validator.validate(bundle)
+
+        scene_meta = bundle.get("scene_meta")
+        self.assertIsInstance(scene_meta, dict)
+        if not isinstance(scene_meta, dict):
+            return
+        locks_used = scene_meta.get("locks_used")
+        self.assertIsInstance(locks_used, list)
+        if not isinstance(locks_used, list):
+            return
+        lock_rows = {
+            item.get("lock_id"): item
+            for item in locks_used
+            if isinstance(item, dict) and isinstance(item.get("lock_id"), str)
+        }
+        unknown_lock = lock_rows.get("LOCK.UNKNOWN.TEST")
+        self.assertIsInstance(unknown_lock, dict)
+        if not isinstance(unknown_lock, dict):
+            return
+        self.assertEqual(unknown_lock.get("label"), "LOCK.UNKNOWN.TEST")
+        self.assertEqual(unknown_lock.get("severity"), "taste")
+
+        recommendation_overlays = bundle.get("recommendation_overlays")
+        self.assertIsInstance(recommendation_overlays, dict)
+        if not isinstance(recommendation_overlays, dict):
+            return
+        targeted_overlay = recommendation_overlays.get("REC.SCENE.OVERLAY.Z")
+        self.assertIsInstance(targeted_overlay, dict)
+        if not isinstance(targeted_overlay, dict):
+            return
+        locks_in_effect = targeted_overlay.get("locks_in_effect")
+        self.assertIsInstance(locks_in_effect, list)
+        if not isinstance(locks_in_effect, list):
+            return
+        lock_summaries = {
+            item.get("lock_id"): item
+            for item in locks_in_effect
+            if isinstance(item, dict) and isinstance(item.get("lock_id"), str)
+        }
+        unknown_overlay_lock = lock_summaries.get("LOCK.UNKNOWN.TEST")
+        self.assertIsInstance(unknown_overlay_lock, dict)
+        if not isinstance(unknown_overlay_lock, dict):
+            return
+        self.assertEqual(unknown_overlay_lock.get("label"), "LOCK.UNKNOWN.TEST")
+        self.assertEqual(unknown_overlay_lock.get("severity"), "taste")
 
     def test_build_ui_bundle_embeds_project_gui_design_and_pointers(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

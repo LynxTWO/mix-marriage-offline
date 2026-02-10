@@ -1,13 +1,22 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+try:
+    import jsonschema
+except ImportError:  # pragma: no cover - optional dependency
+    jsonschema = None
 
 UI_BUNDLE_SCHEMA_VERSION = "0.1.0"
 TOP_ISSUE_LIMIT = 5
 _RISK_LEVELS = {"low", "medium", "high"}
 _BASELINE_RENDER_TARGET_ID = "TARGET.STEREO.2_0"
+_SCENE_LOCK_SEVERITIES = {"hard", "taste"}
+_SCENE_LOCK_APPLIES_TO = {"object", "bed", "scene"}
+_UNKNOWN_LOCK_DESCRIPTION = "Unknown lock ID; definition not found in the scene lock registry."
 
 
 def _repo_root() -> Path:
@@ -291,6 +300,293 @@ def _resolve_repo_path(path: Path) -> Path:
     if repo_relative.exists():
         return repo_relative
     return path
+
+
+def _load_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise ValueError(f"Failed to read {label} JSON from {path}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} JSON is not valid JSON: {path}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} JSON must be an object: {path}")
+    return payload
+
+
+def _validate_json_payload(
+    payload: dict[str, Any],
+    *,
+    schema_path: Path,
+    payload_name: str,
+) -> None:
+    if jsonschema is None:
+        raise RuntimeError("jsonschema is required to validate UI bundle dependencies.")
+
+    from mmo.core.schema_registry import build_schema_registry, load_json_schema  # noqa: WPS433
+
+    schema = load_json_schema(schema_path)
+    registry = build_schema_registry(schema_path.parent)
+    validator = jsonschema.Draft202012Validator(schema, registry=registry)
+    errors = sorted(validator.iter_errors(payload), key=lambda err: list(err.path))
+    if not errors:
+        return
+
+    lines: list[str] = []
+    for err in errors:
+        path = ".".join(str(item) for item in err.path) or "$"
+        lines.append(f"- {path}: {err.message}")
+    details = "\n".join(lines)
+    raise ValueError(f"{payload_name} schema validation failed:\n{details}")
+
+
+def _load_scene_payload(scene_path: Path | None) -> dict[str, Any] | None:
+    if scene_path is None:
+        return None
+
+    resolved_scene_path = _resolve_repo_path(scene_path)
+    if not resolved_scene_path.exists():
+        return None
+    if not resolved_scene_path.is_file():
+        raise ValueError(f"Scene path is not a file: {resolved_scene_path}")
+
+    payload = _load_json_object(resolved_scene_path, label="Scene")
+    _validate_json_payload(
+        payload,
+        schema_path=_repo_root() / "schemas" / "scene.schema.json",
+        payload_name="Scene",
+    )
+    return payload
+
+
+def _normalized_lock_ids(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return sorted(
+        {
+            item.strip()
+            for item in value
+            if isinstance(item, str) and item.strip()
+        }
+    )
+
+
+def _intent_lock_ids(intent: Any) -> list[str]:
+    intent_payload = intent if isinstance(intent, dict) else {}
+    return _normalized_lock_ids(intent_payload.get("locks"))
+
+
+def _scene_lock_specs(scene_locks_registry: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    locks = scene_locks_registry.get("locks")
+    if not isinstance(locks, dict):
+        return {}
+    return {
+        lock_id: dict(lock_spec)
+        for lock_id, lock_spec in locks.items()
+        if isinstance(lock_id, str) and isinstance(lock_spec, dict)
+    }
+
+
+def _scene_lock_summary(
+    lock_id: str,
+    scene_lock_specs: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    lock_spec = scene_lock_specs.get(lock_id)
+    if not isinstance(lock_spec, dict):
+        return {
+            "lock_id": lock_id,
+            "label": lock_id,
+            "description": _UNKNOWN_LOCK_DESCRIPTION,
+            "severity": "taste",
+            "applies_to": [],
+        }
+
+    label = _coerce_str(lock_spec.get("label")).strip() or lock_id
+    description = _coerce_str(lock_spec.get("description"))
+    severity = _coerce_str(lock_spec.get("severity")).strip()
+    if severity not in _SCENE_LOCK_SEVERITIES:
+        severity = "taste"
+    applies_to = sorted(
+        {
+            item
+            for item in lock_spec.get("applies_to", [])
+            if isinstance(item, str) and item in _SCENE_LOCK_APPLIES_TO
+        }
+    )
+    return {
+        "lock_id": lock_id,
+        "label": label,
+        "description": description,
+        "severity": severity,
+        "applies_to": applies_to,
+    }
+
+
+def _scene_overlay_lock_summary(
+    lock_id: str,
+    scene_lock_specs: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    lock_summary = _scene_lock_summary(lock_id, scene_lock_specs)
+    return {
+        "lock_id": lock_summary["lock_id"],
+        "label": lock_summary["label"],
+        "severity": lock_summary["severity"],
+    }
+
+
+def _scene_lock_ids_used(scene_payload: dict[str, Any]) -> list[str]:
+    lock_ids: set[str] = set(_intent_lock_ids(scene_payload.get("intent")))
+    for object_payload in _iter_dict_list(scene_payload.get("objects")):
+        lock_ids.update(_intent_lock_ids(object_payload.get("intent")))
+    for bed_payload in _iter_dict_list(scene_payload.get("beds")):
+        lock_ids.update(_intent_lock_ids(bed_payload.get("intent")))
+    return sorted(lock_ids)
+
+
+def _intent_param_defs(intent_params_registry: dict[str, Any]) -> list[dict[str, Any]]:
+    params = intent_params_registry.get("params")
+    if not isinstance(params, dict):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for param_id in sorted(params.keys()):
+        param_spec = params.get(param_id)
+        if not isinstance(param_id, str) or not isinstance(param_spec, dict):
+            continue
+        param_type = _coerce_str(param_spec.get("type")).strip()
+        if param_type not in {"number", "enum"}:
+            continue
+
+        entry: dict[str, Any] = {
+            "param_id": param_id,
+            "type": param_type,
+        }
+
+        unit = _coerce_str(param_spec.get("unit")).strip()
+        if unit:
+            entry["unit"] = unit
+
+        min_value = param_spec.get("min")
+        if isinstance(min_value, (int, float)) and not isinstance(min_value, bool):
+            entry["min"] = float(min_value)
+
+        max_value = param_spec.get("max")
+        if isinstance(max_value, (int, float)) and not isinstance(max_value, bool):
+            entry["max"] = float(max_value)
+
+        values = param_spec.get("values")
+        if isinstance(values, list):
+            normalized_values = [
+                item.strip()
+                for item in values
+                if isinstance(item, str) and item.strip()
+            ]
+            if normalized_values:
+                entry["values"] = normalized_values
+
+        if "default" in param_spec:
+            default_value = param_spec.get("default")
+            if (
+                default_value is None
+                or isinstance(default_value, (str, bool))
+                or (isinstance(default_value, (int, float)) and not isinstance(default_value, bool))
+            ):
+                entry["default"] = default_value
+
+        normalized.append(entry)
+    return normalized
+
+
+def _scene_objects_by_stem_id(scene_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    mapping: dict[str, dict[str, Any]] = {}
+    for object_payload in _iter_dict_list(scene_payload.get("objects")):
+        stem_id = _coerce_str(object_payload.get("stem_id")).strip()
+        if stem_id and stem_id not in mapping:
+            mapping[stem_id] = object_payload
+    return mapping
+
+
+def _recommendation_target_stem_id(recommendation: dict[str, Any]) -> str:
+    direct_target_stem_id = _coerce_str(recommendation.get("target_stem_id")).strip()
+    if direct_target_stem_id:
+        return direct_target_stem_id
+
+    direct_stem_id = _coerce_str(recommendation.get("stem_id")).strip()
+    if direct_stem_id:
+        return direct_stem_id
+
+    target = recommendation.get("target")
+    if isinstance(target, dict):
+        target_stem_id = _coerce_str(target.get("stem_id")).strip()
+        if target_stem_id:
+            return target_stem_id
+    return ""
+
+
+def _scene_meta_payload(
+    scene_payload: dict[str, Any],
+    scene_locks_registry: dict[str, Any],
+    intent_params_registry: dict[str, Any],
+) -> dict[str, Any]:
+    scene_lock_specs = _scene_lock_specs(scene_locks_registry)
+    lock_ids_used = _scene_lock_ids_used(scene_payload)
+    return {
+        "locks_used": [
+            _scene_lock_summary(lock_id, scene_lock_specs)
+            for lock_id in lock_ids_used
+        ],
+        "intent_param_defs": _intent_param_defs(intent_params_registry),
+    }
+
+
+def _recommendation_overlays_payload(
+    report: dict[str, Any],
+    scene_payload: dict[str, Any],
+    scene_locks_registry: dict[str, Any],
+) -> dict[str, Any]:
+    recommendation_rows: list[tuple[str, dict[str, Any]]] = []
+    recommendations = _recommendations(report)
+    if not recommendations:
+        return {}
+
+    scene_lock_specs = _scene_lock_specs(scene_locks_registry)
+    scene_level_lock_ids = _intent_lock_ids(scene_payload.get("intent"))
+    objects_by_stem_id = _scene_objects_by_stem_id(scene_payload)
+    for recommendation in recommendations:
+        recommendation_id = _coerce_str(recommendation.get("recommendation_id")).strip()
+        if not recommendation_id:
+            continue
+
+        target_stem_id = _recommendation_target_stem_id(recommendation)
+        object_payload = objects_by_stem_id.get(target_stem_id)
+
+        lock_ids_in_effect: set[str] = set(scene_level_lock_ids)
+        if isinstance(object_payload, dict):
+            lock_ids_in_effect.update(_intent_lock_ids(object_payload.get("intent")))
+
+        scope: dict[str, Any] = {"scene": True}
+        if isinstance(object_payload, dict):
+            object_id = _coerce_str(object_payload.get("object_id")).strip()
+            if object_id:
+                scope["object_id"] = object_id
+
+        recommendation_rows.append(
+            (
+                recommendation_id,
+                {
+                    "locks_in_effect": [
+                        _scene_overlay_lock_summary(lock_id, scene_lock_specs)
+                        for lock_id in sorted(lock_ids_in_effect)
+                    ],
+                    "scope": scope,
+                },
+            )
+        )
+
+    return {
+        recommendation_id: payload
+        for recommendation_id, payload in sorted(recommendation_rows, key=lambda row: row[0])
+    }
 
 
 def _screen_template_ui_copy_keys(gui_design_payload: dict[str, Any]) -> list[str]:
@@ -626,6 +922,8 @@ def build_ui_bundle(
 ) -> dict[str, Any]:
     from mmo.core.gui_design import load_gui_design  # noqa: WPS433
     from mmo.core.help_registry import load_help_registry, resolve_help_entries  # noqa: WPS433
+    from mmo.core.intent_params import load_intent_params  # noqa: WPS433
+    from mmo.core.scene_locks import load_scene_locks  # noqa: WPS433
     from mmo.core.ui_copy import load_ui_copy, resolve_ui_copy  # noqa: WPS433
 
     gui_design_payload = load_gui_design(_repo_root() / "ontology" / "gui_design.yaml")
@@ -665,6 +963,22 @@ def build_ui_bundle(
         "gui_design": _gui_design_summary(gui_design_payload),
         "render_targets": _ui_bundle_render_targets(report, dashboard_deliverables),
     }
+    scene_payload = _load_scene_payload(scene_path)
+    if scene_payload is not None:
+        scene_locks_registry = load_scene_locks()
+        intent_params_registry = load_intent_params()
+        payload["scene_meta"] = _scene_meta_payload(
+            scene_payload,
+            scene_locks_registry,
+            intent_params_registry,
+        )
+        recommendation_overlays = _recommendation_overlays_payload(
+            report,
+            scene_payload,
+            scene_locks_registry,
+        )
+        if recommendation_overlays:
+            payload["recommendation_overlays"] = recommendation_overlays
 
     help_ids = _collect_help_ids(
         report,

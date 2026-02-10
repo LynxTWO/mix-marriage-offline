@@ -18,6 +18,8 @@
     "project": { "$ref": "#/$defs/project_summary" },
     "gui_design": { "$ref": "#/$defs/gui_design_summary" },
     "render_targets": { "$ref": "#/$defs/render_targets_payload" },
+    "scene_meta": { "$ref": "#/$defs/scene_meta" },
+    "recommendation_overlays": { "$ref": "#/$defs/recommendation_overlays" },
     "pointers": { "$ref": "#/$defs/pointers" }
   },
   "$defs": {
@@ -331,6 +333,98 @@
           "items": { "$ref": "#/$defs/render_target_entry" }
         }
       }
+    },
+    "scene_lock_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lock_id", "label", "description", "severity", "applies_to"],
+      "properties": {
+        "lock_id": { "type": "string", "pattern": "^LOCK\\.[A-Z0-9_.]+$" },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "severity": { "type": "string", "enum": ["hard", "taste"] },
+        "applies_to": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["object", "bed", "scene"]
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "intent_param_def": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["param_id", "type"],
+      "properties": {
+        "param_id": { "type": "string", "pattern": "^INTENT\\.[A-Z0-9_.]+$" },
+        "type": { "type": "string", "enum": ["number", "enum"] },
+        "unit": { "type": "string", "minLength": 1 },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "values": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "default": { "type": ["number", "string", "boolean", "null"] }
+      }
+    },
+    "scene_meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locks_used", "intent_param_defs"],
+      "properties": {
+        "locks_used": {
+          "type": "array",
+          "description": "Sorted by lock_id.",
+          "items": { "$ref": "#/$defs/scene_lock_summary" }
+        },
+        "intent_param_defs": {
+          "type": "array",
+          "description": "Sorted by param_id.",
+          "items": { "$ref": "#/$defs/intent_param_def" }
+        }
+      }
+    },
+    "recommendation_overlay_lock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lock_id", "label", "severity"],
+      "properties": {
+        "lock_id": { "type": "string", "pattern": "^LOCK\\.[A-Z0-9_.]+$" },
+        "label": { "type": "string", "minLength": 1 },
+        "severity": { "type": "string", "enum": ["hard", "taste"] }
+      }
+    },
+    "recommendation_overlay_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scene"],
+      "properties": {
+        "scene": { "const": true },
+        "object_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "recommendation_overlay_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locks_in_effect", "scope"],
+      "properties": {
+        "locks_in_effect": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/recommendation_overlay_lock" }
+        },
+        "scope": { "$ref": "#/$defs/recommendation_overlay_scope" }
+      }
+    },
+    "recommendation_overlays": {
+      "type": "object",
+      "description": "Object keys sorted by recommendation_id.",
+      "patternProperties": {
+        "^.+$": { "$ref": "#/$defs/recommendation_overlay_entry" }
+      },
+      "additionalProperties": false
     },
     "pointers": {
       "type": "object",
