@@ -528,6 +528,48 @@ def _analysis_cache_key(lock: dict[str, Any], cfg: dict[str, Any]) -> str:
     return cache_key(lock_hash, cfg_hash)
 
 
+def _analysis_run_config_for_variant_cache(run_config: dict[str, Any]) -> dict[str, Any]:
+    normalized = normalize_run_config(run_config)
+    analysis_cfg = json.loads(json.dumps(normalized))
+
+    render_cfg = analysis_cfg.get("render")
+    if isinstance(render_cfg, dict):
+        render_cfg = dict(render_cfg)
+        render_cfg.pop("out_dir", None)
+        render_cfg.pop("output_formats", None)
+        if render_cfg:
+            analysis_cfg["render"] = render_cfg
+        else:
+            analysis_cfg.pop("render", None)
+    else:
+        analysis_cfg.pop("render", None)
+
+    apply_cfg = analysis_cfg.get("apply")
+    if isinstance(apply_cfg, dict):
+        apply_cfg = dict(apply_cfg)
+        apply_cfg.pop("output_formats", None)
+        if apply_cfg:
+            analysis_cfg["apply"] = apply_cfg
+        else:
+            analysis_cfg.pop("apply", None)
+    else:
+        analysis_cfg.pop("apply", None)
+
+    downmix_cfg = analysis_cfg.get("downmix")
+    if isinstance(downmix_cfg, dict):
+        downmix_cfg = dict(downmix_cfg)
+        downmix_cfg.pop("source_layout_id", None)
+        downmix_cfg.pop("target_layout_id", None)
+        if downmix_cfg:
+            analysis_cfg["downmix"] = downmix_cfg
+        else:
+            analysis_cfg.pop("downmix", None)
+    else:
+        analysis_cfg.pop("downmix", None)
+
+    return normalize_run_config(analysis_cfg)
+
+
 def _should_skip_analysis_cache_save(report: dict[str, Any], run_config: dict[str, Any]) -> bool:
     meters = run_config.get("meters")
     if meters != "truth":
@@ -1291,6 +1333,42 @@ def _run_render_plan_to_variants_command(
         for item in results
     )
     return 1 if has_failure else 0
+
+
+def _apply_run_config_to_render_many_variant_plan(
+    *,
+    variant_plan: dict[str, Any],
+    run_config: dict[str, Any],
+    preset_id: str | None,
+    config_path: Path | None,
+) -> dict[str, Any]:
+    variants = variant_plan.get("variants")
+    if not isinstance(variants, list):
+        return variant_plan
+
+    base_patch = normalize_run_config(run_config)
+    normalized_preset_id = _coerce_str(preset_id).strip()
+    resolved_config_path = (
+        config_path.resolve().as_posix()
+        if isinstance(config_path, Path)
+        else None
+    )
+    for variant in variants:
+        if not isinstance(variant, dict):
+            continue
+        variant_overrides = variant.get("run_config_overrides")
+        if isinstance(variant_overrides, dict):
+            merged_overrides = merge_run_config(base_patch, variant_overrides)
+        else:
+            merged_overrides = normalize_run_config(base_patch)
+        variant["run_config_overrides"] = merged_overrides
+
+        if normalized_preset_id and not _coerce_str(variant.get("preset_id")).strip():
+            variant["preset_id"] = normalized_preset_id
+        if isinstance(resolved_config_path, str):
+            variant["config_path"] = resolved_config_path
+
+    return variant_plan
 
 
 def _write_routing_plan_artifact(
@@ -3033,6 +3111,443 @@ def _run_one_shot_workflow(
     return 0
 
 
+def _run_render_many_workflow(
+    *,
+    repo_root: Path,
+    tools_dir: Path,
+    presets_dir: Path,
+    stems_dir: Path,
+    out_dir: Path,
+    preset_id: str | None,
+    config_path: str | None,
+    project_path: Path | None,
+    timeline_path: Path | None,
+    profile: str | None,
+    meters: str | None,
+    max_seconds: float | None,
+    truncate_values: int | None,
+    export_pdf: bool,
+    export_csv: bool,
+    scene_requested: bool,
+    render_plan_requested: bool,
+    target_ids: list[str],
+    contexts: list[str],
+    deliverables_index: bool,
+    listen_pack: bool = False,
+    output_formats: str | None = None,
+    cache_enabled: bool = True,
+    cache_dir: Path | None = None,
+) -> int:
+    resolved_timeline_path: Path | None = None
+    timeline_payload: dict[str, Any] | None = None
+    if timeline_path is not None:
+        resolved_timeline_path = timeline_path.resolve()
+        try:
+            timeline_payload = _load_timeline_payload(resolved_timeline_path)
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+    run_overrides: dict[str, Any] = {}
+    if profile is not None:
+        run_overrides["profile_id"] = profile
+    if meters is not None:
+        run_overrides["meters"] = meters
+    if max_seconds is not None:
+        run_overrides["max_seconds"] = max_seconds
+    if truncate_values is not None:
+        run_overrides["truncate_values"] = truncate_values
+    if output_formats is not None:
+        try:
+            parsed_output_formats = _parse_output_formats_csv(output_formats)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        _set_nested(["render", "output_formats"], run_overrides, parsed_output_formats)
+        _set_nested(["apply", "output_formats"], run_overrides, parsed_output_formats)
+
+    try:
+        merged_run_config = _load_and_merge_run_config(
+            config_path,
+            run_overrides,
+            preset_id=preset_id,
+            presets_dir=presets_dir,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    effective_profile = _config_string(merged_run_config, "profile_id", "PROFILE.ASSIST")
+    effective_meters = _config_optional_string(merged_run_config, "meters", None)
+    effective_preset_id = _config_optional_string(merged_run_config, "preset_id", None)
+    effective_run_config = _analyze_run_config(
+        profile_id=effective_profile,
+        meters=effective_meters,
+        preset_id=effective_preset_id,
+        base_run_config=merged_run_config,
+    )
+    analysis_cache_run_config = _analysis_run_config_for_variant_cache(effective_run_config)
+    render_output_formats = _config_nested_output_formats(
+        merged_run_config,
+        "render",
+        ["wav"],
+    )
+    apply_output_formats = _config_nested_output_formats(
+        merged_run_config,
+        "apply",
+        ["wav"],
+    )
+
+    report_path = out_dir / "report.json"
+    scene_path = out_dir / "scene.json"
+    render_plan_path = out_dir / "render_plan.json"
+    routing_plan_path = out_dir / "routing_plan.json"
+    variant_plan_path = out_dir / "variant_plan.json"
+    variant_result_path = out_dir / "variant_result.json"
+    listen_pack_path = out_dir / "listen_pack.json"
+    deliverables_index_path = out_dir / "deliverables_index.json"
+    report_schema_path = repo_root / "schemas" / "report.schema.json"
+    plugins_dir = str(repo_root / "plugins")
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    should_build_scene = scene_requested or not scene_path.exists()
+    should_build_render_plan = render_plan_requested or not render_plan_path.exists()
+    needs_report = should_build_scene or should_build_render_plan
+
+    lock_payload: dict[str, Any] | None = None
+    cache_key_value: str | None = None
+    report_payload: dict[str, Any] | None = None
+    scene_payload: dict[str, Any] | None = None
+    render_plan_payload: dict[str, Any] | None = None
+
+    if needs_report:
+        if cache_enabled:
+            from mmo.core.lockfile import build_lockfile  # noqa: WPS433
+
+            try:
+                lock_payload = build_lockfile(stems_dir)
+                cache_key_value = _analysis_cache_key(lock_payload, analysis_cache_run_config)
+            except ValueError:
+                cache_enabled = False
+                lock_payload = None
+                cache_key_value = None
+
+            if lock_payload is not None:
+                cached_report = try_load_cached_report(
+                    cache_dir,
+                    lock_payload,
+                    analysis_cache_run_config,
+                )
+                if (
+                    isinstance(cached_report, dict)
+                    and report_schema_is_valid(cached_report, report_schema_path)
+                ):
+                    rewritten_report = rewrite_report_stems_dir(cached_report, stems_dir)
+                    rewritten_report["run_config"] = normalize_run_config(effective_run_config)
+                    apply_routing_plan_to_report(rewritten_report, rewritten_report["run_config"])
+                    if report_schema_is_valid(rewritten_report, report_schema_path):
+                        try:
+                            _validate_json_payload(
+                                rewritten_report,
+                                schema_path=report_schema_path,
+                                payload_name="Report",
+                            )
+                        except SystemExit as exc:
+                            return int(exc.code) if isinstance(exc.code, int) else 1
+                        _write_json_file(report_path, rewritten_report)
+                        report_payload = rewritten_report
+                        print(f"analysis cache: hit {cache_key_value}")
+                if report_payload is None:
+                    print(f"analysis cache: miss {cache_key_value}")
+
+        if report_payload is None:
+            exit_code = _run_analyze(
+                tools_dir,
+                stems_dir,
+                report_path,
+                effective_meters,
+                False,
+                plugins_dir,
+                False,
+                effective_profile,
+            )
+            if exit_code != 0:
+                return exit_code
+            try:
+                report_payload = _load_report(report_path)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            report_payload["run_config"] = normalize_run_config(effective_run_config)
+            apply_routing_plan_to_report(report_payload, report_payload["run_config"])
+            try:
+                _validate_json_payload(
+                    report_payload,
+                    schema_path=report_schema_path,
+                    payload_name="Report",
+                )
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+            _write_json_file(report_path, report_payload)
+
+        if cache_enabled and lock_payload is not None and report_payload is not None:
+            if report_schema_is_valid(report_payload, report_schema_path):
+                if _should_skip_analysis_cache_save(report_payload, effective_run_config):
+                    print(f"analysis cache: skip-save {cache_key_value} (time-cap stop)")
+                else:
+                    try:
+                        save_cached_report(
+                            cache_dir,
+                            lock_payload,
+                            analysis_cache_run_config,
+                            report_payload,
+                        )
+                    except OSError:
+                        pass
+
+        if timeline_payload is not None and report_payload is not None:
+            report_payload["timeline"] = timeline_payload
+            try:
+                _validate_json_payload(
+                    report_payload,
+                    schema_path=report_schema_path,
+                    payload_name="Report",
+                )
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+            _write_json_file(report_path, report_payload)
+
+    if should_build_scene:
+        if report_payload is None:
+            print("Report payload is unavailable after analysis.", file=sys.stderr)
+            return 1
+        try:
+            scene_payload = _build_validated_scene_payload(
+                repo_root=repo_root,
+                report=report_payload,
+                timeline_payload=timeline_payload,
+                lock_hash=(
+                    hash_lockfile(lock_payload)
+                    if isinstance(lock_payload, dict)
+                    else None
+                ),
+                created_from="analyze",
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+        _write_json_file(scene_path, scene_payload)
+    else:
+        try:
+            scene_payload = _load_json_object(scene_path, label="Scene")
+            _validate_scene_schema(repo_root=repo_root, scene_payload=scene_payload)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+
+    if should_build_render_plan:
+        if scene_payload is None:
+            print("Scene payload is unavailable for render plan.", file=sys.stderr)
+            return 1
+        if report_payload is None:
+            print("Report payload is unavailable for render plan.", file=sys.stderr)
+            return 1
+        try:
+            render_targets_payload = _build_selected_render_targets_payload(
+                target_ids=target_ids,
+                render_targets_path=repo_root / "ontology" / "render_targets.yaml",
+            )
+            routing_plan_artifact_path = _write_routing_plan_artifact(
+                repo_root=repo_root,
+                report_payload=report_payload,
+                out_path=routing_plan_path,
+            )
+            render_plan_format_set: set[str] = set()
+            if "render" in contexts:
+                render_plan_format_set.update(render_output_formats)
+            if "auto_apply" in contexts:
+                render_plan_format_set.update(apply_output_formats)
+            if not render_plan_format_set:
+                render_plan_format_set.update(render_output_formats)
+            render_plan_output_formats = [
+                fmt for fmt in _OUTPUT_FORMAT_ORDER if fmt in render_plan_format_set
+            ]
+            render_plan_payload = _build_validated_render_plan_payload(
+                repo_root=repo_root,
+                scene_payload=scene_payload,
+                scene_path=scene_path,
+                render_targets_payload=render_targets_payload,
+                routing_plan_path=routing_plan_artifact_path,
+                output_formats=render_plan_output_formats,
+                contexts=contexts,
+                policies=_render_plan_policies_from_report(report_payload),
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+        _write_json_file(render_plan_path, render_plan_payload)
+    else:
+        try:
+            render_plan_payload = _load_json_object(render_plan_path, label="Render plan")
+            _validate_json_payload(
+                render_plan_payload,
+                schema_path=repo_root / "schemas" / "render_plan.schema.json",
+                payload_name="Render plan",
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+
+    if scene_payload is None:
+        try:
+            scene_payload = _load_json_object(scene_path, label="Scene")
+            _validate_scene_schema(repo_root=repo_root, scene_payload=scene_payload)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+    if render_plan_payload is None:
+        print("Render plan payload is unavailable.", file=sys.stderr)
+        return 1
+
+    scene_for_bridge = json.loads(json.dumps(scene_payload))
+    scene_for_bridge["scene_path"] = scene_path.resolve().as_posix()
+    render_plan_for_bridge = json.loads(json.dumps(render_plan_payload))
+    render_plan_for_bridge["render_plan_path"] = render_plan_path.resolve().as_posix()
+    bridge_default_steps = {
+        "routing": False,
+        "export_pdf": export_pdf,
+        "export_csv": export_csv,
+        "render": "render" in contexts,
+        "apply": "auto_apply" in contexts,
+        "bundle": True,
+    }
+    try:
+        variant_plan = render_plan_to_variant_plan(
+            render_plan_for_bridge,
+            scene_for_bridge,
+            base_out_dir=out_dir.resolve().as_posix(),
+            default_steps=bridge_default_steps,
+        )
+        variant_plan = _apply_run_config_to_render_many_variant_plan(
+            variant_plan=variant_plan,
+            run_config=effective_run_config,
+            preset_id=effective_preset_id,
+            config_path=Path(config_path) if config_path else None,
+        )
+        _validate_json_payload(
+            variant_plan,
+            schema_path=repo_root / "schemas" / "variant_plan.schema.json",
+            payload_name="Variant plan",
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    except SystemExit as exc:
+        return int(exc.code) if isinstance(exc.code, int) else 1
+
+    _write_json_file(variant_plan_path, variant_plan)
+    variants = variant_plan.get("variants")
+    if isinstance(variants, list) and len(variants) > 1:
+        print("Youll get one folder per variant.")
+
+    run_variant_plan_kwargs: dict[str, Any] = {
+        "cache_enabled": cache_enabled,
+        "cache_dir": cache_dir,
+    }
+    if project_path is not None:
+        run_variant_plan_kwargs["project_path"] = project_path
+    if deliverables_index:
+        run_variant_plan_kwargs["deliverables_index_path"] = deliverables_index_path
+    if listen_pack:
+        run_variant_plan_kwargs["listen_pack_path"] = listen_pack_path
+    if timeline_payload is not None:
+        run_variant_plan_kwargs["timeline"] = timeline_payload
+    if resolved_timeline_path is not None:
+        run_variant_plan_kwargs["timeline_path"] = resolved_timeline_path
+
+    try:
+        variant_result = run_variant_plan(
+            variant_plan,
+            repo_root=repo_root,
+            **run_variant_plan_kwargs,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    try:
+        _validate_json_payload(
+            variant_result,
+            schema_path=repo_root / "schemas" / "variant_result.schema.json",
+            payload_name="Variant result",
+        )
+    except SystemExit as exc:
+        return int(exc.code) if isinstance(exc.code, int) else 1
+    _write_json_file(variant_result_path, variant_result)
+
+    if listen_pack:
+        try:
+            listen_pack_payload = _build_validated_listen_pack(
+                repo_root=repo_root,
+                presets_dir=presets_dir,
+                variant_result=variant_result,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+        _write_json_file(listen_pack_path, listen_pack_payload)
+    if deliverables_index:
+        try:
+            deliverables_index_payload = _build_validated_deliverables_index_variants(
+                repo_root=repo_root,
+                root_out_dir=out_dir,
+                variant_result=variant_result,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+        _write_json_file(deliverables_index_path, deliverables_index_payload)
+
+    results = variant_result.get("results")
+    if not isinstance(results, list):
+        return 1
+
+    summary: list[tuple[str, Path]] = [
+        ("scene", scene_path),
+        ("render_plan", render_plan_path),
+        ("variant_plan", variant_plan_path),
+        ("variant_result", variant_result_path),
+    ]
+    if listen_pack:
+        summary.append(("listen_pack", listen_pack_path))
+    if deliverables_index:
+        summary.append(("deliverables_index", deliverables_index_path))
+    print("render-many complete:")
+    for label, path in summary:
+        print(f"- {label}: {path.resolve().as_posix()}")
+
+    has_failure = any(
+        isinstance(item, dict) and item.get("ok") is not True
+        for item in results
+    )
+    return 1 if has_failure else 0
+
+
 def _run_workflow_from_run_args(
     *,
     repo_root: Path,
@@ -3053,6 +3568,70 @@ def _run_workflow_from_run_args(
     timeline_path_value = getattr(args, "timeline", None)
     if isinstance(timeline_path_value, str) and timeline_path_value.strip():
         timeline_path = Path(timeline_path_value)
+    if getattr(args, "render_many", False):
+        if len(preset_values) > 1 or len(config_values) > 1 or bool(format_set_values):
+            print(
+                (
+                    "--render-many supports at most one --preset, at most one --config, "
+                    "and does not support --format-set."
+                ),
+                file=sys.stderr,
+            )
+            return 1, "variants"
+        try:
+            target_ids = _parse_target_ids_csv(
+                getattr(args, "targets", _BASELINE_RENDER_TARGET_ID)
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1, "variants"
+
+        context_values = (
+            list(args.context)
+            if isinstance(getattr(args, "context", None), list)
+            else []
+        )
+        context_set = {
+            _coerce_str(item).strip().lower()
+            for item in context_values
+            if _coerce_str(item).strip()
+        }
+        contexts = [
+            item
+            for item in ("render", "auto_apply")
+            if item in context_set
+        ]
+        if not contexts:
+            contexts = ["render"]
+
+        exit_code = _run_render_many_workflow(
+            repo_root=repo_root,
+            tools_dir=tools_dir,
+            presets_dir=presets_dir,
+            stems_dir=stems_dir,
+            out_dir=out_dir,
+            preset_id=preset_values[0] if preset_values else None,
+            config_path=config_values[0] if config_values else None,
+            project_path=project_path,
+            timeline_path=timeline_path,
+            profile=args.profile,
+            meters=args.meters,
+            max_seconds=args.max_seconds,
+            truncate_values=args.truncate_values,
+            export_pdf=args.export_pdf,
+            export_csv=args.export_csv,
+            scene_requested=getattr(args, "scene", False),
+            render_plan_requested=getattr(args, "render_plan", False),
+            target_ids=target_ids,
+            contexts=contexts,
+            deliverables_index=args.deliverables_index,
+            listen_pack=getattr(args, "listen_pack", False),
+            output_formats=args.output_formats,
+            cache_enabled=args.cache == "on",
+            cache_dir=Path(args.cache_dir) if args.cache_dir else None,
+        )
+        return exit_code, "variants"
+
     should_delegate_to_variants = (
         args.variants
         or len(preset_values) > 1
@@ -3085,6 +3664,7 @@ def _run_workflow_from_run_args(
             truncate_values=args.truncate_values,
             output_formats=args.output_formats,
             format_set_values=format_set_values if format_set_values else None,
+            listen_pack=getattr(args, "listen_pack", False),
             deliverables_index=args.deliverables_index,
             project_path=project_path,
             timeline_path=timeline_path,
@@ -4062,6 +4642,26 @@ def main(argv: list[str] | None = None) -> int:
         "--render-plan",
         action="store_true",
         help="Build a render_plan.json artifact (auto-builds scene.json if needed).",
+    )
+    run_parser.add_argument(
+        "--render-many",
+        action="store_true",
+        help="Mix once, then render many targets via scene/render_plan -> variants.",
+    )
+    run_parser.add_argument(
+        "--targets",
+        default=_BASELINE_RENDER_TARGET_ID,
+        help=(
+            "Comma-separated target IDs for --render-many "
+            "(default: TARGET.STEREO.2_0)."
+        ),
+    )
+    run_parser.add_argument(
+        "--context",
+        action="append",
+        choices=["render", "auto_apply"],
+        default=[],
+        help="Repeatable context for --render-many render_plan jobs.",
     )
     run_parser.add_argument(
         "--deliverables-index",
@@ -5044,6 +5644,26 @@ def main(argv: list[str] | None = None) -> int:
         "--render-plan",
         action="store_true",
         help="Build a render_plan.json artifact (auto-builds scene.json if needed).",
+    )
+    project_run_parser.add_argument(
+        "--render-many",
+        action="store_true",
+        help="Mix once, then render many targets via scene/render_plan -> variants.",
+    )
+    project_run_parser.add_argument(
+        "--targets",
+        default=_BASELINE_RENDER_TARGET_ID,
+        help=(
+            "Comma-separated target IDs for --render-many "
+            "(default: TARGET.STEREO.2_0)."
+        ),
+    )
+    project_run_parser.add_argument(
+        "--context",
+        action="append",
+        choices=["render", "auto_apply"],
+        default=[],
+        help="Repeatable context for --render-many render_plan jobs.",
     )
     project_run_parser.add_argument(
         "--deliverables-index",

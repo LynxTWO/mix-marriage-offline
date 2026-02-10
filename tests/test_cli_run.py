@@ -1,4 +1,6 @@
 import json
+import contextlib
+import io
 import math
 import struct
 import tempfile
@@ -354,6 +356,96 @@ class TestCliRun(unittest.TestCase):
             self.assertTrue(variant_plan_path.exists())
             variant_plan_payload = json.loads(variant_plan_path.read_text(encoding="utf-8"))
             variant_plan_validator.validate(variant_plan_payload)
+
+    def test_run_render_many_builds_variants_and_reuses_cache(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        variant_plan_validator = _schema_validator(
+            repo_root / "schemas" / "variant_plan.schema.json"
+        )
+        variant_result_validator = _schema_validator(
+            repo_root / "schemas" / "variant_result.schema.json"
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            out_dir = temp_path / "out"
+            cache_dir = temp_path / ".cache"
+            _write_wav_16bit(stems_dir / "drums" / "kick.wav")
+
+            command = [
+                "run",
+                "--stems",
+                str(stems_dir),
+                "--out",
+                str(out_dir),
+                "--preset",
+                "PRESET.SAFE_CLEANUP",
+                "--render-many",
+                "--targets",
+                "TARGET.STEREO.2_0,TARGET.SURROUND.5_1",
+                "--deliverables-index",
+                "--cache",
+                "on",
+                "--cache-dir",
+                str(cache_dir),
+            ]
+
+            stdout_first = io.StringIO()
+            with contextlib.redirect_stdout(stdout_first):
+                first_exit = main(command)
+            self.assertEqual(first_exit, 0)
+
+            scene_path = out_dir / "scene.json"
+            render_plan_path = out_dir / "render_plan.json"
+            variant_plan_path = out_dir / "variant_plan.json"
+            variant_result_path = out_dir / "variant_result.json"
+            deliverables_index_path = out_dir / "deliverables_index.json"
+            self.assertTrue(scene_path.exists())
+            self.assertTrue(render_plan_path.exists())
+            self.assertTrue(variant_plan_path.exists())
+            self.assertTrue(variant_result_path.exists())
+            self.assertTrue(deliverables_index_path.exists())
+
+            variant_plan_payload = json.loads(variant_plan_path.read_text(encoding="utf-8"))
+            variant_result_payload = json.loads(variant_result_path.read_text(encoding="utf-8"))
+            variant_plan_validator.validate(variant_plan_payload)
+            variant_result_validator.validate(variant_result_payload)
+
+            variants = variant_plan_payload.get("variants")
+            self.assertIsInstance(variants, list)
+            if not isinstance(variants, list):
+                return
+            self.assertEqual(len(variants), 2)
+            self.assertEqual(
+                [item.get("label") for item in variants if isinstance(item, dict)],
+                ["TARGET.STEREO.2_0", "TARGET.SURROUND.5_1"],
+            )
+
+            results = variant_result_payload.get("results")
+            self.assertIsInstance(results, list)
+            if not isinstance(results, list):
+                return
+            self.assertEqual(len(results), 2)
+            self.assertTrue(
+                all(
+                    isinstance(item, dict) and item.get("ok") is True
+                    for item in results
+                )
+            )
+            for item in results:
+                if not isinstance(item, dict):
+                    continue
+                bundle_path = item.get("bundle_path")
+                self.assertIsInstance(bundle_path, str)
+                if isinstance(bundle_path, str):
+                    self.assertTrue(Path(bundle_path).exists())
+
+            stdout_second = io.StringIO()
+            with contextlib.redirect_stdout(stdout_second):
+                second_exit = main(command)
+            self.assertEqual(second_exit, 0)
+            self.assertIn("analysis cache: hit", stdout_second.getvalue())
 
 
 if __name__ == "__main__":

@@ -607,6 +607,16 @@ def _analysis_run_config(run_config: dict[str, Any]) -> dict[str, Any]:
     else:
         analysis_cfg.pop("apply", None)
 
+    # Analysis depends on source stems and detector config, not render target routing.
+    # Dropping layout overrides improves cache reuse across render-many target variants.
+    downmix_cfg = _coerce_dict(analysis_cfg.get("downmix"))
+    downmix_cfg.pop("source_layout_id", None)
+    downmix_cfg.pop("target_layout_id", None)
+    if downmix_cfg:
+        analysis_cfg["downmix"] = downmix_cfg
+    else:
+        analysis_cfg.pop("downmix", None)
+
     return normalize_run_config(analysis_cfg)
 
 

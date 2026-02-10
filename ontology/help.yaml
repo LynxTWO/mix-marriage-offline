@@ -341,3 +341,21 @@ entries:
     watch_out_for:
       - "Rendering/applying lossless formats can increase runtime and disk use."
       - "Multiple presets/configs switch to variants output structure."
+  HELP.WORKFLOW.RENDER_MANY:
+    title: "Render many workflow"
+    short: "Mix once, then render many target deliverables from one scene and render plan."
+    long: |
+      Render many makes a single analysis pass feel like a first-class delivery
+      workflow. `mmo run --render-many` (or `mmo project run --render-many`)
+      ensures scene + render_plan artifacts exist, converts them to variant_plan,
+      and runs all target jobs in one deterministic flow.
+
+      Outputs land in the same out directory as `scene.json`, `render_plan.json`,
+      `variant_plan.json`, and `variant_result.json`, plus one per-variant folder
+      for each target delivery.
+    cues:
+      - "If you want one creative mix decision and many delivery targets."
+      - "If you need deterministic per-target folders for GUI/tool ingestion."
+    watch_out_for:
+      - "More targets increase runtime and disk usage."
+      - "Use --render-plan to force rebuild when target/context intent changes."
