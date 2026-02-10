@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import subprocess
@@ -56,6 +57,21 @@ SCHEMA_ANCHORS: tuple[str, ...] = (
     "schemas/render_plan.schema.json",
     "schemas/presets_index.schema.json",
     "schemas/lockfile.schema.json",
+)
+
+SCENE_REGISTRIES_CHECK_ID = "SCENE.REGISTRIES"
+SCENE_REGISTRIES_TOOL = (
+    "src/mmo/core/{speaker_positions.py,scene_locks.py,intent_params.py,render_targets.py}"
+)
+SCENE_REGISTRY_LOADERS: tuple[tuple[str, str, str], ...] = (
+    (
+        "load_speaker_positions",
+        "mmo.core.speaker_positions",
+        "ontology/speaker_positions.yaml",
+    ),
+    ("load_scene_locks", "mmo.core.scene_locks", "ontology/scene_locks.yaml"),
+    ("load_intent_params", "mmo.core.intent_params", "ontology/intent_params.yaml"),
+    ("list_render_targets", "mmo.core.render_targets", "ontology/render_targets.yaml"),
 )
 
 
@@ -255,6 +271,79 @@ def _anchor_schema_status(
     return anchor_result
 
 
+def _scene_registry_summary(*, loader_name: str, payload: Any) -> dict[str, int]:
+    if loader_name == "load_speaker_positions":
+        layouts = payload.get("layouts") if isinstance(payload, dict) else None
+        return {"layouts": len(layouts) if isinstance(layouts, dict) else 0}
+    if loader_name == "load_scene_locks":
+        locks = payload.get("locks") if isinstance(payload, dict) else None
+        return {"locks": len(locks) if isinstance(locks, dict) else 0}
+    if loader_name == "load_intent_params":
+        params = payload.get("params") if isinstance(payload, dict) else None
+        return {"params": len(params) if isinstance(params, dict) else 0}
+    if loader_name == "list_render_targets":
+        return {"targets": len(payload) if isinstance(payload, list) else 0}
+    return {}
+
+
+def _run_scene_registries_check(*, repo_root: Path) -> dict[str, Any]:
+    details: dict[str, Any] = {"loaders": []}
+    errors: list[str] = []
+
+    for loader_name, module_name, relative_path in SCENE_REGISTRY_LOADERS:
+        registry_path = repo_root / relative_path
+        loader_details: dict[str, Any] = {
+            "loader": loader_name,
+            "module": module_name,
+            "path": relative_path,
+            "ok": True,
+        }
+
+        if not registry_path.is_file():
+            loader_details["ok"] = False
+            loader_details["error"] = f"Required registry is missing: {relative_path}"
+            errors.append(f"Required registry is missing: {relative_path}")
+            details["loaders"].append(loader_details)
+            continue
+
+        try:
+            module = importlib.import_module(module_name)
+            loader = getattr(module, loader_name)
+        except Exception as exc:
+            loader_details["ok"] = False
+            loader_details["error"] = str(exc)
+            errors.append(f"Failed to import {module_name}.{loader_name}: {exc}")
+            details["loaders"].append(loader_details)
+            continue
+
+        try:
+            payload = loader(registry_path)
+        except Exception as exc:
+            loader_details["ok"] = False
+            loader_details["error"] = str(exc)
+            errors.append(f"{loader_name} failed for {relative_path}: {exc}")
+            details["loaders"].append(loader_details)
+            continue
+
+        loader_details["summary"] = _scene_registry_summary(
+            loader_name=loader_name,
+            payload=payload,
+        )
+        details["loaders"].append(loader_details)
+
+    ok = not errors
+    if not ok:
+        errors.append("Run alone: python tools/validate_contracts.py --strict")
+    return _build_check_payload(
+        check_id=SCENE_REGISTRIES_CHECK_ID,
+        ok=ok,
+        exit_code=0 if ok else 1,
+        tool=SCENE_REGISTRIES_TOOL,
+        details=details,
+        errors=errors,
+    )
+
+
 def _run_schema_smoke_check(*, repo_root: Path) -> dict[str, Any]:
     details: dict[str, Any] = {"anchors": []}
     errors: list[str] = []
@@ -338,6 +427,7 @@ def run_contract_checks(*, repo_root: Path, strict: bool) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     for check in EXTERNAL_CHECKS:
         checks.append(_run_external_check(check, repo_root=repo_root, strict=strict))
+    checks.append(_run_scene_registries_check(repo_root=repo_root))
     checks.append(_run_schema_smoke_check(repo_root=repo_root))
 
     failed = [check["check_id"] for check in checks if not check.get("ok")]
