@@ -1,0 +1,403 @@
+"""Umbrella validator for core repository contracts."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+try:
+    import jsonschema
+except ImportError:  # pragma: no cover - optional dependency
+    jsonschema = None
+
+SCRIPT_REPO_ROOT = Path(__file__).resolve().parents[1]
+SCRIPT_SRC_DIR = SCRIPT_REPO_ROOT / "src"
+if str(SCRIPT_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_SRC_DIR))
+
+from mmo.core.schema_registry import (  # noqa: E402
+    build_schema_registry,
+    load_json_schema,
+    unresolved_schema_refs,
+)
+
+
+@dataclass(frozen=True)
+class ExternalCheckSpec:
+    check_id: str
+    tool: str
+    args: tuple[str, ...]
+
+
+EXTERNAL_CHECKS: tuple[ExternalCheckSpec, ...] = (
+    ExternalCheckSpec("UI.SPECS", "tools/validate_ui_specs.py", ("--repo-root", ".")),
+    ExternalCheckSpec("UI.EXAMPLES", "tools/validate_ui_examples.py", ("--repo-root", ".")),
+    ExternalCheckSpec("ONTOLOGY.REFS", "tools/validate_ontology_refs.py", ("--ontology", "ontology")),
+    ExternalCheckSpec(
+        "PLUGINS",
+        "tools/validate_plugins.py",
+        ("plugins", "--schema", "schemas/plugin.schema.json"),
+    ),
+)
+
+SCHEMA_SMOKE_CHECK_ID = "SCHEMAS"
+SCHEMA_SMOKE_TOOL = "src/mmo/core/schema_registry.py"
+SCHEMA_ANCHORS: tuple[str, ...] = (
+    "schemas/report.schema.json",
+    "schemas/ui_bundle.schema.json",
+    "schemas/scene.schema.json",
+    "schemas/render_targets.schema.json",
+    "schemas/render_plan.schema.json",
+    "schemas/presets_index.schema.json",
+    "schemas/lockfile.schema.json",
+)
+
+
+def _tail_text(value: str, *, max_lines: int = 20, max_chars: int = 2000) -> str:
+    text = value.strip()
+    if not text:
+        return ""
+    lines = text.splitlines()
+    tail = "\n".join(lines[-max_lines:])
+    if len(tail) > max_chars:
+        return tail[-max_chars:]
+    return tail
+
+
+def _build_check_payload(
+    *,
+    check_id: str,
+    ok: bool,
+    exit_code: int,
+    tool: str,
+    details: dict[str, Any],
+    errors: list[str],
+) -> dict[str, Any]:
+    return {
+        "check_id": check_id,
+        "ok": ok,
+        "exit_code": exit_code,
+        "tool": tool,
+        "details": details,
+        "errors": errors,
+    }
+
+
+def _standalone_command(check: ExternalCheckSpec) -> str:
+    return " ".join(["python", check.tool, *check.args])
+
+
+def _build_subprocess_env(repo_root: Path) -> dict[str, str]:
+    env = dict(os.environ)
+    src_dir = repo_root / "src"
+    if src_dir.exists():
+        existing = env.get("PYTHONPATH", "")
+        src = os.fspath(src_dir)
+        env["PYTHONPATH"] = src if not existing else src + os.pathsep + existing
+    return env
+
+
+def _parse_json_stdout(stdout: str) -> tuple[Any | None, str | None]:
+    text = stdout.strip()
+    if not text:
+        return None, "Validator produced empty stdout; expected JSON output."
+    try:
+        return json.loads(text), None
+    except json.JSONDecodeError as exc:
+        return (
+            None,
+            (
+                "Validator stdout was not valid JSON: "
+                f"line {exc.lineno}, column {exc.colno}: {exc.msg}."
+            ),
+        )
+
+
+def _details_from_unparsed_output(stdout: str, stderr: str) -> dict[str, Any]:
+    details: dict[str, Any] = {}
+    stdout_tail = _tail_text(stdout)
+    stderr_tail = _tail_text(stderr)
+    if stdout_tail:
+        details["stdout_tail"] = stdout_tail
+    if stderr_tail:
+        details["stderr_tail"] = stderr_tail
+    return details
+
+
+def _run_external_check(
+    check: ExternalCheckSpec,
+    *,
+    repo_root: Path,
+    strict: bool,
+) -> dict[str, Any]:
+    tool_path = repo_root / check.tool
+    if not tool_path.exists():
+        errors = [
+            f"Required validator tool is missing: {check.tool}",
+            f"Run alone: {_standalone_command(check)}",
+        ]
+        details = {"expected_path": str(tool_path)}
+        return _build_check_payload(
+            check_id=check.check_id,
+            ok=False,
+            exit_code=2,
+            tool=check.tool,
+            details=details,
+            errors=errors,
+        )
+
+    command = [sys.executable, os.fspath(tool_path), *check.args]
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            cwd=repo_root,
+            env=_build_subprocess_env(repo_root),
+        )
+    except OSError as exc:
+        errors = [
+            f"Failed to execute validator {check.tool}: {exc}",
+            f"Run alone: {_standalone_command(check)}",
+        ]
+        details = {"expected_path": str(tool_path)}
+        return _build_check_payload(
+            check_id=check.check_id,
+            ok=False,
+            exit_code=2,
+            tool=check.tool,
+            details=details,
+            errors=errors,
+        )
+
+    parsed_output, parse_error = _parse_json_stdout(completed.stdout)
+    if isinstance(parsed_output, dict):
+        details: dict[str, Any] = parsed_output
+    elif parsed_output is not None:
+        details = {"parsed_json": parsed_output}
+    else:
+        details = _details_from_unparsed_output(completed.stdout, completed.stderr)
+
+    exit_code = 0 if completed.returncode == 0 else 1
+    if completed.returncode == 0 and parse_error is not None and strict:
+        exit_code = 2
+
+    ok = exit_code == 0
+    errors: list[str] = []
+    if not ok:
+        if completed.returncode != 0:
+            errors.append(f"Validator exited with code {completed.returncode}.")
+        if parse_error is not None:
+            errors.append(parse_error)
+        stderr_tail = _tail_text(completed.stderr)
+        if stderr_tail:
+            errors.append(f"stderr tail:\n{stderr_tail}")
+        errors.append(f"Run alone: {_standalone_command(check)}")
+    elif parse_error is not None:
+        details = dict(details)
+        details["parse_warning"] = parse_error
+
+    return _build_check_payload(
+        check_id=check.check_id,
+        ok=ok,
+        exit_code=exit_code,
+        tool=check.tool,
+        details=details,
+        errors=errors,
+    )
+
+
+def _anchor_schema_status(
+    *,
+    repo_root: Path,
+    anchor: str,
+    registry: Any,
+) -> dict[str, Any]:
+    anchor_path = repo_root / anchor
+    anchor_result: dict[str, Any] = {"schema": anchor, "ok": True}
+    anchor_errors: list[str] = []
+    unresolved_refs: list[str] = []
+
+    if not anchor_path.exists():
+        anchor_result["ok"] = False
+        anchor_errors.append(f"Missing required schema anchor: {anchor}")
+    else:
+        try:
+            schema = load_json_schema(anchor_path)
+            if jsonschema is None:
+                raise RuntimeError("jsonschema is required to validate schema anchors.")
+            jsonschema.Draft202012Validator.check_schema(schema)
+            unresolved_refs = unresolved_schema_refs(
+                schema,
+                registry=registry,
+                default_base_uri=anchor_path.resolve().as_uri(),
+            )
+            if unresolved_refs:
+                anchor_result["ok"] = False
+                anchor_errors.append(
+                    f"Schema anchor has unresolved $ref values: {anchor}"
+                )
+        except Exception as exc:
+            anchor_result["ok"] = False
+            anchor_errors.append(f"Failed to load schema anchor {anchor}: {exc}")
+
+    if unresolved_refs:
+        anchor_result["unresolved_refs"] = unresolved_refs
+    if anchor_errors:
+        anchor_result["errors"] = anchor_errors
+    return anchor_result
+
+
+def _run_schema_smoke_check(*, repo_root: Path) -> dict[str, Any]:
+    details: dict[str, Any] = {"anchors": []}
+    errors: list[str] = []
+
+    if jsonschema is None:
+        errors.append("jsonschema is not installed; cannot validate schema anchors.")
+        errors.append("Run: python -m pip install jsonschema")
+        return _build_check_payload(
+            check_id=SCHEMA_SMOKE_CHECK_ID,
+            ok=False,
+            exit_code=2,
+            tool=SCHEMA_SMOKE_TOOL,
+            details=details,
+            errors=errors,
+        )
+
+    schemas_dir = repo_root / "schemas"
+    if not schemas_dir.exists() or not schemas_dir.is_dir():
+        errors.append(f"Required schemas directory is missing: {schemas_dir}")
+        errors.append("Run alone: python tools/validate_contracts.py --strict")
+        return _build_check_payload(
+            check_id=SCHEMA_SMOKE_CHECK_ID,
+            ok=False,
+            exit_code=1,
+            tool=SCHEMA_SMOKE_TOOL,
+            details=details,
+            errors=errors,
+        )
+
+    try:
+        registry = build_schema_registry(schemas_dir)
+    except RuntimeError as exc:
+        errors.append(str(exc))
+        errors.append("Run: python -m pip install referencing")
+        return _build_check_payload(
+            check_id=SCHEMA_SMOKE_CHECK_ID,
+            ok=False,
+            exit_code=2,
+            tool=SCHEMA_SMOKE_TOOL,
+            details=details,
+            errors=errors,
+        )
+    except ValueError as exc:
+        errors.append(str(exc))
+        errors.append("Run alone: python tools/validate_contracts.py --strict")
+        return _build_check_payload(
+            check_id=SCHEMA_SMOKE_CHECK_ID,
+            ok=False,
+            exit_code=1,
+            tool=SCHEMA_SMOKE_TOOL,
+            details=details,
+            errors=errors,
+        )
+
+    for anchor in SCHEMA_ANCHORS:
+        anchor_result = _anchor_schema_status(
+            repo_root=repo_root,
+            anchor=anchor,
+            registry=registry,
+        )
+        details["anchors"].append(anchor_result)
+        if not anchor_result.get("ok"):
+            for message in anchor_result.get("errors", []):
+                if isinstance(message, str):
+                    errors.append(message)
+
+    ok = not errors
+    if not ok:
+        errors.append("Run alone: python tools/validate_contracts.py --strict")
+    return _build_check_payload(
+        check_id=SCHEMA_SMOKE_CHECK_ID,
+        ok=ok,
+        exit_code=0 if ok else 1,
+        tool=SCHEMA_SMOKE_TOOL,
+        details=details,
+        errors=errors,
+    )
+
+
+def run_contract_checks(*, repo_root: Path, strict: bool) -> dict[str, Any]:
+    checks: list[dict[str, Any]] = []
+    for check in EXTERNAL_CHECKS:
+        checks.append(_run_external_check(check, repo_root=repo_root, strict=strict))
+    checks.append(_run_schema_smoke_check(repo_root=repo_root))
+
+    failed = [check["check_id"] for check in checks if not check.get("ok")]
+    passed = [check["check_id"] for check in checks if check.get("ok")]
+    return {
+        "ok": not failed,
+        "checks": checks,
+        "summary": {
+            "failed": failed,
+            "passed": passed,
+        },
+    }
+
+
+def _output_payload(result: dict[str, Any], *, quiet: bool) -> dict[str, Any]:
+    if not quiet:
+        return result
+    return {
+        "ok": bool(result.get("ok")),
+        "summary": result.get("summary", {"failed": [], "passed": []}),
+    }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Validate repository core contracts.")
+    parser.add_argument(
+        "--repo-root",
+        default=str(SCRIPT_REPO_ROOT),
+        help="Repository root containing tools/, schemas/, ontology/, and plugins/.",
+    )
+    parser.add_argument(
+        "--out",
+        default=None,
+        help="Optional path to write deterministic JSON output.",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail checks that do not emit valid JSON output.",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Print only minimal deterministic summary JSON.",
+    )
+    args = parser.parse_args()
+
+    repo_root = Path(args.repo_root)
+    result = run_contract_checks(repo_root=repo_root, strict=args.strict)
+    output = _output_payload(result, quiet=args.quiet)
+    serialized = json.dumps(output, sort_keys=True, indent=2)
+    print(serialized)
+
+    if args.out:
+        out_path = Path(args.out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(serialized + "\n", encoding="utf-8")
+
+    return 0 if result["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
