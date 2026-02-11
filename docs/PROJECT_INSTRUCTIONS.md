@@ -37,6 +37,13 @@ The scene is the source of truth when stems plus intent are available.
 - Consistent dither/noise policies; same inputs plus same settings must produce same outputs
 - No time-based metadata in outputs (for example, no creation timestamps in encoded formats)
 - Deterministic retry/backoff limits and deterministic attempt ordering
+- If BLAS/OpenMP backends show allocation hiccups or nondeterministic performance variance during validation, pin backend thread counts:
+  - `OPENBLAS_NUM_THREADS=1`
+  - `OMP_NUM_THREADS=1`
+  - `MKL_NUM_THREADS=1`
+  - `VECLIB_MAXIMUM_THREADS=1` (macOS)
+  - `NUMEXPR_NUM_THREADS=1`
+- These environment settings do not change mix decisions; they reduce runtime variability in numeric backends.
 
 ## D) Layout safety principles
 
