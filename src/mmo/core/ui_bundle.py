@@ -498,6 +498,46 @@ def _recommendation_lock_notes(
     return [notes_by_lock_id[lock_id] for lock_id in sorted(notes_by_lock_id.keys())]
 
 
+def _recommendation_lock_conflicts(
+    recommendation: dict[str, Any],
+    *,
+    locks_in_effect: list[dict[str, Any]],
+    scene_lock_specs: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    action_id = _recommendation_action_id(recommendation)
+    if not action_id:
+        return []
+
+    conflicts_by_lock_id: dict[str, dict[str, Any]] = {}
+    for lock_summary in locks_in_effect:
+        lock_id = _coerce_str(lock_summary.get("lock_id")).strip()
+        if not lock_id:
+            continue
+
+        lock_spec = scene_lock_specs.get(lock_id)
+        if not isinstance(lock_spec, dict):
+            continue
+        affected_actions = _normalized_string_list(lock_spec.get("affected_actions"))
+        if action_id not in affected_actions:
+            continue
+
+        severity = _coerce_str(lock_summary.get("severity")).strip()
+        if severity not in _SCENE_LOCK_SEVERITIES:
+            severity = "taste"
+
+        conflicts_by_lock_id[lock_id] = {
+            "lock_id": lock_id,
+            "severity": severity,
+            "action_id": action_id,
+            "note": f"Action {action_id} may violate {lock_id}.",
+        }
+
+    return [
+        conflicts_by_lock_id[lock_id]
+        for lock_id in sorted(conflicts_by_lock_id.keys())
+    ]
+
+
 def _scene_lock_ids_used(scene_payload: dict[str, Any]) -> list[str]:
     lock_ids: set[str] = set(_intent_lock_ids(scene_payload.get("intent")))
     for object_payload in _iter_dict_list(scene_payload.get("objects")):
@@ -673,6 +713,14 @@ def _recommendation_overlays_payload(
             "locks_in_effect": locks_in_effect,
             "scope": scope,
         }
+        lock_conflicts = _recommendation_lock_conflicts(
+            recommendation,
+            locks_in_effect=locks_in_effect,
+            scene_lock_specs=scene_lock_specs,
+        )
+        if lock_conflicts:
+            overlay_payload["lock_conflicts"] = lock_conflicts
+
         lock_notes = _recommendation_lock_notes(
             recommendation,
             locks_in_effect=locks_in_effect,

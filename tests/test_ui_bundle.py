@@ -865,6 +865,101 @@ class TestUiBundle(unittest.TestCase):
             ],
         )
 
+    def test_build_ui_bundle_scene_overlay_lock_conflicts(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        report["recommendations"] = [
+            {
+                "recommendation_id": "REC.SCENE.CONFLICT.MATCH",
+                "action_id": "ACTION.STEREO.WIDEN",
+                "risk": "low",
+                "requires_approval": False,
+                "target": {"scope": "stem", "stem_id": "bass"},
+                "params": [],
+                "eligible_auto_apply": True,
+                "eligible_render": True,
+                "extreme": False,
+            },
+            {
+                "recommendation_id": "REC.SCENE.CONFLICT.NO_MATCH",
+                "action_id": "ACTION.UTILITY.GAIN",
+                "risk": "low",
+                "requires_approval": False,
+                "target": {"scope": "stem", "stem_id": "bass"},
+                "params": [],
+                "eligible_auto_apply": True,
+                "eligible_render": True,
+                "extreme": False,
+            },
+        ]
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+        scene_payload = _sample_scene()
+        scene_payload["intent"]["locks"] = [
+            "LOCK.PRESERVE_CENTER_IMAGE",
+            "LOCK.NO_STEREO_WIDENING",
+        ]
+        scene_payload["objects"][0]["intent"]["locks"] = []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            scene_path = temp_path / "scene.json"
+            scene_path.write_text(
+                json.dumps(scene_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                scene_path=scene_path,
+            )
+
+        validator.validate(bundle)
+
+        recommendation_overlays = bundle.get("recommendation_overlays")
+        self.assertIsInstance(recommendation_overlays, dict)
+        if not isinstance(recommendation_overlays, dict):
+            return
+
+        match_overlay = recommendation_overlays.get("REC.SCENE.CONFLICT.MATCH")
+        self.assertIsInstance(match_overlay, dict)
+        if not isinstance(match_overlay, dict):
+            return
+        lock_conflicts = match_overlay.get("lock_conflicts")
+        self.assertIsInstance(lock_conflicts, list)
+        if not isinstance(lock_conflicts, list):
+            return
+        self.assertEqual(
+            lock_conflicts,
+            [
+                {
+                    "lock_id": "LOCK.NO_STEREO_WIDENING",
+                    "severity": "hard",
+                    "action_id": "ACTION.STEREO.WIDEN",
+                    "note": (
+                        "Action ACTION.STEREO.WIDEN may violate "
+                        "LOCK.NO_STEREO_WIDENING."
+                    ),
+                },
+                {
+                    "lock_id": "LOCK.PRESERVE_CENTER_IMAGE",
+                    "severity": "hard",
+                    "action_id": "ACTION.STEREO.WIDEN",
+                    "note": (
+                        "Action ACTION.STEREO.WIDEN may violate "
+                        "LOCK.PRESERVE_CENTER_IMAGE."
+                    ),
+                },
+            ],
+        )
+
+        non_match_overlay = recommendation_overlays.get("REC.SCENE.CONFLICT.NO_MATCH")
+        self.assertIsInstance(non_match_overlay, dict)
+        if not isinstance(non_match_overlay, dict):
+            return
+        self.assertNotIn("lock_conflicts", non_match_overlay)
+
     def test_build_ui_bundle_scene_overlay_lock_notes_are_sorted_and_stable(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
