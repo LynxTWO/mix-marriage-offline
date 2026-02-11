@@ -38,6 +38,7 @@ from mmo.core.render_targets import (
     list_render_targets,
     resolve_render_target_id,
 )
+from mmo.core.target_recommendations import recommend_render_targets
 from mmo.core.scene_templates import (
     apply_scene_templates,
     get_scene_template,
@@ -1989,6 +1990,89 @@ def _build_render_target_show_payload(
     if payload is None:
         raise ValueError(f"Resolved target is missing from registry: {resolved_target_id}")
     return payload
+
+
+def _load_report_from_path_or_dir(path: Path) -> tuple[dict[str, Any], Path | None]:
+    if path.is_dir():
+        report_path = path / "report.json"
+        if not report_path.exists():
+            raise ValueError(f"Missing report.json in directory: {path}")
+        if report_path.is_dir():
+            raise ValueError(f"Expected report JSON file path, got directory: {report_path}")
+        return _load_report(report_path), path
+
+    if not path.exists():
+        raise ValueError(f"Report path does not exist: {path}")
+    if path.is_dir():
+        raise ValueError(f"Expected report JSON file path, got directory: {path}")
+    return _load_report(path), None
+
+
+def _format_confidence(value: Any) -> str:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return "0.00"
+    clamped = max(0.0, min(1.0, float(value)))
+    return f"{clamped:.2f}"
+
+
+def _build_render_target_recommendations_payload(
+    *,
+    repo_root: Path,
+    render_targets_path: Path,
+    report_input: str | None,
+    scene_input: str | None,
+    max_results: int,
+) -> list[dict[str, Any]]:
+    if max_results <= 0:
+        raise ValueError("--max must be greater than 0.")
+
+    report_payload: dict[str, Any] | None = None
+    report_dir: Path | None = None
+    if isinstance(report_input, str) and report_input.strip():
+        report_payload, report_dir = _load_report_from_path_or_dir(Path(report_input))
+
+    scene_payload: dict[str, Any] | None = None
+    if isinstance(scene_input, str) and scene_input.strip():
+        scene_path = Path(scene_input)
+        if scene_path.is_dir():
+            raise ValueError(f"Expected scene JSON file path, got directory: {scene_path}")
+        scene_payload = _load_json_object(scene_path, label="Scene")
+    elif report_dir is not None:
+        auto_scene_path = report_dir / "scene.json"
+        if auto_scene_path.exists():
+            if auto_scene_path.is_dir():
+                raise ValueError(
+                    f"Expected scene JSON file path, got directory: {auto_scene_path}"
+                )
+            scene_payload = _load_json_object(auto_scene_path, label="Scene")
+
+    return recommend_render_targets(
+        repo_root=repo_root,
+        render_targets_path=render_targets_path,
+        report=report_payload,
+        scene=scene_payload,
+        max_results=max_results,
+    )
+
+
+def _render_target_recommendations_text(payload: list[dict[str, Any]]) -> str:
+    lines = ["Recommended targets:"]
+    if not payload:
+        lines.append("  (none)")
+        return "\n".join(lines)
+
+    for row in payload:
+        rank = row.get("rank")
+        target_id = _coerce_str(row.get("target_id")).strip()
+        lines.append(
+            f"  {rank}) {target_id} (conf={_format_confidence(row.get('confidence'))})"
+        )
+        reasons = row.get("reasons")
+        if isinstance(reasons, list):
+            for reason in reasons:
+                if isinstance(reason, str):
+                    lines.append(f"     - {reason}")
+    return "\n".join(lines)
 
 
 def _render_target_text(payload: dict[str, Any]) -> str:
@@ -5702,6 +5786,33 @@ def main(argv: list[str] | None = None) -> int:
         default="text",
         help="Output format for render target details.",
     )
+    targets_recommend_parser = targets_subparsers.add_parser(
+        "recommend",
+        help="Recommend conservative render targets from report and scene signals.",
+    )
+    targets_recommend_parser.add_argument(
+        "--report",
+        default=None,
+        help="Path to report JSON, or a directory containing report.json.",
+    )
+    targets_recommend_parser.add_argument(
+        "--scene",
+        default=None,
+        help="Optional path to scene JSON.",
+    )
+    targets_recommend_parser.add_argument(
+        "--max",
+        dest="max_results",
+        type=int,
+        default=3,
+        help="Maximum number of target recommendations to return (default: 3).",
+    )
+    targets_recommend_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for recommended targets.",
+    )
 
     locks_parser = subparsers.add_parser("locks", help="Scene lock registry tools.")
     locks_subparsers = locks_parser.add_subparsers(dest="locks_command", required=True)
@@ -7460,6 +7571,23 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(payload, indent=2, sort_keys=True))
             else:
                 print(_render_target_text(payload))
+            return 0
+        if args.targets_command == "recommend":
+            try:
+                payload = _build_render_target_recommendations_payload(
+                    repo_root=repo_root,
+                    render_targets_path=render_targets_path,
+                    report_input=args.report,
+                    scene_input=args.scene,
+                    max_results=args.max_results,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_target_recommendations_text(payload))
             return 0
         print("Unknown targets command.", file=sys.stderr)
         return 2
