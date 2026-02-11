@@ -970,6 +970,53 @@ def _gui_design_summary(gui_design_payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _render_plan_summary(render_plan_path: Path | None) -> dict[str, Any] | None:
+    if render_plan_path is None:
+        return None
+
+    resolved_render_plan_path = _resolve_repo_path(render_plan_path)
+    if not resolved_render_plan_path.exists() or not resolved_render_plan_path.is_file():
+        return None
+
+    try:
+        render_plan_payload = _load_json_object(resolved_render_plan_path, label="Render plan")
+    except ValueError:
+        return None
+
+    target_ids = sorted(
+        {
+            target_id.strip()
+            for target_id in render_plan_payload.get("targets", [])
+            if isinstance(target_id, str) and target_id.strip()
+        }
+    )
+
+    output_format_values: set[str] = set()
+    for job in _iter_dict_list(render_plan_payload.get("jobs")):
+        output_formats = job.get("output_formats")
+        if not isinstance(output_formats, list):
+            continue
+        for output_format in output_formats:
+            if not isinstance(output_format, str):
+                continue
+            normalized_output_format = output_format.strip()
+            if normalized_output_format:
+                output_format_values.add(normalized_output_format)
+
+    policy_id: str | None = None
+    policies_payload = render_plan_payload.get("policies")
+    if isinstance(policies_payload, dict):
+        downmix_policy_id = _coerce_str(policies_payload.get("downmix_policy_id")).strip()
+        if downmix_policy_id:
+            policy_id = downmix_policy_id
+
+    return {
+        "target_ids": target_ids,
+        "output_formats": sorted(output_format_values),
+        "policy_id": policy_id,
+    }
+
+
 def _bundle_pointers(
     *,
     project_path: Path | None,
@@ -1171,6 +1218,10 @@ def build_ui_bundle(
         from mmo.core.project_file import load_project  # noqa: WPS433
 
         payload["project"] = _project_summary(load_project(project_path))
+
+    render_plan_summary = _render_plan_summary(render_plan_path)
+    if render_plan_summary is not None:
+        payload["render_plan_summary"] = render_plan_summary
 
     pointers = _bundle_pointers(
         project_path=project_path,

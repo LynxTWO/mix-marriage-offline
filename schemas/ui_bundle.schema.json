@@ -20,6 +20,7 @@
     "render_targets": { "$ref": "#/$defs/render_targets_payload" },
     "scene_meta": { "$ref": "#/$defs/scene_meta" },
     "recommendation_overlays": { "$ref": "#/$defs/recommendation_overlays" },
+    "render_plan_summary": { "$ref": "#/$defs/render_plan_summary" },
     "pointers": { "$ref": "#/$defs/pointers" }
   },
   "$defs": {
@@ -497,6 +498,22 @@
         "render_plan_path": { "$ref": "#/$defs/posix_abs_path" },
         "timeline_path": { "$ref": "#/$defs/posix_abs_path" },
         "project_path": { "$ref": "#/$defs/posix_abs_path" }
+      }
+    },
+    "render_plan_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_ids", "output_formats", "policy_id"],
+      "properties": {
+        "target_ids": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^TARGET\\.[A-Z0-9_.]+$" }
+        },
+        "output_formats": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "policy_id": { "type": ["string", "null"] }
       }
     },
     "dashboard": {

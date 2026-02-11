@@ -295,6 +295,40 @@ def _sample_applied_report() -> dict:
     return applied
 
 
+def _sample_render_plan() -> dict:
+    return {
+        "schema_version": "0.1.0",
+        "plan_id": "PLAN.UI.BUNDLE.TEST.1234abcd",
+        "scene_path": "C:/tmp/scene.json",
+        "targets": [
+            "TARGET.STEREO.2_0",
+            "TARGET.ATMOS.7_1_2",
+            "TARGET.STEREO.2_0",
+        ],
+        "policies": {
+            "downmix_policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
+        },
+        "jobs": [
+            {
+                "job_id": "JOB.002",
+                "target_id": "TARGET.ATMOS.7_1_2",
+                "target_layout_id": "LAYOUT.7_1_2",
+                "output_formats": ["wav", "flac"],
+                "contexts": ["render"],
+                "notes": [],
+            },
+            {
+                "job_id": "JOB.001",
+                "target_id": "TARGET.STEREO.2_0",
+                "target_layout_id": "LAYOUT.2_0",
+                "output_formats": ["flac", "aiff", "wav"],
+                "contexts": ["render"],
+                "notes": [],
+            },
+        ],
+    }
+
+
 def _sample_scene(*, include_unknown_lock: bool = False) -> dict:
     object_locks = ["LOCK.NO_STEREO_WIDENING"]
     if include_unknown_lock:
@@ -1094,6 +1128,58 @@ class TestUiBundle(unittest.TestCase):
             return
         self.assertEqual(unknown_overlay_lock.get("label"), "LOCK.UNKNOWN.TEST")
         self.assertEqual(unknown_overlay_lock.get("severity"), "taste")
+
+    def test_build_ui_bundle_embeds_render_plan_summary(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            render_plan_path = temp_path / "render_plan.json"
+            render_plan_path.write_text(
+                json.dumps(_sample_render_plan(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                render_plan_path=render_plan_path,
+            )
+
+        validator.validate(bundle)
+        self.assertEqual(
+            bundle.get("render_plan_summary"),
+            {
+                "target_ids": [
+                    "TARGET.ATMOS.7_1_2",
+                    "TARGET.STEREO.2_0",
+                ],
+                "output_formats": ["aiff", "flac", "wav"],
+                "policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
+            },
+        )
+
+    def test_build_ui_bundle_without_render_plan_omits_render_plan_summary(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            missing_render_plan_path = temp_path / "render_plan.json"
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                render_plan_path=missing_render_plan_path,
+            )
+
+        validator.validate(bundle)
+        self.assertNotIn("render_plan_summary", bundle)
 
     def test_build_ui_bundle_embeds_project_gui_design_and_pointers(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
