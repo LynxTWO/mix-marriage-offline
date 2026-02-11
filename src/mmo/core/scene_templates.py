@@ -267,6 +267,140 @@ def _apply_set_payload(
             target[key] = value
 
 
+def _copy_json_value(value: Any) -> Any:
+    return json.loads(json.dumps(value))
+
+
+def _preview_source(*, template_id: str, patch_index: int) -> dict[str, Any]:
+    return {
+        "template_id": template_id,
+        "patch_index": patch_index,
+    }
+
+
+def _preview_sort_key(row: dict[str, Any]) -> tuple[str, str, int]:
+    path = _coerce_str(row.get("path")).strip()
+    source = row.get("source")
+    template_id = ""
+    patch_index = 0
+    if isinstance(source, dict):
+        template_id = _coerce_str(source.get("template_id")).strip()
+        patch_index_value = source.get("patch_index")
+        if isinstance(patch_index_value, int):
+            patch_index = patch_index_value
+    return (path, template_id, patch_index)
+
+
+def _sort_preview_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized_rows = [dict(row) for row in rows if isinstance(row, dict)]
+    normalized_rows.sort(key=_preview_sort_key)
+    return normalized_rows
+
+
+def _ensure_intent_for_preview(
+    *,
+    target: dict[str, Any],
+    changes: list[dict[str, Any]],
+    source: dict[str, Any],
+) -> dict[str, Any]:
+    intent = target.get("intent")
+    if isinstance(intent, dict):
+        return intent
+    created_intent = {"confidence": 0.0, "locks": []}
+    target["intent"] = created_intent
+    changes.append(
+        {
+            "path": "intent.confidence",
+            "before": None,
+            "after": 0.0,
+            "reason": "set_missing",
+            "source": dict(source),
+        }
+    )
+    changes.append(
+        {
+            "path": "intent.locks",
+            "before": None,
+            "after": [],
+            "reason": "set_missing",
+            "source": dict(source),
+        }
+    )
+    return created_intent
+
+
+def _preview_apply_set_payload(
+    *,
+    target: dict[str, Any],
+    set_payload: dict[str, Any],
+    force: bool,
+    source: dict[str, Any],
+    changes: list[dict[str, Any]],
+    skipped: list[dict[str, Any]],
+    path_prefix: str,
+) -> None:
+    for key, value in set_payload.items():
+        path = f"{path_prefix}.{key}" if path_prefix else key
+        if isinstance(value, dict):
+            existing = target.get(key)
+            if isinstance(existing, dict):
+                _preview_apply_set_payload(
+                    target=existing,
+                    set_payload=value,
+                    force=force,
+                    source=source,
+                    changes=changes,
+                    skipped=skipped,
+                    path_prefix=path,
+                )
+                continue
+            if key in target and not force:
+                skipped.append(
+                    {
+                        "path": path,
+                        "reason": "existing_value",
+                        "source": dict(source),
+                    }
+                )
+                continue
+            new_target: dict[str, Any] = {}
+            target[key] = new_target
+            _preview_apply_set_payload(
+                target=new_target,
+                set_payload=value,
+                force=force,
+                source=source,
+                changes=changes,
+                skipped=skipped,
+                path_prefix=path,
+            )
+            continue
+
+        has_existing = key in target
+        if has_existing and not force:
+            skipped.append(
+                {
+                    "path": path,
+                    "reason": "existing_value",
+                    "source": dict(source),
+                }
+            )
+            continue
+
+        before = _copy_json_value(target.get(key)) if has_existing else None
+        after = _copy_json_value(value)
+        target[key] = after
+        changes.append(
+            {
+                "path": path,
+                "before": before,
+                "after": after,
+                "reason": "overwrite" if has_existing else "set_missing",
+                "source": dict(source),
+            }
+        )
+
+
 def _coerce_str(value: Any) -> str:
     if isinstance(value, str):
         return value
@@ -430,3 +564,179 @@ def apply_scene_templates(
 
     _normalize_scene_order(edited)
     return edited
+
+
+def preview_scene_templates(
+    scene: dict[str, Any],
+    template_ids: list[str],
+    *,
+    force: bool = False,
+    scene_templates_path: Path | None = None,
+    scene_locks_path: Path | None = None,
+) -> dict[str, Any]:
+    preview_scene = _clone_scene(scene)
+    registry = load_scene_templates(scene_templates_path)
+    templates = _templates_map(registry)
+    ordered_template_ids = _resolve_template_ids(template_ids, templates=templates)
+
+    scene_locks_registry = load_scene_locks(scene_locks_path)
+    hard_lock_ids = _hard_lock_ids(scene_locks_registry)
+    scene_lock_ids = _lock_ids_from_intent(preview_scene.get("intent"))
+    scene_hard_locked = bool(scene_lock_ids & hard_lock_ids)
+
+    scene_preview: dict[str, Any] = {
+        "hard_locked": scene_hard_locked,
+        "changes": [],
+        "skipped": [],
+    }
+
+    object_targets: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    objects = preview_scene.get("objects")
+    if isinstance(objects, list):
+        for entry in objects:
+            if not isinstance(entry, dict):
+                continue
+            object_targets.append(
+                (
+                    entry,
+                    {
+                        "object_id": _coerce_str(entry.get("object_id")).strip(),
+                        "label": _coerce_str(entry.get("label")).strip(),
+                        "hard_locked": _target_has_hard_lock(
+                            scene_lock_ids=scene_lock_ids,
+                            target_lock_ids=_lock_ids_from_intent(entry.get("intent")),
+                            hard_lock_ids=hard_lock_ids,
+                        ),
+                        "changes": [],
+                        "skipped": [],
+                    },
+                )
+            )
+
+    bed_targets: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    beds = preview_scene.get("beds")
+    if isinstance(beds, list):
+        for entry in beds:
+            if not isinstance(entry, dict):
+                continue
+            bed_targets.append(
+                (
+                    entry,
+                    {
+                        "bed_id": _coerce_str(entry.get("bed_id")).strip(),
+                        "kind": _coerce_str(entry.get("kind")).strip(),
+                        "hard_locked": _target_has_hard_lock(
+                            scene_lock_ids=scene_lock_ids,
+                            target_lock_ids=_lock_ids_from_intent(entry.get("intent")),
+                            hard_lock_ids=hard_lock_ids,
+                        ),
+                        "changes": [],
+                        "skipped": [],
+                    },
+                )
+            )
+
+    for template_id in ordered_template_ids:
+        template_payload = templates.get(template_id)
+        if not isinstance(template_payload, dict):
+            continue
+        patches = template_payload.get("patches")
+        if not isinstance(patches, list):
+            continue
+        for patch_index, patch in enumerate(patches):
+            if not isinstance(patch, dict):
+                continue
+            scope = _coerce_str(patch.get("scope")).strip()
+            match_payload = patch.get("match")
+            set_payload = patch.get("set")
+            if not isinstance(match_payload, dict) or not isinstance(set_payload, dict):
+                continue
+            source = _preview_source(template_id=template_id, patch_index=patch_index)
+
+            if scope == _SCENE_SCOPE:
+                if scene_hard_locked:
+                    continue
+                if not _match_scene_patch(preview_scene, match_payload):
+                    continue
+                scene_intent = _ensure_intent_for_preview(
+                    target=preview_scene,
+                    changes=scene_preview["changes"],
+                    source=source,
+                )
+                _preview_apply_set_payload(
+                    target=scene_intent,
+                    set_payload=set_payload,
+                    force=force,
+                    source=source,
+                    changes=scene_preview["changes"],
+                    skipped=scene_preview["skipped"],
+                    path_prefix="intent",
+                )
+                continue
+
+            if scope == _OBJECT_SCOPE:
+                for entry, preview_payload in object_targets:
+                    if not _match_object_patch(entry, match_payload):
+                        continue
+                    if bool(preview_payload.get("hard_locked")):
+                        continue
+                    entry_intent = _ensure_intent_for_preview(
+                        target=entry,
+                        changes=preview_payload["changes"],
+                        source=source,
+                    )
+                    _preview_apply_set_payload(
+                        target=entry_intent,
+                        set_payload=set_payload,
+                        force=force,
+                        source=source,
+                        changes=preview_payload["changes"],
+                        skipped=preview_payload["skipped"],
+                        path_prefix="intent",
+                    )
+                continue
+
+            if scope == _BED_SCOPE:
+                for entry, preview_payload in bed_targets:
+                    if not _match_bed_patch(entry, match_payload):
+                        continue
+                    if bool(preview_payload.get("hard_locked")):
+                        continue
+                    entry_intent = _ensure_intent_for_preview(
+                        target=entry,
+                        changes=preview_payload["changes"],
+                        source=source,
+                    )
+                    _preview_apply_set_payload(
+                        target=entry_intent,
+                        set_payload=set_payload,
+                        force=force,
+                        source=source,
+                        changes=preview_payload["changes"],
+                        skipped=preview_payload["skipped"],
+                        path_prefix="intent",
+                    )
+
+    scene_preview["changes"] = _sort_preview_rows(scene_preview["changes"])
+    scene_preview["skipped"] = _sort_preview_rows(scene_preview["skipped"])
+
+    object_rows = [preview_payload for _, preview_payload in object_targets]
+    for row in object_rows:
+        row["changes"] = _sort_preview_rows(row["changes"])
+        row["skipped"] = _sort_preview_rows(row["skipped"])
+    object_rows.sort(key=lambda row: _coerce_str(row.get("object_id")).strip())
+
+    bed_rows = [preview_payload for _, preview_payload in bed_targets]
+    for row in bed_rows:
+        row["changes"] = _sort_preview_rows(row["changes"])
+        row["skipped"] = _sort_preview_rows(row["skipped"])
+    bed_rows.sort(key=lambda row: _coerce_str(row.get("bed_id")).strip())
+
+    return {
+        "scene_id": _coerce_str(preview_scene.get("scene_id")).strip(),
+        "template_ids": ordered_template_ids,
+        "force": bool(force),
+        "scene": scene_preview,
+        "objects": object_rows,
+        "beds": bed_rows,
+    }

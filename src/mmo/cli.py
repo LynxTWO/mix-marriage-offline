@@ -42,6 +42,7 @@ from mmo.core.scene_templates import (
     apply_scene_templates,
     get_scene_template,
     list_scene_templates,
+    preview_scene_templates,
 )
 from mmo.core.scene_locks import get_scene_lock, list_scene_locks
 from mmo.core.intent_params import load_intent_params, validate_scene_intent
@@ -1142,6 +1143,132 @@ def _run_scene_template_apply_command(
         force=force,
     )
     _write_json_file(out_path, edited)
+    return 0
+
+
+def _sorted_preview_paths(rows: Any) -> list[str]:
+    if not isinstance(rows, list):
+        return []
+    return sorted(
+        {
+            _coerce_str(item.get("path")).strip()
+            for item in rows
+            if isinstance(item, dict) and _coerce_str(item.get("path")).strip()
+        }
+    )
+
+
+def _format_preview_paths(rows: Any, *, limit: int = 5) -> str:
+    paths = _sorted_preview_paths(rows)
+    if not paths:
+        return "(none)"
+    if len(paths) <= limit:
+        return ", ".join(paths)
+    return f"{', '.join(paths[:limit])}, +{len(paths) - limit} more"
+
+
+def _render_scene_template_preview_text(payload: dict[str, Any]) -> str:
+    template_ids = [
+        _coerce_str(template_id).strip()
+        for template_id in payload.get("template_ids", [])
+        if _coerce_str(template_id).strip()
+    ]
+    template_label = ", ".join(template_ids) if template_ids else "(none)"
+    lines = [
+        f"templates: {template_label}",
+        f"force: {str(bool(payload.get('force'))).lower()}",
+    ]
+
+    scene_payload = payload.get("scene")
+    if not isinstance(scene_payload, dict):
+        scene_payload = {}
+    scene_changes = scene_payload.get("changes")
+    scene_skipped = scene_payload.get("skipped")
+    lines.append(
+        "scene: "
+        f"hard_locked={str(bool(scene_payload.get('hard_locked'))).lower()} "
+        f"changes={len(scene_changes) if isinstance(scene_changes, list) else 0} "
+        f"skipped={len(scene_skipped) if isinstance(scene_skipped, list) else 0}"
+    )
+    lines.append(
+        "  paths: "
+        f"changes=[{_format_preview_paths(scene_changes)}] "
+        f"skipped=[{_format_preview_paths(scene_skipped)}]"
+    )
+
+    lines.append("objects:")
+    objects = payload.get("objects")
+    if not isinstance(objects, list) or not objects:
+        lines.append("- (none)")
+    else:
+        for object_payload in objects:
+            if not isinstance(object_payload, dict):
+                continue
+            object_id = _coerce_str(object_payload.get("object_id")).strip()
+            label = _coerce_str(object_payload.get("label")).strip()
+            changes = object_payload.get("changes")
+            skipped = object_payload.get("skipped")
+            lines.append(
+                f"- {object_id}: "
+                f"label={label or '(none)'} "
+                f"hard_locked={str(bool(object_payload.get('hard_locked'))).lower()} "
+                f"changes={len(changes) if isinstance(changes, list) else 0} "
+                f"skipped={len(skipped) if isinstance(skipped, list) else 0}"
+            )
+            lines.append(
+                "  paths: "
+                f"changes=[{_format_preview_paths(changes)}] "
+                f"skipped=[{_format_preview_paths(skipped)}]"
+            )
+
+    lines.append("beds:")
+    beds = payload.get("beds")
+    if not isinstance(beds, list) or not beds:
+        lines.append("- (none)")
+    else:
+        for bed_payload in beds:
+            if not isinstance(bed_payload, dict):
+                continue
+            bed_id = _coerce_str(bed_payload.get("bed_id")).strip()
+            kind = _coerce_str(bed_payload.get("kind")).strip()
+            changes = bed_payload.get("changes")
+            skipped = bed_payload.get("skipped")
+            lines.append(
+                f"- {bed_id}: "
+                f"kind={kind or '(none)'} "
+                f"hard_locked={str(bool(bed_payload.get('hard_locked'))).lower()} "
+                f"changes={len(changes) if isinstance(changes, list) else 0} "
+                f"skipped={len(skipped) if isinstance(skipped, list) else 0}"
+            )
+            lines.append(
+                "  paths: "
+                f"changes=[{_format_preview_paths(changes)}] "
+                f"skipped=[{_format_preview_paths(skipped)}]"
+            )
+
+    return "\n".join(lines)
+
+
+def _run_scene_template_preview_command(
+    *,
+    repo_root: Path,
+    scene_path: Path,
+    template_ids: list[str],
+    force: bool,
+    output_format: str,
+) -> int:
+    scene_payload = _load_json_object(scene_path, label="Scene")
+    preview_payload = preview_scene_templates(
+        scene_payload,
+        template_ids,
+        force=force,
+        scene_templates_path=repo_root / "ontology" / "scene_templates.yaml",
+        scene_locks_path=repo_root / "ontology" / "scene_locks.yaml",
+    )
+    if output_format == "json":
+        print(json.dumps(preview_payload, indent=2, sort_keys=True))
+    else:
+        print(_render_scene_template_preview_text(preview_payload))
     return 0
 
 
@@ -6352,6 +6479,31 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Overwrite existing intent fields (hard locks are still respected).",
     )
+    scene_template_preview_parser = scene_template_subparsers.add_parser(
+        "preview",
+        help="Preview template changes without writing files.",
+    )
+    scene_template_preview_parser.add_argument(
+        "template_ids",
+        nargs="+",
+        help="Scene template ID(s) to preview in order.",
+    )
+    scene_template_preview_parser.add_argument(
+        "--scene",
+        required=True,
+        help="Path to scene JSON.",
+    )
+    scene_template_preview_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Preview overwriting existing intent fields (hard locks are still respected).",
+    )
+    scene_template_preview_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for template preview.",
+    )
 
     render_plan_parser = subparsers.add_parser(
         "render-plan",
@@ -7631,6 +7783,20 @@ def main(argv: list[str] | None = None) -> int:
                         out_path=Path(args.out),
                         template_ids=args.template_ids,
                         force=bool(args.force),
+                    )
+                except (RuntimeError, ValueError) as exc:
+                    print(str(exc), file=sys.stderr)
+                    return 1
+                except SystemExit as exc:
+                    return int(exc.code) if isinstance(exc.code, int) else 1
+            if args.scene_template_command == "preview":
+                try:
+                    return _run_scene_template_preview_command(
+                        repo_root=repo_root,
+                        scene_path=Path(args.scene),
+                        template_ids=args.template_ids,
+                        force=bool(args.force),
+                        output_format=args.format,
                     )
                 except (RuntimeError, ValueError) as exc:
                     print(str(exc), file=sys.stderr)
