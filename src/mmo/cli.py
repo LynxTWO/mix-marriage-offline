@@ -38,6 +38,10 @@ from mmo.core.render_targets import (
     list_render_targets,
     resolve_render_target_id,
 )
+from mmo.core.translation_profiles import (
+    get_translation_profile,
+    list_translation_profiles,
+)
 from mmo.core.target_recommendations import recommend_render_targets
 from mmo.core.scene_templates import (
     apply_scene_templates,
@@ -1990,6 +1994,53 @@ def _build_render_target_show_payload(
     if payload is None:
         raise ValueError(f"Resolved target is missing from registry: {resolved_target_id}")
     return payload
+
+
+def _build_translation_profile_list_payload(
+    *,
+    translation_profiles_path: Path,
+) -> list[dict[str, Any]]:
+    return list_translation_profiles(translation_profiles_path)
+
+
+def _build_translation_profile_show_payload(
+    *,
+    translation_profiles_path: Path,
+    profile_id: str,
+) -> dict[str, Any]:
+    return get_translation_profile(profile_id, translation_profiles_path)
+
+
+def _render_translation_profile_text(payload: dict[str, Any]) -> str:
+    lines = [
+        _coerce_str(payload.get("profile_id")).strip(),
+        f"label: {_coerce_str(payload.get('label')).strip()}",
+        f"description: {_coerce_str(payload.get('description')).strip()}",
+        f"intent: {_coerce_str(payload.get('intent')).strip()}",
+    ]
+
+    thresholds = payload.get("default_thresholds")
+    if isinstance(thresholds, dict):
+        lines.append("default_thresholds:")
+        for key in sorted(thresholds.keys()):
+            value = thresholds.get(key)
+            lines.append(f"- {key}: {value}")
+
+    scoring = payload.get("scoring")
+    if isinstance(scoring, dict):
+        lines.append("scoring:")
+        for key in sorted(scoring.keys()):
+            value = scoring.get(key)
+            lines.append(f"- {key}: {value}")
+
+    notes = payload.get("notes")
+    if isinstance(notes, list) and notes:
+        lines.append("notes:")
+        for item in notes:
+            if isinstance(item, str):
+                lines.append(f"- {item}")
+
+    return "\n".join(lines)
 
 
 def _load_report_from_path_or_dir(path: Path) -> tuple[dict[str, Any], Path | None]:
@@ -5814,6 +5865,39 @@ def main(argv: list[str] | None = None) -> int:
         help="Output format for recommended targets.",
     )
 
+    translation_parser = subparsers.add_parser(
+        "translation",
+        help="Translation profile registry tools.",
+    )
+    translation_subparsers = translation_parser.add_subparsers(
+        dest="translation_command",
+        required=True,
+    )
+    translation_list_parser = translation_subparsers.add_parser(
+        "list",
+        help="List translation profiles.",
+    )
+    translation_list_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for translation profile list.",
+    )
+    translation_show_parser = translation_subparsers.add_parser(
+        "show",
+        help="Show one translation profile.",
+    )
+    translation_show_parser.add_argument(
+        "profile_id",
+        help="Translation profile ID (e.g., TRANS.MONO.COLLAPSE).",
+    )
+    translation_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for translation profile details.",
+    )
+
     locks_parser = subparsers.add_parser("locks", help="Scene lock registry tools.")
     locks_subparsers = locks_parser.add_subparsers(dest="locks_command", required=True)
     locks_list_parser = locks_subparsers.add_parser("list", help="List scene locks.")
@@ -7590,6 +7674,42 @@ def main(argv: list[str] | None = None) -> int:
                 print(_render_target_recommendations_text(payload))
             return 0
         print("Unknown targets command.", file=sys.stderr)
+        return 2
+    if args.command == "translation":
+        translation_profiles_path = repo_root / "ontology" / "translation_profiles.yaml"
+        if args.translation_command == "list":
+            try:
+                payload = _build_translation_profile_list_payload(
+                    translation_profiles_path=translation_profiles_path,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                for item in payload:
+                    print(
+                        f"{item.get('profile_id', '')}"
+                        f"  {item.get('label', '')}"
+                        f"  {item.get('intent', '')}"
+                    )
+            return 0
+        if args.translation_command == "show":
+            try:
+                payload = _build_translation_profile_show_payload(
+                    translation_profiles_path=translation_profiles_path,
+                    profile_id=args.profile_id,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_translation_profile_text(payload))
+            return 0
+        print("Unknown translation command.", file=sys.stderr)
         return 2
     if args.command == "locks":
         scene_locks_path = repo_root / "ontology" / "scene_locks.yaml"

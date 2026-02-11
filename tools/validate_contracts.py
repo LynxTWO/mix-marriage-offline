@@ -54,6 +54,7 @@ SCHEMA_ANCHORS: tuple[str, ...] = (
     "schemas/ui_bundle.schema.json",
     "schemas/scene.schema.json",
     "schemas/render_targets.schema.json",
+    "schemas/translation_profiles.schema.json",
     "schemas/render_plan.schema.json",
     "schemas/presets_index.schema.json",
     "schemas/lockfile.schema.json",
@@ -77,6 +78,14 @@ SCENE_REGISTRY_LOADERS: tuple[tuple[str, str, str], ...] = (
     ),
     ("load_intent_params", "mmo.core.intent_params", "ontology/intent_params.yaml"),
     ("list_render_targets", "mmo.core.render_targets", "ontology/render_targets.yaml"),
+)
+
+TRANSLATION_REGISTRIES_CHECK_ID = "TRANSLATION.REGISTRIES"
+TRANSLATION_REGISTRIES_TOOL = "src/mmo/core/translation_profiles.py"
+TRANSLATION_REGISTRY_LOADER: tuple[str, str, str] = (
+    "list_translation_profiles",
+    "mmo.core.translation_profiles",
+    "ontology/translation_profiles.yaml",
 )
 
 
@@ -293,6 +302,12 @@ def _scene_registry_summary(*, loader_name: str, payload: Any) -> dict[str, int]
     return {}
 
 
+def _translation_registry_summary(*, loader_name: str, payload: Any) -> dict[str, int]:
+    if loader_name == "list_translation_profiles":
+        return {"profiles": len(payload) if isinstance(payload, list) else 0}
+    return {}
+
+
 def _run_scene_registries_check(*, repo_root: Path) -> dict[str, Any]:
     details: dict[str, Any] = {"loaders": []}
     errors: list[str] = []
@@ -346,6 +361,61 @@ def _run_scene_registries_check(*, repo_root: Path) -> dict[str, Any]:
         ok=ok,
         exit_code=0 if ok else 1,
         tool=SCENE_REGISTRIES_TOOL,
+        details=details,
+        errors=errors,
+    )
+
+
+def _run_translation_registries_check(*, repo_root: Path) -> dict[str, Any]:
+    loader_name, module_name, relative_path = TRANSLATION_REGISTRY_LOADER
+    details: dict[str, Any] = {"loaders": []}
+    errors: list[str] = []
+
+    registry_path = repo_root / relative_path
+    loader_details: dict[str, Any] = {
+        "loader": loader_name,
+        "module": module_name,
+        "path": relative_path,
+        "ok": True,
+    }
+
+    if not registry_path.is_file():
+        loader_details["ok"] = False
+        loader_details["error"] = f"Required registry is missing: {relative_path}"
+        errors.append(f"Required registry is missing: {relative_path}")
+        details["loaders"].append(loader_details)
+    else:
+        try:
+            module = importlib.import_module(module_name)
+            loader = getattr(module, loader_name)
+        except Exception as exc:
+            loader_details["ok"] = False
+            loader_details["error"] = str(exc)
+            errors.append(f"Failed to import {module_name}.{loader_name}: {exc}")
+            details["loaders"].append(loader_details)
+        else:
+            try:
+                payload = loader(registry_path)
+            except Exception as exc:
+                loader_details["ok"] = False
+                loader_details["error"] = str(exc)
+                errors.append(f"{loader_name} failed for {relative_path}: {exc}")
+                details["loaders"].append(loader_details)
+            else:
+                loader_details["summary"] = _translation_registry_summary(
+                    loader_name=loader_name,
+                    payload=payload,
+                )
+                details["loaders"].append(loader_details)
+
+    ok = not errors
+    if not ok:
+        errors.append("Run alone: python tools/validate_contracts.py --strict")
+    return _build_check_payload(
+        check_id=TRANSLATION_REGISTRIES_CHECK_ID,
+        ok=ok,
+        exit_code=0 if ok else 1,
+        tool=TRANSLATION_REGISTRIES_TOOL,
         details=details,
         errors=errors,
     )
@@ -435,6 +505,7 @@ def run_contract_checks(*, repo_root: Path, strict: bool) -> dict[str, Any]:
     for check in EXTERNAL_CHECKS:
         checks.append(_run_external_check(check, repo_root=repo_root, strict=strict))
     checks.append(_run_scene_registries_check(repo_root=repo_root))
+    checks.append(_run_translation_registries_check(repo_root=repo_root))
     checks.append(_run_schema_smoke_check(repo_root=repo_root))
 
     failed = [check["check_id"] for check in checks if not check.get("ok")]

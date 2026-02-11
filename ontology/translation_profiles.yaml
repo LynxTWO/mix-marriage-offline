@@ -1,0 +1,94 @@
+TRANS.DEVICE.CAR:
+  label: "Car"
+  description: "Checks low-end focus, vocal readability, and harshness in noisy playback."
+  intent: "fatigue"
+  default_thresholds:
+    max_lufs_delta: 2.0
+    max_spectral_delta_db: 2.5
+    min_mono_correlation: 0.1
+    max_transient_smear: 0.3
+    max_hf_harshness_db: 1.5
+  scoring:
+    mono_compatibility: 0.25
+    spectral_balance: 0.2
+    vocal_clarity: 0.25
+    low_end_translation: 0.2
+    fatigue_risk: 0.1
+  notes:
+    - "Prioritize vocal clarity over width for in-cabin intelligibility."
+
+TRANS.DEVICE.EARBUDS:
+  label: "Earbuds"
+  description: "Prioritizes vocal presence, mono resilience, and upper-mid comfort on compact drivers."
+  intent: "tonal"
+  default_thresholds:
+    max_lufs_delta: 1.5
+    max_spectral_delta_db: 2.0
+    min_mono_correlation: 0.2
+    max_transient_smear: 0.25
+    max_hf_harshness_db: 1.2
+  scoring:
+    mono_compatibility: 0.2
+    spectral_balance: 0.25
+    vocal_clarity: 0.3
+    low_end_translation: 0.1
+    fatigue_risk: 0.15
+  notes:
+    - "Transient control is weighted to avoid splashy highs at high listen levels."
+
+TRANS.DEVICE.PHONE:
+  label: "Phone"
+  description: "Emphasizes midrange translation and collapse behavior for small single-speaker playback."
+  intent: "compatibility"
+  default_thresholds:
+    max_lufs_delta: 2.5
+    max_spectral_delta_db: 3.0
+    min_mono_correlation: 0.25
+    max_transient_smear: 0.35
+    max_hf_harshness_db: 1.8
+  scoring:
+    mono_compatibility: 0.3
+    spectral_balance: 0.2
+    vocal_clarity: 0.3
+    low_end_translation: 0.1
+    fatigue_risk: 0.1
+  notes:
+    - "Low-end translation is deprioritized relative to midrange intelligibility."
+
+TRANS.DEVICE.SMALL_SPEAKER:
+  label: "Small speaker"
+  description: "Stress-tests narrow-band consumer speakers for balance and intelligibility drift."
+  intent: "compatibility"
+  default_thresholds:
+    max_lufs_delta: 2.2
+    max_spectral_delta_db: 2.8
+    min_mono_correlation: 0.2
+    max_transient_smear: 0.3
+    max_hf_harshness_db: 1.6
+  scoring:
+    mono_compatibility: 0.25
+    spectral_balance: 0.25
+    vocal_clarity: 0.25
+    low_end_translation: 0.1
+    fatigue_risk: 0.15
+  notes:
+    - "Use this profile when checking portable Bluetooth and smart-speaker playback."
+
+TRANS.MONO.COLLAPSE:
+  label: "Mono collapse"
+  description: "Measures phase cancellation and center-energy retention when folded to mono."
+  intent: "compatibility"
+  default_thresholds:
+    max_lufs_delta: 1.0
+    max_spectral_delta_db: 1.5
+    min_mono_correlation: 0.35
+    max_transient_smear: 0.2
+    max_hf_harshness_db: 1.0
+  scoring:
+    mono_compatibility: 0.45
+    spectral_balance: 0.15
+    vocal_clarity: 0.2
+    low_end_translation: 0.1
+    fatigue_risk: 0.1
+  notes:
+    - "Use before final print checks to catch wide-element phase fragility."
