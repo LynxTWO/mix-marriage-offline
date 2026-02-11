@@ -35,10 +35,10 @@ locales:
         tooltip: "Additional context to guide your next decision."
       COPY.ACTION.PREVIEW:
         text: "Preview"
-        tooltip: "See what this vibe changes before you commit."
+        tooltip: "See what this vibe changes before you Apply."
       COPY.ACTION.RUN:
         text: "Run"
-        tooltip: "Create results from your stems with this vibe."
+        tooltip: "Create results from your stems with this vibe and learn Why each step matters."
       COPY.ACTION.RENDER_MANY:
         text: "Render Many"
         tooltip: "Use one mix plan to print multiple target deliverables."

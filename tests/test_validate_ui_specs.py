@@ -31,6 +31,7 @@ class TestValidateUiSpecs(unittest.TestCase):
         self.assertTrue(payload.get("ok"))
         self.assertEqual(payload.get("missing_ui_copy_keys"), [])
         self.assertEqual(payload.get("missing_help_ids"), [])
+        self.assertEqual(payload.get("missing_glossary_terms"), [])
 
     def test_validate_ui_specs_missing_copy_key_fails(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
