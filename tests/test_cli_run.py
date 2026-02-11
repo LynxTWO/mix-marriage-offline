@@ -32,6 +32,132 @@ def _write_wav_16bit(path: Path, *, sample_rate_hz: int = 48000, duration_s: flo
         handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
 
 
+def _write_stereo_wav_16bit(
+    path: Path,
+    *,
+    sample_rate_hz: int = 48000,
+    duration_s: float = 0.1,
+) -> None:
+    frames = int(sample_rate_hz * duration_s)
+    left = [
+        int(0.45 * 32767.0 * math.sin(2.0 * math.pi * 220.0 * index / sample_rate_hz))
+        for index in range(frames)
+    ]
+    right = [
+        int(0.35 * 32767.0 * math.sin(2.0 * math.pi * 330.0 * index / sample_rate_hz))
+        for index in range(frames)
+    ]
+    interleaved: list[int] = []
+    for left_value, right_value in zip(left, right):
+        interleaved.extend([left_value, right_value])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate_hz)
+        handle.writeframes(struct.pack(f"<{len(interleaved)}h", *interleaved))
+
+
+def _mock_render_many_run_variant_plan(
+    *,
+    out_dir: Path,
+    include_stereo_deliverable: bool,
+):
+    def _fake_run_variant_plan(
+        variant_plan: dict,
+        repo_root: Path,
+        **_: object,
+    ) -> dict:
+        source_report = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
+        results: list[dict[str, object]] = []
+        variants = variant_plan.get("variants")
+        if not isinstance(variants, list):
+            variants = []
+        for variant in variants:
+            if not isinstance(variant, dict):
+                continue
+            variant_id = str(variant.get("variant_id", "VARIANT.000"))
+            variant_slug = str(variant.get("variant_slug", "variant"))
+            variant_label = str(variant.get("label", ""))
+            variant_dir = out_dir / f"{variant_id}__{variant_slug}"
+            variant_dir.mkdir(parents=True, exist_ok=True)
+
+            report_path = variant_dir / "report.json"
+            report_path.write_text(
+                json.dumps(source_report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            render_manifest_path = variant_dir / "render_manifest.json"
+            bundle_path = variant_dir / "ui_bundle.json"
+
+            outputs: list[dict[str, object]] = []
+            deliverables: list[dict[str, object]] = []
+            if include_stereo_deliverable and variant_label == "TARGET.STEREO.2_0":
+                stereo_file_path = variant_dir / "render" / "mix.stereo.wav"
+                _write_stereo_wav_16bit(stereo_file_path)
+                outputs.append(
+                    {
+                        "output_id": "OUTPUT.STEREO.001",
+                        "file_path": "mix.stereo.wav",
+                        "format": "wav",
+                        "channel_count": 2,
+                        "metadata": {
+                            "routing_applied": True,
+                            "target_layout_id": "LAYOUT.2_0",
+                        },
+                    }
+                )
+                deliverables.append(
+                    {
+                        "deliverable_id": "DELIV.LAYOUT.2_0.2CH",
+                        "label": "LAYOUT.2_0 deliverable",
+                        "target_layout_id": "LAYOUT.2_0",
+                        "channel_count": 2,
+                        "formats": ["wav"],
+                        "output_ids": ["OUTPUT.STEREO.001"],
+                    }
+                )
+
+            render_manifest: dict[str, object] = {
+                "schema_version": "0.1.0",
+                "report_id": str(source_report.get("report_id", "")),
+                "renderer_manifests": [
+                    {
+                        "renderer_id": "PLUGIN.RENDERER.SAFE",
+                        "outputs": outputs,
+                        "skipped": [],
+                    }
+                ],
+            }
+            if deliverables:
+                render_manifest["deliverables"] = deliverables
+            render_manifest_path.write_text(
+                json.dumps(render_manifest, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            results.append(
+                {
+                    "variant_id": variant_id,
+                    "out_dir": variant_dir.resolve().as_posix(),
+                    "report_path": report_path.resolve().as_posix(),
+                    "render_manifest_path": render_manifest_path.resolve().as_posix(),
+                    "bundle_path": bundle_path.resolve().as_posix(),
+                    "ok": True,
+                    "errors": [],
+                }
+            )
+
+        return {
+            "schema_version": "0.1.0",
+            "plan": variant_plan,
+            "results": results,
+        }
+
+    return _fake_run_variant_plan
+
+
 def _schema_validator(schema_path: Path) -> jsonschema.Draft202012Validator:
     registry = Registry()
     for candidate in sorted(schema_path.parent.glob("*.schema.json")):
@@ -464,6 +590,150 @@ class TestCliRun(unittest.TestCase):
                 second_exit = main(command)
             self.assertEqual(second_exit, 0)
             self.assertIn("analysis cache: hit", stdout_second.getvalue())
+
+    def test_run_render_many_translation_patches_report_and_bundle_deterministically(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        bundle_validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            out_dir = temp_path / "out"
+            _write_wav_16bit(stems_dir / "drums" / "kick.wav")
+
+            command = [
+                "run",
+                "--stems",
+                str(stems_dir),
+                "--out",
+                str(out_dir),
+                "--preset",
+                "PRESET.SAFE_CLEANUP",
+                "--render-many",
+                "--targets",
+                "Stereo (streaming),5.1 (home theater)",
+                "--translation",
+                "--cache",
+                "off",
+            ]
+
+            with mock.patch(
+                "mmo.cli.run_variant_plan",
+                side_effect=_mock_render_many_run_variant_plan(
+                    out_dir=out_dir,
+                    include_stereo_deliverable=True,
+                ),
+            ):
+                first_exit = main(command)
+                self.assertEqual(first_exit, 0)
+
+                report_path = out_dir / "report.json"
+                first_report = json.loads(report_path.read_text(encoding="utf-8"))
+                first_translation_results = first_report.get("translation_results")
+                self.assertIsInstance(first_translation_results, list)
+                if not isinstance(first_translation_results, list):
+                    return
+                self.assertEqual(
+                    [
+                        item.get("profile_id")
+                        for item in first_translation_results
+                        if isinstance(item, dict)
+                    ],
+                    [
+                        "TRANS.DEVICE.PHONE",
+                        "TRANS.DEVICE.SMALL_SPEAKER",
+                        "TRANS.MONO.COLLAPSE",
+                    ],
+                )
+
+                variant_result = json.loads(
+                    (out_dir / "variant_result.json").read_text(encoding="utf-8")
+                )
+                plan = variant_result.get("plan")
+                plan_variants = (
+                    {
+                        item.get("variant_id"): item
+                        for item in plan.get("variants", [])
+                        if isinstance(item, dict) and isinstance(item.get("variant_id"), str)
+                    }
+                    if isinstance(plan, dict)
+                    else {}
+                )
+                results = variant_result.get("results")
+                self.assertIsInstance(results, list)
+                if not isinstance(results, list):
+                    return
+                stereo_result = next(
+                    (
+                        item
+                        for item in results
+                        if isinstance(item, dict)
+                        and isinstance(item.get("variant_id"), str)
+                        and isinstance(plan_variants.get(item["variant_id"]), dict)
+                        and plan_variants[item["variant_id"]].get("label")
+                        == "TARGET.STEREO.2_0"
+                    ),
+                    None,
+                )
+                self.assertIsInstance(stereo_result, dict)
+                if not isinstance(stereo_result, dict):
+                    return
+                stereo_bundle_path_value = stereo_result.get("bundle_path")
+                self.assertIsInstance(stereo_bundle_path_value, str)
+                if not isinstance(stereo_bundle_path_value, str):
+                    return
+                stereo_bundle_path = Path(stereo_bundle_path_value)
+                self.assertTrue(stereo_bundle_path.exists())
+                stereo_bundle = json.loads(stereo_bundle_path.read_text(encoding="utf-8"))
+                bundle_validator.validate(stereo_bundle)
+                self.assertEqual(
+                    stereo_bundle.get("translation_results"),
+                    first_translation_results,
+                )
+
+                second_exit = main(command)
+                self.assertEqual(second_exit, 0)
+                second_report = json.loads(report_path.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    second_report.get("translation_results"),
+                    first_translation_results,
+                )
+
+    def test_run_render_many_translation_skips_when_stereo_deliverable_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            out_dir = temp_path / "out"
+            _write_wav_16bit(stems_dir / "drums" / "kick.wav")
+
+            with mock.patch(
+                "mmo.cli.run_variant_plan",
+                side_effect=_mock_render_many_run_variant_plan(
+                    out_dir=out_dir,
+                    include_stereo_deliverable=False,
+                ),
+            ):
+                exit_code = main(
+                    [
+                        "run",
+                        "--stems",
+                        str(stems_dir),
+                        "--out",
+                        str(out_dir),
+                        "--preset",
+                        "PRESET.SAFE_CLEANUP",
+                        "--render-many",
+                        "--targets",
+                        "5.1 (home theater)",
+                        "--translation",
+                        "--cache",
+                        "off",
+                    ]
+                )
+            self.assertEqual(exit_code, 0)
+
+            report_payload = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
+            self.assertNotIn("translation_results", report_payload)
 
     def test_run_render_many_applies_scene_templates_before_render_plan_build(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

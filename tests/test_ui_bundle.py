@@ -543,6 +543,50 @@ class TestUiBundle(unittest.TestCase):
         self.assertEqual(bundle["dashboard"], second_bundle["dashboard"])
         self.assertEqual(bundle.get("help"), second_bundle.get("help"))
 
+    def test_build_ui_bundle_embeds_translation_results_sorted_by_profile_id(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        report["translation_results"] = [
+            {
+                "profile_id": "TRANS.MONO.COLLAPSE",
+                "score": 65,
+                "issues": [
+                    {
+                        "issue_id": "ISSUE.TRANSLATION.PROFILE_SCORE_LOW",
+                        "severity": 55,
+                        "confidence": 1.0,
+                        "target": {"scope": "session"},
+                        "evidence": [
+                            {
+                                "evidence_id": "EVID.ISSUE.SCORE",
+                                "value": 0.65,
+                                "unit_id": "UNIT.RATIO",
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "profile_id": "TRANS.DEVICE.PHONE",
+                "score": 75,
+            },
+        ]
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        bundle = build_ui_bundle(report, None, help_registry_path=help_registry_path)
+        validator.validate(bundle)
+
+        translation_results = bundle.get("translation_results")
+        self.assertIsInstance(translation_results, list)
+        if not isinstance(translation_results, list):
+            return
+        self.assertEqual(
+            [item.get("profile_id") for item in translation_results if isinstance(item, dict)],
+            ["TRANS.DEVICE.PHONE", "TRANS.MONO.COLLAPSE"],
+        )
+        self.assertEqual(translation_results[1].get("issues"), report["translation_results"][0]["issues"])
+
     def test_build_ui_bundle_with_apply_payload_and_schema(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")

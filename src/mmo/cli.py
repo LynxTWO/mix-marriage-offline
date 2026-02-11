@@ -117,6 +117,11 @@ _SCENE_INTENT_KEYS: tuple[str, ...] = (
     "loudness_bias",
     "confidence",
 )
+_DEFAULT_RENDER_MANY_TRANSLATION_PROFILE_IDS: tuple[str, ...] = (
+    "TRANS.MONO.COLLAPSE",
+    "TRANS.DEVICE.PHONE",
+    "TRANS.DEVICE.SMALL_SPEAKER",
+)
 
 
 def _run_command(command: list[str]) -> int:
@@ -2169,6 +2174,361 @@ def _write_report_with_translation_results(
         raise ValueError(f"Failed to write report JSON: {report_out_path}: {exc}") from exc
 
 
+def _sorted_translation_results(payload: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows = [dict(item) for item in payload if isinstance(item, dict)]
+    rows.sort(
+        key=lambda item: (
+            _coerce_str(item.get("profile_id")).strip(),
+            json.dumps(item, sort_keys=True),
+        )
+    )
+    return rows
+
+
+def _dict_list(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _path_from_result_value(
+    value: Any,
+    *,
+    root_out_dir: Path,
+    variant_out_dir: Path | None = None,
+) -> Path | None:
+    raw = _coerce_str(value).strip()
+    if not raw:
+        return None
+    candidate = Path(raw)
+    if candidate.is_absolute():
+        return candidate.resolve()
+    if variant_out_dir is not None:
+        return (variant_out_dir / candidate).resolve()
+    return (root_out_dir / candidate).resolve()
+
+
+def _render_output_sort_key(output: dict[str, Any]) -> tuple[str, str, str]:
+    return (
+        _coerce_str(output.get("format")).strip().lower(),
+        _coerce_str(output.get("file_path")).strip(),
+        _coerce_str(output.get("output_id")).strip(),
+    )
+
+
+def _render_many_variant_artifacts(
+    *,
+    variant_result: dict[str, Any],
+    root_out_dir: Path,
+) -> list[dict[str, Any]]:
+    plan = variant_result.get("plan")
+    plan_variants = (
+        _dict_list(plan.get("variants"))
+        if isinstance(plan, dict)
+        else []
+    )
+    by_variant_id: dict[str, dict[str, Any]] = {}
+    for variant in plan_variants:
+        variant_id = _coerce_str(variant.get("variant_id")).strip()
+        if variant_id and variant_id not in by_variant_id:
+            by_variant_id[variant_id] = variant
+
+    artifacts: list[dict[str, Any]] = []
+    results = sorted(
+        _dict_list(variant_result.get("results")),
+        key=lambda item: _coerce_str(item.get("variant_id")).strip(),
+    )
+    for result in results:
+        variant_id = _coerce_str(result.get("variant_id")).strip()
+        plan_variant = by_variant_id.get(variant_id, {})
+        variant_out_dir = _path_from_result_value(
+            result.get("out_dir"),
+            root_out_dir=root_out_dir,
+        )
+        artifact = {
+            "variant_id": variant_id,
+            "target_id": (
+                _coerce_str(plan_variant.get("label")).strip()
+                if _coerce_str(plan_variant.get("label")).strip().startswith("TARGET.")
+                else ""
+            ),
+            "target_layout_id": _coerce_str(plan_variant.get("target_layout_id")).strip(),
+            "out_dir": variant_out_dir,
+            "report_path": _path_from_result_value(
+                result.get("report_path"),
+                root_out_dir=root_out_dir,
+                variant_out_dir=variant_out_dir,
+            ),
+            "bundle_path": _path_from_result_value(
+                result.get("bundle_path"),
+                root_out_dir=root_out_dir,
+                variant_out_dir=variant_out_dir,
+            ),
+            "render_manifest_path": _path_from_result_value(
+                result.get("render_manifest_path"),
+                root_out_dir=root_out_dir,
+                variant_out_dir=variant_out_dir,
+            ),
+            "apply_manifest_path": _path_from_result_value(
+                result.get("apply_manifest_path"),
+                root_out_dir=root_out_dir,
+                variant_out_dir=variant_out_dir,
+            ),
+            "applied_report_path": _path_from_result_value(
+                result.get("applied_report_path"),
+                root_out_dir=root_out_dir,
+                variant_out_dir=variant_out_dir,
+            ),
+        }
+        artifacts.append(artifact)
+    return artifacts
+
+
+def _resolve_wav_output_path(
+    *,
+    output: dict[str, Any],
+    candidate_roots: list[Path],
+) -> Path | None:
+    output_format = _coerce_str(output.get("format")).strip().lower()
+    file_path = _coerce_str(output.get("file_path")).strip()
+    if not file_path:
+        return None
+    if output_format and output_format != "wav":
+        return None
+    if not output_format and Path(file_path).suffix.lower() not in {".wav", ".wave"}:
+        return None
+
+    channel_count = output.get("channel_count")
+    if (
+        isinstance(channel_count, int)
+        and not isinstance(channel_count, bool)
+        and channel_count != 2
+    ):
+        return None
+
+    file_candidate = Path(file_path)
+    if file_candidate.is_absolute():
+        if file_candidate.exists() and file_candidate.is_file():
+            return file_candidate.resolve()
+        return None
+
+    for root in candidate_roots:
+        candidate = (root / file_candidate).resolve()
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
+
+
+def _wav_output_path_from_manifest(
+    *,
+    render_manifest: dict[str, Any],
+    target_layout_id: str,
+    candidate_roots: list[Path],
+    allow_fallback: bool,
+) -> Path | None:
+    outputs_by_id: dict[str, list[dict[str, Any]]] = {}
+    outputs_all: list[dict[str, Any]] = []
+    for renderer_manifest in _dict_list(render_manifest.get("renderer_manifests")):
+        for output in _dict_list(renderer_manifest.get("outputs")):
+            output_id = _coerce_str(output.get("output_id")).strip()
+            if output_id:
+                outputs_by_id.setdefault(output_id, []).append(output)
+            outputs_all.append(output)
+
+    for output_id in list(outputs_by_id.keys()):
+        outputs_by_id[output_id] = sorted(
+            outputs_by_id[output_id],
+            key=_render_output_sort_key,
+        )
+    outputs_all = sorted(outputs_all, key=_render_output_sort_key)
+
+    preferred_output_ids: list[str] = []
+    for deliverable in sorted(
+        _dict_list(render_manifest.get("deliverables")),
+        key=lambda item: _coerce_str(item.get("deliverable_id")).strip(),
+    ):
+        deliverable_layout_id = _coerce_str(deliverable.get("target_layout_id")).strip()
+        if deliverable_layout_id != target_layout_id:
+            continue
+        for output_id in sorted(
+            {
+                _coerce_str(output_id).strip()
+                for output_id in deliverable.get("output_ids", [])
+                if isinstance(output_id, str) and _coerce_str(output_id).strip()
+            }
+        ):
+            preferred_output_ids.append(output_id)
+
+    for output_id in preferred_output_ids:
+        for output in outputs_by_id.get(output_id, []):
+            resolved = _resolve_wav_output_path(
+                output=output,
+                candidate_roots=candidate_roots,
+            )
+            if resolved is not None:
+                return resolved
+
+    if not allow_fallback:
+        return None
+
+    for output in outputs_all:
+        resolved = _resolve_wav_output_path(
+            output=output,
+            candidate_roots=candidate_roots,
+        )
+        if resolved is not None:
+            return resolved
+    return None
+
+
+def _resolve_render_many_stereo_audio_path(
+    *,
+    variant_artifacts: list[dict[str, Any]],
+    stereo_layout_id: str,
+) -> Path | None:
+    for artifact in variant_artifacts:
+        target_id = _coerce_str(artifact.get("target_id")).strip()
+        target_layout_id = _coerce_str(artifact.get("target_layout_id")).strip()
+        if target_id != _BASELINE_RENDER_TARGET_ID and target_layout_id != stereo_layout_id:
+            continue
+
+        render_manifest_path = artifact.get("render_manifest_path")
+        if not isinstance(render_manifest_path, Path) or not render_manifest_path.exists():
+            continue
+        if render_manifest_path.is_dir():
+            continue
+
+        try:
+            render_manifest = _load_json_object(
+                render_manifest_path,
+                label=f"Render manifest ({artifact.get('variant_id')})",
+            )
+        except ValueError:
+            continue
+
+        candidate_roots: list[Path] = []
+        out_dir = artifact.get("out_dir")
+        if isinstance(out_dir, Path):
+            candidate_roots.append((out_dir / "render").resolve())
+            candidate_roots.append(out_dir.resolve())
+        candidate_roots.append((render_manifest_path.parent / "render").resolve())
+        candidate_roots.append(render_manifest_path.parent.resolve())
+
+        deduped_roots: list[Path] = []
+        seen_roots: set[str] = set()
+        for root in candidate_roots:
+            token = root.as_posix()
+            if token in seen_roots:
+                continue
+            seen_roots.add(token)
+            deduped_roots.append(root)
+
+        resolved = _wav_output_path_from_manifest(
+            render_manifest=render_manifest,
+            target_layout_id=stereo_layout_id,
+            candidate_roots=deduped_roots,
+            allow_fallback=(target_id == _BASELINE_RENDER_TARGET_ID),
+        )
+        if resolved is not None:
+            return resolved
+    return None
+
+
+def _run_render_many_translation_checks(
+    *,
+    repo_root: Path,
+    root_out_dir: Path,
+    report_path: Path,
+    variant_result: dict[str, Any],
+    profile_ids: list[str],
+    project_path: Path | None,
+    deliverables_index_path: Path | None,
+    listen_pack_path: Path | None,
+    timeline_path: Path | None,
+) -> None:
+    if not profile_ids:
+        return
+
+    stereo_target = get_render_target(
+        _BASELINE_RENDER_TARGET_ID,
+        repo_root / "ontology" / "render_targets.yaml",
+    )
+    if not isinstance(stereo_target, dict):
+        return
+    stereo_layout_id = _coerce_str(stereo_target.get("layout_id")).strip()
+    if not stereo_layout_id:
+        return
+
+    variant_artifacts = _render_many_variant_artifacts(
+        variant_result=variant_result,
+        root_out_dir=root_out_dir,
+    )
+    stereo_audio_path = _resolve_render_many_stereo_audio_path(
+        variant_artifacts=variant_artifacts,
+        stereo_layout_id=stereo_layout_id,
+    )
+    if stereo_audio_path is None:
+        return
+
+    translation_profiles_path = repo_root / "ontology" / "translation_profiles.yaml"
+    try:
+        translation_results = _build_translation_run_payload(
+            translation_profiles_path=translation_profiles_path,
+            audio_path=stereo_audio_path,
+            profile_ids=profile_ids,
+        )
+        translation_results = _sorted_translation_results(translation_results)
+    except ValueError:
+        return
+
+    try:
+        _write_report_with_translation_results(
+            report_in_path=report_path,
+            report_out_path=report_path,
+            translation_results=translation_results,
+            repo_root=repo_root,
+        )
+    except (SystemExit, ValueError):
+        return
+
+    for artifact in variant_artifacts:
+        variant_report_path = artifact.get("report_path")
+        if isinstance(variant_report_path, Path) and variant_report_path.exists():
+            try:
+                _write_report_with_translation_results(
+                    report_in_path=variant_report_path,
+                    report_out_path=variant_report_path,
+                    translation_results=translation_results,
+                    repo_root=repo_root,
+                )
+            except (SystemExit, ValueError):
+                continue
+
+        variant_bundle_path = artifact.get("bundle_path")
+        if not isinstance(variant_bundle_path, Path):
+            continue
+        if not isinstance(variant_report_path, Path) or not variant_report_path.exists():
+            continue
+
+        try:
+            _run_bundle(
+                repo_root=repo_root,
+                report_path=variant_report_path,
+                out_path=variant_bundle_path,
+                render_manifest_path=artifact.get("render_manifest_path"),
+                apply_manifest_path=artifact.get("apply_manifest_path"),
+                applied_report_path=artifact.get("applied_report_path"),
+                project_path=project_path,
+                deliverables_index_path=deliverables_index_path,
+                listen_pack_path=listen_pack_path,
+                scene_path=None,
+                render_plan_path=None,
+                timeline_path=timeline_path,
+            )
+        except ValueError:
+            continue
+
+
 def _load_report_from_path_or_dir(path: Path) -> tuple[dict[str, Any], Path | None]:
     if path.is_dir():
         report_path = path / "report.json"
@@ -3670,6 +4030,7 @@ def _run_render_many_workflow(
     contexts: list[str],
     deliverables_index: bool,
     listen_pack: bool = False,
+    translation_profile_ids: list[str] | None = None,
     output_formats: str | None = None,
     cache_enabled: bool = True,
     cache_dir: Path | None = None,
@@ -4074,6 +4435,21 @@ def _run_render_many_workflow(
             return int(exc.code) if isinstance(exc.code, int) else 1
         _write_json_file(deliverables_index_path, deliverables_index_payload)
 
+    if isinstance(translation_profile_ids, list) and translation_profile_ids:
+        _run_render_many_translation_checks(
+            repo_root=repo_root,
+            root_out_dir=out_dir,
+            report_path=report_path,
+            variant_result=variant_result,
+            profile_ids=list(translation_profile_ids),
+            project_path=project_path,
+            deliverables_index_path=(
+                deliverables_index_path if deliverables_index else None
+            ),
+            listen_pack_path=listen_pack_path if listen_pack else None,
+            timeline_path=resolved_timeline_path,
+        )
+
     results = variant_result.get("results")
     if not isinstance(results, list):
         return 1
@@ -4164,6 +4540,23 @@ def _run_workflow_from_run_args(
                 print(str(exc), file=sys.stderr)
                 return 1, "variants"
 
+        translation_profiles_path = repo_root / "ontology" / "translation_profiles.yaml"
+        translation_profiles_value = getattr(args, "translation_profiles", None)
+        translation_enabled = bool(getattr(args, "translation", False))
+        translation_profile_ids: list[str] | None = None
+        if isinstance(translation_profiles_value, str) and translation_profiles_value.strip():
+            try:
+                translation_profile_ids = _parse_translation_profile_ids_csv(
+                    translation_profiles_value,
+                    translation_profiles_path=translation_profiles_path,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1, "variants"
+            translation_enabled = True
+        if translation_enabled and translation_profile_ids is None:
+            translation_profile_ids = list(_DEFAULT_RENDER_MANY_TRANSLATION_PROFILE_IDS)
+
         exit_code = _run_render_many_workflow(
             repo_root=repo_root,
             tools_dir=tools_dir,
@@ -4187,6 +4580,7 @@ def _run_workflow_from_run_args(
             contexts=contexts,
             deliverables_index=args.deliverables_index,
             listen_pack=getattr(args, "listen_pack", False),
+            translation_profile_ids=translation_profile_ids,
             output_formats=args.output_formats,
             cache_enabled=args.cache == "on",
             cache_dir=Path(args.cache_dir) if args.cache_dir else None,
@@ -5228,6 +5622,22 @@ def main(argv: list[str] | None = None) -> int:
         choices=["render", "auto_apply"],
         default=[],
         help="Repeatable context for --render-many render_plan jobs.",
+    )
+    run_parser.add_argument(
+        "--translation",
+        action="store_true",
+        help=(
+            "For --render-many, run translation checks when a TARGET.STEREO.2_0 "
+            "deliverable exists."
+        ),
+    )
+    run_parser.add_argument(
+        "--translation-profiles",
+        default=None,
+        help=(
+            "Comma-separated translation profile IDs for --render-many. "
+            "Implies --translation."
+        ),
     )
     run_parser.add_argument(
         "--deliverables-index",
@@ -6335,6 +6745,22 @@ def main(argv: list[str] | None = None) -> int:
         choices=["render", "auto_apply"],
         default=[],
         help="Repeatable context for --render-many render_plan jobs.",
+    )
+    project_run_parser.add_argument(
+        "--translation",
+        action="store_true",
+        help=(
+            "For --render-many, run translation checks when a TARGET.STEREO.2_0 "
+            "deliverable exists."
+        ),
+    )
+    project_run_parser.add_argument(
+        "--translation-profiles",
+        default=None,
+        help=(
+            "Comma-separated translation profile IDs for --render-many. "
+            "Implies --translation."
+        ),
     )
     project_run_parser.add_argument(
         "--deliverables-index",

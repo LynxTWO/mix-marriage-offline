@@ -9,6 +9,10 @@
     "schema_version": { "const": "0.1.0" },
     "generated_at_utc": { "type": "string", "format": "date-time" },
     "report": { "$ref": "report.schema.json" },
+    "translation_results": {
+      "type": "array",
+      "items": { "$ref": "report.schema.json#/$defs/translation_result" }
+    },
     "render_manifest": { "$ref": "render_manifest.schema.json" },
     "apply_manifest": { "$ref": "apply_manifest.schema.json" },
     "applied_report": { "$ref": "report.schema.json" },

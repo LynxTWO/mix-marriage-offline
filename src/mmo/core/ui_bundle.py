@@ -76,6 +76,17 @@ def _recommendations(report: dict[str, Any]) -> list[dict[str, Any]]:
     return _iter_dict_list(report.get("recommendations"))
 
 
+def _translation_results(report: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = [dict(item) for item in _iter_dict_list(report.get("translation_results"))]
+    rows.sort(
+        key=lambda item: (
+            _coerce_str(item.get("profile_id")).strip(),
+            json.dumps(item, sort_keys=True),
+        )
+    )
+    return rows
+
+
 def _list_length(value: Any) -> int:
     return len(value) if isinstance(value, list) else 0
 
@@ -1187,6 +1198,9 @@ def build_ui_bundle(
             scene_path=scene_path,
         ),
     }
+    translation_results = _translation_results(report)
+    if translation_results:
+        payload["translation_results"] = translation_results
     scene_payload = _load_scene_payload(scene_path)
     scene_locks_registry: dict[str, Any] | None = None
     if scene_payload is not None:
