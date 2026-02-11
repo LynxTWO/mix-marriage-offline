@@ -526,7 +526,18 @@ class TestUiBundle(unittest.TestCase):
                     for item in targets
                     if isinstance(item, dict) and isinstance(item.get("target_id"), str)
                 ]
-                self.assertEqual(target_ids, ["TARGET.STEREO.2_0"])
+                self.assertEqual(
+                    target_ids,
+                    [
+                        "TARGET.STEREO.2_0",
+                        "TARGET.SURROUND.5_1",
+                        "TARGET.SURROUND.7_1",
+                    ],
+                )
+            self.assertEqual(
+                render_targets_payload.get("highlighted_target_ids"),
+                ["TARGET.STEREO.2_0"],
+            )
 
         second_bundle = build_ui_bundle(report, None, help_registry_path=help_registry_path)
         self.assertEqual(bundle["dashboard"], second_bundle["dashboard"])
@@ -580,8 +591,99 @@ class TestUiBundle(unittest.TestCase):
                 ]
                 self.assertEqual(
                     target_ids,
-                    ["TARGET.STEREO.2_0", "TARGET.SURROUND.5_1"],
+                    [
+                        "TARGET.STEREO.2_0",
+                        "TARGET.SURROUND.5_1",
+                        "TARGET.SURROUND.7_1",
+                    ],
                 )
+            self.assertEqual(
+                render_targets_payload.get("highlighted_target_ids"),
+                ["TARGET.STEREO.2_0", "TARGET.SURROUND.5_1"],
+            )
+
+    def test_build_ui_bundle_render_targets_include_scene_recommendations(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+        scene_payload = _sample_scene()
+        scene_payload["beds"] = [
+            {
+                "bed_id": "BED.BETA.FIELD",
+                "label": "Beta Field",
+                "kind": "field",
+                "intent": {
+                    "diffuse": 0.90,
+                    "confidence": 0.0,
+                    "locks": [],
+                },
+                "notes": [],
+            },
+            {
+                "bed_id": "BED.ALPHA.FIELD",
+                "label": "Alpha Field",
+                "kind": "field",
+                "intent": {
+                    "diffuse": 0.80,
+                    "confidence": 0.0,
+                    "locks": [],
+                },
+                "notes": [],
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            scene_path = temp_path / "scene.json"
+            scene_path.write_text(
+                json.dumps(scene_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                scene_path=scene_path,
+            )
+
+        validator.validate(bundle)
+
+        render_targets_payload = bundle.get("render_targets")
+        self.assertIsInstance(render_targets_payload, dict)
+        if not isinstance(render_targets_payload, dict):
+            return
+
+        recommendations = render_targets_payload.get("recommendations")
+        self.assertIsInstance(recommendations, list)
+        if not isinstance(recommendations, list):
+            return
+        self.assertEqual(
+            [
+                row.get("target_id")
+                for row in recommendations
+                if isinstance(row, dict)
+            ],
+            ["TARGET.STEREO.2_0", "TARGET.SURROUND.5_1", "TARGET.SURROUND.7_1"],
+        )
+        self.assertEqual(
+            [
+                row.get("rank")
+                for row in recommendations
+                if isinstance(row, dict)
+            ],
+            [1, 2, 3],
+        )
+        self.assertEqual(
+            recommendations,
+            sorted(
+                recommendations,
+                key=lambda row: (
+                    int(row.get("rank", 0)) if isinstance(row, dict) else 0,
+                    str(row.get("target_id", "")) if isinstance(row, dict) else "",
+                ),
+            ),
+        )
 
     def test_build_ui_bundle_help_includes_profile_and_vibe_preset(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

@@ -1072,37 +1072,56 @@ def _collect_referenced_target_layout_ids(
 def _ui_bundle_render_targets(
     report: dict[str, Any],
     dashboard_deliverables: list[dict[str, Any]],
+    *,
+    scene_path: Path | None = None,
 ) -> dict[str, Any]:
-    from mmo.core.render_targets import get_render_target, list_render_targets  # noqa: WPS433
+    from mmo.core.render_targets import list_render_targets  # noqa: WPS433
+    from mmo.core.target_recommendations import recommend_render_targets  # noqa: WPS433
 
     referenced_layout_ids = _collect_referenced_target_layout_ids(
         report,
         dashboard_deliverables,
     )
-    selected_targets: dict[str, dict[str, Any]] = {}
+    all_targets: dict[str, dict[str, Any]] = {}
+    for target in list_render_targets():
+        target_id = _coerce_str(target.get("target_id")).strip()
+        if not target_id:
+            continue
+        all_targets[target_id] = dict(target)
 
-    baseline_target = get_render_target(_BASELINE_RENDER_TARGET_ID)
-    if baseline_target is None:
+    if _BASELINE_RENDER_TARGET_ID not in all_targets:
         raise ValueError(
             "Render targets registry is missing baseline target: "
             f"{_BASELINE_RENDER_TARGET_ID}"
         )
-    selected_targets[_BASELINE_RENDER_TARGET_ID] = dict(baseline_target)
 
-    for target in list_render_targets():
-        target_id = _coerce_str(target.get("target_id")).strip()
-        layout_id = _coerce_str(target.get("layout_id")).strip()
-        if not target_id or not layout_id:
-            continue
+    highlighted_target_ids: set[str] = {_BASELINE_RENDER_TARGET_ID}
+    for target_id in sorted(all_targets.keys()):
+        layout_id = _coerce_str(all_targets[target_id].get("layout_id")).strip()
         if layout_id in referenced_layout_ids:
-            selected_targets[target_id] = dict(target)
+            highlighted_target_ids.add(target_id)
 
-    return {
-        "targets": [
-            selected_targets[target_id]
-            for target_id in sorted(selected_targets.keys())
-        ]
+    render_targets_payload: dict[str, Any] = {
+        "targets": [all_targets[target_id] for target_id in sorted(all_targets.keys())],
+        "highlighted_target_ids": sorted(highlighted_target_ids),
     }
+    if scene_path is None:
+        return render_targets_payload
+
+    try:
+        scene_payload = _load_scene_payload(scene_path)
+    except (RuntimeError, ValueError):
+        return render_targets_payload
+
+    if scene_payload is None:
+        return render_targets_payload
+
+    render_targets_payload["recommendations"] = recommend_render_targets(
+        repo_root=_repo_root(),
+        report=report,
+        scene=scene_payload,
+    )
+    return render_targets_payload
 
 
 def build_ui_bundle(
@@ -1162,7 +1181,11 @@ def build_ui_bundle(
         "report": report,
         "dashboard": dashboard,
         "gui_design": _gui_design_summary(gui_design_payload),
-        "render_targets": _ui_bundle_render_targets(report, dashboard_deliverables),
+        "render_targets": _ui_bundle_render_targets(
+            report,
+            dashboard_deliverables,
+            scene_path=scene_path,
+        ),
     }
     scene_payload = _load_scene_payload(scene_path)
     scene_locks_registry: dict[str, Any] | None = None
