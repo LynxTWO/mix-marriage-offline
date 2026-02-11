@@ -9,6 +9,22 @@ from mmo.core.ui_screen_examples import load_ui_screen_example, load_ui_screen_e
 
 
 class TestUiExamples(unittest.TestCase):
+    def setUp(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        src_dir = str((repo_root / "src").resolve())
+        self._original_pythonpath = os.environ.get("PYTHONPATH")
+        os.environ["PYTHONPATH"] = (
+            src_dir
+            if not self._original_pythonpath
+            else f"{src_dir}{os.pathsep}{self._original_pythonpath}"
+        )
+
+    def tearDown(self) -> None:
+        if self._original_pythonpath is None:
+            os.environ.pop("PYTHONPATH", None)
+            return
+        os.environ["PYTHONPATH"] = self._original_pythonpath
+
     def _repo_root(self) -> Path:
         return Path(__file__).resolve().parents[1]
 

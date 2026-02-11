@@ -2,6 +2,7 @@ import contextlib
 import io
 import json
 import math
+import os
 import struct
 import tempfile
 import unittest
@@ -37,6 +38,22 @@ def _write_wav_16bit(
 
 
 class TestAnalysisCache(unittest.TestCase):
+    def setUp(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        src_dir = str((repo_root / "src").resolve())
+        self._original_pythonpath = os.environ.get("PYTHONPATH")
+        os.environ["PYTHONPATH"] = (
+            src_dir
+            if not self._original_pythonpath
+            else f"{src_dir}{os.pathsep}{self._original_pythonpath}"
+        )
+
+    def tearDown(self) -> None:
+        if self._original_pythonpath is None:
+            os.environ.pop("PYTHONPATH", None)
+            return
+        os.environ["PYTHONPATH"] = self._original_pythonpath
+
     def test_cache_keys_are_deterministic_and_root_dir_agnostic(self) -> None:
         lock_a = {
             "schema_version": "0.1.0",

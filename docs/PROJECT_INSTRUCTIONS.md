@@ -81,6 +81,8 @@ Stereo stems with baked pan/width are inference-only:
 - `make validate`
 - `python tools/validate.py`
 - `python tools/validate_contracts.py`
+- `python -m pytest` automatically prefers local `src/` imports via `tests/conftest.py`.
+- `PYTHONPATH=src` is still valid, but no longer required for pytest in this repository.
 
 ## Related docs
 

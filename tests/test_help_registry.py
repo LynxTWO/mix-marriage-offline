@@ -12,6 +12,22 @@ from mmo.core.help_registry import load_help_registry, resolve_help_entries
 
 
 class TestHelpRegistry(unittest.TestCase):
+    def setUp(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        src_dir = str((repo_root / "src").resolve())
+        self._original_pythonpath = os.environ.get("PYTHONPATH")
+        os.environ["PYTHONPATH"] = (
+            src_dir
+            if not self._original_pythonpath
+            else f"{src_dir}{os.pathsep}{self._original_pythonpath}"
+        )
+
+    def tearDown(self) -> None:
+        if self._original_pythonpath is None:
+            os.environ.pop("PYTHONPATH", None)
+            return
+        os.environ["PYTHONPATH"] = self._original_pythonpath
+
     def test_help_registry_yaml_validates_against_schema(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         schema_path = repo_root / "schemas" / "help_registry.schema.json"
