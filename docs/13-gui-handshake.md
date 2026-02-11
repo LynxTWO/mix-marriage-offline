@@ -79,6 +79,8 @@ Apply template (if implemented):
 mmo scene template apply TEMPLATE.SCENE.* --scene out/scene.json --out out/scene.json
 ```
 
+For starter intent packs and safe apply semantics, see [14-scene-templates.md](14-scene-templates.md).
+
 Add/remove locks:
 
 ```bash

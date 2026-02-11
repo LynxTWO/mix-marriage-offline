@@ -87,5 +87,6 @@ Stereo stems with baked pan/width are inference-only:
 ## Related docs
 
 - [SCENE_AND_RENDER_CONTRACT_OVERVIEW.md](SCENE_AND_RENDER_CONTRACT_OVERVIEW.md)
+- [14-scene-templates.md](14-scene-templates.md)
 - [09-product-vision.md](09-product-vision.md)
 - [11-gui-vision.md](11-gui-vision.md)
