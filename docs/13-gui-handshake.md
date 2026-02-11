@@ -101,6 +101,8 @@ mmo targets list --format json
 mmo targets show TARGET.STEREO.2_0 --format json
 ```
 
+For deterministic target selection and recommendation wiring, see [15-target-selection.md](15-target-selection.md).
+
 Persist selected target IDs in GUI state, then pass them as CSV in execution (step 5).
 
 ## 5) Execute

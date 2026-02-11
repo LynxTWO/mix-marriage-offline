@@ -1,0 +1,295 @@
+{
+  "schema_version": "0.1.0",
+  "screen_id": "RUN",
+  "mode": "default",
+  "title": "Run - Target selection",
+  "description": "RUN screen showing full target catalog, highlighted targets, and ranked recommendations.",
+  "ui_state": {
+    "selected_tab": "targets",
+    "filters": {
+      "show": "recommended"
+    }
+  },
+  "bundle": {
+    "schema_version": "0.1.0",
+    "generated_at_utc": "2000-01-01T00:00:00Z",
+    "report": {
+      "schema_version": "0.1.0",
+      "report_id": "REPORT.UI.EXAMPLE.RUN.DEFAULT.TARGETS",
+      "project_id": "PROJECT.UI.EXAMPLES",
+      "profile_id": "PROFILE.ASSIST",
+      "generated_at": "2000-01-01T00:00:00Z",
+      "engine_version": "0.1.0",
+      "ontology_version": "0.1.0",
+      "session": {
+        "stems": []
+      },
+      "issues": [],
+      "recommendations": [],
+      "run_config": {
+        "schema_version": "0.1.0",
+        "profile_id": "PROFILE.ASSIST",
+        "meters": "truth",
+        "downmix": {
+          "source_layout_id": "LAYOUT.7_1",
+          "target_layout_id": "LAYOUT.7_1"
+        },
+        "render": {
+          "out_dir": "C:/mmo/examples/ui/run_targets"
+        }
+      },
+      "routing_plan": {
+        "schema_version": "0.1.0",
+        "source_layout_id": "LAYOUT.7_1",
+        "target_layout_id": "LAYOUT.5_1",
+        "routes": []
+      }
+    },
+    "dashboard": {
+      "profile_id": "PROFILE.ASSIST",
+      "top_issues": [],
+      "eligible_counts": {
+        "auto_apply": 0,
+        "render": 0
+      },
+      "blocked_counts": {
+        "auto_apply": 0,
+        "render": 0
+      },
+      "extreme_count": 0,
+      "downmix_qa": {
+        "has_issues": false,
+        "max_delta_lufs": null,
+        "max_delta_true_peak": null,
+        "min_corr": null
+      },
+      "mix_complexity": {
+        "density_mean": 1.4,
+        "density_peak": 2,
+        "top_masking_pairs_count": 0
+      },
+      "vibe_signals": {
+        "density_level": "low",
+        "masking_level": "low",
+        "translation_risk": "low",
+        "notes": [
+          "Targets tab keeps full catalog and recommended rows visible.",
+          "Highlighted rows reflect routing/downmix context."
+        ]
+      },
+      "deliverables": [
+        {
+          "deliverable_id": "DELIVERABLE.MAIN.SURROUND",
+          "label": "Main Surround",
+          "target_layout_id": "LAYOUT.5_1",
+          "channel_count": 6,
+          "formats": [
+            "wav"
+          ],
+          "output_count": 1
+        }
+      ]
+    },
+    "render_targets": {
+      "targets": [
+        {
+          "aliases": [
+            "Stereo (streaming)",
+            "Stereo (everyday)"
+          ],
+          "channel_order_ref": "ontology/layouts.yaml:SPK.L/SPK.R",
+          "downmix_policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
+          "label": "Stereo",
+          "layout_id": "LAYOUT.2_0",
+          "notes": [
+            "Baseline target for earbuds, headphones, laptops, and most everyday playback.",
+            "Use this as your quick reality check before printing final files."
+          ],
+          "safety_policy_id": "POLICY.GATES.CORE_V0",
+          "speaker_positions": [
+            {
+              "azimuth_deg": -30.0,
+              "ch": 0,
+              "elevation_deg": 0.0
+            },
+            {
+              "azimuth_deg": 30.0,
+              "ch": 1,
+              "elevation_deg": 0.0
+            }
+          ],
+          "target_id": "TARGET.STEREO.2_0"
+        },
+        {
+          "aliases": [
+            "5.1 (home theater)",
+            "5.1 (cinematic)"
+          ],
+          "channel_order_ref": "ontology/layouts.yaml:SPK.L/SPK.R/SPK.C/SPK.LFE/SPK.LS/SPK.RS",
+          "downmix_policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
+          "label": "Surround 5.1",
+          "layout_id": "LAYOUT.5_1",
+          "notes": [
+            "Cinema-style bed with center focus and dedicated low-frequency effects.",
+            "Good target when you want wide playback translation beyond stereo."
+          ],
+          "safety_policy_id": "POLICY.GATES.CORE_V0",
+          "speaker_positions": [
+            {
+              "azimuth_deg": -30.0,
+              "ch": 0,
+              "elevation_deg": 0.0
+            },
+            {
+              "azimuth_deg": 30.0,
+              "ch": 1,
+              "elevation_deg": 0.0
+            },
+            {
+              "azimuth_deg": 0.0,
+              "ch": 2,
+              "elevation_deg": 0.0
+            },
+            {
+              "azimuth_deg": 0.0,
+              "ch": 3,
+              "elevation_deg": 0.0
+            },
+            {
+              "azimuth_deg": -110.0,
+              "ch": 4,
+              "elevation_deg": 0.0
+            },
+            {
+              "azimuth_deg": 110.0,
+              "ch": 5,
+              "elevation_deg": 0.0
+            }
+          ],
+          "target_id": "TARGET.SURROUND.5_1"
+        },
+        {
+          "aliases": [
+            "7.1 (cinematic)"
+          ],
+          "channel_order_ref": "ontology/layouts.yaml:SPK.L/SPK.R/SPK.C/SPK.LFE/SPK.LS/SPK.RS/SPK.LRS/SPK.RRS",
+          "downmix_policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
+          "label": "Surround 7.1",
+          "layout_id": "LAYOUT.7_1",
+          "notes": [
+            "Adds rear image support beyond 5.1 for larger rooms and cinema playback.",
+            "Useful when your arrangement relies on depth and rear motion cues."
+          ],
+          "safety_policy_id": "POLICY.GATES.CORE_V0",
+          "speaker_positions": [
+            {
+              "azimuth_deg": -30.0,
+              "ch": 0,
+              "elevation_deg": 0.0
+            },
+            {
+              "azimuth_deg": 30.0,
+              "ch": 1,
+              "elevation_deg": 0.0
+            },
+            {
+              "azimuth_deg": 0.0,
+              "ch": 2,
+              "elevation_deg": 0.0
+            },
+            {
+              "azimuth_deg": 0.0,
+              "ch": 3,
+              "elevation_deg": 0.0
+            },
+            {
+              "azimuth_deg": -90.0,
+              "ch": 4,
+              "elevation_deg": 0.0
+            },
+            {
+              "azimuth_deg": 90.0,
+              "ch": 5,
+              "elevation_deg": 0.0
+            },
+            {
+              "azimuth_deg": -150.0,
+              "ch": 6,
+              "elevation_deg": 0.0
+            },
+            {
+              "azimuth_deg": 150.0,
+              "ch": 7,
+              "elevation_deg": 0.0
+            }
+          ],
+          "target_id": "TARGET.SURROUND.7_1"
+        }
+      ],
+      "highlighted_target_ids": [
+        "TARGET.STEREO.2_0",
+        "TARGET.SURROUND.5_1",
+        "TARGET.SURROUND.7_1"
+      ],
+      "recommendations": [
+        {
+          "target_id": "TARGET.STEREO.2_0",
+          "rank": 1,
+          "confidence": 1.0,
+          "reasons": [
+            "Baseline stereo reality check."
+          ]
+        },
+        {
+          "target_id": "TARGET.SURROUND.5_1",
+          "rank": 2,
+          "confidence": 0.92,
+          "reasons": [
+            "Routing plan targets LAYOUT.5_1"
+          ]
+        },
+        {
+          "target_id": "TARGET.SURROUND.7_1",
+          "rank": 3,
+          "confidence": 0.84,
+          "reasons": [
+            "Run config downmix targets LAYOUT.7_1"
+          ]
+        }
+      ]
+    },
+    "ui_copy": {
+      "locale": "en-US",
+      "entries": {
+        "COPY.NAV.RUN": {
+          "text": "Run"
+        },
+        "COPY.ACTION.RUN": {
+          "text": "Run"
+        },
+        "COPY.BADGE.INFO": {
+          "text": "Info"
+        }
+      }
+    },
+    "help": {
+      "HELP.WORKFLOW.RUN": {
+        "title": "One-shot run workflow",
+        "short": "Analyze/export/apply/render in one command."
+      }
+    },
+    "pointers": {
+      "project_path": "C:/mmo/examples/ui/project.json",
+      "scene_path": "C:/mmo/examples/ui/run_targets/scene.json",
+      "render_plan_path": "C:/mmo/examples/ui/run_targets/render_plan.json"
+    }
+  },
+  "design_hints": {
+    "badges_expected": [
+      "INFO"
+    ],
+    "hover_help_ids": [
+      "HELP.WORKFLOW.RUN"
+    ]
+  }
+}
