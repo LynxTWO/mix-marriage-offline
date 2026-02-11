@@ -1,0 +1,54 @@
+schema_version: "0.1.0"
+templates:
+  TEMPLATE.SCENE.LIVE.YOU_ARE_THERE:
+    label: "Live: you are there"
+    description: "More depth and space, still safe on downmix."
+    patches:
+      - scope: "bed"
+        match:
+          bed_kind: "field"
+        set:
+          diffuse: 0.85
+      - scope: "object"
+        match:
+          label_regex: ".*"
+        set:
+          depth: 0.55
+          loudness_bias: "back"
+  TEMPLATE.SCENE.STEREO.BAND_WIDE_VOCAL_CENTER:
+    label: "Band: wide, vocal center"
+    description: "Keep lead anchored, spread band safely."
+    notes:
+      - "Conservative defaults. Fills only missing intent fields."
+    patches:
+      - scope: "object"
+        match:
+          label_regex: "(?i)\\b(lead\\s*)?(vox|vocal|vocals)\\b"
+        set:
+          position:
+            azimuth_deg: 0.0
+          width: 0.15
+          depth: 0.2
+          loudness_bias: "forward"
+      - scope: "object"
+        match:
+          label_regex: ".*"
+        set:
+          width: 0.6
+          depth: 0.4
+          loudness_bias: "neutral"
+  TEMPLATE.SCENE.SURROUND.FRONT_STAGE_CLEAR_REAR_FIELD:
+    label: "Surround: front stage + clear rear field"
+    description: "Keep important objects front. Let beds carry rear energy."
+    patches:
+      - scope: "bed"
+        match:
+          bed_kind: "field"
+        set:
+          diffuse: 0.75
+      - scope: "object"
+        match:
+          label_regex: ".*"
+        set:
+          depth: 0.35
+          loudness_bias: "neutral"

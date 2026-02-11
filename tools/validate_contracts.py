@@ -61,7 +61,7 @@ SCHEMA_ANCHORS: tuple[str, ...] = (
 
 SCENE_REGISTRIES_CHECK_ID = "SCENE.REGISTRIES"
 SCENE_REGISTRIES_TOOL = (
-    "src/mmo/core/{speaker_positions.py,scene_locks.py,intent_params.py,render_targets.py}"
+    "src/mmo/core/{speaker_positions.py,scene_locks.py,scene_templates.py,intent_params.py,render_targets.py}"
 )
 SCENE_REGISTRY_LOADERS: tuple[tuple[str, str, str], ...] = (
     (
@@ -70,6 +70,11 @@ SCENE_REGISTRY_LOADERS: tuple[tuple[str, str, str], ...] = (
         "ontology/speaker_positions.yaml",
     ),
     ("load_scene_locks", "mmo.core.scene_locks", "ontology/scene_locks.yaml"),
+    (
+        "list_scene_templates",
+        "mmo.core.scene_templates",
+        "ontology/scene_templates.yaml",
+    ),
     ("load_intent_params", "mmo.core.intent_params", "ontology/intent_params.yaml"),
     ("list_render_targets", "mmo.core.render_targets", "ontology/render_targets.yaml"),
 )
@@ -278,6 +283,8 @@ def _scene_registry_summary(*, loader_name: str, payload: Any) -> dict[str, int]
     if loader_name == "load_scene_locks":
         locks = payload.get("locks") if isinstance(payload, dict) else None
         return {"locks": len(locks) if isinstance(locks, dict) else 0}
+    if loader_name == "list_scene_templates":
+        return {"templates": len(payload) if isinstance(payload, list) else 0}
     if loader_name == "load_intent_params":
         params = payload.get("params") if isinstance(payload, dict) else None
         return {"params": len(params) if isinstance(params, dict) else 0}

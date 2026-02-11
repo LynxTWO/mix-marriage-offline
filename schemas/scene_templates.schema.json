@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/scene_templates.schema.json",
+  "title": "MMO Scene Templates Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "templates"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "templates": {
+      "type": "object",
+      "patternProperties": {
+        "^TEMPLATE\\.SCENE\\.[A-Z0-9_.]+$": { "$ref": "#/$defs/scene_template" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "position_patch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "azimuth_deg": { "type": "number" },
+        "elevation_deg": { "type": "number" }
+      },
+      "minProperties": 1
+    },
+    "object_or_scene_set": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "position": { "$ref": "#/$defs/position_patch" },
+        "width": { "type": "number", "minimum": 0, "maximum": 1 },
+        "depth": { "type": "number", "minimum": 0, "maximum": 1 },
+        "loudness_bias": {
+          "type": "string",
+          "enum": ["forward", "neutral", "back"]
+        },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "minProperties": 1
+    },
+    "bed_set": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "diffuse": { "type": "number", "minimum": 0, "maximum": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "minProperties": 1
+    },
+    "scene_match": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    },
+    "object_match": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "object_id": { "type": "string", "minLength": 1 },
+        "label_regex": { "type": "string", "minLength": 1 }
+      }
+    },
+    "bed_match": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bed_id": { "type": "string", "minLength": 1 },
+        "bed_kind": {
+          "type": "string",
+          "enum": ["field", "bed"]
+        }
+      }
+    },
+    "scene_patch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "match", "set"],
+      "properties": {
+        "scope": { "const": "scene" },
+        "match": { "$ref": "#/$defs/scene_match" },
+        "set": { "$ref": "#/$defs/object_or_scene_set" }
+      }
+    },
+    "object_patch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "match", "set"],
+      "properties": {
+        "scope": { "const": "object" },
+        "match": { "$ref": "#/$defs/object_match" },
+        "set": { "$ref": "#/$defs/object_or_scene_set" }
+      }
+    },
+    "bed_patch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "match", "set"],
+      "properties": {
+        "scope": { "const": "bed" },
+        "match": { "$ref": "#/$defs/bed_match" },
+        "set": { "$ref": "#/$defs/bed_set" }
+      }
+    },
+    "template_patch": {
+      "oneOf": [
+        { "$ref": "#/$defs/scene_patch" },
+        { "$ref": "#/$defs/object_patch" },
+        { "$ref": "#/$defs/bed_patch" }
+      ]
+    },
+    "scene_template": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "description", "patches"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "patches": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/template_patch" }
+        }
+      }
+    }
+  }
+}

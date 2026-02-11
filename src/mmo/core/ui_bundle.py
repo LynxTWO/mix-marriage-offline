@@ -591,16 +591,47 @@ def _scene_meta_payload(
     scene_payload: dict[str, Any],
     scene_locks_registry: dict[str, Any],
     intent_params_registry: dict[str, Any],
+    scene_templates_payload: list[dict[str, Any]],
 ) -> dict[str, Any]:
     scene_lock_specs = _scene_lock_specs(scene_locks_registry)
     lock_ids_used = _scene_lock_ids_used(scene_payload)
-    return {
+    payload: dict[str, Any] = {
         "locks_used": [
             _scene_lock_summary(lock_id, scene_lock_specs)
             for lock_id in lock_ids_used
         ],
         "intent_param_defs": _intent_param_defs(intent_params_registry),
     }
+    scene_templates: list[dict[str, Any]] = []
+    for template_payload in scene_templates_payload:
+        if not isinstance(template_payload, dict):
+            continue
+        template_id = _coerce_str(template_payload.get("template_id")).strip()
+        label = _coerce_str(template_payload.get("label")).strip()
+        description = _coerce_str(template_payload.get("description")).strip()
+        if not template_id or not label or not description:
+            continue
+        row: dict[str, Any] = {
+            "template_id": template_id,
+            "label": label,
+            "description": description,
+        }
+        notes_value = template_payload.get("notes")
+        notes = (
+            [
+                item.strip()
+                for item in notes_value
+                if isinstance(item, str) and item.strip()
+            ]
+            if isinstance(notes_value, list)
+            else []
+        )
+        if notes:
+            row["notes"] = notes
+        scene_templates.append(row)
+    if scene_templates:
+        payload["scene_templates"] = scene_templates
+    return payload
 
 
 def _recommendation_overlays_payload(
@@ -998,6 +1029,7 @@ def build_ui_bundle(
     from mmo.core.help_registry import load_help_registry, resolve_help_entries  # noqa: WPS433
     from mmo.core.intent_params import load_intent_params  # noqa: WPS433
     from mmo.core.scene_locks import load_scene_locks  # noqa: WPS433
+    from mmo.core.scene_templates import list_scene_templates  # noqa: WPS433
     from mmo.core.ui_copy import load_ui_copy, resolve_ui_copy  # noqa: WPS433
 
     gui_design_payload = load_gui_design(_repo_root() / "ontology" / "gui_design.yaml")
@@ -1042,10 +1074,12 @@ def build_ui_bundle(
     if scene_payload is not None:
         scene_locks_registry = load_scene_locks()
         intent_params_registry = load_intent_params()
+        scene_templates_payload = list_scene_templates()
         payload["scene_meta"] = _scene_meta_payload(
             scene_payload,
             scene_locks_registry,
             intent_params_registry,
+            scene_templates_payload,
         )
         recommendation_overlays = _recommendation_overlays_payload(
             report,

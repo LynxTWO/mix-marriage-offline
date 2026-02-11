@@ -667,6 +667,25 @@ class TestUiBundle(unittest.TestCase):
         self.assertIn("INTENT.DEPTH", param_ids)
         self.assertIn("INTENT.CONFIDENCE", param_ids)
 
+        scene_templates = scene_meta.get("scene_templates")
+        self.assertIsInstance(scene_templates, list)
+        if not isinstance(scene_templates, list):
+            return
+        template_ids = [
+            item.get("template_id")
+            for item in scene_templates
+            if isinstance(item, dict) and isinstance(item.get("template_id"), str)
+        ]
+        self.assertEqual(template_ids, sorted(template_ids))
+        self.assertEqual(
+            template_ids,
+            [
+                "TEMPLATE.SCENE.LIVE.YOU_ARE_THERE",
+                "TEMPLATE.SCENE.STEREO.BAND_WIDE_VOCAL_CENTER",
+                "TEMPLATE.SCENE.SURROUND.FRONT_STAGE_CLEAR_REAR_FIELD",
+            ],
+        )
+
         recommendation_overlays = bundle.get("recommendation_overlays")
         self.assertIsInstance(recommendation_overlays, dict)
         if not isinstance(recommendation_overlays, dict):

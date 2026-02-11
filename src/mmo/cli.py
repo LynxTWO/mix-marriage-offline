@@ -34,6 +34,11 @@ from mmo.core.presets import (
 from mmo.core.render_plan import build_render_plan
 from mmo.core.render_plan_bridge import render_plan_to_variant_plan
 from mmo.core.render_targets import get_render_target, list_render_targets
+from mmo.core.scene_templates import (
+    apply_scene_templates,
+    get_scene_template,
+    list_scene_templates,
+)
 from mmo.core.scene_locks import get_scene_lock, list_scene_locks
 from mmo.core.intent_params import load_intent_params, validate_scene_intent
 from mmo.core.scene_editor import (
@@ -1081,6 +1086,29 @@ def _run_scene_intent_set_command(
     return 0
 
 
+def _run_scene_template_apply_command(
+    *,
+    repo_root: Path,
+    scene_path: Path,
+    out_path: Path,
+    template_ids: list[str],
+    force: bool,
+) -> int:
+    scene_payload = _load_json_object(scene_path, label="Scene")
+    _validate_scene_schema(repo_root=repo_root, scene_payload=scene_payload)
+    edited = apply_scene_templates(
+        scene_payload,
+        template_ids,
+        force=force,
+        scene_templates_path=repo_root / "ontology" / "scene_templates.yaml",
+        scene_locks_path=repo_root / "ontology" / "scene_locks.yaml",
+    )
+    _validate_scene_schema(repo_root=repo_root, scene_payload=edited)
+    _validate_scene_intent_rules(repo_root=repo_root, scene_payload=edited)
+    _write_json_file(out_path, edited)
+    return 0
+
+
 def _build_scene_intent_show_payload(scene_payload: dict[str, Any]) -> dict[str, Any]:
     scene_intent = scene_payload.get("intent")
     normalized_scene_intent = dict(scene_intent) if isinstance(scene_intent, dict) else {}
@@ -1899,6 +1927,80 @@ def _render_scene_lock_text(payload: dict[str, Any]) -> str:
     lines.append(f"applies_to: {', '.join(normalized_applies_to)}")
     help_id = _coerce_str(payload.get("help_id")).strip()
     lines.append(f"help_id: {help_id or '(none)'}")
+    return "\n".join(lines)
+
+
+def _build_scene_template_list_payload(
+    *,
+    scene_templates_path: Path,
+) -> list[dict[str, Any]]:
+    return list_scene_templates(scene_templates_path)
+
+
+def _build_scene_template_show_payload(
+    *,
+    scene_templates_path: Path,
+    template_ids: list[str],
+) -> list[dict[str, Any]]:
+    normalized_template_ids = [
+        template_id.strip()
+        for template_id in template_ids
+        if isinstance(template_id, str) and template_id.strip()
+    ]
+    if not normalized_template_ids:
+        raise ValueError("At least one template_id is required.")
+
+    available_templates = list_scene_templates(scene_templates_path)
+    available_ids = [
+        item.get("template_id")
+        for item in available_templates
+        if isinstance(item, dict) and isinstance(item.get("template_id"), str)
+    ]
+    available_ids_set = set(available_ids)
+    unknown_ids = sorted(
+        {
+            template_id
+            for template_id in normalized_template_ids
+            if template_id not in available_ids_set
+        }
+    )
+    if unknown_ids:
+        unknown_label = ", ".join(unknown_ids)
+        available_label = ", ".join(sorted(available_ids))
+        if available_label:
+            raise ValueError(
+                f"Unknown template_id: {unknown_label}. Available templates: {available_label}"
+            )
+        raise ValueError(
+            f"Unknown template_id: {unknown_label}. No scene templates are available."
+        )
+
+    payload: list[dict[str, Any]] = []
+    for template_id in normalized_template_ids:
+        template_payload = get_scene_template(template_id, scene_templates_path)
+        if isinstance(template_payload, dict):
+            payload.append(template_payload)
+    return payload
+
+
+def _render_scene_template_text(payload: dict[str, Any]) -> str:
+    lines = [
+        _coerce_str(payload.get("template_id")).strip(),
+        f"label: {_coerce_str(payload.get('label')).strip()}",
+        f"description: {_coerce_str(payload.get('description')).strip()}",
+    ]
+    notes = payload.get("notes")
+    if isinstance(notes, list) and notes:
+        lines.append("notes:")
+        for item in notes:
+            if isinstance(item, str):
+                lines.append(f"- {item}")
+    patches = payload.get("patches")
+    if isinstance(patches, list) and patches:
+        lines.append("patches:")
+        for patch in patches:
+            if isinstance(patch, dict):
+                lines.append(f"- {json.dumps(patch, sort_keys=True)}")
     return "\n".join(lines)
 
 
@@ -6097,6 +6199,63 @@ def main(argv: list[str] | None = None) -> int:
         default="text",
         help="Output format for scene intent display.",
     )
+    scene_template_parser = scene_subparsers.add_parser(
+        "template",
+        help="Scene template registry and apply tools.",
+    )
+    scene_template_subparsers = scene_template_parser.add_subparsers(
+        dest="scene_template_command",
+        required=True,
+    )
+    scene_template_list_parser = scene_template_subparsers.add_parser(
+        "list",
+        help="List scene templates.",
+    )
+    scene_template_list_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for scene template list.",
+    )
+    scene_template_show_parser = scene_template_subparsers.add_parser(
+        "show",
+        help="Show one or more scene templates.",
+    )
+    scene_template_show_parser.add_argument(
+        "template_ids",
+        nargs="+",
+        help="Scene template ID(s) (e.g., TEMPLATE.SCENE.STEREO.BAND_WIDE_VOCAL_CENTER).",
+    )
+    scene_template_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for scene template details.",
+    )
+    scene_template_apply_parser = scene_template_subparsers.add_parser(
+        "apply",
+        help="Apply one or more templates to a scene JSON.",
+    )
+    scene_template_apply_parser.add_argument(
+        "template_ids",
+        nargs="+",
+        help="Scene template ID(s) to apply in order.",
+    )
+    scene_template_apply_parser.add_argument(
+        "--scene",
+        required=True,
+        help="Path to scene JSON.",
+    )
+    scene_template_apply_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output scene JSON.",
+    )
+    scene_template_apply_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing intent fields (hard locks are still respected).",
+    )
 
     render_plan_parser = subparsers.add_parser(
         "render-plan",
@@ -7290,6 +7449,59 @@ def main(argv: list[str] | None = None) -> int:
                     print(_render_scene_intent_text(payload))
                 return 0
             print("Unknown scene intent command.", file=sys.stderr)
+            return 2
+
+        if args.scene_command == "template":
+            scene_templates_path = repo_root / "ontology" / "scene_templates.yaml"
+            if args.scene_template_command == "list":
+                try:
+                    payload = _build_scene_template_list_payload(
+                        scene_templates_path=scene_templates_path,
+                    )
+                except ValueError as exc:
+                    print(str(exc), file=sys.stderr)
+                    return 1
+                if args.format == "json":
+                    print(json.dumps(payload, indent=2, sort_keys=True))
+                else:
+                    for item in payload:
+                        print(
+                            f"{item.get('template_id', '')}"
+                            f"  {item.get('label', '')}"
+                        )
+                return 0
+            if args.scene_template_command == "show":
+                try:
+                    payload = _build_scene_template_show_payload(
+                        scene_templates_path=scene_templates_path,
+                        template_ids=args.template_ids,
+                    )
+                except ValueError as exc:
+                    print(str(exc), file=sys.stderr)
+                    return 1
+                if args.format == "json":
+                    print(json.dumps(payload, indent=2, sort_keys=True))
+                else:
+                    for index, item in enumerate(payload):
+                        if index > 0:
+                            print("")
+                        print(_render_scene_template_text(item))
+                return 0
+            if args.scene_template_command == "apply":
+                try:
+                    return _run_scene_template_apply_command(
+                        repo_root=repo_root,
+                        scene_path=Path(args.scene),
+                        out_path=Path(args.out),
+                        template_ids=args.template_ids,
+                        force=bool(args.force),
+                    )
+                except (RuntimeError, ValueError) as exc:
+                    print(str(exc), file=sys.stderr)
+                    return 1
+                except SystemExit as exc:
+                    return int(exc.code) if isinstance(exc.code, int) else 1
+            print("Unknown scene template command.", file=sys.stderr)
             return 2
 
         if args.scene_command in {"validate", "show"}:
