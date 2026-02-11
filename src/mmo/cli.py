@@ -41,7 +41,9 @@ from mmo.core.render_targets import (
 from mmo.core.translation_profiles import (
     get_translation_profile,
     list_translation_profiles,
+    load_translation_profiles,
 )
+from mmo.core.translation_checks import run_translation_checks
 from mmo.core.target_recommendations import recommend_render_targets
 from mmo.core.scene_templates import (
     apply_scene_templates,
@@ -2041,6 +2043,130 @@ def _render_translation_profile_text(payload: dict[str, Any]) -> str:
                 lines.append(f"- {item}")
 
     return "\n".join(lines)
+
+
+def _parse_translation_profile_ids_csv(
+    raw_value: str,
+    *,
+    translation_profiles_path: Path,
+) -> list[str]:
+    if not isinstance(raw_value, str):
+        raise ValueError("translation profiles must be a comma-separated string.")
+
+    requested = [
+        profile_id.strip()
+        for profile_id in raw_value.split(",")
+        if isinstance(profile_id, str) and profile_id.strip()
+    ]
+    if not requested:
+        raise ValueError("translation profiles must include at least one profile ID.")
+
+    profiles = load_translation_profiles(translation_profiles_path)
+    known_ids = sorted(profile_id for profile_id in profiles.keys() if isinstance(profile_id, str))
+    known_set = set(known_ids)
+    unknown_ids = sorted(
+        {
+            profile_id
+            for profile_id in requested
+            if profile_id not in known_set
+        }
+    )
+    if unknown_ids:
+        unknown_label = ", ".join(unknown_ids)
+        known_label = ", ".join(known_ids)
+        if known_label:
+            raise ValueError(
+                f"Unknown translation profile_id: {unknown_label}. Known profile_ids: {known_label}"
+            )
+        raise ValueError(
+            f"Unknown translation profile_id: {unknown_label}. No translation profiles are available."
+        )
+
+    selected: list[str] = []
+    seen: set[str] = set()
+    for profile_id in requested:
+        if profile_id not in seen:
+            selected.append(profile_id)
+            seen.add(profile_id)
+    return selected
+
+
+def _build_translation_run_payload(
+    *,
+    translation_profiles_path: Path,
+    audio_path: Path,
+    profile_ids: list[str],
+    max_issues_per_profile: int = 3,
+) -> list[dict[str, Any]]:
+    profiles = load_translation_profiles(translation_profiles_path)
+    return run_translation_checks(
+        audio_path=audio_path,
+        profiles=profiles,
+        profile_ids=profile_ids,
+        max_issues_per_profile=max_issues_per_profile,
+    )
+
+
+def _render_translation_results_text(payload: list[dict[str, Any]]) -> str:
+    if not payload:
+        return "translation_results: (none)"
+
+    lines = ["translation_results:"]
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        profile_id = _coerce_str(row.get("profile_id")).strip()
+        score = row.get("score")
+        issues = row.get("issues")
+        issue_count = len(issues) if isinstance(issues, list) else 0
+        lines.append(f"- {profile_id} score={score} issues={issue_count}")
+        if not isinstance(issues, list):
+            continue
+        for issue in issues:
+            if not isinstance(issue, dict):
+                continue
+            issue_id = _coerce_str(issue.get("issue_id")).strip()
+            message = _coerce_str(issue.get("message")).strip()
+            lines.append(f"  {issue_id}: {message}")
+    return "\n".join(lines)
+
+
+def _write_translation_results_json(
+    path: Path,
+    payload: list[dict[str, Any]],
+) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        raise ValueError(f"Failed to write translation results JSON: {path}: {exc}") from exc
+
+
+def _write_report_with_translation_results(
+    *,
+    report_in_path: Path,
+    report_out_path: Path,
+    translation_results: list[dict[str, Any]],
+    repo_root: Path,
+) -> None:
+    report_payload = _load_report(report_in_path)
+    report_payload["translation_results"] = translation_results
+    _validate_json_payload(
+        report_payload,
+        schema_path=repo_root / "schemas" / "report.schema.json",
+        payload_name="Report",
+    )
+    try:
+        report_out_path.parent.mkdir(parents=True, exist_ok=True)
+        report_out_path.write_text(
+            json.dumps(report_payload, indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        raise ValueError(f"Failed to write report JSON: {report_out_path}: {exc}") from exc
 
 
 def _load_report_from_path_or_dir(path: Path) -> tuple[dict[str, Any], Path | None]:
@@ -5897,6 +6023,41 @@ def main(argv: list[str] | None = None) -> int:
         default="text",
         help="Output format for translation profile details.",
     )
+    translation_run_parser = translation_subparsers.add_parser(
+        "run",
+        help="Run deterministic meter-only translation checks from a WAV file.",
+    )
+    translation_run_parser.add_argument(
+        "--audio",
+        required=True,
+        help="Path to mono/stereo WAV input.",
+    )
+    translation_run_parser.add_argument(
+        "--profiles",
+        required=True,
+        help="Comma-separated translation profile IDs.",
+    )
+    translation_run_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for translation check results.",
+    )
+    translation_run_parser.add_argument(
+        "--out",
+        default=None,
+        help="Optional output JSON path for translation_results list.",
+    )
+    translation_run_parser.add_argument(
+        "--report-in",
+        default=None,
+        help="Optional input report JSON path to patch translation_results.",
+    )
+    translation_run_parser.add_argument(
+        "--report-out",
+        default=None,
+        help="Output report JSON path for patched translation_results.",
+    )
 
     locks_parser = subparsers.add_parser("locks", help="Scene lock registry tools.")
     locks_subparsers = locks_parser.add_subparsers(dest="locks_command", required=True)
@@ -7708,6 +7869,44 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(payload, indent=2, sort_keys=True))
             else:
                 print(_render_translation_profile_text(payload))
+            return 0
+        if args.translation_command == "run":
+            report_in_raw = args.report_in if isinstance(args.report_in, str) else ""
+            report_out_raw = args.report_out if isinstance(args.report_out, str) else ""
+            report_in_value = report_in_raw.strip()
+            report_out_value = report_out_raw.strip()
+            if bool(report_in_value) != bool(report_out_value):
+                print(
+                    "translation run requires both --report-in and --report-out when patching a report.",
+                    file=sys.stderr,
+                )
+                return 1
+            try:
+                profile_ids = _parse_translation_profile_ids_csv(
+                    args.profiles,
+                    translation_profiles_path=translation_profiles_path,
+                )
+                payload = _build_translation_run_payload(
+                    translation_profiles_path=translation_profiles_path,
+                    audio_path=Path(args.audio),
+                    profile_ids=profile_ids,
+                )
+                if isinstance(args.out, str) and args.out.strip():
+                    _write_translation_results_json(Path(args.out), payload)
+                if report_in_value and report_out_value:
+                    _write_report_with_translation_results(
+                        report_in_path=Path(report_in_value),
+                        report_out_path=Path(report_out_value),
+                        translation_results=payload,
+                        repo_root=repo_root,
+                    )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_translation_results_text(payload))
             return 0
         print("Unknown translation command.", file=sys.stderr)
         return 2
