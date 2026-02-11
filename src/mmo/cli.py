@@ -942,6 +942,8 @@ def _run_scene_build_command(
     report_path: Path,
     out_path: Path,
     timeline_path: Path | None,
+    template_ids: list[str] | None = None,
+    force_templates: bool = False,
 ) -> int:
     report = _load_report(report_path)
     _validate_json_payload(
@@ -956,6 +958,12 @@ def _run_scene_build_command(
         timeline_payload=timeline_payload,
         lock_hash=None,
         created_from="analyze",
+    )
+    scene_payload = _apply_scene_templates_to_payload(
+        repo_root=repo_root,
+        scene_payload=scene_payload,
+        template_ids=template_ids or [],
+        force=force_templates,
     )
     _write_json_file(out_path, scene_payload)
     return 0
@@ -1090,6 +1098,33 @@ def _run_scene_intent_set_command(
     return 0
 
 
+def _apply_scene_templates_to_payload(
+    *,
+    repo_root: Path,
+    scene_payload: dict[str, Any],
+    template_ids: list[str],
+    force: bool,
+) -> dict[str, Any]:
+    normalized_template_ids = [
+        template_id.strip()
+        for template_id in template_ids
+        if isinstance(template_id, str) and template_id.strip()
+    ]
+    if not normalized_template_ids:
+        return scene_payload
+
+    edited = apply_scene_templates(
+        scene_payload,
+        normalized_template_ids,
+        force=force,
+        scene_templates_path=repo_root / "ontology" / "scene_templates.yaml",
+        scene_locks_path=repo_root / "ontology" / "scene_locks.yaml",
+    )
+    _validate_scene_schema(repo_root=repo_root, scene_payload=edited)
+    _validate_scene_intent_rules(repo_root=repo_root, scene_payload=edited)
+    return edited
+
+
 def _run_scene_template_apply_command(
     *,
     repo_root: Path,
@@ -1100,15 +1135,12 @@ def _run_scene_template_apply_command(
 ) -> int:
     scene_payload = _load_json_object(scene_path, label="Scene")
     _validate_scene_schema(repo_root=repo_root, scene_payload=scene_payload)
-    edited = apply_scene_templates(
-        scene_payload,
-        template_ids,
+    edited = _apply_scene_templates_to_payload(
+        repo_root=repo_root,
+        scene_payload=scene_payload,
+        template_ids=template_ids,
         force=force,
-        scene_templates_path=repo_root / "ontology" / "scene_templates.yaml",
-        scene_locks_path=repo_root / "ontology" / "scene_locks.yaml",
     )
-    _validate_scene_schema(repo_root=repo_root, scene_payload=edited)
-    _validate_scene_intent_rules(repo_root=repo_root, scene_payload=edited)
     _write_json_file(out_path, edited)
     return 0
 
@@ -2002,6 +2034,20 @@ def _render_scene_template_text(payload: dict[str, Any]) -> str:
             if isinstance(patch, dict):
                 lines.append(f"- {json.dumps(patch, sort_keys=True)}")
     return "\n".join(lines)
+
+
+def _parse_scene_template_ids_csv(raw_value: str) -> list[str]:
+    if not isinstance(raw_value, str):
+        raise ValueError("scene templates must be a comma-separated string.")
+
+    template_ids = [
+        template_id.strip()
+        for template_id in raw_value.split(",")
+        if isinstance(template_id, str) and template_id.strip()
+    ]
+    if not template_ids:
+        raise ValueError("scene templates must include at least one template ID.")
+    return template_ids
 
 
 def _parse_target_ids_csv(raw_value: str, *, render_targets_path: Path) -> list[str]:
@@ -3231,6 +3277,7 @@ def _run_render_many_workflow(
     export_csv: bool,
     scene_requested: bool,
     render_plan_requested: bool,
+    scene_template_ids: list[str] | None,
     target_ids: list[str],
     contexts: list[str],
     deliverables_index: bool,
@@ -3450,6 +3497,21 @@ def _run_render_many_workflow(
             return 1
         except SystemExit as exc:
             return int(exc.code) if isinstance(exc.code, int) else 1
+
+    if scene_payload is not None and isinstance(scene_template_ids, list) and scene_template_ids:
+        try:
+            scene_payload = _apply_scene_templates_to_payload(
+                repo_root=repo_root,
+                scene_payload=scene_payload,
+                template_ids=scene_template_ids,
+                force=False,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+        _write_json_file(scene_path, scene_payload)
 
     if should_build_render_plan:
         if scene_payload is None:
@@ -3705,6 +3767,14 @@ def _run_workflow_from_run_args(
         ]
         if not contexts:
             contexts = ["render"]
+        scene_template_ids: list[str] = []
+        scene_templates_value = getattr(args, "scene_templates", None)
+        if isinstance(scene_templates_value, str) and scene_templates_value.strip():
+            try:
+                scene_template_ids = _parse_scene_template_ids_csv(scene_templates_value)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1, "variants"
 
         exit_code = _run_render_many_workflow(
             repo_root=repo_root,
@@ -3724,6 +3794,7 @@ def _run_workflow_from_run_args(
             export_csv=args.export_csv,
             scene_requested=getattr(args, "scene", False),
             render_plan_requested=getattr(args, "render_plan", False),
+            scene_template_ids=scene_template_ids,
             target_ids=target_ids,
             contexts=contexts,
             deliverables_index=args.deliverables_index,
@@ -4746,6 +4817,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Build a render_plan.json artifact (auto-builds scene.json if needed).",
     )
     run_parser.add_argument(
+        "--scene-templates",
+        default=None,
+        help="Comma-separated scene template IDs applied in --render-many before render-plan/variants.",
+    )
+    run_parser.add_argument(
         "--render-many",
         action="store_true",
         help="Mix once, then render many targets via scene/render_plan -> variants.",
@@ -5753,6 +5829,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Build a render_plan.json artifact (auto-builds scene.json if needed).",
     )
     project_run_parser.add_argument(
+        "--scene-templates",
+        default=None,
+        help="Comma-separated scene template IDs applied in --render-many before render-plan/variants.",
+    )
+    project_run_parser.add_argument(
         "--render-many",
         action="store_true",
         help="Mix once, then render many targets via scene/render_plan -> variants.",
@@ -6051,6 +6132,16 @@ def main(argv: list[str] | None = None) -> int:
         "--out",
         required=True,
         help="Path to output scene JSON.",
+    )
+    scene_build_parser.add_argument(
+        "--templates",
+        default=None,
+        help="Optional comma-separated scene template IDs to apply in order.",
+    )
+    scene_build_parser.add_argument(
+        "--force-templates",
+        action="store_true",
+        help="When used with --templates, overwrite existing intent fields (hard locks still apply).",
     )
     scene_show_parser = scene_subparsers.add_parser(
         "show",
@@ -7426,11 +7517,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "scene":
         if args.scene_command == "build":
             try:
+                template_ids: list[str] = []
+                if isinstance(args.templates, str) and args.templates.strip():
+                    template_ids = _parse_scene_template_ids_csv(args.templates)
                 return _run_scene_build_command(
                     repo_root=repo_root,
                     report_path=Path(args.report),
                     out_path=Path(args.out),
                     timeline_path=Path(args.timeline) if args.timeline else None,
+                    template_ids=template_ids,
+                    force_templates=bool(args.force_templates),
                 )
             except (RuntimeError, ValueError) as exc:
                 print(str(exc), file=sys.stderr)

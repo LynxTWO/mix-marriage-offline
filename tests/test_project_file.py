@@ -274,6 +274,8 @@ class TestProjectFile(unittest.TestCase):
                         "--out",
                         str(out_dir),
                         "--render-many",
+                        "--scene-templates",
+                        "TEMPLATE.SCENE.STEREO.BAND_WIDE_VOCAL_CENTER",
                         "--targets",
                         "Stereo (streaming),5.1 (home theater)",
                         "--deliverables-index",
@@ -288,6 +290,10 @@ class TestProjectFile(unittest.TestCase):
             self.assertEqual(
                 patched_render_many.call_args.kwargs["target_ids"],
                 ["TARGET.STEREO.2_0", "TARGET.SURROUND.5_1"],
+            )
+            self.assertEqual(
+                patched_render_many.call_args.kwargs["scene_template_ids"],
+                ["TEMPLATE.SCENE.STEREO.BAND_WIDE_VOCAL_CENTER"],
             )
 
             project = load_project(project_path)

@@ -8,6 +8,7 @@ import tempfile
 import unittest
 import wave
 from pathlib import Path
+from unittest import mock
 
 import jsonschema
 from referencing import Registry, Resource
@@ -463,6 +464,77 @@ class TestCliRun(unittest.TestCase):
                 second_exit = main(command)
             self.assertEqual(second_exit, 0)
             self.assertIn("analysis cache: hit", stdout_second.getvalue())
+
+    def test_run_render_many_applies_scene_templates_before_render_plan_build(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            out_dir = temp_path / "out"
+            _write_wav_16bit(stems_dir / "drums" / "kick.wav")
+
+            captured_scene_payload: dict[str, object] = {}
+            original_build_render_plan = main.__globals__["_build_validated_render_plan_payload"]
+
+            def _capture_render_plan_call(*args: object, **kwargs: object) -> dict[str, object]:
+                scene_payload = kwargs.get("scene_payload")
+                if isinstance(scene_payload, dict):
+                    captured_scene_payload["scene_payload"] = json.loads(
+                        json.dumps(scene_payload)
+                    )
+                return original_build_render_plan(*args, **kwargs)
+
+            with mock.patch(
+                "mmo.cli._build_validated_render_plan_payload",
+                side_effect=_capture_render_plan_call,
+            ):
+                exit_code = main(
+                    [
+                        "run",
+                        "--stems",
+                        str(stems_dir),
+                        "--out",
+                        str(out_dir),
+                        "--preset",
+                        "PRESET.SAFE_CLEANUP",
+                        "--render-many",
+                        "--targets",
+                        "Stereo (streaming)",
+                        "--scene-templates",
+                        "TEMPLATE.SCENE.STEREO.BAND_WIDE_VOCAL_CENTER",
+                        "--cache",
+                        "off",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertIn("scene_payload", captured_scene_payload)
+            captured_scene = captured_scene_payload["scene_payload"]
+            self.assertIsInstance(captured_scene, dict)
+            if not isinstance(captured_scene, dict):
+                return
+
+            objects = captured_scene.get("objects")
+            self.assertIsInstance(objects, list)
+            if not isinstance(objects, list):
+                return
+            self.assertGreaterEqual(len(objects), 1)
+            for item in objects:
+                if not isinstance(item, dict):
+                    continue
+                intent = item.get("intent")
+                self.assertIsInstance(intent, dict)
+                if not isinstance(intent, dict):
+                    continue
+                self.assertEqual(intent.get("width"), 0.6)
+                self.assertEqual(intent.get("depth"), 0.4)
+                self.assertEqual(intent.get("loudness_bias"), "neutral")
+                self.assertEqual(intent.get("locks"), [])
+
+            scene_path = out_dir / "scene.json"
+            self.assertTrue(scene_path.exists())
+            scene_payload = json.loads(scene_path.read_text(encoding="utf-8"))
+            scene_objects = scene_payload.get("objects")
+            self.assertIsInstance(scene_objects, list)
 
 
 if __name__ == "__main__":
