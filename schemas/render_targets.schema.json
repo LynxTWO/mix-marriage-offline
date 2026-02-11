@@ -48,6 +48,10 @@
         },
         "downmix_policy_id": { "type": "string", "minLength": 1 },
         "safety_policy_id": { "type": "string", "minLength": 1 },
+        "aliases": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
         "notes": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 }

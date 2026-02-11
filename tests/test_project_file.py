@@ -275,7 +275,7 @@ class TestProjectFile(unittest.TestCase):
                         str(out_dir),
                         "--render-many",
                         "--targets",
-                        "TARGET.STEREO.2_0,TARGET.SURROUND.5_1",
+                        "Stereo (streaming),5.1 (home theater)",
                         "--deliverables-index",
                         "--cache",
                         "off",
@@ -285,6 +285,10 @@ class TestProjectFile(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertTrue(patched_render_many.called)
             self.assertEqual(patched_render_many.call_args.kwargs["stems_dir"], stems_dir)
+            self.assertEqual(
+                patched_render_many.call_args.kwargs["target_ids"],
+                ["TARGET.STEREO.2_0", "TARGET.SURROUND.5_1"],
+            )
 
             project = load_project(project_path)
             validator.validate(project)

@@ -383,7 +383,7 @@ class TestCliRun(unittest.TestCase):
                 "PRESET.SAFE_CLEANUP",
                 "--render-many",
                 "--targets",
-                "TARGET.STEREO.2_0,TARGET.SURROUND.5_1",
+                "Stereo (streaming),5.1 (home theater)",
                 "--deliverables-index",
                 "--cache",
                 "on",

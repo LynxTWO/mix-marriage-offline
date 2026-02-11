@@ -33,7 +33,11 @@ from mmo.core.presets import (
 )
 from mmo.core.render_plan import build_render_plan
 from mmo.core.render_plan_bridge import render_plan_to_variant_plan
-from mmo.core.render_targets import get_render_target, list_render_targets
+from mmo.core.render_targets import (
+    get_render_target,
+    list_render_targets,
+    resolve_render_target_id,
+)
 from mmo.core.scene_templates import (
     apply_scene_templates,
     get_scene_template,
@@ -1821,25 +1825,10 @@ def _build_render_target_show_payload(
     render_targets_path: Path,
     target_id: str,
 ) -> dict[str, Any]:
-    normalized_target_id = target_id.strip() if isinstance(target_id, str) else ""
-    if not normalized_target_id:
-        raise ValueError("target_id must be a non-empty string.")
-
-    payload = get_render_target(normalized_target_id, render_targets_path)
+    resolved_target_id = resolve_render_target_id(target_id, render_targets_path)
+    payload = get_render_target(resolved_target_id, render_targets_path)
     if payload is None:
-        targets = list_render_targets(render_targets_path)
-        available = ", ".join(
-            item["target_id"]
-            for item in targets
-            if isinstance(item.get("target_id"), str)
-        )
-        if available:
-            raise ValueError(
-                f"Unknown target_id: {normalized_target_id}. Available targets: {available}"
-            )
-        raise ValueError(
-            f"Unknown target_id: {normalized_target_id}. No render targets are available."
-        )
+        raise ValueError(f"Resolved target is missing from registry: {resolved_target_id}")
     return payload
 
 
@@ -1850,6 +1839,17 @@ def _render_target_text(payload: dict[str, Any]) -> str:
         f"layout_id: {_coerce_str(payload.get('layout_id')).strip()}",
         f"channel_order_ref: {_coerce_str(payload.get('channel_order_ref')).strip()}",
     ]
+
+    aliases = payload.get("aliases")
+    normalized_aliases = (
+        [item for item in aliases if isinstance(item, str) and item.strip()]
+        if isinstance(aliases, list)
+        else []
+    )
+    if normalized_aliases:
+        lines.append("aliases:")
+        for alias in normalized_aliases:
+            lines.append(f"- {alias}")
 
     downmix_policy_id = _coerce_str(payload.get("downmix_policy_id")).strip()
     safety_policy_id = _coerce_str(payload.get("safety_policy_id")).strip()
@@ -2004,7 +2004,7 @@ def _render_scene_template_text(payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _parse_target_ids_csv(raw_value: str) -> list[str]:
+def _parse_target_ids_csv(raw_value: str, *, render_targets_path: Path) -> list[str]:
     if not isinstance(raw_value, str):
         raise ValueError("targets must be a comma-separated string.")
 
@@ -2012,10 +2012,10 @@ def _parse_target_ids_csv(raw_value: str) -> list[str]:
     for item in raw_value.split(","):
         normalized = item.strip()
         if normalized:
-            selected.add(normalized)
+            selected.add(resolve_render_target_id(normalized, render_targets_path))
 
     if not selected:
-        raise ValueError("targets must include at least one target ID.")
+        raise ValueError("targets must include at least one target ID or alias.")
     return sorted(selected)
 
 
@@ -2025,17 +2025,16 @@ def _build_selected_render_targets_payload(
     render_targets_path: Path,
 ) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
-    for target_id in sorted(target_ids):
+    resolved_target_ids = sorted(
+        {
+            resolve_render_target_id(target_id, render_targets_path)
+            for target_id in target_ids
+        }
+    )
+    for target_id in resolved_target_ids:
         payload = get_render_target(target_id, render_targets_path)
         if payload is None:
-            available = ", ".join(
-                item["target_id"]
-                for item in list_render_targets(render_targets_path)
-                if isinstance(item.get("target_id"), str)
-            )
-            if available:
-                raise ValueError(f"Unknown target_id: {target_id}. Available targets: {available}")
-            raise ValueError(f"Unknown target_id: {target_id}. No render targets are available.")
+            raise ValueError(f"Resolved target is missing from registry: {target_id}")
         rows.append(dict(payload))
     return {"targets": rows}
 
@@ -3682,7 +3681,8 @@ def _run_workflow_from_run_args(
             return 1, "variants"
         try:
             target_ids = _parse_target_ids_csv(
-                getattr(args, "targets", _BASELINE_RENDER_TARGET_ID)
+                getattr(args, "targets", _BASELINE_RENDER_TARGET_ID),
+                render_targets_path=repo_root / "ontology" / "render_targets.yaml",
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
@@ -4754,7 +4754,7 @@ def main(argv: list[str] | None = None) -> int:
         "--targets",
         default=_BASELINE_RENDER_TARGET_ID,
         help=(
-            "Comma-separated target IDs for --render-many "
+            "Comma-separated target IDs or aliases for --render-many "
             "(default: TARGET.STEREO.2_0)."
         ),
     )
@@ -5483,10 +5483,15 @@ def main(argv: list[str] | None = None) -> int:
         default="text",
         help="Output format for the render target list.",
     )
+    targets_list_parser.add_argument(
+        "--long",
+        action="store_true",
+        help="Show notes and aliases in text output.",
+    )
     targets_show_parser = targets_subparsers.add_parser("show", help="Show one render target.")
     targets_show_parser.add_argument(
         "target_id",
-        help="Render target ID (e.g., TARGET.STEREO.2_0).",
+        help="Render target ID or alias (e.g., TARGET.STEREO.2_0, Stereo (streaming)).",
     )
     targets_show_parser.add_argument(
         "--format",
@@ -5756,7 +5761,7 @@ def main(argv: list[str] | None = None) -> int:
         "--targets",
         default=_BASELINE_RENDER_TARGET_ID,
         help=(
-            "Comma-separated target IDs for --render-many "
+            "Comma-separated target IDs or aliases for --render-many "
             "(default: TARGET.STEREO.2_0)."
         ),
     )
@@ -6277,7 +6282,10 @@ def main(argv: list[str] | None = None) -> int:
     render_plan_build_parser.add_argument(
         "--targets",
         required=True,
-        help="Comma-separated target IDs (e.g., TARGET.STEREO.2_0,TARGET.SURROUND.5_1).",
+        help=(
+            "Comma-separated target IDs or aliases "
+            "(e.g., TARGET.STEREO.2_0,5.1 (home theater))."
+        ),
     )
     render_plan_build_parser.add_argument(
         "--out",
@@ -7157,12 +7165,44 @@ def main(argv: list[str] | None = None) -> int:
             if args.format == "json":
                 print(json.dumps(payload, indent=2, sort_keys=True))
             else:
-                for item in payload:
-                    print(
-                        f"{item.get('target_id', '')}"
-                        f"  {item.get('label', '')}"
-                        f"  {item.get('layout_id', '')}"
-                    )
+                if not args.long:
+                    for item in payload:
+                        print(
+                            f"{item.get('target_id', '')}"
+                            f"  {item.get('label', '')}"
+                            f"  {item.get('layout_id', '')}"
+                        )
+                else:
+                    for index, item in enumerate(payload):
+                        if index > 0:
+                            print("")
+                        print(
+                            f"{item.get('target_id', '')}"
+                            f"  {item.get('label', '')}"
+                            f"  {item.get('layout_id', '')}"
+                        )
+                        aliases = item.get("aliases")
+                        normalized_aliases = (
+                            [
+                                alias
+                                for alias in aliases
+                                if isinstance(alias, str) and alias.strip()
+                            ]
+                            if isinstance(aliases, list)
+                            else []
+                        )
+                        if normalized_aliases:
+                            print(f"aliases: {', '.join(normalized_aliases)}")
+                        notes = item.get("notes")
+                        normalized_notes = (
+                            [note for note in notes if isinstance(note, str) and note.strip()]
+                            if isinstance(notes, list)
+                            else []
+                        )
+                        if normalized_notes:
+                            print("notes:")
+                            for note in normalized_notes:
+                                print(f"- {note}")
             return 0
         if args.targets_command == "show":
             try:
@@ -7528,7 +7568,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "render-plan":
         if args.render_plan_command == "build":
             try:
-                target_ids = _parse_target_ids_csv(args.targets)
+                target_ids = _parse_target_ids_csv(
+                    args.targets,
+                    render_targets_path=repo_root / "ontology" / "render_targets.yaml",
+                )
                 output_formats = _parse_output_formats_csv(args.output_formats)
                 contexts = (
                     list(args.context)

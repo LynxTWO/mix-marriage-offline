@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -305,3 +306,57 @@ def get_render_target(target_id: str, path: Path | None = None) -> dict[str, Any
         if target.get("target_id") == normalized_target_id:
             return dict(target)
     return None
+
+
+def _normalize_alias_token(token: str) -> str:
+    return re.sub(r"\s+", "", token).casefold()
+
+
+def resolve_render_target_id(token: str, path: Path | None = None) -> str:
+    normalized_token = token.strip() if isinstance(token, str) else ""
+    if not normalized_token:
+        raise ValueError("Render target token must be a non-empty string.")
+
+    targets = list_render_targets(path)
+    target_ids = sorted(
+        target_id
+        for target_id in (item.get("target_id") for item in targets)
+        if isinstance(target_id, str) and target_id
+    )
+    if normalized_token in target_ids:
+        return normalized_token
+
+    normalized_alias = _normalize_alias_token(normalized_token)
+    matched_target_ids: set[str] = set()
+    for target in targets:
+        target_id = target.get("target_id")
+        if not isinstance(target_id, str) or not target_id:
+            continue
+        aliases = target.get("aliases")
+        if not isinstance(aliases, list):
+            continue
+        if any(
+            isinstance(alias, str)
+            and alias.strip()
+            and _normalize_alias_token(alias) == normalized_alias
+            for alias in aliases
+        ):
+            matched_target_ids.add(target_id)
+
+    sorted_matches = sorted(matched_target_ids)
+    if len(sorted_matches) > 1:
+        raise ValueError(
+            "Ambiguous render target token: "
+            f"{normalized_token}. Matching targets: {', '.join(sorted_matches)}"
+        )
+    if len(sorted_matches) == 1:
+        return sorted_matches[0]
+    if target_ids:
+        raise ValueError(
+            f"Unknown render target token: {normalized_token}. "
+            f"Available targets: {', '.join(target_ids)}"
+        )
+    raise ValueError(
+        f"Unknown render target token: {normalized_token}. "
+        "No render targets are available."
+    )

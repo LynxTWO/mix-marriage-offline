@@ -97,7 +97,7 @@ class TestCliRenderPlan(unittest.TestCase):
                     "--scene",
                     str(scene_path),
                     "--targets",
-                    "TARGET.STEREO.2_0,TARGET.SURROUND.5_1",
+                    "Stereo (streaming),5.1 (home theater)",
                     "--out",
                     str(render_plan_path),
                     "--routing-plan",
@@ -117,6 +117,21 @@ class TestCliRenderPlan(unittest.TestCase):
 
             payload = json.loads(render_plan_path.read_text(encoding="utf-8"))
             validator.validate(payload)
+            self.assertEqual(
+                payload.get("targets"),
+                ["TARGET.STEREO.2_0", "TARGET.SURROUND.5_1"],
+            )
+            jobs = payload.get("jobs")
+            self.assertIsInstance(jobs, list)
+            if isinstance(jobs, list):
+                self.assertEqual(
+                    [
+                        item.get("target_id")
+                        for item in jobs
+                        if isinstance(item, dict)
+                    ],
+                    ["TARGET.STEREO.2_0", "TARGET.SURROUND.5_1"],
+                )
 
             show_json_stdout = StringIO()
             with redirect_stdout(show_json_stdout):

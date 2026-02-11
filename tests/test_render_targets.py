@@ -1,6 +1,7 @@
 import json
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import jsonschema
 import yaml
@@ -9,6 +10,7 @@ from mmo.core.render_targets import (
     get_render_target,
     list_render_targets,
     load_render_targets,
+    resolve_render_target_id,
 )
 from mmo.core.speaker_positions import get_layout_positions
 from mmo.dsp.downmix import load_layouts
@@ -114,6 +116,60 @@ class TestRenderTargetsRegistry(unittest.TestCase):
         self.assertIsInstance(stereo, dict)
         if isinstance(stereo, dict):
             self.assertEqual(stereo.get("layout_id"), "LAYOUT.2_0")
+
+    def test_resolve_render_target_id_accepts_aliases(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        targets_path = repo_root / "ontology" / "render_targets.yaml"
+        self.assertEqual(
+            resolve_render_target_id(" stereo   (streaming) ", targets_path),
+            "TARGET.STEREO.2_0",
+        )
+        self.assertEqual(
+            resolve_render_target_id("5.1(home  theater)", targets_path),
+            "TARGET.SURROUND.5_1",
+        )
+
+    def test_resolve_render_target_id_reports_ambiguous_aliases_deterministically(self) -> None:
+        with mock.patch(
+            "mmo.core.render_targets.list_render_targets",
+            return_value=[
+                {
+                    "target_id": "TARGET.ALPHA",
+                    "aliases": ["Shared Name"],
+                },
+                {
+                    "target_id": "TARGET.BETA",
+                    "aliases": ["shared   name"],
+                },
+            ],
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                resolve_render_target_id("shared name")
+        self.assertEqual(
+            str(ctx.exception),
+            (
+                "Ambiguous render target token: shared name. Matching targets: "
+                "TARGET.ALPHA, TARGET.BETA"
+            ),
+        )
+
+    def test_resolve_render_target_id_reports_unknown_with_sorted_available_targets(self) -> None:
+        with mock.patch(
+            "mmo.core.render_targets.list_render_targets",
+            return_value=[
+                {"target_id": "TARGET.SURROUND.5_1"},
+                {"target_id": "TARGET.STEREO.2_0"},
+            ],
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                resolve_render_target_id("nope")
+        self.assertEqual(
+            str(ctx.exception),
+            (
+                "Unknown render target token: nope. Available targets: "
+                "TARGET.STEREO.2_0, TARGET.SURROUND.5_1"
+            ),
+        )
 
 
 if __name__ == "__main__":

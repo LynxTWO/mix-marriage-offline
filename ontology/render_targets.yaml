@@ -2,6 +2,9 @@ schema_version: "0.1.0"
 targets:
   - target_id: "TARGET.STEREO.2_0"
     label: "Stereo"
+    aliases:
+      - "Stereo (streaming)"
+      - "Stereo (everyday)"
     layout_id: "LAYOUT.2_0"
     channel_order_ref: "ontology/layouts.yaml:SPK.L/SPK.R"
     speaker_positions_ref: "LAYOUT.2_0"
@@ -12,6 +15,9 @@ targets:
       - "Use this as your quick reality check before printing final files."
   - target_id: "TARGET.SURROUND.5_1"
     label: "Surround 5.1"
+    aliases:
+      - "5.1 (home theater)"
+      - "5.1 (cinematic)"
     layout_id: "LAYOUT.5_1"
     channel_order_ref: "ontology/layouts.yaml:SPK.L/SPK.R/SPK.C/SPK.LFE/SPK.LS/SPK.RS"
     speaker_positions_ref: "LAYOUT.5_1"
@@ -22,6 +28,8 @@ targets:
       - "Good target when you want wide playback translation beyond stereo."
   - target_id: "TARGET.SURROUND.7_1"
     label: "Surround 7.1"
+    aliases:
+      - "7.1 (cinematic)"
     layout_id: "LAYOUT.7_1"
     channel_order_ref: "ontology/layouts.yaml:SPK.L/SPK.R/SPK.C/SPK.LFE/SPK.LS/SPK.RS/SPK.LRS/SPK.RRS"
     speaker_positions_ref: "LAYOUT.7_1"
