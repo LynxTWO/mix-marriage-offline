@@ -679,6 +679,7 @@ class TestCliRun(unittest.TestCase):
                 "Stereo (streaming),5.1 (home theater)",
                 "--translation",
                 "--translation-audition",
+                "--listen-pack",
                 "--translation-audition-segment",
                 "0.05",
                 "--cache",
@@ -770,6 +771,47 @@ class TestCliRun(unittest.TestCase):
                     if isinstance(rendered_path, str):
                         self.assertTrue(Path(rendered_path).exists())
 
+                listen_pack_path = out_dir / "listen_pack.json"
+                self.assertTrue(listen_pack_path.exists())
+                first_listen_pack = json.loads(listen_pack_path.read_text(encoding="utf-8"))
+                first_translation_auditions = first_listen_pack.get("translation_auditions")
+                self.assertIsInstance(first_translation_auditions, dict)
+                if not isinstance(first_translation_auditions, dict):
+                    return
+                self.assertEqual(
+                    first_translation_auditions.get("manifest_path"),
+                    "listen_pack/translation_auditions/manifest.json",
+                )
+                self.assertEqual(
+                    first_translation_auditions.get("segment"),
+                    {"start_s": 0.0, "end_s": 0.05},
+                )
+                index_renders = first_translation_auditions.get("renders")
+                self.assertIsInstance(index_renders, list)
+                if not isinstance(index_renders, list):
+                    return
+                self.assertEqual(
+                    [
+                        item.get("profile_id")
+                        for item in index_renders
+                        if isinstance(item, dict)
+                    ],
+                    [
+                        "TRANS.DEVICE.PHONE",
+                        "TRANS.DEVICE.SMALL_SPEAKER",
+                        "TRANS.MONO.COLLAPSE",
+                    ],
+                )
+                self.assertTrue(
+                    all(
+                        isinstance(item, dict)
+                        and isinstance(item.get("path"), str)
+                        and item.get("path", "").startswith("listen_pack/translation_auditions/")
+                        and "\\" not in item.get("path", "")
+                        for item in index_renders
+                    )
+                )
+
                 variant_result = json.loads(
                     (out_dir / "variant_result.json").read_text(encoding="utf-8")
                 )
@@ -818,6 +860,10 @@ class TestCliRun(unittest.TestCase):
                     stereo_bundle.get("translation_summary"),
                     first_translation_summary,
                 )
+                self.assertEqual(
+                    stereo_bundle.get("translation_auditions"),
+                    first_translation_auditions,
+                )
 
                 second_exit = main(command)
                 self.assertEqual(second_exit, 0)
@@ -834,6 +880,11 @@ class TestCliRun(unittest.TestCase):
                     audition_manifest_path.read_text(encoding="utf-8")
                 )
                 self.assertEqual(second_audition_manifest, first_audition_manifest)
+                second_listen_pack = json.loads(listen_pack_path.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    second_listen_pack.get("translation_auditions"),
+                    first_translation_auditions,
+                )
 
     def test_run_render_many_translation_uses_downmix_fallback_when_stereo_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -989,6 +1040,8 @@ class TestCliRun(unittest.TestCase):
                         "--targets",
                         "5.1 (home theater)",
                         "--translation",
+                        "--translation-audition",
+                        "--listen-pack",
                         "--cache",
                         "off",
                     ]
@@ -998,6 +1051,31 @@ class TestCliRun(unittest.TestCase):
             report_payload = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
             self.assertNotIn("translation_results", report_payload)
             self.assertNotIn("translation_reference", report_payload)
+
+            listen_pack_path = out_dir / "listen_pack.json"
+            self.assertTrue(listen_pack_path.exists())
+            listen_pack_payload = json.loads(listen_pack_path.read_text(encoding="utf-8"))
+            self.assertNotIn("translation_auditions", listen_pack_payload)
+
+            variant_result_payload = json.loads(
+                (out_dir / "variant_result.json").read_text(encoding="utf-8")
+            )
+            results = variant_result_payload.get("results")
+            self.assertIsInstance(results, list)
+            if not isinstance(results, list):
+                return
+            for item in results:
+                if not isinstance(item, dict):
+                    continue
+                bundle_path = item.get("bundle_path")
+                self.assertIsInstance(bundle_path, str)
+                if not isinstance(bundle_path, str):
+                    continue
+                bundle_file = Path(bundle_path)
+                if not bundle_file.exists():
+                    continue
+                bundle_payload = json.loads(bundle_file.read_text(encoding="utf-8"))
+                self.assertNotIn("translation_auditions", bundle_payload)
 
     def test_run_render_many_applies_scene_templates_before_render_plan_build(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -2795,6 +2795,126 @@ def _run_render_many_translation_checks(
             continue
 
 
+def _coerce_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _render_many_rel_posix(path: Path, *, root_out_dir: Path) -> str | None:
+    rel_path = _rel_path_if_under_root(root_out_dir, path)
+    if isinstance(rel_path, str) and rel_path:
+        return rel_path
+    return None
+
+
+def _render_many_rel_posix_from_value(
+    path_value: Any,
+    *,
+    root_out_dir: Path,
+) -> str | None:
+    raw = _coerce_str(path_value).strip()
+    if not raw:
+        return None
+    candidate = Path(raw)
+    resolved = candidate.resolve() if candidate.is_absolute() else (root_out_dir / candidate).resolve()
+    return _render_many_rel_posix(resolved, root_out_dir=root_out_dir)
+
+
+def _translation_audition_summary_from_manifest(
+    *,
+    root_out_dir: Path,
+    manifest_path: Path,
+    manifest: dict[str, Any],
+) -> dict[str, Any] | None:
+    manifest_rel_path = _render_many_rel_posix(
+        manifest_path.resolve(),
+        root_out_dir=root_out_dir,
+    )
+    if manifest_rel_path is None:
+        raise ValueError(f"Translation audition manifest path is outside root_out_dir: {manifest_path}")
+
+    renders: list[dict[str, Any]] = []
+    for row in _dict_list(manifest.get("renders")):
+        profile_id = _coerce_str(row.get("profile_id")).strip()
+        rel_render_path = _render_many_rel_posix_from_value(
+            row.get("path"),
+            root_out_dir=root_out_dir,
+        )
+        if not profile_id or rel_render_path is None:
+            continue
+
+        notes_raw = row.get("notes")
+        notes = [
+            item.strip()
+            for item in notes_raw
+            if isinstance(item, str) and item.strip()
+        ] if isinstance(notes_raw, list) else []
+        renders.append(
+            {
+                "profile_id": profile_id,
+                "path": rel_render_path,
+                "notes": notes,
+            }
+        )
+
+    if not renders:
+        return None
+    renders.sort(
+        key=lambda item: (
+            _coerce_str(item.get("profile_id")).strip(),
+            _coerce_str(item.get("path")).strip(),
+            json.dumps(item, sort_keys=True),
+        )
+    )
+
+    segment_raw = manifest.get("segment")
+    segment_payload: dict[str, float] | None = None
+    if isinstance(segment_raw, dict):
+        start_s = _coerce_float(segment_raw.get("start_s"))
+        end_s = _coerce_float(segment_raw.get("end_s"))
+        if start_s is not None and end_s is not None:
+            segment_payload = {
+                "start_s": start_s,
+                "end_s": end_s,
+            }
+
+    return {
+        "manifest_path": manifest_rel_path,
+        "renders": renders,
+        "segment": segment_payload,
+    }
+
+
+def _write_render_many_listen_pack_translation_auditions(
+    *,
+    root_out_dir: Path,
+    listen_pack_path: Path | None,
+    manifest_path: Path,
+    manifest: dict[str, Any],
+) -> None:
+    if not isinstance(listen_pack_path, Path):
+        return
+    if not listen_pack_path.exists() or listen_pack_path.is_dir():
+        return
+
+    resolved_root = root_out_dir.resolve()
+    listen_pack_payload = _load_json_object(listen_pack_path, label="Listen pack")
+    summary = _translation_audition_summary_from_manifest(
+        root_out_dir=resolved_root,
+        manifest_path=manifest_path,
+        manifest=manifest,
+    )
+    if summary is None:
+        listen_pack_payload.pop("translation_auditions", None)
+    else:
+        listen_pack_payload["translation_auditions"] = summary
+
+    _write_json_file(listen_pack_path, listen_pack_payload)
+
+
 def _run_render_many_translation_auditions(
     *,
     repo_root: Path,
@@ -2802,6 +2922,10 @@ def _run_render_many_translation_auditions(
     variant_result: dict[str, Any],
     profile_ids: list[str],
     segment_s: float | None,
+    project_path: Path | None,
+    deliverables_index_path: Path | None,
+    listen_pack_path: Path | None,
+    timeline_path: Path | None,
 ) -> None:
     if not profile_ids:
         return
@@ -2839,6 +2963,45 @@ def _run_render_many_translation_auditions(
             segment_s=segment_s,
         )
         _write_translation_audition_manifest(manifest_path, manifest)
+        _write_render_many_listen_pack_translation_auditions(
+            root_out_dir=root_out_dir,
+            listen_pack_path=listen_pack_path,
+            manifest_path=manifest_path,
+            manifest=manifest,
+        )
+
+        if not isinstance(listen_pack_path, Path):
+            return
+        if not listen_pack_path.exists() or listen_pack_path.is_dir():
+            return
+
+        for artifact in variant_artifacts:
+            variant_report_path = artifact.get("report_path")
+            variant_bundle_path = artifact.get("bundle_path")
+            if not isinstance(variant_bundle_path, Path):
+                continue
+            if not isinstance(variant_report_path, Path) or not variant_report_path.exists():
+                continue
+            if variant_report_path.is_dir():
+                continue
+
+            try:
+                _run_bundle(
+                    repo_root=repo_root,
+                    report_path=variant_report_path,
+                    out_path=variant_bundle_path,
+                    render_manifest_path=artifact.get("render_manifest_path"),
+                    apply_manifest_path=artifact.get("apply_manifest_path"),
+                    applied_report_path=artifact.get("applied_report_path"),
+                    project_path=project_path,
+                    deliverables_index_path=deliverables_index_path,
+                    listen_pack_path=listen_pack_path,
+                    scene_path=None,
+                    render_plan_path=None,
+                    timeline_path=timeline_path,
+                )
+            except ValueError:
+                continue
     except Exception as exc:
         print(
             f"warning: translation audition skipped: {exc}",
@@ -4780,6 +4943,12 @@ def _run_render_many_workflow(
             variant_result=variant_result,
             profile_ids=audition_profile_ids,
             segment_s=translation_audition_segment_s,
+            project_path=project_path,
+            deliverables_index_path=(
+                deliverables_index_path if deliverables_index else None
+            ),
+            listen_pack_path=listen_pack_path if listen_pack else None,
+            timeline_path=resolved_timeline_path,
         )
 
     results = variant_result.get("results")
@@ -6011,6 +6180,11 @@ def main(argv: list[str] | None = None) -> int:
         "--deliverables-index",
         action="store_true",
         help="Also write deliverables_index.json summarizing file deliverables.",
+    )
+    run_parser.add_argument(
+        "--listen-pack",
+        action="store_true",
+        help="Also write listen_pack.json for musician audition guidance.",
     )
     run_parser.add_argument(
         "--cache",

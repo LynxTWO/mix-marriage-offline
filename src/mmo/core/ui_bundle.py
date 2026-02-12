@@ -132,6 +132,71 @@ def _translation_reference(report: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _translation_audition_notes(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
+def _translation_auditions(listen_pack_path: Path | None) -> dict[str, Any] | None:
+    if listen_pack_path is None:
+        return None
+
+    resolved_listen_pack_path = _resolve_repo_path(listen_pack_path)
+    if not resolved_listen_pack_path.exists() or not resolved_listen_pack_path.is_file():
+        return None
+
+    try:
+        listen_pack_payload = _load_json_object(resolved_listen_pack_path, label="Listen pack")
+    except ValueError:
+        return None
+
+    raw = listen_pack_payload.get("translation_auditions")
+    if not isinstance(raw, dict):
+        return None
+
+    manifest_path = _coerce_str(raw.get("manifest_path")).strip().replace("\\", "/")
+    if not manifest_path:
+        return None
+
+    renders: list[dict[str, Any]] = []
+    for row in _iter_dict_list(raw.get("renders")):
+        profile_id = _coerce_str(row.get("profile_id")).strip()
+        render_path = _coerce_str(row.get("path")).strip().replace("\\", "/")
+        if not profile_id or not render_path:
+            continue
+        renders.append(
+            {
+                "profile_id": profile_id,
+                "path": render_path,
+                "notes": _translation_audition_notes(row.get("notes")),
+            }
+        )
+    if not renders:
+        return None
+    renders.sort(
+        key=lambda item: (
+            _coerce_str(item.get("profile_id")).strip(),
+            _coerce_str(item.get("path")).strip(),
+            json.dumps(item, sort_keys=True),
+        )
+    )
+
+    segment_raw = raw.get("segment")
+    segment_payload: dict[str, float] | None = None
+    if isinstance(segment_raw, dict):
+        start_s = _numeric_value(segment_raw.get("start_s"))
+        end_s = _numeric_value(segment_raw.get("end_s"))
+        if start_s is not None and end_s is not None:
+            segment_payload = {"start_s": start_s, "end_s": end_s}
+
+    return {
+        "manifest_path": manifest_path,
+        "renders": renders,
+        "segment": segment_payload,
+    }
+
+
 def _list_length(value: Any) -> int:
     return len(value) if isinstance(value, list) else 0
 
@@ -1252,6 +1317,9 @@ def build_ui_bundle(
     translation_reference = _translation_reference(report)
     if translation_reference is not None:
         payload["translation_reference"] = translation_reference
+    translation_auditions = _translation_auditions(listen_pack_path)
+    if translation_auditions is not None:
+        payload["translation_auditions"] = translation_auditions
     scene_payload = _load_scene_payload(scene_path)
     scene_locks_registry: dict[str, Any] | None = None
     if scene_payload is not None:

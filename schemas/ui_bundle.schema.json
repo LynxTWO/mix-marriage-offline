@@ -20,6 +20,9 @@
     "translation_reference": {
       "$ref": "report.schema.json#/$defs/translation_reference"
     },
+    "translation_auditions": {
+      "$ref": "#/$defs/translation_auditions_summary"
+    },
     "render_manifest": { "$ref": "render_manifest.schema.json" },
     "apply_manifest": { "$ref": "apply_manifest.schema.json" },
     "applied_report": { "$ref": "report.schema.json" },
@@ -38,6 +41,51 @@
     "posix_abs_path": {
       "type": "string",
       "pattern": "^(?:[A-Za-z]:/|/).+"
+    },
+    "posix_rel_path": {
+      "type": "string",
+      "pattern": "^(?![A-Za-z]:/)(?!/)[^\\\\]+$"
+    },
+    "translation_audition_segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_s", "end_s"],
+      "properties": {
+        "start_s": { "type": "number", "minimum": 0 },
+        "end_s": { "type": "number", "minimum": 0 }
+      }
+    },
+    "translation_audition_render": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "path", "notes"],
+      "properties": {
+        "profile_id": { "type": "string", "minLength": 1 },
+        "path": { "$ref": "#/$defs/posix_rel_path" },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "translation_auditions_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_path", "renders", "segment"],
+      "properties": {
+        "manifest_path": { "$ref": "#/$defs/posix_rel_path" },
+        "renders": {
+          "type": "array",
+          "description": "Sorted lexicographically by profile_id.",
+          "items": { "$ref": "#/$defs/translation_audition_render" }
+        },
+        "segment": {
+          "oneOf": [
+            { "$ref": "#/$defs/translation_audition_segment" },
+            { "type": "null" }
+          ]
+        }
+      }
     },
     "help_entry": {
       "type": "object",
