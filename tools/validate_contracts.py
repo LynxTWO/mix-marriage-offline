@@ -60,6 +60,7 @@ SCHEMA_ANCHORS: tuple[str, ...] = (
     "schemas/render_plan.schema.json",
     "schemas/presets_index.schema.json",
     "schemas/lockfile.schema.json",
+    "schemas/stems_index.schema.json",
 )
 
 SCENE_REGISTRIES_CHECK_ID = "SCENE.REGISTRIES"

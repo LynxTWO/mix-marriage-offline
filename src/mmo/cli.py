@@ -61,6 +61,7 @@ from mmo.core.scene_templates import (
 )
 from mmo.core.scene_locks import get_scene_lock, list_scene_locks
 from mmo.core.intent_params import load_intent_params, validate_scene_intent
+from mmo.core.stems_index import build_stems_index, resolve_stem_sets
 from mmo.core.scene_editor import (
     INTENT_PARAM_KEY_TO_ID,
     add_lock as edit_scene_add_lock,
@@ -5379,6 +5380,18 @@ def _render_project_text(project: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _render_stem_sets_text(stem_sets: list[dict[str, Any]]) -> str:
+    lines = [f"found {len(stem_sets)} sets"]
+    for item in stem_sets:
+        rel_dir = item.get("rel_dir") if isinstance(item.get("rel_dir"), str) else ""
+        file_count = item.get("file_count") if isinstance(item.get("file_count"), int) else 0
+        why = item.get("why") if isinstance(item.get("why"), str) else ""
+        lines.append(
+            f"- {rel_dir or '.'}  file_count={file_count}  why={why or 'n/a'}"
+        )
+    return "\n".join(lines)
+
+
 _UIInputProvider = Callable[[str], str]
 _UIOutputWriter = Callable[[str], None]
 
@@ -6127,6 +6140,44 @@ def main(argv: list[str] | None = None) -> int:
         "--cache-dir",
         default=None,
         help="Optional cache directory (default: <repo_root>/.mmo_cache).",
+    )
+
+    stems_parser = subparsers.add_parser("stems", help="Stem-set resolver tools.")
+    stems_subparsers = stems_parser.add_subparsers(dest="stems_command", required=True)
+    stems_scan_parser = stems_subparsers.add_parser(
+        "scan",
+        help="Resolve stem sets and write a stems_index artifact JSON.",
+    )
+    stems_scan_parser.add_argument(
+        "--root",
+        required=True,
+        help="Root directory to scan for stem sets.",
+    )
+    stems_scan_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output stems_index JSON.",
+    )
+    stems_scan_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for stdout summary.",
+    )
+    stems_sets_parser = stems_subparsers.add_parser(
+        "sets",
+        help="List stem-set candidates for a root directory.",
+    )
+    stems_sets_parser.add_argument(
+        "--root",
+        required=True,
+        help="Root directory to scan for stem sets.",
+    )
+    stems_sets_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for stem-set listing.",
     )
 
     run_parser = subparsers.add_parser(
@@ -8248,6 +8299,51 @@ def main(argv: list[str] | None = None) -> int:
             args.meters,
             args.peak,
         )
+    if args.command == "stems":
+        if args.stems_command == "scan":
+            try:
+                payload = build_stems_index(
+                    Path(args.root),
+                    root_dir=args.root,
+                )
+                _validate_json_payload(
+                    payload,
+                    schema_path=repo_root / "schemas" / "stems_index.schema.json",
+                    payload_name="Stems index",
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+
+            _write_json_file(Path(args.out), payload)
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                stem_sets = (
+                    payload.get("stem_sets")
+                    if isinstance(payload.get("stem_sets"), list)
+                    else []
+                )
+                print(_render_stem_sets_text(stem_sets))
+            return 0
+
+        if args.stems_command == "sets":
+            try:
+                payload = resolve_stem_sets(Path(args.root))
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_stem_sets_text(payload))
+            return 0
+
+        print("Unknown stems command.", file=sys.stderr)
+        return 2
     if args.command == "project":
         if args.project_command == "new":
             try:
