@@ -419,6 +419,71 @@ def _sample_report_for_scene_overlay_tests(
     return report
 
 
+def _sample_stems_index_payload() -> dict:
+    return {
+        "version": "0.1.0",
+        "root_dir": "demo_stems",
+        "stem_sets": [
+            {
+                "set_id": "STEMSET.bbbbbbbbbb",
+                "rel_dir": "zeta",
+                "file_count": 2,
+                "score_hint": 0,
+                "why": "folder hints: none",
+            },
+            {
+                "set_id": "STEMSET.aaaaaaaaaa",
+                "rel_dir": "alpha",
+                "file_count": 5,
+                "score_hint": 2,
+                "why": "folder hints: stems",
+            },
+        ],
+        "files": [],
+    }
+
+
+def _sample_stems_map_payload() -> dict:
+    assignments: list[dict] = []
+    counts_by_role: dict[str, int] = {}
+    counts_by_bus_group: dict[str, int] = {}
+    unknown_files = 0
+
+    for idx in range(14):
+        rel_idx = 13 - idx
+        role_id = "ROLE.OTHER.UNKNOWN" if idx % 5 == 0 else "ROLE.DRUM.KICK"
+        bus_group = "BG.OTHER" if role_id == "ROLE.OTHER.UNKNOWN" else "BG.RHYTHM"
+        if role_id == "ROLE.OTHER.UNKNOWN":
+            unknown_files += 1
+        counts_by_role[role_id] = counts_by_role.get(role_id, 0) + 1
+        counts_by_bus_group[bus_group] = counts_by_bus_group.get(bus_group, 0) + 1
+        assignments.append(
+            {
+                "file_id": f"STEMFILE.{idx:010x}",
+                "rel_path": f"stems/{rel_idx:02d}_track.wav",
+                "role_id": role_id,
+                "confidence": round(0.5 + (idx * 0.01), 3),
+                "bus_group": bus_group,
+                "reasons": ["seeded_for_ui_bundle_test"],
+                "link_group_id": None,
+            }
+        )
+
+    return {
+        "version": "0.1.0",
+        "stems_index_ref": "demo/stems_index.json",
+        "roles_ref": "ontology/roles.yaml",
+        "assignments": assignments,
+        "summary": {
+            "counts_by_role": {key: counts_by_role[key] for key in sorted(counts_by_role.keys())},
+            "counts_by_bus_group": {
+                key: counts_by_bus_group[key] for key in sorted(counts_by_bus_group.keys())
+            },
+            "unknown_files": unknown_files,
+        },
+    }
+
+
 class TestUiBundle(unittest.TestCase):
     def test_build_ui_bundle_dashboard_and_schema(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -1475,6 +1540,102 @@ class TestUiBundle(unittest.TestCase):
             {"gui_state_path": gui_state_path.resolve().as_posix()},
         )
         self.assertNotIn("gui_state", bundle)
+
+    def test_build_ui_bundle_embeds_stems_summary_when_paths_are_present(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_index_path = temp_path / "stems_index.json"
+            stems_map_path = temp_path / "stems_map.json"
+            stems_index_path.write_text(
+                json.dumps(_sample_stems_index_payload(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            stems_map_path.write_text(
+                json.dumps(_sample_stems_map_payload(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                stems_index_path=stems_index_path,
+                stems_map_path=stems_map_path,
+            )
+
+        validator.validate(bundle)
+        self.assertEqual(
+            bundle.get("pointers"),
+            {
+                "stems_index_path": stems_index_path.resolve().as_posix(),
+                "stems_map_path": stems_map_path.resolve().as_posix(),
+            },
+        )
+
+        stems_summary = bundle.get("stems_summary")
+        self.assertIsInstance(stems_summary, dict)
+        if not isinstance(stems_summary, dict):
+            return
+
+        stem_sets = stems_summary.get("stem_sets")
+        self.assertIsInstance(stem_sets, list)
+        if isinstance(stem_sets, list) and stem_sets:
+            self.assertEqual(stem_sets[0].get("rel_dir"), "alpha")
+            self.assertEqual(stem_sets[1].get("rel_dir"), "zeta")
+
+        assignments_preview = stems_summary.get("assignments_preview")
+        self.assertIsInstance(assignments_preview, list)
+        if isinstance(assignments_preview, list):
+            self.assertEqual(len(assignments_preview), 12)
+            rel_paths = [
+                item.get("rel_path")
+                for item in assignments_preview
+                if isinstance(item, dict) and isinstance(item.get("rel_path"), str)
+            ]
+            self.assertEqual(rel_paths, sorted(rel_paths))
+
+        self.assertEqual(
+            stems_summary.get("counts_by_bus_group"),
+            {"BG.OTHER": 3, "BG.RHYTHM": 11},
+        )
+        self.assertEqual(stems_summary.get("unknown_files"), 3)
+        self.assertEqual(
+            stems_summary.get("stems_map_path"),
+            stems_map_path.resolve().as_posix(),
+        )
+
+    def test_build_ui_bundle_missing_stems_artifacts_omits_stems_summary(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            missing_stems_index_path = temp_path / "missing_stems_index.json"
+            missing_stems_map_path = temp_path / "missing_stems_map.json"
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                stems_index_path=missing_stems_index_path,
+                stems_map_path=missing_stems_map_path,
+            )
+
+        validator.validate(bundle)
+        self.assertEqual(
+            bundle.get("pointers"),
+            {
+                "stems_index_path": missing_stems_index_path.resolve().as_posix(),
+                "stems_map_path": missing_stems_map_path.resolve().as_posix(),
+            },
+        )
+        self.assertNotIn("stems_summary", bundle)
 
     def test_cli_bundle_writes_schema_valid_payload(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

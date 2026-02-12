@@ -33,6 +33,8 @@ The numeric prefixes reflect a recommended reading order. Gaps may exist as docu
   Guide vs Assist vs Full send, hard stops vs taste gates, safety rules.
 - [11-gui-vision.md](11-gui-vision.md)  
   Musician-first GUI principles, nerd toggle, screens, and rollout milestones.
+- [17-stem-discovery.md](17-stem-discovery.md)  
+  Stem-set scan/classify/review flow, safe override artifact, and confidence-first behavior.
 
 ## Conventions
 

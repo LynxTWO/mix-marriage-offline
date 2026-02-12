@@ -67,7 +67,15 @@ class TestUiExamples(unittest.TestCase):
         }
         self.assertEqual(
             screen_ids,
-            {"DASHBOARD", "PRESETS", "RUN", "RUN_TRANSLATION", "RESULTS", "COMPARE"},
+            {
+                "DASHBOARD",
+                "PRESETS",
+                "RUN",
+                "RUN_TRANSLATION",
+                "RESULTS",
+                "COMPARE",
+                "STEMS_REVIEW",
+            },
         )
 
         modes = {

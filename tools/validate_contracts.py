@@ -63,6 +63,7 @@ SCHEMA_ANCHORS: tuple[str, ...] = (
     "schemas/role_lexicon.schema.json",
     "schemas/stems_index.schema.json",
     "schemas/stems_map.schema.json",
+    "schemas/stems_overrides.schema.json",
 )
 
 SCENE_REGISTRIES_CHECK_ID = "SCENE.REGISTRIES"

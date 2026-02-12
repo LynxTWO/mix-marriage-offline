@@ -12,6 +12,7 @@ except ImportError:  # pragma: no cover - optional dependency
 
 UI_BUNDLE_SCHEMA_VERSION = "0.1.0"
 TOP_ISSUE_LIMIT = 5
+STEMS_ASSIGNMENTS_PREVIEW_LIMIT = 12
 _RISK_LEVELS = {"low", "medium", "high"}
 _BASELINE_RENDER_TARGET_ID = "TARGET.STEREO.2_0"
 _SCENE_LOCK_SEVERITIES = {"hard", "taste"}
@@ -1138,6 +1139,200 @@ def _render_plan_summary(render_plan_path: Path | None) -> dict[str, Any] | None
     }
 
 
+def _load_optional_json(path: Path | None, *, label: str) -> dict[str, Any] | None:
+    if path is None:
+        return None
+
+    resolved_path = _resolve_repo_path(path)
+    if not resolved_path.exists() or not resolved_path.is_file():
+        return None
+
+    try:
+        return _load_json_object(resolved_path, label=label)
+    except ValueError:
+        return None
+
+
+def _stems_summary_stem_sets(stems_index_payload: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(stems_index_payload, dict):
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for item in _iter_dict_list(stems_index_payload.get("stem_sets")):
+        set_id = _coerce_str(item.get("set_id")).strip()
+        rel_dir = _coerce_str(item.get("rel_dir")).strip()
+        file_count = item.get("file_count")
+        score_hint = item.get("score_hint")
+        why = _coerce_str(item.get("why"))
+        if (
+            not set_id
+            or not rel_dir
+            or not isinstance(file_count, int)
+            or isinstance(file_count, bool)
+            or file_count < 0
+            or not isinstance(score_hint, int)
+            or isinstance(score_hint, bool)
+            or score_hint < 0
+            or not why
+        ):
+            continue
+        rows.append(
+            {
+                "set_id": set_id,
+                "rel_dir": rel_dir,
+                "file_count": file_count,
+                "score_hint": score_hint,
+                "why": why,
+            }
+        )
+
+    rows.sort(
+        key=lambda item: (
+            _coerce_str(item.get("rel_dir")).strip(),
+            _coerce_str(item.get("set_id")).strip(),
+        )
+    )
+    return rows
+
+
+def _stems_summary_assignments_preview(
+    stems_map_payload: dict[str, Any] | None,
+    *,
+    limit: int,
+) -> list[dict[str, Any]]:
+    if not isinstance(stems_map_payload, dict):
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for item in _iter_dict_list(stems_map_payload.get("assignments")):
+        file_id = _coerce_str(item.get("file_id")).strip()
+        rel_path = _coerce_str(item.get("rel_path")).strip()
+        role_id = _coerce_str(item.get("role_id")).strip()
+        confidence = _numeric_value(item.get("confidence"))
+        if not file_id or not rel_path or not role_id or confidence is None:
+            continue
+
+        reasons = [
+            reason
+            for reason in item.get("reasons", [])
+            if isinstance(reason, str) and reason
+        ]
+        if not reasons:
+            continue
+
+        link_group_id_value = item.get("link_group_id")
+        link_group_id = (
+            link_group_id_value
+            if isinstance(link_group_id_value, str) and link_group_id_value
+            else None
+        )
+        bus_group_value = item.get("bus_group")
+        bus_group = (
+            bus_group_value
+            if isinstance(bus_group_value, str) and bus_group_value
+            else None
+        )
+        rows.append(
+            {
+                "file_id": file_id,
+                "rel_path": rel_path,
+                "role_id": role_id,
+                "confidence": confidence,
+                "bus_group": bus_group,
+                "reasons": reasons,
+                "link_group_id": link_group_id,
+            }
+        )
+
+    rows.sort(
+        key=lambda item: (
+            _coerce_str(item.get("rel_path")).strip(),
+            _coerce_str(item.get("file_id")).strip(),
+        )
+    )
+    return rows[: max(limit, 0)]
+
+
+def _normalized_counts_object(value: Any) -> dict[str, int]:
+    if not isinstance(value, dict):
+        return {}
+    counts: dict[str, int] = {}
+    for key, raw_count in value.items():
+        if (
+            isinstance(key, str)
+            and key
+            and isinstance(raw_count, int)
+            and not isinstance(raw_count, bool)
+            and raw_count >= 0
+        ):
+            counts[key] = raw_count
+    return {key: counts[key] for key in sorted(counts.keys())}
+
+
+def _stems_summary_counts_by_bus_group(stems_map_payload: dict[str, Any] | None) -> dict[str, int]:
+    if not isinstance(stems_map_payload, dict):
+        return {}
+
+    summary = stems_map_payload.get("summary")
+    if isinstance(summary, dict):
+        summary_counts = _normalized_counts_object(summary.get("counts_by_bus_group"))
+        if summary_counts:
+            return summary_counts
+
+    counts: dict[str, int] = {}
+    for item in _iter_dict_list(stems_map_payload.get("assignments")):
+        bus_group = item.get("bus_group")
+        if isinstance(bus_group, str) and bus_group:
+            counts[bus_group] = counts.get(bus_group, 0) + 1
+    return {key: counts[key] for key in sorted(counts.keys())}
+
+
+def _stems_summary_unknown_files(stems_map_payload: dict[str, Any] | None) -> int:
+    if not isinstance(stems_map_payload, dict):
+        return 0
+
+    summary = stems_map_payload.get("summary")
+    if isinstance(summary, dict):
+        unknown_files = summary.get("unknown_files")
+        if (
+            isinstance(unknown_files, int)
+            and not isinstance(unknown_files, bool)
+            and unknown_files >= 0
+        ):
+            return unknown_files
+
+    return sum(
+        1
+        for item in _iter_dict_list(stems_map_payload.get("assignments"))
+        if item.get("role_id") == "ROLE.OTHER.UNKNOWN"
+    )
+
+
+def _stems_summary(
+    *,
+    stems_map_path: Path | None,
+    stems_index_path: Path | None,
+    assignments_preview_limit: int,
+) -> dict[str, Any] | None:
+    stems_map_payload = _load_optional_json(stems_map_path, label="Stems map")
+    stems_index_payload = _load_optional_json(stems_index_path, label="Stems index")
+    if stems_map_payload is None and stems_index_payload is None:
+        return None
+
+    payload: dict[str, Any] = {
+        "stem_sets": _stems_summary_stem_sets(stems_index_payload),
+        "assignments_preview": _stems_summary_assignments_preview(
+            stems_map_payload,
+            limit=assignments_preview_limit,
+        ),
+        "counts_by_bus_group": _stems_summary_counts_by_bus_group(stems_map_payload),
+        "unknown_files": _stems_summary_unknown_files(stems_map_payload),
+    }
+    if stems_map_path is not None:
+        payload["stems_map_path"] = _path_to_posix(stems_map_path)
+    return payload
+
+
 def _bundle_pointers(
     *,
     project_path: Path | None,
@@ -1145,6 +1340,8 @@ def _bundle_pointers(
     listen_pack_path: Path | None,
     scene_path: Path | None,
     render_plan_path: Path | None,
+    stems_index_path: Path | None,
+    stems_map_path: Path | None,
     timeline_path: Path | None,
     gui_state_path: Path | None,
 ) -> dict[str, str]:
@@ -1157,6 +1354,10 @@ def _bundle_pointers(
         pointers["scene_path"] = _path_to_posix(scene_path)
     if render_plan_path is not None:
         pointers["render_plan_path"] = _path_to_posix(render_plan_path)
+    if stems_index_path is not None:
+        pointers["stems_index_path"] = _path_to_posix(stems_index_path)
+    if stems_map_path is not None:
+        pointers["stems_map_path"] = _path_to_posix(stems_map_path)
     if timeline_path is not None:
         pointers["timeline_path"] = _path_to_posix(timeline_path)
     if gui_state_path is not None:
@@ -1261,6 +1462,8 @@ def build_ui_bundle(
     listen_pack_path: Path | None = None,
     scene_path: Path | None = None,
     render_plan_path: Path | None = None,
+    stems_index_path: Path | None = None,
+    stems_map_path: Path | None = None,
     timeline_path: Path | None = None,
     gui_state_path: Path | None = None,
 ) -> dict[str, Any]:
@@ -1383,12 +1586,22 @@ def build_ui_bundle(
     if render_plan_summary is not None:
         payload["render_plan_summary"] = render_plan_summary
 
+    stems_summary = _stems_summary(
+        stems_map_path=stems_map_path,
+        stems_index_path=stems_index_path,
+        assignments_preview_limit=STEMS_ASSIGNMENTS_PREVIEW_LIMIT,
+    )
+    if stems_summary is not None:
+        payload["stems_summary"] = stems_summary
+
     pointers = _bundle_pointers(
         project_path=project_path,
         deliverables_index_path=deliverables_index_path,
         listen_pack_path=listen_pack_path,
         scene_path=scene_path,
         render_plan_path=render_plan_path,
+        stems_index_path=stems_index_path,
+        stems_map_path=stems_map_path,
         timeline_path=timeline_path,
         gui_state_path=gui_state_path,
     )

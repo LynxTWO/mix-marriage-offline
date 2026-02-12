@@ -35,6 +35,7 @@
     "scene_meta": { "$ref": "#/$defs/scene_meta" },
     "recommendation_overlays": { "$ref": "#/$defs/recommendation_overlays" },
     "render_plan_summary": { "$ref": "#/$defs/render_plan_summary" },
+    "stems_summary": { "$ref": "#/$defs/stems_summary" },
     "pointers": { "$ref": "#/$defs/pointers" }
   },
   "$defs": {
@@ -580,9 +581,50 @@
         "listen_pack_path": { "$ref": "#/$defs/posix_abs_path" },
         "scene_path": { "$ref": "#/$defs/posix_abs_path" },
         "render_plan_path": { "$ref": "#/$defs/posix_abs_path" },
+        "stems_index_path": { "$ref": "#/$defs/posix_abs_path" },
+        "stems_map_path": { "$ref": "#/$defs/posix_abs_path" },
         "timeline_path": { "$ref": "#/$defs/posix_abs_path" },
         "gui_state_path": { "$ref": "#/$defs/posix_abs_path" },
         "project_path": { "$ref": "#/$defs/posix_abs_path" }
+      }
+    },
+    "counts_object": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "stems_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stem_sets",
+        "assignments_preview",
+        "counts_by_bus_group",
+        "unknown_files"
+      ],
+      "properties": {
+        "stem_sets": {
+          "type": "array",
+          "description": "Sorted by rel_dir then set_id.",
+          "items": { "$ref": "stems_index.schema.json#/$defs/stem_set" }
+        },
+        "assignments_preview": {
+          "type": "array",
+          "description": "Sorted by rel_path then file_id; truncated preview rows.",
+          "items": { "$ref": "stems_map.schema.json#/$defs/assignment" }
+        },
+        "counts_by_bus_group": { "$ref": "#/$defs/counts_object" },
+        "unknown_files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stems_map_path": { "$ref": "#/$defs/posix_abs_path" }
       }
     },
     "render_plan_summary": {

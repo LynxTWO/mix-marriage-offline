@@ -1,0 +1,124 @@
+{
+  "schema_version": "0.1.0",
+  "screen_id": "STEMS_REVIEW",
+  "mode": "default",
+  "title": "Stems Review - Override candidates",
+  "description": "Stem discovery and assignment preview with conservative override workflow.",
+  "ui_state": {
+    "selected_tab": "stems_review"
+  },
+  "bundle": {
+    "schema_version": "0.1.0",
+    "generated_at_utc": "2000-01-01T00:00:00Z",
+    "report": {
+      "schema_version": "0.1.0",
+      "report_id": "REPORT.UI.EXAMPLE.STEMS.REVIEW",
+      "project_id": "PROJECT.UI.EXAMPLES",
+      "profile_id": "PROFILE.ASSIST",
+      "generated_at": "2000-01-01T00:00:00Z",
+      "engine_version": "0.1.0",
+      "ontology_version": "0.1.0",
+      "session": {
+        "stems": []
+      },
+      "issues": [],
+      "recommendations": []
+    },
+    "dashboard": {
+      "profile_id": "PROFILE.ASSIST",
+      "top_issues": [],
+      "eligible_counts": {
+        "auto_apply": 0,
+        "render": 0
+      },
+      "blocked_counts": {
+        "auto_apply": 0,
+        "render": 0
+      },
+      "extreme_count": 0,
+      "downmix_qa": {
+        "has_issues": false,
+        "max_delta_lufs": null,
+        "max_delta_true_peak": null,
+        "min_corr": null
+      },
+      "mix_complexity": {
+        "density_mean": 1.0,
+        "density_peak": 2,
+        "top_masking_pairs_count": 0
+      }
+    },
+    "stems_summary": {
+      "stem_sets": [
+        {
+          "set_id": "STEMSET.08f2f48f31",
+          "rel_dir": "album/stems",
+          "file_count": 8,
+          "score_hint": 2,
+          "why": "folder hints: stems"
+        },
+        {
+          "set_id": "STEMSET.e53c0f53ff",
+          "rel_dir": "album/prints",
+          "file_count": 2,
+          "score_hint": 0,
+          "why": "folder hints: none"
+        }
+      ],
+      "assignments_preview": [
+        {
+          "file_id": "STEMFILE.0000000001",
+          "rel_path": "album/stems/01_kick.wav",
+          "role_id": "ROLE.DRUM.KICK",
+          "confidence": 0.917,
+          "bus_group": "BG.RHYTHM",
+          "reasons": [
+            "keyword=kick(+4)",
+            "confidence=0.917"
+          ],
+          "link_group_id": null
+        },
+        {
+          "file_id": "STEMFILE.0000000002",
+          "rel_path": "album/stems/02_snare.wav",
+          "role_id": "ROLE.DRUM.SNARE",
+          "confidence": 0.833,
+          "bus_group": "BG.RHYTHM",
+          "reasons": [
+            "keyword=snare(+4)",
+            "confidence=0.833"
+          ],
+          "link_group_id": null
+        },
+        {
+          "file_id": "STEMFILE.0000000003",
+          "rel_path": "album/stems/07_texture.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "bus_group": "BG.OTHER",
+          "reasons": [
+            "no_match",
+            "fallback=ROLE.OTHER.UNKNOWN"
+          ],
+          "link_group_id": null
+        }
+      ],
+      "counts_by_bus_group": {
+        "BG.OTHER": 1,
+        "BG.RHYTHM": 6,
+        "BG.VOX": 1
+      },
+      "unknown_files": 1,
+      "stems_map_path": "C:/mmo/examples/ui/stems_map.json"
+    },
+    "pointers": {
+      "stems_index_path": "C:/mmo/examples/ui/stems_index.json",
+      "stems_map_path": "C:/mmo/examples/ui/stems_map.json"
+    }
+  },
+  "design_hints": {
+    "badges_expected": [
+      "INFO"
+    ]
+  }
+}

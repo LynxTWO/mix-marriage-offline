@@ -64,6 +64,7 @@ from mmo.core.scene_templates import (
 from mmo.core.scene_locks import get_scene_lock, list_scene_locks
 from mmo.core.intent_params import load_intent_params, validate_scene_intent
 from mmo.core.stems_index import build_stems_index, resolve_stem_sets
+from mmo.core.stems_overrides import apply_overrides, load_stems_overrides
 from mmo.core.scene_editor import (
     INTENT_PARAM_KEY_TO_ID,
     add_lock as edit_scene_add_lock,
@@ -1618,6 +1619,8 @@ def _run_bundle(
     listen_pack_path: Path | None,
     scene_path: Path | None,
     render_plan_path: Path | None,
+    stems_index_path: Path | None,
+    stems_map_path: Path | None,
     timeline_path: Path | None,
     gui_state_path: Path | None = None,
     ui_locale: str | None = None,
@@ -1648,6 +1651,8 @@ def _run_bundle(
         listen_pack_path=listen_pack_path,
         scene_path=scene_path,
         render_plan_path=render_plan_path,
+        stems_index_path=stems_index_path,
+        stems_map_path=stems_map_path,
         timeline_path=timeline_path,
         gui_state_path=gui_state_path,
     )
@@ -2882,6 +2887,8 @@ def _run_render_many_translation_checks(
                 listen_pack_path=listen_pack_path,
                 scene_path=None,
                 render_plan_path=None,
+                stems_index_path=None,
+                stems_map_path=None,
                 timeline_path=timeline_path,
             )
         except ValueError:
@@ -3095,6 +3102,8 @@ def _run_render_many_translation_auditions(
                     listen_pack_path=listen_pack_path,
                     scene_path=None,
                     render_plan_path=None,
+                    stems_index_path=None,
+                    stems_map_path=None,
                     timeline_path=timeline_path,
                 )
             except ValueError:
@@ -4531,6 +4540,8 @@ def _run_one_shot_workflow(
                 listen_pack_path=None,
                 scene_path=scene_path if scene_payload is not None else None,
                 render_plan_path=render_plan_path if render_plan else None,
+                stems_index_path=None,
+                stems_map_path=None,
                 timeline_path=resolved_timeline_path,
             )
         except ValueError as exc:
@@ -5424,6 +5435,35 @@ def _load_stems_index_for_classification(
         return payload, _path_ref(root_path)
 
     raise ValueError("Provide either --index or --root.")
+
+
+def _default_stems_overrides_template() -> str:
+    return (
+        "# Stem assignment overrides.\n"
+        "# Keep overrides sorted by override_id for deterministic behavior.\n"
+        "# If multiple overrides match one file, the first sorted override_id wins.\n"
+        "version: \"0.1.0\"\n"
+        "overrides:\n"
+        "  - override_id: \"OVERRIDE.001\"\n"
+        "    match:\n"
+        "      rel_path: \"stems/kick.wav\"\n"
+        "    role_id: \"ROLE.DRUM.KICK\"\n"
+        "    note: \"Optional note for reviewers\"\n"
+        "  - override_id: \"OVERRIDE.010\"\n"
+        "    match:\n"
+        "      regex: \"^stems/vox.*\\\\.wav$\"\n"
+        "    role_id: \"ROLE.VOCAL.LEAD\"\n"
+    )
+
+
+def _load_stems_map(*, repo_root: Path, map_path: Path) -> dict[str, Any]:
+    payload = _load_json_object(map_path, label="Stems map")
+    _validate_json_payload(
+        payload,
+        schema_path=repo_root / "schemas" / "stems_map.schema.json",
+        payload_name="Stems map",
+    )
+    return payload
 
 
 def _render_stems_map_text(stems_map: dict[str, Any]) -> str:
@@ -6484,6 +6524,73 @@ def main(argv: list[str] | None = None) -> int:
         default="text",
         help="Output format for explanation output.",
     )
+    stems_apply_overrides_parser = stems_subparsers.add_parser(
+        "apply-overrides",
+        help="Apply stems overrides to an existing stems_map JSON.",
+    )
+    stems_apply_overrides_parser.add_argument(
+        "--map",
+        required=True,
+        help="Path to an existing stems_map JSON.",
+    )
+    stems_apply_overrides_parser.add_argument(
+        "--overrides",
+        required=True,
+        help="Path to stems overrides YAML.",
+    )
+    stems_apply_overrides_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output patched stems_map JSON.",
+    )
+    stems_apply_overrides_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for stdout summary.",
+    )
+    stems_review_parser = stems_subparsers.add_parser(
+        "review",
+        help="Review assignments from an existing stems_map JSON.",
+    )
+    stems_review_parser.add_argument(
+        "--map",
+        required=True,
+        help="Path to an existing stems_map JSON.",
+    )
+    stems_review_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for review output.",
+    )
+    stems_overrides_parser = stems_subparsers.add_parser(
+        "overrides",
+        help="Stems override artifact tools.",
+    )
+    stems_overrides_subparsers = stems_overrides_parser.add_subparsers(
+        dest="stems_overrides_command",
+        required=True,
+    )
+    stems_overrides_default_parser = stems_overrides_subparsers.add_parser(
+        "default",
+        help="Write a default stems overrides YAML template.",
+    )
+    stems_overrides_default_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output stems overrides YAML.",
+    )
+    stems_overrides_validate_parser = stems_overrides_subparsers.add_parser(
+        "validate",
+        help="Validate a stems overrides YAML file.",
+    )
+    stems_overrides_validate_parser.add_argument(
+        "--in",
+        dest="in_path",
+        required=True,
+        help="Path to stems overrides YAML.",
+    )
 
     run_parser = subparsers.add_parser(
         "run",
@@ -6924,6 +7031,16 @@ def main(argv: list[str] | None = None) -> int:
         "--render-plan",
         default=None,
         help="Optional path to render_plan JSON for GUI pointer metadata.",
+    )
+    bundle_parser.add_argument(
+        "--stems-index",
+        default=None,
+        help="Optional path to stems_index JSON for GUI pointer metadata.",
+    )
+    bundle_parser.add_argument(
+        "--stems-map",
+        default=None,
+        help="Optional path to stems_map JSON for GUI pointer metadata.",
     )
     bundle_parser.add_argument(
         "--gui-state",
@@ -8741,6 +8858,72 @@ def main(argv: list[str] | None = None) -> int:
                 print(_render_stem_explain_text(payload))
             return 0
 
+        if args.stems_command == "apply-overrides":
+            try:
+                stems_map_payload = _load_stems_map(
+                    repo_root=repo_root,
+                    map_path=Path(args.map),
+                )
+                overrides_payload = load_stems_overrides(Path(args.overrides))
+                payload = apply_overrides(stems_map_payload, overrides_payload)
+                _validate_json_payload(
+                    payload,
+                    schema_path=repo_root / "schemas" / "stems_map.schema.json",
+                    payload_name="Stems map",
+                )
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+
+            _write_json_file(Path(args.out), payload)
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_stems_map_text(payload))
+            return 0
+
+        if args.stems_command == "review":
+            try:
+                payload = _load_stems_map(
+                    repo_root=repo_root,
+                    map_path=Path(args.map),
+                )
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_stems_map_text(payload))
+            return 0
+
+        if args.stems_command == "overrides":
+            if args.stems_overrides_command == "default":
+                out_path = Path(args.out)
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                template = _default_stems_overrides_template()
+                if not template.endswith("\n"):
+                    template += "\n"
+                out_path.write_text(template, encoding="utf-8")
+                return 0
+
+            if args.stems_overrides_command == "validate":
+                try:
+                    load_stems_overrides(Path(args.in_path))
+                except (RuntimeError, ValueError) as exc:
+                    print(str(exc), file=sys.stderr)
+                    return 1
+                print("Stems overrides are valid.")
+                return 0
+
+            print("Unknown stems overrides command.", file=sys.stderr)
+            return 2
+
         print("Unknown stems command.", file=sys.stderr)
         return 2
     if args.command == "project":
@@ -9090,23 +9273,23 @@ def main(argv: list[str] | None = None) -> int:
             print(str(exc), file=sys.stderr)
             return 1
     if args.command == "apply":
-        apply_overrides: dict[str, Any] = {}
+        apply_config_overrides: dict[str, Any] = {}
         if _flag_present(raw_argv, "--profile"):
-            apply_overrides["profile_id"] = args.profile
+            apply_config_overrides["profile_id"] = args.profile
         if _flag_present(raw_argv, "--source-layout"):
             _set_nested(
                 ["downmix", "source_layout_id"],
-                apply_overrides,
+                apply_config_overrides,
                 args.source_layout,
             )
         if _flag_present(raw_argv, "--target-layout"):
             _set_nested(
                 ["downmix", "target_layout_id"],
-                apply_overrides,
+                apply_config_overrides,
                 args.target_layout,
             )
         if _flag_present(raw_argv, "--out-dir"):
-            _set_nested(["render", "out_dir"], apply_overrides, args.out_dir)
+            _set_nested(["render", "out_dir"], apply_config_overrides, args.out_dir)
         if _flag_present(raw_argv, "--output-formats"):
             try:
                 apply_output_formats = _parse_output_formats_csv(args.output_formats)
@@ -9115,13 +9298,13 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
             _set_nested(
                 ["apply", "output_formats"],
-                apply_overrides,
+                apply_config_overrides,
                 apply_output_formats,
             )
         try:
             merged_run_config = _load_and_merge_run_config(
                 args.config,
-                apply_overrides,
+                apply_config_overrides,
                 preset_id=args.preset,
                 presets_dir=presets_dir,
             )
@@ -9181,6 +9364,12 @@ def main(argv: list[str] | None = None) -> int:
                 scene_path=Path(args.scene) if args.scene else None,
                 render_plan_path=(
                     Path(args.render_plan) if getattr(args, "render_plan", None) else None
+                ),
+                stems_index_path=(
+                    Path(args.stems_index) if getattr(args, "stems_index", None) else None
+                ),
+                stems_map_path=(
+                    Path(args.stems_map) if getattr(args, "stems_map", None) else None
                 ),
                 timeline_path=None,
                 gui_state_path=Path(args.gui_state) if args.gui_state else None,

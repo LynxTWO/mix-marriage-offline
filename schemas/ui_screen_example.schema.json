@@ -15,7 +15,8 @@
         "RUN",
         "RUN_TRANSLATION",
         "RESULTS",
-        "COMPARE"
+        "COMPARE",
+        "STEMS_REVIEW"
       ]
     },
     "mode": {
