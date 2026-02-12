@@ -58,11 +58,45 @@ def _write_stereo_wav_16bit(
         handle.writeframes(struct.pack(f"<{len(interleaved)}h", *interleaved))
 
 
+def _write_multichannel_wav_16bit(
+    path: Path,
+    *,
+    channels: int,
+    sample_rate_hz: int = 48000,
+    duration_s: float = 0.1,
+) -> None:
+    frames = int(sample_rate_hz * duration_s)
+    interleaved: list[int] = []
+    for frame_index in range(frames):
+        for channel_index in range(channels):
+            frequency = 180.0 + (55.0 * channel_index)
+            amplitude = max(0.1, 0.45 - (0.03 * channel_index))
+            sample = int(
+                amplitude
+                * 32767.0
+                * math.sin(2.0 * math.pi * frequency * frame_index / sample_rate_hz)
+            )
+            interleaved.append(sample)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(channels)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate_hz)
+        handle.writeframes(struct.pack(f"<{len(interleaved)}h", *interleaved))
+
+
 def _mock_render_many_run_variant_plan(
     *,
     out_dir: Path,
     include_stereo_deliverable: bool,
+    surround_target_ids: set[str] | None = None,
 ):
+    enabled_surround_targets = set(surround_target_ids or set())
+    surround_layouts = {
+        "TARGET.SURROUND.5_1": ("LAYOUT.5_1", 6),
+        "TARGET.SURROUND.7_1": ("LAYOUT.7_1", 8),
+    }
+
     def _fake_run_variant_plan(
         variant_plan: dict,
         repo_root: Path,
@@ -116,6 +150,37 @@ def _mock_render_many_run_variant_plan(
                         "channel_count": 2,
                         "formats": ["wav"],
                         "output_ids": ["OUTPUT.STEREO.001"],
+                    }
+                )
+            elif variant_label in enabled_surround_targets and variant_label in surround_layouts:
+                target_layout_id, channel_count = surround_layouts[variant_label]
+                rendered_name = f"mix.{variant_label.lower().replace('.', '_')}.wav"
+                surround_file_path = variant_dir / "render" / rendered_name
+                _write_multichannel_wav_16bit(
+                    surround_file_path,
+                    channels=channel_count,
+                )
+                output_id = f"OUTPUT.{variant_label}.001"
+                outputs.append(
+                    {
+                        "output_id": output_id,
+                        "file_path": rendered_name,
+                        "format": "wav",
+                        "channel_count": channel_count,
+                        "metadata": {
+                            "routing_applied": True,
+                            "target_layout_id": target_layout_id,
+                        },
+                    }
+                )
+                deliverables.append(
+                    {
+                        "deliverable_id": f"DELIV.{target_layout_id}.{channel_count}CH",
+                        "label": f"{target_layout_id} deliverable",
+                        "target_layout_id": target_layout_id,
+                        "channel_count": channel_count,
+                        "formats": ["wav"],
+                        "output_ids": [output_id],
                     }
                 )
 
@@ -770,7 +835,134 @@ class TestCliRun(unittest.TestCase):
                 )
                 self.assertEqual(second_audition_manifest, first_audition_manifest)
 
-    def test_run_render_many_translation_skips_when_stereo_deliverable_is_missing(self) -> None:
+    def test_run_render_many_translation_uses_downmix_fallback_when_stereo_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            out_dir = temp_path / "out"
+            _write_wav_16bit(stems_dir / "drums" / "kick.wav")
+
+            command = [
+                "run",
+                "--stems",
+                str(stems_dir),
+                "--out",
+                str(out_dir),
+                "--preset",
+                "PRESET.SAFE_CLEANUP",
+                "--render-many",
+                "--targets",
+                "5.1 (home theater)",
+                "--translation",
+                "--cache",
+                "off",
+            ]
+            with mock.patch(
+                "mmo.cli.run_variant_plan",
+                side_effect=_mock_render_many_run_variant_plan(
+                    out_dir=out_dir,
+                    include_stereo_deliverable=False,
+                    surround_target_ids={"TARGET.SURROUND.5_1"},
+                ),
+            ):
+                first_exit_code = main(command)
+                self.assertEqual(first_exit_code, 0)
+
+                report_path = out_dir / "report.json"
+                first_report = json.loads(report_path.read_text(encoding="utf-8"))
+                first_translation_results = first_report.get("translation_results")
+                self.assertIsInstance(first_translation_results, list)
+                if not isinstance(first_translation_results, list):
+                    return
+                self.assertGreater(len(first_translation_results), 0)
+                first_translation_reference = first_report.get("translation_reference")
+                self.assertIsInstance(first_translation_reference, dict)
+                if not isinstance(first_translation_reference, dict):
+                    return
+                self.assertEqual(
+                    first_translation_reference.get("source_target_id"),
+                    "TARGET.SURROUND.5_1",
+                )
+                self.assertEqual(first_translation_reference.get("method"), "downmix_fallback")
+                self.assertEqual(first_translation_reference.get("source_channels"), 6)
+                self.assertEqual(
+                    first_translation_reference.get("audio_path"),
+                    "translation_reference/translation_reference.stereo.wav",
+                )
+
+                first_audio_rel_path = first_translation_reference.get("audio_path")
+                self.assertIsInstance(first_audio_rel_path, str)
+                if not isinstance(first_audio_rel_path, str):
+                    return
+                first_audio_path = out_dir / first_audio_rel_path
+                self.assertTrue(first_audio_path.exists())
+                first_audio_bytes = first_audio_path.read_bytes()
+
+                second_exit_code = main(command)
+                self.assertEqual(second_exit_code, 0)
+
+                second_report = json.loads(report_path.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    second_report.get("translation_results"),
+                    first_translation_results,
+                )
+                self.assertEqual(
+                    second_report.get("translation_summary"),
+                    first_report.get("translation_summary"),
+                )
+                self.assertEqual(
+                    second_report.get("translation_reference"),
+                    first_translation_reference,
+                )
+                self.assertEqual(first_audio_path.read_bytes(), first_audio_bytes)
+
+    def test_run_render_many_translation_prefers_7_1_when_5_1_and_7_1_exist(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            out_dir = temp_path / "out"
+            _write_wav_16bit(stems_dir / "drums" / "kick.wav")
+
+            with mock.patch(
+                "mmo.cli.run_variant_plan",
+                side_effect=_mock_render_many_run_variant_plan(
+                    out_dir=out_dir,
+                    include_stereo_deliverable=False,
+                    surround_target_ids={"TARGET.SURROUND.5_1", "TARGET.SURROUND.7_1"},
+                ),
+            ):
+                exit_code = main(
+                    [
+                        "run",
+                        "--stems",
+                        str(stems_dir),
+                        "--out",
+                        str(out_dir),
+                        "--preset",
+                        "PRESET.SAFE_CLEANUP",
+                        "--render-many",
+                        "--targets",
+                        "5.1 (home theater),7.1 (cinematic)",
+                        "--translation",
+                        "--cache",
+                        "off",
+                    ]
+                )
+            self.assertEqual(exit_code, 0)
+
+            report_payload = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
+            translation_reference = report_payload.get("translation_reference")
+            self.assertIsInstance(translation_reference, dict)
+            if not isinstance(translation_reference, dict):
+                return
+            self.assertEqual(
+                translation_reference.get("source_target_id"),
+                "TARGET.SURROUND.7_1",
+            )
+            self.assertEqual(translation_reference.get("method"), "downmix_fallback")
+            self.assertEqual(translation_reference.get("source_channels"), 8)
+
+    def test_run_render_many_translation_soft_skips_when_no_audio_deliverable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             stems_dir = temp_path / "stems"
@@ -805,6 +997,7 @@ class TestCliRun(unittest.TestCase):
 
             report_payload = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
             self.assertNotIn("translation_results", report_payload)
+            self.assertNotIn("translation_reference", report_payload)
 
     def test_run_render_many_applies_scene_templates_before_render_plan_build(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

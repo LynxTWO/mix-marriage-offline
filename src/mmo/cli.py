@@ -47,6 +47,10 @@ from mmo.core.translation_profiles import (
 from mmo.core.translation_summary import build_translation_summary
 from mmo.core.translation_checks import run_translation_checks
 from mmo.core.translation_audition import render_translation_auditions
+from mmo.core.translation_reference import (
+    TranslationReferenceResolutionError,
+    resolve_translation_reference_audio,
+)
 from mmo.core.target_recommendations import recommend_render_targets
 from mmo.core.scene_templates import (
     apply_scene_templates,
@@ -2362,6 +2366,7 @@ def _write_report_with_translation_results(
     translation_results: list[dict[str, Any]],
     repo_root: Path,
     profiles: dict[str, dict[str, Any]] | None = None,
+    translation_reference: dict[str, Any] | None = None,
 ) -> None:
     report_payload = _load_report(report_in_path)
     profile_map = (
@@ -2374,6 +2379,8 @@ def _write_report_with_translation_results(
         translation_results,
         profile_map,
     )
+    if isinstance(translation_reference, dict):
+        report_payload["translation_reference"] = dict(translation_reference)
     _validate_json_payload(
         report_payload,
         schema_path=repo_root / "schemas" / "report.schema.json",
@@ -2691,33 +2698,44 @@ def _run_render_many_translation_checks(
     if not profile_ids:
         return
 
-    stereo_target = get_render_target(
-        _BASELINE_RENDER_TARGET_ID,
-        repo_root / "ontology" / "render_targets.yaml",
-    )
-    if not isinstance(stereo_target, dict):
-        return
-    stereo_layout_id = _coerce_str(stereo_target.get("layout_id")).strip()
-    if not stereo_layout_id:
-        return
-
     variant_artifacts = _render_many_variant_artifacts(
         variant_result=variant_result,
         root_out_dir=root_out_dir,
     )
-    stereo_audio_path = _resolve_render_many_stereo_audio_path(
-        variant_artifacts=variant_artifacts,
-        stereo_layout_id=stereo_layout_id,
+    fallback_render_manifest_path: Path | None = None
+    for artifact in variant_artifacts:
+        manifest_path = artifact.get("render_manifest_path")
+        if isinstance(manifest_path, Path) and manifest_path.exists() and not manifest_path.is_dir():
+            fallback_render_manifest_path = manifest_path
+            break
+
+    resolved_deliverables_index_path = (
+        deliverables_index_path
+        if isinstance(deliverables_index_path, Path)
+        else root_out_dir / "deliverables_index.json"
     )
-    if stereo_audio_path is None:
+    try:
+        translation_audio_path, translation_reference_meta = resolve_translation_reference_audio(
+            out_dir=root_out_dir,
+            deliverables_index_path=resolved_deliverables_index_path,
+            render_manifest_path=fallback_render_manifest_path,
+        )
+    except (TranslationReferenceResolutionError, ValueError):
         return
 
     translation_profiles_path = repo_root / "ontology" / "translation_profiles.yaml"
     translation_profiles: dict[str, dict[str, Any]]
+    translation_reference_payload: dict[str, Any] = dict(translation_reference_meta)
+    audio_rel_path = _rel_path_if_under_root(root_out_dir, translation_audio_path)
+    translation_reference_payload["audio_path"] = (
+        audio_rel_path
+        if isinstance(audio_rel_path, str) and audio_rel_path
+        else translation_audio_path.resolve().as_posix()
+    )
     try:
         translation_results = _build_translation_run_payload(
             translation_profiles_path=translation_profiles_path,
-            audio_path=stereo_audio_path,
+            audio_path=translation_audio_path,
             profile_ids=profile_ids,
         )
         translation_results = _sorted_translation_results(translation_results)
@@ -2732,6 +2750,7 @@ def _run_render_many_translation_checks(
             translation_results=translation_results,
             repo_root=repo_root,
             profiles=translation_profiles,
+            translation_reference=translation_reference_payload,
         )
     except (SystemExit, ValueError):
         return
@@ -2746,6 +2765,7 @@ def _run_render_many_translation_checks(
                     translation_results=translation_results,
                     repo_root=repo_root,
                     profiles=translation_profiles,
+                    translation_reference=translation_reference_payload,
                 )
             except (SystemExit, ValueError):
                 continue

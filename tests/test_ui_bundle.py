@@ -625,6 +625,23 @@ class TestUiBundle(unittest.TestCase):
         self.assertEqual(translation_summary[0].get("status"), "pass")
         self.assertEqual(translation_summary[1].get("status"), "fail")
 
+    def test_build_ui_bundle_embeds_translation_reference(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        report["translation_reference"] = {
+            "source_target_id": "TARGET.SURROUND.7_1",
+            "method": "downmix_fallback",
+            "downmix_policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
+            "source_channels": 8,
+            "audio_path": "translation_reference/translation_reference.stereo.wav",
+        }
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        bundle = build_ui_bundle(report, None, help_registry_path=help_registry_path)
+        validator.validate(bundle)
+        self.assertEqual(bundle.get("translation_reference"), report["translation_reference"])
+
     def test_build_ui_bundle_with_apply_payload_and_schema(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")

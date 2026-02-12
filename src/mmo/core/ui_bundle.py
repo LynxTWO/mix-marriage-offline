@@ -98,6 +98,40 @@ def _translation_summary(report: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _translation_reference(report: dict[str, Any]) -> dict[str, Any] | None:
+    source = report.get("translation_reference")
+    if not isinstance(source, dict):
+        return None
+
+    source_target_id = _coerce_str(source.get("source_target_id")).strip()
+    method = _coerce_str(source.get("method")).strip()
+    audio_path = _coerce_str(source.get("audio_path")).strip()
+    source_channels = source.get("source_channels")
+    if (
+        not source_target_id
+        or method not in {"native_stereo", "downmix_fallback"}
+        or not audio_path
+        or not isinstance(source_channels, int)
+        or isinstance(source_channels, bool)
+        or source_channels < 1
+    ):
+        return None
+
+    downmix_policy_id = source.get("downmix_policy_id")
+    normalized_policy_id = (
+        downmix_policy_id.strip()
+        if isinstance(downmix_policy_id, str) and downmix_policy_id.strip()
+        else None
+    )
+    return {
+        "source_target_id": source_target_id,
+        "method": method,
+        "downmix_policy_id": normalized_policy_id,
+        "source_channels": source_channels,
+        "audio_path": audio_path,
+    }
+
+
 def _list_length(value: Any) -> int:
     return len(value) if isinstance(value, list) else 0
 
@@ -1215,6 +1249,9 @@ def build_ui_bundle(
     translation_summary = _translation_summary(report)
     if translation_summary:
         payload["translation_summary"] = translation_summary
+    translation_reference = _translation_reference(report)
+    if translation_reference is not None:
+        payload["translation_reference"] = translation_reference
     scene_payload = _load_scene_payload(scene_path)
     scene_locks_registry: dict[str, Any] | None = None
     if scene_payload is not None:

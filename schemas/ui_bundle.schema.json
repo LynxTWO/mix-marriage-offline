@@ -17,6 +17,9 @@
       "type": "array",
       "items": { "$ref": "report.schema.json#/$defs/translation_summary_entry" }
     },
+    "translation_reference": {
+      "$ref": "report.schema.json#/$defs/translation_reference"
+    },
     "render_manifest": { "$ref": "render_manifest.schema.json" },
     "apply_manifest": { "$ref": "apply_manifest.schema.json" },
     "applied_report": { "$ref": "report.schema.json" },

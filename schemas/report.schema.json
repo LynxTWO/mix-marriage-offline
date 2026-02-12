@@ -31,6 +31,7 @@
       "type": "array",
       "items": { "$ref": "#/$defs/translation_summary_entry" }
     },
+    "translation_reference": { "$ref": "#/$defs/translation_reference" },
     "plugins": {
       "type": "array",
       "items": { "$ref": "#/$defs/plugin_run" }
@@ -322,6 +323,27 @@
         "score": { "type": "integer", "minimum": 0, "maximum": 100 },
         "label": { "type": "string", "minLength": 1 },
         "short_reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "translation_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_target_id",
+        "method",
+        "downmix_policy_id",
+        "source_channels",
+        "audio_path"
+      ],
+      "properties": {
+        "source_target_id": { "type": "string", "minLength": 1 },
+        "method": {
+          "type": "string",
+          "enum": ["native_stereo", "downmix_fallback"]
+        },
+        "downmix_policy_id": { "type": ["string", "null"] },
+        "source_channels": { "type": "integer", "minimum": 1 },
+        "audio_path": { "type": "string", "minLength": 1 }
       }
     },
     "plugin_run": {
