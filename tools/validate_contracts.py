@@ -60,7 +60,9 @@ SCHEMA_ANCHORS: tuple[str, ...] = (
     "schemas/render_plan.schema.json",
     "schemas/presets_index.schema.json",
     "schemas/lockfile.schema.json",
+    "schemas/role_lexicon.schema.json",
     "schemas/stems_index.schema.json",
+    "schemas/stems_map.schema.json",
 )
 
 SCENE_REGISTRIES_CHECK_ID = "SCENE.REGISTRIES"
@@ -490,6 +492,30 @@ def _run_roles_registries_check(*, repo_root: Path) -> dict[str, Any]:
                     loader_name=loader_name,
                     payload=payload,
                 )
+                role_lexicon_rel_path = "ontology/role_lexicon.yaml"
+                role_lexicon_path = repo_root / role_lexicon_rel_path
+                role_lexicon_details: dict[str, Any] = {
+                    "path": role_lexicon_rel_path,
+                    "present": role_lexicon_path.is_file(),
+                    "ok": True,
+                }
+                if role_lexicon_path.is_file():
+                    try:
+                        lexicon_module = importlib.import_module("mmo.core.role_lexicon")
+                        load_role_lexicon = getattr(lexicon_module, "load_role_lexicon")
+                        lexicon_payload = load_role_lexicon(
+                            role_lexicon_path,
+                            roles_payload=payload,
+                        )
+                        role_lexicon_details["entries"] = len(lexicon_payload)
+                    except Exception as exc:
+                        role_lexicon_details["ok"] = False
+                        role_lexicon_details["error"] = str(exc)
+                        loader_details["ok"] = False
+                        errors.append(
+                            f"load_role_lexicon failed for {role_lexicon_rel_path}: {exc}"
+                        )
+                loader_details["role_lexicon"] = role_lexicon_details
                 details["loaders"].append(loader_details)
 
     ok = not errors

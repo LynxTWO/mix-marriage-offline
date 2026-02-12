@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/stems_map.schema.json",
+  "title": "MMO Stems Map",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "stems_index_ref",
+    "roles_ref",
+    "assignments",
+    "summary"
+  ],
+  "properties": {
+    "version": {
+      "const": "0.1.0"
+    },
+    "stems_index_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "roles_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "role_lexicon_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "assignments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/assignment"
+      }
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    }
+  },
+  "$defs": {
+    "counts_object": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_id",
+        "rel_path",
+        "role_id",
+        "confidence",
+        "bus_group",
+        "reasons",
+        "link_group_id"
+      ],
+      "properties": {
+        "file_id": {
+          "type": "string",
+          "pattern": "^STEMFILE\\.[0-9a-f]{10}$"
+        },
+        "rel_path": {
+          "type": "string",
+          "pattern": "^[^\\\\]+$",
+          "minLength": 1
+        },
+        "role_id": {
+          "type": "string",
+          "pattern": "^ROLE\\.[A-Z0-9_.]+$"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "bus_group": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "link_group_id": {
+          "type": ["string", "null"],
+          "pattern": "^LINK\\.[0-9a-f]{10}$"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "counts_by_role",
+        "counts_by_bus_group",
+        "unknown_files"
+      ],
+      "properties": {
+        "counts_by_role": {
+          "$ref": "#/$defs/counts_object"
+        },
+        "counts_by_bus_group": {
+          "$ref": "#/$defs/counts_object"
+        },
+        "unknown_files": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}
