@@ -39,6 +39,7 @@ from mmo.core.render_targets import (
     list_render_targets,
     resolve_render_target_id,
 )
+from mmo.core.roles import list_roles, resolve_role
 from mmo.core.translation_profiles import (
     get_translation_profile,
     list_translation_profiles,
@@ -2012,6 +2013,70 @@ def _build_render_target_show_payload(
     if payload is None:
         raise ValueError(f"Resolved target is missing from registry: {resolved_target_id}")
     return payload
+
+
+def _build_role_list_payload(*, roles_path: Path) -> list[str]:
+    return list_roles(roles_path)
+
+
+def _build_role_show_payload(*, roles_path: Path, role_id: str) -> dict[str, Any]:
+    normalized_role_id = role_id.strip() if isinstance(role_id, str) else ""
+    if not normalized_role_id:
+        raise ValueError("role_id must be a non-empty string.")
+    payload = resolve_role(normalized_role_id, roles_path)
+    row = {"role_id": normalized_role_id}
+    row.update(dict(payload))
+    return row
+
+
+def _render_role_text(payload: dict[str, Any]) -> str:
+    lines = [
+        _coerce_str(payload.get("role_id")).strip(),
+        f"label: {_coerce_str(payload.get('label')).strip()}",
+        f"kind: {_coerce_str(payload.get('kind')).strip()}",
+    ]
+
+    default_bus_group = payload.get("default_bus_group")
+    if isinstance(default_bus_group, str) and default_bus_group.strip():
+        lines.append(f"default_bus_group: {default_bus_group.strip()}")
+
+    description = payload.get("description")
+    if isinstance(description, str) and description.strip():
+        lines.append(f"description: {description.strip()}")
+
+    inference = payload.get("inference")
+    if isinstance(inference, dict):
+        keywords = inference.get("keywords")
+        if isinstance(keywords, list):
+            normalized_keywords = [
+                keyword.strip()
+                for keyword in keywords
+                if isinstance(keyword, str) and keyword.strip()
+            ]
+            if normalized_keywords:
+                lines.append(f"keywords: {', '.join(normalized_keywords)}")
+
+        regex_values = inference.get("regex")
+        if isinstance(regex_values, list):
+            normalized_regex_values = [
+                pattern.strip()
+                for pattern in regex_values
+                if isinstance(pattern, str) and pattern.strip()
+            ]
+            if normalized_regex_values:
+                lines.append("regex:")
+                for pattern in normalized_regex_values:
+                    lines.append(f"- {pattern}")
+
+    notes = payload.get("notes")
+    if isinstance(notes, list) and notes:
+        normalized_notes = [item.strip() for item in notes if isinstance(item, str) and item.strip()]
+        if normalized_notes:
+            lines.append("notes:")
+            for item in normalized_notes:
+                lines.append(f"- {item}")
+
+    return "\n".join(lines)
 
 
 def _build_translation_profile_list_payload(
@@ -6989,6 +7054,27 @@ def main(argv: list[str] | None = None) -> int:
         help="Output format for recommended targets.",
     )
 
+    roles_parser = subparsers.add_parser("roles", help="Role registry tools.")
+    roles_subparsers = roles_parser.add_subparsers(dest="roles_command", required=True)
+    roles_list_parser = roles_subparsers.add_parser("list", help="List role IDs.")
+    roles_list_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for role list.",
+    )
+    roles_show_parser = roles_subparsers.add_parser("show", help="Show one role entry.")
+    roles_show_parser.add_argument(
+        "role_id",
+        help="Role ID (e.g., ROLE.BASS.AMP).",
+    )
+    roles_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for role details.",
+    )
+
     translation_parser = subparsers.add_parser(
         "translation",
         help="Translation profile registry tools.",
@@ -8966,6 +9052,36 @@ def main(argv: list[str] | None = None) -> int:
                 print(_render_target_recommendations_text(payload))
             return 0
         print("Unknown targets command.", file=sys.stderr)
+        return 2
+    if args.command == "roles":
+        roles_path = repo_root / "ontology" / "roles.yaml"
+        if args.roles_command == "list":
+            try:
+                payload = _build_role_list_payload(roles_path=roles_path)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                for role_id in payload:
+                    print(role_id)
+            return 0
+        if args.roles_command == "show":
+            try:
+                payload = _build_role_show_payload(
+                    roles_path=roles_path,
+                    role_id=args.role_id,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_role_text(payload))
+            return 0
+        print("Unknown roles command.", file=sys.stderr)
         return 2
     if args.command == "translation":
         translation_profiles_path = repo_root / "ontology" / "translation_profiles.yaml"

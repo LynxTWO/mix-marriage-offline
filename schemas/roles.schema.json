@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/roles.schema.json",
+  "title": "MMO Roles Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "roles"
+  ],
+  "properties": {
+    "roles": {
+      "type": "object",
+      "properties": {
+        "_meta": {
+          "type": "object"
+        }
+      },
+      "patternProperties": {
+        "^ROLE\\.[A-Z0-9_.]+$": {
+          "$ref": "#/$defs/role_entry"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "role_inference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "regex": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "role_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "kind"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "track",
+            "bus",
+            "master",
+            "utility",
+            "reference",
+            "other",
+            "source",
+            "fx"
+          ]
+        },
+        "default_bus_group": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inference": {
+          "$ref": "#/$defs/role_inference"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

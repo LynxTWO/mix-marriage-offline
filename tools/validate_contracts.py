@@ -55,6 +55,7 @@ SCHEMA_ANCHORS: tuple[str, ...] = (
     "schemas/gui_state.schema.json",
     "schemas/scene.schema.json",
     "schemas/render_targets.schema.json",
+    "schemas/roles.schema.json",
     "schemas/translation_profiles.schema.json",
     "schemas/render_plan.schema.json",
     "schemas/presets_index.schema.json",
@@ -87,6 +88,14 @@ TRANSLATION_REGISTRY_LOADER: tuple[str, str, str] = (
     "list_translation_profiles",
     "mmo.core.translation_profiles",
     "ontology/translation_profiles.yaml",
+)
+
+ROLES_REGISTRIES_CHECK_ID = "ROLES.REGISTRIES"
+ROLES_REGISTRIES_TOOL = "src/mmo/core/roles.py"
+ROLES_REGISTRY_LOADER: tuple[str, str, str] = (
+    "load_roles",
+    "mmo.core.roles",
+    "ontology/roles.yaml",
 )
 
 
@@ -309,6 +318,24 @@ def _translation_registry_summary(*, loader_name: str, payload: Any) -> dict[str
     return {}
 
 
+def _roles_registry_summary(*, loader_name: str, payload: Any) -> dict[str, int]:
+    if loader_name == "load_roles":
+        roles = payload.get("roles") if isinstance(payload, dict) else None
+        if not isinstance(roles, dict):
+            return {"roles": 0}
+        count = sum(
+            1
+            for role_id, role_payload in roles.items()
+            if (
+                isinstance(role_id, str)
+                and role_id != "_meta"
+                and isinstance(role_payload, dict)
+            )
+        )
+        return {"roles": count}
+    return {}
+
+
 def _run_scene_registries_check(*, repo_root: Path) -> dict[str, Any]:
     details: dict[str, Any] = {"loaders": []}
     errors: list[str] = []
@@ -422,6 +449,61 @@ def _run_translation_registries_check(*, repo_root: Path) -> dict[str, Any]:
     )
 
 
+def _run_roles_registries_check(*, repo_root: Path) -> dict[str, Any]:
+    loader_name, module_name, relative_path = ROLES_REGISTRY_LOADER
+    details: dict[str, Any] = {"loaders": []}
+    errors: list[str] = []
+
+    registry_path = repo_root / relative_path
+    loader_details: dict[str, Any] = {
+        "loader": loader_name,
+        "module": module_name,
+        "path": relative_path,
+        "ok": True,
+    }
+
+    if not registry_path.is_file():
+        loader_details["ok"] = False
+        loader_details["error"] = f"Required registry is missing: {relative_path}"
+        errors.append(f"Required registry is missing: {relative_path}")
+        details["loaders"].append(loader_details)
+    else:
+        try:
+            module = importlib.import_module(module_name)
+            loader = getattr(module, loader_name)
+        except Exception as exc:
+            loader_details["ok"] = False
+            loader_details["error"] = str(exc)
+            errors.append(f"Failed to import {module_name}.{loader_name}: {exc}")
+            details["loaders"].append(loader_details)
+        else:
+            try:
+                payload = loader(registry_path)
+            except Exception as exc:
+                loader_details["ok"] = False
+                loader_details["error"] = str(exc)
+                errors.append(f"{loader_name} failed for {relative_path}: {exc}")
+                details["loaders"].append(loader_details)
+            else:
+                loader_details["summary"] = _roles_registry_summary(
+                    loader_name=loader_name,
+                    payload=payload,
+                )
+                details["loaders"].append(loader_details)
+
+    ok = not errors
+    if not ok:
+        errors.append("Run alone: python tools/validate_contracts.py --strict")
+    return _build_check_payload(
+        check_id=ROLES_REGISTRIES_CHECK_ID,
+        ok=ok,
+        exit_code=0 if ok else 1,
+        tool=ROLES_REGISTRIES_TOOL,
+        details=details,
+        errors=errors,
+    )
+
+
 def _run_schema_smoke_check(*, repo_root: Path) -> dict[str, Any]:
     details: dict[str, Any] = {"anchors": []}
     errors: list[str] = []
@@ -507,6 +589,7 @@ def run_contract_checks(*, repo_root: Path, strict: bool) -> dict[str, Any]:
         checks.append(_run_external_check(check, repo_root=repo_root, strict=strict))
     checks.append(_run_scene_registries_check(repo_root=repo_root))
     checks.append(_run_translation_registries_check(repo_root=repo_root))
+    checks.append(_run_roles_registries_check(repo_root=repo_root))
     checks.append(_run_schema_smoke_check(repo_root=repo_root))
 
     failed = [check["check_id"] for check in checks if not check.get("ok")]
