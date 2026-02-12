@@ -73,6 +73,7 @@ from mmo.core.project_file import (
     update_project_last_run,
     write_project,
 )
+from mmo.core.gui_state import default_gui_state, validate_gui_state
 from mmo.core.routing import (
     apply_routing_plan_to_report,
     build_routing_plan,
@@ -1614,6 +1615,7 @@ def _run_bundle(
     scene_path: Path | None,
     render_plan_path: Path | None,
     timeline_path: Path | None,
+    gui_state_path: Path | None = None,
     ui_locale: str | None = None,
 ) -> int:
     from mmo.core.ui_bundle import build_ui_bundle  # noqa: WPS433
@@ -1643,6 +1645,7 @@ def _run_bundle(
         scene_path=scene_path,
         render_plan_path=render_plan_path,
         timeline_path=timeline_path,
+        gui_state_path=gui_state_path,
     )
     _validate_json_payload(
         bundle,
@@ -6502,6 +6505,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to render_plan JSON for GUI pointer metadata.",
     )
     bundle_parser.add_argument(
+        "--gui-state",
+        default=None,
+        help="Optional path to gui_state JSON for GUI pointer metadata.",
+    )
+    bundle_parser.add_argument(
         "--ui-locale",
         default=None,
         help="Optional UI copy locale (default: registry default_locale).",
@@ -8115,6 +8123,30 @@ def main(argv: list[str] | None = None) -> int:
         default="text",
         help="Output format for timeline display.",
     )
+    gui_state_parser = subparsers.add_parser("gui-state", help="GUI state artifact tools.")
+    gui_state_subparsers = gui_state_parser.add_subparsers(
+        dest="gui_state_command",
+        required=True,
+    )
+    gui_state_validate_parser = gui_state_subparsers.add_parser(
+        "validate",
+        help="Validate a gui_state JSON file.",
+    )
+    gui_state_validate_parser.add_argument(
+        "--in",
+        dest="in_path",
+        required=True,
+        help="Path to gui_state JSON.",
+    )
+    gui_state_default_parser = gui_state_subparsers.add_parser(
+        "default",
+        help="Write a default gui_state JSON file.",
+    )
+    gui_state_default_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output gui_state JSON.",
+    )
 
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
     args = parser.parse_args(raw_argv)
@@ -8570,6 +8602,7 @@ def main(argv: list[str] | None = None) -> int:
                     Path(args.render_plan) if getattr(args, "render_plan", None) else None
                 ),
                 timeline_path=None,
+                gui_state_path=Path(args.gui_state) if args.gui_state else None,
                 ui_locale=args.ui_locale,
             )
         except ValueError as exc:
@@ -9531,6 +9564,20 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(_render_timeline_text(timeline_payload))
         return 0
+    if args.command == "gui-state":
+        if args.gui_state_command == "validate":
+            try:
+                validate_gui_state(Path(args.in_path))
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            print("GUI state is valid.")
+            return 0
+        if args.gui_state_command == "default":
+            _write_json_file(Path(args.out), default_gui_state())
+            return 0
+        print("Unknown gui-state command.", file=sys.stderr)
+        return 2
     if args.command == "routing":
         from mmo.core.session import build_session_from_stems_dir  # noqa: WPS433
 

@@ -1146,6 +1146,7 @@ def _bundle_pointers(
     scene_path: Path | None,
     render_plan_path: Path | None,
     timeline_path: Path | None,
+    gui_state_path: Path | None,
 ) -> dict[str, str]:
     pointers: dict[str, str] = {}
     if deliverables_index_path is not None:
@@ -1158,6 +1159,8 @@ def _bundle_pointers(
         pointers["render_plan_path"] = _path_to_posix(render_plan_path)
     if timeline_path is not None:
         pointers["timeline_path"] = _path_to_posix(timeline_path)
+    if gui_state_path is not None:
+        pointers["gui_state_path"] = _path_to_posix(gui_state_path)
     if project_path is not None:
         pointers["project_path"] = _path_to_posix(project_path)
     return pointers
@@ -1259,6 +1262,7 @@ def build_ui_bundle(
     scene_path: Path | None = None,
     render_plan_path: Path | None = None,
     timeline_path: Path | None = None,
+    gui_state_path: Path | None = None,
 ) -> dict[str, Any]:
     from mmo.core.gui_design import load_gui_design  # noqa: WPS433
     from mmo.core.help_registry import load_help_registry, resolve_help_entries  # noqa: WPS433
@@ -1386,6 +1390,7 @@ def build_ui_bundle(
         scene_path=scene_path,
         render_plan_path=render_plan_path,
         timeline_path=timeline_path,
+        gui_state_path=gui_state_path,
     )
     if pointers:
         payload["pointers"] = pointers

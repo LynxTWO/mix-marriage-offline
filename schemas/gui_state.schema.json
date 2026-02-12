@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/gui_state.schema.json",
+  "title": "MMO GUI State",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "last_opened_project_path",
+    "selected_targets",
+    "selected_preset_id",
+    "selected_template_ids",
+    "nerd_mode",
+    "selected_tab"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "last_opened_project_path": {
+      "type": "string"
+    },
+    "selected_targets": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^TARGET\\.[A-Z0-9_.]+$"
+      }
+    },
+    "selected_preset_id": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "selected_template_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^TEMPLATE\\.[A-Z0-9_.]+$"
+      }
+    },
+    "nerd_mode": {
+      "type": "boolean"
+    },
+    "selected_tab": {
+      "type": "string",
+      "enum": [
+        "dashboard",
+        "scene",
+        "targets",
+        "run",
+        "results"
+      ]
+    }
+  }
+}

@@ -581,6 +581,7 @@
         "scene_path": { "$ref": "#/$defs/posix_abs_path" },
         "render_plan_path": { "$ref": "#/$defs/posix_abs_path" },
         "timeline_path": { "$ref": "#/$defs/posix_abs_path" },
+        "gui_state_path": { "$ref": "#/$defs/posix_abs_path" },
         "project_path": { "$ref": "#/$defs/posix_abs_path" }
       }
     },

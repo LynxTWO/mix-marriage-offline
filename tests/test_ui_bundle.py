@@ -1453,6 +1453,29 @@ class TestUiBundle(unittest.TestCase):
         if isinstance(palette, dict):
             self.assertEqual(palette.get("background"), "#0F1117")
 
+    def test_build_ui_bundle_embeds_optional_gui_state_pointer_only(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            gui_state_path = temp_path / "gui_state.json"
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                gui_state_path=gui_state_path,
+            )
+
+        validator.validate(bundle)
+        self.assertEqual(
+            bundle.get("pointers"),
+            {"gui_state_path": gui_state_path.resolve().as_posix()},
+        )
+        self.assertNotIn("gui_state", bundle)
+
     def test_cli_bundle_writes_schema_valid_payload(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")

@@ -52,6 +52,7 @@ SCHEMA_SMOKE_TOOL = "src/mmo/core/schema_registry.py"
 SCHEMA_ANCHORS: tuple[str, ...] = (
     "schemas/report.schema.json",
     "schemas/ui_bundle.schema.json",
+    "schemas/gui_state.schema.json",
     "schemas/scene.schema.json",
     "schemas/render_targets.schema.json",
     "schemas/translation_profiles.schema.json",

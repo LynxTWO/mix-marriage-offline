@@ -136,6 +136,93 @@ class TestCliBundlePointers(unittest.TestCase):
                 },
             )
 
+    def test_bundle_command_embeds_optional_gui_state_pointer(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            stems_dir.mkdir(parents=True, exist_ok=True)
+            out_dir = temp_path / "out"
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+            report_path = temp_path / "report.json"
+            report_path.write_text(
+                json.dumps(_sample_report_payload(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            deliverables_index_path = out_dir / "deliverables_index.json"
+            deliverables_index_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "0.1.0",
+                        "root_out_dir": out_dir.resolve().as_posix(),
+                        "mode": "single",
+                        "entries": [],
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            project_path = temp_path / "project.json"
+            project_payload = new_project(stems_dir, notes=None)
+            project_payload = update_project_last_run(
+                project_payload,
+                {
+                    "mode": "single",
+                    "out_dir": out_dir.resolve().as_posix(),
+                    "deliverables_index_path": deliverables_index_path.resolve().as_posix(),
+                },
+            )
+            write_project(project_path, project_payload)
+
+            gui_state_path = temp_path / "gui_state.json"
+            out_bundle_path = temp_path / "ui_bundle.json"
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(repo_root / "src")
+            result = subprocess.run(
+                [
+                    self._python_cmd(),
+                    "-m",
+                    "mmo",
+                    "bundle",
+                    "--report",
+                    str(report_path),
+                    "--project",
+                    str(project_path),
+                    "--deliverables-index",
+                    str(deliverables_index_path),
+                    "--gui-state",
+                    str(gui_state_path),
+                    "--out",
+                    str(out_bundle_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+                cwd=repo_root,
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(out_bundle_path.exists())
+
+            bundle = json.loads(out_bundle_path.read_text(encoding="utf-8"))
+            validator.validate(bundle)
+
+            self.assertEqual(
+                bundle.get("pointers"),
+                {
+                    "project_path": project_path.resolve().as_posix(),
+                    "deliverables_index_path": deliverables_index_path.resolve().as_posix(),
+                    "gui_state_path": gui_state_path.resolve().as_posix(),
+                },
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
