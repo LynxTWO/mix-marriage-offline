@@ -9,7 +9,14 @@
     "schema_version": { "const": "0.1.0" },
     "screen_id": {
       "type": "string",
-      "enum": ["DASHBOARD", "PRESETS", "RUN", "RESULTS", "COMPARE"]
+      "enum": [
+        "DASHBOARD",
+        "PRESETS",
+        "RUN",
+        "RUN_TRANSLATION",
+        "RESULTS",
+        "COMPARE"
+      ]
     },
     "mode": {
       "type": "string",

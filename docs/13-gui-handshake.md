@@ -2,6 +2,8 @@
 
 This document defines the smallest real GUI loop using existing MMO contracts and CLI entry points.
 
+For translation simulation behavior and CLI commands, see [16-translation-checks.md](16-translation-checks.md).
+
 The loop is:
 
 1. Open a project file.
