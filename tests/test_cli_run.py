@@ -613,6 +613,9 @@ class TestCliRun(unittest.TestCase):
                 "--targets",
                 "Stereo (streaming),5.1 (home theater)",
                 "--translation",
+                "--translation-audition",
+                "--translation-audition-segment",
+                "0.05",
                 "--cache",
                 "off",
             ]
@@ -670,6 +673,37 @@ class TestCliRun(unittest.TestCase):
                         for item in first_translation_summary
                     )
                 )
+                audition_manifest_path = (
+                    out_dir / "listen_pack" / "translation_auditions" / "manifest.json"
+                )
+                self.assertTrue(audition_manifest_path.exists())
+                first_audition_manifest = json.loads(
+                    audition_manifest_path.read_text(encoding="utf-8")
+                )
+                first_audition_renders = first_audition_manifest.get("renders")
+                self.assertIsInstance(first_audition_renders, list)
+                if not isinstance(first_audition_renders, list):
+                    return
+                observed_audition_profiles = sorted(
+                    item.get("profile_id")
+                    for item in first_audition_renders
+                    if isinstance(item, dict) and isinstance(item.get("profile_id"), str)
+                )
+                self.assertEqual(
+                    observed_audition_profiles,
+                    [
+                        "TRANS.DEVICE.PHONE",
+                        "TRANS.DEVICE.SMALL_SPEAKER",
+                        "TRANS.MONO.COLLAPSE",
+                    ],
+                )
+                for item in first_audition_renders:
+                    if not isinstance(item, dict):
+                        continue
+                    rendered_path = item.get("path")
+                    self.assertIsInstance(rendered_path, str)
+                    if isinstance(rendered_path, str):
+                        self.assertTrue(Path(rendered_path).exists())
 
                 variant_result = json.loads(
                     (out_dir / "variant_result.json").read_text(encoding="utf-8")
@@ -731,6 +765,10 @@ class TestCliRun(unittest.TestCase):
                     second_report.get("translation_summary"),
                     first_translation_summary,
                 )
+                second_audition_manifest = json.loads(
+                    audition_manifest_path.read_text(encoding="utf-8")
+                )
+                self.assertEqual(second_audition_manifest, first_audition_manifest)
 
     def test_run_render_many_translation_skips_when_stereo_deliverable_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

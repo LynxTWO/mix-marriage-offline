@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import subprocess
 import sys
@@ -45,6 +46,7 @@ from mmo.core.translation_profiles import (
 )
 from mmo.core.translation_summary import build_translation_summary
 from mmo.core.translation_checks import run_translation_checks
+from mmo.core.translation_audition import render_translation_auditions
 from mmo.core.target_recommendations import recommend_render_targets
 from mmo.core.scene_templates import (
     apply_scene_templates,
@@ -123,6 +125,7 @@ _DEFAULT_RENDER_MANY_TRANSLATION_PROFILE_IDS: tuple[str, ...] = (
     "TRANS.DEVICE.PHONE",
     "TRANS.DEVICE.SMALL_SPEAKER",
 )
+_DEFAULT_RENDER_MANY_TRANSLATION_AUDITION_SEGMENT_S = 30.0
 
 
 def _run_command(command: list[str]) -> int:
@@ -2113,6 +2116,24 @@ def _build_translation_run_payload(
     )
 
 
+def _build_translation_audition_payload(
+    *,
+    translation_profiles_path: Path,
+    audio_path: Path,
+    out_dir: Path,
+    profile_ids: list[str],
+    segment_s: float | None = None,
+) -> dict[str, Any]:
+    profiles = load_translation_profiles(translation_profiles_path)
+    return render_translation_auditions(
+        audio_path=audio_path,
+        out_dir=out_dir,
+        profiles=profiles,
+        profile_ids=profile_ids,
+        segment_s=segment_s,
+    )
+
+
 def _render_translation_results_text(payload: list[dict[str, Any]]) -> str:
     if not payload:
         return "translation_results: (none)"
@@ -2149,6 +2170,22 @@ def _write_translation_results_json(
         )
     except OSError as exc:
         raise ValueError(f"Failed to write translation results JSON: {path}: {exc}") from exc
+
+
+def _write_translation_audition_manifest(
+    path: Path,
+    payload: dict[str, Any],
+) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        raise ValueError(
+            f"Failed to write translation audition manifest JSON: {path}: {exc}"
+        ) from exc
 
 
 def _write_report_with_translation_results(
@@ -2194,6 +2231,33 @@ def _sorted_translation_results(payload: list[dict[str, Any]]) -> list[dict[str,
         )
     )
     return rows
+
+
+def _render_translation_audition_text(
+    *,
+    payload: dict[str, Any],
+    root_out_dir: Path,
+    audition_out_dir: Path,
+) -> str:
+    renders = payload.get("renders")
+    rows = [item for item in renders if isinstance(item, dict)] if isinstance(renders, list) else []
+    rows = sorted(
+        rows,
+        key=lambda item: (
+            _coerce_str(item.get("profile_id")).strip(),
+            _coerce_str(item.get("path")).strip(),
+        ),
+    )
+
+    lines = [f"Wrote {len(rows)} audition files to {audition_out_dir.resolve().as_posix()}"]
+    for row in rows:
+        profile_id = _coerce_str(row.get("profile_id")).strip()
+        path_value = _coerce_str(row.get("path")).strip()
+        rendered_path = Path(path_value) if path_value else Path()
+        relative = _rel_path_if_under_root(root_out_dir, rendered_path) if path_value else None
+        target_path = relative if relative else path_value
+        lines.append(f"- {profile_id} -> {target_path}")
+    return "\n".join(lines)
 
 
 def _dict_list(value: Any) -> list[dict[str, Any]]:
@@ -2542,6 +2606,57 @@ def _run_render_many_translation_checks(
             )
         except ValueError:
             continue
+
+
+def _run_render_many_translation_auditions(
+    *,
+    repo_root: Path,
+    root_out_dir: Path,
+    variant_result: dict[str, Any],
+    profile_ids: list[str],
+    segment_s: float | None,
+) -> None:
+    if not profile_ids:
+        return
+
+    stereo_target = get_render_target(
+        _BASELINE_RENDER_TARGET_ID,
+        repo_root / "ontology" / "render_targets.yaml",
+    )
+    if not isinstance(stereo_target, dict):
+        return
+    stereo_layout_id = _coerce_str(stereo_target.get("layout_id")).strip()
+    if not stereo_layout_id:
+        return
+
+    variant_artifacts = _render_many_variant_artifacts(
+        variant_result=variant_result,
+        root_out_dir=root_out_dir,
+    )
+    stereo_audio_path = _resolve_render_many_stereo_audio_path(
+        variant_artifacts=variant_artifacts,
+        stereo_layout_id=stereo_layout_id,
+    )
+    if stereo_audio_path is None:
+        return
+
+    translation_profiles_path = repo_root / "ontology" / "translation_profiles.yaml"
+    auditions_out_dir = root_out_dir / "listen_pack" / "translation_auditions"
+    manifest_path = auditions_out_dir / "manifest.json"
+    try:
+        manifest = _build_translation_audition_payload(
+            translation_profiles_path=translation_profiles_path,
+            audio_path=stereo_audio_path,
+            out_dir=auditions_out_dir,
+            profile_ids=profile_ids,
+            segment_s=segment_s,
+        )
+        _write_translation_audition_manifest(manifest_path, manifest)
+    except Exception as exc:
+        print(
+            f"warning: translation audition skipped: {exc}",
+            file=sys.stderr,
+        )
 
 
 def _load_report_from_path_or_dir(path: Path) -> tuple[dict[str, Any], Path | None]:
@@ -4046,6 +4161,8 @@ def _run_render_many_workflow(
     deliverables_index: bool,
     listen_pack: bool = False,
     translation_profile_ids: list[str] | None = None,
+    translation_audition: bool = False,
+    translation_audition_segment_s: float | None = _DEFAULT_RENDER_MANY_TRANSLATION_AUDITION_SEGMENT_S,
     output_formats: str | None = None,
     cache_enabled: bool = True,
     cache_dir: Path | None = None,
@@ -4464,6 +4581,19 @@ def _run_render_many_workflow(
             listen_pack_path=listen_pack_path if listen_pack else None,
             timeline_path=resolved_timeline_path,
         )
+    if translation_audition:
+        audition_profile_ids = (
+            list(translation_profile_ids)
+            if isinstance(translation_profile_ids, list) and translation_profile_ids
+            else list(_DEFAULT_RENDER_MANY_TRANSLATION_PROFILE_IDS)
+        )
+        _run_render_many_translation_auditions(
+            repo_root=repo_root,
+            root_out_dir=out_dir,
+            variant_result=variant_result,
+            profile_ids=audition_profile_ids,
+            segment_s=translation_audition_segment_s,
+        )
 
     results = variant_result.get("results")
     if not isinstance(results, list):
@@ -4571,6 +4701,26 @@ def _run_workflow_from_run_args(
             translation_enabled = True
         if translation_enabled and translation_profile_ids is None:
             translation_profile_ids = list(_DEFAULT_RENDER_MANY_TRANSLATION_PROFILE_IDS)
+        translation_audition_enabled = bool(getattr(args, "translation_audition", False))
+        translation_audition_segment_s: float | None = None
+        if translation_audition_enabled:
+            raw_segment = getattr(
+                args,
+                "translation_audition_segment",
+                _DEFAULT_RENDER_MANY_TRANSLATION_AUDITION_SEGMENT_S,
+            )
+            if (
+                isinstance(raw_segment, bool)
+                or not isinstance(raw_segment, (int, float))
+                or not math.isfinite(float(raw_segment))
+                or float(raw_segment) <= 0.0
+            ):
+                print(
+                    "--translation-audition-segment must be a positive number of seconds.",
+                    file=sys.stderr,
+                )
+                return 1, "variants"
+            translation_audition_segment_s = float(raw_segment)
 
         exit_code = _run_render_many_workflow(
             repo_root=repo_root,
@@ -4596,6 +4746,8 @@ def _run_workflow_from_run_args(
             deliverables_index=args.deliverables_index,
             listen_pack=getattr(args, "listen_pack", False),
             translation_profile_ids=translation_profile_ids,
+            translation_audition=translation_audition_enabled,
+            translation_audition_segment_s=translation_audition_segment_s,
             output_formats=args.output_formats,
             cache_enabled=args.cache == "on",
             cache_dir=Path(args.cache_dir) if args.cache_dir else None,
@@ -5655,6 +5807,20 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     run_parser.add_argument(
+        "--translation-audition",
+        action="store_true",
+        help=(
+            "For --render-many, write optional translation audition WAVs when a "
+            "TARGET.STEREO.2_0 deliverable exists."
+        ),
+    )
+    run_parser.add_argument(
+        "--translation-audition-segment",
+        type=float,
+        default=_DEFAULT_RENDER_MANY_TRANSLATION_AUDITION_SEGMENT_S,
+        help="Segment duration in seconds for --translation-audition (default: 30).",
+    )
+    run_parser.add_argument(
         "--deliverables-index",
         action="store_true",
         help="Also write deliverables_index.json summarizing file deliverables.",
@@ -6483,6 +6649,31 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Output report JSON path for patched translation_results.",
     )
+    translation_audition_parser = translation_subparsers.add_parser(
+        "audition",
+        help="Render deterministic translation audition WAVs from a WAV file.",
+    )
+    translation_audition_parser.add_argument(
+        "--audio",
+        required=True,
+        help="Path to mono/stereo WAV input.",
+    )
+    translation_audition_parser.add_argument(
+        "--profiles",
+        required=True,
+        help="Comma-separated translation profile IDs.",
+    )
+    translation_audition_parser.add_argument(
+        "--out-dir",
+        required=True,
+        help="Output directory root for translation_auditions artifacts.",
+    )
+    translation_audition_parser.add_argument(
+        "--segment",
+        type=float,
+        default=None,
+        help="Optional segment duration in seconds (from start).",
+    )
 
     locks_parser = subparsers.add_parser("locks", help="Scene lock registry tools.")
     locks_subparsers = locks_parser.add_subparsers(dest="locks_command", required=True)
@@ -6776,6 +6967,20 @@ def main(argv: list[str] | None = None) -> int:
             "Comma-separated translation profile IDs for --render-many. "
             "Implies --translation."
         ),
+    )
+    project_run_parser.add_argument(
+        "--translation-audition",
+        action="store_true",
+        help=(
+            "For --render-many, write optional translation audition WAVs when a "
+            "TARGET.STEREO.2_0 deliverable exists."
+        ),
+    )
+    project_run_parser.add_argument(
+        "--translation-audition-segment",
+        type=float,
+        default=_DEFAULT_RENDER_MANY_TRANSLATION_AUDITION_SEGMENT_S,
+        help="Segment duration in seconds for --translation-audition (default: 30).",
     )
     project_run_parser.add_argument(
         "--deliverables-index",
@@ -8350,6 +8555,36 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(payload, indent=2, sort_keys=True))
             else:
                 print(_render_translation_results_text(payload))
+            return 0
+        if args.translation_command == "audition":
+            try:
+                profile_ids = _parse_translation_profile_ids_csv(
+                    args.profiles,
+                    translation_profiles_path=translation_profiles_path,
+                )
+                out_root_dir = Path(args.out_dir)
+                audition_out_dir = out_root_dir / "translation_auditions"
+                payload = _build_translation_audition_payload(
+                    translation_profiles_path=translation_profiles_path,
+                    audio_path=Path(args.audio),
+                    out_dir=audition_out_dir,
+                    profile_ids=profile_ids,
+                    segment_s=args.segment,
+                )
+                _write_translation_audition_manifest(
+                    audition_out_dir / "manifest.json",
+                    payload,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            print(
+                _render_translation_audition_text(
+                    payload=payload,
+                    root_out_dir=out_root_dir,
+                    audition_out_dir=audition_out_dir,
+                )
+            )
             return 0
         print("Unknown translation command.", file=sys.stderr)
         return 2
