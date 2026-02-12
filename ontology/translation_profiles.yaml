@@ -2,6 +2,8 @@ TRANS.DEVICE.CAR:
   label: "Car"
   description: "Checks low-end focus, vocal readability, and harshness in noisy playback."
   intent: "fatigue"
+  score_warn_below: 70
+  score_fail_below: 50
   default_thresholds:
     max_lufs_delta: 2.0
     max_spectral_delta_db: 2.5
@@ -21,6 +23,8 @@ TRANS.DEVICE.EARBUDS:
   label: "Earbuds"
   description: "Prioritizes vocal presence, mono resilience, and upper-mid comfort on compact drivers."
   intent: "tonal"
+  score_warn_below: 70
+  score_fail_below: 50
   default_thresholds:
     max_lufs_delta: 1.5
     max_spectral_delta_db: 2.0
@@ -40,6 +44,8 @@ TRANS.DEVICE.PHONE:
   label: "Phone"
   description: "Emphasizes midrange translation and collapse behavior for small single-speaker playback."
   intent: "compatibility"
+  score_warn_below: 70
+  score_fail_below: 50
   default_thresholds:
     max_lufs_delta: 2.5
     max_spectral_delta_db: 3.0
@@ -59,6 +65,8 @@ TRANS.DEVICE.SMALL_SPEAKER:
   label: "Small speaker"
   description: "Stress-tests narrow-band consumer speakers for balance and intelligibility drift."
   intent: "compatibility"
+  score_warn_below: 70
+  score_fail_below: 50
   default_thresholds:
     max_lufs_delta: 2.2
     max_spectral_delta_db: 2.8
@@ -78,6 +86,8 @@ TRANS.MONO.COLLAPSE:
   label: "Mono collapse"
   description: "Measures phase cancellation and center-energy retention when folded to mono."
   intent: "compatibility"
+  score_warn_below: 70
+  score_fail_below: 50
   default_thresholds:
     max_lufs_delta: 1.0
     max_spectral_delta_db: 1.5

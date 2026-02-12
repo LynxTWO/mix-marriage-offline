@@ -101,7 +101,9 @@
         "description",
         "intent",
         "default_thresholds",
-        "scoring"
+        "scoring",
+        "score_warn_below",
+        "score_fail_below"
       ],
       "properties": {
         "label": {
@@ -132,8 +134,2040 @@
             "type": "string",
             "minLength": 1
           }
+        },
+        "score_warn_below": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "score_fail_below": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 0
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 1
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 2
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 3
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 3
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 4
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 4
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 5
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 5
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 6
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 6
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 7
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 7
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 8
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 8
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 9
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 9
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 10
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 10
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 11
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 11
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 12
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 12
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 13
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 13
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 14
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 14
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 15
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 15
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 16
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 16
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 17
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 17
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 18
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 18
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 19
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 19
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 20
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 20
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 21
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 21
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 22
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 22
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 23
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 23
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 24
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 24
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 25
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 25
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 26
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 26
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 27
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 27
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 28
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 28
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 29
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 29
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 30
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 30
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 31
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 31
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 32
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 32
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 33
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 33
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 34
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 34
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 35
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 35
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 36
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 36
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 37
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 37
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 38
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 38
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 39
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 39
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 40
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 40
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 41
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 41
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 42
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 42
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 43
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 43
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 44
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 44
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 45
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 45
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 46
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 46
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 47
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 47
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 48
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 48
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 49
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 49
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 50
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 50
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 51
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 51
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 52
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 52
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 53
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 53
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 54
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 54
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 55
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 55
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 56
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 56
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 57
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 57
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 58
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 58
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 59
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 59
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 60
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 60
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 61
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 61
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 62
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 62
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 63
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 63
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 64
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 64
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 65
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 65
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 66
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 66
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 67
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 67
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 68
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 68
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 69
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 69
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 70
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 70
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 71
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 71
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 72
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 72
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 73
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 73
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 74
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 74
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 75
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 75
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 76
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 76
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 77
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 77
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 78
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 78
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 79
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 79
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 80
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 80
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 81
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 81
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 82
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 82
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 83
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 83
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 84
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 84
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 85
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 85
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 86
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 86
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 87
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 87
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 88
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 88
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 89
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 89
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 90
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 90
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 91
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 91
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 92
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 92
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 93
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 93
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 94
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 94
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 95
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 95
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 96
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 96
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 97
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 97
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 98
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 98
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 99
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 99
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "score_warn_below",
+              "score_fail_below"
+            ],
+            "properties": {
+              "score_warn_below": {
+                "const": 100
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "score_fail_below": {
+                "maximum": 100
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

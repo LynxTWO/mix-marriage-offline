@@ -587,6 +587,44 @@ class TestUiBundle(unittest.TestCase):
         )
         self.assertEqual(translation_results[1].get("issues"), report["translation_results"][0]["issues"])
 
+    def test_build_ui_bundle_embeds_translation_summary_sorted_by_profile_id(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        report["translation_summary"] = [
+            {
+                "profile_id": "TRANS.MONO.COLLAPSE",
+                "status": "fail",
+                "score": 42,
+                "label": "Mono collapse",
+                "short_reason": (
+                    "ISSUE.TRANSLATION.PROFILE_SCORE_LOW: score=42 fail<50 warn<70."
+                ),
+            },
+            {
+                "profile_id": "TRANS.DEVICE.PHONE",
+                "status": "pass",
+                "score": 75,
+                "label": "Phone",
+                "short_reason": "Score meets threshold.",
+            },
+        ]
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        bundle = build_ui_bundle(report, None, help_registry_path=help_registry_path)
+        validator.validate(bundle)
+
+        translation_summary = bundle.get("translation_summary")
+        self.assertIsInstance(translation_summary, list)
+        if not isinstance(translation_summary, list):
+            return
+        self.assertEqual(
+            [item.get("profile_id") for item in translation_summary if isinstance(item, dict)],
+            ["TRANS.DEVICE.PHONE", "TRANS.MONO.COLLAPSE"],
+        )
+        self.assertEqual(translation_summary[0].get("status"), "pass")
+        self.assertEqual(translation_summary[1].get("status"), "fail")
+
     def test_build_ui_bundle_with_apply_payload_and_schema(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")

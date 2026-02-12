@@ -74,6 +74,21 @@ def _write_device_fixture(path: Path) -> None:
     )
 
 
+def _base_report_payload() -> dict[str, object]:
+    return {
+        "schema_version": "0.1.0",
+        "report_id": "REPORT.TRANSLATION.CLI.TEST",
+        "project_id": "PROJECT.TRANSLATION.CLI.TEST",
+        "profile_id": "PROFILE.ASSIST",
+        "generated_at": "2000-01-01T00:00:00Z",
+        "engine_version": "0.1.0",
+        "ontology_version": "0.1.0",
+        "session": {"stems": []},
+        "issues": [],
+        "recommendations": [],
+    }
+
+
 class TestCliTranslationRun(unittest.TestCase):
     def _python_cmd(self) -> str:
         return os.fspath(os.getenv("PYTHON", "") or sys.executable)
@@ -243,6 +258,110 @@ class TestCliTranslationRun(unittest.TestCase):
             "TRANS.DEVICE.CAR": 48,
         }
         self.assertEqual(observed, expected_scores)
+
+    def test_translation_run_report_patch_adds_translation_summary_deterministically(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        profiles = {
+            item.get("profile_id"): item
+            for item in list_translation_profiles(
+                repo_root / "ontology" / "translation_profiles.yaml"
+            )
+            if isinstance(item, dict) and isinstance(item.get("profile_id"), str)
+        }
+        first_report: dict[str, object]
+        second_report: dict[str, object]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            audio_path = temp_path / "translation_device.wav"
+            report_in_path = temp_path / "report.in.json"
+            report_out_first = temp_path / "report.out.first.json"
+            report_out_second = temp_path / "report.out.second.json"
+
+            _write_device_fixture(audio_path)
+            report_in_path.write_text(
+                json.dumps(_base_report_payload(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            args = [
+                "translation",
+                "run",
+                "--audio",
+                str(audio_path),
+                "--profiles",
+                "TRANS.MONO.COLLAPSE,TRANS.DEVICE.PHONE",
+                "--report-in",
+                str(report_in_path),
+                "--report-out",
+                str(report_out_first),
+                "--format",
+                "json",
+            ]
+            first = self._run(repo_root, args)
+            second = self._run(
+                repo_root,
+                [*args[:-3], str(report_out_second), "--format", "json"],
+            )
+            first_report = json.loads(report_out_first.read_text(encoding="utf-8"))
+            second_report = json.loads(report_out_second.read_text(encoding="utf-8"))
+
+        self.assertEqual(first.returncode, 0, msg=first.stderr)
+        self.assertEqual(second.returncode, 0, msg=second.stderr)
+        self.assertEqual(first_report, second_report)
+
+        translation_results = first_report.get("translation_results")
+        self.assertIsInstance(translation_results, list)
+        if not isinstance(translation_results, list):
+            return
+
+        translation_summary = first_report.get("translation_summary")
+        self.assertIsInstance(translation_summary, list)
+        if not isinstance(translation_summary, list):
+            return
+
+        self.assertEqual(len(translation_summary), len(translation_results))
+        profile_ids = [
+            item.get("profile_id")
+            for item in translation_summary
+            if isinstance(item, dict)
+        ]
+        self.assertEqual(profile_ids, sorted(profile_ids))
+
+        summary_by_profile = {
+            item.get("profile_id"): item
+            for item in translation_summary
+            if isinstance(item, dict) and isinstance(item.get("profile_id"), str)
+        }
+        for row in translation_results:
+            if not isinstance(row, dict):
+                continue
+            profile_id = row.get("profile_id")
+            score = row.get("score")
+            if not isinstance(profile_id, str) or not isinstance(score, int):
+                continue
+            summary_row = summary_by_profile.get(profile_id)
+            self.assertIsInstance(summary_row, dict)
+            if not isinstance(summary_row, dict):
+                continue
+            profile = profiles.get(profile_id)
+            self.assertIsInstance(profile, dict)
+            if not isinstance(profile, dict):
+                continue
+            warn_below = int(profile.get("score_warn_below", 70))
+            fail_below = int(profile.get("score_fail_below", 50))
+            expected_status = "pass"
+            if score < fail_below:
+                expected_status = "fail"
+            elif score < warn_below:
+                expected_status = "warn"
+            self.assertEqual(summary_row.get("status"), expected_status)
+            self.assertEqual(summary_row.get("score"), score)
+            self.assertEqual(summary_row.get("label"), profile.get("label"))
+            short_reason = summary_row.get("short_reason")
+            self.assertIsInstance(short_reason, str)
+            if isinstance(short_reason, str):
+                self.assertTrue(short_reason.strip())
 
 
 if __name__ == "__main__":

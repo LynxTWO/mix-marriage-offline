@@ -13,6 +13,10 @@
       "type": "array",
       "items": { "$ref": "report.schema.json#/$defs/translation_result" }
     },
+    "translation_summary": {
+      "type": "array",
+      "items": { "$ref": "report.schema.json#/$defs/translation_summary_entry" }
+    },
     "render_manifest": { "$ref": "render_manifest.schema.json" },
     "apply_manifest": { "$ref": "apply_manifest.schema.json" },
     "applied_report": { "$ref": "report.schema.json" },

@@ -43,6 +43,7 @@ from mmo.core.translation_profiles import (
     list_translation_profiles,
     load_translation_profiles,
 )
+from mmo.core.translation_summary import build_translation_summary
 from mmo.core.translation_checks import run_translation_checks
 from mmo.core.target_recommendations import recommend_render_targets
 from mmo.core.scene_templates import (
@@ -2156,9 +2157,19 @@ def _write_report_with_translation_results(
     report_out_path: Path,
     translation_results: list[dict[str, Any]],
     repo_root: Path,
+    profiles: dict[str, dict[str, Any]] | None = None,
 ) -> None:
     report_payload = _load_report(report_in_path)
+    profile_map = (
+        profiles
+        if isinstance(profiles, dict)
+        else load_translation_profiles(repo_root / "ontology" / "translation_profiles.yaml")
+    )
     report_payload["translation_results"] = translation_results
+    report_payload["translation_summary"] = build_translation_summary(
+        translation_results,
+        profile_map,
+    )
     _validate_json_payload(
         report_payload,
         schema_path=repo_root / "schemas" / "report.schema.json",
@@ -2471,6 +2482,7 @@ def _run_render_many_translation_checks(
         return
 
     translation_profiles_path = repo_root / "ontology" / "translation_profiles.yaml"
+    translation_profiles: dict[str, dict[str, Any]]
     try:
         translation_results = _build_translation_run_payload(
             translation_profiles_path=translation_profiles_path,
@@ -2478,6 +2490,7 @@ def _run_render_many_translation_checks(
             profile_ids=profile_ids,
         )
         translation_results = _sorted_translation_results(translation_results)
+        translation_profiles = load_translation_profiles(translation_profiles_path)
     except ValueError:
         return
 
@@ -2487,6 +2500,7 @@ def _run_render_many_translation_checks(
             report_out_path=report_path,
             translation_results=translation_results,
             repo_root=repo_root,
+            profiles=translation_profiles,
         )
     except (SystemExit, ValueError):
         return
@@ -2500,6 +2514,7 @@ def _run_render_many_translation_checks(
                     report_out_path=variant_report_path,
                     translation_results=translation_results,
                     repo_root=repo_root,
+                    profiles=translation_profiles,
                 )
             except (SystemExit, ValueError):
                 continue
@@ -8317,6 +8332,7 @@ def main(argv: list[str] | None = None) -> int:
                     audio_path=Path(args.audio),
                     profile_ids=profile_ids,
                 )
+                profiles = load_translation_profiles(translation_profiles_path)
                 if isinstance(args.out, str) and args.out.strip():
                     _write_translation_results_json(Path(args.out), payload)
                 if report_in_value and report_out_value:
@@ -8325,6 +8341,7 @@ def main(argv: list[str] | None = None) -> int:
                         report_out_path=Path(report_out_value),
                         translation_results=payload,
                         repo_root=repo_root,
+                        profiles=profiles,
                     )
             except ValueError as exc:
                 print(str(exc), file=sys.stderr)

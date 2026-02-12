@@ -645,6 +645,31 @@ class TestCliRun(unittest.TestCase):
                         "TRANS.MONO.COLLAPSE",
                     ],
                 )
+                first_translation_summary = first_report.get("translation_summary")
+                self.assertIsInstance(first_translation_summary, list)
+                if not isinstance(first_translation_summary, list):
+                    return
+                self.assertEqual(
+                    [
+                        item.get("profile_id")
+                        for item in first_translation_summary
+                        if isinstance(item, dict)
+                    ],
+                    [
+                        "TRANS.DEVICE.PHONE",
+                        "TRANS.DEVICE.SMALL_SPEAKER",
+                        "TRANS.MONO.COLLAPSE",
+                    ],
+                )
+                self.assertTrue(
+                    all(
+                        isinstance(item, dict)
+                        and item.get("status") in {"pass", "warn", "fail"}
+                        and isinstance(item.get("short_reason"), str)
+                        and bool(item.get("short_reason"))
+                        for item in first_translation_summary
+                    )
+                )
 
                 variant_result = json.loads(
                     (out_dir / "variant_result.json").read_text(encoding="utf-8")
@@ -690,6 +715,10 @@ class TestCliRun(unittest.TestCase):
                     stereo_bundle.get("translation_results"),
                     first_translation_results,
                 )
+                self.assertEqual(
+                    stereo_bundle.get("translation_summary"),
+                    first_translation_summary,
+                )
 
                 second_exit = main(command)
                 self.assertEqual(second_exit, 0)
@@ -697,6 +726,10 @@ class TestCliRun(unittest.TestCase):
                 self.assertEqual(
                     second_report.get("translation_results"),
                     first_translation_results,
+                )
+                self.assertEqual(
+                    second_report.get("translation_summary"),
+                    first_translation_summary,
                 )
 
     def test_run_render_many_translation_skips_when_stereo_deliverable_is_missing(self) -> None:

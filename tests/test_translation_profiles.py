@@ -60,6 +60,19 @@ class TestTranslationProfiles(unittest.TestCase):
                 "TRANS.MONO.COLLAPSE",
             ],
         )
+        for item in first:
+            if not isinstance(item, dict):
+                continue
+            warn_below = item.get("score_warn_below")
+            fail_below = item.get("score_fail_below")
+            self.assertIsInstance(warn_below, int)
+            self.assertIsInstance(fail_below, int)
+            if isinstance(warn_below, int) and isinstance(fail_below, int):
+                self.assertGreaterEqual(warn_below, 0)
+                self.assertLessEqual(warn_below, 100)
+                self.assertGreaterEqual(fail_below, 0)
+                self.assertLessEqual(fail_below, 100)
+                self.assertLessEqual(fail_below, warn_below)
 
     def test_get_translation_profile_unknown_id_error_is_deterministic(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -97,6 +110,8 @@ class TestTranslationProfiles(unittest.TestCase):
         self.assertIsInstance(profile, dict)
         if not isinstance(profile, dict):
             return
+        profile["score_warn_below"] = 40
+        profile["score_fail_below"] = 41
 
         thresholds = profile.get("default_thresholds")
         self.assertIsInstance(thresholds, dict)
@@ -124,6 +139,7 @@ class TestTranslationProfiles(unittest.TestCase):
 
         self.assertEqual(str(first.exception), str(second.exception))
         self.assertIn("Translation profiles registry schema validation failed", str(first.exception))
+        self.assertIn("score_fail_below", str(first.exception))
         self.assertIn("max_lufs_delta", str(first.exception))
         self.assertIn("unknown_metric", str(first.exception))
 
