@@ -156,6 +156,60 @@ class TestCliSceneTemplatesPreview(unittest.TestCase):
             self.assertEqual(locked_preview.get("changes"), [])
             self.assertEqual(locked_preview.get("skipped"), [])
 
+    def test_scene_template_preview_text_snapshot(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        env = self._env(repo_root)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            stems_dir.mkdir(parents=True, exist_ok=True)
+            scene_payload = _sample_scene(stems_dir=stems_dir)
+            scene_payload["objects"] = [scene_payload["objects"][1]]
+            scene_payload["beds"] = []
+            scene_path = temp_path / "scene.json"
+            _write_json(scene_path, scene_payload)
+
+            result = subprocess.run(
+                [
+                    self._python_cmd(),
+                    "-m",
+                    "mmo",
+                    "scene",
+                    "template",
+                    "preview",
+                    "TEMPLATE.SCENE.STEREO.BAND_WIDE_VOCAL_CENTER",
+                    "--scene",
+                    os.fspath(scene_path),
+                    "--format",
+                    "text",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                cwd=repo_root,
+                env=env,
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertEqual(result.stderr, "")
+
+            expected_output = (
+                "\n".join(
+                    [
+                        "templates: TEMPLATE.SCENE.STEREO.BAND_WIDE_VOCAL_CENTER",
+                        "force: false",
+                        "scene: hard_locked=false changes=0 skipped=0",
+                        "  paths: changes=[(none)] skipped=[(none)]",
+                        "objects:",
+                        "- OBJ.A_VOX: label=Lead Vocal hard_locked=false changes=6 skipped=3",
+                        "  paths: changes=[intent.confidence, intent.depth, intent.locks, intent.loudness_bias, intent.position.azimuth_deg, +1 more] skipped=[intent.depth, intent.loudness_bias, intent.width]",
+                        "beds:",
+                        "- (none)",
+                    ]
+                )
+                + "\n"
+            )
+            self.assertEqual(result.stdout, expected_output)
+
 
 if __name__ == "__main__":
     unittest.main()
