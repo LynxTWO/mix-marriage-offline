@@ -2100,6 +2100,173 @@ def _parse_translation_profile_ids_csv(
     return selected
 
 
+def _parse_translation_audio_csv(raw_value: str) -> list[Path]:
+    if not isinstance(raw_value, str):
+        raise ValueError("audio must be a comma-separated string.")
+
+    selected: list[Path] = []
+    seen: set[str] = set()
+    for item in raw_value.split(","):
+        normalized = item.strip()
+        if not normalized:
+            continue
+        key = Path(normalized).as_posix().strip().casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        selected.append(Path(normalized))
+
+    if not selected:
+        raise ValueError("audio must include at least one WAV path.")
+    return selected
+
+
+def _translation_audio_sort_key(path: Path) -> tuple[str, str, str, str]:
+    filename = path.name
+    normalized_filename = filename.casefold()
+    normalized_path = path.as_posix().casefold()
+    return (normalized_filename, filename, normalized_path, path.as_posix())
+
+
+def _discover_translation_audio_paths(
+    *,
+    in_dir: Path,
+    glob_pattern: str,
+) -> list[Path]:
+    if not in_dir.exists():
+        raise ValueError(f"Audio directory does not exist: {in_dir}")
+    if not in_dir.is_dir():
+        raise ValueError(f"Audio directory is not a directory: {in_dir}")
+    if not isinstance(glob_pattern, str) or not glob_pattern.strip():
+        raise ValueError("glob pattern must be a non-empty string.")
+
+    pattern = glob_pattern.strip()
+    candidates = [path for path in in_dir.glob(pattern) if path.is_file()]
+    wav_paths = [
+        path
+        for path in candidates
+        if path.suffix.lower() in {".wav", ".wave"}
+    ]
+    if not wav_paths:
+        raise ValueError(f"No WAV files matched {pattern!r} under directory: {in_dir}")
+    return sorted(wav_paths, key=_translation_audio_sort_key)
+
+
+def _resolve_translation_compare_audio_paths(
+    *,
+    raw_audio: str | None,
+    in_dir_value: str | None,
+    glob_pattern: str | None,
+) -> list[Path]:
+    audio_value = raw_audio.strip() if isinstance(raw_audio, str) else ""
+    in_dir_raw = in_dir_value.strip() if isinstance(in_dir_value, str) else ""
+    if audio_value and in_dir_raw:
+        raise ValueError("translation compare accepts either --audio or --in-dir, not both.")
+
+    if audio_value:
+        audio_paths = _parse_translation_audio_csv(audio_value)
+        return sorted(audio_paths, key=_translation_audio_sort_key)
+
+    if in_dir_raw:
+        pattern = glob_pattern.strip() if isinstance(glob_pattern, str) else "*.wav"
+        return _discover_translation_audio_paths(
+            in_dir=Path(in_dir_raw),
+            glob_pattern=pattern or "*.wav",
+        )
+
+    raise ValueError("translation compare requires either --audio or --in-dir.")
+
+
+def _coerce_translation_compare_score(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, (int, float)):
+        return int(round(float(value)))
+    return 0
+
+
+def _build_translation_compare_payload(
+    *,
+    translation_profiles_path: Path,
+    audio_paths: list[Path],
+    profile_ids: list[str],
+    max_issues_per_profile: int = 3,
+) -> list[dict[str, Any]]:
+    if not isinstance(audio_paths, list):
+        raise ValueError("audio paths must be provided as a list.")
+    if not audio_paths:
+        raise ValueError("At least one WAV audio input is required.")
+
+    sorted_profile_ids = sorted(
+        {
+            profile_id.strip()
+            for profile_id in profile_ids
+            if isinstance(profile_id, str) and profile_id.strip()
+        }
+    )
+    if not sorted_profile_ids:
+        raise ValueError("At least one translation profile_id is required.")
+
+    profiles = load_translation_profiles(translation_profiles_path)
+    rows: list[dict[str, Any]] = []
+
+    for audio_path in sorted(audio_paths, key=_translation_audio_sort_key):
+        translation_results = run_translation_checks(
+            audio_path=audio_path,
+            profiles=profiles,
+            profile_ids=sorted_profile_ids,
+            max_issues_per_profile=max_issues_per_profile,
+        )
+        summary_rows = build_translation_summary(translation_results, profiles)
+        status_by_profile = {
+            _coerce_str(item.get("profile_id")).strip(): _coerce_str(item.get("status")).strip()
+            for item in summary_rows
+            if isinstance(item, dict)
+        }
+
+        for result in _sorted_translation_results(translation_results):
+            profile_id = _coerce_str(result.get("profile_id")).strip()
+            if not profile_id:
+                continue
+            issues_raw = result.get("issues")
+            issues_count = len(
+                [item for item in issues_raw if isinstance(item, dict)]
+            ) if isinstance(issues_raw, list) else 0
+            rows.append(
+                {
+                    "audio": audio_path.name,
+                    "profile_id": profile_id,
+                    "score": _coerce_translation_compare_score(result.get("score")),
+                    "status": status_by_profile.get(profile_id, ""),
+                    "issues_count": issues_count,
+                }
+            )
+
+    rows.sort(
+        key=lambda item: (
+            _coerce_str(item.get("audio")).strip().casefold(),
+            _coerce_str(item.get("audio")).strip(),
+            _coerce_str(item.get("profile_id")).strip(),
+            json.dumps(item, sort_keys=True),
+        )
+    )
+    return rows
+
+
+def _render_translation_compare_text(payload: list[dict[str, Any]]) -> str:
+    lines = ["audio | profile_id | score | status"]
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            f"{_coerce_str(row.get('audio')).strip()} | "
+            f"{_coerce_str(row.get('profile_id')).strip()} | "
+            f"{_coerce_translation_compare_score(row.get('score'))} | "
+            f"{_coerce_str(row.get('status')).strip()}"
+        )
+    return "\n".join(lines)
+
+
 def _build_translation_run_payload(
     *,
     translation_profiles_path: Path,
@@ -6649,6 +6816,39 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Output report JSON path for patched translation_results.",
     )
+    translation_compare_parser = translation_subparsers.add_parser(
+        "compare",
+        help="Run deterministic translation checks across multiple WAV inputs.",
+    )
+    translation_compare_audio_group = translation_compare_parser.add_mutually_exclusive_group(
+        required=True
+    )
+    translation_compare_audio_group.add_argument(
+        "--audio",
+        default=None,
+        help="Comma-separated WAV paths to compare.",
+    )
+    translation_compare_audio_group.add_argument(
+        "--in-dir",
+        default=None,
+        help="Directory containing WAV files for comparison.",
+    )
+    translation_compare_parser.add_argument(
+        "--glob",
+        default="*.wav",
+        help="Optional glob pattern for --in-dir discovery (default: *.wav).",
+    )
+    translation_compare_parser.add_argument(
+        "--profiles",
+        required=True,
+        help="Comma-separated translation profile IDs.",
+    )
+    translation_compare_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for translation compare rows.",
+    )
     translation_audition_parser = translation_subparsers.add_parser(
         "audition",
         help="Render deterministic translation audition WAVs from a WAV file.",
@@ -8555,6 +8755,30 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(payload, indent=2, sort_keys=True))
             else:
                 print(_render_translation_results_text(payload))
+            return 0
+        if args.translation_command == "compare":
+            try:
+                profile_ids = _parse_translation_profile_ids_csv(
+                    args.profiles,
+                    translation_profiles_path=translation_profiles_path,
+                )
+                audio_paths = _resolve_translation_compare_audio_paths(
+                    raw_audio=getattr(args, "audio", None),
+                    in_dir_value=getattr(args, "in_dir", None),
+                    glob_pattern=getattr(args, "glob", None),
+                )
+                payload = _build_translation_compare_payload(
+                    translation_profiles_path=translation_profiles_path,
+                    audio_paths=audio_paths,
+                    profile_ids=profile_ids,
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_translation_compare_text(payload))
             return 0
         if args.translation_command == "audition":
             try:
