@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 from typing import Any
 
 from mmo.core.run_config import RUN_CONFIG_SCHEMA_VERSION, normalize_run_config
+from mmo.dsp.io import sha256_file
 
 
 def _hash_json_payload(payload: Any) -> str:
@@ -63,3 +65,41 @@ def cache_key(lock_hash: str, cfg_hash: str) -> str:
     if not isinstance(cfg_hash, str) or not cfg_hash:
         raise ValueError("cfg_hash must be a non-empty string.")
     return f"LOCK.{lock_hash[:8]}__CFG.{cfg_hash[:8]}"
+
+
+def _normalize_profile_ids_for_cache(profile_ids: list[str]) -> list[str]:
+    if not isinstance(profile_ids, list):
+        raise ValueError("profile_ids must be a list of profile identifiers.")
+
+    normalized: set[str] = set()
+    for profile_id in profile_ids:
+        if not isinstance(profile_id, str):
+            continue
+        token = profile_id.strip()
+        if token:
+            normalized.add(token)
+    if not normalized:
+        raise ValueError("At least one translation profile_id is required.")
+    return sorted(normalized)
+
+
+def translation_cache_key(
+    audio_path: Path,
+    profile_ids: list[str],
+    version_str: str,
+) -> str:
+    if not isinstance(audio_path, Path):
+        raise ValueError("audio_path must be a pathlib.Path.")
+    if not audio_path.exists():
+        raise ValueError(f"Audio path does not exist: {audio_path}")
+    if not audio_path.is_file():
+        raise ValueError(f"Audio path must be a file: {audio_path}")
+    if not isinstance(version_str, str) or not version_str.strip():
+        raise ValueError("version_str must be a non-empty string.")
+
+    payload = {
+        "audio_sha256": sha256_file(audio_path),
+        "profile_ids": _normalize_profile_ids_for_cache(profile_ids),
+        "version": version_str.strip(),
+    }
+    return _hash_json_payload(payload)

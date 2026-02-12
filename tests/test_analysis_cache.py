@@ -8,12 +8,21 @@ import tempfile
 import unittest
 import wave
 from pathlib import Path
+from unittest import mock
 
 from mmo.cli import main
-from mmo.core.cache_keys import cache_key, hash_lockfile, hash_run_config
+from mmo.core.cache_keys import (
+    cache_key,
+    hash_lockfile,
+    hash_run_config,
+    translation_cache_key,
+)
 from mmo.core.cache_store import cache_paths, save_cached_report, try_load_cached_report
 from mmo.core.lockfile import build_lockfile
 from mmo.core.run_config import RUN_CONFIG_SCHEMA_VERSION, normalize_run_config
+from mmo.core.translation_audition import render_translation_auditions
+from mmo.core.translation_checks import run_translation_checks
+from mmo.core.translation_profiles import load_translation_profiles
 
 
 def _write_wav_16bit(
@@ -213,6 +222,146 @@ class TestAnalysisCache(unittest.TestCase):
                 second_report.get("report_id"),
                 third_report.get("report_id"),
             )
+
+    def test_translation_cache_key_is_content_based_and_profile_order_agnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            audio_path_a = temp_path / "tone_a.wav"
+            audio_path_b = temp_path / "tone_b.wav"
+            audio_path_c = temp_path / "tone_c.wav"
+            _write_wav_16bit(audio_path_a, freq_hz=220.0, amplitude=0.45)
+            _write_wav_16bit(audio_path_b, freq_hz=220.0, amplitude=0.45)
+            _write_wav_16bit(audio_path_c, freq_hz=330.0, amplitude=0.25)
+
+            key_a = translation_cache_key(
+                audio_path_a,
+                ["TRANS.MONO.COLLAPSE", "TRANS.DEVICE.PHONE"],
+                "translation_checks_v1",
+            )
+            key_b = translation_cache_key(
+                audio_path_b,
+                ["TRANS.DEVICE.PHONE", "TRANS.MONO.COLLAPSE"],
+                "translation_checks_v1",
+            )
+            key_c = translation_cache_key(
+                audio_path_c,
+                ["TRANS.DEVICE.PHONE", "TRANS.MONO.COLLAPSE"],
+                "translation_checks_v1",
+            )
+            key_d = translation_cache_key(
+                audio_path_a,
+                ["TRANS.DEVICE.PHONE", "TRANS.MONO.COLLAPSE"],
+                "translation_checks_v2",
+            )
+
+            self.assertEqual(key_a, key_b)
+            self.assertNotEqual(key_a, key_c)
+            self.assertNotEqual(key_a, key_d)
+
+    def test_translation_checks_cache_creates_entry_and_reuses_cached_results(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        profiles = load_translation_profiles(repo_root / "ontology" / "translation_profiles.yaml")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            audio_path = temp_path / "translation_checks.wav"
+            cache_dir = temp_path / ".mmo_cache"
+            _write_wav_16bit(audio_path, freq_hz=220.0, amplitude=0.45)
+
+            first = run_translation_checks(
+                audio_path=audio_path,
+                profiles=profiles,
+                profile_ids=["TRANS.MONO.COLLAPSE", "TRANS.DEVICE.PHONE"],
+                cache_dir=cache_dir,
+                use_cache=True,
+            )
+            cache_files = sorted((cache_dir / "translation_checks").glob("*.json"))
+            self.assertEqual(len(cache_files), 1)
+
+            with mock.patch(
+                "mmo.core.translation_checks._load_channels",
+                side_effect=AssertionError("expected translation checks cache hit"),
+            ):
+                second = run_translation_checks(
+                    audio_path=audio_path,
+                    profiles=profiles,
+                    profile_ids=["TRANS.MONO.COLLAPSE", "TRANS.DEVICE.PHONE"],
+                    cache_dir=cache_dir,
+                    use_cache=True,
+                )
+
+            self.assertEqual(second, first)
+
+    def test_translation_audition_cache_creates_entry_and_reuses_cached_renders(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        profiles = load_translation_profiles(repo_root / "ontology" / "translation_profiles.yaml")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            audio_path = temp_path / "translation_audition.wav"
+            first_out_dir = temp_path / "out_first" / "translation_auditions"
+            second_out_dir = temp_path / "out_second" / "translation_auditions"
+            cache_dir = temp_path / ".mmo_cache"
+            profile_ids = ["TRANS.MONO.COLLAPSE", "TRANS.DEVICE.PHONE"]
+            _write_wav_16bit(audio_path, freq_hz=330.0, amplitude=0.35)
+
+            first = render_translation_auditions(
+                audio_path=audio_path,
+                out_dir=first_out_dir,
+                profiles=profiles,
+                profile_ids=profile_ids,
+                segment_s=0.05,
+                cache_dir=cache_dir,
+                use_cache=True,
+            )
+            cached_manifest_paths = sorted(
+                (cache_dir / "translation_auditions").glob("*/manifest.json")
+            )
+            self.assertEqual(len(cached_manifest_paths), 1)
+
+            with mock.patch(
+                "mmo.core.translation_audition._load_channels",
+                side_effect=AssertionError("expected translation audition cache hit"),
+            ):
+                second = render_translation_auditions(
+                    audio_path=audio_path,
+                    out_dir=second_out_dir,
+                    profiles=profiles,
+                    profile_ids=profile_ids,
+                    segment_s=0.05,
+                    cache_dir=cache_dir,
+                    use_cache=True,
+                )
+
+            first_renders = first.get("renders")
+            second_renders = second.get("renders")
+            self.assertIsInstance(first_renders, list)
+            self.assertIsInstance(second_renders, list)
+            if not isinstance(first_renders, list) or not isinstance(second_renders, list):
+                return
+            self.assertEqual(
+                [
+                    item.get("profile_id")
+                    for item in first_renders
+                    if isinstance(item, dict)
+                ],
+                profile_ids,
+            )
+            self.assertEqual(
+                [
+                    item.get("profile_id")
+                    for item in second_renders
+                    if isinstance(item, dict)
+                ],
+                profile_ids,
+            )
+
+            for profile_id in profile_ids:
+                first_file = first_out_dir / f"{profile_id}.wav"
+                second_file = second_out_dir / f"{profile_id}.wav"
+                self.assertTrue(first_file.exists())
+                self.assertTrue(second_file.exists())
+                self.assertEqual(first_file.read_bytes(), second_file.read_bytes())
 
 
 if __name__ == "__main__":

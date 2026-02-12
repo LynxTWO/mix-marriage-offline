@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import json
 import math
+import shutil
 import struct
 import wave
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+from mmo.core.cache_keys import translation_cache_key
+from mmo.core.cache_store import resolve_cache_dir
 from mmo.dsp.float64 import (
     bytes_to_float_samples_ieee,
     bytes_to_int_samples_pcm,
@@ -19,6 +23,7 @@ _WINDOW_SIZE = 4096
 _HOP_SIZE = 1024
 _EPSILON = 1e-12
 _DEFAULT_PRESENCE_CAP_DB = 1.5
+_TRANSLATION_AUDITION_CACHE_VERSION = "translation_audition_v1"
 
 
 def _normalize_profile_ids(
@@ -56,6 +61,211 @@ def _normalize_profile_ids(
             f"Unknown translation profile_id: {unknown_label}. No translation profiles are available."
         )
     return normalized
+
+
+def _validate_segment_s_value(segment_s: float | None) -> None:
+    if segment_s is None:
+        return
+    if isinstance(segment_s, bool) or not isinstance(segment_s, (int, float)):
+        raise ValueError("segment_s must be a positive number of seconds when provided.")
+    if not math.isfinite(float(segment_s)) or float(segment_s) <= 0.0:
+        raise ValueError("segment_s must be a positive number of seconds when provided.")
+
+
+def _segment_cache_token(segment_s: float | None) -> str:
+    if segment_s is None:
+        return "full"
+    return f"{float(segment_s):.6f}"
+
+
+def _translation_audition_cache_version(segment_s: float | None) -> str:
+    return f"{_TRANSLATION_AUDITION_CACHE_VERSION}.segment_{_segment_cache_token(segment_s)}"
+
+
+def _translation_audition_cache_entry_dir(
+    *,
+    cache_dir: Path | None,
+    cache_key_value: str,
+) -> Path:
+    cache_root = resolve_cache_dir(cache_dir)
+    return cache_root / "translation_auditions" / cache_key_value
+
+
+def _translation_audition_cache_manifest_path(cache_entry_dir: Path) -> Path:
+    return cache_entry_dir / "manifest.json"
+
+
+def _coerce_cached_segment(value: Any) -> dict[str, float] | None:
+    if not isinstance(value, dict):
+        return None
+    start_s = value.get("start_s")
+    end_s = value.get("end_s")
+    if isinstance(start_s, bool) or isinstance(end_s, bool):
+        return None
+    if not isinstance(start_s, (int, float)) or not isinstance(end_s, (int, float)):
+        return None
+    start_value = float(start_s)
+    end_value = float(end_s)
+    if not math.isfinite(start_value) or not math.isfinite(end_value):
+        return None
+    if start_value < 0.0 or end_value < start_value:
+        return None
+    return {
+        "start_s": round(start_value, 6),
+        "end_s": round(end_value, 6),
+    }
+
+
+def _coerce_cached_render_notes(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    notes: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        token = item.strip()
+        if token:
+            notes.append(token)
+    return notes
+
+
+def _build_translation_audition_payload_from_cache(
+    *,
+    cache_entry_dir: Path,
+    out_dir: Path,
+    audio_path: Path,
+    profile_ids: list[str],
+) -> dict[str, Any] | None:
+    manifest_path = _translation_audition_cache_manifest_path(cache_entry_dir)
+    if not manifest_path.exists() or manifest_path.is_dir():
+        return None
+
+    try:
+        cached_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(cached_manifest, dict):
+        return None
+
+    renders_value = cached_manifest.get("renders")
+    if not isinstance(renders_value, list):
+        return None
+
+    render_map: dict[str, dict[str, Any]] = {}
+    for item in renders_value:
+        if not isinstance(item, dict):
+            return None
+        profile_id = item.get("profile_id")
+        if not isinstance(profile_id, str) or not profile_id.strip():
+            return None
+        file_name = item.get("file_name")
+        if not isinstance(file_name, str) or not file_name.strip():
+            return None
+        render_map[profile_id] = {
+            "file_name": file_name.strip(),
+            "notes": _coerce_cached_render_notes(item.get("notes")),
+        }
+
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return None
+
+    renders: list[dict[str, Any]] = []
+    for profile_id in profile_ids:
+        render_entry = render_map.get(profile_id)
+        if not isinstance(render_entry, dict):
+            return None
+        file_name = render_entry.get("file_name")
+        if not isinstance(file_name, str) or not file_name:
+            return None
+        source_path = cache_entry_dir / file_name
+        if not source_path.exists() or source_path.is_dir():
+            return None
+        target_path = out_dir / f"{profile_id}.wav"
+        try:
+            shutil.copyfile(source_path, target_path)
+        except OSError:
+            return None
+        renders.append(
+            {
+                "profile_id": profile_id,
+                "path": target_path.resolve().as_posix(),
+                "notes": list(render_entry.get("notes", [])),
+            }
+        )
+
+    return {
+        "audio_in": audio_path.resolve().as_posix(),
+        "segment": _coerce_cached_segment(cached_manifest.get("segment")),
+        "renders": renders,
+    }
+
+
+def _save_translation_audition_cache(
+    *,
+    cache_entry_dir: Path,
+    payload: dict[str, Any],
+    out_dir: Path,
+) -> None:
+    renders_value = payload.get("renders")
+    if not isinstance(renders_value, list):
+        return
+
+    try:
+        cache_entry_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
+
+    cached_renders: list[dict[str, Any]] = []
+    file_names: set[str] = set()
+    for item in renders_value:
+        if not isinstance(item, dict):
+            continue
+        profile_id = item.get("profile_id")
+        if not isinstance(profile_id, str) or not profile_id.strip():
+            continue
+        file_name = f"{profile_id}.wav"
+        source_path = out_dir / file_name
+        if not source_path.exists() or source_path.is_dir():
+            continue
+        target_path = cache_entry_dir / file_name
+        try:
+            shutil.copyfile(source_path, target_path)
+        except OSError:
+            return
+        file_names.add(file_name)
+        cached_renders.append(
+            {
+                "profile_id": profile_id,
+                "file_name": file_name,
+                "notes": _coerce_cached_render_notes(item.get("notes")),
+            }
+        )
+
+    cached_renders.sort(key=lambda item: str(item.get("profile_id", "")))
+    if not cached_renders:
+        return
+
+    try:
+        for stale_path in sorted(cache_entry_dir.glob("*.wav")):
+            if stale_path.name in file_names:
+                continue
+            stale_path.unlink()
+    except OSError:
+        return
+
+    cached_manifest = {
+        "segment": _coerce_cached_segment(payload.get("segment")),
+        "renders": cached_renders,
+    }
+    try:
+        _translation_audition_cache_manifest_path(cache_entry_dir).write_text(
+            json.dumps(cached_manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        return
 
 
 def _iter_wav_float64_chunks(path: Path) -> tuple[int, int, Iterator[list[float]]]:
@@ -127,12 +337,9 @@ def _parse_segment(
     sample_rate_hz: int,
     total_frames: int,
 ) -> tuple[int, int, dict[str, float] | None]:
+    _validate_segment_s_value(segment_s)
     if segment_s is None:
         return 0, total_frames, None
-    if isinstance(segment_s, bool) or not isinstance(segment_s, (int, float)):
-        raise ValueError("segment_s must be a positive number of seconds when provided.")
-    if not math.isfinite(float(segment_s)) or float(segment_s) <= 0.0:
-        raise ValueError("segment_s must be a positive number of seconds when provided.")
 
     frame_count = int(round(float(segment_s) * float(sample_rate_hz)))
     end_frame = max(1, min(total_frames, frame_count))
@@ -423,6 +630,8 @@ def render_translation_auditions(
     profiles: dict,
     profile_ids: list[str],
     segment_s: float | None = None,
+    cache_dir: Path | None = None,
+    use_cache: bool = True,
 ) -> dict[str, Any]:
     if not isinstance(audio_path, Path):
         raise ValueError("audio_path must be a pathlib.Path.")
@@ -436,8 +645,32 @@ def render_translation_auditions(
         raise ValueError("out_dir must be a pathlib.Path.")
     if not isinstance(profiles, dict):
         raise ValueError("profiles must be a mapping of profile_id to profile definition.")
+    if cache_dir is not None and not isinstance(cache_dir, Path):
+        raise ValueError("cache_dir must be a pathlib.Path when provided.")
+    if not isinstance(use_cache, bool):
+        raise ValueError("use_cache must be a boolean.")
+    _validate_segment_s_value(segment_s)
 
     resolved_profile_ids = _normalize_profile_ids(profile_ids, profiles=profiles)
+    cache_entry_dir: Path | None = None
+    if use_cache:
+        cache_key_value = translation_cache_key(
+            audio_path,
+            resolved_profile_ids,
+            _translation_audition_cache_version(segment_s),
+        )
+        cache_entry_dir = _translation_audition_cache_entry_dir(
+            cache_dir=cache_dir,
+            cache_key_value=cache_key_value,
+        )
+        cached_payload = _build_translation_audition_payload_from_cache(
+            cache_entry_dir=cache_entry_dir,
+            out_dir=out_dir,
+            audio_path=audio_path,
+            profile_ids=resolved_profile_ids,
+        )
+        if isinstance(cached_payload, dict):
+            return cached_payload
 
     sample_rate_hz, full_left, full_right = _load_channels(audio_path)
     total_frames = min(len(full_left), len(full_right))
@@ -497,8 +730,15 @@ def render_translation_auditions(
             }
         )
 
-    return {
+    payload = {
         "audio_in": audio_path.resolve().as_posix(),
         "segment": segment_payload,
         "renders": renders,
     }
+    if use_cache and cache_entry_dir is not None:
+        _save_translation_audition_cache(
+            cache_entry_dir=cache_entry_dir,
+            payload=payload,
+            out_dir=out_dir,
+        )
+    return payload

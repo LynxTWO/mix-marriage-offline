@@ -2277,6 +2277,8 @@ def _build_translation_run_payload(
     audio_path: Path,
     profile_ids: list[str],
     max_issues_per_profile: int = 3,
+    cache_dir: Path | None = None,
+    use_cache: bool = True,
 ) -> list[dict[str, Any]]:
     profiles = load_translation_profiles(translation_profiles_path)
     return run_translation_checks(
@@ -2284,6 +2286,8 @@ def _build_translation_run_payload(
         profiles=profiles,
         profile_ids=profile_ids,
         max_issues_per_profile=max_issues_per_profile,
+        cache_dir=cache_dir,
+        use_cache=use_cache,
     )
 
 
@@ -2294,6 +2298,8 @@ def _build_translation_audition_payload(
     out_dir: Path,
     profile_ids: list[str],
     segment_s: float | None = None,
+    cache_dir: Path | None = None,
+    use_cache: bool = True,
 ) -> dict[str, Any]:
     profiles = load_translation_profiles(translation_profiles_path)
     return render_translation_auditions(
@@ -2302,6 +2308,8 @@ def _build_translation_audition_payload(
         profiles=profiles,
         profile_ids=profile_ids,
         segment_s=segment_s,
+        cache_dir=cache_dir,
+        use_cache=use_cache,
     )
 
 
@@ -2683,6 +2691,16 @@ def _resolve_render_many_stereo_audio_path(
     return None
 
 
+def _resolve_render_many_translation_cache_dir(
+    *,
+    root_out_dir: Path,
+    cache_dir: Path | None,
+) -> Path:
+    if isinstance(cache_dir, Path):
+        return cache_dir
+    return root_out_dir / ".mmo_cache"
+
+
 def _run_render_many_translation_checks(
     *,
     repo_root: Path,
@@ -2694,6 +2712,8 @@ def _run_render_many_translation_checks(
     deliverables_index_path: Path | None,
     listen_pack_path: Path | None,
     timeline_path: Path | None,
+    cache_dir: Path | None,
+    use_cache: bool,
 ) -> None:
     if not profile_ids:
         return
@@ -2737,6 +2757,8 @@ def _run_render_many_translation_checks(
             translation_profiles_path=translation_profiles_path,
             audio_path=translation_audio_path,
             profile_ids=profile_ids,
+            cache_dir=cache_dir,
+            use_cache=use_cache,
         )
         translation_results = _sorted_translation_results(translation_results)
         translation_profiles = load_translation_profiles(translation_profiles_path)
@@ -2926,6 +2948,8 @@ def _run_render_many_translation_auditions(
     deliverables_index_path: Path | None,
     listen_pack_path: Path | None,
     timeline_path: Path | None,
+    cache_dir: Path | None,
+    use_cache: bool,
 ) -> None:
     if not profile_ids:
         return
@@ -2961,6 +2985,8 @@ def _run_render_many_translation_auditions(
             out_dir=auditions_out_dir,
             profile_ids=profile_ids,
             segment_s=segment_s,
+            cache_dir=cache_dir,
+            use_cache=use_cache,
         )
         _write_translation_audition_manifest(manifest_path, manifest)
         _write_render_many_listen_pack_translation_auditions(
@@ -4918,6 +4944,10 @@ def _run_render_many_workflow(
         _write_json_file(deliverables_index_path, deliverables_index_payload)
 
     if isinstance(translation_profile_ids, list) and translation_profile_ids:
+        translation_cache_dir = _resolve_render_many_translation_cache_dir(
+            root_out_dir=out_dir,
+            cache_dir=cache_dir,
+        )
         _run_render_many_translation_checks(
             repo_root=repo_root,
             root_out_dir=out_dir,
@@ -4930,12 +4960,18 @@ def _run_render_many_workflow(
             ),
             listen_pack_path=listen_pack_path if listen_pack else None,
             timeline_path=resolved_timeline_path,
+            cache_dir=translation_cache_dir,
+            use_cache=cache_enabled,
         )
     if translation_audition:
         audition_profile_ids = (
             list(translation_profile_ids)
             if isinstance(translation_profile_ids, list) and translation_profile_ids
             else list(_DEFAULT_RENDER_MANY_TRANSLATION_PROFILE_IDS)
+        )
+        translation_cache_dir = _resolve_render_many_translation_cache_dir(
+            root_out_dir=out_dir,
+            cache_dir=cache_dir,
         )
         _run_render_many_translation_auditions(
             repo_root=repo_root,
@@ -4949,6 +4985,8 @@ def _run_render_many_workflow(
             ),
             listen_pack_path=listen_pack_path if listen_pack else None,
             timeline_path=resolved_timeline_path,
+            cache_dir=translation_cache_dir,
+            use_cache=cache_enabled,
         )
 
     results = variant_result.get("results")
@@ -7010,6 +7048,16 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Output report JSON path for patched translation_results.",
     )
+    translation_run_parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Disable deterministic translation check caching.",
+    )
+    translation_run_parser.add_argument(
+        "--cache-dir",
+        default=None,
+        help="Optional cache directory (default: <repo_root>/.mmo_cache).",
+    )
     translation_compare_parser = translation_subparsers.add_parser(
         "compare",
         help="Run deterministic translation checks across multiple WAV inputs.",
@@ -7067,6 +7115,16 @@ def main(argv: list[str] | None = None) -> int:
         type=float,
         default=None,
         help="Optional segment duration in seconds (from start).",
+    )
+    translation_audition_parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Disable deterministic translation audition caching.",
+    )
+    translation_audition_parser.add_argument(
+        "--cache-dir",
+        default=None,
+        help="Optional cache directory (default: <repo_root>/.mmo_cache).",
     )
 
     locks_parser = subparsers.add_parser("locks", help="Scene lock registry tools.")
@@ -8930,6 +8988,8 @@ def main(argv: list[str] | None = None) -> int:
                     translation_profiles_path=translation_profiles_path,
                     audio_path=Path(args.audio),
                     profile_ids=profile_ids,
+                    cache_dir=Path(args.cache_dir) if args.cache_dir else None,
+                    use_cache=not bool(getattr(args, "no_cache", False)),
                 )
                 profiles = load_translation_profiles(translation_profiles_path)
                 if isinstance(args.out, str) and args.out.strip():
@@ -8988,6 +9048,8 @@ def main(argv: list[str] | None = None) -> int:
                     out_dir=audition_out_dir,
                     profile_ids=profile_ids,
                     segment_s=args.segment,
+                    cache_dir=Path(args.cache_dir) if args.cache_dir else None,
+                    use_cache=not bool(getattr(args, "no_cache", False)),
                 )
                 _write_translation_audition_manifest(
                     audition_out_dir / "manifest.json",

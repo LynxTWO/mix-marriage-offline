@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 import math
 import wave
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+from mmo.core.cache_keys import translation_cache_key
+from mmo.core.cache_store import resolve_cache_dir
 from mmo.dsp.correlation import OnlineCorrelationAccumulator
 from mmo.dsp.float64 import (
     bytes_to_float_samples_ieee,
@@ -22,6 +25,7 @@ _MONO_HOP_SIZE = 1024
 _SPECTRAL_WINDOW_SIZE = 512
 _SPECTRAL_HOP_SIZE = 512
 _DEFAULT_SCORE_THRESHOLD = 70
+_TRANSLATION_CHECKS_CACHE_VERSION = "translation_checks_v1"
 
 _BANDS_HZ = {
     "sub": (0.0, 60.0),
@@ -649,12 +653,108 @@ def _normalize_profile_ids(
     return normalized
 
 
+def _translation_checks_cache_version(*, max_issues_per_profile: int) -> str:
+    return f"{_TRANSLATION_CHECKS_CACHE_VERSION}.max_issues_{max_issues_per_profile}"
+
+
+def _translation_result_sort_key(item: dict[str, Any]) -> tuple[str, str]:
+    profile_id = item.get("profile_id")
+    profile_token = profile_id.strip() if isinstance(profile_id, str) else ""
+    return (
+        profile_token,
+        json.dumps(item, sort_keys=True),
+    )
+
+
+def _order_translation_results(
+    *,
+    rows: list[dict[str, Any]],
+    profile_ids: list[str],
+) -> list[dict[str, Any]]:
+    ordered_profile_ids = [item for item in profile_ids if isinstance(item, str) and item.strip()]
+    seen_profile_ids: set[str] = set()
+    canonical_profile_ids: list[str] = []
+    for profile_id in ordered_profile_ids:
+        if profile_id in seen_profile_ids:
+            continue
+        canonical_profile_ids.append(profile_id)
+        seen_profile_ids.add(profile_id)
+
+    by_profile: dict[str, dict[str, Any]] = {}
+    extras: list[dict[str, Any]] = []
+    for item in rows:
+        profile_id = item.get("profile_id")
+        if isinstance(profile_id, str) and profile_id not in by_profile:
+            by_profile[profile_id] = dict(item)
+        else:
+            extras.append(dict(item))
+
+    ordered: list[dict[str, Any]] = [
+        by_profile[profile_id]
+        for profile_id in canonical_profile_ids
+        if profile_id in by_profile
+    ]
+    for profile_id, row in by_profile.items():
+        if profile_id not in seen_profile_ids:
+            extras.append(row)
+
+    extras.sort(key=_translation_result_sort_key)
+    return ordered + extras
+
+
+def _translation_checks_cache_path(
+    *,
+    cache_dir: Path | None,
+    cache_key_value: str,
+) -> Path:
+    cache_root = resolve_cache_dir(cache_dir)
+    return cache_root / "translation_checks" / f"{cache_key_value}.json"
+
+
+def _load_translation_checks_cache(
+    *,
+    cache_path: Path,
+    profile_ids: list[str],
+) -> list[dict[str, Any]] | None:
+    if not cache_path.exists() or cache_path.is_dir():
+        return None
+    try:
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, list):
+        return None
+    rows = [dict(item) for item in payload if isinstance(item, dict)]
+    if len(rows) != len(payload):
+        return None
+    return _order_translation_results(rows=rows, profile_ids=profile_ids)
+
+
+def _save_translation_checks_cache(
+    *,
+    cache_path: Path,
+    rows: list[dict[str, Any]],
+) -> None:
+    canonical_rows = [dict(item) for item in rows if isinstance(item, dict)]
+    canonical_rows.sort(key=_translation_result_sort_key)
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(
+            json.dumps(canonical_rows, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    except OSError:
+        return
+
+
 def run_translation_checks(
     *,
     audio_path: Path,
     profiles: dict[str, Any],
     profile_ids: list[str],
     max_issues_per_profile: int = 3,
+    cache_dir: Path | None = None,
+    use_cache: bool = True,
 ) -> list[dict[str, Any]]:
     if not isinstance(audio_path, Path):
         raise ValueError("audio_path must be a pathlib.Path.")
@@ -672,8 +772,32 @@ def run_translation_checks(
         or max_issues_per_profile < 0
     ):
         raise ValueError("max_issues_per_profile must be a non-negative integer.")
+    if not isinstance(use_cache, bool):
+        raise ValueError("use_cache must be a boolean.")
+    if cache_dir is not None and not isinstance(cache_dir, Path):
+        raise ValueError("cache_dir must be a pathlib.Path when provided.")
 
     resolved_profile_ids = _normalize_profile_ids(profile_ids, profiles=profiles)
+    cache_path: Path | None = None
+    if use_cache:
+        cache_key_value = translation_cache_key(
+            audio_path,
+            resolved_profile_ids,
+            _translation_checks_cache_version(
+                max_issues_per_profile=max_issues_per_profile,
+            ),
+        )
+        cache_path = _translation_checks_cache_path(
+            cache_dir=cache_dir,
+            cache_key_value=cache_key_value,
+        )
+        cached_results = _load_translation_checks_cache(
+            cache_path=cache_path,
+            profile_ids=resolved_profile_ids,
+        )
+        if isinstance(cached_results, list):
+            return cached_results
+
     sample_rate_hz, left, right = _load_channels(audio_path)
 
     mono_metrics = _compute_mono_metrics(left, right, sample_rate_hz=sample_rate_hz)
@@ -711,4 +835,9 @@ def run_translation_checks(
                 result.pop("issues", None)
         results.append(result)
 
+    if use_cache and cache_path is not None:
+        _save_translation_checks_cache(
+            cache_path=cache_path,
+            rows=results,
+        )
     return results

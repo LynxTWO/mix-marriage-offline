@@ -145,6 +145,62 @@ class TestCliTranslationAudition(unittest.TestCase):
         ]
         self.assertEqual(observed_profile_ids, expected_profile_ids)
 
+    def test_translation_audition_cache_dir_and_no_cache_flags(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        profile_ids = ["TRANS.MONO.COLLAPSE", "TRANS.DEVICE.PHONE"]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            audio_path = temp_path / "translation_fixture.wav"
+            cached_out_dir = temp_path / "out_cached"
+            no_cached_out_dir = temp_path / "out_no_cache"
+            cache_dir = temp_path / ".cache"
+            no_cache_dir = temp_path / ".cache_disabled"
+            _write_stereo_fixture(audio_path)
+
+            cached = self._run(
+                repo_root,
+                [
+                    "translation",
+                    "audition",
+                    "--audio",
+                    str(audio_path),
+                    "--profiles",
+                    ",".join(profile_ids),
+                    "--out-dir",
+                    str(cached_out_dir),
+                    "--segment",
+                    "0.10",
+                    "--cache-dir",
+                    str(cache_dir),
+                ],
+            )
+            no_cached = self._run(
+                repo_root,
+                [
+                    "translation",
+                    "audition",
+                    "--audio",
+                    str(audio_path),
+                    "--profiles",
+                    ",".join(profile_ids),
+                    "--out-dir",
+                    str(no_cached_out_dir),
+                    "--segment",
+                    "0.10",
+                    "--cache-dir",
+                    str(no_cache_dir),
+                    "--no-cache",
+                ],
+            )
+
+            self.assertEqual(cached.returncode, 0, msg=cached.stderr)
+            self.assertEqual(no_cached.returncode, 0, msg=no_cached.stderr)
+            self.assertGreater(
+                len(list((cache_dir / "translation_auditions").glob("*/manifest.json"))),
+                0,
+            )
+            self.assertFalse((no_cache_dir / "translation_auditions").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

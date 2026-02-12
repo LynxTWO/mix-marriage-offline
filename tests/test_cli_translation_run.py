@@ -363,6 +363,52 @@ class TestCliTranslationRun(unittest.TestCase):
             if isinstance(short_reason, str):
                 self.assertTrue(short_reason.strip())
 
+    def test_translation_run_cache_dir_and_no_cache_flags(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            audio_path = temp_path / "translation_device.wav"
+            cache_dir = temp_path / ".cache"
+            no_cache_dir = temp_path / ".cache_disabled"
+            _write_device_fixture(audio_path)
+
+            cached = self._run(
+                repo_root,
+                [
+                    "translation",
+                    "run",
+                    "--audio",
+                    str(audio_path),
+                    "--profiles",
+                    "TRANS.MONO.COLLAPSE,TRANS.DEVICE.PHONE",
+                    "--cache-dir",
+                    str(cache_dir),
+                    "--format",
+                    "json",
+                ],
+            )
+            no_cached = self._run(
+                repo_root,
+                [
+                    "translation",
+                    "run",
+                    "--audio",
+                    str(audio_path),
+                    "--profiles",
+                    "TRANS.MONO.COLLAPSE,TRANS.DEVICE.PHONE",
+                    "--cache-dir",
+                    str(no_cache_dir),
+                    "--no-cache",
+                    "--format",
+                    "json",
+                ],
+            )
+            self.assertEqual(cached.returncode, 0, msg=cached.stderr)
+            self.assertEqual(no_cached.returncode, 0, msg=no_cached.stderr)
+            self.assertTrue((cache_dir / "translation_checks").exists())
+            self.assertGreater(len(list((cache_dir / "translation_checks").glob("*.json"))), 0)
+            self.assertFalse((no_cache_dir / "translation_checks").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
