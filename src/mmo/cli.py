@@ -8145,6 +8145,47 @@ def main(argv: list[str] | None = None) -> int:
         help="Force delegation to variants mode, even for a single preset/config.",
     )
 
+    project_init_parser = project_subparsers.add_parser(
+        "init",
+        help="Scaffold a project from a stems folder (pipeline + drafts + bundle).",
+    )
+    project_init_parser.add_argument(
+        "--stems-root",
+        required=True,
+        help="Root directory to scan for stem sets.",
+    )
+    project_init_parser.add_argument(
+        "--out-dir",
+        required=True,
+        help="Output directory for the project scaffold.",
+    )
+    project_init_parser.add_argument(
+        "--role-lexicon",
+        default=None,
+        help="Optional path to role lexicon extension YAML.",
+    )
+    project_init_parser.add_argument(
+        "--no-common-lexicon",
+        action="store_true",
+        help="Disable built-in common role lexicon baseline.",
+    )
+    project_init_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing init outputs (allowlisted files only).",
+    )
+    project_init_parser.add_argument(
+        "--bundle",
+        default=None,
+        help="Optional path to write a pointer bundle JSON.",
+    )
+    project_init_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="json",
+        help="Output format (default: json).",
+    )
+
     downmix_parser = subparsers.add_parser("downmix", help="Downmix policy tools.")
     downmix_subparsers = downmix_parser.add_subparsers(dest="downmix_command", required=True)
     downmix_show_parser = downmix_subparsers.add_parser(
@@ -9310,6 +9351,228 @@ def main(argv: list[str] | None = None) -> int:
             except (RuntimeError, ValueError) as exc:
                 print(str(exc), file=sys.stderr)
                 return 1
+            return 0
+
+        if args.project_command == "init":
+            out_dir = Path(args.out_dir)
+            stems_sub = out_dir / "stems"
+            drafts_sub = out_dir / "drafts"
+            force = bool(getattr(args, "force", False))
+
+            # Allowlisted output files this command may write.
+            index_path = stems_sub / "stems_index.json"
+            map_path = stems_sub / "stems_map.json"
+            overrides_path = stems_sub / "stems_overrides.yaml"
+            scene_path = drafts_sub / "scene.draft.json"
+            routing_path = drafts_sub / "routing_plan.draft.json"
+            drafts_readme_path = drafts_sub / "README.txt"
+            root_readme_path = out_dir / "README.txt"
+            bundle_path: Path | None = None
+            if isinstance(getattr(args, "bundle", None), str) and args.bundle.strip():
+                bundle_path = Path(args.bundle)
+
+            # Pre-flight: refuse to overwrite non-allowlisted or protected files.
+            always_overwritable = [
+                index_path, map_path,
+                scene_path, routing_path,
+                drafts_readme_path, root_readme_path,
+            ]
+            if bundle_path is not None:
+                always_overwritable.append(bundle_path)
+            force_only = [overrides_path]
+
+            if not force:
+                blocked: list[str] = []
+                for fp in force_only:
+                    if fp.exists():
+                        blocked.append(fp.as_posix())
+                if blocked:
+                    for bp in blocked:
+                        print(f"File exists (use --force to overwrite): {bp}", file=sys.stderr)
+                    print("Aborting.", file=sys.stderr)
+                    return 1
+
+            try:
+                # --- Stems pipeline (scan + classify + overrides) ---
+                stems_sub.mkdir(parents=True, exist_ok=True)
+
+                stems_index_payload = build_stems_index(
+                    Path(args.stems_root),
+                    root_dir=args.stems_root,
+                )
+                _validate_json_payload(
+                    stems_index_payload,
+                    schema_path=repo_root / "schemas" / "stems_index.schema.json",
+                    payload_name="Stems index",
+                )
+                _write_json_file(index_path, stems_index_payload)
+
+                roles_path = repo_root / "ontology" / "roles.yaml"
+                roles_payload = load_roles(roles_path)
+                role_lexicon_payload: dict[str, Any] | None = None
+                role_lexicon_ref: str | None = None
+                if isinstance(getattr(args, "role_lexicon", None), str) and args.role_lexicon.strip():
+                    role_lexicon_ref = _path_ref(args.role_lexicon)
+                    role_lexicon_payload = load_role_lexicon(
+                        Path(args.role_lexicon),
+                        roles_payload=roles_payload,
+                    )
+
+                stems_map_payload = classify_stems(
+                    stems_index_payload,
+                    roles_payload,
+                    role_lexicon=role_lexicon_payload,
+                    use_common_role_lexicon=not bool(getattr(args, "no_common_lexicon", False)),
+                    stems_index_ref="stems_index.json",
+                    roles_ref="ontology/roles.yaml",
+                    role_lexicon_ref=role_lexicon_ref,
+                )
+                _validate_json_payload(
+                    stems_map_payload,
+                    schema_path=repo_root / "schemas" / "stems_map.schema.json",
+                    payload_name="Stems map",
+                )
+                _write_json_file(map_path, stems_map_payload)
+
+                overrides_written = False
+                overrides_skipped = False
+                if overrides_path.exists() and not force:
+                    overrides_skipped = True
+                else:
+                    template = _default_stems_overrides_template()
+                    if not template.endswith("\n"):
+                        template += "\n"
+                    overrides_path.write_text(template, encoding="utf-8")
+                    overrides_written = True
+
+                # --- Drafts ---
+                drafts_sub.mkdir(parents=True, exist_ok=True)
+
+                scene_payload = build_draft_scene(
+                    stems_map_payload,
+                    stems_dir=Path(args.stems_root).resolve().as_posix(),
+                )
+                routing_payload = build_draft_routing_plan(stems_map_payload)
+
+                _validate_json_payload(
+                    scene_payload,
+                    schema_path=repo_root / "schemas" / "scene.schema.json",
+                    payload_name="Draft scene",
+                )
+                _validate_json_payload(
+                    routing_payload,
+                    schema_path=repo_root / "schemas" / "routing_plan.schema.json",
+                    payload_name="Draft routing plan",
+                )
+
+                _write_json_file(scene_path, scene_payload)
+                _write_json_file(routing_path, routing_payload)
+
+                # --- README files ---
+                drafts_readme_path.write_text(
+                    "PREVIEW-ONLY DRAFTS\n"
+                    "\n"
+                    "These draft files are preview-only.\n"
+                    "They are NEVER auto-loaded by any MMO workflow.\n"
+                    "To use a scene or routing plan, pass explicit flags\n"
+                    "to the relevant command (e.g. future --scene / --routing-plan flags).\n",
+                    encoding="utf-8",
+                )
+                root_readme_path.write_text(
+                    "MMO Project Init Scaffold\n"
+                    "\n"
+                    "Edit stems/stems_overrides.yaml to adjust role assignments,\n"
+                    "then rerun the pipeline and drafts:\n"
+                    "\n"
+                    "  python -m mmo stems pipeline --root <stems_root> --out-dir stems/\n"
+                    "  python -m mmo stems draft --stems-map stems/stems_map.json --out-dir drafts/\n"
+                    "\n"
+                    "WARNING: Draft files in drafts/ are preview-only.\n"
+                    "They are NEVER auto-loaded by any MMO workflow.\n",
+                    encoding="utf-8",
+                )
+
+                # --- Optional bundle ---
+                bundle_path_written: str | None = None
+                if bundle_path is not None:
+                    summary = stems_map_payload.get("summary")
+                    if not isinstance(summary, dict):
+                        summary = {}
+                    bundle_payload: dict[str, Any] = {
+                        "stems_index_path": index_path.resolve().as_posix(),
+                        "stems_map_path": map_path.resolve().as_posix(),
+                        "scene_draft_path": scene_path.resolve().as_posix(),
+                        "routing_plan_draft_path": routing_path.resolve().as_posix(),
+                        "stems_summary": {
+                            "counts_by_bus_group": summary.get("counts_by_bus_group", {}),
+                            "unknown_files": summary.get("unknown_files", 0),
+                        },
+                    }
+                    _write_json_file(bundle_path, bundle_payload)
+                    bundle_path_written = bundle_path.as_posix()
+
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+
+            # --- Printed summary ---
+            files_list = stems_index_payload.get("files")
+            file_count = len(files_list) if isinstance(files_list, list) else 0
+            assignments = stems_map_payload.get("assignments")
+            assignment_count = len(assignments) if isinstance(assignments, list) else 0
+            summary_obj = stems_map_payload.get("summary")
+            bus_groups_count = 0
+            if isinstance(summary_obj, dict):
+                cbg = summary_obj.get("counts_by_bus_group")
+                if isinstance(cbg, dict):
+                    bus_groups_count = len(cbg)
+
+            paths_written = sorted(
+                fp.as_posix()
+                for fp in [
+                    index_path, map_path, scene_path, routing_path,
+                    drafts_readme_path, root_readme_path,
+                ]
+            )
+            if overrides_written:
+                paths_written.append(overrides_path.as_posix())
+                paths_written.sort()
+            if bundle_path_written is not None:
+                paths_written.append(bundle_path_written)
+                paths_written.sort()
+
+            result: dict[str, Any] = {
+                "ok": True,
+                "preview_only": True,
+                "stems_root": Path(args.stems_root).as_posix(),
+                "out_dir": out_dir.as_posix(),
+                "paths_written": paths_written,
+                "overrides_written": overrides_written,
+                "overrides_skipped": overrides_skipped,
+                "file_count": file_count,
+                "assignment_count": assignment_count,
+                "bus_groups_count": bus_groups_count,
+            }
+            if bundle_path_written is not None:
+                result["bundle_path"] = bundle_path_written
+
+            fmt = getattr(args, "format", "json")
+            if fmt == "json":
+                print(json.dumps(result, indent=2, sort_keys=True))
+            else:
+                print(f"Project scaffold written to: {out_dir.as_posix()}")
+                for wp in paths_written:
+                    print(f"  {wp}")
+                print(f"Stems: {file_count}, Assignments: {assignment_count}, Bus groups: {bus_groups_count}")
+                if overrides_skipped:
+                    print("stems_overrides.yaml already exists (use --force to overwrite).")
+                print(
+                    "Drafts in drafts/ are preview-only. "
+                    "They are NEVER auto-loaded by any MMO workflow."
+                )
+
             return 0
 
         print("Unknown project command.", file=sys.stderr)
