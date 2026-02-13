@@ -81,8 +81,17 @@ Stereo stems with baked pan/width are inference-only:
 - `make validate`
 - `python tools/validate.py`
 - `python tools/validate_contracts.py`
-- `python -m pytest` automatically prefers local `src/` imports via `tests/conftest.py`.
-- `PYTHONPATH=src` is still valid, but no longer required for pytest in this repository.
+- Preferred pytest entrypoint (Windows/OneDrive safe):
+  - `tools\run_pytest.cmd -q`
+  - `tools\run_pytest.cmd -q tests/test_tools_stem_corpus_scan.py`
+- `tools\run_pytest.cmd` forces `TMP`, `TEMP`, and `TMPDIR` into `<repo>\.tmp_pytest` and sets pytest `--basetemp` there so tempfile output does not pollute repo root and cleanup stays allowlist-only.
+- Optional PowerShell runner (useful if you need a `.ps1` entrypoint):
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File tools\run_pytest.ps1 -q`
+- If you see `.git\index.lock` permission denied:
+  - Pause OneDrive sync for this repo.
+  - Close Explorer tabs/windows on the repo.
+  - Ensure no `git` process is running.
+  - Delete `.git\index.lock` only if it still persists.
 
 ## Related docs
 

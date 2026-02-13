@@ -1,7 +1,10 @@
 __pycache__/
 *.pyc
 *.pyo
-.pytest_cache/
+/.pytest_cache/
+/.tmp_pytest/
+/.tmp_codex/
+/sandbox_tmp/
 *.scan.json
 *.pdf
 rendered/
