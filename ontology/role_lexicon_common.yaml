@@ -10,6 +10,7 @@ role_lexicon:
     - overheads
   ROLE.DRUM.ROOM:
     keywords:
+    - drums room
     - drumsroom
   ROLE.DRUM.TOMS:
     keywords:
@@ -17,11 +18,13 @@ role_lexicon:
     - toms
   ROLE.GTR.ELECTRIC:
     keywords:
+    - elec gtr
     - elecgtr
     - electricgtr
     - egtr
   ROLE.VOCAL.HARMONY:
     keywords:
+    - backing vox
     - backingvox
     - bgv
     - bvs

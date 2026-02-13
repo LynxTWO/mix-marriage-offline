@@ -224,17 +224,17 @@ class TestStemsClassifier(unittest.TestCase):
                 {
                     "file_id": "STEMFILE.backingvox_override",
                     "set_id": "STEMSET.demo",
-                    "rel_path": "stems/backingvox1_leadtake_voxlead.wav",
-                    "basename": "backingvox1_leadtake_voxlead",
+                    "rel_path": "stems/backingvox1_leadtake_voxlead_mainvox.wav",
+                    "basename": "backingvox1_leadtake_voxlead_mainvox",
                     "ext": ".wav",
-                    "tokens": ["backingvox1", "leadtake", "voxlead"],
+                    "tokens": ["backingvox1", "leadtake", "voxlead", "mainvox"],
                     "folder_tokens": [],
                 }
             ],
         }
         role_lexicon = {
             "ROLE.VOCAL.LEAD": {
-                "keywords": ["leadtake", "voxlead"],
+                "keywords": ["leadtake", "voxlead", "mainvox"],
                 "regex": [],
             }
         }
@@ -253,6 +253,7 @@ class TestStemsClassifier(unittest.TestCase):
             return
         self.assertIn("keyword=leadtake(+4)", reasons)
         self.assertIn("keyword=voxlead(+4)", reasons)
+        self.assertIn("keyword=mainvox(+4)", reasons)
 
     def test_common_and_user_lexicon_merge_is_sorted_and_deduped(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -381,6 +382,119 @@ class TestStemsClassifier(unittest.TestCase):
         self.assertIn(
             "token_split:snaredown->snare+down",
             by_rel_path["stems/snaredown.wav"]["reasons"],
+        )
+
+    def test_compound_role_splits_boost_classification_confidence(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        roles_payload = load_roles(repo_root / "ontology" / "roles.yaml")
+        stems_index = {
+            "version": "0.1.0",
+            "root_dir": "demo",
+            "stem_sets": [],
+            "files": [
+                {
+                    "file_id": "STEMFILE.backingvox1",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/backingvox1.wav",
+                    "basename": "backingvox1",
+                    "ext": ".wav",
+                    "tokens": ["backingvox1"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.backingvox2",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/backingvox2.wav",
+                    "basename": "backingvox2",
+                    "ext": ".wav",
+                    "tokens": ["backingvox2"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.elecgtr1",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/elecgtr1.wav",
+                    "basename": "elecgtr1",
+                    "ext": ".wav",
+                    "tokens": ["elecgtr1"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.elecgtr2",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/elecgtr2.wav",
+                    "basename": "elecgtr2",
+                    "ext": ".wav",
+                    "tokens": ["elecgtr2"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.bassdi",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/bassdi.wav",
+                    "basename": "bassdi",
+                    "ext": ".wav",
+                    "tokens": ["bassdi"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.drumsroom",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/drumsroom.wav",
+                    "basename": "drumsroom",
+                    "ext": ".wav",
+                    "tokens": ["drumsroom"],
+                    "folder_tokens": [],
+                },
+            ],
+        }
+
+        stems_map = classify_stems(stems_index, roles_payload)
+        assignments = stems_map.get("assignments")
+        self.assertIsInstance(assignments, list)
+        if not isinstance(assignments, list):
+            return
+        by_rel = {
+            item.get("rel_path"): item
+            for item in assignments
+            if isinstance(item, dict) and isinstance(item.get("rel_path"), str)
+        }
+
+        # backingvox1/2 -> ROLE.VOCAL.HARMONY with boosted confidence
+        bv1 = by_rel["stems/backingvox1.wav"]
+        bv2 = by_rel["stems/backingvox2.wav"]
+        self.assertEqual(bv1["role_id"], "ROLE.VOCAL.HARMONY")
+        self.assertEqual(bv2["role_id"], "ROLE.VOCAL.HARMONY")
+        self.assertGreater(bv1["confidence"], 0.333)
+        self.assertGreater(bv2["confidence"], 0.333)
+        self.assertIn(
+            "token_split_compound:backingvox->backing,vox", bv1["reasons"]
+        )
+
+        # elecgtr1/2 -> ROLE.GTR.ELECTRIC with boosted confidence
+        eg1 = by_rel["stems/elecgtr1.wav"]
+        eg2 = by_rel["stems/elecgtr2.wav"]
+        self.assertEqual(eg1["role_id"], "ROLE.GTR.ELECTRIC")
+        self.assertEqual(eg2["role_id"], "ROLE.GTR.ELECTRIC")
+        self.assertGreater(eg1["confidence"], 0.333)
+        self.assertIn(
+            "token_split_compound:elecgtr->elec,gtr", eg1["reasons"]
+        )
+
+        # bassdi -> ROLE.BASS.DI with boosted confidence
+        bd = by_rel["stems/bassdi.wav"]
+        self.assertEqual(bd["role_id"], "ROLE.BASS.DI")
+        self.assertGreater(bd["confidence"], 0.333)
+        self.assertIn(
+            "token_split_compound:bassdi->bass,di", bd["reasons"]
+        )
+
+        # drumsroom -> ROLE.DRUM.ROOM with boosted confidence
+        dr = by_rel["stems/drumsroom.wav"]
+        self.assertEqual(dr["role_id"], "ROLE.DRUM.ROOM")
+        self.assertGreater(dr["confidence"], 0.333)
+        self.assertIn(
+            "token_split_compound:drumsroom->drums,room", dr["reasons"]
         )
 
     def test_numeric_only_tokens_are_ignored_for_scoring(self) -> None:

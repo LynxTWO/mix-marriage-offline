@@ -45,6 +45,13 @@ _COMPOUND_TOKEN_SPLITS: dict[str, tuple[str, str]] = {
     "hihatopen": ("hihat", "open"),
     "hihatclosed": ("hihat", "closed"),
 }
+_COMPOUND_ROLE_SPLITS: dict[str, tuple[str, ...]] = {
+    "backingvox": ("backing", "vox"),
+    "bassdi": ("bass", "di"),
+    "drumsroom": ("drums", "room"),
+    "elecgtr": ("elec", "gtr"),
+    "leadvox": ("lead", "vox"),
+}
 
 
 @dataclass(frozen=True)
@@ -156,6 +163,16 @@ def _derive_scoring_tokens(token: str) -> list[_ScoringToken]:
         split_reason = f"token_split:{split_source}->{left}+{right}"
         _append(left, split_reason)
         _append(right, split_reason)
+
+    for split_source in split_candidates:
+        role_parts = _COMPOUND_ROLE_SPLITS.get(split_source)
+        if role_parts is None:
+            continue
+        split_reason = (
+            f"token_split_compound:{split_source}->{','.join(role_parts)}"
+        )
+        for part in role_parts:
+            _append(part, split_reason)
 
     return derived
 

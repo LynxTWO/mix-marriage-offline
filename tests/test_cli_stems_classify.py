@@ -127,6 +127,34 @@ class TestCliStemsClassify(unittest.TestCase):
             self.assertIn("derived_evidence:", first_stdout)
             self.assertIn("token_split:snareup->snare+up", first_stdout)
 
+    def test_explain_text_includes_compound_role_split_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            root = temp_path / "stems_root"
+            _write_tiny_wav(root / "stems" / "backingvox1.wav")
+
+            args = [
+                "stems",
+                "explain",
+                "--root",
+                str(root),
+                "--file",
+                "stems/backingvox1.wav",
+                "--format",
+                "text",
+            ]
+            first_exit, first_stdout, first_stderr = self._run_main(args)
+            second_exit, second_stdout, second_stderr = self._run_main(args)
+
+            self.assertEqual(first_exit, 0)
+            self.assertEqual(second_exit, 0)
+            self.assertEqual(first_stdout, second_stdout)
+            self.assertEqual(first_stderr, second_stderr)
+            self.assertIn("derived_evidence:", first_stdout)
+            self.assertIn(
+                "token_split_compound:backingvox->backing,vox", first_stdout
+            )
+
     def test_unknown_role_lexicon_file_error_is_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -206,7 +234,10 @@ class TestCliStemsClassify(unittest.TestCase):
             temp_path = Path(temp_dir)
             root = temp_path / "stems_root"
             out_path = temp_path / "stems_map.json"
-            _write_tiny_wav(root / "stems" / "elecgtr2.wav")
+            # Use electricgtr2 — only matches via common lexicon keyword
+            # "electricgtr", and has no compound role split that would
+            # produce sub-tokens matching roles.yaml keywords.
+            _write_tiny_wav(root / "stems" / "electricgtr2.wav")
 
             default_args = [
                 "stems",
