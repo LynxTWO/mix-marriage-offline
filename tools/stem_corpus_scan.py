@@ -24,12 +24,25 @@ from mmo.core.stems_classifier import (  # noqa: E402
 )
 from mmo.core.stems_index import build_stems_index  # noqa: E402
 
-_TOKEN_RE = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
+_TOKEN_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 _TOP_TOKENS_LIMIT = 200
 _PER_ROLE_TOP_LIMIT = 40
 _AMBIGUOUS_MARGIN = 1
-_HIGH_CONFIDENCE_THRESHOLD = 0.8
-_SUGGESTION_KEYWORDS_PER_ROLE = 24
+_DEFAULT_STOPWORDS = frozenset(
+    {
+        "alt",
+        "master",
+        "mix",
+        "print",
+        "stem",
+        "stems",
+        "take",
+        "track",
+        "tracks",
+        "ver",
+        "version",
+    }
+)
 
 
 def _sha1_token(value: str) -> str:
@@ -62,10 +75,50 @@ def _ranked_role_counter(
     return [{"role_id": role_id, "count": count} for role_id, count in ranked]
 
 
-def _is_suggestion_token(token: str) -> bool:
-    if not _TOKEN_RE.fullmatch(token):
+def _stopwords_from_csv(raw: str | None) -> frozenset[str]:
+    extra = {
+        token.strip().lower()
+        for token in (raw or "").split(",")
+        if token.strip()
+    }
+    return frozenset(_DEFAULT_STOPWORDS | extra)
+
+
+def _is_filtered_token(
+    token: str,
+    *,
+    stopwords: set[str] | frozenset[str],
+) -> bool:
+    if not token or not _TOKEN_RE.fullmatch(token):
         return False
-    return token not in {"l", "r", "left", "right", "mono", "stereo", "mix", "stem", "stems"}
+    if len(token) < 2:
+        return False
+    if token.isdigit():
+        return False
+    return token not in stopwords
+
+
+def _token_values_for_row(
+    row: dict[str, Any],
+    *,
+    include_folder_tokens: bool,
+    stopwords: set[str] | frozenset[str],
+) -> list[str]:
+    values: list[str] = []
+    tokens = row.get("tokens")
+    if isinstance(tokens, list):
+        values.extend(token for token in tokens if isinstance(token, str))
+    if include_folder_tokens:
+        folder_tokens = row.get("folder_tokens")
+        if isinstance(folder_tokens, list):
+            values.extend(token for token in folder_tokens if isinstance(token, str))
+
+    normalized: list[str] = []
+    for token in values:
+        lowered = token.strip().lower()
+        if _is_filtered_token(lowered, stopwords=stopwords):
+            normalized.append(lowered)
+    return normalized
 
 
 def _known_role_tokens(
@@ -228,6 +281,12 @@ def _build_stats(
     *,
     corpus_rows: list[dict[str, Any]],
     explanations: dict[str, Any],
+    include_folder_tokens: bool,
+    stopwords: frozenset[str],
+    min_count: int,
+    min_set_count: int,
+    min_precision: float,
+    min_confidence: float,
 ) -> dict[str, Any]:
     token_frequency = Counter[str]()
     unknown_token_frequency = Counter[str]()
@@ -235,10 +294,13 @@ def _build_stats(
     ambiguous_token_role_counts: dict[str, Counter[str]] = defaultdict(Counter)
 
     for row in corpus_rows:
-        tokens = row.get("tokens")
-        if not isinstance(tokens, list):
+        token_values = _token_values_for_row(
+            row,
+            include_folder_tokens=include_folder_tokens,
+            stopwords=stopwords,
+        )
+        if not token_values:
             continue
-        token_values = [token for token in tokens if isinstance(token, str) and token]
         token_frequency.update(token_values)
 
         role_id = row.get("role_id")
@@ -250,7 +312,7 @@ def _build_stats(
             isinstance(role_id, str)
             and role_id != UNKNOWN_ROLE_ID
             and isinstance(confidence, (int, float))
-            and float(confidence) >= _HIGH_CONFIDENCE_THRESHOLD
+            and float(confidence) >= min_confidence
         ):
             per_role_token_frequency[role_id].update(token_values)
 
@@ -309,6 +371,14 @@ def _build_stats(
 
     return {
         "total_files": len(corpus_rows),
+        "scan_params": {
+            "include_folder_tokens": include_folder_tokens,
+            "min_confidence": min_confidence,
+            "min_count": min_count,
+            "min_precision": min_precision,
+            "min_set_count": min_set_count,
+            "stopwords": sorted(stopwords),
+        },
         "token_frequency_top": _ranked_counter(token_frequency, limit=_TOP_TOKENS_LIMIT),
         "unknown_token_frequency_top": _ranked_counter(
             unknown_token_frequency,
@@ -324,13 +394,21 @@ def _build_role_lexicon_suggestions(
     corpus_rows: list[dict[str, Any]],
     roles_payload: dict[str, Any],
     role_lexicon_payload: dict[str, Any] | None,
+    include_folder_tokens: bool,
+    stopwords: frozenset[str],
+    min_count: int,
+    min_set_count: int,
+    min_precision: float,
+    min_confidence: float,
 ) -> dict[str, Any]:
     known_tokens = _known_role_tokens(
         roles_payload=roles_payload,
         role_lexicon_payload=role_lexicon_payload,
     )
 
-    role_token_counts: dict[str, Counter[str]] = defaultdict(Counter)
+    token_total_counts = Counter[str]()
+    token_role_counts: dict[str, Counter[str]] = defaultdict(Counter)
+    token_set_ids: dict[str, set[str]] = defaultdict(set)
     for row in corpus_rows:
         role_id = row.get("role_id")
         confidence = row.get("confidence")
@@ -338,31 +416,53 @@ def _build_role_lexicon_suggestions(
             not isinstance(role_id, str)
             or role_id == UNKNOWN_ROLE_ID
             or not isinstance(confidence, (int, float))
-            or float(confidence) < _HIGH_CONFIDENCE_THRESHOLD
+            or float(confidence) < min_confidence
         ):
             continue
-        tokens = row.get("tokens")
-        if not isinstance(tokens, list):
+
+        token_values = _token_values_for_row(
+            row,
+            include_folder_tokens=include_folder_tokens,
+            stopwords=stopwords,
+        )
+        if not token_values:
             continue
-        for token in tokens:
-            if not isinstance(token, str):
-                continue
-            normalized = token.strip().lower()
-            if not normalized or not _is_suggestion_token(normalized):
-                continue
-            role_token_counts[role_id][normalized] += 1
+
+        set_id = row.get("set_id") if isinstance(row.get("set_id"), str) else ""
+        for token in token_values:
+            token_total_counts[token] += 1
+            token_role_counts[token][role_id] += 1
+            if set_id:
+                token_set_ids[token].add(set_id)
+
+    suggestions_by_role: dict[str, set[str]] = defaultdict(set)
+    for token in sorted(token_total_counts.keys()):
+        total_count = token_total_counts[token]
+        if total_count < min_count:
+            continue
+        set_count = len(token_set_ids[token])
+        if set_count < min_set_count:
+            continue
+
+        role_counts = token_role_counts.get(token)
+        if not role_counts:
+            continue
+        best_role_id, best_role_count = min(
+            role_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+        precision = best_role_count / total_count if total_count else 0.0
+        if precision < min_precision:
+            continue
+        if token in known_tokens.get(best_role_id, set()):
+            continue
+        suggestions_by_role[best_role_id].add(token)
 
     suggestions: dict[str, dict[str, list[str]]] = {}
-    for role_id, counter in sorted(role_token_counts.items()):
-        known = known_tokens.get(role_id, set())
-        ranked = [
-            token
-            for token, _count in sorted(counter.items(), key=lambda item: (-item[1], item[0]))
-            if token not in known
-        ]
-        ranked = ranked[:_SUGGESTION_KEYWORDS_PER_ROLE]
-        if ranked:
-            suggestions[role_id] = {"keywords": ranked}
+    for role_id in sorted(suggestions_by_role.keys()):
+        keywords = sorted(suggestions_by_role[role_id])
+        if keywords:
+            suggestions[role_id] = {"keywords": keywords}
     return {"role_lexicon": suggestions}
 
 
@@ -401,7 +501,7 @@ def _render_suggestions_yaml(payload: dict[str, Any]) -> str:
         lines.append(f"  {role_id}:")
         keywords = entry.get("keywords") if isinstance(entry, dict) else None
         keyword_values = (
-            [item for item in keywords if isinstance(item, str) and item]
+            sorted(item for item in keywords if isinstance(item, str) and item)
             if isinstance(keywords, list)
             else []
         )
@@ -426,6 +526,16 @@ def _positive_int(raw: str) -> int:
         raise argparse.ArgumentTypeError("must be an integer") from exc
     if value <= 0:
         raise argparse.ArgumentTypeError("must be > 0")
+    return value
+
+
+def _unit_interval_float(raw: str) -> float:
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a float") from exc
+    if value < 0.0 or value > 1.0:
+        raise argparse.ArgumentTypeError("must be in [0.0, 1.0]")
     return value
 
 
@@ -463,6 +573,40 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="Optional max number of files to include after deterministic sorting.",
     )
     parser.add_argument(
+        "--include-folder-tokens",
+        action="store_true",
+        help="Include folder tokens (in addition to basename tokens) in stats and suggestions.",
+    )
+    parser.add_argument(
+        "--min-count",
+        type=_positive_int,
+        default=10,
+        help="Suggestions: minimum token occurrence count across considered files.",
+    )
+    parser.add_argument(
+        "--min-set-count",
+        type=_positive_int,
+        default=3,
+        help="Suggestions: minimum distinct stem-set count containing a token.",
+    )
+    parser.add_argument(
+        "--min-precision",
+        type=_unit_interval_float,
+        default=0.85,
+        help="Suggestions: minimum precision for token -> role assignment.",
+    )
+    parser.add_argument(
+        "--min-confidence",
+        type=_unit_interval_float,
+        default=0.80,
+        help="Suggestions/per-role stats: minimum assignment confidence to include.",
+    )
+    parser.add_argument(
+        "--stopwords",
+        default=None,
+        help="Optional comma-separated extra stopwords to filter from stats/suggestions.",
+    )
+    parser.add_argument(
         "--role-lexicon",
         default=None,
         help="Optional path to role_lexicon YAML used during classification.",
@@ -481,6 +625,7 @@ def main(argv: list[str] | None = None) -> int:
     out_path = Path(args.out)
     stats_path = Path(args.stats)
     role_lexicon_path = Path(args.role_lexicon) if args.role_lexicon else None
+    stopwords = _stopwords_from_csv(args.stopwords)
 
     try:
         corpus_rows, stems_map, explanations, role_lexicon_payload = _scan_payload(
@@ -489,7 +634,16 @@ def main(argv: list[str] | None = None) -> int:
             max_files=args.max_files,
             role_lexicon_path=role_lexicon_path,
         )
-        stats_payload = _build_stats(corpus_rows=corpus_rows, explanations=explanations)
+        stats_payload = _build_stats(
+            corpus_rows=corpus_rows,
+            explanations=explanations,
+            include_folder_tokens=bool(args.include_folder_tokens),
+            stopwords=stopwords,
+            min_count=int(args.min_count),
+            min_set_count=int(args.min_set_count),
+            min_precision=float(args.min_precision),
+            min_confidence=float(args.min_confidence),
+        )
         _write_corpus_jsonl(out_path, corpus_rows)
         _write_json(stats_path, stats_payload)
 
@@ -499,6 +653,12 @@ def main(argv: list[str] | None = None) -> int:
                 corpus_rows=corpus_rows,
                 roles_payload=roles_payload,
                 role_lexicon_payload=role_lexicon_payload,
+                include_folder_tokens=bool(args.include_folder_tokens),
+                stopwords=stopwords,
+                min_count=int(args.min_count),
+                min_set_count=int(args.min_set_count),
+                min_precision=float(args.min_precision),
+                min_confidence=float(args.min_confidence),
             )
             _write_suggestions(Path(args.suggestions_out), suggestions_payload)
 
