@@ -6628,6 +6628,40 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="Path to stems overrides YAML.",
     )
+    stems_pipeline_parser = stems_subparsers.add_parser(
+        "pipeline",
+        help="One-command scan + classify + default overrides.",
+    )
+    stems_pipeline_parser.add_argument(
+        "--root",
+        required=True,
+        help="Root directory to scan for stem sets.",
+    )
+    stems_pipeline_parser.add_argument(
+        "--out-dir",
+        required=True,
+        help="Directory for stems_index.json, stems_map.json, and stems_overrides.yaml.",
+    )
+    stems_pipeline_parser.add_argument(
+        "--role-lexicon",
+        default=None,
+        help="Optional path to role lexicon extension YAML.",
+    )
+    stems_pipeline_parser.add_argument(
+        "--no-common-lexicon",
+        action="store_true",
+        help="Disable built-in common role lexicon baseline.",
+    )
+    stems_pipeline_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing stems_overrides.yaml.",
+    )
+    stems_pipeline_parser.add_argument(
+        "--bundle",
+        default=None,
+        help="Optional path to write a ui_bundle.json pointer set.",
+    )
 
     run_parser = subparsers.add_parser(
         "run",
@@ -8939,6 +8973,106 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(payload, indent=2, sort_keys=True))
             else:
                 print(_render_stems_map_text(payload))
+            return 0
+
+        if args.stems_command == "pipeline":
+            out_dir = Path(args.out_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            index_path = out_dir / "stems_index.json"
+            map_path = out_dir / "stems_map.json"
+            overrides_path = out_dir / "stems_overrides.yaml"
+
+            roles_path = repo_root / "ontology" / "roles.yaml"
+            try:
+                stems_index_payload = build_stems_index(
+                    Path(args.root),
+                    root_dir=args.root,
+                )
+                _validate_json_payload(
+                    stems_index_payload,
+                    schema_path=repo_root / "schemas" / "stems_index.schema.json",
+                    payload_name="Stems index",
+                )
+                _write_json_file(index_path, stems_index_payload)
+
+                roles_payload = load_roles(roles_path)
+                role_lexicon_payload: dict[str, Any] | None = None
+                role_lexicon_ref: str | None = None
+                if isinstance(getattr(args, "role_lexicon", None), str) and args.role_lexicon.strip():
+                    role_lexicon_ref = _path_ref(args.role_lexicon)
+                    role_lexicon_payload = load_role_lexicon(
+                        Path(args.role_lexicon),
+                        roles_payload=roles_payload,
+                    )
+
+                stems_map_payload = classify_stems(
+                    stems_index_payload,
+                    roles_payload,
+                    role_lexicon=role_lexicon_payload,
+                    use_common_role_lexicon=not bool(getattr(args, "no_common_lexicon", False)),
+                    stems_index_ref="stems_index.json",
+                    roles_ref="ontology/roles.yaml",
+                    role_lexicon_ref=role_lexicon_ref,
+                )
+                _validate_json_payload(
+                    stems_map_payload,
+                    schema_path=repo_root / "schemas" / "stems_map.schema.json",
+                    payload_name="Stems map",
+                )
+                _write_json_file(map_path, stems_map_payload)
+
+                overrides_written = False
+                overrides_skipped = False
+                if overrides_path.exists() and not getattr(args, "force", False):
+                    overrides_skipped = True
+                else:
+                    template = _default_stems_overrides_template()
+                    if not template.endswith("\n"):
+                        template += "\n"
+                    overrides_path.write_text(template, encoding="utf-8")
+                    overrides_written = True
+
+                bundle_path_str: str | None = None
+                if isinstance(getattr(args, "bundle", None), str) and args.bundle.strip():
+                    bundle_path = Path(args.bundle)
+                    summary = stems_map_payload.get("summary")
+                    if not isinstance(summary, dict):
+                        summary = {}
+                    bundle_payload: dict[str, Any] = {
+                        "stems_index_path": index_path.resolve().as_posix(),
+                        "stems_map_path": map_path.resolve().as_posix(),
+                        "stems_summary": {
+                            "counts_by_bus_group": summary.get("counts_by_bus_group", {}),
+                            "unknown_files": summary.get("unknown_files", 0),
+                        },
+                    }
+                    _write_json_file(bundle_path, bundle_payload)
+                    bundle_path_str = str(bundle_path)
+
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+
+            files = stems_index_payload.get("files")
+            file_count = len(files) if isinstance(files, list) else 0
+            assignments = stems_map_payload.get("assignments")
+            assignment_count = len(assignments) if isinstance(assignments, list) else 0
+
+            result: dict[str, Any] = {
+                "stems_index": str(index_path),
+                "stems_map": str(map_path),
+                "stems_overrides": str(overrides_path),
+                "overrides_written": overrides_written,
+                "overrides_skipped": overrides_skipped,
+                "file_count": file_count,
+                "assignment_count": assignment_count,
+            }
+            if bundle_path_str is not None:
+                result["bundle"] = bundle_path_str
+
+            print(json.dumps(result, indent=2, sort_keys=True))
             return 0
 
         if args.stems_command == "overrides":
