@@ -10,3 +10,7 @@ out.json
 recall.csv
 local_media/
 .mmo_cache/
+/private/
+/corpus/
+*.corpus.jsonl
+*.corpus.stats.json

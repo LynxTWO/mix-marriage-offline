@@ -35,6 +35,8 @@ The numeric prefixes reflect a recommended reading order. Gaps may exist as docu
   Musician-first GUI principles, nerd toggle, screens, and rollout milestones.
 - [17-stem-discovery.md](17-stem-discovery.md)  
   Stem-set scan/classify/review flow, safe override artifact, and confidence-first behavior.
+- [18-corpus-scanning.md](18-corpus-scanning.md)  
+  Private names-only corpus scan flow for role lexicon refinement.
 
 ## Conventions
 
