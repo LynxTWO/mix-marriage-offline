@@ -93,6 +93,35 @@ Stereo stems with baked pan/width are inference-only:
   - Ensure no `git` process is running.
   - Delete `.git\index.lock` only if it still persists.
 
+## Safe cleanup
+
+All temp/artifact cleanup MUST be allowlist-only.
+Never use regex, glob patterns, name-length heuristics, or root-level sweeps.
+
+### Allowlisted repo-local temp dirs
+
+| Directory | Purpose |
+|---|---|
+| `.tmp_pytest/` | pytest temp (forced by `run_pytest.cmd`) |
+| `.tmp_codex/` | Codex tooling temp |
+| `.tmp_claude/` | Claude tooling temp |
+| `sandbox_tmp/` | Sandbox temp |
+| `.pytest_cache/` | pytest cache |
+| `pytest-cache-files-*` | pytest cache dirs (repo root only) |
+
+### Running safe cleanup
+
+```
+python tools/safe_cleanup.py            # delete allowlisted dirs
+python tools/safe_cleanup.py --dry-run  # preview only
+```
+
+### Rules
+
+- Only the dirs listed above may be deleted by automation.
+- Do NOT delete arbitrary root folders or files matching hashes, short names, etc.
+- Do NOT add new entries without updating `CLAUDE.md`, this table, and `tools/safe_cleanup.py` together.
+
 ## Related docs
 
 - [SCENE_AND_RENDER_CONTRACT_OVERVIEW.md](SCENE_AND_RENDER_CONTRACT_OVERVIEW.md)
