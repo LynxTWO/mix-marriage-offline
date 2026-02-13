@@ -43,7 +43,7 @@
         "lock_hash": { "type": "string", "minLength": 1 },
         "created_from": {
           "type": "string",
-          "enum": ["analyze", "apply", "render", "variants"]
+          "enum": ["analyze", "apply", "render", "variants", "draft"]
         }
       }
     },

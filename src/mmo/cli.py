@@ -42,6 +42,7 @@ from mmo.core.render_targets import (
 from mmo.core.role_lexicon import load_role_lexicon
 from mmo.core.roles import list_roles, load_roles, resolve_role
 from mmo.core.stems_classifier import classify_stems, classify_stems_with_evidence
+from mmo.core.stems_draft import build_draft_routing_plan, build_draft_scene
 from mmo.core.translation_profiles import (
     get_translation_profile,
     list_translation_profiles,
@@ -6663,6 +6664,47 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to write a ui_bundle.json pointer set.",
     )
 
+    stems_draft_parser = stems_subparsers.add_parser(
+        "draft",
+        help="Generate preview-only scene and routing_plan drafts from a stems_map.",
+    )
+    stems_draft_parser.add_argument(
+        "--stems-map",
+        required=True,
+        help="Path to stems_map.json.",
+    )
+    stems_draft_parser.add_argument(
+        "--out-dir",
+        required=True,
+        help="Output directory for draft files.",
+    )
+    stems_draft_parser.add_argument(
+        "--scene-out",
+        default="scene.draft.json",
+        help="Output filename for the draft scene (default: scene.draft.json).",
+    )
+    stems_draft_parser.add_argument(
+        "--routing-out",
+        default="routing_plan.draft.json",
+        help="Output filename for the draft routing plan (default: routing_plan.draft.json).",
+    )
+    stems_draft_parser.add_argument(
+        "--stems-dir",
+        default="/DRAFT/stems",
+        help="Absolute stems_dir for scene.source (default: /DRAFT/stems).",
+    )
+    stems_draft_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format (default: text).",
+    )
+    stems_draft_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow overwriting existing output files.",
+    )
+
     run_parser = subparsers.add_parser(
         "run",
         help=(
@@ -9096,6 +9138,85 @@ def main(argv: list[str] | None = None) -> int:
 
             print("Unknown stems overrides command.", file=sys.stderr)
             return 2
+
+        if args.stems_command == "draft":
+            out_dir = Path(args.out_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            scene_path = out_dir / args.scene_out
+            routing_path = out_dir / args.routing_out
+
+            if not getattr(args, "overwrite", False):
+                existing: list[str] = []
+                if scene_path.exists():
+                    existing.append(str(scene_path))
+                if routing_path.exists():
+                    existing.append(str(routing_path))
+                if existing:
+                    for p in existing:
+                        print(f"File already exists: {p}", file=sys.stderr)
+                    print("Use --overwrite to replace.", file=sys.stderr)
+                    return 1
+
+            try:
+                stems_map_payload = _load_stems_map(
+                    repo_root=repo_root,
+                    map_path=Path(args.stems_map),
+                )
+                scene_payload = build_draft_scene(
+                    stems_map_payload,
+                    stems_dir=args.stems_dir,
+                )
+                routing_payload = build_draft_routing_plan(stems_map_payload)
+
+                _validate_json_payload(
+                    scene_payload,
+                    schema_path=repo_root / "schemas" / "scene.schema.json",
+                    payload_name="Draft scene",
+                )
+                _validate_json_payload(
+                    routing_payload,
+                    schema_path=repo_root / "schemas" / "routing_plan.schema.json",
+                    payload_name="Draft routing plan",
+                )
+
+                _write_json_file(scene_path, scene_payload)
+                _write_json_file(routing_path, routing_payload)
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+
+            assignments = stems_map_payload.get("assignments")
+            stems_count = len(assignments) if isinstance(assignments, list) else 0
+            summary = stems_map_payload.get("summary")
+            bus_groups_count = 0
+            if isinstance(summary, dict):
+                cbg = summary.get("counts_by_bus_group")
+                if isinstance(cbg, dict):
+                    bus_groups_count = len(cbg)
+
+            fmt = getattr(args, "format", "text")
+            if fmt == "json":
+                result: dict[str, Any] = {
+                    "ok": True,
+                    "preview_only": True,
+                    "stems_count": stems_count,
+                    "bus_groups_count": bus_groups_count,
+                    "scene_out": scene_path.as_posix(),
+                    "routing_out": routing_path.as_posix(),
+                }
+                print(json.dumps(result, indent=2, sort_keys=True))
+            else:
+                print(f"Draft scene written to: {scene_path.as_posix()}")
+                print(f"Draft routing plan written to: {routing_path.as_posix()}")
+                print(f"Stems: {stems_count}, Bus groups: {bus_groups_count}")
+                print(
+                    "These are preview-only drafts. "
+                    "They are not auto-discovered by any workflow."
+                )
+
+            return 0
 
         print("Unknown stems command.", file=sys.stderr)
         return 2

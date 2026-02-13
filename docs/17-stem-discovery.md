@@ -71,3 +71,8 @@ The patched map keeps existing file identity and path fields unchanged; only ass
 - Higher confidence means stronger lexical or regex evidence.
 - `ROLE.OTHER.UNKNOWN` remains valid when no reliable evidence exists.
 - Use overrides for intentional domain corrections rather than weakening classifier thresholds globally.
+
+## Next step: generate drafts
+
+Once you have a finalized `stems_map.json`, you can generate preview-only scene and
+routing plan drafts. See [19. Stems Drafts](19-stems-drafts.md) for details.
