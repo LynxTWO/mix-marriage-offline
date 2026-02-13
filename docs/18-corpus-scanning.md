@@ -102,3 +102,24 @@ The stats file includes:
 
 Treat it as a draft only. Review each token before using it in production lexicon rules.
 The merge-suggestions command never modifies the built-in common lexicon — it only writes user lexicons.
+
+## How to diff runs
+
+After re-scanning with updated lexicons or thresholds, compare two stats JSON files to see what changed:
+
+```powershell
+python tools/stem_corpus_diff.py `
+  --before "private\run1.corpus.stats.json" `
+  --after "private\run2.corpus.stats.json" `
+  --top 20
+```
+
+The output is stable JSON with:
+
+- `token_frequency_top_delta` — tokens with changed counts, sorted by abs(delta) desc
+- `unknown_token_frequency_top_delta` — same for unknown tokens
+- `per_role_token_top_delta` — per-role breakdowns, roles sorted by ID
+- `increased_count`, `decreased_count`, `unchanged_count` — summary counts
+- `warnings` — sorted list of issues (e.g., missing keys in either input)
+
+Write to a file with `--out diff.json` instead of printing to stdout.
