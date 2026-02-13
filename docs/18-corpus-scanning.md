@@ -65,9 +65,34 @@ The stats file includes:
 
 1. Run `stem_corpus_scan.py` on the private corpus.
 2. Inspect `*.corpus.stats.json` for unknown and ambiguous tokens.
-3. Curate `role_lexicon.yaml` updates manually.
-4. Re-run classification:
-   `python -m mmo stems classify --root <stems_root> --role-lexicon ontology/role_lexicon.yaml --out stems_map.json`
+3. Review the suggestions YAML (if generated with `--suggestions-out`).
+4. Merge suggestions into a user role lexicon:
+   ```powershell
+   python -m mmo role-lexicon merge-suggestions `
+     --suggestions "private\cambridge.role_lexicon.suggestions.yaml" `
+     --out "ontology\role_lexicon.yaml" `
+     --deny "bad_token1,bad_token2"
+   ```
+5. Re-run the stems pipeline with the new lexicon:
+   ```powershell
+   python -m mmo stems pipeline `
+     --root <stems_root> `
+     --out-dir <out_dir> `
+     --role-lexicon "ontology\role_lexicon.yaml"
+   ```
+
+### Merge-suggestions flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--suggestions` | (required) | Path to suggestions YAML |
+| `--base` | none | Existing user role lexicon YAML to merge into |
+| `--out` | (required) | Output path for the merged lexicon |
+| `--deny` | none | Comma-separated tokens to exclude |
+| `--allow` | none | Comma-separated tokens to include exclusively (overrides validity filters) |
+| `--max-per-role` | 100 | Cap on new keywords per role (deterministic selection) |
+| `--dry-run` | off | Print summary without writing |
+| `--format` | json | Summary output format (json or text) |
 
 ## Suggestions file warning
 
@@ -76,3 +101,4 @@ The stats file includes:
 `HUMAN REVIEW REQUIRED`
 
 Treat it as a draft only. Review each token before using it in production lexicon rules.
+The merge-suggestions command never modifies the built-in common lexicon — it only writes user lexicons.

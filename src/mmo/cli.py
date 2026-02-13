@@ -39,7 +39,11 @@ from mmo.core.render_targets import (
     list_render_targets,
     resolve_render_target_id,
 )
-from mmo.core.role_lexicon import load_role_lexicon
+from mmo.core.role_lexicon import (
+    load_role_lexicon,
+    merge_suggestions_into_lexicon,
+    render_role_lexicon_yaml,
+)
 from mmo.core.roles import list_roles, load_roles, resolve_role
 from mmo.core.stems_classifier import classify_stems, classify_stems_with_evidence
 from mmo.core.stems_draft import build_draft_routing_plan, build_draft_scene
@@ -8861,6 +8865,65 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to output gui_state JSON.",
     )
 
+    role_lexicon_parser = subparsers.add_parser(
+        "role-lexicon",
+        help="Role lexicon tools.",
+    )
+    role_lexicon_subparsers = role_lexicon_parser.add_subparsers(
+        dest="role_lexicon_command",
+        required=True,
+    )
+    role_lexicon_merge_parser = role_lexicon_subparsers.add_parser(
+        "merge-suggestions",
+        help="Merge corpus scan suggestions into a user role lexicon YAML.",
+    )
+    role_lexicon_merge_parser.add_argument(
+        "--suggestions",
+        required=True,
+        help="Path to suggestions YAML (from tools/stem_corpus_scan.py --suggestions-out).",
+    )
+    role_lexicon_merge_parser.add_argument(
+        "--base",
+        default=None,
+        help="Optional path to an existing user role lexicon YAML to merge into.",
+    )
+    role_lexicon_merge_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to write the merged role lexicon YAML.",
+    )
+    role_lexicon_merge_parser.add_argument(
+        "--deny",
+        default=None,
+        help="Comma-separated tokens to exclude from merge.",
+    )
+    role_lexicon_merge_parser.add_argument(
+        "--allow",
+        default=None,
+        help=(
+            "Comma-separated tokens to include exclusively. "
+            "When provided, ONLY these tokens are merged "
+            "(overrides default validity filters like digit-only or len<2)."
+        ),
+    )
+    role_lexicon_merge_parser.add_argument(
+        "--max-per-role",
+        type=int,
+        default=100,
+        help="Maximum new keywords to add per role (default: 100). Deterministic (lexicographic) selection.",
+    )
+    role_lexicon_merge_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print summary without writing the output file.",
+    )
+    role_lexicon_merge_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="json",
+        help="Output format for the summary (default: json).",
+    )
+
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
     args = parser.parse_args(raw_argv)
     repo_root = Path(__file__).resolve().parents[2]
@@ -11269,5 +11332,89 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(output, end="")
         return 0
+
+    if args.command == "role-lexicon":
+        if args.role_lexicon_command == "merge-suggestions":
+            try:
+                from mmo.core.role_lexicon import _load_yaml_object  # noqa: WPS433
+
+                suggestions_payload = _load_yaml_object(
+                    Path(args.suggestions), label="Suggestions"
+                )
+
+                base_payload: dict[str, Any] | None = None
+                if isinstance(getattr(args, "base", None), str) and args.base.strip():
+                    base_payload = _load_yaml_object(
+                        Path(args.base), label="Base role lexicon"
+                    )
+
+                deny: frozenset[str] | None = None
+                if isinstance(getattr(args, "deny", None), str) and args.deny.strip():
+                    deny = frozenset(
+                        t.strip().lower()
+                        for t in args.deny.split(",")
+                        if t.strip()
+                    )
+
+                allow: frozenset[str] | None = None
+                if isinstance(getattr(args, "allow", None), str) and args.allow.strip():
+                    allow = frozenset(
+                        t.strip().lower()
+                        for t in args.allow.split(",")
+                        if t.strip()
+                    )
+
+                result = merge_suggestions_into_lexicon(
+                    suggestions_payload,
+                    base=base_payload,
+                    deny=deny,
+                    allow=allow,
+                    max_per_role=args.max_per_role,
+                )
+
+                out_path = Path(args.out)
+                if not getattr(args, "dry_run", False):
+                    out_path.parent.mkdir(parents=True, exist_ok=True)
+                    yaml_text = render_role_lexicon_yaml(result["merged"])
+                    out_path.write_text(yaml_text, encoding="utf-8")
+
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            # Build skip counts.
+            skip_counts: dict[str, int] = {}
+            for reason, tokens in sorted(result["keywords_skipped"].items()):
+                skip_counts[reason] = len(tokens)
+
+            fmt = getattr(args, "format", "json")
+            if fmt == "json":
+                summary: dict[str, Any] = {
+                    "ok": True,
+                    "out_path": out_path.as_posix(),
+                    "dry_run": bool(getattr(args, "dry_run", False)),
+                    "roles_added_count": result["roles_added_count"],
+                    "keywords_added_count": result["keywords_added_count"],
+                    "keywords_skipped_count": skip_counts,
+                    "max_per_role_applied": result["max_per_role_applied"],
+                }
+                print(json.dumps(summary, indent=2, sort_keys=True))
+            else:
+                if getattr(args, "dry_run", False):
+                    print("Dry run — no file written.")
+                else:
+                    print(f"Merged lexicon written to: {out_path.as_posix()}")
+                print(f"Roles with new keywords: {result['roles_added_count']}")
+                print(f"Keywords added: {result['keywords_added_count']}")
+                if skip_counts:
+                    for reason, count in sorted(skip_counts.items()):
+                        print(f"  Skipped ({reason}): {count}")
+                if result["max_per_role_applied"]:
+                    print(f"Max-per-role cap ({args.max_per_role}) was applied.")
+
+            return 0
+
+        print("Unknown role-lexicon command.", file=sys.stderr)
+        return 2
 
     return 0

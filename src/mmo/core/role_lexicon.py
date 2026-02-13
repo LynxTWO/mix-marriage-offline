@@ -252,3 +252,186 @@ def merge_role_lexicons(
             "regex": sorted(merged_regex.get(role_id, set())),
         }
     return _compile_role_lexicon_entries(merged_entries)
+
+
+# ---------------------------------------------------------------------------
+# Merge suggestions into a user role lexicon (keywords only, no regex).
+# ---------------------------------------------------------------------------
+
+_DIGIT_ONLY_RE = re.compile(r"^\d+$")
+
+
+def _is_valid_keyword(token: str) -> bool:
+    """Return True if the token passes default hygiene (len>=2, not digit-only)."""
+    return len(token) >= 2 and not _DIGIT_ONLY_RE.match(token)
+
+
+def merge_suggestions_into_lexicon(
+    suggestions: dict[str, Any],
+    *,
+    base: dict[str, Any] | None = None,
+    deny: frozenset[str] | None = None,
+    allow: frozenset[str] | None = None,
+    max_per_role: int = 100,
+) -> dict[str, Any]:
+    """Merge a suggestions YAML payload into a base role_lexicon YAML payload.
+
+    Returns a dict with:
+      - ``merged``: the merged role_lexicon payload (``{"role_lexicon": {...}}``).
+      - ``roles_added_count``: number of roles that gained new keywords.
+      - ``keywords_added_count``: total new keywords added.
+      - ``keywords_skipped``: dict mapping skip reason to sorted list of tokens.
+      - ``max_per_role_applied``: True if any role was clamped.
+    """
+    deny_set = deny if deny is not None else frozenset()
+    allow_set = allow if allow is not None else None
+
+    # Parse base lexicon keywords.
+    base_keywords: dict[str, set[str]] = {}
+    if isinstance(base, dict):
+        base_rl = base.get("role_lexicon")
+        if isinstance(base_rl, dict):
+            for role_id, entry in sorted(base_rl.items()):
+                if isinstance(entry, dict):
+                    kws = entry.get("keywords")
+                    if isinstance(kws, list):
+                        base_keywords[role_id] = {
+                            k.strip().lower()
+                            for k in kws
+                            if isinstance(k, str) and k.strip()
+                        }
+
+    # Parse suggestions keywords.
+    sugg_rl = suggestions.get("role_lexicon")
+    if not isinstance(sugg_rl, dict):
+        sugg_rl = {}
+
+    skipped_deny: list[str] = []
+    skipped_allow_miss: list[str] = []
+    skipped_duplicate: list[str] = []
+    skipped_clamp: list[str] = []
+    skipped_invalid: list[str] = []
+
+    merged_keywords: dict[str, list[str]] = {}
+    roles_with_additions: set[str] = set()
+    total_added = 0
+    max_per_role_applied = False
+
+    for role_id in sorted(sugg_rl.keys()):
+        entry = sugg_rl[role_id]
+        if not isinstance(entry, dict):
+            continue
+        raw_kws = entry.get("keywords")
+        if not isinstance(raw_kws, list):
+            continue
+
+        existing = base_keywords.get(role_id, set())
+        # Start merged result with existing base keywords.
+        result_kws: list[str] = sorted(existing)
+        candidates: list[str] = []
+
+        for raw in raw_kws:
+            if not isinstance(raw, str):
+                continue
+            token = raw.strip().lower()
+            if not token:
+                continue
+
+            # Deny filter.
+            if token in deny_set:
+                skipped_deny.append(token)
+                continue
+
+            # Allow filter: if provided, only include tokens in the allow set.
+            if allow_set is not None and token not in allow_set:
+                skipped_allow_miss.append(token)
+                continue
+
+            # Duplicate check.
+            if token in existing:
+                skipped_duplicate.append(token)
+                continue
+
+            # Validity check (allow-list can override this).
+            if allow_set is None and not _is_valid_keyword(token):
+                skipped_invalid.append(token)
+                continue
+
+            candidates.append(token)
+
+        # Dedup candidates themselves.
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for c in sorted(candidates):
+            if c not in seen:
+                seen.add(c)
+                deduped.append(c)
+
+        # Clamp.
+        if len(deduped) > max_per_role:
+            max_per_role_applied = True
+            skipped_clamp.extend(deduped[max_per_role:])
+            deduped = deduped[:max_per_role]
+
+        if deduped:
+            roles_with_additions.add(role_id)
+            total_added += len(deduped)
+            result_kws = sorted(set(result_kws) | set(deduped))
+
+        if result_kws:
+            merged_keywords[role_id] = result_kws
+
+    # Include base roles that had no suggestions.
+    for role_id, kws in sorted(base_keywords.items()):
+        if role_id not in merged_keywords and kws:
+            merged_keywords[role_id] = sorted(kws)
+
+    # Build output payload.
+    merged_rl: dict[str, dict[str, list[str]]] = {}
+    for role_id in sorted(merged_keywords.keys()):
+        merged_rl[role_id] = {"keywords": merged_keywords[role_id]}
+
+    keywords_skipped: dict[str, list[str]] = {}
+    if skipped_deny:
+        keywords_skipped["deny"] = sorted(set(skipped_deny))
+    if skipped_allow_miss:
+        keywords_skipped["allow_miss"] = sorted(set(skipped_allow_miss))
+    if skipped_duplicate:
+        keywords_skipped["duplicate"] = sorted(set(skipped_duplicate))
+    if skipped_clamp:
+        keywords_skipped["clamp"] = sorted(set(skipped_clamp))
+    if skipped_invalid:
+        keywords_skipped["invalid"] = sorted(set(skipped_invalid))
+
+    return {
+        "merged": {"role_lexicon": merged_rl},
+        "roles_added_count": len(roles_with_additions),
+        "keywords_added_count": total_added,
+        "keywords_skipped": keywords_skipped,
+        "max_per_role_applied": max_per_role_applied,
+    }
+
+
+def render_role_lexicon_yaml(payload: dict[str, Any]) -> str:
+    """Render a role_lexicon payload as deterministic YAML."""
+    role_lexicon = payload.get("role_lexicon")
+    if not isinstance(role_lexicon, dict) or not role_lexicon:
+        return "role_lexicon: {}\n"
+
+    lines = ["role_lexicon:"]
+    for role_id in sorted(role_lexicon.keys()):
+        entry = role_lexicon[role_id]
+        lines.append(f"  {role_id}:")
+        keywords = entry.get("keywords") if isinstance(entry, dict) else None
+        keyword_values = (
+            sorted(item for item in keywords if isinstance(item, str) and item)
+            if isinstance(keywords, list)
+            else []
+        )
+        if keyword_values:
+            lines.append("    keywords:")
+            for keyword in keyword_values:
+                lines.append(f"      - {keyword}")
+        else:
+            lines.append("    {}")
+    return "\n".join(lines) + "\n"
