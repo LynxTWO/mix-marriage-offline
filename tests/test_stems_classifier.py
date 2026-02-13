@@ -104,6 +104,191 @@ class TestStemsClassifier(unittest.TestCase):
                 return
             self.assertIn("folder_token=drums(+1)", reasons)
 
+    def test_numbered_tom_tokens_classify_without_role_lexicon(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        roles_payload = load_roles(repo_root / "ontology" / "roles.yaml")
+
+        stems_index = {
+            "version": "0.1.0",
+            "root_dir": "demo",
+            "stem_sets": [],
+            "files": [
+                {
+                    "file_id": "STEMFILE.tom1",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/tom1.wav",
+                    "basename": "tom1",
+                    "ext": ".wav",
+                    "tokens": ["tom1"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.tom2",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/tom2.wav",
+                    "basename": "tom2",
+                    "ext": ".wav",
+                    "tokens": ["tom2"],
+                    "folder_tokens": [],
+                },
+            ],
+        }
+
+        stems_map = classify_stems(stems_index, roles_payload)
+        assignments = stems_map.get("assignments")
+        self.assertIsInstance(assignments, list)
+        if not isinstance(assignments, list):
+            return
+
+        by_rel_path = {
+            item.get("rel_path"): item
+            for item in assignments
+            if isinstance(item, dict) and isinstance(item.get("rel_path"), str)
+        }
+        self.assertEqual(by_rel_path["stems/tom1.wav"]["role_id"], "ROLE.DRUM.TOMS")
+        self.assertEqual(by_rel_path["stems/tom2.wav"]["role_id"], "ROLE.DRUM.TOMS")
+        self.assertIn("token_norm:tom1->tom", by_rel_path["stems/tom1.wav"]["reasons"])
+        self.assertIn("token_norm:tom2->tom", by_rel_path["stems/tom2.wav"]["reasons"])
+
+    def test_numbered_elecgtr_token_maps_with_matching_role_lexicon_entry(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        roles_payload = load_roles(repo_root / "ontology" / "roles.yaml")
+        role_lexicon = {
+            "ROLE.GTR.ELECTRIC": {
+                "keywords": ["elecgtr"],
+                "regex": [],
+            }
+        }
+        stems_index = {
+            "version": "0.1.0",
+            "root_dir": "demo",
+            "stem_sets": [],
+            "files": [
+                {
+                    "file_id": "STEMFILE.elecgtr2",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/elecgtr2.wav",
+                    "basename": "elecgtr2",
+                    "ext": ".wav",
+                    "tokens": ["elecgtr2"],
+                    "folder_tokens": [],
+                }
+            ],
+        }
+
+        stems_map = classify_stems(stems_index, roles_payload, role_lexicon=role_lexicon)
+        assignments = stems_map.get("assignments")
+        self.assertIsInstance(assignments, list)
+        if not isinstance(assignments, list) or not assignments:
+            return
+
+        assignment = assignments[0]
+        self.assertEqual(assignment.get("role_id"), "ROLE.GTR.ELECTRIC")
+        reasons = assignment.get("reasons")
+        self.assertIsInstance(reasons, list)
+        if not isinstance(reasons, list):
+            return
+        self.assertIn("token_norm:elecgtr2->elecgtr", reasons)
+
+    def test_snare_direction_compounds_boost_snare_classification(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        roles_payload = load_roles(repo_root / "ontology" / "roles.yaml")
+        stems_index = {
+            "version": "0.1.0",
+            "root_dir": "demo",
+            "stem_sets": [],
+            "files": [
+                {
+                    "file_id": "STEMFILE.snareup",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/snareup.wav",
+                    "basename": "snareup",
+                    "ext": ".wav",
+                    "tokens": ["snareup"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.snaredown",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/snaredown.wav",
+                    "basename": "snaredown",
+                    "ext": ".wav",
+                    "tokens": ["snaredown"],
+                    "folder_tokens": [],
+                },
+            ],
+        }
+
+        stems_map = classify_stems(stems_index, roles_payload)
+        assignments = stems_map.get("assignments")
+        self.assertIsInstance(assignments, list)
+        if not isinstance(assignments, list):
+            return
+        by_rel_path = {
+            item.get("rel_path"): item
+            for item in assignments
+            if isinstance(item, dict) and isinstance(item.get("rel_path"), str)
+        }
+
+        self.assertEqual(by_rel_path["stems/snareup.wav"]["role_id"], "ROLE.DRUM.SNARE")
+        self.assertEqual(by_rel_path["stems/snaredown.wav"]["role_id"], "ROLE.DRUM.SNARE")
+        self.assertIn(
+            "token_split:snareup->snare+up",
+            by_rel_path["stems/snareup.wav"]["reasons"],
+        )
+        self.assertIn(
+            "token_split:snaredown->snare+down",
+            by_rel_path["stems/snaredown.wav"]["reasons"],
+        )
+
+    def test_numeric_only_tokens_are_ignored_for_scoring(self) -> None:
+        roles_payload = {
+            "roles": {
+                "ROLE.OTHER.UNKNOWN": {
+                    "label": "Unknown",
+                    "kind": "utility",
+                    "default_bus_group": "MUSIC",
+                    "inference": {"keywords": [], "regex": []},
+                },
+                "ROLE.TEST.NUMERIC": {
+                    "label": "Numeric keyword",
+                    "kind": "source",
+                    "inference": {"keywords": ["1234"], "regex": []},
+                },
+            }
+        }
+        stems_index = {
+            "version": "0.1.0",
+            "root_dir": "demo",
+            "stem_sets": [],
+            "files": [
+                {
+                    "file_id": "STEMFILE.1234",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/1234.wav",
+                    "basename": "1234",
+                    "ext": ".wav",
+                    "tokens": ["1234"],
+                    "folder_tokens": ["1234"],
+                }
+            ],
+        }
+
+        stems_map = classify_stems(stems_index, roles_payload)
+        assignments = stems_map.get("assignments")
+        self.assertIsInstance(assignments, list)
+        if not isinstance(assignments, list) or not assignments:
+            return
+
+        assignment = assignments[0]
+        self.assertEqual(assignment.get("role_id"), "ROLE.OTHER.UNKNOWN")
+        reasons = assignment.get("reasons")
+        self.assertIsInstance(reasons, list)
+        if not isinstance(reasons, list):
+            return
+        self.assertNotIn("keyword=1234(+4)", reasons)
+        self.assertNotIn("folder_token=1234(+1)", reasons)
+
     def test_tie_breaks_are_deterministic(self) -> None:
         roles_payload = {
             "roles": {

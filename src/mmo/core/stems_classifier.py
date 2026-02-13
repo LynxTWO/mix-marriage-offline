@@ -21,11 +21,26 @@ _BUS_PREFERENCE_MARGIN = 1
 
 _TOKEN_SPLIT_RE = re.compile(r"[\s_.\-\[\]\(\)\{\}]+")
 _TRACK_PREFIX_RE = re.compile(r"^\s*\d+\s*[-_.\s]+\s*")
+_TRAILING_DIGIT_TOKEN_RE = re.compile(r"^([a-z][a-z0-9]*?)(\d+)$")
+_PURE_DIGIT_TOKEN_RE = re.compile(r"^\d+$")
 
 _LEFT_LONG_TOKENS = frozenset({"left", "lf", "lt", "lft", "lhs", "lch"})
 _RIGHT_LONG_TOKENS = frozenset({"right", "rf", "rt", "rgt", "rhs", "rch"})
 _LEFT_SIDE_TOKENS = frozenset({"l", "left"})
 _RIGHT_SIDE_TOKENS = frozenset({"r", "right"})
+_COMPOUND_TOKEN_SPLITS: dict[str, tuple[str, str]] = {
+    "kickin": ("kick", "in"),
+    "kickout": ("kick", "out"),
+    "kickinside": ("kick", "inside"),
+    "kickoutside": ("kick", "outside"),
+    "snaretop": ("snare", "top"),
+    "snarebot": ("snare", "bot"),
+    "snarebottom": ("snare", "bottom"),
+    "snareup": ("snare", "up"),
+    "snaredown": ("snare", "down"),
+    "hihatopen": ("hihat", "open"),
+    "hihatclosed": ("hihat", "closed"),
+}
 
 
 @dataclass(frozen=True)
@@ -46,6 +61,12 @@ class _RoleEvidence:
     bus_group: str | None
     score: int
     reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class _ScoringToken:
+    token: str
+    derived_reason: str | None
 
 
 def _sha1_token(value: str) -> str:
@@ -91,6 +112,79 @@ def _normalize_regex(values: Any) -> tuple[str, ...]:
         if isinstance(value, str) and value.strip()
     }
     return tuple(sorted(normalized))
+
+
+def _is_pure_digit_token(token: str) -> bool:
+    return bool(_PURE_DIGIT_TOKEN_RE.fullmatch(token))
+
+
+def _derive_scoring_tokens(token: str) -> list[_ScoringToken]:
+    normalized = token.lower()
+    if not normalized or _is_pure_digit_token(normalized):
+        return []
+
+    derived: list[_ScoringToken] = []
+    seen: set[tuple[str, str | None]] = set()
+
+    def _append(derived_token: str, derived_reason: str | None = None) -> None:
+        if not derived_token or _is_pure_digit_token(derived_token):
+            return
+        key = (derived_token, derived_reason)
+        if key in seen:
+            return
+        seen.add(key)
+        derived.append(_ScoringToken(token=derived_token, derived_reason=derived_reason))
+
+    _append(normalized)
+    split_candidates = [normalized]
+    match = _TRAILING_DIGIT_TOKEN_RE.fullmatch(normalized)
+    if match is not None:
+        base = match.group(1)
+        if base:
+            _append(base, f"token_norm:{normalized}->{base}")
+            split_candidates.append(base)
+
+    for split_source in split_candidates:
+        split_target = _COMPOUND_TOKEN_SPLITS.get(split_source)
+        if split_target is None:
+            continue
+        left, right = split_target
+        split_reason = f"token_split:{split_source}->{left}+{right}"
+        _append(left, split_reason)
+        _append(right, split_reason)
+
+    return derived
+
+
+def _build_scoring_tokens(values: Any) -> list[_ScoringToken]:
+    if not isinstance(values, list):
+        return []
+    scoring_tokens: list[_ScoringToken] = []
+    for token in values:
+        if not isinstance(token, str):
+            continue
+        scoring_tokens.extend(_derive_scoring_tokens(token))
+    return scoring_tokens
+
+
+def _token_reason_index(scoring_tokens: list[_ScoringToken]) -> dict[str, tuple[str, ...]]:
+    reasons_by_token: dict[str, list[str]] = {}
+    for scoring_token in scoring_tokens:
+        reason = scoring_token.derived_reason
+        if reason is None:
+            continue
+        token_reasons = reasons_by_token.setdefault(scoring_token.token, [])
+        if reason not in token_reasons:
+            token_reasons.append(reason)
+    return {
+        token: tuple(reasons)
+        for token, reasons in sorted(reasons_by_token.items(), key=lambda item: item[0])
+    }
+
+
+def _append_unique_reason(reasons: list[str], reason: str) -> None:
+    if reason not in reasons:
+        reasons.append(reason)
 
 
 def _compiled_external_lexicon(
@@ -207,14 +301,27 @@ def _compile_role_rules(
     return rules
 
 
-def _contains_phrase(tokens: list[str], phrase_tokens: list[str]) -> bool:
+def _match_phrase(
+    tokens: list[_ScoringToken],
+    phrase_tokens: list[str],
+) -> tuple[bool, tuple[str, ...]]:
     if not phrase_tokens or len(phrase_tokens) > len(tokens):
-        return False
+        return False, ()
+
     window = len(phrase_tokens)
     for idx in range(0, len(tokens) - window + 1):
-        if tokens[idx : idx + window] == phrase_tokens:
-            return True
-    return False
+        candidate_window = tokens[idx : idx + window]
+        candidate_tokens = [item.token for item in candidate_window]
+        if candidate_tokens != phrase_tokens:
+            continue
+        matched_reasons: list[str] = []
+        for item in candidate_window:
+            reason = item.derived_reason
+            if reason is not None and reason not in matched_reasons:
+                matched_reasons.append(reason)
+        return True, tuple(matched_reasons)
+
+    return False, ()
 
 
 def _score_role(
@@ -232,7 +339,10 @@ def _score_role(
         for token in file_entry.get("folder_tokens", [])
         if isinstance(token, str) and token
     ]
-    folder_token_set = set(folder_tokens)
+    scoring_tokens = _build_scoring_tokens(tokens)
+    folder_scoring_tokens = _build_scoring_tokens(folder_tokens)
+    folder_token_set = {item.token for item in folder_scoring_tokens}
+    folder_token_reasons = _token_reason_index(folder_scoring_tokens)
 
     rel_path = file_entry.get("rel_path") if isinstance(file_entry.get("rel_path"), str) else ""
     basename = file_entry.get("basename") if isinstance(file_entry.get("basename"), str) else ""
@@ -246,23 +356,30 @@ def _score_role(
         keyword_tokens = _tokenize_value(keyword)
         if not keyword_tokens:
             continue
-        if _contains_phrase(tokens, keyword_tokens):
+        phrase_hit, phrase_derived_reasons = _match_phrase(scoring_tokens, keyword_tokens)
+        if phrase_hit:
             points = _SCORE_KEYWORD_PHRASE if len(keyword_tokens) > 1 else _SCORE_KEYWORD_TOKEN
             score += points
-            reasons.append(f"keyword={keyword}(+{points})")
+            _append_unique_reason(reasons, f"keyword={keyword}(+{points})")
+            for derived_reason in phrase_derived_reasons:
+                _append_unique_reason(reasons, derived_reason)
             continue
         if len(keyword_tokens) == 1:
             token = keyword_tokens[0]
             if token in folder_token_set and token not in folder_hits:
                 folder_hits.add(token)
                 score += _SCORE_FOLDER_TOKEN
-                reasons.append(f"folder_token={token}(+{_SCORE_FOLDER_TOKEN})")
+                _append_unique_reason(reasons, f"folder_token={token}(+{_SCORE_FOLDER_TOKEN})")
+                for derived_reason in folder_token_reasons.get(token, ()):
+                    _append_unique_reason(reasons, derived_reason)
 
     for token in rule.folder_match_tokens:
         if token in folder_token_set and token not in folder_hits:
             folder_hits.add(token)
             score += _SCORE_FOLDER_TOKEN
-            reasons.append(f"folder_token={token}(+{_SCORE_FOLDER_TOKEN})")
+            _append_unique_reason(reasons, f"folder_token={token}(+{_SCORE_FOLDER_TOKEN})")
+            for derived_reason in folder_token_reasons.get(token, ()):
+                _append_unique_reason(reasons, derived_reason)
 
     for pattern, compiled in zip(rule.regex, rule.compiled_regex):
         if compiled.search(searchable_text):

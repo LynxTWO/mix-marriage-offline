@@ -101,6 +101,32 @@ class TestCliStemsClassify(unittest.TestCase):
             first_candidate = candidates[0]
             self.assertEqual(first_candidate.get("role_id"), "ROLE.DRUM.KICK")
 
+    def test_explain_text_includes_derived_token_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            root = temp_path / "stems_root"
+            _write_tiny_wav(root / "stems" / "snareup.wav")
+
+            args = [
+                "stems",
+                "explain",
+                "--root",
+                str(root),
+                "--file",
+                "stems/snareup.wav",
+                "--format",
+                "text",
+            ]
+            first_exit, first_stdout, first_stderr = self._run_main(args)
+            second_exit, second_stdout, second_stderr = self._run_main(args)
+
+            self.assertEqual(first_exit, 0)
+            self.assertEqual(second_exit, 0)
+            self.assertEqual(first_stdout, second_stdout)
+            self.assertEqual(first_stderr, second_stderr)
+            self.assertIn("derived_evidence:", first_stdout)
+            self.assertIn("token_split:snareup->snare+up", first_stdout)
+
     def test_unknown_role_lexicon_file_error_is_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

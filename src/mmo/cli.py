@@ -5581,6 +5581,24 @@ def _build_stem_explain_payload(
     if selected_assignment is None:
         selected_assignment = {}
 
+    reasons = (
+        selected_assignment.get("reasons")
+        if isinstance(selected_assignment.get("reasons"), list)
+        else explanation.get("selected_reasons", [])
+    )
+    derived_evidence: list[str] = []
+    if isinstance(reasons, list):
+        for reason in reasons:
+            if not isinstance(reason, str):
+                continue
+            if not (
+                reason.startswith("token_norm:")
+                or reason.startswith("token_split:")
+            ):
+                continue
+            if reason not in derived_evidence:
+                derived_evidence.append(reason)
+
     return {
         "file_id": file_id,
         "rel_path": rel_path,
@@ -5614,11 +5632,8 @@ def _build_stem_explain_payload(
             if isinstance(selected_assignment.get("link_group_id"), str)
             else None
         ),
-        "reasons": (
-            selected_assignment.get("reasons")
-            if isinstance(selected_assignment.get("reasons"), list)
-            else explanation.get("selected_reasons", [])
-        ),
+        "reasons": reasons if isinstance(reasons, list) else [],
+        "derived_evidence": derived_evidence,
         "candidates": (
             explanation.get("candidates")
             if isinstance(explanation.get("candidates"), list)
@@ -5636,6 +5651,11 @@ def _render_stem_explain_text(payload: dict[str, Any]) -> str:
         else "-"
     )
     reasons = payload.get("reasons") if isinstance(payload.get("reasons"), list) else []
+    derived_evidence = (
+        payload.get("derived_evidence")
+        if isinstance(payload.get("derived_evidence"), list)
+        else []
+    )
 
     lines = [
         f"file_id: {payload.get('file_id', '')}",
@@ -5650,6 +5670,13 @@ def _render_stem_explain_text(payload: dict[str, Any]) -> str:
     ]
     if reasons:
         for reason in reasons:
+            lines.append(f"- {reason}")
+    else:
+        lines.append("- (none)")
+
+    lines.append("derived_evidence:")
+    if derived_evidence:
+        for reason in derived_evidence:
             lines.append(f"- {reason}")
     else:
         lines.append("- (none)")
