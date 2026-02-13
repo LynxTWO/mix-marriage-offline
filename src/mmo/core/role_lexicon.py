@@ -24,6 +24,9 @@ class CompiledRoleLexiconEntry:
     compiled_regex: tuple[re.Pattern[str], ...]
 
 
+COMMON_ROLE_LEXICON_REL_PATH = Path("ontology") / "role_lexicon_common.yaml"
+
+
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
@@ -177,9 +180,10 @@ def _compile_role_lexicon_entries(
     return compiled
 
 
-def load_role_lexicon(
+def _load_compiled_role_lexicon(
     path: Path,
     *,
+    label: str,
     roles_payload: dict[str, Any] | None = None,
 ) -> dict[str, CompiledRoleLexiconEntry]:
     if roles_payload is None:
@@ -187,13 +191,64 @@ def load_role_lexicon(
 
         roles_payload = load_roles()
 
-    payload = _load_yaml_object(path, label="Role lexicon")
+    payload = _load_yaml_object(path, label=label)
     _validate_payload_against_schema(
         payload,
         schema_path=_repo_root() / "schemas" / "role_lexicon.schema.json",
-        payload_name="Role lexicon",
+        payload_name=label,
     )
 
     role_lexicon = _role_lexicon_map(payload)
     _validate_role_ids(role_lexicon, known_role_ids=_known_role_ids(roles_payload))
     return _compile_role_lexicon_entries(role_lexicon)
+
+
+def load_role_lexicon(
+    path: Path,
+    *,
+    roles_payload: dict[str, Any] | None = None,
+) -> dict[str, CompiledRoleLexiconEntry]:
+    return _load_compiled_role_lexicon(
+        path,
+        label="Role lexicon",
+        roles_payload=roles_payload,
+    )
+
+
+def load_common_role_lexicon(
+    path: Path | None = None,
+    *,
+    roles_payload: dict[str, Any] | None = None,
+) -> dict[str, CompiledRoleLexiconEntry]:
+    common_path = path if isinstance(path, Path) else _repo_root() / COMMON_ROLE_LEXICON_REL_PATH
+    return _load_compiled_role_lexicon(
+        common_path,
+        label="Common role lexicon",
+        roles_payload=roles_payload,
+    )
+
+
+def merge_role_lexicons(
+    *lexicons: dict[str, CompiledRoleLexiconEntry] | None,
+) -> dict[str, CompiledRoleLexiconEntry]:
+    merged_keywords: dict[str, set[str]] = {}
+    merged_regex: dict[str, set[str]] = {}
+
+    for lexicon in lexicons:
+        if not isinstance(lexicon, dict):
+            continue
+        for role_id in sorted(lexicon.keys()):
+            entry = lexicon.get(role_id)
+            if not isinstance(role_id, str) or not isinstance(entry, CompiledRoleLexiconEntry):
+                continue
+            merged_keywords.setdefault(role_id, set()).update(entry.keywords)
+            merged_regex.setdefault(role_id, set()).update(entry.regex)
+
+    merged_entries: dict[str, dict[str, Any]] = {}
+    all_role_ids = sorted(set(merged_keywords.keys()) | set(merged_regex.keys()))
+    for role_id in all_role_ids:
+        merged_entries[role_id] = {
+            "keywords": sorted(merged_keywords.get(role_id, set())),
+            "regex": sorted(merged_regex.get(role_id, set())),
+        }
+    return _compile_role_lexicon_entries(merged_entries)

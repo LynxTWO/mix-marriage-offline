@@ -1,0 +1,31 @@
+role_lexicon:
+  ROLE.BASS.DI:
+    keywords:
+    - bassdi
+  ROLE.DRUM.HIHAT:
+    keywords:
+    - hihat
+  ROLE.DRUM.OVERHEADS:
+    keywords:
+    - overheads
+  ROLE.DRUM.ROOM:
+    keywords:
+    - drumsroom
+  ROLE.DRUM.TOMS:
+    keywords:
+    - tom
+    - toms
+  ROLE.GTR.ELECTRIC:
+    keywords:
+    - elecgtr
+    - electricgtr
+    - egtr
+  ROLE.VOCAL.HARMONY:
+    keywords:
+    - backingvox
+    - bgv
+    - bvs
+  ROLE.VOCAL.LEAD:
+    keywords:
+    - leadvocal
+    - leadvox

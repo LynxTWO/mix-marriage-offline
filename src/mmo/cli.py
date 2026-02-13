@@ -6517,6 +6517,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to role lexicon extension YAML.",
     )
     stems_classify_parser.add_argument(
+        "--no-common-lexicon",
+        action="store_true",
+        help="Disable built-in common role lexicon baseline.",
+    )
+    stems_classify_parser.add_argument(
         "--format",
         choices=["json", "text"],
         default="text",
@@ -6544,6 +6549,11 @@ def main(argv: list[str] | None = None) -> int:
         "--role-lexicon",
         default=None,
         help="Optional path to role lexicon extension YAML.",
+    )
+    stems_explain_parser.add_argument(
+        "--no-common-lexicon",
+        action="store_true",
+        help="Disable built-in common role lexicon baseline.",
     )
     stems_explain_parser.add_argument(
         "--format",
@@ -8814,6 +8824,7 @@ def main(argv: list[str] | None = None) -> int:
                     stems_index_payload,
                     roles_payload,
                     role_lexicon=role_lexicon_payload,
+                    use_common_role_lexicon=not bool(args.no_common_lexicon),
                     stems_index_ref=stems_index_ref,
                     roles_ref="ontology/roles.yaml",
                     role_lexicon_ref=role_lexicon_ref,
@@ -8859,6 +8870,7 @@ def main(argv: list[str] | None = None) -> int:
                     stems_index_payload,
                     roles_payload,
                     role_lexicon=role_lexicon_payload,
+                    use_common_role_lexicon=not bool(args.no_common_lexicon),
                     stems_index_ref=stems_index_ref,
                     roles_ref="ontology/roles.yaml",
                     role_lexicon_ref=role_lexicon_ref,

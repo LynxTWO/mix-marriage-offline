@@ -201,6 +201,45 @@ class TestCliStemsClassify(unittest.TestCase):
             self.assertEqual(first_stderr, second_stderr)
             self.assertEqual(first_stderr.strip(), expected)
 
+    def test_no_common_lexicon_flag_disables_builtin_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            root = temp_path / "stems_root"
+            out_path = temp_path / "stems_map.json"
+            _write_tiny_wav(root / "stems" / "elecgtr2.wav")
+
+            default_args = [
+                "stems",
+                "classify",
+                "--root",
+                str(root),
+                "--out",
+                str(out_path),
+                "--format",
+                "json",
+            ]
+            default_exit, default_stdout, default_stderr = self._run_main(default_args)
+            self.assertEqual(default_exit, 0, msg=default_stderr)
+            default_payload = json.loads(default_stdout)
+            default_assignments = default_payload.get("assignments")
+            self.assertIsInstance(default_assignments, list)
+            if not isinstance(default_assignments, list) or not default_assignments:
+                return
+            self.assertEqual(default_assignments[0].get("role_id"), "ROLE.GTR.ELECTRIC")
+
+            disabled_args = [
+                *default_args,
+                "--no-common-lexicon",
+            ]
+            disabled_exit, disabled_stdout, disabled_stderr = self._run_main(disabled_args)
+            self.assertEqual(disabled_exit, 0, msg=disabled_stderr)
+            disabled_payload = json.loads(disabled_stdout)
+            disabled_assignments = disabled_payload.get("assignments")
+            self.assertIsInstance(disabled_assignments, list)
+            if not isinstance(disabled_assignments, list) or not disabled_assignments:
+                return
+            self.assertEqual(disabled_assignments[0].get("role_id"), "ROLE.OTHER.UNKNOWN")
+
 
 if __name__ == "__main__":
     unittest.main()

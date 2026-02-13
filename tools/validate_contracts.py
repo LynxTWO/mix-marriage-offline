@@ -101,6 +101,9 @@ ROLES_REGISTRY_LOADER: tuple[str, str, str] = (
     "mmo.core.roles",
     "ontology/roles.yaml",
 )
+ROLE_LEXICON_COMMON_CHECK_ID = "ROLE_LEXICON.COMMON"
+ROLE_LEXICON_COMMON_TOOL = "src/mmo/core/role_lexicon.py"
+ROLE_LEXICON_COMMON_REL_PATH = "ontology/role_lexicon_common.yaml"
 
 
 def _tail_text(value: str, *, max_lines: int = 20, max_chars: int = 2000) -> str:
@@ -532,6 +535,59 @@ def _run_roles_registries_check(*, repo_root: Path) -> dict[str, Any]:
     )
 
 
+def _run_role_lexicon_common_check(*, repo_root: Path) -> dict[str, Any]:
+    details: dict[str, Any] = {
+        "path": ROLE_LEXICON_COMMON_REL_PATH,
+        "schema": "schemas/role_lexicon.schema.json",
+        "ok": True,
+    }
+    errors: list[str] = []
+
+    roles_registry_path = repo_root / ROLES_REGISTRY_LOADER[2]
+    common_lexicon_path = repo_root / ROLE_LEXICON_COMMON_REL_PATH
+    if not common_lexicon_path.is_file():
+        details["ok"] = False
+        details["present"] = False
+        errors.append(f"Required role lexicon is missing: {ROLE_LEXICON_COMMON_REL_PATH}")
+    else:
+        details["present"] = True
+
+    if not roles_registry_path.is_file():
+        details["ok"] = False
+        errors.append(f"Required registry is missing: {ROLES_REGISTRY_LOADER[2]}")
+
+    if not errors:
+        try:
+            roles_module = importlib.import_module(ROLES_REGISTRY_LOADER[1])
+            load_roles = getattr(roles_module, ROLES_REGISTRY_LOADER[0])
+            lexicon_module = importlib.import_module("mmo.core.role_lexicon")
+            load_common_role_lexicon = getattr(lexicon_module, "load_common_role_lexicon")
+            roles_payload = load_roles(roles_registry_path)
+            lexicon_payload = load_common_role_lexicon(
+                common_lexicon_path,
+                roles_payload=roles_payload,
+            )
+        except Exception as exc:
+            details["ok"] = False
+            details["error"] = str(exc)
+            errors.append(f"load_common_role_lexicon failed for {ROLE_LEXICON_COMMON_REL_PATH}: {exc}")
+        else:
+            details["entries"] = len(lexicon_payload)
+            details["role_ids"] = sorted(lexicon_payload.keys())
+
+    ok = not errors
+    if not ok:
+        errors.append("Run alone: python tools/validate_contracts.py --strict")
+    return _build_check_payload(
+        check_id=ROLE_LEXICON_COMMON_CHECK_ID,
+        ok=ok,
+        exit_code=0 if ok else 1,
+        tool=ROLE_LEXICON_COMMON_TOOL,
+        details=details,
+        errors=errors,
+    )
+
+
 def _run_schema_smoke_check(*, repo_root: Path) -> dict[str, Any]:
     details: dict[str, Any] = {"anchors": []}
     errors: list[str] = []
@@ -618,6 +674,7 @@ def run_contract_checks(*, repo_root: Path, strict: bool) -> dict[str, Any]:
     checks.append(_run_scene_registries_check(repo_root=repo_root))
     checks.append(_run_translation_registries_check(repo_root=repo_root))
     checks.append(_run_roles_registries_check(repo_root=repo_root))
+    checks.append(_run_role_lexicon_common_check(repo_root=repo_root))
     checks.append(_run_schema_smoke_check(repo_root=repo_root))
 
     failed = [check["check_id"] for check in checks if not check.get("ok")]

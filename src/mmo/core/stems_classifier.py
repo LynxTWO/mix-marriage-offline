@@ -5,7 +5,11 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from mmo.core.role_lexicon import CompiledRoleLexiconEntry
+from mmo.core.role_lexicon import (
+    CompiledRoleLexiconEntry,
+    load_common_role_lexicon,
+    merge_role_lexicons,
+)
 
 STEMS_MAP_VERSION = "0.1.0"
 DEFAULT_ROLES_REF = "ontology/roles.yaml"
@@ -230,12 +234,18 @@ def _compiled_external_lexicon(
 def _compile_role_rules(
     roles_payload: dict[str, Any],
     role_lexicon: dict[str, Any] | None,
+    *,
+    use_common_role_lexicon: bool,
 ) -> dict[str, _RoleRule]:
     roles = roles_payload.get("roles")
     if not isinstance(roles, dict):
         raise ValueError("Roles registry payload must include a roles mapping.")
 
-    compiled_lexicon = _compiled_external_lexicon(role_lexicon)
+    compiled_user_lexicon = _compiled_external_lexicon(role_lexicon)
+    common_lexicon: dict[str, CompiledRoleLexiconEntry] = {}
+    if use_common_role_lexicon:
+        common_lexicon = load_common_role_lexicon()
+    compiled_lexicon = merge_role_lexicons(common_lexicon, compiled_user_lexicon)
     invalid_patterns: list[str] = []
     rules: dict[str, _RoleRule] = {}
 
@@ -498,11 +508,16 @@ def classify_stems_with_evidence(
     roles: dict[str, Any],
     role_lexicon: dict[str, Any] | None = None,
     *,
+    use_common_role_lexicon: bool = True,
     stems_index_ref: str = "stems_index.json",
     roles_ref: str = DEFAULT_ROLES_REF,
     role_lexicon_ref: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
-    rules = _compile_role_rules(roles, role_lexicon)
+    rules = _compile_role_rules(
+        roles,
+        role_lexicon,
+        use_common_role_lexicon=use_common_role_lexicon,
+    )
     unknown_rule = rules.get(UNKNOWN_ROLE_ID)
 
     files = stems_index.get("files")
@@ -634,6 +649,7 @@ def classify_stems(
     roles: dict[str, Any],
     role_lexicon: dict[str, Any] | None = None,
     *,
+    use_common_role_lexicon: bool = True,
     stems_index_ref: str = "stems_index.json",
     roles_ref: str = DEFAULT_ROLES_REF,
     role_lexicon_ref: str | None = None,
@@ -642,6 +658,7 @@ def classify_stems(
         stems_index,
         roles,
         role_lexicon=role_lexicon,
+        use_common_role_lexicon=use_common_role_lexicon,
         stems_index_ref=stems_index_ref,
         roles_ref=roles_ref,
         role_lexicon_ref=role_lexicon_ref,
