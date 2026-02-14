@@ -279,7 +279,7 @@ class TestCliErrorOutputDeterminism(unittest.TestCase):
                 return resolve_target_id_from_registry(token, targets_path)
 
             with mock.patch(
-                "mmo.cli.resolve_render_target_id",
+                "mmo.cli_commands._scene.resolve_render_target_id",
                 side_effect=_resolve_from_local_registry,
             ):
                 for command in commands:

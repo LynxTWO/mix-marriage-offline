@@ -84,9 +84,9 @@ class TestTuiUi(unittest.TestCase):
                 )
                 return 0
 
-            with mock.patch("mmo.cli._run_analyze", side_effect=_fake_run_analyze):
+            with mock.patch("mmo.cli_commands._workflows._run_analyze", side_effect=_fake_run_analyze):
                 with mock.patch(
-                    "mmo.cli._run_one_shot_workflow",
+                    "mmo.cli_commands._workflows._run_one_shot_workflow",
                     side_effect=_fake_run_one_shot_workflow,
                 ) as patched_single_run:
                     exit_code = _run_ui_workflow(
@@ -191,9 +191,9 @@ class TestTuiUi(unittest.TestCase):
                     (out_path / "listen_pack.json").write_text("{}\n", encoding="utf-8")
                 return 0
 
-            with mock.patch("mmo.cli._run_analyze", side_effect=_fake_run_analyze):
+            with mock.patch("mmo.cli_commands._workflows._run_analyze", side_effect=_fake_run_analyze):
                 with mock.patch(
-                    "mmo.cli._run_variants_workflow",
+                    "mmo.cli_commands._workflows._run_variants_workflow",
                     side_effect=_fake_run_variants_workflow,
                 ) as patched_variants_run:
                     exit_code = _run_ui_workflow(

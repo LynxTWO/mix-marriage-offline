@@ -240,7 +240,7 @@ class TestCliRenderPlanToVariants(unittest.TestCase):
                     "results": results,
                 }
 
-            with mock.patch("mmo.cli.run_variant_plan", side_effect=_fake_run_variant_plan) as patched:
+            with mock.patch("mmo.cli_commands._scene.run_variant_plan", side_effect=_fake_run_variant_plan) as patched:
                 exit_code = main(
                     [
                         "render-plan",

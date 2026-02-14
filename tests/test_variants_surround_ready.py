@@ -208,7 +208,7 @@ class TestVariantsSurroundReady(unittest.TestCase):
                     "results": results,
                 }
 
-            with mock.patch("mmo.cli.run_variant_plan", side_effect=_fake_run_variant_plan):
+            with mock.patch("mmo.cli_commands._workflows.run_variant_plan", side_effect=_fake_run_variant_plan):
                 exit_code = main(
                     [
                         "variants",

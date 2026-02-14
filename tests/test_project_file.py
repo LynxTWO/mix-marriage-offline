@@ -150,7 +150,7 @@ class TestProjectFile(unittest.TestCase):
                 return 0
 
             with mock.patch(
-                "mmo.cli._run_one_shot_workflow",
+                "mmo.cli_commands._workflows._run_one_shot_workflow",
                 side_effect=_fake_run_one_shot_workflow,
             ) as patched_single_run:
                 exit_code = main(
@@ -262,7 +262,7 @@ class TestProjectFile(unittest.TestCase):
                 return 0
 
             with mock.patch(
-                "mmo.cli._run_render_many_workflow",
+                "mmo.cli_commands._workflows._run_render_many_workflow",
                 side_effect=_fake_run_render_many_workflow,
             ) as patched_render_many:
                 exit_code = main(

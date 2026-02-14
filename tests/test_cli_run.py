@@ -687,7 +687,7 @@ class TestCliRun(unittest.TestCase):
             ]
 
             with mock.patch(
-                "mmo.cli.run_variant_plan",
+                "mmo.cli_commands._workflows.run_variant_plan",
                 side_effect=_mock_render_many_run_variant_plan(
                     out_dir=out_dir,
                     include_stereo_deliverable=True,
@@ -909,7 +909,7 @@ class TestCliRun(unittest.TestCase):
                 "off",
             ]
             with mock.patch(
-                "mmo.cli.run_variant_plan",
+                "mmo.cli_commands._workflows.run_variant_plan",
                 side_effect=_mock_render_many_run_variant_plan(
                     out_dir=out_dir,
                     include_stereo_deliverable=False,
@@ -975,7 +975,7 @@ class TestCliRun(unittest.TestCase):
             _write_wav_16bit(stems_dir / "drums" / "kick.wav")
 
             with mock.patch(
-                "mmo.cli.run_variant_plan",
+                "mmo.cli_commands._workflows.run_variant_plan",
                 side_effect=_mock_render_many_run_variant_plan(
                     out_dir=out_dir,
                     include_stereo_deliverable=False,
@@ -1021,7 +1021,7 @@ class TestCliRun(unittest.TestCase):
             _write_wav_16bit(stems_dir / "drums" / "kick.wav")
 
             with mock.patch(
-                "mmo.cli.run_variant_plan",
+                "mmo.cli_commands._workflows.run_variant_plan",
                 side_effect=_mock_render_many_run_variant_plan(
                     out_dir=out_dir,
                     include_stereo_deliverable=False,
@@ -1096,7 +1096,7 @@ class TestCliRun(unittest.TestCase):
                 return original_build_render_plan(*args, **kwargs)
 
             with mock.patch(
-                "mmo.cli._build_validated_render_plan_payload",
+                "mmo.cli_commands._workflows._build_validated_render_plan_payload",
                 side_effect=_capture_render_plan_call,
             ):
                 exit_code = main(
