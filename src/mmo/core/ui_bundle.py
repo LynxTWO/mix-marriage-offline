@@ -1466,6 +1466,8 @@ def build_ui_bundle(
     stems_map_path: Path | None = None,
     timeline_path: Path | None = None,
     gui_state_path: Path | None = None,
+    project_init: dict[str, Any] | None = None,
+    stems_auditions: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from mmo.core.gui_design import load_gui_design  # noqa: WPS433
     from mmo.core.help_registry import load_help_registry, resolve_help_entries  # noqa: WPS433
@@ -1593,6 +1595,11 @@ def build_ui_bundle(
     )
     if stems_summary is not None:
         payload["stems_summary"] = stems_summary
+
+    if project_init is not None:
+        payload["project_init"] = project_init
+    if stems_auditions is not None:
+        payload["stems_auditions"] = stems_auditions
 
     pointers = _bundle_pointers(
         project_path=project_path,

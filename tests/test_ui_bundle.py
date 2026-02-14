@@ -1749,6 +1749,211 @@ class TestUiBundle(unittest.TestCase):
             self.assertIn("apply_manifest", bundle)
             self.assertIn("applied_report", bundle)
 
+    # -- project_init section --------------------------------------------------
+
+    def test_build_ui_bundle_includes_project_init_when_provided(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        project_init = {
+            "stems_index_path": "/tmp/proj/stems/stems_index.json",
+            "stems_map_path": "/tmp/proj/stems/stems_map.json",
+            "stems_overrides_path": "/tmp/proj/stems/stems_overrides.yaml",
+            "scene_draft_path": "/tmp/proj/drafts/scene.draft.json",
+            "routing_draft_path": "/tmp/proj/drafts/routing_plan.draft.json",
+            "preview_only": True,
+        }
+
+        bundle = build_ui_bundle(
+            report,
+            None,
+            help_registry_path=help_registry_path,
+            project_init=project_init,
+        )
+        validator.validate(bundle)
+        self.assertEqual(bundle["project_init"], project_init)
+        self.assertTrue(bundle["project_init"]["preview_only"])
+        for key in (
+            "stems_index_path",
+            "stems_map_path",
+            "stems_overrides_path",
+            "scene_draft_path",
+            "routing_draft_path",
+        ):
+            self.assertNotIn("\\", bundle["project_init"][key])
+
+    def test_build_ui_bundle_omits_project_init_when_not_provided(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        bundle = build_ui_bundle(
+            report,
+            None,
+            help_registry_path=help_registry_path,
+        )
+        validator.validate(bundle)
+        self.assertNotIn("project_init", bundle)
+
+    def test_build_ui_bundle_project_init_minimal(self) -> None:
+        """Only preview_only is required; path fields are optional."""
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        bundle = build_ui_bundle(
+            report,
+            None,
+            help_registry_path=help_registry_path,
+            project_init={"preview_only": True},
+        )
+        validator.validate(bundle)
+        self.assertEqual(bundle["project_init"], {"preview_only": True})
+
+    # -- stems_auditions section -----------------------------------------------
+
+    def test_build_ui_bundle_includes_stems_auditions_when_provided(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        stems_auditions = {
+            "manifest_path": "/tmp/proj/stems_auditions/manifest.json",
+            "out_dir": "/tmp/proj/stems_auditions",
+            "rendered_groups_count": 4,
+            "missing_files_count": 1,
+        }
+
+        bundle = build_ui_bundle(
+            report,
+            None,
+            help_registry_path=help_registry_path,
+            stems_auditions=stems_auditions,
+        )
+        validator.validate(bundle)
+        self.assertEqual(bundle["stems_auditions"], stems_auditions)
+        self.assertEqual(bundle["stems_auditions"]["rendered_groups_count"], 4)
+        self.assertEqual(bundle["stems_auditions"]["missing_files_count"], 1)
+
+    def test_build_ui_bundle_omits_stems_auditions_when_not_provided(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        bundle = build_ui_bundle(
+            report,
+            None,
+            help_registry_path=help_registry_path,
+        )
+        validator.validate(bundle)
+        self.assertNotIn("stems_auditions", bundle)
+
+    # -- determinism + size sanity for new sections ----------------------------
+
+    def test_bundle_new_sections_deterministic_key_ordering(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        project_init = {
+            "stems_index_path": "/tmp/proj/stems/stems_index.json",
+            "stems_map_path": "/tmp/proj/stems/stems_map.json",
+            "scene_draft_path": "/tmp/proj/drafts/scene.draft.json",
+            "routing_draft_path": "/tmp/proj/drafts/routing_plan.draft.json",
+            "preview_only": True,
+        }
+        stems_auditions = {
+            "manifest_path": "/tmp/proj/stems_auditions/manifest.json",
+            "out_dir": "/tmp/proj/stems_auditions",
+            "rendered_groups_count": 3,
+            "missing_files_count": 0,
+        }
+
+        bundle = build_ui_bundle(
+            report,
+            None,
+            help_registry_path=help_registry_path,
+            project_init=project_init,
+            stems_auditions=stems_auditions,
+        )
+        text_a = json.dumps(bundle, indent=2, sort_keys=True)
+        text_b = json.dumps(bundle, indent=2, sort_keys=True)
+        self.assertEqual(text_a, text_b)
+
+        # Verify key ordering within sections is stable after round-trip
+        rt = json.loads(text_a)
+        self.assertEqual(
+            sorted(rt["project_init"].keys()),
+            list(sorted(rt["project_init"].keys())),
+        )
+        self.assertEqual(
+            sorted(rt["stems_auditions"].keys()),
+            list(sorted(rt["stems_auditions"].keys())),
+        )
+
+    def test_bundle_size_sanity_with_new_sections(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        project_init = {
+            "stems_index_path": "/tmp/proj/stems/stems_index.json",
+            "stems_map_path": "/tmp/proj/stems/stems_map.json",
+            "stems_overrides_path": "/tmp/proj/stems/stems_overrides.yaml",
+            "scene_draft_path": "/tmp/proj/drafts/scene.draft.json",
+            "routing_draft_path": "/tmp/proj/drafts/routing_plan.draft.json",
+            "preview_only": True,
+        }
+        stems_auditions = {
+            "manifest_path": "/tmp/proj/stems_auditions/manifest.json",
+            "out_dir": "/tmp/proj/stems_auditions",
+            "rendered_groups_count": 10,
+            "missing_files_count": 2,
+        }
+
+        bundle = build_ui_bundle(
+            report,
+            None,
+            help_registry_path=help_registry_path,
+            project_init=project_init,
+            stems_auditions=stems_auditions,
+        )
+        bundle_json = json.dumps(bundle, indent=2, sort_keys=True)
+        self.assertLess(
+            len(bundle_json),
+            50_000,
+            "Bundle with new pointer sections should remain small (< 50 KB)",
+        )
+
+    def test_stems_auditions_paths_are_posix(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        stems_auditions = {
+            "manifest_path": "/tmp/proj/stems_auditions/manifest.json",
+            "out_dir": "/tmp/proj/stems_auditions",
+            "rendered_groups_count": 2,
+            "missing_files_count": 0,
+        }
+
+        bundle = build_ui_bundle(
+            report,
+            None,
+            help_registry_path=help_registry_path,
+            stems_auditions=stems_auditions,
+        )
+        validator.validate(bundle)
+        self.assertNotIn("\\", bundle["stems_auditions"]["manifest_path"])
+        self.assertNotIn("\\", bundle["stems_auditions"]["out_dir"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -9694,6 +9694,17 @@ def main(argv: list[str] | None = None) -> int:
                     summary = stems_map_payload.get("summary")
                     if not isinstance(summary, dict):
                         summary = {}
+                    project_init_section: dict[str, Any] = {
+                        "stems_index_path": index_path.resolve().as_posix(),
+                        "stems_map_path": map_path.resolve().as_posix(),
+                        "scene_draft_path": scene_path.resolve().as_posix(),
+                        "routing_draft_path": routing_path.resolve().as_posix(),
+                        "preview_only": True,
+                    }
+                    if overrides_written:
+                        project_init_section["stems_overrides_path"] = (
+                            overrides_path.resolve().as_posix()
+                        )
                     bundle_payload: dict[str, Any] = {
                         "stems_index_path": index_path.resolve().as_posix(),
                         "stems_map_path": map_path.resolve().as_posix(),
@@ -9703,6 +9714,7 @@ def main(argv: list[str] | None = None) -> int:
                             "counts_by_bus_group": summary.get("counts_by_bus_group", {}),
                             "unknown_files": summary.get("unknown_files", 0),
                         },
+                        "project_init": project_init_section,
                     }
                     _write_json_file(bundle_path, bundle_payload)
                     bundle_path_written = bundle_path.as_posix()

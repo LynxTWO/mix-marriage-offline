@@ -36,7 +36,9 @@
     "recommendation_overlays": { "$ref": "#/$defs/recommendation_overlays" },
     "render_plan_summary": { "$ref": "#/$defs/render_plan_summary" },
     "stems_summary": { "$ref": "#/$defs/stems_summary" },
-    "pointers": { "$ref": "#/$defs/pointers" }
+    "pointers": { "$ref": "#/$defs/pointers" },
+    "project_init": { "$ref": "#/$defs/project_init_pointers" },
+    "stems_auditions": { "$ref": "#/$defs/stems_auditions_pointers" }
   },
   "$defs": {
     "posix_abs_path": {
@@ -676,6 +678,30 @@
           "type": "array",
           "items": { "$ref": "#/$defs/dashboard_deliverable" }
         }
+      }
+    },
+    "project_init_pointers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preview_only"],
+      "properties": {
+        "stems_index_path": { "$ref": "#/$defs/posix_abs_path" },
+        "stems_map_path": { "$ref": "#/$defs/posix_abs_path" },
+        "stems_overrides_path": { "$ref": "#/$defs/posix_abs_path" },
+        "scene_draft_path": { "$ref": "#/$defs/posix_abs_path" },
+        "routing_draft_path": { "$ref": "#/$defs/posix_abs_path" },
+        "preview_only": { "const": true }
+      }
+    },
+    "stems_auditions_pointers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_path", "out_dir", "rendered_groups_count", "missing_files_count"],
+      "properties": {
+        "manifest_path": { "$ref": "#/$defs/posix_abs_path" },
+        "out_dir": { "$ref": "#/$defs/posix_abs_path" },
+        "rendered_groups_count": { "type": "integer", "minimum": 0 },
+        "missing_files_count": { "type": "integer", "minimum": 0 }
       }
     }
   }
