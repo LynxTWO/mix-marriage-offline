@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
+import stat
 import sys
 from pathlib import Path
 
@@ -32,6 +34,17 @@ ALLOWLISTED_DIRS: tuple[str, ...] = (
 
 # Glob prefix for pytest-cache-files-* (repo root only).
 PYTEST_CACHE_FILES_PREFIX = "pytest-cache-files-"
+
+
+def _on_rm_error(func, path, _exc_info):  # noqa: ANN001
+    """Handle read-only files during rmtree (common on Windows/OneDrive)."""
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+
+def _safe_rmtree(target: Path) -> None:
+    """Remove a directory tree, handling read-only files."""
+    shutil.rmtree(target, onerror=_on_rm_error)
 
 
 def find_pytest_cache_dirs(repo_root: Path) -> list[Path]:
@@ -73,10 +86,10 @@ def run_cleanup(
             removed.append(name)
             continue
         try:
-            shutil.rmtree(target)
+            _safe_rmtree(target)
             removed.append(name)
         except OSError as exc:
-            errors.append(f"{name}: {exc}")
+            errors.append(f"{name}: {exc}".replace("\\", "/"))
 
     # pytest-cache-files-* dirs (repo root only)
     for target in find_pytest_cache_dirs(repo_root):
@@ -85,10 +98,10 @@ def run_cleanup(
             removed.append(rel)
             continue
         try:
-            shutil.rmtree(target)
+            _safe_rmtree(target)
             removed.append(rel)
         except OSError as exc:
-            errors.append(f"{rel}: {exc}")
+            errors.append(f"{rel}: {exc}".replace("\\", "/"))
 
     return {
         "dry_run": dry_run,

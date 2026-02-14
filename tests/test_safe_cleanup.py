@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import unittest
@@ -10,6 +11,14 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TOOL_PATH = REPO_ROOT / "tools" / "safe_cleanup.py"
+
+# Unique suffix per process to avoid collisions on parallel/OneDrive runs.
+_PID = os.getpid()
+
+
+def _unique_root(label: str) -> Path:
+    """Return a unique fake_root under .tmp_claude for this PID + label."""
+    return REPO_ROOT / ".tmp_claude" / f"_test_safe_cleanup_{label}_{_PID}"
 
 
 def _run_cleanup(fake_root: Path, *, dry_run: bool = False) -> dict:
@@ -38,7 +47,7 @@ class TestSafeCleanupRemovesAllowlisted(unittest.TestCase):
     )
 
     def setUp(self):
-        self.fake_root = REPO_ROOT / ".tmp_claude" / "_test_safe_cleanup_root"
+        self.fake_root = _unique_root("root")
         self.fake_root.mkdir(parents=True, exist_ok=True)
         for name in self.ALLOWLISTED:
             d = self.fake_root / name
@@ -89,7 +98,7 @@ class TestSafeCleanupIgnoresNonAllowlisted(unittest.TestCase):
     """Non-allowlisted dirs must NOT be touched."""
 
     def setUp(self):
-        self.fake_root = REPO_ROOT / ".tmp_claude" / "_test_safe_cleanup_nonallow"
+        self.fake_root = _unique_root("nonallow")
         self.fake_root.mkdir(parents=True, exist_ok=True)
         # Create non-allowlisted dirs of various kinds
         self.non_allowlisted = [
@@ -123,7 +132,7 @@ class TestSafeCleanupJsonDeterminism(unittest.TestCase):
     """Output must be valid JSON with stable key order."""
 
     def setUp(self):
-        self.fake_root = REPO_ROOT / ".tmp_claude" / "_test_safe_cleanup_json"
+        self.fake_root = _unique_root("json")
         self.fake_root.mkdir(parents=True, exist_ok=True)
 
     def tearDown(self):
@@ -149,6 +158,51 @@ class TestSafeCleanupJsonDeterminism(unittest.TestCase):
         r1 = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)
         r2 = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)
         self.assertEqual(r1.stdout, r2.stdout)
+
+
+class TestSafeCleanupReadOnlyFiles(unittest.TestCase):
+    """Read-only files inside allowlisted dirs must not cause errors."""
+
+    ALLOWLISTED = (
+        ".pytest_cache",
+        ".tmp_claude",
+        ".tmp_codex",
+        ".tmp_pytest",
+        "sandbox_tmp",
+    )
+
+    def setUp(self):
+        self.fake_root = _unique_root("readonly")
+        self.fake_root.mkdir(parents=True, exist_ok=True)
+        for name in self.ALLOWLISTED:
+            d = self.fake_root / name
+            d.mkdir(exist_ok=True)
+            f = d / "locked.txt"
+            f.write_text("read-only content", encoding="utf-8")
+            # Make the file read-only
+            f.chmod(stat.S_IREAD)
+
+    def tearDown(self):
+        # Restore write permissions so tearDown can clean up
+        if self.fake_root.exists():
+            for root, dirs, files in os.walk(self.fake_root):
+                for fname in files:
+                    fp = Path(root) / fname
+                    try:
+                        fp.chmod(stat.S_IWRITE | stat.S_IREAD)
+                    except OSError:
+                        pass
+            shutil.rmtree(self.fake_root, ignore_errors=True)
+
+    def test_readonly_files_removed_without_errors(self):
+        summary = _run_cleanup(self.fake_root)
+        for name in self.ALLOWLISTED:
+            self.assertIn(name, summary["removed"])
+            self.assertFalse(
+                (self.fake_root / name).exists(),
+                f"{name} should have been removed despite read-only files",
+            )
+        self.assertEqual(summary["errors"], [])
 
 
 if __name__ == "__main__":
