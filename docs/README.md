@@ -4,9 +4,14 @@ This folder is the canonical documentation set for Mix Marriage Offline (MMO).
 
 The numeric prefixes reflect a recommended reading order. Gaps may exist as documents evolve.
 
+## Start here
+
+- [00-quickstart.md](00-quickstart.md)
+  Golden-path walkthrough: stems to project scaffold in five minutes.
+
 ## Recommended reading order
 
-1. [00-proposal.md](00-proposal.md)  
+1. [00-proposal.md](00-proposal.md)
 2. [01-philosophy.md](01-philosophy.md)  
 3. [02-architecture.md](02-architecture.md)  
 4. [03-ontology.md](03-ontology.md)  
@@ -35,8 +40,12 @@ The numeric prefixes reflect a recommended reading order. Gaps may exist as docu
   Musician-first GUI principles, nerd toggle, screens, and rollout milestones.
 - [17-stem-discovery.md](17-stem-discovery.md)  
   Stem-set scan/classify/review flow, safe override artifact, and confidence-first behavior.
-- [18-corpus-scanning.md](18-corpus-scanning.md)  
+- [18-corpus-scanning.md](18-corpus-scanning.md)
   Private names-only corpus scan flow for role lexicon refinement.
+- [19-stems-drafts.md](19-stems-drafts.md)
+  Preview-only scene and routing plan drafts from classified stems.
+- [20-stems-audition.md](20-stems-audition.md)
+  Per-bus-group WAV audition pack rendering and manifest format.
 
 ## Conventions
 
