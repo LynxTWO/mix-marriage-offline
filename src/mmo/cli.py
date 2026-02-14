@@ -46,6 +46,7 @@ from mmo.core.role_lexicon import (
 )
 from mmo.core.roles import list_roles, load_roles, resolve_role
 from mmo.core.stems_classifier import classify_stems, classify_stems_with_evidence
+from mmo.core.stems_audition import render_audition_pack
 from mmo.core.stems_draft import build_draft_routing_plan, build_draft_scene
 from mmo.core.translation_profiles import (
     get_translation_profile,
@@ -6709,6 +6710,43 @@ def main(argv: list[str] | None = None) -> int:
         help="Allow overwriting existing output files.",
     )
 
+    stems_audition_parser = stems_subparsers.add_parser(
+        "audition",
+        help="Render per-bus-group audition WAV bounces from a stems_map.",
+    )
+    stems_audition_parser.add_argument(
+        "--stems-map",
+        required=True,
+        help="Path to stems_map.json.",
+    )
+    stems_audition_parser.add_argument(
+        "--stems-dir",
+        required=True,
+        help="Root directory where stem audio files live.",
+    )
+    stems_audition_parser.add_argument(
+        "--out-dir",
+        required=True,
+        help="Output directory (auditions written to <out-dir>/stems_auditions/).",
+    )
+    stems_audition_parser.add_argument(
+        "--segment",
+        type=float,
+        default=30.0,
+        help="Audition segment length in seconds (default: 30).",
+    )
+    stems_audition_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="json",
+        help="Output format (default: json).",
+    )
+    stems_audition_parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing audition outputs and manifest.",
+    )
+
     run_parser = subparsers.add_parser(
         "run",
         help=(
@@ -9319,6 +9357,90 @@ def main(argv: list[str] | None = None) -> int:
                     "These are preview-only drafts. "
                     "They are not auto-discovered by any workflow."
                 )
+
+            return 0
+
+        if args.stems_command == "audition":
+            out_dir = Path(args.out_dir)
+            audition_dir = out_dir / "stems_auditions"
+
+            if not getattr(args, "overwrite", False) and audition_dir.exists():
+                manifest_path = audition_dir / "manifest.json"
+                if manifest_path.exists():
+                    print(
+                        f"Audition directory already has manifest: "
+                        f"{manifest_path.as_posix()}",
+                        file=sys.stderr,
+                    )
+                    print("Use --overwrite to replace.", file=sys.stderr)
+                    return 1
+
+            try:
+                stems_map_payload = _load_stems_map(
+                    repo_root=repo_root,
+                    map_path=Path(args.stems_map),
+                )
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+
+            result = render_audition_pack(
+                stems_map_payload,
+                stems_dir=Path(args.stems_dir),
+                out_dir=out_dir,
+                segment_seconds=args.segment,
+            )
+
+            if not result.get("ok", False):
+                err_out = {
+                    "ok": False,
+                    "error_code": result.get("error_code", "UNKNOWN"),
+                    "missing_files_count": result.get("missing_files_count", 0),
+                    "groups_attempted_count": result.get(
+                        "groups_attempted_count", 0
+                    ),
+                }
+                print(json.dumps(err_out, indent=2, sort_keys=True))
+                return 1
+
+            fmt = getattr(args, "format", "json")
+            if fmt == "json":
+                summary: dict[str, Any] = {
+                    "ok": True,
+                    "out_dir": result.get("out_dir", ""),
+                    "manifest_path": result.get("manifest_path", ""),
+                    "rendered_groups_count": result.get(
+                        "rendered_groups_count", 0
+                    ),
+                    "attempted_groups_count": result.get(
+                        "attempted_groups_count", 0
+                    ),
+                    "missing_files_count": result.get("missing_files_count", 0),
+                    "skipped_mismatch_count": result.get(
+                        "skipped_mismatch_count", 0
+                    ),
+                }
+                print(json.dumps(summary, indent=2, sort_keys=True))
+            else:
+                print(
+                    f"Audition pack written to: {result.get('out_dir', '')}"
+                )
+                print(
+                    f"Manifest: {result.get('manifest_path', '')}"
+                )
+                print(
+                    f"Rendered: {result.get('rendered_groups_count', 0)} / "
+                    f"{result.get('attempted_groups_count', 0)} groups"
+                )
+                missing = result.get("missing_files_count", 0)
+                skipped = result.get("skipped_mismatch_count", 0)
+                if missing or skipped:
+                    print(
+                        f"Warnings: {missing} missing, "
+                        f"{skipped} skipped (see manifest)"
+                    )
 
             return 0
 

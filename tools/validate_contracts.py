@@ -64,6 +64,7 @@ SCHEMA_ANCHORS: tuple[str, ...] = (
     "schemas/stems_index.schema.json",
     "schemas/stems_map.schema.json",
     "schemas/stems_overrides.schema.json",
+    "schemas/stems_audition_manifest.schema.json",
 )
 
 SCENE_REGISTRIES_CHECK_ID = "SCENE.REGISTRIES"
