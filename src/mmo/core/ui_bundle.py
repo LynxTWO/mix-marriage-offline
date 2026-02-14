@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +10,7 @@ except ImportError:  # pragma: no cover - optional dependency
     jsonschema = None
 
 UI_BUNDLE_SCHEMA_VERSION = "0.1.0"
+_FALLBACK_GENERATED_AT = "2000-01-01T00:00:00Z"
 TOP_ISSUE_LIMIT = 5
 STEMS_ASSIGNMENTS_PREVIEW_LIMIT = 12
 _RISK_LEVELS = {"low", "medium", "high"}
@@ -22,10 +22,6 @@ _UNKNOWN_LOCK_DESCRIPTION = "Unknown lock ID; definition not found in the scene 
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def _numeric_value(value: Any) -> float | None:
@@ -1507,7 +1503,7 @@ def build_ui_bundle(
 
     payload: dict[str, Any] = {
         "schema_version": UI_BUNDLE_SCHEMA_VERSION,
-        "generated_at_utc": _utc_now_iso(),
+        "generated_at_utc": report.get("generated_at", _FALLBACK_GENERATED_AT),
         "report": report,
         "dashboard": dashboard,
         "gui_design": _gui_design_summary(gui_design_payload),

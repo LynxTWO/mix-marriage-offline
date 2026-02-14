@@ -1854,6 +1854,36 @@ class TestUiBundle(unittest.TestCase):
         validator.validate(bundle)
         self.assertNotIn("stems_auditions", bundle)
 
+    # -- generated_at_utc determinism ------------------------------------------
+
+    def test_generated_at_utc_derived_from_report(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        bundle = build_ui_bundle(report, None, help_registry_path=help_registry_path)
+        self.assertEqual(bundle["generated_at_utc"], report["generated_at"])
+
+    def test_generated_at_utc_fallback_when_missing(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        report = _sample_report()
+        del report["generated_at"]
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        bundle = build_ui_bundle(report, None, help_registry_path=help_registry_path)
+        self.assertEqual(bundle["generated_at_utc"], "2000-01-01T00:00:00Z")
+
+    def test_two_runs_produce_identical_json_bytes(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        bundle_a = build_ui_bundle(report, None, help_registry_path=help_registry_path)
+        bundle_b = build_ui_bundle(report, None, help_registry_path=help_registry_path)
+        bytes_a = json.dumps(bundle_a, indent=2, sort_keys=True).encode("utf-8")
+        bytes_b = json.dumps(bundle_b, indent=2, sort_keys=True).encode("utf-8")
+        self.assertEqual(bytes_a, bytes_b)
+
     # -- determinism + size sanity for new sections ----------------------------
 
     def test_bundle_new_sections_deterministic_key_ordering(self) -> None:
