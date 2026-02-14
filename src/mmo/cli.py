@@ -77,7 +77,7 @@ from mmo.core.scene_editor import (
     remove_lock as edit_scene_remove_lock,
     set_intent as edit_scene_set_intent,
 )
-from mmo.core.listen_pack import build_listen_pack
+from mmo.core.listen_pack import build_listen_pack, index_stems_auditions
 from mmo.core.project_file import (
     load_project,
     new_project,
@@ -3891,6 +3891,7 @@ def _run_variants_listen_pack_command(
     presets_dir: Path,
     variant_result_path: Path,
     out_path: Path,
+    stems_auditions_manifest: Path | None = None,
 ) -> int:
     try:
         variant_result = _load_json_object(variant_result_path, label="Variant result")
@@ -3904,6 +3905,11 @@ def _run_variants_listen_pack_command(
         return 1
     except SystemExit as exc:
         return int(exc.code) if isinstance(exc.code, int) else 1
+
+    if isinstance(stems_auditions_manifest, Path):
+        listen_pack["stems_auditions"] = index_stems_auditions(
+            stems_auditions_manifest,
+        )
 
     _write_json_file(out_path, listen_pack)
     return 0
@@ -7414,6 +7420,11 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="Path to output listen_pack JSON.",
     )
+    variants_listen_pack_parser.add_argument(
+        "--stems-auditions-manifest",
+        default=None,
+        help="Optional path to stems audition manifest.json to index.",
+    )
 
     deliverables_parser = subparsers.add_parser(
         "deliverables",
@@ -10134,11 +10145,15 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.command == "variants":
         if args.variants_command == "listen-pack":
+            stems_aud_manifest = getattr(args, "stems_auditions_manifest", None)
             return _run_variants_listen_pack_command(
                 repo_root=repo_root,
                 presets_dir=presets_dir,
                 variant_result_path=Path(args.variant_result),
                 out_path=Path(args.out),
+                stems_auditions_manifest=(
+                    Path(stems_aud_manifest) if stems_aud_manifest else None
+                ),
             )
         if args.variants_command != "run":
             print("Unknown variants command.", file=sys.stderr)

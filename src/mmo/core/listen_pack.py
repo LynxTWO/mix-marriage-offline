@@ -470,3 +470,97 @@ def build_listen_pack(variant_result: dict[str, Any], presets_dir: Path) -> dict
         "root_out_dir": _root_out_dir(raw_results),
         "entries": entries,
     }
+
+
+_STEMS_AUDITIONS_GROUPS_CAP = 50
+
+
+def index_stems_auditions(
+    manifest_path: Path,
+) -> dict[str, Any]:
+    """Build a stems_auditions summary block from an audition manifest.
+
+    Parameters
+    ----------
+    manifest_path : Path
+        Path to a ``stems_auditions/manifest.json`` produced by
+        ``render_audition_pack``.
+
+    Returns
+    -------
+    dict
+        A ``stems_auditions`` block suitable for merging into a listen-pack
+        payload.  Always includes ``present`` (bool).  If the manifest is
+        missing or invalid, ``present`` is ``False`` and a ``warning`` string
+        is included.
+    """
+    if not isinstance(manifest_path, Path) or not manifest_path.is_file():
+        return {
+            "present": False,
+            "warning": f"Manifest not found: {manifest_path}",
+        }
+
+    try:
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "present": False,
+            "warning": f"Manifest unreadable: {exc}",
+        }
+
+    if not isinstance(raw, dict):
+        return {
+            "present": False,
+            "warning": "Manifest is not a JSON object.",
+        }
+
+    manifest_posix = manifest_path.resolve().as_posix()
+
+    rendered_groups_count = raw.get("rendered_groups_count")
+    if not isinstance(rendered_groups_count, int):
+        rendered_groups_count = 0
+    attempted_groups_count = raw.get("attempted_groups_count")
+    if not isinstance(attempted_groups_count, int):
+        attempted_groups_count = 0
+
+    warnings_list = raw.get("warnings")
+    if not isinstance(warnings_list, list):
+        warnings_list = []
+    warnings_count = len(warnings_list)
+
+    missing_files_count = 0
+    raw_groups = raw.get("groups")
+    if not isinstance(raw_groups, list):
+        raw_groups = []
+
+    for g in raw_groups:
+        if isinstance(g, dict):
+            missing = g.get("stems_missing")
+            if isinstance(missing, list):
+                missing_files_count += len(missing)
+
+    groups_summary: list[dict[str, Any]] = []
+    sorted_groups = sorted(
+        (g for g in raw_groups if isinstance(g, dict)),
+        key=lambda g: _coerce_str(g.get("bus_group_id")),
+    )
+    for g in sorted_groups[:_STEMS_AUDITIONS_GROUPS_CAP]:
+        bus_group_id = _coerce_str(g.get("bus_group_id")).strip()
+        if not bus_group_id:
+            continue
+        output_wav = _coerce_str(g.get("output_wav")).strip()
+        entry: dict[str, Any] = {
+            "bus_group_id": bus_group_id,
+            "output_wav": output_wav if output_wav else None,
+        }
+        groups_summary.append(entry)
+
+    return {
+        "present": True,
+        "manifest_path": manifest_posix,
+        "rendered_groups_count": rendered_groups_count,
+        "attempted_groups_count": attempted_groups_count,
+        "missing_files_count": missing_files_count,
+        "warnings_count": warnings_count,
+        "groups": groups_summary,
+    }

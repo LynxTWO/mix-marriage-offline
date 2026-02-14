@@ -12,7 +12,8 @@
       "type": "array",
       "items": { "$ref": "#/$defs/listen_pack_entry" }
     },
-    "translation_auditions": { "$ref": "#/$defs/translation_auditions_summary" }
+    "translation_auditions": { "$ref": "#/$defs/translation_auditions_summary" },
+    "stems_auditions": { "$ref": "#/$defs/stems_auditions_summary" }
   },
   "$defs": {
     "posix_abs_path": {
@@ -97,6 +98,40 @@
             { "type": "null" }
           ]
         }
+      }
+    },
+    "stems_auditions_group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bus_group_id", "output_wav"],
+      "properties": {
+        "bus_group_id": { "type": "string", "minLength": 1 },
+        "output_wav": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "stems_auditions_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["present"],
+      "properties": {
+        "present": { "type": "boolean" },
+        "manifest_path": { "$ref": "#/$defs/posix_abs_path" },
+        "rendered_groups_count": { "type": "integer", "minimum": 0 },
+        "attempted_groups_count": { "type": "integer", "minimum": 0 },
+        "missing_files_count": { "type": "integer", "minimum": 0 },
+        "warnings_count": { "type": "integer", "minimum": 0 },
+        "groups": {
+          "type": "array",
+          "maxItems": 50,
+          "description": "Sorted lexicographically by bus_group_id.",
+          "items": { "$ref": "#/$defs/stems_auditions_group" }
+        },
+        "warning": { "type": "string", "minLength": 1 }
       }
     }
   }
