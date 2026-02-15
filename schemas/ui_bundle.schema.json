@@ -38,7 +38,8 @@
     "stems_summary": { "$ref": "#/$defs/stems_summary" },
     "pointers": { "$ref": "#/$defs/pointers" },
     "project_init": { "$ref": "#/$defs/project_init_pointers" },
-    "stems_auditions": { "$ref": "#/$defs/stems_auditions_pointers" }
+    "stems_auditions": { "$ref": "#/$defs/stems_auditions_pointers" },
+    "render": { "$ref": "#/$defs/render_artifacts" }
   },
   "$defs": {
     "posix_abs_path": {
@@ -702,6 +703,25 @@
         "out_dir": { "$ref": "#/$defs/posix_abs_path" },
         "rendered_groups_count": { "type": "integer", "minimum": 0 },
         "missing_files_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "render_artifact_pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "exists"],
+      "properties": {
+        "path": { "$ref": "#/$defs/posix_abs_path" },
+        "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+        "exists": { "type": "boolean" }
+      }
+    },
+    "render_artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "render_request": { "$ref": "#/$defs/render_artifact_pointer" },
+        "render_plan": { "$ref": "#/$defs/render_artifact_pointer" },
+        "render_report": { "$ref": "#/$defs/render_artifact_pointer" }
       }
     }
   }

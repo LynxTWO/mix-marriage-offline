@@ -1985,5 +1985,242 @@ class TestUiBundle(unittest.TestCase):
         self.assertNotIn("\\", bundle["stems_auditions"]["out_dir"])
 
 
+    # -- render artifacts block -------------------------------------------------
+
+    def test_build_ui_bundle_includes_render_block_when_paths_provided(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            render_request_path = temp_path / "render_request.json"
+            render_plan_path = temp_path / "render_plan.json"
+            render_report_path = temp_path / "render_report.json"
+
+            render_request_path.write_text(
+                json.dumps({"schema_version": "0.1.0"}, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            render_plan_path.write_text(
+                json.dumps(_sample_render_plan(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            render_report_path.write_text(
+                json.dumps({"schema_version": "0.1.0"}, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                render_request_path=render_request_path,
+                render_plan_artifact_path=render_plan_path,
+                render_report_path=render_report_path,
+            )
+
+        validator.validate(bundle)
+
+        render_block = bundle.get("render")
+        self.assertIsInstance(render_block, dict)
+        if not isinstance(render_block, dict):
+            return
+
+        for key in ("render_request", "render_plan", "render_report"):
+            entry = render_block.get(key)
+            self.assertIsInstance(entry, dict, msg=f"Missing or invalid: render.{key}")
+            if not isinstance(entry, dict):
+                continue
+            self.assertTrue(entry["exists"], msg=f"render.{key}.exists should be True")
+            self.assertIsInstance(entry["sha256"], str)
+            self.assertEqual(len(entry["sha256"]), 64)
+            self.assertNotIn("\\", entry["path"])
+
+    def test_build_ui_bundle_render_block_missing_files(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            missing_request = temp_path / "missing_render_request.json"
+            missing_report = temp_path / "missing_render_report.json"
+
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                render_request_path=missing_request,
+                render_report_path=missing_report,
+            )
+
+        validator.validate(bundle)
+
+        render_block = bundle.get("render")
+        self.assertIsInstance(render_block, dict)
+        if not isinstance(render_block, dict):
+            return
+
+        for key in ("render_request", "render_report"):
+            entry = render_block.get(key)
+            self.assertIsInstance(entry, dict, msg=f"Missing render.{key}")
+            if not isinstance(entry, dict):
+                continue
+            self.assertFalse(entry["exists"])
+            self.assertIsNone(entry["sha256"])
+            self.assertNotIn("\\", entry["path"])
+
+        self.assertNotIn("render_plan", render_block)
+
+    def test_build_ui_bundle_omits_render_block_when_no_paths(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        bundle = build_ui_bundle(
+            report,
+            None,
+            help_registry_path=help_registry_path,
+        )
+        validator.validate(bundle)
+        self.assertNotIn("render", bundle)
+
+    def test_build_ui_bundle_render_block_determinism(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            render_request_path = temp_path / "render_request.json"
+            render_request_path.write_text(
+                json.dumps({"schema_version": "0.1.0"}, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            missing_report = temp_path / "no_such_render_report.json"
+
+            bundle_a = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                render_request_path=render_request_path,
+                render_report_path=missing_report,
+            )
+            bundle_b = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                render_request_path=render_request_path,
+                render_report_path=missing_report,
+            )
+
+        bytes_a = json.dumps(bundle_a, indent=2, sort_keys=True).encode("utf-8")
+        bytes_b = json.dumps(bundle_b, indent=2, sort_keys=True).encode("utf-8")
+        self.assertEqual(bytes_a, bytes_b)
+
+    def test_build_ui_bundle_render_block_path_hygiene(self) -> None:
+        """Backslash paths are normalized to forward slashes."""
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            render_request_path = temp_path / "render_request.json"
+            render_request_path.write_text(
+                json.dumps({"schema_version": "0.1.0"}, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                render_request_path=render_request_path,
+            )
+
+        validator.validate(bundle)
+        render_block = bundle.get("render")
+        self.assertIsInstance(render_block, dict)
+        if not isinstance(render_block, dict):
+            return
+        entry = render_block.get("render_request")
+        self.assertIsInstance(entry, dict)
+        if isinstance(entry, dict):
+            self.assertNotIn("\\", entry["path"])
+
+    def test_cli_bundle_with_render_artifacts(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            report_path = temp_path / "report.json"
+            render_request_path = temp_path / "render_request.json"
+            render_plan_path = temp_path / "render_plan.json"
+            render_report_path = temp_path / "render_report.json"
+            out_bundle_path = temp_path / "ui_bundle.json"
+
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            render_request_path.write_text(
+                json.dumps({"schema_version": "0.1.0"}, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            render_plan_path.write_text(
+                json.dumps(_sample_render_plan(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            render_report_path.write_text(
+                json.dumps({"schema_version": "0.1.0"}, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            exit_code = main(
+                [
+                    "bundle",
+                    "--report",
+                    str(report_path),
+                    "--render-request",
+                    str(render_request_path),
+                    "--render-plan",
+                    str(render_plan_path),
+                    "--render-report",
+                    str(render_report_path),
+                    "--out",
+                    str(out_bundle_path),
+                ]
+            )
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(out_bundle_path.exists())
+
+            bundle = json.loads(out_bundle_path.read_text(encoding="utf-8"))
+            validator.validate(bundle)
+
+            render_block = bundle.get("render")
+            self.assertIsInstance(render_block, dict)
+            if not isinstance(render_block, dict):
+                return
+
+            for key in ("render_request", "render_plan", "render_report"):
+                entry = render_block.get(key)
+                self.assertIsInstance(entry, dict, msg=f"Missing: render.{key}")
+                if isinstance(entry, dict):
+                    self.assertTrue(entry["exists"])
+                    self.assertIsInstance(entry["sha256"], str)
+                    self.assertNotIn("\\", entry["path"])
+
+            # render_plan_summary should also be present (from the same --render-plan)
+            self.assertIn("render_plan_summary", bundle)
+
+
 if __name__ == "__main__":
     unittest.main()

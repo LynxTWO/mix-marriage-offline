@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,49 @@ def _coerce_str(value: Any) -> str:
 
 def _path_to_posix(path: Path) -> str:
     return path.resolve().as_posix()
+
+
+def _sha256_of_file(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with open(path, "rb") as fh:
+        while True:
+            chunk = fh.read(65536)
+            if not chunk:
+                break
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def _render_artifact_pointer(path: Path) -> dict[str, Any]:
+    posix_path = _path_to_posix(path)
+    resolved = path.resolve()
+    if resolved.exists() and resolved.is_file():
+        return {
+            "path": posix_path,
+            "sha256": _sha256_of_file(resolved),
+            "exists": True,
+        }
+    return {
+        "path": posix_path,
+        "sha256": None,
+        "exists": False,
+    }
+
+
+def _render_artifacts_block(
+    *,
+    render_request_path: Path | None,
+    render_plan_artifact_path: Path | None,
+    render_report_path: Path | None,
+) -> dict[str, Any] | None:
+    block: dict[str, Any] = {}
+    if render_request_path is not None:
+        block["render_request"] = _render_artifact_pointer(render_request_path)
+    if render_plan_artifact_path is not None:
+        block["render_plan"] = _render_artifact_pointer(render_plan_artifact_path)
+    if render_report_path is not None:
+        block["render_report"] = _render_artifact_pointer(render_report_path)
+    return block if block else None
 
 
 def _iter_dict_list(value: Any) -> list[dict[str, Any]]:
@@ -1464,6 +1508,9 @@ def build_ui_bundle(
     gui_state_path: Path | None = None,
     project_init: dict[str, Any] | None = None,
     stems_auditions: dict[str, Any] | None = None,
+    render_request_path: Path | None = None,
+    render_plan_artifact_path: Path | None = None,
+    render_report_path: Path | None = None,
 ) -> dict[str, Any]:
     from mmo.core.gui_design import load_gui_design  # noqa: WPS433
     from mmo.core.help_registry import load_help_registry, resolve_help_entries  # noqa: WPS433
@@ -1596,6 +1643,14 @@ def build_ui_bundle(
         payload["project_init"] = project_init
     if stems_auditions is not None:
         payload["stems_auditions"] = stems_auditions
+
+    render_block = _render_artifacts_block(
+        render_request_path=render_request_path,
+        render_plan_artifact_path=render_plan_artifact_path,
+        render_report_path=render_report_path,
+    )
+    if render_block is not None:
+        payload["render"] = render_block
 
     pointers = _bundle_pointers(
         project_path=project_path,

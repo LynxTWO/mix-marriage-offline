@@ -346,6 +346,8 @@ def _run_bundle(
     timeline_path: Path | None,
     gui_state_path: Path | None = None,
     ui_locale: str | None = None,
+    render_request_path: Path | None = None,
+    render_report_path: Path | None = None,
 ) -> int:
     from mmo.core.ui_bundle import build_ui_bundle  # noqa: WPS433
 
@@ -377,6 +379,9 @@ def _run_bundle(
         stems_map_path=stems_map_path,
         timeline_path=timeline_path,
         gui_state_path=gui_state_path,
+        render_request_path=render_request_path,
+        render_plan_artifact_path=render_plan_path,
+        render_report_path=render_report_path,
     )
     _validate_json_payload(
         bundle,

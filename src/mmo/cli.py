@@ -973,6 +973,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to gui_state JSON for GUI pointer metadata.",
     )
     bundle_parser.add_argument(
+        "--render-request",
+        default=None,
+        help="Optional path to render_request JSON artifact.",
+    )
+    bundle_parser.add_argument(
+        "--render-report",
+        default=None,
+        help="Optional path to render_report JSON artifact.",
+    )
+    bundle_parser.add_argument(
         "--ui-locale",
         default=None,
         help="Optional UI copy locale (default: registry default_locale).",
@@ -4197,6 +4207,12 @@ def main(argv: list[str] | None = None) -> int:
                 timeline_path=None,
                 gui_state_path=Path(args.gui_state) if args.gui_state else None,
                 ui_locale=args.ui_locale,
+                render_request_path=(
+                    Path(args.render_request) if getattr(args, "render_request", None) else None
+                ),
+                render_report_path=(
+                    Path(args.render_report) if getattr(args, "render_report", None) else None
+                ),
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
