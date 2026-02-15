@@ -19,4 +19,9 @@ local_media/
 /corpus/
 *.corpus.jsonl
 *.corpus.stats.json
-.claude/
+# Claude Code workspace files (ignore by default)
+.claude/*
+
+# But keep agent definitions in git
+!.claude/agents/
+!.claude/agents/**

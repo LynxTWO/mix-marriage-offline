@@ -1,5 +1,13 @@
 # Repository Guidelines
 
+## Cross-platform rule (Linux, Windows, macOS)
+
+All changes must remain install-safe and cross-platform:
+- No repo-root assumptions for data or tool execution.
+- Use `mmo.resources` + packaged data for schemas/ontology/presets.
+- Avoid OS-specific paths and shell behaviors.
+- Tests must pass on Windows/macOS/Linux in CI.
+
 ## Project Structure & Module Organization
 - `docs/` contains design and contributor documentation (architecture, ontology, fixtures, validation rules).
 - `ontology/` is the YAML source of truth for canonical IDs and vocabularies.

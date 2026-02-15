@@ -10,6 +10,26 @@ Primary goals:
 - Bounded authority (no “surprise” destructive actions).
 - Offline-first (no network assumptions in core flows).
 
+## Cross-platform + distributable install contract (Linux, Windows, macOS)
+
+MMO must run correctly in these two modes:
+1) Repo checkout (dev): running from the git workspace.
+2) Installed package (users): running from a wheel/sdist install where repo-root folders are not available.
+
+Rules:
+- Never assume a repo-root path for loading schemas/ontology/presets/tools.
+  Use a single resolver (e.g., `mmo.resources`) and packaged data via `importlib.resources`, with env overrides.
+- No OS-specific path assumptions:
+  - Use `pathlib` for filesystem paths.
+  - Do not hardcode `/`-absolute paths, drive letters, or shell-specific locations.
+  - Tests must not assert raw path separators.
+- Do not shell out to repo scripts by filesystem path.
+  Prefer `python -m mmo.tools.<module>` for internal tools and keep CLIs install-safe.
+- External dependencies (FFmpeg, etc.) are optional unless explicitly required by a feature.
+  Detect capabilities, gate features, and emit clear “how to enable” messages.
+- CI must test a matrix: ubuntu-latest, windows-latest, macos-latest, and the supported Python range.
+- Encoding: always read/write text as UTF-8 unless a file format requires otherwise.
+
 ## Repo map (high level)
 - `src/mmo/core/` deterministic core logic (planners, registries, classifiers, reports).
 - `src/mmo/cli.py` CLI entrypoints; outputs must be stable (ordering, formatting).
