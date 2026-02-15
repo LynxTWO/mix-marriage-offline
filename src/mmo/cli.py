@@ -2032,6 +2032,20 @@ def main(argv: list[str] | None = None) -> int:
         help="Output format (default: json).",
     )
 
+    project_validate_parser = project_subparsers.add_parser(
+        "validate",
+        help="Validate project scaffold files against their schemas.",
+    )
+    project_validate_parser.add_argument(
+        "project_dir",
+        help="Path to the project scaffold directory.",
+    )
+    project_validate_parser.add_argument(
+        "--out",
+        default=None,
+        help="Optional path to write validation result JSON.",
+    )
+
     downmix_parser = subparsers.add_parser("downmix", help="Downmix policy tools.")
     downmix_subparsers = downmix_parser.add_subparsers(dest="downmix_command", required=True)
     downmix_show_parser = downmix_subparsers.add_parser(
@@ -3738,6 +3752,13 @@ def main(argv: list[str] | None = None) -> int:
                     print("stems_overrides.yaml preserved (use --force to overwrite).")
 
             return 0
+
+        if args.project_command == "validate":
+            return _run_project_validate(
+                project_dir=Path(args.project_dir),
+                out_path=Path(args.out) if args.out else None,
+                repo_root=repo_root,
+            )
 
         print("Unknown project command.", file=sys.stderr)
         return 2

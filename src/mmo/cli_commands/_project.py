@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +12,155 @@ __all__ = [
     "_project_last_run_payload",
     "_project_run_config_defaults",
     "_render_project_text",
+    "_run_project_validate",
 ]
+
+
+# ── project validate ─────────────────────────────────────────────
+
+# (rel_path, schema_basename | None for YAML, required)
+_VALIDATE_CHECKS: list[tuple[str, str | None, bool]] = [
+    ("drafts/routing_plan.draft.json", "routing_plan.schema.json", True),
+    ("drafts/scene.draft.json", "scene.schema.json", True),
+    ("report.json", "report.schema.json", False),
+    ("stems/stems_index.json", "stems_index.schema.json", True),
+    ("stems/stems_map.json", "stems_map.schema.json", True),
+    ("stems/stems_overrides.yaml", "stems_overrides.schema.json", True),
+    ("stems_auditions/manifest.json", "stems_audition_manifest.schema.json", False),
+    ("ui_bundle.json", "ui_bundle.schema.json", False),
+]
+
+
+def _validate_one_check(
+    project_dir: Path,
+    schemas_dir: Path,
+    rel_path: str,
+    schema_basename: str | None,
+    required: bool,
+) -> dict[str, Any]:
+    """Validate a single project artifact. Returns a check dict."""
+    file_path = project_dir / rel_path
+    entry: dict[str, Any] = {"file": rel_path, "required": required}
+
+    if not file_path.is_file():
+        entry["status"] = "missing"
+        return entry
+
+    # YAML files: validate by loading through the typed loader.
+    if rel_path.endswith(".yaml"):
+        try:
+            from mmo.core.stems_overrides import load_stems_overrides
+            load_stems_overrides(file_path)
+        except (ValueError, RuntimeError) as exc:
+            entry["status"] = "invalid"
+            entry["errors"] = [str(exc)]
+            return entry
+        entry["status"] = "valid"
+        return entry
+
+    # JSON files: load + schema-validate.
+    try:
+        data = json.loads(file_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        entry["status"] = "invalid"
+        entry["errors"] = [f"JSON parse error: {exc}"]
+        return entry
+
+    if not isinstance(data, dict):
+        entry["status"] = "invalid"
+        entry["errors"] = ["JSON root must be an object."]
+        return entry
+
+    if schema_basename is None:
+        entry["status"] = "valid"
+        return entry
+
+    try:
+        import jsonschema
+    except ImportError:
+        entry["status"] = "valid"
+        return entry
+
+    schema_path = schemas_dir / schema_basename
+    if not schema_path.is_file():
+        entry["status"] = "valid"
+        return entry
+
+    try:
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        entry["status"] = "valid"
+        return entry
+
+    try:
+        from mmo.cli_commands._helpers import _build_schema_registry
+        registry = _build_schema_registry(schemas_dir)
+    except (ValueError, RuntimeError):
+        registry = None
+
+    validator_kwargs: dict[str, Any] = {"schema": schema}
+    if registry is not None:
+        validator_kwargs["registry"] = registry
+    validator = jsonschema.Draft202012Validator(**validator_kwargs)
+    errors = sorted(validator.iter_errors(data), key=lambda e: list(e.path))
+    if errors:
+        entry["status"] = "invalid"
+        entry["errors"] = [
+            f"{'.'.join(str(p) for p in err.path) or '$'}: {err.message}"
+            for err in errors
+        ]
+        return entry
+
+    entry["status"] = "valid"
+    return entry
+
+
+def _run_project_validate(
+    *,
+    project_dir: Path,
+    out_path: Path | None,
+    repo_root: Path,
+) -> int:
+    """Run project validate and print/write the result. Returns exit code."""
+    schemas_dir = repo_root / "schemas"
+    checks: list[dict[str, Any]] = []
+
+    for rel_path, schema_basename, required in _VALIDATE_CHECKS:
+        check = _validate_one_check(
+            project_dir, schemas_dir, rel_path, schema_basename, required,
+        )
+        checks.append(check)
+
+    valid_count = sum(1 for c in checks if c["status"] == "valid")
+    missing_count = sum(1 for c in checks if c["status"] == "missing")
+    invalid_count = sum(1 for c in checks if c["status"] == "invalid")
+
+    # ok = no invalid AND no missing-required
+    has_missing_required = any(
+        c["status"] == "missing" and c["required"] for c in checks
+    )
+    ok = invalid_count == 0 and not has_missing_required
+
+    result: dict[str, Any] = {
+        "ok": ok,
+        "project_dir": project_dir.resolve().as_posix(),
+        "checks": checks,
+        "summary": {
+            "total": len(checks),
+            "valid": valid_count,
+            "missing": missing_count,
+            "invalid": invalid_count,
+        },
+    }
+
+    output_text = json.dumps(result, indent=2, sort_keys=True) + "\n"
+    sys.stdout.write(output_text)
+
+    if out_path is not None:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(output_text, encoding="utf-8")
+
+    return 0 if ok else 2
 
 
 def _project_last_run_payload(*, mode: str, out_dir: Path) -> dict[str, Any]:
