@@ -2750,6 +2750,44 @@ def main(argv: list[str] | None = None) -> int:
         help="Overwrite output file if it already exists.",
     )
 
+    render_run_parser = subparsers.add_parser(
+        "render-run",
+        help=(
+            "Build a render plan from a render_request + scene, "
+            "then build a render report (dry_run) in one pass."
+        ),
+    )
+    render_run_parser.add_argument(
+        "--request",
+        required=True,
+        help="Path to render_request JSON.",
+    )
+    render_run_parser.add_argument(
+        "--scene",
+        required=True,
+        help="Path to scene JSON.",
+    )
+    render_run_parser.add_argument(
+        "--routing-plan",
+        default=None,
+        help="Optional path to routing_plan JSON.",
+    )
+    render_run_parser.add_argument(
+        "--plan-out",
+        required=True,
+        help="Path to output render_plan JSON.",
+    )
+    render_run_parser.add_argument(
+        "--report-out",
+        required=True,
+        help="Path to output render_report JSON.",
+    )
+    render_run_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite output files if they already exist.",
+    )
+
     timeline_parser = subparsers.add_parser("timeline", help="Timeline marker tools.")
     timeline_subparsers = timeline_parser.add_subparsers(
         dest="timeline_command",
@@ -5234,6 +5272,24 @@ def main(argv: list[str] | None = None) -> int:
             )
             _write_json_file(out_path, report_payload)
             return 0
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+    if args.command == "render-run":
+        try:
+            return _run_render_run_command(
+                repo_root=repo_root,
+                request_path=Path(args.request),
+                scene_path=Path(args.scene),
+                routing_plan_path=(
+                    Path(args.routing_plan) if args.routing_plan else None
+                ),
+                plan_out_path=Path(args.plan_out),
+                report_out_path=Path(args.report_out),
+                force=bool(getattr(args, "force", False)),
+            )
         except (RuntimeError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 1
