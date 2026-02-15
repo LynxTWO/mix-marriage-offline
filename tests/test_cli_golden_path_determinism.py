@@ -12,6 +12,7 @@ import contextlib
 import hashlib
 import io
 import json
+import os
 import unittest
 import wave
 from pathlib import Path
@@ -20,7 +21,9 @@ from mmo.cli import main
 from mmo.core.listen_pack import index_stems_auditions
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_SANDBOX = _REPO_ROOT / "sandbox_tmp" / "test_cli_golden_path_determinism"
+_SANDBOX = (
+    _REPO_ROOT / "sandbox_tmp" / "test_cli_golden_path_determinism" / str(os.getpid())
+)
 
 # Short segment keeps audition WAVs small and fast.
 _AUDITION_SEGMENT = "1.0"
