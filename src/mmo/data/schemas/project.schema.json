@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/project.schema.json",
+  "title": "MMO Project File",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "project_id",
+    "created_at_utc",
+    "updated_at_utc",
+    "stems_dir"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "project_id": { "type": "string", "minLength": 1 },
+    "created_at_utc": { "type": "string", "format": "date-time" },
+    "updated_at_utc": { "type": "string", "format": "date-time" },
+    "stems_dir": { "$ref": "#/$defs/posix_abs_path" },
+    "timeline_path": { "$ref": "#/$defs/posix_abs_path" },
+    "lockfile_path": { "$ref": "#/$defs/posix_abs_path" },
+    "lock_hash": { "type": "string", "minLength": 1 },
+    "last_run": { "$ref": "#/$defs/last_run" },
+    "run_config_defaults": { "$ref": "run_config.schema.json" },
+    "notes": { "type": "string" }
+  },
+  "$defs": {
+    "posix_abs_path": {
+      "type": "string",
+      "pattern": "^(?:[A-Za-z]:/|/).+"
+    },
+    "last_run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "out_dir"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["single", "variants"]
+        },
+        "out_dir": { "$ref": "#/$defs/posix_abs_path" },
+        "deliverables_index_path": { "$ref": "#/$defs/posix_abs_path" },
+        "listen_pack_path": { "$ref": "#/$defs/posix_abs_path" },
+        "variant_plan_path": { "$ref": "#/$defs/posix_abs_path" },
+        "variant_result_path": { "$ref": "#/$defs/posix_abs_path" }
+      }
+    }
+  }
+}

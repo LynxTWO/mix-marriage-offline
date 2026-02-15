@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/stems_overrides.schema.json",
+  "title": "MMO Stems Overrides",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "overrides"],
+  "properties": {
+    "version": {
+      "const": "0.1.0"
+    },
+    "overrides": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/override_entry"
+      }
+    }
+  },
+  "$defs": {
+    "posix_rel_path": {
+      "type": "string",
+      "pattern": "^[^\\\\]+$",
+      "minLength": 1
+    },
+    "override_match": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rel_path"],
+          "properties": {
+            "rel_path": {
+              "$ref": "#/$defs/posix_rel_path"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["regex"],
+          "properties": {
+            "regex": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "override_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["override_id", "match", "role_id"],
+      "properties": {
+        "override_id": {
+          "type": "string",
+          "pattern": "^[A-Z0-9_.-]+$",
+          "minLength": 1
+        },
+        "match": {
+          "$ref": "#/$defs/override_match"
+        },
+        "role_id": {
+          "type": "string",
+          "pattern": "^ROLE\\.[A-Z0-9_.]+$"
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,133 @@
+# MMO Ontology Manifest
+# Source of truth for canonical IDs and where each category lives.
+# The loader should treat this file as the entrypoint.
+
+manifest_version: "1.0"
+
+ontology:
+  id: "MMO.ONTOLOGY"
+  name: "Mix Marriage Offline Ontology"
+  ontology_version: "0.1.0"
+  semver_policy:
+    major: "breaking changes only; avoid when possible (prefer deprecations)"
+    minor: "additive IDs/fields only (backward compatible)"
+    patch: "typos/metadata improvements only (no ID behavior changes)"
+  description: >
+    Canonical vocabulary for MMO: roles, features, issues, actions, params, units,
+    evidence keys, and surround scaffolding (speakers/layouts/downmix policies).
+  license: "TBD"
+  repository: "TBD"
+  created_utc: "2026-01-29T00:00:00Z"
+
+id_conventions:
+  format: "UPPERCASE.DOT.SEPARATED"
+  examples:
+    - "ROLE.DRUM.KICK"
+    - "FEATURE.LOUDNESS.LUFS_I"
+    - "ISSUE.SPECTRAL.HARSHNESS"
+    - "ACTION.EQ.BELL_CUT"
+    - "PARAM.EQ.FREQ_HZ"
+    - "UNIT.DBTP"
+    - "SPK.TFR"
+    - "LAYOUT.7_1_4"
+  rules:
+    - "IDs are stable once released. Never rename or remove IDs silently."
+    - "Prefer specificity over vague terms (e.g., HARSHNESS vs BRIGHT)."
+    - "Human-facing text (label/description) may evolve without breaking compatibility."
+    - "Deprecated IDs remain loadable for at least one major cycle."
+  deprecation:
+    field: "deprecated"
+    replacement_field: "replaced_by"
+
+# Includes are explicit to support deterministic loading and predictable review diffs.
+# Files may be absent early in the repo, but the manifest defines the intended map.
+includes:
+  core:
+    units: "units.yaml"
+    roles: "roles.yaml"
+    features: "features.yaml"
+    issues: "issues.yaml"
+    actions: "actions.yaml"
+    params: "params.yaml"
+    evidence: "evidence.yaml"
+    reasons: "reasons.yaml"
+
+  surround:
+    speakers: "speakers.yaml"
+    layouts: "layouts.yaml"
+
+  policies:
+    gates: "policies/gates.yaml"
+    authority_profiles: "policies/authority_profiles.yaml"
+    downmix: "policies/downmix.yaml"
+    # Optional future expansion (kept here so the loader can discover policy packs):
+    downmix_packs_dir: "policies/downmix_policies/"
+
+# Loader hints: how to validate file structure once loaded.
+# These are “soft contracts” so we can keep YAML readable while still strict in code.
+category_specs:
+  - category: "units"
+    root_key: "units"
+    id_prefix: "UNIT."
+    file_key: "includes.core.units"
+  - category: "roles"
+    root_key: "roles"
+    id_prefix: "ROLE."
+    file_key: "includes.core.roles"
+  - category: "features"
+    root_key: "features"
+    id_prefix: "FEATURE."
+    file_key: "includes.core.features"
+  - category: "issues"
+    root_key: "issues"
+    id_prefix: "ISSUE."
+    file_key: "includes.core.issues"
+  - category: "actions"
+    root_key: "actions"
+    id_prefix: "ACTION."
+    file_key: "includes.core.actions"
+  - category: "params"
+    root_key: "params"
+    id_prefix: "PARAM."
+    file_key: "includes.core.params"
+  - category: "evidence"
+    root_key: "evidence"
+    id_prefix: "EVID."
+    file_key: "includes.core.evidence"
+
+  - category: "reasons"
+    root_key: "reasons"
+    id_prefix: "REASON."
+    file_key: "includes.core.reasons"
+  - category: "speakers"
+    root_key: "speakers"
+    id_prefix: "SPK."
+    file_key: "includes.surround.speakers"
+  - category: "layouts"
+    root_key: "layouts"
+    id_prefix: "LAYOUT."
+    file_key: "includes.surround.layouts"
+
+validation_defaults:
+  required_entry_fields:
+    # Units are allowed to omit description if needed, but label is still recommended.
+    units: ["label", "symbol"]
+    roles: ["label", "description"]
+    features: ["label", "description", "unit_id"]
+    issues: ["label", "description"]
+    actions: ["label", "description", "required_params"]
+    params: ["label", "description", "unit_id", "value_type"]
+    evidence: ["label", "description", "value_type"]
+    reasons: ["label", "description", "kind"]
+
+  allowed_value_types:
+    - "number"
+    - "integer"
+    - "boolean"
+    - "string"
+    - "array"
+    - "object"
+
+notes:
+  - "This manifest is intentionally conservative and deterministic."
+  - "Policy YAML files are swappable; ontology IDs remain stable."

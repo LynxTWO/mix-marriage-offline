@@ -1,0 +1,454 @@
+# Canonical Features
+# FEATURE.* IDs are measured, deterministic values produced by the core “truth layer.”
+# Detectors consume features to emit ISSUE.* with EVID.* evidence.
+#
+# Conventions:
+# - Every feature declares unit_id (UNIT.*) and value_type.
+# - “dimensions” describes *how* a feature is indexed (per band, per time window, per channel group, etc.).
+# - String/object features still declare unit_id as UNIT.NONE.
+
+features:
+  _meta:
+    features_version: "0.1.0"
+    id_prefix: "FEATURE."
+    value_types: ["number", "integer", "boolean", "string", "array", "object"]
+    scope_types: ["stem", "bus", "session"]
+    dimension_keys:
+      - "time_window"     # object { start_s, end_s }
+      - "freq_band"       # object { low_hz, high_hz }
+      - "channel_ref"     # object { layout_id, speaker_id, channel_index }
+      - "channel_group"   # string enum defined below
+      - "profile_id"      # string (translation/downmix profile)
+    surround_channel_groups:
+      enum:
+        - "front"
+        - "center"
+        - "surround"
+        - "rear"
+        - "height"
+        - "lfe"
+        - "bed"
+        - "objects"
+    notes:
+      - "Metadata-like measurements are included as features for uniform reporting and plugin consumption."
+      - "Downmix/translation features are produced by simulation policies, then re-metered like any render."
+
+  # -------------------------
+  # Session / Stem Metadata as Features
+  # -------------------------
+  FEATURE.META.SAMPLE_RATE_HZ:
+    label: "Sample rate"
+    description: "Decoded sample rate."
+    unit_id: "UNIT.HZ"
+    value_type: "number"
+    scopes: ["stem", "session"]
+
+  FEATURE.META.BIT_DEPTH:
+    label: "Bit depth"
+    description: "Decoded PCM bit depth (or effective bit depth if converted)."
+    unit_id: "UNIT.BIT"
+    value_type: "integer"
+    scopes: ["stem", "session"]
+
+  FEATURE.META.CHANNEL_COUNT:
+    label: "Channel count"
+    description: "Number of channels in the decoded stream."
+    unit_id: "UNIT.COUNT"
+    value_type: "integer"
+    scopes: ["stem", "session"]
+
+  FEATURE.META.DURATION_S:
+    label: "Duration"
+    description: "Total decoded duration."
+    unit_id: "UNIT.S"
+    value_type: "number"
+    scopes: ["stem", "session"]
+
+  FEATURE.META.TEMPO_BPM:
+    label: "Tempo estimate"
+    description: "Estimated tempo for tempo-aware analysis (if available)."
+    unit_id: "UNIT.BPM"
+    value_type: "number"
+    scopes: ["session"]
+
+  FEATURE.META.LAYOUT_ID:
+    label: "Layout id"
+    description: "Declared or inferred channel layout id (LAYOUT.*)."
+    unit_id: "UNIT.NONE"
+    value_type: "string"
+    scopes: ["stem", "bus", "session"]
+    constraints:
+      pattern: "^LAYOUT\\."
+
+  # -------------------------
+  # Loudness (BS.1770-style meters)
+  # -------------------------
+  FEATURE.LOUDNESS.LUFS_I:
+    label: "Integrated loudness"
+    description: "Integrated loudness over program duration."
+    unit_id: "UNIT.LUFS"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+
+  FEATURE.LOUDNESS.LUFS_S:
+    label: "Short-term loudness"
+    description: "Short-term loudness over a moving time window."
+    unit_id: "UNIT.LUFS"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+
+  FEATURE.LOUDNESS.LUFS_M:
+    label: "Momentary loudness"
+    description: "Momentary loudness over a shorter moving time window."
+    unit_id: "UNIT.LUFS"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+
+  FEATURE.LOUDNESS.LRA_LU:
+    label: "Loudness range"
+    description: "Loudness Range (LRA)."
+    unit_id: "UNIT.LU"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+
+  # -------------------------
+  # Level / Peak / Headroom
+  # -------------------------
+  FEATURE.LEVEL.PEAK_DBFS:
+    label: "Sample peak"
+    description: "Highest sample peak level."
+    unit_id: "UNIT.DBFS"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+
+  FEATURE.LEVEL.TRUEPEAK_DBTP:
+    label: "True peak"
+    description: "True-peak level (intersample-aware)."
+    unit_id: "UNIT.DBTP"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+
+  FEATURE.LEVEL.RMS_DBFS:
+    label: "RMS level"
+    description: "Root-mean-square level (windowed or aggregate)."
+    unit_id: "UNIT.DBFS"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+
+  FEATURE.LEVEL.HEADROOM_DB:
+    label: "Headroom"
+    description: "Headroom to 0 dBFS based on peak (0 - peak)."
+    unit_id: "UNIT.DB"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+
+  # -------------------------
+  # Dynamics (shape, not taste)
+  # -------------------------
+  FEATURE.DYNAMICS.CREST_FACTOR_DB:
+    label: "Crest factor"
+    description: "Peak minus RMS (peak - RMS). Higher values indicate spikier transients."
+    unit_id: "UNIT.DB"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+
+  FEATURE.DYNAMICS.PEAK_TO_LUFS_I_DB:
+    label: "Peak to integrated loudness"
+    description: "True peak relative to integrated loudness (TP - LUFS_I)."
+    unit_id: "UNIT.DB"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+
+  # -------------------------
+  # Quality / Safety Signals
+  # -------------------------
+  FEATURE.QUALITY.CLIPPED_SAMPLES_COUNT:
+    label: "Clipped samples count"
+    description: "Number of samples detected at or beyond clip threshold."
+    unit_id: "UNIT.COUNT"
+    value_type: "integer"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+
+  FEATURE.QUALITY.CLIP_EVENTS_COUNT:
+    label: "Clip events count"
+    description: "Number of contiguous clipping regions/events."
+    unit_id: "UNIT.COUNT"
+    value_type: "integer"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+
+  FEATURE.QUALITY.DC_OFFSET_PERCENT:
+    label: "DC offset estimate"
+    description: "Estimated DC offset as percent of full scale."
+    unit_id: "UNIT.PERCENT"
+    value_type: "number"
+    scopes: ["stem", "bus"]
+
+  FEATURE.QUALITY.NOISE_FLOOR_DBFS:
+    label: "Noise floor estimate"
+    description: "Estimated noise floor during low-energy sections."
+    unit_id: "UNIT.DBFS"
+    value_type: "number"
+    scopes: ["stem", "bus"]
+    dimensions: ["time_window"]
+
+  # -------------------------
+  # Spectral Descriptors
+  # -------------------------
+  FEATURE.SPECTRAL.CENTROID_HZ:
+    label: "Spectral centroid"
+    description: "Center of mass of the spectrum."
+    unit_id: "UNIT.HZ"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+
+  FEATURE.SPECTRAL.ROLLOFF_HZ:
+    label: "Spectral rolloff"
+    description: "Frequency below which a set percentage of energy is contained."
+    unit_id: "UNIT.HZ"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+
+  FEATURE.SPECTRAL.BAND_ENERGY_DB:
+    label: "Band energy"
+    description: "Energy level in a specific frequency band."
+    unit_id: "UNIT.DB"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["freq_band", "time_window"]
+
+  FEATURE.SPECTRAL.BAND_ENERGY_RATIO:
+    label: "Band energy ratio"
+    description: "Ratio of energy in a band to broadband energy."
+    unit_id: "UNIT.RATIO"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["freq_band", "time_window"]
+    constraints:
+      min: 0
+
+  FEATURE.SPECTRAL.SPECTRAL_TILT_DB_PER_OCT:
+    label: "Spectral tilt"
+    description: "Estimated spectral tilt (broad slope) in dB per octave."
+    unit_id: "UNIT.DB_PER_OCT"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+
+  FEATURE.SPECTRAL.SUB_ENERGY_RATIO:
+    label: "Sub energy ratio"
+    description: "Energy ratio in sub band (commonly 20–60 Hz) relative to broadband."
+    unit_id: "UNIT.RATIO"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+    constraints:
+      min: 0
+    notes:
+      - "Band edges are detector/policy-defined; feature is the computed value."
+
+  FEATURE.SPECTRAL.RESONANCE_PEAKS:
+    label: "Resonance peaks"
+    description: "Detected narrow-band peaks suitable for resonance analysis."
+    unit_id: "UNIT.NONE"
+    value_type: "array"
+    scopes: ["stem", "bus"]
+    dimensions: ["time_window"]
+    item_schema:
+      value_type: "object"
+      fields:
+        freq_hz: { value_type: "number", unit_id: "UNIT.HZ" }
+        level_db: { value_type: "number", unit_id: "UNIT.DB" }
+        q: { value_type: "number", unit_id: "UNIT.Q" }
+    notes:
+      - "Detectors may filter and rank these peaks; this feature is a raw candidate list."
+
+  # -------------------------
+  # Imaging / Phase (stereo)
+  # -------------------------
+  FEATURE.IMAGE.CORRELATION:
+    label: "Correlation"
+    description: "Stereo correlation coefficient (-1 to +1)."
+    unit_id: "UNIT.CORRELATION"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+    constraints:
+      min: -1
+      max: 1
+
+  FEATURE.IMAGE.MID_LEVEL_DB:
+    label: "Mid level"
+    description: "Estimated mid channel level (mid/side analysis)."
+    unit_id: "UNIT.DB"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+
+  FEATURE.IMAGE.SIDE_LEVEL_DB:
+    label: "Side level"
+    description: "Estimated side channel level (mid/side analysis)."
+    unit_id: "UNIT.DB"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+
+  FEATURE.IMAGE.MS_BALANCE_DB:
+    label: "Mid-side balance"
+    description: "Mid level minus side level (mid - side)."
+    unit_id: "UNIT.DB"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+
+  FEATURE.IMAGE.WIDTH_ESTIMATE_PERCENT:
+    label: "Width estimate"
+    description: "Heuristic width estimate (100 = typical stereo, not a DAW control)."
+    unit_id: "UNIT.PERCENT"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["time_window"]
+
+  # -------------------------
+  # Surround / Multichannel (layout-aware)
+  # -------------------------
+  FEATURE.SURROUND.SPEAKER_ENERGY_DB:
+    label: "Speaker/channel energy"
+    description: "Energy level for a specific speaker/channel within a multichannel layout."
+    unit_id: "UNIT.DB"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["channel_ref", "time_window"]
+
+  FEATURE.SURROUND.GROUP_ENERGY_DB:
+    label: "Channel-group energy"
+    description: "Energy level aggregated over a semantic channel group (front/center/surround/height/LFE)."
+    unit_id: "UNIT.DB"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["channel_group", "time_window"]
+
+  FEATURE.SURROUND.GROUP_ENERGY_RATIO:
+    label: "Channel-group energy ratio"
+    description: "Ratio of a channel-group energy to total multichannel energy."
+    unit_id: "UNIT.RATIO"
+    value_type: "number"
+    scopes: ["stem", "bus", "session"]
+    dimensions: ["channel_group", "time_window"]
+    constraints:
+      min: 0
+
+  FEATURE.SURROUND.FRONT_STAGE_IMBALANCE_DB:
+    label: "Front stage imbalance"
+    description: "Imbalance metric across L/C/R (higher usually means less stable focus)."
+    unit_id: "UNIT.DB"
+    value_type: "number"
+    scopes: ["bus", "session"]
+    dimensions: ["time_window"]
+
+  FEATURE.SURROUND.BED_CHANNEL_COUNT:
+    label: "Bed channel count"
+    description: "Number of bed channels for the session/layout context."
+    unit_id: "UNIT.COUNT"
+    value_type: "integer"
+    scopes: ["session"]
+
+  FEATURE.SURROUND.OBJECT_COUNT:
+    label: "Object count"
+    description: "Number of objects (if object metadata is present)."
+    unit_id: "UNIT.COUNT"
+    value_type: "integer"
+    scopes: ["session"]
+
+  # -------------------------
+  # Mix Complexity (objective, non-ML)
+  # -------------------------
+  FEATURE.MIX.DENSITY:
+    label: "Mix density"
+    description: "Deterministic estimate of concurrent active stems over time."
+    unit_id: "UNIT.NONE"
+    value_type: "object"
+    scopes: ["session"]
+
+  FEATURE.MIX.MASKING_RISK:
+    label: "Masking risk"
+    description: "Deterministic midrange spectral overlap ranking between stem pairs."
+    unit_id: "UNIT.NONE"
+    value_type: "object"
+    scopes: ["session"]
+
+  # -------------------------
+  # Downmix (render then meter)
+  # -------------------------
+  FEATURE.DOWNMIX.RESULT.PEAK_DBFS:
+    label: "Downmix peak"
+    description: "Peak level of the downmix render."
+    unit_id: "UNIT.DBFS"
+    value_type: "number"
+    scopes: ["session"]
+    dimensions: ["profile_id", "time_window"]
+
+  FEATURE.DOWNMIX.RESULT.TRUEPEAK_DBTP:
+    label: "Downmix true peak"
+    description: "True peak level of the downmix render."
+    unit_id: "UNIT.DBTP"
+    value_type: "number"
+    scopes: ["session"]
+    dimensions: ["profile_id", "time_window"]
+
+  FEATURE.DOWNMIX.RESULT.LUFS_I:
+    label: "Downmix integrated loudness"
+    description: "Integrated loudness of the downmix render."
+    unit_id: "UNIT.LUFS"
+    value_type: "number"
+    scopes: ["session"]
+    dimensions: ["profile_id"]
+
+  FEATURE.DOWNMIX.RESULT.CORRELATION:
+    label: "Downmix correlation"
+    description: "Correlation of the downmix render (for stereo results)."
+    unit_id: "UNIT.CORRELATION"
+    value_type: "number"
+    scopes: ["session"]
+    dimensions: ["profile_id", "time_window"]
+    constraints:
+      min: -1
+      max: 1
+
+  # -------------------------
+  # Translation Profiles (simulation + scoring)
+  # -------------------------
+  FEATURE.TRANSLATION.PROFILE_ID:
+    label: "Translation profile id"
+    description: "Identifier of the translation profile used (policy-defined)."
+    unit_id: "UNIT.NONE"
+    value_type: "string"
+    scopes: ["session"]
+
+  FEATURE.TRANSLATION.SCORE_PERCENT:
+    label: "Translation score"
+    description: "Translation score for a profile (0–100). Higher is better."
+    unit_id: "UNIT.PERCENT"
+    value_type: "number"
+    scopes: ["session"]
+    dimensions: ["profile_id"]
+    constraints:
+      min: 0
+      max: 100
+
+  FEATURE.TRANSLATION.PASS:
+    label: "Translation pass"
+    description: "Whether translation passes a profile-defined threshold."
+    unit_id: "UNIT.NONE"
+    value_type: "boolean"
+    scopes: ["session"]
+    dimensions: ["profile_id"]

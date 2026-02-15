@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/render_plan.schema.json",
+  "title": "MMO Render Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "scene_path",
+    "targets",
+    "policies",
+    "jobs"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "plan_id": { "type": "string", "pattern": "^PLAN\\.[A-Za-z0-9_.-]+\\.[0-9a-f]{8}$" },
+    "scene_path": { "$ref": "#/$defs/posix_path" },
+    "targets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/target_id" }
+    },
+    "policies": { "$ref": "#/$defs/policies" },
+    "jobs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/job" }
+    },
+    "request": { "$ref": "#/$defs/request_echo" },
+    "resolved": { "$ref": "#/$defs/resolved" }
+  },
+  "$defs": {
+    "posix_path": {
+      "type": "string",
+      "pattern": "^[^\\\\]+$",
+      "minLength": 1
+    },
+    "target_id": {
+      "type": "string",
+      "pattern": "^TARGET\\.[A-Z0-9_.]+$"
+    },
+    "layout_id": {
+      "type": "string",
+      "pattern": "^LAYOUT\\.[A-Z0-9_.]+$"
+    },
+    "speaker_id": {
+      "type": "string",
+      "pattern": "^SPK\\.[A-Z0-9_.]+$"
+    },
+    "policies": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gates_policy_id": { "type": "string", "minLength": 1 },
+        "downmix_policy_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "request_echo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_layout_id", "scene_path"],
+      "properties": {
+        "target_layout_id": { "$ref": "#/$defs/layout_id" },
+        "scene_path": { "$ref": "#/$defs/posix_path" },
+        "routing_plan_path": { "$ref": "#/$defs/posix_path" },
+        "options": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "output_formats": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["wav", "flac", "wv", "aiff", "alac"]
+              }
+            },
+            "downmix_policy_id": { "type": "string", "minLength": 1 },
+            "gates_policy_id": { "type": "string", "minLength": 1 },
+            "sample_rate_hz": { "type": "integer", "minimum": 8000 },
+            "bit_depth": { "type": "integer", "enum": [16, 24, 32] },
+            "dry_run": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "resolved": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_layout_id", "channel_order"],
+      "properties": {
+        "target_layout_id": { "$ref": "#/$defs/layout_id" },
+        "channel_order": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/speaker_id" }
+        },
+        "channel_count": { "type": "integer", "minimum": 1 },
+        "family": { "type": "string", "minLength": 1 },
+        "has_lfe": { "type": "boolean" },
+        "downmix_policy_id": { "type": ["string", "null"] },
+        "gates_policy_id": { "type": ["string", "null"] }
+      }
+    },
+    "job_input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "role"],
+      "properties": {
+        "path": { "$ref": "#/$defs/posix_path" },
+        "role": { "type": "string", "minLength": 1 }
+      }
+    },
+    "job_output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "format"],
+      "properties": {
+        "path": { "$ref": "#/$defs/posix_path" },
+        "format": {
+          "type": "string",
+          "enum": ["wav", "flac", "wv", "aiff", "alac"]
+        }
+      }
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "target_id",
+        "target_layout_id",
+        "output_formats",
+        "contexts",
+        "notes"
+      ],
+      "properties": {
+        "job_id": { "type": "string", "pattern": "^JOB\\.[0-9]{3}$" },
+        "target_id": { "$ref": "#/$defs/target_id" },
+        "target_layout_id": { "$ref": "#/$defs/layout_id" },
+        "routing_plan_path": { "$ref": "#/$defs/posix_path" },
+        "output_formats": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["wav", "flac", "wv", "aiff", "alac"]
+          }
+        },
+        "contexts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["render", "auto_apply"]
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": ["planned", "completed", "skipped", "failed"]
+        },
+        "inputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/job_input" }
+        },
+        "outputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/job_output" }
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

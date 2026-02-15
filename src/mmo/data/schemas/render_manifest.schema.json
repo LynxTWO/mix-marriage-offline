@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/render_manifest.schema.json",
+  "title": "MMO Render Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "report_id", "renderer_manifests"],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "report_id": { "type": "string", "minLength": 1 },
+    "renderer_manifests": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/renderer_manifest" }
+    },
+    "deliverables": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/deliverable" }
+    }
+  },
+  "$defs": {
+    "renderer_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["renderer_id", "outputs", "skipped"],
+      "properties": {
+        "renderer_id": { "type": "string", "pattern": "^PLUGIN\\." },
+        "outputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/render_output" }
+        },
+        "notes": { "type": "string" },
+        "received_recommendation_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "skipped": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/render_skipped" }
+        }
+      }
+    },
+    "render_output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["output_id", "file_path"],
+      "properties": {
+        "output_id": { "type": "string", "minLength": 1 },
+        "file_path": { "type": "string", "minLength": 1 },
+        "action_id": { "type": "string", "pattern": "^ACTION\\." },
+        "recommendation_id": { "type": "string", "minLength": 1 },
+        "target_stem_id": { "type": "string", "minLength": 1 },
+        "target_bus_id": { "type": "string", "minLength": 1 },
+        "layout_id": { "type": "string", "pattern": "^LAYOUT\\." },
+        "format": { "type": "string", "enum": ["wav", "flac", "wv", "aiff", "alac"] },
+        "codec": { "type": "string", "minLength": 1 },
+        "sample_rate_hz": { "type": "integer", "minimum": 1 },
+        "bit_depth": { "type": "integer", "minimum": 1 },
+        "channel_count": { "type": "integer", "minimum": 1 },
+        "sha256": { "type": "string", "minLength": 16 },
+        "notes": { "type": "string" },
+        "metadata": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "render_skipped": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recommendation_id", "action_id", "reason", "gate_summary"],
+      "properties": {
+        "recommendation_id": { "type": "string", "minLength": 1 },
+        "action_id": { "type": "string", "pattern": "^ACTION\\." },
+        "reason": { "type": "string", "minLength": 1 },
+        "gate_summary": { "type": "string" },
+        "details": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "deliverable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deliverable_id", "label", "output_ids"],
+      "properties": {
+        "deliverable_id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "target_layout_id": { "type": "string", "minLength": 1 },
+        "channel_count": { "type": "integer", "minimum": 1 },
+        "formats": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "output_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

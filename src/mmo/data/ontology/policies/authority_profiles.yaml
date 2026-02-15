@@ -1,0 +1,62 @@
+# MMO Authority Profiles
+# Profiles override gate defaults/limits without changing detector/resolver outputs.
+# Hard safety limits remain enforced by gate hard_* thresholds.
+
+profiles:
+  _meta:
+    authority_profiles_version: "0.1.0"
+    policy_id: "POLICY.AUTHORITY_PROFILES.CORE_V0"
+    id_prefix: "PROFILE."
+    created_utc: "2026-02-05T00:00:00Z"
+    notes:
+      - "Overrides only affect gate eligibility outcomes (suggest/auto_apply/render)."
+      - "Profile behavior is deterministic for fixed inputs and policy files."
+
+  PROFILE.GUIDE:
+    label: "Guide"
+    description: "Never auto-apply; always recommendations only."
+    overrides:
+      gates:
+        GATE.PROFILE_DISABLE_AUTO_APPLY:
+          default_enabled: true
+
+  PROFILE.ASSIST:
+    label: "Assist"
+    description: "Default conservative behavior."
+    overrides: {}
+
+  PROFILE.FULL_SEND:
+    label: "Full Send"
+    description: "More permissive auto-apply, still respects hard stops."
+    overrides:
+      gates:
+        GATE.MAX_GAIN_DB:
+          limits:
+            auto_apply_abs_max: { value: 12.0, unit_id: "UNIT.DB" }
+        GATE.MAX_EQ_GAIN_DB:
+          limits:
+            auto_apply_abs_max: { value: 6.0, unit_id: "UNIT.DB" }
+        GATE.MAX_EQ_BANDS:
+          limits:
+            auto_apply_max: { value: 12, unit_id: "UNIT.COUNT" }
+
+  PROFILE.TURBO:
+    label: "Turbo"
+    description: "Auto-apply broadly up to render limits; still logs extreme changes."
+    overrides:
+      gates:
+        GATE.MAX_GAIN_DB:
+          limits:
+            auto_apply_abs_max: { value: 12.0, unit_id: "UNIT.DB" }
+        GATE.MAX_EQ_GAIN_DB:
+          limits:
+            auto_apply_abs_max: { value: 6.0, unit_id: "UNIT.DB" }
+        GATE.MAX_EQ_BANDS:
+          limits:
+            auto_apply_max: { value: 12, unit_id: "UNIT.COUNT" }
+        GATE.MAX_COMP_RATIO:
+          limits:
+            auto_apply_max: { value: 8.0, unit_id: "UNIT.RATIO" }
+        GATE.MAX_DELAY_MS:
+          limits:
+            auto_apply_max: { value: 50.0, unit_id: "UNIT.MS" }

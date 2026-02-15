@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/deliverables_index.schema.json",
+  "title": "MMO Deliverables Index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "root_out_dir", "mode", "entries"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "root_out_dir": { "$ref": "#/$defs/posix_abs_path" },
+    "mode": { "type": "string", "enum": ["single", "variants"] },
+    "entries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "posix_abs_path": {
+      "type": "string",
+      "pattern": "^(?:[A-Za-z]:/|/).+"
+    },
+    "posix_path": {
+      "type": "string",
+      "pattern": "^[^\\\\]+$"
+    },
+    "deliverable_file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "path"],
+      "properties": {
+        "format": { "type": "string", "minLength": 1 },
+        "path": { "$ref": "#/$defs/posix_path" },
+        "sha256": { "type": "string", "minLength": 1 }
+      }
+    },
+    "deliverable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deliverable_id", "label", "formats", "files"],
+      "properties": {
+        "deliverable_id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "target_layout_id": { "type": "string", "minLength": 1 },
+        "channel_count": { "type": "integer", "minimum": 1 },
+        "formats": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "files": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/deliverable_file" }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "report": { "$ref": "#/$defs/posix_path" },
+        "bundle": { "$ref": "#/$defs/posix_path" },
+        "pdf": { "$ref": "#/$defs/posix_path" },
+        "csv": { "$ref": "#/$defs/posix_path" },
+        "render_manifest": { "$ref": "#/$defs/posix_path" },
+        "apply_manifest": { "$ref": "#/$defs/posix_path" },
+        "listen_pack": { "$ref": "#/$defs/posix_path" }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entry_id", "label", "deliverables", "artifacts"],
+      "properties": {
+        "entry_id": { "type": "string", "minLength": 1 },
+        "variant_id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "preset_id": { "type": "string", "minLength": 1 },
+        "profile_id": { "type": "string", "minLength": 1 },
+        "deliverables": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/deliverable" }
+        },
+        "artifacts": { "$ref": "#/$defs/artifacts" }
+      }
+    }
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/compare_report.schema.json",
+  "title": "MMO Compare Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "a", "b", "diffs", "notes", "warnings"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "a": { "$ref": "#/$defs/side" },
+    "b": { "$ref": "#/$defs/side" },
+    "diffs": { "$ref": "#/$defs/diffs" },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "side": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "report_path", "preset_id", "profile_id"],
+      "properties": {
+        "label": { "type": "string" },
+        "report_path": { "type": "string" },
+        "preset_id": { "type": "string" },
+        "profile_id": { "type": "string" }
+      }
+    },
+    "string_diff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["a", "b"],
+      "properties": {
+        "a": { "type": "string" },
+        "b": { "type": "string" }
+      }
+    },
+    "number_diff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["a", "b", "delta"],
+      "properties": {
+        "a": { "type": ["number", "null"] },
+        "b": { "type": ["number", "null"] },
+        "delta": { "type": ["number", "null"] }
+      }
+    },
+    "output_formats_diff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["a", "b"],
+      "properties": {
+        "a": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "b": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "downmix_qa_diff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lufs_delta", "true_peak_delta", "corr_delta"],
+      "properties": {
+        "lufs_delta": { "$ref": "#/$defs/number_diff" },
+        "true_peak_delta": { "$ref": "#/$defs/number_diff" },
+        "corr_delta": { "$ref": "#/$defs/number_diff" }
+      }
+    },
+    "mix_complexity_diff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["density_mean", "density_peak", "masking_pairs_count"],
+      "properties": {
+        "density_mean": { "$ref": "#/$defs/number_diff" },
+        "density_peak": { "$ref": "#/$defs/number_diff" },
+        "masking_pairs_count": { "$ref": "#/$defs/number_diff" }
+      }
+    },
+    "translation_risk_diff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["a", "b", "shift"],
+      "properties": {
+        "a": { "type": "string" },
+        "b": { "type": "string" },
+        "shift": { "type": "integer" }
+      }
+    },
+    "change_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extreme_count", "translation_risk"],
+      "properties": {
+        "extreme_count": { "$ref": "#/$defs/number_diff" },
+        "translation_risk": { "$ref": "#/$defs/translation_risk_diff" }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["downmix_qa", "mix_complexity", "change_flags"],
+      "properties": {
+        "downmix_qa": {
+          "anyOf": [
+            { "$ref": "#/$defs/downmix_qa_diff" },
+            { "type": "null" }
+          ]
+        },
+        "mix_complexity": {
+          "anyOf": [
+            { "$ref": "#/$defs/mix_complexity_diff" },
+            { "type": "null" }
+          ]
+        },
+        "change_flags": { "$ref": "#/$defs/change_flags" }
+      }
+    },
+    "diffs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "preset_id", "meters", "output_formats", "metrics"],
+      "properties": {
+        "profile_id": { "$ref": "#/$defs/string_diff" },
+        "preset_id": { "$ref": "#/$defs/string_diff" },
+        "meters": { "$ref": "#/$defs/string_diff" },
+        "output_formats": { "$ref": "#/$defs/output_formats_diff" },
+        "metrics": { "$ref": "#/$defs/metrics" }
+      }
+    }
+  }
+}

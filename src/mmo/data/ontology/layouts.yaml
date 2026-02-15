@@ -1,0 +1,359 @@
+# Canonical Layouts
+# LAYOUT.* IDs define channel layouts and canonical channel ordering.
+# Layouts reference SPK.* from ontology/speakers.yaml.
+
+layouts:
+  _meta:
+    layouts_version: "0.1.0"
+    id_prefix: "LAYOUT."
+    channel_index_base: 0
+    ordering_standards:
+      - "SMPTE"   # common in WAV/DAW exports: L R C LFE Ls Rs (etc.)
+      - "FILM"    # common in some containers: L C R Ls Rs LFE (etc.)
+    conventions:
+      - "channel_order is the canonical order MMO will use internally when it must impose one."
+      - "ordering_variants are accepted for inference/import; core should normalize to canonical."
+      - "channel_groups are semantic buckets used for surround meters and detectors."
+      - "bed_speakers excludes heights; LFE is bed."
+    channel_groups:
+      enum:
+        - "front"
+        - "center"
+        - "surround"
+        - "rear"
+        - "height"
+        - "lfe"
+        - "bed"
+        - "objects"
+
+  # -------------------------
+  # Mono / Stereo
+  # -------------------------
+  LAYOUT.1_0:
+    label: "Mono (1.0)"
+    description: "Single-channel mono."
+    family: "mono"
+    channel_count: 1
+    ordering_standard: "SMPTE"
+    channel_order: ["SPK.M"]
+    channel_groups:
+      center: ["SPK.M"]
+      bed: ["SPK.M"]
+    bed_speakers: ["SPK.M"]
+    height_speakers: []
+    has_lfe: false
+    aliases: ["1.0", "1_0", "mono", "M"]
+
+  LAYOUT.2_0:
+    label: "Stereo (2.0)"
+    description: "Standard stereo left/right."
+    family: "stereo"
+    channel_count: 2
+    ordering_standard: "SMPTE"
+    channel_order: ["SPK.L", "SPK.R"]
+    ordering_variants:
+      SMPTE: ["SPK.L", "SPK.R"]
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      bed: ["SPK.L", "SPK.R"]
+    bed_speakers: ["SPK.L", "SPK.R"]
+    height_speakers: []
+    has_lfe: false
+    aliases: ["2.0", "2_0", "stereo", "LR", "L R"]
+
+  LAYOUT.2_1:
+    label: "Stereo + LFE (2.1)"
+    description: "Stereo left/right plus LFE."
+    family: "stereo"
+    channel_count: 3
+    ordering_standard: "SMPTE"
+    channel_order: ["SPK.L", "SPK.R", "SPK.LFE"]
+    ordering_variants:
+      SMPTE: ["SPK.L", "SPK.R", "SPK.LFE"]
+      FILM: ["SPK.L", "SPK.R", "SPK.LFE"]
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      lfe: ["SPK.LFE"]
+      bed: ["SPK.L", "SPK.R", "SPK.LFE"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.LFE"]
+    height_speakers: []
+    has_lfe: true
+    aliases: ["2.1", "2_1", "stereo+lfe", "LRLFE"]
+
+  # -------------------------
+  # Front stage (LCR)
+  # -------------------------
+  LAYOUT.3_0:
+    label: "LCR (3.0)"
+    description: "Front Left, Center, Front Right."
+    family: "surround"
+    channel_count: 3
+    ordering_standard: "SMPTE"
+    channel_order: ["SPK.L", "SPK.R", "SPK.C"]
+    ordering_variants:
+      SMPTE: ["SPK.L", "SPK.R", "SPK.C"]
+      FILM: ["SPK.L", "SPK.C", "SPK.R"]
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      center: ["SPK.C"]
+      bed: ["SPK.L", "SPK.R", "SPK.C"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.C"]
+    height_speakers: []
+    has_lfe: false
+    aliases: ["3.0", "3_0", "lcr", "L C R"]
+
+  # -------------------------
+  # Quad / 4.0
+  # -------------------------
+  LAYOUT.4_0:
+    label: "Quad (4.0)"
+    description: "Front L/R plus Surround L/R (no center, no LFE)."
+    family: "surround"
+    channel_count: 4
+    ordering_standard: "SMPTE"
+    channel_order: ["SPK.L", "SPK.R", "SPK.LS", "SPK.RS"]
+    ordering_variants:
+      SMPTE: ["SPK.L", "SPK.R", "SPK.LS", "SPK.RS"]
+      FILM: ["SPK.L", "SPK.R", "SPK.LS", "SPK.RS"]
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      surround: ["SPK.LS", "SPK.RS"]
+      bed: ["SPK.L", "SPK.R", "SPK.LS", "SPK.RS"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.LS", "SPK.RS"]
+    height_speakers: []
+    has_lfe: false
+    aliases: ["4.0", "4_0", "quad", "quadraphonic"]
+
+  # -------------------------
+  # 5.0 / 5.1
+  # -------------------------
+  LAYOUT.5_0:
+    label: "Surround (5.0)"
+    description: "L/R/C plus Surround L/R (no LFE)."
+    family: "surround"
+    channel_count: 5
+    ordering_standard: "SMPTE"
+    channel_order: ["SPK.L", "SPK.R", "SPK.C", "SPK.LS", "SPK.RS"]
+    ordering_variants:
+      SMPTE: ["SPK.L", "SPK.R", "SPK.C", "SPK.LS", "SPK.RS"]
+      FILM: ["SPK.L", "SPK.C", "SPK.R", "SPK.LS", "SPK.RS"]
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      center: ["SPK.C"]
+      surround: ["SPK.LS", "SPK.RS"]
+      bed: ["SPK.L", "SPK.R", "SPK.C", "SPK.LS", "SPK.RS"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.C", "SPK.LS", "SPK.RS"]
+    height_speakers: []
+    has_lfe: false
+    aliases: ["5.0", "5_0", "surround5", "5ch"]
+
+  LAYOUT.5_1:
+    label: "Surround (5.1)"
+    description: "L/R/C/LFE plus Surround L/R."
+    family: "surround"
+    channel_count: 6
+    ordering_standard: "SMPTE"
+    channel_order: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS"]
+    ordering_variants:
+      SMPTE: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS"]
+      FILM: ["SPK.L", "SPK.C", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LFE"]
+      AAC: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS"]
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      center: ["SPK.C"]
+      lfe: ["SPK.LFE"]
+      surround: ["SPK.LS", "SPK.RS"]
+      bed: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS"]
+    height_speakers: []
+    has_lfe: true
+    aliases: ["5.1", "5_1", "surround51", "6ch", "L R C LFE Ls Rs"]
+
+  # -------------------------
+  # 7.0 / 7.1
+  # -------------------------
+  LAYOUT.7_0:
+    label: "Surround (7.0)"
+    description: "5.0 plus Rear Surround L/R (no LFE)."
+    family: "surround"
+    channel_count: 7
+    ordering_standard: "SMPTE"
+    channel_order: ["SPK.L", "SPK.R", "SPK.C", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    ordering_variants:
+      SMPTE: ["SPK.L", "SPK.R", "SPK.C", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+      FILM: ["SPK.L", "SPK.C", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      center: ["SPK.C"]
+      surround: ["SPK.LS", "SPK.RS"]
+      rear: ["SPK.LRS", "SPK.RRS"]
+      bed: ["SPK.L", "SPK.R", "SPK.C", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.C", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    height_speakers: []
+    has_lfe: false
+    aliases: ["7.0", "7_0", "surround70", "7ch"]
+
+  LAYOUT.7_1:
+    label: "Surround (7.1)"
+    description: "5.1 plus Rear Surround L/R."
+    family: "surround"
+    channel_count: 8
+    ordering_standard: "SMPTE"
+    channel_order: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    ordering_variants:
+      SMPTE: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+      FILM: ["SPK.L", "SPK.C", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS", "SPK.LFE"]
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      center: ["SPK.C"]
+      lfe: ["SPK.LFE"]
+      surround: ["SPK.LS", "SPK.RS"]
+      rear: ["SPK.LRS", "SPK.RRS"]
+      bed: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    height_speakers: []
+    has_lfe: true
+    aliases: ["7.1", "7_1", "surround71", "8ch", "L R C LFE Ls Rs Lrs Rrs"]
+
+  # -------------------------
+  # Immersive beds with heights (common “.2” and “.4”)
+  # -------------------------
+  LAYOUT.5_1_2:
+    label: "Immersive (5.1.2)"
+    description: "5.1 bed plus Top Front L/R."
+    family: "immersive"
+    channel_count: 8
+    ordering_standard: "SMPTE"
+    channel_order:
+      - "SPK.L"    # 0
+      - "SPK.R"    # 1
+      - "SPK.C"    # 2
+      - "SPK.LFE"  # 3
+      - "SPK.LS"   # 4
+      - "SPK.RS"   # 5
+      - "SPK.TFL"  # 6
+      - "SPK.TFR"  # 7
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      center: ["SPK.C"]
+      lfe: ["SPK.LFE"]
+      surround: ["SPK.LS", "SPK.RS"]
+      height: ["SPK.TFL", "SPK.TFR"]
+      bed: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS"]
+    height_speakers: ["SPK.TFL", "SPK.TFR"]
+    has_lfe: true
+    recommended_downmix_targets: ["LAYOUT.5_1", "LAYOUT.2_0", "LAYOUT.1_0"]
+    aliases: ["5.1.2", "5_1_2", "immersive512", "atmos_bed_512"]
+
+  LAYOUT.5_1_4:
+    label: "Immersive (5.1.4)"
+    description: "5.1 bed plus Top Front L/R and Top Rear L/R."
+    family: "immersive"
+    channel_count: 10
+    ordering_standard: "SMPTE"
+    channel_order:
+      - "SPK.L"
+      - "SPK.R"
+      - "SPK.C"
+      - "SPK.LFE"
+      - "SPK.LS"
+      - "SPK.RS"
+      - "SPK.TFL"
+      - "SPK.TFR"
+      - "SPK.TRL"
+      - "SPK.TRR"
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      center: ["SPK.C"]
+      lfe: ["SPK.LFE"]
+      surround: ["SPK.LS", "SPK.RS"]
+      height: ["SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"]
+      bed: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS"]
+    height_speakers: ["SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"]
+    has_lfe: true
+    recommended_downmix_targets: ["LAYOUT.5_1", "LAYOUT.2_0", "LAYOUT.1_0"]
+    aliases: ["5.1.4", "5_1_4", "immersive514", "atmos_bed_514"]
+
+  LAYOUT.7_1_2:
+    label: "Immersive (7.1.2)"
+    description: "7.1 bed plus Top Front L/R."
+    family: "immersive"
+    channel_count: 10
+    ordering_standard: "SMPTE"
+    channel_order:
+      - "SPK.L"
+      - "SPK.R"
+      - "SPK.C"
+      - "SPK.LFE"
+      - "SPK.LS"
+      - "SPK.RS"
+      - "SPK.LRS"
+      - "SPK.RRS"
+      - "SPK.TFL"
+      - "SPK.TFR"
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      center: ["SPK.C"]
+      lfe: ["SPK.LFE"]
+      surround: ["SPK.LS", "SPK.RS"]
+      rear: ["SPK.LRS", "SPK.RRS"]
+      height: ["SPK.TFL", "SPK.TFR"]
+      bed: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    height_speakers: ["SPK.TFL", "SPK.TFR"]
+    has_lfe: true
+    recommended_downmix_targets: ["LAYOUT.7_1", "LAYOUT.5_1", "LAYOUT.2_0", "LAYOUT.1_0"]
+    aliases: ["7.1.2", "7_1_2", "immersive712", "atmos_bed_712"]
+
+  LAYOUT.7_1_4:
+    label: "Immersive (7.1.4)"
+    description: "7.1 bed plus Top Front L/R and Top Rear L/R."
+    family: "immersive"
+    channel_count: 12
+    ordering_standard: "SMPTE"
+    channel_order:
+      - "SPK.L"
+      - "SPK.R"
+      - "SPK.C"
+      - "SPK.LFE"
+      - "SPK.LS"
+      - "SPK.RS"
+      - "SPK.LRS"
+      - "SPK.RRS"
+      - "SPK.TFL"
+      - "SPK.TFR"
+      - "SPK.TRL"
+      - "SPK.TRR"
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      center: ["SPK.C"]
+      lfe: ["SPK.LFE"]
+      surround: ["SPK.LS", "SPK.RS"]
+      rear: ["SPK.LRS", "SPK.RRS"]
+      height: ["SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"]
+      bed: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    height_speakers: ["SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"]
+    has_lfe: true
+    recommended_downmix_targets: ["LAYOUT.7_1", "LAYOUT.5_1", "LAYOUT.2_0", "LAYOUT.1_0"]
+    aliases: ["7.1.4", "7_1_4", "immersive714", "atmos_bed_714"]
+
+  # -------------------------
+  # Optional: Stereo with Wides (for some cinema/music workflows)
+  # -------------------------
+  LAYOUT.4_0_WIDE:
+    label: "Front with Wides (4.0)"
+    description: "Front L/R plus Wide L/R (no center, no surrounds)."
+    family: "surround"
+    channel_count: 4
+    ordering_standard: "SMPTE"
+    channel_order: ["SPK.L", "SPK.R", "SPK.LW", "SPK.RW"]
+    channel_groups:
+      front: ["SPK.L", "SPK.R", "SPK.LW", "SPK.RW"]
+      bed: ["SPK.L", "SPK.R", "SPK.LW", "SPK.RW"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.LW", "SPK.RW"]
+    height_speakers: []
+    has_lfe: false
+    aliases: ["4.0_wide", "4_0_wide", "stereo+wides"]

@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/render_report.schema.json",
+  "title": "MMO Render Report",
+  "description": "Report of a completed render pass: what was rendered, which policies applied, and QA gate summaries.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request",
+    "jobs",
+    "policies_applied",
+    "qa_gates"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "request": { "$ref": "#/$defs/request_summary" },
+    "jobs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/render_job" }
+    },
+    "policies_applied": { "$ref": "#/$defs/policies_applied" },
+    "qa_gates": { "$ref": "#/$defs/qa_gates" }
+  },
+  "$defs": {
+    "posix_path": {
+      "type": "string",
+      "pattern": "^[^\\\\]+$",
+      "minLength": 1
+    },
+    "layout_id": {
+      "type": "string",
+      "pattern": "^LAYOUT\\.[A-Z0-9_.]+$"
+    },
+    "request_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_layout_id", "scene_path"],
+      "properties": {
+        "target_layout_id": { "$ref": "#/$defs/layout_id" },
+        "scene_path": { "$ref": "#/$defs/posix_path" },
+        "routing_plan_path": { "$ref": "#/$defs/posix_path" }
+      }
+    },
+    "render_job": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["job_id", "status", "output_files"],
+      "properties": {
+        "job_id": {
+          "type": "string",
+          "pattern": "^JOB\\.[0-9]{3}$"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["completed", "skipped", "failed"]
+        },
+        "output_files": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/output_file" }
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "output_file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file_path", "format"],
+      "properties": {
+        "file_path": { "$ref": "#/$defs/posix_path" },
+        "format": {
+          "type": "string",
+          "enum": ["wav", "flac", "wv", "aiff", "alac"]
+        },
+        "channel_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sample_rate_hz": {
+          "type": "integer",
+          "minimum": 8000
+        },
+        "bit_depth": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "type": "string",
+          "minLength": 16
+        }
+      }
+    },
+    "policies_applied": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "downmix_policy_id": {
+          "type": ["string", "null"]
+        },
+        "gates_policy_id": {
+          "type": ["string", "null"]
+        },
+        "matrix_id": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "qa_gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "gates"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pass", "warn", "fail", "not_run"]
+        },
+        "gates": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/qa_gate_entry" }
+        }
+      }
+    },
+    "qa_gate_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "outcome"],
+      "properties": {
+        "gate_id": {
+          "type": "string",
+          "pattern": "^GATE\\.[A-Z0-9_.]+$"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["pass", "warn", "fail", "not_run"]
+        },
+        "reason_id": {
+          "type": "string",
+          "pattern": "^REASON\\.[A-Z0-9_.]+$"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

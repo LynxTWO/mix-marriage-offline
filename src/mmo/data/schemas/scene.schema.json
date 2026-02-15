@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/scene.schema.json",
+  "title": "MMO Scene",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scene_id",
+    "source",
+    "objects",
+    "beds",
+    "metadata"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "scene_id": { "type": "string", "minLength": 1 },
+    "source": { "$ref": "#/$defs/source" },
+    "intent": { "$ref": "#/$defs/object_intent" },
+    "timeline": { "$ref": "timeline.schema.json" },
+    "objects": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/object_entry" }
+    },
+    "beds": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/bed_entry" }
+    },
+    "metadata": { "$ref": "#/$defs/metadata" }
+  },
+  "$defs": {
+    "posix_abs_path": {
+      "type": "string",
+      "pattern": "^(?:[A-Za-z]:/|/).+"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stems_dir", "created_from"],
+      "properties": {
+        "report_id": { "type": "string", "minLength": 1 },
+        "stems_dir": { "$ref": "#/$defs/posix_abs_path" },
+        "lock_hash": { "type": "string", "minLength": 1 },
+        "created_from": {
+          "type": "string",
+          "enum": ["analyze", "apply", "render", "variants", "draft"]
+        }
+      }
+    },
+    "position_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "azimuth_deg": { "type": "number" },
+        "elevation_deg": { "type": "number" }
+      }
+    },
+    "object_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["confidence", "locks"],
+      "properties": {
+        "position": { "$ref": "#/$defs/position_intent" },
+        "width": { "type": "number", "minimum": 0, "maximum": 1 },
+        "depth": { "type": "number", "minimum": 0, "maximum": 1 },
+        "loudness_bias": {
+          "type": "string",
+          "enum": ["forward", "neutral", "back"]
+        },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "locks": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "object_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_id",
+        "stem_id",
+        "label",
+        "channel_count",
+        "intent",
+        "notes"
+      ],
+      "properties": {
+        "object_id": { "type": "string", "minLength": 1 },
+        "stem_id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "channel_count": { "type": "integer", "minimum": 1 },
+        "intent": { "$ref": "#/$defs/object_intent" },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "bed_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["confidence", "locks"],
+      "properties": {
+        "diffuse": { "type": "number", "minimum": 0, "maximum": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "locks": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "bed_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bed_id", "label", "kind", "intent", "notes"],
+      "properties": {
+        "bed_id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": ["field", "bed"]
+        },
+        "intent": { "$ref": "#/$defs/bed_intent" },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "vibe_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "density_level": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "masking_level": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "translation_risk": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile_id": { "type": "string", "minLength": 1 },
+        "preset_id": { "type": "string", "minLength": 1 },
+        "vibe": { "$ref": "#/$defs/vibe_snapshot" }
+      }
+    }
+  }
+}

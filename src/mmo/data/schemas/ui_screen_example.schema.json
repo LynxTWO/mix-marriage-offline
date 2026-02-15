@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/ui_screen_example.schema.json",
+  "title": "MMO UI Screen Example",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "screen_id", "mode", "title", "bundle"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "screen_id": {
+      "type": "string",
+      "enum": [
+        "DASHBOARD",
+        "PRESETS",
+        "RUN",
+        "RUN_TRANSLATION",
+        "RESULTS",
+        "COMPARE",
+        "STEMS_REVIEW"
+      ]
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["default", "nerd"]
+    },
+    "title": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "ui_state": { "$ref": "#/$defs/ui_state" },
+    "bundle": { "$ref": "ui_bundle.schema.json" },
+    "design_hints": { "$ref": "#/$defs/design_hints" }
+  },
+  "$defs": {
+    "ui_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "selected_tab": { "type": "string", "minLength": 1 },
+        "selected_preset_id": { "type": "string", "minLength": 1 },
+        "selected_variant_id": { "type": "string", "minLength": 1 },
+        "selected_deliverable_id": { "type": "string", "minLength": 1 },
+        "selected_compare_side": { "type": "string", "minLength": 1 },
+        "filters": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "design_hints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "badges_expected": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["EXTREME", "BLOCKED", "SAFE", "INFO"]
+          }
+        },
+        "hover_help_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

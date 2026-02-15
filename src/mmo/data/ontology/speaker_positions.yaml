@@ -1,0 +1,72 @@
+schema_version: "0.1.0"
+layouts:
+  LAYOUT.2_0:
+    channels:
+      - ch: 0
+        name: "L"
+        azimuth_deg: -30.0
+        elevation_deg: 0.0
+      - ch: 1
+        name: "R"
+        azimuth_deg: 30.0
+        elevation_deg: 0.0
+  LAYOUT.5_1:
+    channels:
+      - ch: 0
+        name: "L"
+        azimuth_deg: -30.0
+        elevation_deg: 0.0
+      - ch: 1
+        name: "R"
+        azimuth_deg: 30.0
+        elevation_deg: 0.0
+      - ch: 2
+        name: "C"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+      - ch: 3
+        name: "LFE"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+      - ch: 4
+        name: "LS"
+        azimuth_deg: -110.0
+        elevation_deg: 0.0
+      - ch: 5
+        name: "RS"
+        azimuth_deg: 110.0
+        elevation_deg: 0.0
+  LAYOUT.7_1:
+    channels:
+      - ch: 0
+        name: "L"
+        azimuth_deg: -30.0
+        elevation_deg: 0.0
+      - ch: 1
+        name: "R"
+        azimuth_deg: 30.0
+        elevation_deg: 0.0
+      - ch: 2
+        name: "C"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+      - ch: 3
+        name: "LFE"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+      - ch: 4
+        name: "LS"
+        azimuth_deg: -90.0
+        elevation_deg: 0.0
+      - ch: 5
+        name: "RS"
+        azimuth_deg: 90.0
+        elevation_deg: 0.0
+      - ch: 6
+        name: "LRS"
+        azimuth_deg: -150.0
+        elevation_deg: 0.0
+      - ch: 7
+        name: "RRS"
+        azimuth_deg: 150.0
+        elevation_deg: 0.0

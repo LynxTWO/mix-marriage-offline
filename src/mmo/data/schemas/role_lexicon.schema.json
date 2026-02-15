@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/role_lexicon.schema.json",
+  "title": "MMO Role Lexicon Extension",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["role_lexicon"],
+  "properties": {
+    "role_lexicon": {
+      "type": "object",
+      "patternProperties": {
+        "^ROLE\\.[A-Z0-9_.]+$": {
+          "$ref": "#/$defs/role_lexicon_entry"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "role_lexicon_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "regex": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

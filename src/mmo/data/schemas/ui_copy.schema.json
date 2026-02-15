@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/ui_copy.schema.json",
+  "title": "MMO UI Copy Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "default_locale", "locales"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "default_locale": { "type": "string", "minLength": 1 },
+    "locales": {
+      "type": "object",
+      "patternProperties": {
+        "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$": { "$ref": "#/$defs/locale_payload" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "copy_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "tooltip": { "type": "string", "minLength": 1 },
+        "long": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": ["label", "tooltip", "message"]
+        }
+      }
+    },
+    "copy_entries": {
+      "type": "object",
+      "patternProperties": {
+        "^COPY\\.[A-Z0-9_.]+$": { "$ref": "#/$defs/copy_entry" }
+      },
+      "additionalProperties": false
+    },
+    "locale_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entries"],
+      "properties": {
+        "entries": { "$ref": "#/$defs/copy_entries" }
+      }
+    }
+  }
+}

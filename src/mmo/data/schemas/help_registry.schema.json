@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/help_registry.schema.json",
+  "title": "MMO Help Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "entries"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "entries": {
+      "type": "object",
+      "patternProperties": {
+        "^HELP\\.[A-Z0-9_.]+$": { "$ref": "#/$defs/help_entry" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "help_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "short"],
+      "properties": {
+        "title": { "type": "string" },
+        "short": { "type": "string" },
+        "long": { "type": "string" },
+        "cues": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "watch_out_for": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

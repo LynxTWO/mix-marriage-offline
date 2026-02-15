@@ -1,0 +1,28 @@
+schema_version: "0.1.0"
+params:
+  INTENT.POSITION.AZIMUTH_DEG:
+    type: "number"
+    unit: "deg"
+    min: -180
+    max: 180
+    default: null
+    description: "Horizontal angle around listener."
+  INTENT.WIDTH:
+    type: "number"
+    min: 0
+    max: 1
+    default: null
+  INTENT.DEPTH:
+    type: "number"
+    min: 0
+    max: 1
+    default: null
+  INTENT.LOUDNESS_BIAS:
+    type: "enum"
+    values: ["forward", "neutral", "back"]
+    default: "neutral"
+  INTENT.CONFIDENCE:
+    type: "number"
+    min: 0
+    max: 1
+    default: 0.0

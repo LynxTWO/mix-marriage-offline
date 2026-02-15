@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/presets_index.schema.json",
+  "title": "MMO Presets Index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "presets"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "presets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["preset_id", "file", "label", "description"],
+        "properties": {
+          "preset_id": { "type": "string" },
+          "file": { "type": "string" },
+          "label": { "type": "string" },
+          "description": { "type": "string" },
+          "help_id": {
+            "type": "string",
+            "pattern": "^HELP\\.[A-Z0-9_.]+$"
+          },
+          "overlay": { "type": "string" },
+          "category": { "type": "string" },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "goals": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "warnings": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "packs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pack_id", "label", "description", "preset_ids"],
+        "properties": {
+          "pack_id": { "type": "string" },
+          "label": { "type": "string" },
+          "description": { "type": "string" },
+          "preset_ids": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

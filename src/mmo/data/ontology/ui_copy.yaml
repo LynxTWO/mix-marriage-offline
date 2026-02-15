@@ -1,0 +1,47 @@
+schema_version: "0.1.0"
+default_locale: "en-US"
+locales:
+  en-US:
+    entries:
+      COPY.APP.TITLE:
+        text: "Mix Marriage Offline"
+      COPY.NAV.DASHBOARD:
+        text: "Dashboard"
+      COPY.NAV.PRESETS:
+        text: "Presets"
+      COPY.NAV.RUN:
+        text: "Run"
+      COPY.NAV.RESULTS:
+        text: "Results"
+      COPY.NAV.COMPARE:
+        text: "Compare"
+      COPY.PANEL.SIGNALS.TITLE:
+        text: "Signals"
+        tooltip: "Quick read on what your mix is doing right now."
+      COPY.PANEL.DELIVERABLES.TITLE:
+        text: "Deliverables"
+        tooltip: "Your finished files, organized for listening and export."
+      COPY.BADGE.EXTREME:
+        text: "Extreme"
+        tooltip: "Big move. Listen closely before keeping it."
+      COPY.BADGE.BLOCKED:
+        text: "Blocked"
+        tooltip: "Safety check says no. Fix the cause first."
+      COPY.BADGE.SAFE:
+        text: "Safe"
+        tooltip: "Checks passed for this stage."
+      COPY.BADGE.INFO:
+        text: "Info"
+        tooltip: "Additional context to guide your next decision."
+      COPY.ACTION.PREVIEW:
+        text: "Preview"
+        tooltip: "See what this vibe changes before you Apply."
+      COPY.ACTION.RUN:
+        text: "Run"
+        tooltip: "Create results from your stems with this vibe and learn Why each step matters."
+      COPY.ACTION.RENDER_MANY:
+        text: "Render Many"
+        tooltip: "Use one mix plan to print multiple target deliverables."
+      COPY.ACTION.COMPARE:
+        text: "Compare"
+        tooltip: "See what changed between two versions."

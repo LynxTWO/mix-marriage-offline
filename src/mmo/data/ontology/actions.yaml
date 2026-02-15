@@ -1,0 +1,522 @@
+# Canonical Actions
+# ACTION.* IDs represent DAW-agnostic operations that can be recommended (and sometimes auto-applied)
+# within safety gates. Actions reference PARAM.* IDs defined in ontology/params.yaml.
+
+actions:
+  _meta:
+    actions_version: "0.1.0"
+    id_prefix: "ACTION."
+    risk_levels: ["low", "medium", "high"]
+    conventions:
+      - "Actions are DAW-agnostic operations (EQ cut, compressor, limiter). Not plugin names."
+      - "required_params must be satisfied for schema + ontology validation."
+      - "auto_apply_eligible indicates the action *may* be auto-applied if gates allow."
+      - "gates are tags; the core enforces actual thresholds/policies."
+    target_scopes:
+      - "stem"
+      - "bus"
+      - "session"
+    target_granularity:
+      - "full"        # entire target (track/bus/session)
+      - "time_range"  # localized in time using PARAM.TIME.*
+      - "band"        # localized in frequency using PARAM.BAND.* (optional convention)
+      - "channel"     # channel_index or speaker_id
+      - "group"       # surround channel_group
+
+  # -------------------------
+  # Utility / Routing
+  # -------------------------
+  ACTION.UTILITY.GAIN:
+    label: "Gain"
+    description: "Apply a static gain change to the target."
+    required_params: ["PARAM.GAIN.DB"]
+    optional_params: ["PARAM.TIME.START_S", "PARAM.TIME.END_S", "PARAM.TIME.FADE_IN_S", "PARAM.TIME.FADE_OUT_S"]
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: true
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range"]
+    gates: ["GATE.MAX_GAIN_DB", "GATE.NO_CLIP"]
+
+  ACTION.UTILITY.TRIM:
+    label: "Trim"
+    description: "Apply a trim gain (often pre-processing) to the target."
+    required_params: ["PARAM.GAIN.TRIM_DB"]
+    optional_params: ["PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: true
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range"]
+    gates: ["GATE.MAX_GAIN_DB", "GATE.NO_CLIP"]
+
+  ACTION.UTILITY.MUTE:
+    label: "Mute"
+    description: "Mute/unmute the target."
+    required_params: ["PARAM.MUTE"]
+    optional_params: ["PARAM.TIME.START_S", "PARAM.TIME.END_S", "PARAM.TIME.FADE_IN_S", "PARAM.TIME.FADE_OUT_S"]
+    default_risk: "high"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL"]
+
+  ACTION.UTILITY.POLARITY_INVERT:
+    label: "Polarity invert"
+    description: "Invert polarity (180°) on the target."
+    required_params: ["PARAM.POLARITY.INVERT"]
+    optional_params: ["PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "medium"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL"]
+
+  # -------------------------
+  # Diagnostic / Advisory
+  # -------------------------
+  ACTION.DIAGNOSTIC.CHECK_POLARITY:
+    label: "Check polarity / routing"
+    description: "Guidance-only: suggests verifying mic polarity, cabling, routing, and mono compatibility for a flagged channel pair. No automatic processing."
+    required_params: []
+    optional_params: []
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full"]
+    gates: []
+    notes:
+      - "Non-destructive advisory action. Intended for recall sheet only."
+
+  ACTION.DIAGNOSTIC.CHECK_DOWNMIX_QA:
+    label: "Check downmix QA deltas"
+    description: "Guidance-only: suggests reviewing downmix QA deltas (LUFS, true-peak, correlation) against expected policy/matrix/export."
+    required_params: []
+    optional_params:
+      - "PARAM.DOWNMIX.QA.LUFS_DELTA"
+      - "PARAM.DOWNMIX.QA.TRUE_PEAK_DELTA"
+      - "PARAM.DOWNMIX.QA.CORR_DELTA"
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: false
+    allowed_scopes: ["session"]
+    allowed_granularity: ["full"]
+    gates: []
+    notes:
+      - "Non-destructive advisory action. Intended for QA review."
+
+  ACTION.DIAGNOSTIC.REVIEW_DOWNMIX_POLICY_MATRIX:
+    label: "Review downmix policy matrix"
+    description: "Guidance-only: verify policy_id, matrix_id, and target layout mapping used for downmix render."
+    required_params: []
+    optional_params: []
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: false
+    allowed_scopes: ["session"]
+    allowed_granularity: ["full"]
+    gates: []
+    notes:
+      - "Non-destructive advisory action. Intended for QA triage when render is blocked."
+
+  ACTION.DIAGNOSTIC.CHECK_REFERENCE_LEVELS:
+    label: "Check reference levels"
+    description: "Guidance-only: verify folded/reference loudness and true-peak reference calibration before render."
+    required_params: []
+    optional_params: []
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: false
+    allowed_scopes: ["session"]
+    allowed_granularity: ["full"]
+    gates: []
+    notes:
+      - "Non-destructive advisory action for level-mismatch diagnostics."
+
+  ACTION.DIAGNOSTIC.CHECK_PHASE_CORRELATION:
+    label: "Check phase correlation"
+    description: "Guidance-only: inspect phase/correlation between folded downmix and reference before render."
+    required_params: []
+    optional_params: []
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: false
+    allowed_scopes: ["session"]
+    allowed_granularity: ["full"]
+    gates: []
+    notes:
+      - "Non-destructive advisory action for correlation-delta failures."
+
+  ACTION.UTILITY.DELAY:
+    label: "Delay"
+    description: "Apply a time delay to the target (used for alignment or creative offset)."
+    required_params: ["PARAM.DELAY.MS"]
+    optional_params: ["PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "medium"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range"]
+    gates: ["GATE.MAX_DELAY_MS", "GATE.REQUIRES_APPROVAL"]
+
+  ACTION.UTILITY.PAN:
+    label: "Pan"
+    description: "Apply stereo pan to the target."
+    required_params: ["PARAM.PAN.PERCENT"]
+    optional_params: ["PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "medium"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL"]
+
+  # -------------------------
+  # EQ (static)
+  # -------------------------
+  ACTION.EQ.BAND_ENABLE:
+    label: "EQ band enable"
+    description: "Enable/disable a specific EQ band (useful for recall sheet toggles)."
+    required_params: ["PARAM.EQ.BAND_INDEX", "PARAM.EQ.ENABLED"]
+    optional_params: []
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: true
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full"]
+    gates: ["GATE.MAX_EQ_BANDS"]
+
+  ACTION.EQ.BELL_CUT:
+    label: "EQ bell cut"
+    description: "Apply a bell EQ cut at a specified frequency/Q."
+    required_params: ["PARAM.EQ.FREQ_HZ", "PARAM.EQ.Q", "PARAM.EQ.GAIN_DB"]
+    optional_params: ["PARAM.EQ.BAND_INDEX", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: true
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range", "band"]
+    gates: ["GATE.MAX_EQ_GAIN_DB", "GATE.MAX_EQ_BANDS", "GATE.NO_CLIP"]
+    notes:
+      - "Common for resonance control, mud reduction, and masking relief."
+
+  ACTION.EQ.BELL_BOOST:
+    label: "EQ bell boost"
+    description: "Apply a bell EQ boost at a specified frequency/Q."
+    required_params: ["PARAM.EQ.FREQ_HZ", "PARAM.EQ.Q", "PARAM.EQ.GAIN_DB"]
+    optional_params: ["PARAM.EQ.BAND_INDEX", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "medium"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range", "band"]
+    gates: ["GATE.MAX_EQ_GAIN_DB", "GATE.MAX_EQ_BANDS", "GATE.REQUIRES_APPROVAL"]
+    notes:
+      - "Boosts are more taste-dependent; default is approval-required."
+
+  ACTION.EQ.NOTCH_CUT:
+    label: "EQ notch cut"
+    description: "Apply a narrow notch cut for surgical resonance reduction."
+    required_params: ["PARAM.EQ.FREQ_HZ", "PARAM.EQ.Q", "PARAM.EQ.GAIN_DB"]
+    optional_params: ["PARAM.EQ.BAND_INDEX", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: true
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range", "band"]
+    gates: ["GATE.MAX_EQ_GAIN_DB", "GATE.MAX_EQ_BANDS", "GATE.NO_CLIP"]
+    notes:
+      - "Typically Q is high; gate policy may enforce a minimum Q when using NOTCH."
+
+  ACTION.EQ.HIGH_PASS:
+    label: "High-pass filter"
+    description: "Apply a high-pass filter (HPF) to remove low-frequency rumble."
+    required_params: ["PARAM.EQ.FREQ_HZ", "PARAM.EQ.SLOPE_DB_PER_OCT"]
+    optional_params: ["PARAM.EQ.BAND_INDEX", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "medium"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.MAX_EQ_BANDS"]
+    notes:
+      - "HPF cutoff is role-dependent; default is approval-required."
+
+  ACTION.EQ.LOW_PASS:
+    label: "Low-pass filter"
+    description: "Apply a low-pass filter (LPF) to remove high-frequency content."
+    required_params: ["PARAM.EQ.FREQ_HZ", "PARAM.EQ.SLOPE_DB_PER_OCT"]
+    optional_params: ["PARAM.EQ.BAND_INDEX", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "medium"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.MAX_EQ_BANDS"]
+
+  ACTION.EQ.LOW_SHELF:
+    label: "Low shelf"
+    description: "Apply a low-shelf boost or cut."
+    required_params: ["PARAM.EQ.FREQ_HZ", "PARAM.EQ.Q", "PARAM.EQ.GAIN_DB"]
+    optional_params: ["PARAM.EQ.BAND_INDEX", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "high"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.MAX_EQ_GAIN_DB"]
+
+  ACTION.EQ.HIGH_SHELF:
+    label: "High shelf"
+    description: "Apply a high-shelf boost or cut."
+    required_params: ["PARAM.EQ.FREQ_HZ", "PARAM.EQ.Q", "PARAM.EQ.GAIN_DB"]
+    optional_params: ["PARAM.EQ.BAND_INDEX", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "high"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.MAX_EQ_GAIN_DB"]
+
+  # -------------------------
+  # Dynamic EQ (scaffolding)
+  # -------------------------
+  ACTION.DYN_EQ.BAND:
+    label: "Dynamic EQ band"
+    description: "Apply a dynamic EQ band (frequency-selective compression/expansion)."
+    required_params:
+      - "PARAM.DYN_EQ.FREQ_HZ"
+      - "PARAM.DYN_EQ.Q"
+      - "PARAM.DYN_EQ.GAIN_DB"
+      - "PARAM.DYN_EQ.THRESHOLD_DB"
+      - "PARAM.DYN_EQ.RATIO"
+      - "PARAM.DYN_EQ.ATTACK_MS"
+      - "PARAM.DYN_EQ.RELEASE_MS"
+    optional_params: ["PARAM.DYN_EQ.DRY_WET_PERCENT", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "medium"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range", "band"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.MAX_EQ_BANDS"]
+
+  # -------------------------
+  # Compression / Dynamics
+  # -------------------------
+  ACTION.DYN.COMPRESSOR:
+    label: "Compressor"
+    description: "Apply broadband compression to control dynamics."
+    required_params:
+      - "PARAM.COMP.THRESHOLD_DB"
+      - "PARAM.COMP.RATIO"
+      - "PARAM.COMP.ATTACK_MS"
+      - "PARAM.COMP.RELEASE_MS"
+    optional_params:
+      - "PARAM.COMP.KNEE_DB"
+      - "PARAM.COMP.MAKEUP_DB"
+      - "PARAM.COMP.MIX_PERCENT"
+      - "PARAM.COMP.SIDECHAIN_HPF_HZ"
+      - "PARAM.COMP.AUTO_MAKEUP"
+      - "PARAM.TIME.START_S"
+      - "PARAM.TIME.END_S"
+    default_risk: "high"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.MAX_COMP_RATIO"]
+
+  ACTION.DYN.DEESSER:
+    label: "De-esser"
+    description: "Reduce sibilance using frequency-focused dynamics."
+    required_params:
+      - "PARAM.DEESS.FREQ_HZ"
+      - "PARAM.DEESS.Q"
+      - "PARAM.DEESS.THRESHOLD_DB"
+      - "PARAM.DEESS.RATIO"
+      - "PARAM.DEESS.ATTACK_MS"
+      - "PARAM.DEESS.RELEASE_MS"
+    optional_params: ["PARAM.DEESS.MIX_PERCENT", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "medium"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range", "band"]
+    gates: ["GATE.REQUIRES_APPROVAL"]
+
+  ACTION.DYN.LIMITER:
+    label: "Limiter"
+    description: "Apply limiting with an output ceiling to control peaks."
+    required_params: ["PARAM.LIMIT.CEILING_DBFS", "PARAM.LIMIT.LOOKAHEAD_MS", "PARAM.LIMIT.RELEASE_MS"]
+    optional_params: ["PARAM.LIMIT.MIX_PERCENT"]
+    default_risk: "high"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["bus", "session"]
+    allowed_granularity: ["full"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.NO_CLIP"]
+
+  ACTION.DYN.CLIPPER:
+    label: "Clipper"
+    description: "Apply clipping with a ceiling (aggressive peak control)."
+    required_params: ["PARAM.CLIP.CEILING_DBFS"]
+    optional_params: []
+    default_risk: "high"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["bus", "session"]
+    allowed_granularity: ["full"]
+    gates: ["GATE.REQUIRES_APPROVAL"]
+
+  # -------------------------
+  # Color / Harmonics (scaffolding)
+  # -------------------------
+  ACTION.COLOR.SATURATION:
+    label: "Saturation"
+    description: "Apply saturation/distortion for harmonic enhancement."
+    required_params: ["PARAM.SAT.DRIVE_DB"]
+    optional_params: ["PARAM.SAT.MIX_PERCENT", "PARAM.SAT.TONE_PERCENT", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "high"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL"]
+
+  # -------------------------
+  # Imaging (stereo)
+  # -------------------------
+  ACTION.IMAGE.WIDTH:
+    label: "Stereo width"
+    description: "Adjust stereo width (100% = unchanged)."
+    required_params: ["PARAM.IMAGE.WIDTH_PERCENT"]
+    optional_params: ["PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "high"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL"]
+
+  ACTION.IMAGE.MS_BALANCE:
+    label: "M/S balance"
+    description: "Adjust mid-side balance."
+    required_params: ["PARAM.IMAGE.MS_BALANCE_DB"]
+    optional_params: ["PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "high"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL"]
+
+  # -------------------------
+  # Space (scaffolding)
+  # -------------------------
+  ACTION.SPACE.REVERB:
+    label: "Reverb"
+    description: "Apply reverb (send/insert semantics are DAW-defined)."
+    required_params: ["PARAM.REVERB.MIX_PERCENT", "PARAM.REVERB.PREDELAY_MS", "PARAM.REVERB.DECAY_S"]
+    optional_params: ["PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "high"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL"]
+
+  ACTION.SPACE.DELAY:
+    label: "Delay (FX)"
+    description: "Apply a delay effect (distinct from alignment delay)."
+    required_params: ["PARAM.DELAY.TIME_MS", "PARAM.DELAY.FEEDBACK_PERCENT", "PARAM.DELAY.MIX_PERCENT"]
+    optional_params: ["PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "high"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["full", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL"]
+
+  # -------------------------
+  # Surround (layout-aware scaffolding)
+  # -------------------------
+  ACTION.SURROUND.CHANNEL_GAIN:
+    label: "Surround channel gain"
+    description: "Apply gain to a specific channel in a multichannel stem/bus."
+    required_params: ["PARAM.SURROUND.CHANNEL_INDEX", "PARAM.SURROUND.GAIN_DB"]
+    optional_params: ["PARAM.SURROUND.LAYOUT_ID", "PARAM.SURROUND.SPEAKER_ID", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "medium"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["channel", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.MAX_GAIN_DB"]
+    notes:
+      - "Use CHANNEL_INDEX when container channel order is known; SPEAKER_ID when a map exists."
+
+  ACTION.SURROUND.GROUP_GAIN:
+    label: "Surround group gain"
+    description: "Apply gain to a semantic surround group (front/center/surround/height/LFE)."
+    required_params: ["PARAM.SURROUND.CHANNEL_GROUP", "PARAM.SURROUND.GAIN_DB"]
+    optional_params: ["PARAM.SURROUND.LAYOUT_ID", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "medium"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["group", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.MAX_GAIN_DB"]
+
+  # -------------------------
+  # Downmix (translation / render scaffolding)
+  # -------------------------
+  ACTION.DOWNMIX.RENDER:
+    label: "Downmix render"
+    description: "Render a downmix using a named policy into a target layout (e.g., 5.1 -> 2.0)."
+    required_params: ["PARAM.DOWNMIX.POLICY_ID", "PARAM.DOWNMIX.TARGET_LAYOUT_ID"]
+    optional_params:
+      - "PARAM.DOWNMIX.CENTER_TRIM_DB"
+      - "PARAM.DOWNMIX.SURROUND_TRIM_DB"
+      - "PARAM.DOWNMIX.LFE_TRIM_DB"
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: true
+    allowed_scopes: ["session"]
+    allowed_granularity: ["full"]
+    gates: ["GATE.NO_CLIP", "GATE.DOWNMIX_POLICY_EXISTS"]
+    notes:
+      - "Typically used for translation checks and optional export previews."
+
+  # -------------------------
+  # Render controls (renderer-facing; may not appear in DAW recall)
+  # -------------------------
+  ACTION.RENDER.SET_OVERSAMPLE:
+    label: "Set oversample factor"
+    description: "Set oversampling factor for safe rendering (renderer setting)."
+    required_params: ["PARAM.RENDER.OVERSAMPLE_FACTOR"]
+    optional_params: []
+    default_risk: "low"
+    requires_approval_default: false
+    auto_apply_eligible: true
+    allowed_scopes: ["session"]
+    allowed_granularity: ["full"]
+    gates: ["GATE.OVERSAMPLE_SUPPORTED"]
+
+  # -------------------------
+  # Target / Normalization (optional mastering-ish)
+  # -------------------------
+  ACTION.MASTER.NORMALIZE_LOUDNESS:
+    label: "Normalize to target loudness"
+    description: "Adjust gain to hit a target integrated loudness and/or true-peak ceiling."
+    required_params: ["PARAM.TARGET.LOUDNESS_LUFS_I", "PARAM.TARGET.TRUEPEAK_DBTP"]
+    optional_params: []
+    default_risk: "high"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["bus", "session"]
+    allowed_granularity: ["full"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.NO_CLIP"]
+    notes:
+      - "Kept for workflows that explicitly want targets; off by default."

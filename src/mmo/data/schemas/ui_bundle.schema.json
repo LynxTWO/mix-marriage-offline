@@ -1,0 +1,728 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/ui_bundle.schema.json",
+  "title": "MMO UI Bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generated_at_utc", "report", "dashboard"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "generated_at_utc": { "type": "string", "format": "date-time" },
+    "report": { "$ref": "report.schema.json" },
+    "translation_results": {
+      "type": "array",
+      "items": { "$ref": "report.schema.json#/$defs/translation_result" }
+    },
+    "translation_summary": {
+      "type": "array",
+      "items": { "$ref": "report.schema.json#/$defs/translation_summary_entry" }
+    },
+    "translation_reference": {
+      "$ref": "report.schema.json#/$defs/translation_reference"
+    },
+    "translation_auditions": {
+      "$ref": "#/$defs/translation_auditions_summary"
+    },
+    "render_manifest": { "$ref": "render_manifest.schema.json" },
+    "apply_manifest": { "$ref": "apply_manifest.schema.json" },
+    "applied_report": { "$ref": "report.schema.json" },
+    "help": { "$ref": "#/$defs/help_payload" },
+    "ui_copy": { "$ref": "#/$defs/ui_copy_payload" },
+    "dashboard": { "$ref": "#/$defs/dashboard" },
+    "project": { "$ref": "#/$defs/project_summary" },
+    "gui_design": { "$ref": "#/$defs/gui_design_summary" },
+    "render_targets": { "$ref": "#/$defs/render_targets_payload" },
+    "scene_meta": { "$ref": "#/$defs/scene_meta" },
+    "recommendation_overlays": { "$ref": "#/$defs/recommendation_overlays" },
+    "render_plan_summary": { "$ref": "#/$defs/render_plan_summary" },
+    "stems_summary": { "$ref": "#/$defs/stems_summary" },
+    "pointers": { "$ref": "#/$defs/pointers" },
+    "project_init": { "$ref": "#/$defs/project_init_pointers" },
+    "stems_auditions": { "$ref": "#/$defs/stems_auditions_pointers" },
+    "render": { "$ref": "#/$defs/render_artifacts" }
+  },
+  "$defs": {
+    "posix_abs_path": {
+      "type": "string",
+      "pattern": "^(?:[A-Za-z]:/|/).+"
+    },
+    "posix_rel_path": {
+      "type": "string",
+      "pattern": "^(?![A-Za-z]:/)(?!/)[^\\\\]+$"
+    },
+    "translation_audition_segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_s", "end_s"],
+      "properties": {
+        "start_s": { "type": "number", "minimum": 0 },
+        "end_s": { "type": "number", "minimum": 0 }
+      }
+    },
+    "translation_audition_render": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "path", "notes"],
+      "properties": {
+        "profile_id": { "type": "string", "minLength": 1 },
+        "path": { "$ref": "#/$defs/posix_rel_path" },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "translation_auditions_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_path", "renders", "segment"],
+      "properties": {
+        "manifest_path": { "$ref": "#/$defs/posix_rel_path" },
+        "renders": {
+          "type": "array",
+          "description": "Sorted lexicographically by profile_id.",
+          "items": { "$ref": "#/$defs/translation_audition_render" }
+        },
+        "segment": {
+          "oneOf": [
+            { "$ref": "#/$defs/translation_audition_segment" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "help_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "short"],
+      "properties": {
+        "title": { "type": "string" },
+        "short": { "type": "string" },
+        "long": { "type": "string" },
+        "cues": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "watch_out_for": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "help_payload": {
+      "type": "object",
+      "patternProperties": {
+        "^HELP\\.[A-Z0-9_.]+$": { "$ref": "#/$defs/help_entry" }
+      },
+      "additionalProperties": false
+    },
+    "ui_copy_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "tooltip": { "type": "string", "minLength": 1 },
+        "long": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": ["label", "tooltip", "message"]
+        }
+      }
+    },
+    "ui_copy_entries": {
+      "type": "object",
+      "patternProperties": {
+        "^COPY\\.[A-Z0-9_.]+$": { "$ref": "#/$defs/ui_copy_entry" }
+      },
+      "additionalProperties": false
+    },
+    "ui_copy_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locale", "entries"],
+      "properties": {
+        "locale": { "type": "string", "minLength": 1 },
+        "entries": { "$ref": "#/$defs/ui_copy_entries" }
+      }
+    },
+    "top_issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue_id", "severity", "summary"],
+      "properties": {
+        "issue_id": { "type": "string", "pattern": "^ISSUE\\." },
+        "severity": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "summary": { "type": "string" }
+      }
+    },
+    "eligibility_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["auto_apply", "render"],
+      "properties": {
+        "auto_apply": { "type": "integer", "minimum": 0 },
+        "render": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "downmix_qa_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["has_issues", "max_delta_lufs", "max_delta_true_peak", "min_corr"],
+      "properties": {
+        "has_issues": { "type": "boolean" },
+        "max_delta_lufs": { "type": ["number", "null"] },
+        "max_delta_true_peak": { "type": ["number", "null"] },
+        "min_corr": { "type": ["number", "null"] }
+      }
+    },
+    "mix_complexity_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["density_mean", "density_peak", "top_masking_pairs_count"],
+      "properties": {
+        "density_mean": { "type": ["number", "null"] },
+        "density_peak": { "type": ["integer", "null"], "minimum": 0 },
+        "top_masking_pairs_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "vibe_signals_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["density_level", "masking_level", "translation_risk", "notes"],
+      "properties": {
+        "density_level": { "type": "string", "enum": ["low", "medium", "high"] },
+        "masking_level": { "type": "string", "enum": ["low", "medium", "high"] },
+        "translation_risk": { "type": "string", "enum": ["low", "medium", "high"] },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "preset_recommendation_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preset_id", "reasons"],
+      "properties": {
+        "preset_id": { "type": "string", "minLength": 1 },
+        "overlay": { "type": "string" },
+        "help_id": { "type": "string" },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "apply_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eligible_count",
+        "blocked_count",
+        "outputs_count",
+        "skipped_count"
+      ],
+      "properties": {
+        "eligible_count": { "type": "integer", "minimum": 0 },
+        "blocked_count": { "type": "integer", "minimum": 0 },
+        "outputs_count": { "type": "integer", "minimum": 0 },
+        "skipped_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "dashboard_deliverable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deliverable_id", "label", "output_count"],
+      "properties": {
+        "deliverable_id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "target_layout_id": { "type": "string", "minLength": 1 },
+        "channel_count": { "type": "integer", "minimum": 1 },
+        "formats": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "output_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "project_last_run_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "out_dir"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["single", "variants"]
+        },
+        "out_dir": { "$ref": "#/$defs/posix_abs_path" },
+        "deliverables_index_path": { "$ref": "#/$defs/posix_abs_path" },
+        "listen_pack_path": { "$ref": "#/$defs/posix_abs_path" },
+        "variant_plan_path": { "$ref": "#/$defs/posix_abs_path" },
+        "variant_result_path": { "$ref": "#/$defs/posix_abs_path" }
+      }
+    },
+    "project_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project_id", "stems_dir", "last_run", "updated_at_utc"],
+      "properties": {
+        "project_id": { "type": "string", "minLength": 1 },
+        "stems_dir": { "$ref": "#/$defs/posix_abs_path" },
+        "last_run": {
+          "oneOf": [
+            { "$ref": "#/$defs/project_last_run_summary" },
+            { "type": "null" }
+          ]
+        },
+        "updated_at_utc": { "type": "string", "format": "date-time" }
+      }
+    },
+    "gui_palette": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "background",
+        "surface",
+        "surface_alt",
+        "text",
+        "text_muted",
+        "accent_primary",
+        "accent_secondary",
+        "danger",
+        "warning",
+        "ok",
+        "info"
+      ],
+      "properties": {
+        "background": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "surface": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "surface_alt": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "text": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "text_muted": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "accent_primary": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "accent_secondary": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "danger": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "warning": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "ok": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "info": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
+      }
+    },
+    "gui_typography": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ui_font", "mono_font", "display_font", "fallback_fonts"],
+      "properties": {
+        "ui_font": { "type": "string", "minLength": 1 },
+        "mono_font": { "type": "string", "minLength": 1 },
+        "display_font": { "type": "string", "minLength": 1 },
+        "fallback_fonts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "gui_layout_rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_nav_depth",
+        "prefer_search_over_menus",
+        "keep_primary_actions_visible",
+        "progressive_disclosure"
+      ],
+      "properties": {
+        "max_nav_depth": { "type": "integer", "minimum": 1 },
+        "prefer_search_over_menus": { "type": "boolean" },
+        "keep_primary_actions_visible": { "type": "boolean" },
+        "progressive_disclosure": { "type": "boolean" }
+      }
+    },
+    "gui_design_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["palette", "typography", "layout_rules"],
+      "properties": {
+        "palette": { "$ref": "#/$defs/gui_palette" },
+        "typography": { "$ref": "#/$defs/gui_typography" },
+        "layout_rules": { "$ref": "#/$defs/gui_layout_rules" }
+      }
+    },
+    "render_target_speaker_position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ch", "azimuth_deg", "elevation_deg"],
+      "properties": {
+        "ch": { "type": "integer", "minimum": 0 },
+        "azimuth_deg": { "type": "number" },
+        "elevation_deg": { "type": "number" }
+      }
+    },
+    "render_target_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_id",
+        "label",
+        "layout_id",
+        "channel_order_ref",
+        "notes"
+      ],
+      "properties": {
+        "target_id": { "type": "string", "pattern": "^TARGET\\.[A-Z0-9_.]+$" },
+        "label": { "type": "string", "minLength": 1 },
+        "layout_id": { "type": "string", "pattern": "^LAYOUT\\.[A-Z0-9_.]+$" },
+        "channel_order_ref": { "type": "string", "minLength": 1 },
+        "speaker_positions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/render_target_speaker_position" }
+        },
+        "downmix_policy_id": { "type": "string", "minLength": 1 },
+        "safety_policy_id": { "type": "string", "minLength": 1 },
+        "aliases": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "render_target_recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_id", "rank", "confidence", "reasons"],
+      "properties": {
+        "target_id": { "type": "string", "pattern": "^TARGET\\.[A-Z0-9_.]+$" },
+        "rank": { "type": "integer", "minimum": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "render_targets_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targets"],
+      "properties": {
+        "targets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/render_target_entry" }
+        },
+        "highlighted_target_ids": {
+          "type": "array",
+          "description": "Sorted unique target IDs.",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^TARGET\\.[A-Z0-9_.]+$" }
+        },
+        "recommendations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/render_target_recommendation" }
+        }
+      }
+    },
+    "scene_lock_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lock_id", "label", "description", "severity", "applies_to"],
+      "properties": {
+        "lock_id": { "type": "string", "pattern": "^LOCK\\.[A-Z0-9_.]+$" },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "severity": { "type": "string", "enum": ["hard", "taste"] },
+        "applies_to": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["object", "bed", "scene"]
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "intent_param_def": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["param_id", "type"],
+      "properties": {
+        "param_id": { "type": "string", "pattern": "^INTENT\\.[A-Z0-9_.]+$" },
+        "type": { "type": "string", "enum": ["number", "enum"] },
+        "unit": { "type": "string", "minLength": 1 },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "values": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "default": { "type": ["number", "string", "boolean", "null"] }
+      }
+    },
+    "scene_template_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["template_id", "label", "description"],
+      "properties": {
+        "template_id": {
+          "type": "string",
+          "pattern": "^TEMPLATE\\.SCENE\\.[A-Z0-9_.]+$"
+        },
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "scene_meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locks_used", "intent_param_defs"],
+      "properties": {
+        "locks_used": {
+          "type": "array",
+          "description": "Sorted by lock_id.",
+          "items": { "$ref": "#/$defs/scene_lock_summary" }
+        },
+        "intent_param_defs": {
+          "type": "array",
+          "description": "Sorted by param_id.",
+          "items": { "$ref": "#/$defs/intent_param_def" }
+        },
+        "scene_templates": {
+          "type": "array",
+          "description": "Sorted by template_id.",
+          "items": { "$ref": "#/$defs/scene_template_summary" }
+        }
+      }
+    },
+    "recommendation_overlay_lock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lock_id", "label", "severity"],
+      "properties": {
+        "lock_id": { "type": "string", "pattern": "^LOCK\\.[A-Z0-9_.]+$" },
+        "label": { "type": "string", "minLength": 1 },
+        "severity": { "type": "string", "enum": ["hard", "taste"] }
+      }
+    },
+    "recommendation_overlay_lock_note": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lock_id", "severity", "note"],
+      "properties": {
+        "lock_id": { "type": "string", "pattern": "^LOCK\\.[A-Z0-9_.]+$" },
+        "severity": { "type": "string", "enum": ["hard", "taste"] },
+        "note": { "type": "string", "minLength": 1 },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "recommendation_overlay_lock_conflict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lock_id", "severity", "action_id", "note"],
+      "properties": {
+        "lock_id": { "type": "string", "pattern": "^LOCK\\.[A-Z0-9_.]+$" },
+        "severity": { "type": "string", "enum": ["hard", "taste"] },
+        "action_id": { "type": "string", "pattern": "^ACTION\\.[A-Z0-9_.]+$" },
+        "note": { "type": "string", "minLength": 1 }
+      }
+    },
+    "recommendation_overlay_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scene"],
+      "properties": {
+        "scene": { "const": true },
+        "object_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "recommendation_overlay_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locks_in_effect", "scope"],
+      "properties": {
+        "locks_in_effect": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/recommendation_overlay_lock" }
+        },
+        "lock_notes": {
+          "type": "array",
+          "description": "Sorted by lock_id.",
+          "items": { "$ref": "#/$defs/recommendation_overlay_lock_note" }
+        },
+        "lock_conflicts": {
+          "type": "array",
+          "description": "Sorted by lock_id.",
+          "items": { "$ref": "#/$defs/recommendation_overlay_lock_conflict" }
+        },
+        "scope": { "$ref": "#/$defs/recommendation_overlay_scope" }
+      }
+    },
+    "recommendation_overlays": {
+      "type": "object",
+      "description": "Object keys sorted by recommendation_id.",
+      "patternProperties": {
+        "^.+$": { "$ref": "#/$defs/recommendation_overlay_entry" }
+      },
+      "additionalProperties": false
+    },
+    "pointers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deliverables_index_path": { "$ref": "#/$defs/posix_abs_path" },
+        "listen_pack_path": { "$ref": "#/$defs/posix_abs_path" },
+        "scene_path": { "$ref": "#/$defs/posix_abs_path" },
+        "render_plan_path": { "$ref": "#/$defs/posix_abs_path" },
+        "stems_index_path": { "$ref": "#/$defs/posix_abs_path" },
+        "stems_map_path": { "$ref": "#/$defs/posix_abs_path" },
+        "timeline_path": { "$ref": "#/$defs/posix_abs_path" },
+        "gui_state_path": { "$ref": "#/$defs/posix_abs_path" },
+        "project_path": { "$ref": "#/$defs/posix_abs_path" }
+      }
+    },
+    "counts_object": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "stems_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stem_sets",
+        "assignments_preview",
+        "counts_by_bus_group",
+        "unknown_files"
+      ],
+      "properties": {
+        "stem_sets": {
+          "type": "array",
+          "description": "Sorted by rel_dir then set_id.",
+          "items": { "$ref": "stems_index.schema.json#/$defs/stem_set" }
+        },
+        "assignments_preview": {
+          "type": "array",
+          "description": "Sorted by rel_path then file_id; truncated preview rows.",
+          "items": { "$ref": "stems_map.schema.json#/$defs/assignment" }
+        },
+        "counts_by_bus_group": { "$ref": "#/$defs/counts_object" },
+        "unknown_files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stems_map_path": { "$ref": "#/$defs/posix_abs_path" }
+      }
+    },
+    "render_plan_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_ids", "output_formats", "policy_id"],
+      "properties": {
+        "target_ids": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^TARGET\\.[A-Z0-9_.]+$" }
+        },
+        "output_formats": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "policy_id": { "type": ["string", "null"] }
+      }
+    },
+    "dashboard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_id",
+        "top_issues",
+        "eligible_counts",
+        "blocked_counts",
+        "extreme_count",
+        "downmix_qa",
+        "mix_complexity"
+      ],
+      "properties": {
+        "profile_id": { "type": "string" },
+        "top_issues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/top_issue" }
+        },
+        "eligible_counts": { "$ref": "#/$defs/eligibility_counts" },
+        "blocked_counts": { "$ref": "#/$defs/eligibility_counts" },
+        "extreme_count": { "type": "integer", "minimum": 0 },
+        "downmix_qa": { "$ref": "#/$defs/downmix_qa_summary" },
+        "mix_complexity": { "$ref": "#/$defs/mix_complexity_summary" },
+        "vibe_signals": { "$ref": "#/$defs/vibe_signals_summary" },
+        "preset_recommendations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/preset_recommendation_summary" }
+        },
+        "apply": { "$ref": "#/$defs/apply_summary" },
+        "deliverables": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dashboard_deliverable" }
+        }
+      }
+    },
+    "project_init_pointers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preview_only"],
+      "properties": {
+        "stems_index_path": { "$ref": "#/$defs/posix_abs_path" },
+        "stems_map_path": { "$ref": "#/$defs/posix_abs_path" },
+        "stems_overrides_path": { "$ref": "#/$defs/posix_abs_path" },
+        "scene_draft_path": { "$ref": "#/$defs/posix_abs_path" },
+        "routing_draft_path": { "$ref": "#/$defs/posix_abs_path" },
+        "preview_only": { "const": true }
+      }
+    },
+    "stems_auditions_pointers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest_path", "out_dir", "rendered_groups_count", "missing_files_count"],
+      "properties": {
+        "manifest_path": { "$ref": "#/$defs/posix_abs_path" },
+        "out_dir": { "$ref": "#/$defs/posix_abs_path" },
+        "rendered_groups_count": { "type": "integer", "minimum": 0 },
+        "missing_files_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "render_artifact_pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "exists"],
+      "properties": {
+        "path": { "$ref": "#/$defs/posix_abs_path" },
+        "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+        "exists": { "type": "boolean" }
+      }
+    },
+    "render_artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "render_request": { "$ref": "#/$defs/render_artifact_pointer" },
+        "render_plan": { "$ref": "#/$defs/render_artifact_pointer" },
+        "render_report": { "$ref": "#/$defs/render_artifact_pointer" }
+      }
+    }
+  }
+}

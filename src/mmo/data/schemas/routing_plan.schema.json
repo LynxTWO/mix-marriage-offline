@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/routing_plan.schema.json",
+  "title": "MMO Routing Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_layout_id",
+    "target_layout_id",
+    "routes"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "source_layout_id": { "type": "string", "minLength": 1 },
+    "target_layout_id": { "type": "string", "minLength": 1 },
+    "routes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/route" }
+    }
+  },
+  "$defs": {
+    "mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["src_ch", "dst_ch"],
+      "properties": {
+        "src_ch": { "type": "integer", "minimum": 0 },
+        "dst_ch": { "type": "integer", "minimum": 0 },
+        "gain_db": { "type": "number", "default": 0.0 }
+      },
+      "description": "Mapping entries are sorted by src_ch, then dst_ch."
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stem_id",
+        "stem_channels",
+        "target_channels",
+        "mapping",
+        "notes"
+      ],
+      "properties": {
+        "stem_id": { "type": "string", "minLength": 1 },
+        "stem_channels": { "type": "integer", "minimum": 0 },
+        "target_channels": { "type": "integer", "minimum": 0 },
+        "mapping": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/mapping" },
+          "description": "Sorted by src_ch, then dst_ch."
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

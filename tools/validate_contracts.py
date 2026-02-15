@@ -45,6 +45,7 @@ EXTERNAL_CHECKS: tuple[ExternalCheckSpec, ...] = (
         "tools/validate_plugins.py",
         ("plugins", "--schema", "schemas/plugin.schema.json"),
     ),
+    ExternalCheckSpec("PKG.MIRROR", "tools/validate_packaged_data_mirror.py", ()),
 )
 
 SCHEMA_SMOKE_CHECK_ID = "SCHEMAS"

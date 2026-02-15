@@ -1,0 +1,123 @@
+# Standard Fold-Down Policy Pack (v0)
+# Conservative Lo/Ro-style downmix matrices for common surround beds.
+# This is NOT a Dolby Atmos renderer. It is a deterministic, transparent fold-down policy for translation checks.
+
+downmix_policy_pack:
+  policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+  pack_version: "0.1.0"
+  created_utc: "2026-01-29T00:00:00Z"
+  label: "Standard fold-down v0"
+  description: >
+    A conservative set of linear downmix matrices for common surround beds (3.0/4.0/5.1/7.1) to 2.0 and 1.0,
+    plus 7.1 to 5.1 bed fold.
+  notes:
+    - "Center and surround contributions default to -3 dB (0.7071)."
+    - "Rear surrounds fold into side surrounds at -3 dB (0.7071) for 7.1 -> 5.1."
+    - "LFE is dropped by default for stereo/mono fold-downs; an alternate matrix includes LFE at -10 dB with low-pass."
+  constants:
+    coef_minus_3db: 0.7071
+    coef_minus_6db: 0.5
+    coef_minus_10db: 0.3162
+    coef_half: 0.5
+    coef_quarter: 0.25
+    coef_minus_3db_over_2: 0.3536  # 0.7071 / 2
+
+  # Matrices are defined as:
+  # - coefficients: target_speaker_id -> { source_speaker_id: linear_gain, ... }
+  # - source_pre_filters: optional per-source filters (hints; implementation-defined)
+  matrices:
+
+    DMX.STD.3_0_TO_2_0.LO_RO:
+      label: "3.0 -> 2.0 Lo/Ro"
+      source_layout_id: "LAYOUT.3_0"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L: { SPK.L: 1.0, SPK.C: 0.7071 }
+        SPK.R: { SPK.R: 1.0, SPK.C: 0.7071 }
+
+    DMX.STD.4_0_TO_2_0.QUAD:
+      label: "4.0 -> 2.0 Quad fold"
+      source_layout_id: "LAYOUT.4_0"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L: { SPK.L: 1.0, SPK.LS: 0.7071 }
+        SPK.R: { SPK.R: 1.0, SPK.RS: 0.7071 }
+
+    DMX.STD.5_0_TO_2_0.LO_RO:
+      label: "5.0 -> 2.0 Lo/Ro (no LFE)"
+      source_layout_id: "LAYOUT.5_0"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L: { SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071 }
+        SPK.R: { SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071 }
+
+    DMX.STD.5_1_TO_2_0.LO_RO_LFE_DROP:
+      label: "5.1 -> 2.0 Lo/Ro (LFE dropped)"
+      source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L: { SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071 }
+        SPK.R: { SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071 }
+      notes:
+        - "Most consumer stereo playback does not include a dedicated LFE channel."
+
+    DMX.STD.5_1_TO_2_0.LO_RO_LFE_MIX:
+      label: "5.1 -> 2.0 Lo/Ro (LFE mixed -10 dB, low-pass)"
+      source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.2_0"
+      source_pre_filters:
+        SPK.LFE:
+          - { type: "lowpass", freq_hz: 120, slope_db_per_oct: 24 }
+      coefficients:
+        SPK.L: { SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071, SPK.LFE: 0.3162 }
+        SPK.R: { SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071, SPK.LFE: 0.3162 }
+      notes:
+        - "This matrix simulates players that fold some LFE into stereo."
+
+    DMX.STD.5_1_TO_1_0.MONO_FROM_LO_RO:
+      label: "5.1 -> 1.0 mono (from Lo/Ro)"
+      source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.1_0"
+      coefficients:
+        SPK.M:
+          SPK.L: 0.5
+          SPK.R: 0.5
+          SPK.C: 0.7071
+          SPK.LS: 0.3536
+          SPK.RS: 0.3536
+
+    DMX.STD.7_1_TO_5_1.BED_FOLD:
+      label: "7.1 -> 5.1 bed fold (rear -> side)"
+      source_layout_id: "LAYOUT.7_1"
+      target_layout_id: "LAYOUT.5_1"
+      coefficients:
+        SPK.L:   { SPK.L: 1.0 }
+        SPK.R:   { SPK.R: 1.0 }
+        SPK.C:   { SPK.C: 1.0 }
+        SPK.LFE: { SPK.LFE: 1.0 }
+        SPK.LS:  { SPK.LS: 1.0, SPK.LRS: 0.7071 }
+        SPK.RS:  { SPK.RS: 1.0, SPK.RRS: 0.7071 }
+
+    DMX.STD.7_1_TO_2_0.LO_RO_COMPOSED:
+      label: "7.1 -> 2.0 Lo/Ro (rear attenuated, composed)"
+      source_layout_id: "LAYOUT.7_1"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L: { SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071, SPK.LRS: 0.5 }
+        SPK.R: { SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071, SPK.RRS: 0.5 }
+      notes:
+        - "Equivalent to (7.1 -> 5.1) followed by (5.1 -> 2.0) using -3 dB coefficients."
+
+    DMX.STD.7_1_TO_1_0.MONO_FROM_LO_RO:
+      label: "7.1 -> 1.0 mono (from composed Lo/Ro)"
+      source_layout_id: "LAYOUT.7_1"
+      target_layout_id: "LAYOUT.1_0"
+      coefficients:
+        SPK.M:
+          SPK.L: 0.5
+          SPK.R: 0.5
+          SPK.C: 0.7071
+          SPK.LS: 0.3536
+          SPK.RS: 0.3536
+          SPK.LRS: 0.25
+          SPK.RRS: 0.25

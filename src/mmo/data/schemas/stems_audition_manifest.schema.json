@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/stems_audition_manifest.schema.json",
+  "title": "MMO Stems Audition Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "segment_seconds",
+    "stems_dir",
+    "groups",
+    "warnings",
+    "rendered_groups_count",
+    "attempted_groups_count"
+  ],
+  "properties": {
+    "segment_seconds": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "stems_dir": {
+      "type": "string",
+      "minLength": 1
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/audition_group"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "rendered_groups_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "attempted_groups_count": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "$defs": {
+    "audition_group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bus_group_id",
+        "output_wav",
+        "stems_included",
+        "stems_missing",
+        "stems_skipped_mismatch"
+      ],
+      "properties": {
+        "bus_group_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "output_wav": {
+          "type": "string"
+        },
+        "stems_included": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "stems_missing": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "stems_skipped_mismatch": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/skipped_entry"
+          }
+        }
+      }
+    },
+    "skipped_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rel_path",
+        "reason"
+      ],
+      "properties": {
+        "rel_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/stems_index.schema.json",
+  "title": "MMO Stems Index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "root_dir", "stem_sets", "files"],
+  "properties": {
+    "version": { "const": "0.1.0" },
+    "root_dir": { "type": "string", "minLength": 1 },
+    "stem_sets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/stem_set" }
+    },
+    "files": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/file_entry" }
+    }
+  },
+  "$defs": {
+    "posix_rel_path": {
+      "type": "string",
+      "pattern": "^[^\\\\]+$"
+    },
+    "stem_set": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["set_id", "rel_dir", "file_count", "score_hint", "why"],
+      "properties": {
+        "set_id": {
+          "type": "string",
+          "pattern": "^STEMSET\\.[0-9a-f]{10}$"
+        },
+        "rel_dir": { "$ref": "#/$defs/posix_rel_path" },
+        "file_count": { "type": "integer", "minimum": 0 },
+        "score_hint": { "type": "integer", "minimum": 0 },
+        "why": { "type": "string", "minLength": 1 }
+      }
+    },
+    "file_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_id",
+        "set_id",
+        "rel_path",
+        "basename",
+        "ext",
+        "tokens",
+        "folder_tokens"
+      ],
+      "properties": {
+        "file_id": {
+          "type": "string",
+          "pattern": "^STEMFILE\\.[0-9a-f]{10}$"
+        },
+        "set_id": {
+          "type": "string",
+          "pattern": "^STEMSET\\.[0-9a-f]{10}$"
+        },
+        "rel_path": { "$ref": "#/$defs/posix_rel_path" },
+        "basename": { "type": "string", "minLength": 1 },
+        "ext": {
+          "type": "string",
+          "pattern": "^\\.[^.\\\\]+$"
+        },
+        "tokens": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "folder_tokens": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

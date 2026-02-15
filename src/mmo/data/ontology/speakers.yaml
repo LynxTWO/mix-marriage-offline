@@ -1,0 +1,213 @@
+# Canonical Speakers
+# SPK.* IDs represent semantic channels used in layout definitions and channel maps.
+# Angles are DEFAULTS for reasoning and UX, not a claim about any specific room.
+
+speakers:
+  _meta:
+    speakers_version: "0.1.0"
+    id_prefix: "SPK."
+    coordinate_system:
+      azimuth_deg:
+        definition: "0° = front center; + = left; - = right"
+        range: [-180, 180]
+      elevation_deg:
+        definition: "0° = ear level; + = up"
+        range: [0, 90]
+    channel_groups:
+      enum:
+        - "front"
+        - "center"
+        - "surround"
+        - "rear"
+        - "height"
+        - "lfe"
+        - "bed"
+        - "objects"
+    notes:
+      - "Use aliases for robust import from common naming (FL/FR/FC/LFE/SL/SR/BL/BR/TFL/TFR...)."
+      - "Layouts define ordering. Speakers define meaning + defaults."
+
+  # -------------------------
+  # Mono / Utility
+  # -------------------------
+  SPK.M:
+    label: "Mono"
+    description: "Single-channel mono (front-center equivalent)."
+    channel_group: "center"
+    bed_or_height: "bed"
+    azimuth_deg: 0
+    elevation_deg: 0
+    aliases: ["M", "MONO", "1.0", "CH1"]
+
+  # -------------------------
+  # Front stage (bed)
+  # -------------------------
+  SPK.L:
+    label: "Left"
+    description: "Front Left."
+    channel_group: "front"
+    bed_or_height: "bed"
+    azimuth_deg: 30
+    elevation_deg: 0
+    aliases: ["L", "FL", "LEFT", "FRONT_LEFT", "FRONTL", "CHL"]
+
+  SPK.R:
+    label: "Right"
+    description: "Front Right."
+    channel_group: "front"
+    bed_or_height: "bed"
+    azimuth_deg: -30
+    elevation_deg: 0
+    aliases: ["R", "FR", "RIGHT", "FRONT_RIGHT", "FRONTR", "CHR"]
+
+  SPK.C:
+    label: "Center"
+    description: "Front Center."
+    channel_group: "center"
+    bed_or_height: "bed"
+    azimuth_deg: 0
+    elevation_deg: 0
+    aliases: ["C", "FC", "CENTER", "FRONT_CENTER", "FRONTC", "CHC"]
+
+  SPK.LFE:
+    label: "LFE"
+    description: "Low Frequency Effects (subwoofer channel)."
+    channel_group: "lfe"
+    bed_or_height: "bed"
+    azimuth_deg: 0
+    elevation_deg: 0
+    is_lfe: true
+    aliases: ["LFE", "LFE1", "SUB", "SUBWOOFER", "CHLFE"]
+
+  # Optional wides (for 9.x and some cinema layouts)
+  SPK.LW:
+    label: "Left Wide"
+    description: "Front Wide Left."
+    channel_group: "front"
+    bed_or_height: "bed"
+    azimuth_deg: 60
+    elevation_deg: 0
+    aliases: ["LW", "WL", "FWL", "WIDE_LEFT", "FRONT_WIDE_LEFT"]
+
+  SPK.RW:
+    label: "Right Wide"
+    description: "Front Wide Right."
+    channel_group: "front"
+    bed_or_height: "bed"
+    azimuth_deg: -60
+    elevation_deg: 0
+    aliases: ["RW", "WR", "FWR", "WIDE_RIGHT", "FRONT_WIDE_RIGHT"]
+
+  # -------------------------
+  # Surrounds (bed)
+  # -------------------------
+  SPK.LS:
+    label: "Left Surround"
+    description: "Side Surround Left."
+    channel_group: "surround"
+    bed_or_height: "bed"
+    azimuth_deg: 110
+    elevation_deg: 0
+    aliases: ["LS", "SL", "SURROUND_LEFT", "SIDE_LEFT", "LEFT_SURROUND", "CHSL"]
+
+  SPK.RS:
+    label: "Right Surround"
+    description: "Side Surround Right."
+    channel_group: "surround"
+    bed_or_height: "bed"
+    azimuth_deg: -110
+    elevation_deg: 0
+    aliases: ["RS", "SR", "SURROUND_RIGHT", "SIDE_RIGHT", "RIGHT_SURROUND", "CHSR"]
+
+  SPK.LRS:
+    label: "Left Rear Surround"
+    description: "Rear Surround Left (aka Back Left)."
+    channel_group: "rear"
+    bed_or_height: "bed"
+    azimuth_deg: 150
+    elevation_deg: 0
+    aliases: ["LRS", "BL", "LB", "BACK_LEFT", "REAR_LEFT", "SURROUND_BACK_LEFT", "CHBL"]
+
+  SPK.RRS:
+    label: "Right Rear Surround"
+    description: "Rear Surround Right (aka Back Right)."
+    channel_group: "rear"
+    bed_or_height: "bed"
+    azimuth_deg: -150
+    elevation_deg: 0
+    aliases: ["RRS", "BR", "RB", "BACK_RIGHT", "REAR_RIGHT", "SURROUND_BACK_RIGHT", "CHBR"]
+
+  # -------------------------
+  # Heights (top layer)
+  # -------------------------
+  SPK.TFL:
+    label: "Top Front Left"
+    description: "Top/Height Front Left."
+    channel_group: "height"
+    bed_or_height: "height"
+    azimuth_deg: 30
+    elevation_deg: 45
+    is_height: true
+    aliases: ["TFL", "HFL", "TOP_FRONT_LEFT", "HEIGHT_FRONT_LEFT", "FH_L", "CHTFL"]
+
+  SPK.TFR:
+    label: "Top Front Right"
+    description: "Top/Height Front Right."
+    channel_group: "height"
+    bed_or_height: "height"
+    azimuth_deg: -30
+    elevation_deg: 45
+    is_height: true
+    aliases: ["TFR", "HFR", "TOP_FRONT_RIGHT", "HEIGHT_FRONT_RIGHT", "FH_R", "CHTFR"]
+
+  SPK.TML:
+    label: "Top Middle Left"
+    description: "Top/Height Middle Left (overhead left)."
+    channel_group: "height"
+    bed_or_height: "height"
+    azimuth_deg: 90
+    elevation_deg: 80
+    is_height: true
+    aliases: ["TML", "HML", "TOP_MIDDLE_LEFT", "HEIGHT_MIDDLE_LEFT", "MH_L", "CHTML"]
+
+  SPK.TMR:
+    label: "Top Middle Right"
+    description: "Top/Height Middle Right (overhead right)."
+    channel_group: "height"
+    bed_or_height: "height"
+    azimuth_deg: -90
+    elevation_deg: 80
+    is_height: true
+    aliases: ["TMR", "HMR", "TOP_MIDDLE_RIGHT", "HEIGHT_MIDDLE_RIGHT", "MH_R", "CHTMR"]
+
+  SPK.TRL:
+    label: "Top Rear Left"
+    description: "Top/Height Rear Left."
+    channel_group: "height"
+    bed_or_height: "height"
+    azimuth_deg: 150
+    elevation_deg: 45
+    is_height: true
+    aliases: ["TRL", "HRL", "TOP_REAR_LEFT", "HEIGHT_REAR_LEFT", "RH_L", "CHTRL"]
+
+  SPK.TRR:
+    label: "Top Rear Right"
+    description: "Top/Height Rear Right."
+    channel_group: "height"
+    bed_or_height: "height"
+    azimuth_deg: -150
+    elevation_deg: 45
+    is_height: true
+    aliases: ["TRR", "HRR", "TOP_REAR_RIGHT", "HEIGHT_REAR_RIGHT", "RH_R", "CHTRR"]
+
+  # -------------------------
+  # Object placeholder (for object-based metadata, not a physical speaker)
+  # -------------------------
+  SPK.OBJ:
+    label: "Object"
+    description: "Object channel placeholder (object-based position, not tied to a fixed speaker)."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+    aliases: ["OBJ", "OBJECT", "ATMOS_OBJECT", "IMMERSIVE_OBJECT"]

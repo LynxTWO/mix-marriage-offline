@@ -1,0 +1,90 @@
+# MMO Downmix Policy Registry
+# Maps POLICY.DOWNMIX.* IDs to policy-pack files and declares default targets.
+
+downmix:
+  _meta:
+    downmix_registry_version: "0.1.0"
+    id_prefix: "POLICY.DOWNMIX."
+    created_utc: "2026-01-29T00:00:00Z"
+    conventions:
+      - "POLICY.DOWNMIX.* points to a policy pack file that contains one or more matrices."
+      - "matrix_id values are stable IDs inside the referenced pack file."
+      - "The core may implement multi-step fold-downs using composition_paths when no direct matrix exists."
+    notes:
+      - "Layouts not present in ontology/layouts.yaml should not be referenced here (keep validation strict)."
+
+  policies:
+    POLICY.DOWNMIX.STANDARD_FOLDOWN_V0:
+      label: "Standard fold-down v0"
+      description: "Conservative, broadly compatible Lo/Ro style fold-downs for surround beds (3.0/4.0/5.1/7.1)."
+      file: "downmix_policies/standard_foldown_v0.yaml"
+      supports_source_layouts: ["LAYOUT.3_0", "LAYOUT.4_0", "LAYOUT.5_0", "LAYOUT.5_1", "LAYOUT.7_0", "LAYOUT.7_1"]
+      supports_target_layouts: ["LAYOUT.2_0", "LAYOUT.1_0", "LAYOUT.5_1"]
+
+    POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0:
+      label: "Immersive fold-down v0"
+      description: "Height-to-bed fold-downs plus bed fold-downs for common immersive beds (5.1.2/5.1.4/7.1.2/7.1.4)."
+      file: "downmix_policies/immersive_foldown_v0.yaml"
+      supports_source_layouts: ["LAYOUT.5_1_2", "LAYOUT.5_1_4", "LAYOUT.7_1_2", "LAYOUT.7_1_4"]
+      supports_target_layouts: ["LAYOUT.7_1", "LAYOUT.5_1", "LAYOUT.2_0", "LAYOUT.1_0"]
+
+  # Default policy selection given a source layout.
+  default_policy_by_source_layout:
+    LAYOUT.3_0: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+    LAYOUT.4_0: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+    LAYOUT.5_0: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+    LAYOUT.5_1: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+    LAYOUT.7_0: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+    LAYOUT.7_1: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+    LAYOUT.5_1_2: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+    LAYOUT.5_1_4: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+    LAYOUT.7_1_2: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+    LAYOUT.7_1_4: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+
+  # Preferred matrices for common conversions.
+  # If a direct matrix isn't present, composition_paths may be used (source -> ... -> target).
+  conversions:
+    - source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.2_0"
+      policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      matrix_id: "DMX.STD.5_1_TO_2_0.LO_RO_LFE_DROP"
+
+    - source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.1_0"
+      policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      matrix_id: "DMX.STD.5_1_TO_1_0.MONO_FROM_LO_RO"
+
+    - source_layout_id: "LAYOUT.7_1"
+      target_layout_id: "LAYOUT.5_1"
+      policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      matrix_id: "DMX.STD.7_1_TO_5_1.BED_FOLD"
+
+    - source_layout_id: "LAYOUT.7_1"
+      target_layout_id: "LAYOUT.2_0"
+      policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      matrix_id: "DMX.STD.7_1_TO_2_0.LO_RO_COMPOSED"
+
+    - source_layout_id: "LAYOUT.7_1_4"
+      target_layout_id: "LAYOUT.5_1"
+      policy_id: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+      matrix_id: "DMX.IMM.7_1_4_TO_5_1.COMPOSED"
+
+    - source_layout_id: "LAYOUT.7_1_4"
+      target_layout_id: "LAYOUT.2_0"
+      policy_id: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+      matrix_id: "DMX.IMM.7_1_4_TO_2_0.COMPOSED"
+
+  # Composition paths (optional helper map). The core may use these to derive a composite
+  # matrix when only intermediate steps exist.
+  composition_paths:
+    - source_layout_id: "LAYOUT.7_1_4"
+      target_layout_id: "LAYOUT.2_0"
+      steps:
+        - { source_layout_id: "LAYOUT.7_1_4", target_layout_id: "LAYOUT.7_1", matrix_id: "DMX.IMM.7_1_4_TO_7_1.HEIGHT_TO_BED" }
+        - { source_layout_id: "LAYOUT.7_1",   target_layout_id: "LAYOUT.2_0", matrix_id: "DMX.STD.7_1_TO_2_0.LO_RO_COMPOSED" }
+
+    - source_layout_id: "LAYOUT.5_1_4"
+      target_layout_id: "LAYOUT.2_0"
+      steps:
+        - { source_layout_id: "LAYOUT.5_1_4", target_layout_id: "LAYOUT.5_1", matrix_id: "DMX.IMM.5_1_4_TO_5_1.HEIGHT_TO_BED" }
+        - { source_layout_id: "LAYOUT.5_1",   target_layout_id: "LAYOUT.2_0", matrix_id: "DMX.STD.5_1_TO_2_0.LO_RO_LFE_DROP" }

@@ -1,0 +1,608 @@
+# Canonical Action Parameters
+# PARAM.* IDs are used by ACTION.* definitions and by resolver outputs (recommendations/recall).
+# Keep these stable. Additive changes only unless a major ontology bump.
+
+params:
+  _meta:
+    params_version: "0.1.0"
+    id_prefix: "PARAM."
+    value_types: ["number", "integer", "boolean", "string", "array", "object"]
+    conventions:
+      - "All numeric params should declare unit_id (UNIT.*). Use UNIT.NONE only when truly unitless."
+      - "Constraints are normative for validators/gates; recommended_range is UX guidance."
+      - "If a param expects SPK.* or LAYOUT.* IDs, validate with pattern."
+      - "Time-local actions may use PARAM.TIME.* plus evidence time ranges."
+
+  # -------------------------
+  # Time & Band Windows (for localized edits)
+  # -------------------------
+  PARAM.TIME.START_S:
+    label: "Start time"
+    description: "Start time (seconds) for a time-local action."
+    value_type: "number"
+    unit_id: "UNIT.S"
+    constraints: { min: 0 }
+
+  PARAM.TIME.END_S:
+    label: "End time"
+    description: "End time (seconds) for a time-local action."
+    value_type: "number"
+    unit_id: "UNIT.S"
+    constraints: { min: 0 }
+
+  PARAM.TIME.FADE_IN_S:
+    label: "Fade-in"
+    description: "Fade-in duration for a time-local action."
+    value_type: "number"
+    unit_id: "UNIT.S"
+    constraints: { min: 0 }
+
+  PARAM.TIME.FADE_OUT_S:
+    label: "Fade-out"
+    description: "Fade-out duration for a time-local action."
+    value_type: "number"
+    unit_id: "UNIT.S"
+    constraints: { min: 0 }
+
+  PARAM.BAND.LOW_HZ:
+    label: "Band low cutoff"
+    description: "Low cutoff of a frequency band."
+    value_type: "number"
+    unit_id: "UNIT.HZ"
+    constraints: { min: 0 }
+
+  PARAM.BAND.HIGH_HZ:
+    label: "Band high cutoff"
+    description: "High cutoff of a frequency band."
+    value_type: "number"
+    unit_id: "UNIT.HZ"
+    constraints: { min: 0 }
+
+  # -------------------------
+  # Gain / Utility
+  # -------------------------
+  PARAM.GAIN.DB:
+    label: "Gain"
+    description: "Static gain change applied to the target."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+    recommended_range: { min: -12, max: 12 }
+    examples: [-1.5, 3.0]
+
+  PARAM.GAIN.TRIM_DB:
+    label: "Trim"
+    description: "Trim gain (often pre-processing) applied to the target."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+    recommended_range: { min: -12, max: 12 }
+
+  PARAM.MUTE:
+    label: "Mute"
+    description: "Whether the target is muted."
+    value_type: "boolean"
+    unit_id: "UNIT.NONE"
+    examples: [true, false]
+
+  PARAM.POLARITY.INVERT:
+    label: "Invert polarity"
+    description: "Invert polarity (180°) for the target."
+    value_type: "boolean"
+    unit_id: "UNIT.NONE"
+    examples: [true, false]
+
+  PARAM.DELAY.MS:
+    label: "Delay"
+    description: "Time delay applied to the target (positive delays only)."
+    value_type: "number"
+    unit_id: "UNIT.MS"
+    constraints: { min: 0 }
+    recommended_range: { min: 0, max: 50 }
+
+  PARAM.PAN.PERCENT:
+    label: "Pan"
+    description: "Stereo pan position, -100 (L) to +100 (R)."
+    value_type: "number"
+    unit_id: "UNIT.PERCENT"
+    constraints: { min: -100, max: 100 }
+
+  # -------------------------
+  # EQ (static)
+  # -------------------------
+  PARAM.EQ.BAND_INDEX:
+    label: "EQ band index"
+    description: "Zero-based band index for multi-band EQ actions."
+    value_type: "integer"
+    unit_id: "UNIT.COUNT"
+    constraints: { min: 0 }
+
+  PARAM.EQ.TYPE:
+    label: "Filter type"
+    description: "EQ filter type."
+    value_type: "string"
+    unit_id: "UNIT.NONE"
+    constraints:
+      enum:
+        - "bell"
+        - "notch"
+        - "low_shelf"
+        - "high_shelf"
+        - "low_pass"
+        - "high_pass"
+        - "band_pass"
+
+  PARAM.EQ.FREQ_HZ:
+    label: "Frequency"
+    description: "Center/cutoff frequency of the EQ band."
+    value_type: "number"
+    unit_id: "UNIT.HZ"
+    constraints: { min: 0 }
+    recommended_range: { min: 20, max: 20000 }
+
+  PARAM.EQ.GAIN_DB:
+    label: "Gain"
+    description: "Boost/cut gain for the EQ band."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+    recommended_range: { min: -12, max: 12 }
+
+  PARAM.EQ.Q:
+    label: "Q"
+    description: "Filter Q (bandwidth control)."
+    value_type: "number"
+    unit_id: "UNIT.Q"
+    constraints: { min: 0.05 }
+    recommended_range: { min: 0.3, max: 20 }
+
+  PARAM.EQ.SLOPE_DB_PER_OCT:
+    label: "Slope"
+    description: "Slope for HP/LP filters."
+    value_type: "number"
+    unit_id: "UNIT.DB_PER_OCT"
+    constraints: { min: 0 }
+    recommended_range: { min: 6, max: 48 }
+    examples: [12, 24]
+
+  PARAM.EQ.ENABLED:
+    label: "Enabled"
+    description: "Whether the EQ band is enabled."
+    value_type: "boolean"
+    unit_id: "UNIT.NONE"
+
+  # -------------------------
+  # Dynamic EQ (scaffolding)
+  # -------------------------
+  PARAM.DYN_EQ.FREQ_HZ:
+    label: "Dynamic EQ frequency"
+    description: "Center frequency for dynamic EQ band."
+    value_type: "number"
+    unit_id: "UNIT.HZ"
+    constraints: { min: 0 }
+
+  PARAM.DYN_EQ.Q:
+    label: "Dynamic EQ Q"
+    description: "Q for dynamic EQ band."
+    value_type: "number"
+    unit_id: "UNIT.Q"
+    constraints: { min: 0.05 }
+
+  PARAM.DYN_EQ.GAIN_DB:
+    label: "Dynamic EQ gain range"
+    description: "Maximum gain change magnitude (typically negative for cuts)."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+    recommended_range: { min: -12, max: 12 }
+
+  PARAM.DYN_EQ.THRESHOLD_DB:
+    label: "Dynamic EQ threshold"
+    description: "Threshold for dynamic EQ triggering (domain depends on implementation)."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+
+  PARAM.DYN_EQ.RATIO:
+    label: "Dynamic EQ ratio"
+    description: "Ratio for dynamic EQ band."
+    value_type: "number"
+    unit_id: "UNIT.RATIO"
+    constraints: { min: 1 }
+
+  PARAM.DYN_EQ.ATTACK_MS:
+    label: "Dynamic EQ attack"
+    description: "Attack time for dynamic EQ."
+    value_type: "number"
+    unit_id: "UNIT.MS"
+    constraints: { min: 0 }
+
+  PARAM.DYN_EQ.RELEASE_MS:
+    label: "Dynamic EQ release"
+    description: "Release time for dynamic EQ."
+    value_type: "number"
+    unit_id: "UNIT.MS"
+    constraints: { min: 0 }
+
+  PARAM.DYN_EQ.DRY_WET_PERCENT:
+    label: "Dynamic EQ dry/wet"
+    description: "Dry/wet for dynamic EQ processing."
+    value_type: "number"
+    unit_id: "UNIT.PERCENT"
+    constraints: { min: 0, max: 100 }
+
+  # -------------------------
+  # Compression / Dynamics
+  # -------------------------
+  PARAM.COMP.THRESHOLD_DB:
+    label: "Threshold"
+    description: "Compressor threshold."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+    recommended_range: { min: -60, max: 0 }
+
+  PARAM.COMP.RATIO:
+    label: "Ratio"
+    description: "Compressor ratio (e.g., 4 means 4:1)."
+    value_type: "number"
+    unit_id: "UNIT.RATIO"
+    constraints: { min: 1 }
+    recommended_range: { min: 1, max: 20 }
+
+  PARAM.COMP.ATTACK_MS:
+    label: "Attack"
+    description: "Compressor attack time."
+    value_type: "number"
+    unit_id: "UNIT.MS"
+    constraints: { min: 0 }
+    recommended_range: { min: 0, max: 200 }
+
+  PARAM.COMP.RELEASE_MS:
+    label: "Release"
+    description: "Compressor release time."
+    value_type: "number"
+    unit_id: "UNIT.MS"
+    constraints: { min: 0 }
+    recommended_range: { min: 5, max: 2000 }
+
+  PARAM.COMP.KNEE_DB:
+    label: "Knee"
+    description: "Compressor knee amount."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+    constraints: { min: 0 }
+    recommended_range: { min: 0, max: 24 }
+
+  PARAM.COMP.MAKEUP_DB:
+    label: "Makeup gain"
+    description: "Compressor makeup gain."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+    recommended_range: { min: -12, max: 12 }
+
+  PARAM.COMP.MIX_PERCENT:
+    label: "Parallel mix"
+    description: "Dry/wet blend for parallel compression."
+    value_type: "number"
+    unit_id: "UNIT.PERCENT"
+    constraints: { min: 0, max: 100 }
+
+  PARAM.COMP.SIDECHAIN_HPF_HZ:
+    label: "Sidechain HPF"
+    description: "High-pass filter applied to the detector sidechain."
+    value_type: "number"
+    unit_id: "UNIT.HZ"
+    constraints: { min: 0 }
+    recommended_range: { min: 0, max: 400 }
+
+  PARAM.COMP.AUTO_MAKEUP:
+    label: "Auto makeup"
+    description: "Whether compressor uses auto makeup gain."
+    value_type: "boolean"
+    unit_id: "UNIT.NONE"
+
+  # -------------------------
+  # De-esser (specialized dynamics)
+  # -------------------------
+  PARAM.DEESS.FREQ_HZ:
+    label: "De-esser center frequency"
+    description: "Center frequency for sibilance reduction."
+    value_type: "number"
+    unit_id: "UNIT.HZ"
+    constraints: { min: 0 }
+    recommended_range: { min: 3000, max: 12000 }
+
+  PARAM.DEESS.Q:
+    label: "De-esser Q"
+    description: "Bandwidth control for de-essing."
+    value_type: "number"
+    unit_id: "UNIT.Q"
+    constraints: { min: 0.05 }
+
+  PARAM.DEESS.THRESHOLD_DB:
+    label: "De-esser threshold"
+    description: "Threshold for sibilance reduction."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+
+  PARAM.DEESS.RATIO:
+    label: "De-esser ratio"
+    description: "Ratio/strength for sibilance reduction."
+    value_type: "number"
+    unit_id: "UNIT.RATIO"
+    constraints: { min: 1 }
+
+  PARAM.DEESS.ATTACK_MS:
+    label: "De-esser attack"
+    description: "Attack time for de-esser."
+    value_type: "number"
+    unit_id: "UNIT.MS"
+    constraints: { min: 0 }
+
+  PARAM.DEESS.RELEASE_MS:
+    label: "De-esser release"
+    description: "Release time for de-esser."
+    value_type: "number"
+    unit_id: "UNIT.MS"
+    constraints: { min: 0 }
+
+  PARAM.DEESS.MIX_PERCENT:
+    label: "De-esser mix"
+    description: "Dry/wet blend for de-esser."
+    value_type: "number"
+    unit_id: "UNIT.PERCENT"
+    constraints: { min: 0, max: 100 }
+
+  # -------------------------
+  # Limiting / Clipping (safety + loudness control)
+  # -------------------------
+  PARAM.LIMIT.CEILING_DBFS:
+    label: "Limiter ceiling"
+    description: "Output ceiling for limiter (sample-peak domain)."
+    value_type: "number"
+    unit_id: "UNIT.DBFS"
+    constraints: { max: 0 }
+    recommended_range: { min: -3, max: -0.1 }
+
+  PARAM.LIMIT.LOOKAHEAD_MS:
+    label: "Lookahead"
+    description: "Limiter lookahead time."
+    value_type: "number"
+    unit_id: "UNIT.MS"
+    constraints: { min: 0 }
+    recommended_range: { min: 0, max: 10 }
+
+  PARAM.LIMIT.RELEASE_MS:
+    label: "Limiter release"
+    description: "Limiter release time."
+    value_type: "number"
+    unit_id: "UNIT.MS"
+    constraints: { min: 0 }
+
+  PARAM.LIMIT.MIX_PERCENT:
+    label: "Limiter mix"
+    description: "Dry/wet blend for limiter."
+    value_type: "number"
+    unit_id: "UNIT.PERCENT"
+    constraints: { min: 0, max: 100 }
+
+  PARAM.CLIP.CEILING_DBFS:
+    label: "Clipper ceiling"
+    description: "Ceiling for clipping stage (sample domain)."
+    value_type: "number"
+    unit_id: "UNIT.DBFS"
+    constraints: { max: 0 }
+
+  PARAM.RENDER.OVERSAMPLE_FACTOR:
+    label: "Oversample factor"
+    description: "Oversampling multiplier for rendering safety (if supported)."
+    value_type: "integer"
+    unit_id: "UNIT.COUNT"
+    constraints: { min: 1 }
+    recommended_range: { min: 1, max: 16 }
+    examples: [1, 2, 4, 8]
+
+  # -------------------------
+  # Saturation / Distortion (scaffolding)
+  # -------------------------
+  PARAM.SAT.DRIVE_DB:
+    label: "Drive"
+    description: "Drive amount for saturation stage."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+    recommended_range: { min: 0, max: 24 }
+
+  PARAM.SAT.MIX_PERCENT:
+    label: "Saturation mix"
+    description: "Dry/wet blend for saturation."
+    value_type: "number"
+    unit_id: "UNIT.PERCENT"
+    constraints: { min: 0, max: 100 }
+
+  PARAM.SAT.TONE_PERCENT:
+    label: "Tone"
+    description: "Tone control for saturation (implementation-defined curve)."
+    value_type: "number"
+    unit_id: "UNIT.PERCENT"
+    constraints: { min: 0, max: 100 }
+
+  # -------------------------
+  # Imaging (stereo-focused)
+  # -------------------------
+  PARAM.IMAGE.WIDTH_PERCENT:
+    label: "Stereo width"
+    description: "Stereo width control (100 = unchanged)."
+    value_type: "number"
+    unit_id: "UNIT.PERCENT"
+    recommended_range: { min: 0, max: 200 }
+    examples: [80, 100, 120]
+
+  PARAM.IMAGE.MS_BALANCE_DB:
+    label: "M/S balance"
+    description: "Mid-side balance adjustment (mid relative to side)."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+    recommended_range: { min: -12, max: 12 }
+
+  # -------------------------
+  # Reverb / Delay (scaffolding)
+  # -------------------------
+  PARAM.REVERB.MIX_PERCENT:
+    label: "Reverb mix"
+    description: "Dry/wet mix for reverb."
+    value_type: "number"
+    unit_id: "UNIT.PERCENT"
+    constraints: { min: 0, max: 100 }
+
+  PARAM.REVERB.PREDELAY_MS:
+    label: "Pre-delay"
+    description: "Reverb pre-delay."
+    value_type: "number"
+    unit_id: "UNIT.MS"
+    constraints: { min: 0 }
+
+  PARAM.REVERB.DECAY_S:
+    label: "Decay"
+    description: "Reverb decay time."
+    value_type: "number"
+    unit_id: "UNIT.S"
+    constraints: { min: 0 }
+
+  PARAM.DELAY.TIME_MS:
+    label: "Delay time"
+    description: "Delay time."
+    value_type: "number"
+    unit_id: "UNIT.MS"
+    constraints: { min: 0 }
+
+  PARAM.DELAY.FEEDBACK_PERCENT:
+    label: "Delay feedback"
+    description: "Delay feedback amount."
+    value_type: "number"
+    unit_id: "UNIT.PERCENT"
+    constraints: { min: 0, max: 100 }
+
+  PARAM.DELAY.MIX_PERCENT:
+    label: "Delay mix"
+    description: "Dry/wet mix for delay."
+    value_type: "number"
+    unit_id: "UNIT.PERCENT"
+    constraints: { min: 0, max: 100 }
+
+  # -------------------------
+  # Surround / Layout-aware targeting (scaffolding)
+  # -------------------------
+  PARAM.SURROUND.LAYOUT_ID:
+    label: "Target layout"
+    description: "Target layout identifier (LAYOUT.*) for layout-aware actions."
+    value_type: "string"
+    unit_id: "UNIT.NONE"
+    constraints: { pattern: "^LAYOUT\\." }
+
+  PARAM.SURROUND.SPEAKER_ID:
+    label: "Target speaker"
+    description: "Target speaker identifier (SPK.*) for channel-specific actions."
+    value_type: "string"
+    unit_id: "UNIT.NONE"
+    constraints: { pattern: "^SPK\\." }
+
+  PARAM.SURROUND.CHANNEL_INDEX:
+    label: "Target channel index"
+    description: "Zero-based channel index within a track for channel-specific actions."
+    value_type: "integer"
+    unit_id: "UNIT.COUNT"
+    constraints: { min: 0 }
+
+  PARAM.SURROUND.CHANNEL_GROUP:
+    label: "Channel group"
+    description: "Semantic channel group for surround-aware actions."
+    value_type: "string"
+    unit_id: "UNIT.NONE"
+    constraints:
+      enum:
+        - "front"
+        - "center"
+        - "surround"
+        - "rear"
+        - "height"
+        - "lfe"
+        - "bed"
+        - "objects"
+
+  PARAM.SURROUND.GAIN_DB:
+    label: "Group/channel gain"
+    description: "Gain change applied to a surround channel, speaker, or group."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+    recommended_range: { min: -12, max: 12 }
+
+  # -------------------------
+  # Downmix policy references (scaffolding)
+  # -------------------------
+  PARAM.DOWNMIX.POLICY_ID:
+    label: "Downmix policy"
+    description: "Identifier of the downmix policy to apply (policy pack entry)."
+    value_type: "string"
+    unit_id: "UNIT.NONE"
+
+  PARAM.DOWNMIX.TARGET_LAYOUT_ID:
+    label: "Downmix target layout"
+    description: "Layout to render/downmix into (e.g., LAYOUT.2_0, LAYOUT.5_1)."
+    value_type: "string"
+    unit_id: "UNIT.NONE"
+    constraints: { pattern: "^LAYOUT\\." }
+
+  PARAM.DOWNMIX.CENTER_TRIM_DB:
+    label: "Center trim"
+    description: "Optional additional trim applied to Center contribution during downmix."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+    recommended_range: { min: -12, max: 12 }
+
+  PARAM.DOWNMIX.SURROUND_TRIM_DB:
+    label: "Surround trim"
+    description: "Optional additional trim applied to Surround contributions during downmix."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+    recommended_range: { min: -12, max: 12 }
+
+  PARAM.DOWNMIX.LFE_TRIM_DB:
+    label: "LFE trim"
+    description: "Optional additional trim applied to LFE contributions during downmix."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+    recommended_range: { min: -24, max: 0 }
+
+  # -------------------------
+  # Downmix QA deltas (diagnostic)
+  # -------------------------
+  PARAM.DOWNMIX.QA.LUFS_DELTA:
+    label: "Downmix QA LUFS delta"
+    description: "Delta between folded downmix and reference integrated loudness."
+    value_type: "number"
+    unit_id: "UNIT.LUFS"
+
+  PARAM.DOWNMIX.QA.TRUE_PEAK_DELTA:
+    label: "Downmix QA true-peak delta"
+    description: "Delta between folded downmix and reference true peak."
+    value_type: "number"
+    unit_id: "UNIT.DBTP"
+
+  PARAM.DOWNMIX.QA.CORR_DELTA:
+    label: "Downmix QA correlation delta"
+    description: "Delta between folded downmix and reference stereo correlation."
+    value_type: "number"
+    unit_id: "UNIT.CORRELATION"
+
+  # -------------------------
+  # Target loudness (for optional mastering-ish constraints)
+  # -------------------------
+  PARAM.TARGET.LOUDNESS_LUFS_I:
+    label: "Target integrated loudness"
+    description: "Target integrated loudness used for normalization or warnings."
+    value_type: "number"
+    unit_id: "UNIT.LUFS"
+    recommended_range: { min: -24, max: -6 }
+
+  PARAM.TARGET.TRUEPEAK_DBTP:
+    label: "Target true peak"
+    description: "Target true peak ceiling used for normalization or warnings."
+    value_type: "number"
+    unit_id: "UNIT.DBTP"
+    constraints: { max: 0 }
+    recommended_range: { min: -3, max: -0.5 }

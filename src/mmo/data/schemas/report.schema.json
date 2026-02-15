@@ -1,0 +1,544 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/report.schema.json",
+  "title": "MMO Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "report_id", "project_id", "generated_at", "engine_version", "ontology_version", "session", "issues", "recommendations"],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "report_id": { "type": "string", "minLength": 1 },
+    "project_id": { "type": "string", "minLength": 1 },
+    "profile_id": { "type": "string", "minLength": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "registry_file": { "type": "string" },
+    "engine_version": { "type": "string" },
+    "ontology_version": { "type": "string" },
+    "session": { "$ref": "#/$defs/session" },
+    "issues": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/issue" }
+    },
+    "recommendations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/recommendation" }
+    },
+    "translation_results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/translation_result" }
+    },
+    "translation_summary": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/translation_summary_entry" }
+    },
+    "translation_reference": { "$ref": "#/$defs/translation_reference" },
+    "plugins": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/plugin_run" }
+    },
+    "artifacts": { "$ref": "#/$defs/artifacts" },
+    "run_config": { "$ref": "#/$defs/run_config" },
+    "routing_plan": { "$ref": "#/$defs/routing_plan" },
+    "timeline": { "$ref": "timeline.schema.json" },
+    "downmix_qa": {
+      "type": "object",
+      "properties": {
+        "src_path": { "type": "string" },
+        "ref_path": { "type": "string" },
+        "policy_id": { "type": ["string", "null"] },
+        "matrix_id": { "type": ["string", "null"] },
+        "sample_rate_hz": { "type": ["integer", "null"] },
+        "issues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/issue" }
+        },
+        "measurements": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidence_item" }
+        },
+        "log": { "type": "string" }
+      },
+      "required": ["src_path", "ref_path", "issues", "measurements", "log"],
+      "additionalProperties": true
+    },
+    "mix_complexity": { "$ref": "#/$defs/mix_complexity" },
+    "vibe_signals": { "$ref": "#/$defs/vibe_signals" },
+    "preset_recommendations": {
+      "type": "array",
+      "maxItems": 5,
+      "items": { "$ref": "#/$defs/preset_recommendation" }
+    }
+  },
+  "$defs": {
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stems"],
+      "properties": {
+        "session_id": { "type": "string" },
+        "stems_dir": { "type": "string", "minLength": 1 },
+        "stems": {
+          "type": "array",
+          "minItems": 0,
+          "items": { "$ref": "#/$defs/stem" }
+        },
+        "buses": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/bus" }
+        },
+        "source_layout_id": { "type": "string", "pattern": "^LAYOUT\\." }
+      }
+    },
+    "routing_mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["src_ch", "dst_ch"],
+      "properties": {
+        "src_ch": { "type": "integer", "minimum": 0 },
+        "dst_ch": { "type": "integer", "minimum": 0 },
+        "gain_db": { "type": "number", "default": 0.0 }
+      }
+    },
+    "routing_route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stem_id", "stem_channels", "target_channels", "mapping", "notes"],
+      "properties": {
+        "stem_id": { "type": "string", "minLength": 1 },
+        "stem_channels": { "type": "integer", "minimum": 0 },
+        "target_channels": { "type": "integer", "minimum": 0 },
+        "mapping": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/routing_mapping" }
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "routing_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "source_layout_id", "target_layout_id", "routes"],
+      "properties": {
+        "schema_version": { "const": "0.1.0" },
+        "source_layout_id": { "type": "string", "minLength": 1 },
+        "target_layout_id": { "type": "string", "minLength": 1 },
+        "routes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/routing_route" }
+        }
+      }
+    },
+    "stem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stem_id", "file_path"],
+      "properties": {
+        "stem_id": { "type": "string", "minLength": 1 },
+        "file_path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "minLength": 16 },
+        "role_id": { "type": "string", "pattern": "^ROLE\\." },
+        "layout_id": { "type": "string", "pattern": "^LAYOUT\\." },
+        "channel_count": { "type": "integer", "minimum": 1 },
+        "channel_layout": { "type": ["string", "null"], "description": "ffprobe channel_layout when known" },
+        "duration_s": { "type": "number", "minimum": 0 },
+        "sample_rate_hz": { "type": "number", "minimum": 8000 },
+        "bits_per_sample": { "type": "integer", "minimum": 1 },
+        "bit_depth": { "type": "integer", "minimum": 1 },
+        "codec_name": { "type": "string", "minLength": 1 },
+        "wav_audio_format": { "type": "integer", "minimum": 1 },
+        "wav_audio_format_resolved": { "type": "integer", "minimum": 1 },
+        "wav_channel_mask": { "type": "integer", "minimum": 0 },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "peak_dbfs": { "type": "number" }
+          }
+        },
+        "measurements": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/measurement" }
+        }
+      }
+    },
+    "bus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bus_id", "member_stem_ids"],
+      "properties": {
+        "bus_id": { "type": "string", "minLength": 1 },
+        "member_stem_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "layout_id": { "type": "string", "pattern": "^LAYOUT\\." }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope"],
+      "properties": {
+        "scope": { "type": "string", "enum": ["stem", "bus", "session"] },
+        "stem_id": { "type": "string" },
+        "bus_id": { "type": "string" },
+        "layout_id": { "type": "string", "pattern": "^LAYOUT\\." },
+        "speaker_id": { "type": "string", "pattern": "^SPK\\." },
+        "channel_index": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_id", "value"],
+      "properties": {
+        "evidence_id": { "type": "string", "pattern": "^EVID\\." },
+        "value": {},
+        "unit_id": { "type": "string", "pattern": "^UNIT\\." },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "source": { "type": "string" },
+        "where": { "type": "object", "additionalProperties": true },
+        "why": { "type": "string" }
+      }
+    },
+    "evidence_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_id", "value"],
+      "properties": {
+        "evidence_id": { "type": "string", "pattern": "^EVID\\." },
+        "value": {},
+        "unit_id": { "type": "string", "pattern": "^UNIT\\." }
+      }
+    },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_id", "value", "unit_id"],
+      "properties": {
+        "evidence_id": { "type": "string", "pattern": "^EVID\\." },
+        "value": {
+          "anyOf": [{ "type": "number" }, { "type": "integer" }, { "type": "string" }]
+        },
+        "unit_id": { "type": "string", "pattern": "^UNIT\\." }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue_id", "severity", "confidence", "evidence"],
+      "properties": {
+        "issue_id": { "type": "string", "pattern": "^ISSUE\\." },
+        "severity": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "message": { "type": "string" },
+        "target": { "$ref": "#/$defs/target" },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      }
+    },
+    "param": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["param_id", "value"],
+      "properties": {
+        "param_id": { "type": "string", "pattern": "^PARAM\\." },
+        "value": {},
+        "unit_id": { "type": "string", "pattern": "^UNIT\\." }
+      }
+    },
+    "recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recommendation_id", "action_id", "risk", "requires_approval", "params"],
+      "properties": {
+        "recommendation_id": { "type": "string", "minLength": 1 },
+        "issue_id": { "type": "string", "pattern": "^ISSUE\\." },
+        "action_id": { "type": "string", "pattern": "^ACTION\\." },
+        "risk": { "type": "string", "enum": ["low", "medium", "high"] },
+        "requires_approval": { "type": "boolean" },
+        "target": { "$ref": "#/$defs/target" },
+        "params": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/param" }
+        },
+        "gate_results": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/gate_result" }
+        },
+        "eligible_auto_apply": { "type": "boolean" },
+        "eligible_render": { "type": "boolean" },
+        "extreme": { "type": "boolean" },
+        "extreme_reasons": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/extreme_reason" }
+        },
+        "notes": { "type": "string" },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      }
+    },
+    "extreme_reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "reason_id", "details"],
+      "properties": {
+        "gate_id": { "type": "string" },
+        "reason_id": { "type": "string" },
+        "details": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "translation_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "score"],
+      "properties": {
+        "profile_id": { "type": "string", "minLength": 1 },
+        "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "issues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/issue" }
+        }
+      }
+    },
+    "translation_summary_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "status", "score", "label", "short_reason"],
+      "properties": {
+        "profile_id": { "type": "string", "minLength": 1 },
+        "status": {
+          "type": "string",
+          "enum": ["pass", "warn", "fail"]
+        },
+        "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "label": { "type": "string", "minLength": 1 },
+        "short_reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "translation_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_target_id",
+        "method",
+        "downmix_policy_id",
+        "source_channels",
+        "audio_path"
+      ],
+      "properties": {
+        "source_target_id": { "type": "string", "minLength": 1 },
+        "method": {
+          "type": "string",
+          "enum": ["native_stereo", "downmix_fallback"]
+        },
+        "downmix_policy_id": { "type": ["string", "null"] },
+        "source_channels": { "type": "integer", "minimum": 1 },
+        "audio_path": { "type": "string", "minLength": 1 }
+      }
+    },
+    "plugin_run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plugin_id", "version"],
+      "properties": {
+        "plugin_id": { "type": "string", "pattern": "^PLUGIN\\." },
+        "version": { "type": "string" },
+        "sha256": { "type": "string" },
+        "status": { "type": "string", "enum": ["ok", "failed", "skipped"] }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "report_json_path": { "type": "string" },
+        "report_pdf_path": { "type": "string" },
+        "recall_csv_path": { "type": "string" },
+        "renders_dir": { "type": "string" }
+      }
+    },
+    "gate_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "context", "outcome", "details"],
+      "properties": {
+        "gate_id": { "type": "string", "pattern": "^GATE\\." },
+        "context": { "type": "string", "enum": ["suggest", "auto_apply", "render"] },
+        "outcome": { "type": "string", "enum": ["allow", "suggest_only", "reject"] },
+        "reason_id": { "type": "string", "pattern": "^REASON\\." },
+        "details": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "preset_recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preset_id", "score", "reasons"],
+      "properties": {
+        "preset_id": { "type": "string", "minLength": 1 },
+        "score": { "type": "number" },
+        "overlay": { "type": "string" },
+        "help_id": { "type": "string" },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "signals": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "density_level": { "type": "string" },
+            "masking_level": { "type": "string" },
+            "translation_risk": { "type": "string" }
+          }
+        }
+      }
+    },
+    "run_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version"],
+      "properties": {
+        "schema_version": { "const": "0.1.0" },
+        "preset_id": { "type": "string" },
+        "profile_id": { "type": "string" },
+        "meters": { "type": "string" },
+        "max_seconds": { "type": "number", "minimum": 0 },
+        "truncate_values": { "type": "integer", "minimum": 0 },
+        "downmix": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source_layout_id": { "type": "string" },
+            "target_layout_id": { "type": "string" },
+            "policy_id": { "type": "string" }
+          }
+        },
+        "render": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "out_dir": { "type": "string" },
+            "output_formats": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": ["wav", "flac", "wv", "aiff", "alac"]
+              }
+            }
+          }
+        },
+        "apply": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "output_formats": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": ["wav", "flac", "wv", "aiff", "alac"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "density_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_s", "end_s", "active_stems"],
+      "properties": {
+        "start_s": { "type": "number", "minimum": 0 },
+        "end_s": { "type": "number", "minimum": 0 },
+        "active_stems": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "masking_pair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stem_a", "stem_b", "score", "start_s", "end_s", "window_count"],
+      "properties": {
+        "stem_a": { "type": "string", "minLength": 1 },
+        "stem_b": { "type": "string", "minLength": 1 },
+        "score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "start_s": { "type": "number", "minimum": 0 },
+        "end_s": { "type": "number", "minimum": 0 },
+        "window_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "mix_complexity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "density_mean",
+        "density_peak",
+        "density_timeline",
+        "top_masking_pairs",
+        "top_masking_pairs_count",
+        "sample_rate_hz",
+        "included_stem_ids",
+        "skipped_stem_ids",
+        "density",
+        "masking_risk"
+      ],
+      "properties": {
+        "density_mean": { "type": "number", "minimum": 0 },
+        "density_peak": { "type": "integer", "minimum": 0 },
+        "density_timeline": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/density_window" }
+        },
+        "top_masking_pairs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/masking_pair" }
+        },
+        "top_masking_pairs_count": { "type": "integer", "minimum": 0 },
+        "sample_rate_hz": { "type": ["integer", "null"], "minimum": 1 },
+        "included_stem_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "skipped_stem_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "density": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "masking_risk": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "vibe_signals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["density_level", "masking_level", "translation_risk", "notes"],
+      "properties": {
+        "density_level": { "type": "string", "enum": ["low", "medium", "high"] },
+        "masking_level": { "type": "string", "enum": ["low", "medium", "high"] },
+        "translation_risk": { "type": "string", "enum": ["low", "medium", "high"] },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

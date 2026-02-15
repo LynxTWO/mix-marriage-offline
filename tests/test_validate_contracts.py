@@ -15,6 +15,7 @@ REQUIRED_CHECK_IDS = [
     "UI.EXAMPLES",
     "ONTOLOGY.REFS",
     "PLUGINS",
+    "PKG.MIRROR",
     "SCENE.REGISTRIES",
     "TRANSLATION.REGISTRIES",
     "ROLES.REGISTRIES",
@@ -27,12 +28,14 @@ REQUIRED_TOOL_SCRIPTS = [
     "validate_ui_examples.py",
     "validate_ontology_refs.py",
     "validate_plugins.py",
+    "validate_packaged_data_mirror.py",
 ]
 
 REQUIRED_REPO_DIRS = [
     "examples",
     "ontology",
     "plugins",
+    "presets",
     "schemas",
     "src",
 ]
