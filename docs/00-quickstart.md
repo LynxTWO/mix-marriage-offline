@@ -52,6 +52,12 @@ project/
   README.txt
 ```
 
+**`--bundle` flag (pointer bundle):**
+You can pass `--bundle path/to/bundle.json` to also write a pointer bundle JSON.
+This is a *scaffold-only* bundle built from the init artifacts alone (stems index, stems map, scene draft).
+It does **not** contain a scan report, listen pack, or metering data.
+For a complete GUI payload, see [section 5](#5-build-a-gui-payload-stems-arc) below.
+
 **Important:** Draft files are preview-only.
 They are never auto-loaded by any MMO workflow.
 You must pass them explicitly to any command that consumes a scene or routing plan.
@@ -102,7 +108,65 @@ See [20-stems-audition.md](20-stems-audition.md) for options and limitations.
 
 ---
 
-## 5. Scan corpus and merge suggestions (optional)
+## 5. Build a GUI payload (stems arc)
+
+After init, refresh, and optional auditions, you can produce a full
+`ui_bundle.json` suitable for GUI consumption. This requires two additional
+commands: `scan` (to generate a report) and `bundle` (to assemble the payload).
+
+**Step 1 -- Generate a scan report:**
+
+```powershell
+python -m mmo scan "D:\MySession\stems" `
+  --out "D:\MySession\project\report.json"
+```
+
+This writes `report.json` containing file metadata, issues, and validation
+results. No meters or peak data are included unless you pass `--meters` or
+`--peak`.
+
+**Step 2 -- (Optional) Build a listen pack:**
+
+If you ran `stems audition` in step 4, you can include the audition index in
+the bundle. Otherwise, skip `--listen-pack` in step 3.
+
+```python
+# Minimal listen_pack.json (written by the test suite or your own tooling):
+{
+  "schema_version": "0.1.0",
+  "stems_auditions": { ... }   # from stems_auditions/manifest.json
+}
+```
+
+**Step 3 -- Assemble the UI bundle:**
+
+```powershell
+python -m mmo bundle `
+  --report "D:\MySession\project\report.json" `
+  --stems-index "D:\MySession\project\stems\stems_index.json" `
+  --stems-map "D:\MySession\project\stems\stems_map.json" `
+  --scene "D:\MySession\project\drafts\scene.draft.json" `
+  --listen-pack "D:\MySession\project\listen_pack.json" `
+  --out "D:\MySession\project\ui_bundle.json"
+```
+
+All flags except `--report` and `--out` are optional.
+Each extra flag adds its payload to the bundle under a dedicated key.
+The output is validated against `schemas/ui_bundle.schema.json`.
+
+**Pointer bundle vs full UI bundle:**
+
+| | Pointer bundle (`project init --bundle`) | Full UI bundle (`mmo bundle`) |
+|---|---|---|
+| Source | Built automatically during `project init` | Built explicitly by the user |
+| Contains report | No | Yes (required `--report`) |
+| Contains listen pack | No | Optional (`--listen-pack`) |
+| Contains metering data | No | Only if the report includes it |
+| Use case | Quick scaffold preview | Complete GUI payload |
+
+---
+
+## 6. Scan corpus and merge suggestions (optional)
 
 If you have a large private stem library, you can scan it to generate
 role-lexicon suggestions that improve classification accuracy:
@@ -135,7 +199,7 @@ See [18-corpus-scanning.md](18-corpus-scanning.md) for full flag reference and w
 
 ---
 
-## 6. Diff corpus runs (optional regression lens)
+## 7. Diff corpus runs (optional regression lens)
 
 After re-scanning with updated lexicons or thresholds, compare two stats files
 to see what changed:
