@@ -2720,6 +2720,26 @@ def main(argv: list[str] | None = None) -> int:
         help="Overwrite output file if it already exists.",
     )
 
+    render_report_parser = subparsers.add_parser(
+        "render-report",
+        help="Build a render_report JSON from a render_plan.",
+    )
+    render_report_parser.add_argument(
+        "--plan",
+        required=True,
+        help="Path to render_plan JSON.",
+    )
+    render_report_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output render_report JSON.",
+    )
+    render_report_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite output file if it already exists.",
+    )
+
     timeline_parser = subparsers.add_parser("timeline", help="Timeline marker tools.")
     timeline_subparsers = timeline_parser.add_subparsers(
         dest="timeline_command",
@@ -5170,6 +5190,39 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(_render_render_plan_text(render_plan_payload))
         return 0
+    if args.command == "render-report":
+        out_path = Path(args.out)
+        if out_path.exists() and not args.force:
+            print(
+                f"File exists (use --force to overwrite): {out_path.as_posix()}",
+                file=sys.stderr,
+            )
+            return 1
+        try:
+            plan_payload = _load_json_object(
+                Path(args.plan),
+                label="Render plan",
+            )
+            _validate_json_payload(
+                plan_payload,
+                schema_path=repo_root / "schemas" / "render_plan.schema.json",
+                payload_name="Render plan",
+            )
+            from mmo.core.render_reporting import build_render_report_from_plan  # noqa: WPS433
+
+            report_payload = build_render_report_from_plan(plan_payload)
+            _validate_json_payload(
+                report_payload,
+                schema_path=repo_root / "schemas" / "render_report.schema.json",
+                payload_name="Render report",
+            )
+            _write_json_file(out_path, report_payload)
+            return 0
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
     if args.command == "timeline":
         if args.timeline_command not in {"validate", "show"}:
             print("Unknown timeline command.", file=sys.stderr)
