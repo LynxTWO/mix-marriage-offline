@@ -31,7 +31,7 @@ jobs:
 
       - name: Validate plugin manifests
         run: |
-          PYTHONPATH=src python tools/validate_plugins.py plugins
+          python tools/validate_plugins.py plugins
 
       - name: Run policy fixtures
         run: |
@@ -39,8 +39,8 @@ jobs:
 
       - name: Run session fixtures
         run: |
-          PYTHONPATH=src python tools/run_session_fixtures.py fixtures/sessions
+          python tools/run_session_fixtures.py fixtures/sessions
 
       - name: Run unit tests
         run: |
-          PYTHONPATH=src python -m pytest
+          python -m pytest
