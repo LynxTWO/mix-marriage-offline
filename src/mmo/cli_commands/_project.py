@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +14,7 @@ __all__ = [
     "_project_last_run_payload",
     "_project_run_config_defaults",
     "_render_project_text",
+    "_run_project_pack",
     "_run_project_validate",
 ]
 
@@ -161,6 +164,91 @@ def _run_project_validate(
         out_path.write_text(output_text, encoding="utf-8")
 
     return 0 if ok else 2
+
+
+# ── project pack ─────────────────────────────────────────────────
+
+# Allowlisted artifact relative paths eligible for packing.
+_PACK_ARTIFACTS: list[str] = [
+    rel for rel, _, _ in _VALIDATE_CHECKS
+] + [
+    "listen_pack.json",
+]
+
+# Fixed date_time for all zip entries (no real timestamps).
+_ZIP_DATE_TIME = (2000, 1, 1, 0, 0, 0)
+
+
+def _run_project_pack(
+    *,
+    project_dir: Path,
+    out_path: Path,
+    include_wavs: bool,
+    force: bool,
+) -> int:
+    """Pack project artifacts into a deterministic zip. Returns exit code."""
+    if out_path.exists() and not force:
+        print(
+            f"File exists (use --force to overwrite): {out_path.as_posix()}",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Collect existing allowlisted files.
+    collected: list[tuple[str, Path]] = []
+    for rel in _PACK_ARTIFACTS:
+        fp = project_dir / rel
+        if fp.is_file():
+            collected.append((rel, fp))
+
+    # Optionally include audition WAVs.
+    if include_wavs:
+        auditions_dir = project_dir / "stems_auditions"
+        if auditions_dir.is_dir():
+            for wav in sorted(auditions_dir.glob("*.wav")):
+                rel = f"stems_auditions/{wav.name}"
+                collected.append((rel, wav))
+
+    # Sort by relative path for determinism.
+    collected.sort(key=lambda item: item[0])
+
+    # Build manifest entries.
+    manifest_files: list[dict[str, Any]] = []
+    for rel, fp in collected:
+        data = fp.read_bytes()
+        manifest_files.append({
+            "path": rel,
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "size": len(data),
+        })
+
+    manifest: dict[str, Any] = {
+        "file_count": len(manifest_files),
+        "files": manifest_files,
+    }
+    manifest_bytes = (
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+    # Write the zip.
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for rel, fp in collected:
+            info = zipfile.ZipInfo(filename=rel, date_time=_ZIP_DATE_TIME)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            zf.writestr(info, fp.read_bytes())
+        # Manifest last.
+        info = zipfile.ZipInfo(filename="manifest.json", date_time=_ZIP_DATE_TIME)
+        info.compress_type = zipfile.ZIP_DEFLATED
+        zf.writestr(info, manifest_bytes)
+
+    result: dict[str, Any] = {
+        "file_count": len(collected),
+        "ok": True,
+        "out": out_path.resolve().as_posix(),
+    }
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
 
 
 def _project_last_run_payload(*, mode: str, out_dir: Path) -> dict[str, Any]:

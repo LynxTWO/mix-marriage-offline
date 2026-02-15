@@ -2046,6 +2046,30 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to write validation result JSON.",
     )
 
+    project_pack_parser = project_subparsers.add_parser(
+        "pack",
+        help="Pack project artifacts into a deterministic zip.",
+    )
+    project_pack_parser.add_argument(
+        "project_dir",
+        help="Path to the project scaffold directory.",
+    )
+    project_pack_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output zip file.",
+    )
+    project_pack_parser.add_argument(
+        "--include-wavs",
+        action="store_true",
+        help="Include audition WAV files in the zip.",
+    )
+    project_pack_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing output zip.",
+    )
+
     downmix_parser = subparsers.add_parser("downmix", help="Downmix policy tools.")
     downmix_subparsers = downmix_parser.add_subparsers(dest="downmix_command", required=True)
     downmix_show_parser = downmix_subparsers.add_parser(
@@ -3758,6 +3782,14 @@ def main(argv: list[str] | None = None) -> int:
                 project_dir=Path(args.project_dir),
                 out_path=Path(args.out) if args.out else None,
                 repo_root=repo_root,
+            )
+
+        if args.project_command == "pack":
+            return _run_project_pack(
+                project_dir=Path(args.project_dir),
+                out_path=Path(args.out),
+                include_wavs=bool(getattr(args, "include_wavs", False)),
+                force=bool(getattr(args, "force", False)),
             )
 
         print("Unknown project command.", file=sys.stderr)
