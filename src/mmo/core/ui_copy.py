@@ -9,16 +9,14 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     jsonschema = None
 
+from mmo.resources import schemas_dir
+
 try:
     import yaml
 except ImportError:  # pragma: no cover - optional dependency
     yaml = None
 
 _ENTRY_KINDS = {"label", "tooltip", "message"}
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
 
 
 def _load_yaml_object(path: Path, *, label: str) -> dict[str, Any]:
@@ -73,7 +71,7 @@ def load_ui_copy(path: Path) -> dict[str, Any]:
     payload = _load_yaml_object(path, label="UI copy registry")
     _validate_payload_against_schema(
         payload,
-        schema_path=_repo_root() / "schemas" / "ui_copy.schema.json",
+        schema_path=schemas_dir() / "ui_copy.schema.json",
         payload_name="UI copy registry",
     )
     return payload

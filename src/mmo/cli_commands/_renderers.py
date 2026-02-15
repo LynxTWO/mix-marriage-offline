@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from mmo.resources import ontology_dir, schemas_dir
+
 from mmo.core.deliverables_index import (
     build_deliverables_index_single,
     build_deliverables_index_variants,
@@ -137,9 +139,9 @@ def _run_render_command(
             apply_routing_plan_to_report(report, normalized_run_config)
     apply_gates_to_report(
         report,
-        policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+        policy_path=ontology_dir() /"policies" / "gates.yaml",
         profile_id=profile_id,
-        profiles_path=repo_root / "ontology" / "policies" / "authority_profiles.yaml",
+        profiles_path=ontology_dir() /"policies" / "authority_profiles.yaml",
     )
 
     recommendations = report.get("recommendations")
@@ -183,7 +185,7 @@ def _run_render_command(
         render_manifest["deliverables"] = deliverables
     _validate_render_manifest(
         render_manifest,
-        repo_root / "schemas" / "render_manifest.schema.json",
+        schemas_dir() /"render_manifest.schema.json",
     )
 
     out_manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -204,7 +206,7 @@ def _run_downmix_render(
     profile_id: str,
 ) -> int:
     return _run_render_command(
-        repo_root=repo_root,
+        repo_root=None,
         report_path=report_path,
         plugins_dir=plugins_dir,
         out_manifest_path=out_manifest_path,
@@ -241,9 +243,9 @@ def _run_apply_command(
             apply_routing_plan_to_report(report, normalized_run_config)
     apply_gates_to_report(
         report,
-        policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+        policy_path=ontology_dir() /"policies" / "gates.yaml",
         profile_id=profile_id,
-        profiles_path=repo_root / "ontology" / "policies" / "authority_profiles.yaml",
+        profiles_path=ontology_dir() /"policies" / "authority_profiles.yaml",
     )
 
     recommendations = report.get("recommendations")
@@ -290,7 +292,7 @@ def _run_apply_command(
         apply_manifest["deliverables"] = deliverables
     _validate_apply_manifest(
         apply_manifest,
-        repo_root / "schemas" / "apply_manifest.schema.json",
+        schemas_dir() /"apply_manifest.schema.json",
     )
 
     out_manifest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -321,7 +323,7 @@ def _write_routing_plan_artifact(
         return None
     _validate_json_payload(
         routing_plan_payload,
-        schema_path=repo_root / "schemas" / "routing_plan.schema.json",
+        schema_path=schemas_dir() /"routing_plan.schema.json",
         payload_name="Routing plan",
     )
     _write_json_file(out_path, routing_plan_payload)
@@ -367,8 +369,8 @@ def _run_bundle(
         render_manifest,
         apply_manifest=apply_manifest,
         applied_report=applied_report,
-        help_registry_path=repo_root / "ontology" / "help.yaml",
-        ui_copy_path=repo_root / "ontology" / "ui_copy.yaml",
+        help_registry_path=ontology_dir() /"help.yaml",
+        ui_copy_path=ontology_dir() /"ui_copy.yaml",
         ui_locale=ui_locale,
         project_path=project_path,
         deliverables_index_path=deliverables_index_path,
@@ -385,7 +387,7 @@ def _run_bundle(
     )
     _validate_json_payload(
         bundle,
-        schema_path=repo_root / "schemas" / "ui_bundle.schema.json",
+        schema_path=schemas_dir() /"ui_bundle.schema.json",
         payload_name="UI bundle",
     )
     _write_json_file(out_path, bundle)
@@ -401,7 +403,7 @@ def _build_validated_listen_pack(
     listen_pack = build_listen_pack(variant_result, presets_dir)
     _validate_json_payload(
         listen_pack,
-        schema_path=repo_root / "schemas" / "listen_pack.schema.json",
+        schema_path=schemas_dir() /"listen_pack.schema.json",
         payload_name="Listen pack",
     )
     return listen_pack
@@ -429,7 +431,7 @@ def _build_validated_deliverables_index_single(
     )
     _validate_json_payload(
         deliverables_index,
-        schema_path=repo_root / "schemas" / "deliverables_index.schema.json",
+        schema_path=schemas_dir() /"deliverables_index.schema.json",
         payload_name="Deliverables index",
     )
     return deliverables_index
@@ -447,7 +449,7 @@ def _build_validated_deliverables_index_variants(
     )
     _validate_json_payload(
         deliverables_index,
-        schema_path=repo_root / "schemas" / "deliverables_index.schema.json",
+        schema_path=schemas_dir() /"deliverables_index.schema.json",
         payload_name="Deliverables index",
     )
     return deliverables_index
@@ -471,7 +473,7 @@ def _run_deliverables_index_command(
         if variant_result_path is not None:
             variant_result = _load_json_object(variant_result_path, label="Variant result")
             payload = _build_validated_deliverables_index_variants(
-                repo_root=repo_root,
+                repo_root=None,
                 root_out_dir=resolved_out_dir,
                 variant_result=variant_result,
             )
@@ -484,7 +486,7 @@ def _run_deliverables_index_command(
                 )
                 return 1
             payload = _build_validated_deliverables_index_single(
-                repo_root=repo_root,
+                repo_root=None,
                 out_dir=resolved_out_dir,
                 report_path=report_path,
                 apply_manifest_path=_existing_file(resolved_out_dir / "apply_manifest.json"),

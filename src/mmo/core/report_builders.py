@@ -11,6 +11,8 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     yaml = None
 
+from mmo.resources import ontology_dir
+
 from mmo import __version__ as engine_version
 from mmo.core.gates import apply_gates_to_report
 
@@ -247,7 +249,7 @@ def enrich_blocked_downmix_render_diagnostics(report: dict) -> dict:
 
 def build_minimal_report_for_downmix_qa(
     *,
-    repo_root: Path,
+    repo_root: Path | None = None,
     qa_payload: dict,
     profile_id: str | None = None,
     profiles_path: Path | None = None,
@@ -273,7 +275,7 @@ def build_minimal_report_for_downmix_qa(
     downmix_qa.setdefault("log", "")
 
     report_id = _hash_report_payload(downmix_qa)
-    ontology_version = _load_ontology_version(repo_root / "ontology" / "ontology.yaml")
+    ontology_version = _load_ontology_version(ontology_dir() / "ontology.yaml")
 
     report = {
         "schema_version": REPORT_SCHEMA_VERSION,
@@ -384,7 +386,7 @@ def build_minimal_report_for_downmix_qa(
 
         apply_gates_to_report(
             report,
-            policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+            policy_path=ontology_dir() / "policies" / "gates.yaml",
             profile_id=profile_id,
             profiles_path=profiles_path,
         )

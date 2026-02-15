@@ -12,6 +12,10 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
+from mmo.resources import _repo_checkout_root, ontology_dir, schemas_dir
+
+_checkout_root = _repo_checkout_root()
+
 from mmo.cli_commands._helpers import (
     _BASELINE_RENDER_TARGET_ID,
     _DEFAULT_RENDER_MANY_TRANSLATION_AUDITION_SEGMENT_S,
@@ -477,7 +481,7 @@ def _run_render_many_translation_checks(
     except (TranslationReferenceResolutionError, ValueError):
         return
 
-    translation_profiles_path = repo_root / "ontology" / "translation_profiles.yaml"
+    translation_profiles_path = ontology_dir() /"translation_profiles.yaml"
     translation_profiles: dict[str, dict[str, Any]]
     translation_reference_payload: dict[str, Any] = dict(translation_reference_meta)
     audio_rel_path = _rel_path_if_under_root(root_out_dir, translation_audio_path)
@@ -504,7 +508,7 @@ def _run_render_many_translation_checks(
             report_in_path=report_path,
             report_out_path=report_path,
             translation_results=translation_results,
-            repo_root=repo_root,
+            repo_root=None,
             profiles=translation_profiles,
             translation_reference=translation_reference_payload,
         )
@@ -519,7 +523,7 @@ def _run_render_many_translation_checks(
                     report_in_path=variant_report_path,
                     report_out_path=variant_report_path,
                     translation_results=translation_results,
-                    repo_root=repo_root,
+                    repo_root=None,
                     profiles=translation_profiles,
                     translation_reference=translation_reference_payload,
                 )
@@ -534,7 +538,7 @@ def _run_render_many_translation_checks(
 
         try:
             _run_bundle(
-                repo_root=repo_root,
+                repo_root=None,
                 report_path=variant_report_path,
                 out_path=variant_bundle_path,
                 render_manifest_path=artifact.get("render_manifest_path"),
@@ -692,7 +696,7 @@ def _run_render_many_translation_auditions(
 
     stereo_target = get_render_target(
         _BASELINE_RENDER_TARGET_ID,
-        repo_root / "ontology" / "render_targets.yaml",
+        ontology_dir() /"render_targets.yaml",
     )
     if not isinstance(stereo_target, dict):
         return
@@ -711,7 +715,7 @@ def _run_render_many_translation_auditions(
     if stereo_audio_path is None:
         return
 
-    translation_profiles_path = repo_root / "ontology" / "translation_profiles.yaml"
+    translation_profiles_path = ontology_dir() /"translation_profiles.yaml"
     auditions_out_dir = root_out_dir / "listen_pack" / "translation_auditions"
     manifest_path = auditions_out_dir / "manifest.json"
     try:
@@ -749,7 +753,7 @@ def _run_render_many_translation_auditions(
 
             try:
                 _run_bundle(
-                    repo_root=repo_root,
+                    repo_root=None,
                     report_path=variant_report_path,
                     out_path=variant_bundle_path,
                     render_manifest_path=artifact.get("render_manifest_path"),
@@ -805,7 +809,7 @@ def _run_variants_listen_pack_command(
     try:
         variant_result = _load_json_object(variant_result_path, label="Variant result")
         listen_pack = _build_validated_listen_pack(
-            repo_root=repo_root,
+            repo_root=None,
             presets_dir=presets_dir,
             variant_result=variant_result,
         )
@@ -1004,7 +1008,7 @@ def _run_variants_workflow(
     try:
         _validate_json_payload(
             plan,
-            schema_path=repo_root / "schemas" / "variant_plan.schema.json",
+            schema_path=schemas_dir() /"variant_plan.schema.json",
             payload_name="Variant plan",
         )
     except SystemExit as exc:
@@ -1035,7 +1039,7 @@ def _run_variants_workflow(
 
         result = run_variant_plan(
             plan,
-            repo_root=repo_root,
+            repo_root=None,
             **run_variant_plan_kwargs,
         )
     except ValueError as exc:
@@ -1045,7 +1049,7 @@ def _run_variants_workflow(
     try:
         _validate_json_payload(
             result,
-            schema_path=repo_root / "schemas" / "variant_result.schema.json",
+            schema_path=schemas_dir() /"variant_result.schema.json",
             payload_name="Variant result",
         )
     except SystemExit as exc:
@@ -1055,7 +1059,7 @@ def _run_variants_workflow(
     if listen_pack:
         try:
             listen_pack_payload = _build_validated_listen_pack(
-                repo_root=repo_root,
+                repo_root=None,
                 presets_dir=presets_dir,
                 variant_result=result,
             )
@@ -1068,7 +1072,7 @@ def _run_variants_workflow(
     if deliverables_index:
         try:
             deliverables_index_payload = _build_validated_deliverables_index_variants(
-                repo_root=repo_root,
+                repo_root=None,
                 root_out_dir=out_dir,
                 variant_result=result,
             )
@@ -1193,8 +1197,8 @@ def _run_one_shot_workflow(
     render_out_dir = out_dir / "render"
     apply_out_dir = out_dir / "apply"
 
-    report_schema_path = repo_root / "schemas" / "report.schema.json"
-    plugins_dir = str(repo_root / "plugins")
+    report_schema_path = schemas_dir() /"report.schema.json"
+    plugins_dir = str((_checkout_root / "plugins" if _checkout_root is not None else Path("plugins")))
     lock_payload: dict[str, Any] | None = None
     cache_key_value: str | None = None
     report_payload: dict[str, Any] | None = None
@@ -1303,7 +1307,7 @@ def _run_one_shot_workflow(
             return 1
         try:
             scene_payload = _build_validated_scene_payload(
-                repo_root=repo_root,
+                repo_root=None,
                 report=report_payload,
                 timeline_payload=timeline_payload,
                 lock_hash=(
@@ -1327,10 +1331,10 @@ def _run_one_shot_workflow(
         try:
             render_targets_payload = _default_render_plan_targets_payload(
                 report=report_payload,
-                render_targets_path=repo_root / "ontology" / "render_targets.yaml",
+                render_targets_path=ontology_dir() /"render_targets.yaml",
             )
             routing_plan_artifact_path = _write_routing_plan_artifact(
-                repo_root=repo_root,
+                repo_root=None,
                 report_payload=report_payload,
                 out_path=routing_plan_path,
             )
@@ -1355,7 +1359,7 @@ def _run_one_shot_workflow(
             ]
 
             render_plan_payload = _build_validated_render_plan_payload(
-                repo_root=repo_root,
+                repo_root=None,
                 scene_payload=scene_payload,
                 scene_path=scene_path,
                 render_targets_payload=render_targets_payload,
@@ -1386,7 +1390,7 @@ def _run_one_shot_workflow(
     if apply:
         try:
             exit_code = _run_apply_command(
-                repo_root=repo_root,
+                repo_root=None,
                 report_path=report_path,
                 plugins_dir=Path(plugins_dir),
                 out_manifest_path=apply_manifest_path,
@@ -1435,7 +1439,7 @@ def _run_one_shot_workflow(
     if render:
         try:
             exit_code = _run_render_command(
-                repo_root=repo_root,
+                repo_root=None,
                 report_path=report_path,
                 plugins_dir=Path(plugins_dir),
                 out_manifest_path=render_manifest_path,
@@ -1454,7 +1458,7 @@ def _run_one_shot_workflow(
     if bundle:
         try:
             exit_code = _run_bundle(
-                repo_root=repo_root,
+                repo_root=None,
                 report_path=report_path,
                 out_path=bundle_path,
                 render_manifest_path=render_manifest_path if render else None,
@@ -1480,7 +1484,7 @@ def _run_one_shot_workflow(
     if deliverables_index:
         try:
             deliverables_index_payload = _build_validated_deliverables_index_single(
-                repo_root=repo_root,
+                repo_root=None,
                 out_dir=out_dir,
                 report_path=report_path,
                 apply_manifest_path=apply_manifest_path if apply else None,
@@ -1623,8 +1627,8 @@ def _run_render_many_workflow(
     variant_result_path = out_dir / "variant_result.json"
     listen_pack_path = out_dir / "listen_pack.json"
     deliverables_index_path = out_dir / "deliverables_index.json"
-    report_schema_path = repo_root / "schemas" / "report.schema.json"
-    plugins_dir = str(repo_root / "plugins")
+    report_schema_path = schemas_dir() /"report.schema.json"
+    plugins_dir = str((_checkout_root / "plugins" if _checkout_root is not None else Path("plugins")))
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1741,7 +1745,7 @@ def _run_render_many_workflow(
             return 1
         try:
             scene_payload = _build_validated_scene_payload(
-                repo_root=repo_root,
+                repo_root=None,
                 report=report_payload,
                 timeline_payload=timeline_payload,
                 lock_hash=(
@@ -1760,7 +1764,7 @@ def _run_render_many_workflow(
     else:
         try:
             scene_payload = _load_json_object(scene_path, label="Scene")
-            _validate_scene_schema(repo_root=repo_root, scene_payload=scene_payload)
+            _validate_scene_schema(repo_root=None, scene_payload=scene_payload)
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 1
@@ -1770,7 +1774,7 @@ def _run_render_many_workflow(
     if scene_payload is not None and isinstance(scene_template_ids, list) and scene_template_ids:
         try:
             scene_payload = _apply_scene_templates_to_payload(
-                repo_root=repo_root,
+                repo_root=None,
                 scene_payload=scene_payload,
                 template_ids=scene_template_ids,
                 force=False,
@@ -1792,10 +1796,10 @@ def _run_render_many_workflow(
         try:
             render_targets_payload = _build_selected_render_targets_payload(
                 target_ids=target_ids,
-                render_targets_path=repo_root / "ontology" / "render_targets.yaml",
+                render_targets_path=ontology_dir() /"render_targets.yaml",
             )
             routing_plan_artifact_path = _write_routing_plan_artifact(
-                repo_root=repo_root,
+                repo_root=None,
                 report_payload=report_payload,
                 out_path=routing_plan_path,
             )
@@ -1810,7 +1814,7 @@ def _run_render_many_workflow(
                 fmt for fmt in _OUTPUT_FORMAT_ORDER if fmt in render_plan_format_set
             ]
             render_plan_payload = _build_validated_render_plan_payload(
-                repo_root=repo_root,
+                repo_root=None,
                 scene_payload=scene_payload,
                 scene_path=scene_path,
                 render_targets_payload=render_targets_payload,
@@ -1830,7 +1834,7 @@ def _run_render_many_workflow(
             render_plan_payload = _load_json_object(render_plan_path, label="Render plan")
             _validate_json_payload(
                 render_plan_payload,
-                schema_path=repo_root / "schemas" / "render_plan.schema.json",
+                schema_path=schemas_dir() /"render_plan.schema.json",
                 payload_name="Render plan",
             )
         except ValueError as exc:
@@ -1842,7 +1846,7 @@ def _run_render_many_workflow(
     if scene_payload is None:
         try:
             scene_payload = _load_json_object(scene_path, label="Scene")
-            _validate_scene_schema(repo_root=repo_root, scene_payload=scene_payload)
+            _validate_scene_schema(repo_root=None, scene_payload=scene_payload)
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 1
@@ -1879,7 +1883,7 @@ def _run_render_many_workflow(
         )
         _validate_json_payload(
             variant_plan,
-            schema_path=repo_root / "schemas" / "variant_plan.schema.json",
+            schema_path=schemas_dir() /"variant_plan.schema.json",
             payload_name="Variant plan",
         )
     except ValueError as exc:
@@ -1911,7 +1915,7 @@ def _run_render_many_workflow(
     try:
         variant_result = run_variant_plan(
             variant_plan,
-            repo_root=repo_root,
+            repo_root=None,
             **run_variant_plan_kwargs,
         )
     except ValueError as exc:
@@ -1921,7 +1925,7 @@ def _run_render_many_workflow(
     try:
         _validate_json_payload(
             variant_result,
-            schema_path=repo_root / "schemas" / "variant_result.schema.json",
+            schema_path=schemas_dir() /"variant_result.schema.json",
             payload_name="Variant result",
         )
     except SystemExit as exc:
@@ -1931,7 +1935,7 @@ def _run_render_many_workflow(
     if listen_pack:
         try:
             listen_pack_payload = _build_validated_listen_pack(
-                repo_root=repo_root,
+                repo_root=None,
                 presets_dir=presets_dir,
                 variant_result=variant_result,
             )
@@ -1944,7 +1948,7 @@ def _run_render_many_workflow(
     if deliverables_index:
         try:
             deliverables_index_payload = _build_validated_deliverables_index_variants(
-                repo_root=repo_root,
+                repo_root=None,
                 root_out_dir=out_dir,
                 variant_result=variant_result,
             )
@@ -1961,7 +1965,7 @@ def _run_render_many_workflow(
             cache_dir=cache_dir,
         )
         _run_render_many_translation_checks(
-            repo_root=repo_root,
+            repo_root=None,
             root_out_dir=out_dir,
             report_path=report_path,
             variant_result=variant_result,
@@ -1986,7 +1990,7 @@ def _run_render_many_workflow(
             cache_dir=cache_dir,
         )
         _run_render_many_translation_auditions(
-            repo_root=repo_root,
+            repo_root=None,
             root_out_dir=out_dir,
             variant_result=variant_result,
             profile_ids=audition_profile_ids,
@@ -2062,7 +2066,7 @@ def _run_workflow_from_run_args(
         try:
             target_ids = _parse_target_ids_csv(
                 getattr(args, "targets", _BASELINE_RENDER_TARGET_ID),
-                render_targets_path=repo_root / "ontology" / "render_targets.yaml",
+                render_targets_path=ontology_dir() /"render_targets.yaml",
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
@@ -2094,7 +2098,7 @@ def _run_workflow_from_run_args(
                 print(str(exc), file=sys.stderr)
                 return 1, "variants"
 
-        translation_profiles_path = repo_root / "ontology" / "translation_profiles.yaml"
+        translation_profiles_path = ontology_dir() /"translation_profiles.yaml"
         translation_profiles_value = getattr(args, "translation_profiles", None)
         translation_enabled = bool(getattr(args, "translation", False))
         translation_profile_ids: list[str] | None = None
@@ -2132,7 +2136,7 @@ def _run_workflow_from_run_args(
             translation_audition_segment_s = float(raw_segment)
 
         exit_code = _run_render_many_workflow(
-            repo_root=repo_root,
+            repo_root=None,
             tools_dir=tools_dir,
             presets_dir=presets_dir,
             stems_dir=stems_dir,
@@ -2171,7 +2175,7 @@ def _run_workflow_from_run_args(
     )
     if should_delegate_to_variants:
         exit_code = _run_variants_workflow(
-            repo_root=repo_root,
+            repo_root=None,
             presets_dir=presets_dir,
             stems_dir=stems_dir,
             out_dir=out_dir,
@@ -2205,7 +2209,7 @@ def _run_workflow_from_run_args(
         return exit_code, "variants"
 
     exit_code = _run_one_shot_workflow(
-        repo_root=repo_root,
+        repo_root=None,
         tools_dir=tools_dir,
         presets_dir=presets_dir,
         stems_dir=stems_dir,
@@ -2364,7 +2368,7 @@ def _ui_workflow_help_short_map(repo_root: Path) -> dict[str, str]:
 
     help_ids = ["HELP.WORKFLOW.RUN", "HELP.WORKFLOW.VARIANTS_RUN"]
     try:
-        registry = load_help_registry(repo_root / "ontology" / "help.yaml")
+        registry = load_help_registry(ontology_dir() /"help.yaml")
         resolved = resolve_help_entries(help_ids, registry)
     except (RuntimeError, ValueError):
         return {}
@@ -2552,7 +2556,7 @@ def _run_ui_workflow(
             quick_report_path,
             None,
             False,
-            str(repo_root / "plugins"),
+            str((_checkout_root / "plugins" if _checkout_root is not None else Path("plugins"))),
             False,
             "PROFILE.ASSIST",
         )
@@ -2718,7 +2722,7 @@ def _run_ui_workflow(
 
     try:
         preview_payload = _build_preset_preview_payload(
-            repo_root=repo_root,
+            repo_root=None,
             presets_dir=presets_dir,
             preset_id=selected_preset_id,
             config_path=None,
@@ -2780,7 +2784,7 @@ def _run_ui_workflow(
     render_header("Run", output=output)
     if use_variants:
         exit_code = _run_variants_workflow(
-            repo_root=repo_root,
+            repo_root=None,
             presets_dir=presets_dir,
             stems_dir=resolved_stems_dir,
             out_dir=resolved_out_dir,
@@ -2817,7 +2821,7 @@ def _run_ui_workflow(
         run_mode = "variants"
     else:
         exit_code = _run_one_shot_workflow(
-            repo_root=repo_root,
+            repo_root=None,
             tools_dir=tools_dir,
             presets_dir=presets_dir,
             stems_dir=resolved_stems_dir,

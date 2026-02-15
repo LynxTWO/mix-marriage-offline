@@ -2903,9 +2903,17 @@ def main(argv: list[str] | None = None) -> int:
 
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
     args = parser.parse_args(raw_argv)
-    repo_root = Path(__file__).resolve().parents[2]
-    tools_dir = repo_root / "tools"
-    presets_dir = repo_root / "presets"
+    from mmo.resources import (
+        _repo_checkout_root,
+        ontology_dir,
+        presets_dir as _presets_dir_fn,
+        schemas_dir,
+    )
+    _checkout_root = _repo_checkout_root()
+    tools_dir = _checkout_root / "tools" if _checkout_root is not None else Path("tools")
+    presets_dir = _presets_dir_fn()
+    schemas = schemas_dir()
+    ontology = ontology_dir()
 
     if args.command == "scan":
         return _run_scan(
@@ -2924,7 +2932,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 _validate_json_payload(
                     payload,
-                    schema_path=repo_root / "schemas" / "stems_index.schema.json",
+                    schema_path=schemas /"stems_index.schema.json",
                     payload_name="Stems index",
                 )
             except ValueError as exc:
@@ -2959,10 +2967,10 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.stems_command == "classify":
-            roles_path = repo_root / "ontology" / "roles.yaml"
+            roles_path = ontology /"roles.yaml"
             try:
                 stems_index_payload, stems_index_ref = _load_stems_index_for_classification(
-                    repo_root=repo_root,
+                    repo_root=None,
                     index_path=getattr(args, "index", None),
                     root_path=getattr(args, "root", None),
                 )
@@ -2988,7 +2996,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 _validate_json_payload(
                     payload,
-                    schema_path=repo_root / "schemas" / "stems_map.schema.json",
+                    schema_path=schemas /"stems_map.schema.json",
                     payload_name="Stems map",
                 )
             except (RuntimeError, ValueError) as exc:
@@ -3005,10 +3013,10 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.stems_command == "explain":
-            roles_path = repo_root / "ontology" / "roles.yaml"
+            roles_path = ontology /"roles.yaml"
             try:
                 stems_index_payload, stems_index_ref = _load_stems_index_for_classification(
-                    repo_root=repo_root,
+                    repo_root=None,
                     index_path=getattr(args, "index", None),
                     root_path=getattr(args, "root", None),
                 )
@@ -3034,7 +3042,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 _validate_json_payload(
                     stems_map,
-                    schema_path=repo_root / "schemas" / "stems_map.schema.json",
+                    schema_path=schemas /"stems_map.schema.json",
                     payload_name="Stems map",
                 )
                 payload = _build_stem_explain_payload(
@@ -3057,14 +3065,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.stems_command == "apply-overrides":
             try:
                 stems_map_payload = _load_stems_map(
-                    repo_root=repo_root,
+                    repo_root=None,
                     map_path=Path(args.map),
                 )
                 overrides_payload = load_stems_overrides(Path(args.overrides))
                 payload = apply_overrides(stems_map_payload, overrides_payload)
                 _validate_json_payload(
                     payload,
-                    schema_path=repo_root / "schemas" / "stems_map.schema.json",
+                    schema_path=schemas /"stems_map.schema.json",
                     payload_name="Stems map",
                 )
             except (RuntimeError, ValueError) as exc:
@@ -3083,7 +3091,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.stems_command == "review":
             try:
                 payload = _load_stems_map(
-                    repo_root=repo_root,
+                    repo_root=None,
                     map_path=Path(args.map),
                 )
             except (RuntimeError, ValueError) as exc:
@@ -3105,7 +3113,7 @@ def main(argv: list[str] | None = None) -> int:
             map_path = out_dir / "stems_map.json"
             overrides_path = out_dir / "stems_overrides.yaml"
 
-            roles_path = repo_root / "ontology" / "roles.yaml"
+            roles_path = ontology /"roles.yaml"
             try:
                 stems_index_payload = build_stems_index(
                     Path(args.root),
@@ -3113,7 +3121,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 _validate_json_payload(
                     stems_index_payload,
-                    schema_path=repo_root / "schemas" / "stems_index.schema.json",
+                    schema_path=schemas /"stems_index.schema.json",
                     payload_name="Stems index",
                 )
                 _write_json_file(index_path, stems_index_payload)
@@ -3139,7 +3147,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 _validate_json_payload(
                     stems_map_payload,
-                    schema_path=repo_root / "schemas" / "stems_map.schema.json",
+                    schema_path=schemas /"stems_map.schema.json",
                     payload_name="Stems map",
                 )
                 _write_json_file(map_path, stems_map_payload)
@@ -3240,7 +3248,7 @@ def main(argv: list[str] | None = None) -> int:
 
             try:
                 stems_map_payload = _load_stems_map(
-                    repo_root=repo_root,
+                    repo_root=None,
                     map_path=Path(args.stems_map),
                 )
                 scene_payload = build_draft_scene(
@@ -3251,12 +3259,12 @@ def main(argv: list[str] | None = None) -> int:
 
                 _validate_json_payload(
                     scene_payload,
-                    schema_path=repo_root / "schemas" / "scene.schema.json",
+                    schema_path=schemas /"scene.schema.json",
                     payload_name="Draft scene",
                 )
                 _validate_json_payload(
                     routing_payload,
-                    schema_path=repo_root / "schemas" / "routing_plan.schema.json",
+                    schema_path=schemas /"routing_plan.schema.json",
                     payload_name="Draft routing plan",
                 )
 
@@ -3316,7 +3324,7 @@ def main(argv: list[str] | None = None) -> int:
 
             try:
                 stems_map_payload = _load_stems_map(
-                    repo_root=repo_root,
+                    repo_root=None,
                     map_path=Path(args.stems_map),
                 )
             except (RuntimeError, ValueError) as exc:
@@ -3433,7 +3441,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.timeline = project_timeline_path
 
             exit_code, run_mode = _run_workflow_from_run_args(
-                repo_root=repo_root,
+                repo_root=None,
                 tools_dir=tools_dir,
                 presets_dir=presets_dir,
                 stems_dir=stems_dir,
@@ -3526,12 +3534,12 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 _validate_json_payload(
                     stems_index_payload,
-                    schema_path=repo_root / "schemas" / "stems_index.schema.json",
+                    schema_path=schemas /"stems_index.schema.json",
                     payload_name="Stems index",
                 )
                 _write_json_file(index_path, stems_index_payload)
 
-                roles_path = repo_root / "ontology" / "roles.yaml"
+                roles_path = ontology /"roles.yaml"
                 roles_payload = load_roles(roles_path)
                 role_lexicon_payload: dict[str, Any] | None = None
                 role_lexicon_ref: str | None = None
@@ -3553,7 +3561,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 _validate_json_payload(
                     stems_map_payload,
-                    schema_path=repo_root / "schemas" / "stems_map.schema.json",
+                    schema_path=schemas /"stems_map.schema.json",
                     payload_name="Stems map",
                 )
                 _write_json_file(map_path, stems_map_payload)
@@ -3580,12 +3588,12 @@ def main(argv: list[str] | None = None) -> int:
 
                 _validate_json_payload(
                     scene_payload,
-                    schema_path=repo_root / "schemas" / "scene.schema.json",
+                    schema_path=schemas /"scene.schema.json",
                     payload_name="Draft scene",
                 )
                 _validate_json_payload(
                     routing_payload,
-                    schema_path=repo_root / "schemas" / "routing_plan.schema.json",
+                    schema_path=schemas /"routing_plan.schema.json",
                     payload_name="Draft routing plan",
                 )
 
@@ -3759,12 +3767,12 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 _validate_json_payload(
                     stems_index_payload,
-                    schema_path=repo_root / "schemas" / "stems_index.schema.json",
+                    schema_path=schemas /"stems_index.schema.json",
                     payload_name="Stems index",
                 )
                 _write_json_file(index_path, stems_index_payload)
 
-                roles_path = repo_root / "ontology" / "roles.yaml"
+                roles_path = ontology /"roles.yaml"
                 roles_payload = load_roles(roles_path)
                 role_lexicon_payload: dict[str, Any] | None = None
                 role_lexicon_ref: str | None = None
@@ -3786,7 +3794,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 _validate_json_payload(
                     stems_map_payload,
-                    schema_path=repo_root / "schemas" / "stems_map.schema.json",
+                    schema_path=schemas /"stems_map.schema.json",
                     payload_name="Stems map",
                 )
                 _write_json_file(map_path, stems_map_payload)
@@ -3811,12 +3819,12 @@ def main(argv: list[str] | None = None) -> int:
 
                 _validate_json_payload(
                     scene_payload,
-                    schema_path=repo_root / "schemas" / "scene.schema.json",
+                    schema_path=schemas /"scene.schema.json",
                     payload_name="Draft scene",
                 )
                 _validate_json_payload(
                     routing_payload,
-                    schema_path=repo_root / "schemas" / "routing_plan.schema.json",
+                    schema_path=schemas /"routing_plan.schema.json",
                     payload_name="Draft routing plan",
                 )
 
@@ -3878,7 +3886,7 @@ def main(argv: list[str] | None = None) -> int:
             return _run_project_validate(
                 project_dir=Path(args.project_dir),
                 out_path=Path(args.out) if args.out else None,
-                repo_root=repo_root,
+                repo_root=None,
             )
 
         if args.project_command == "pack":
@@ -3893,7 +3901,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.command == "ui":
         return _run_ui_workflow(
-            repo_root=repo_root,
+            repo_root=None,
             tools_dir=tools_dir,
             presets_dir=presets_dir,
             stems_dir=Path(args.stems),
@@ -3903,7 +3911,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.command == "run":
         exit_code, _ = _run_workflow_from_run_args(
-            repo_root=repo_root,
+            repo_root=None,
             tools_dir=tools_dir,
             presets_dir=presets_dir,
             stems_dir=Path(args.stems),
@@ -3941,7 +3949,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         cache_enabled = args.cache == "on"
         cache_dir = Path(args.cache_dir) if args.cache_dir else None
-        report_schema_path = repo_root / "schemas" / "report.schema.json"
+        report_schema_path = schemas /"report.schema.json"
         lock_payload: dict[str, Any] | None = None
         cache_key_value: str | None = None
 
@@ -4051,7 +4059,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             _validate_json_payload(
                 compare_report,
-                schema_path=repo_root / "schemas" / "compare_report.schema.json",
+                schema_path=schemas /"compare_report.schema.json",
                 payload_name="Compare report",
             )
             _write_json_file(Path(args.out), compare_report)
@@ -4130,7 +4138,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         try:
             return _run_render_command(
-                repo_root=repo_root,
+                repo_root=None,
                 report_path=Path(args.report),
                 plugins_dir=Path(args.plugins),
                 out_manifest_path=Path(args.out_manifest),
@@ -4203,7 +4211,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         try:
             return _run_apply_command(
-                repo_root=repo_root,
+                repo_root=None,
                 report_path=Path(args.report),
                 plugins_dir=Path(args.plugins),
                 out_manifest_path=Path(args.out_manifest),
@@ -4219,7 +4227,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "bundle":
         try:
             return _run_bundle(
-                repo_root=repo_root,
+                repo_root=None,
                 report_path=Path(args.report),
                 out_path=Path(args.out),
                 render_manifest_path=(
@@ -4260,7 +4268,7 @@ def main(argv: list[str] | None = None) -> int:
             print("Unknown deliverables command.", file=sys.stderr)
             return 2
         return _run_deliverables_index_command(
-            repo_root=repo_root,
+            repo_root=None,
             out_dir=Path(args.out_dir),
             out_path=Path(args.out),
             variant_result_path=(
@@ -4271,7 +4279,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.variants_command == "listen-pack":
             stems_aud_manifest = getattr(args, "stems_auditions_manifest", None)
             return _run_variants_listen_pack_command(
-                repo_root=repo_root,
+                repo_root=None,
                 presets_dir=presets_dir,
                 variant_result_path=Path(args.variant_result),
                 out_path=Path(args.out),
@@ -4284,7 +4292,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
         return _run_variants_workflow(
-            repo_root=repo_root,
+            repo_root=None,
             presets_dir=presets_dir,
             stems_dir=Path(args.stems),
             out_dir=Path(args.out),
@@ -4381,7 +4389,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             try:
                 payload = _build_preset_preview_payload(
-                    repo_root=repo_root,
+                    repo_root=None,
                     presets_dir=presets_dir,
                     preset_id=args.preset_id,
                     config_path=args.config,
@@ -4480,7 +4488,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Unknown presets command.", file=sys.stderr)
         return 2
     if args.command == "help":
-        help_registry_path = repo_root / "ontology" / "help.yaml"
+        help_registry_path = ontology /"help.yaml"
         if args.help_command == "list":
             try:
                 payload = _build_help_list_payload(
@@ -4534,7 +4542,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Unknown help command.", file=sys.stderr)
         return 2
     if args.command == "targets":
-        render_targets_path = repo_root / "ontology" / "render_targets.yaml"
+        render_targets_path = ontology /"render_targets.yaml"
         if args.targets_command == "list":
             try:
                 payload = _build_render_target_list_payload(
@@ -4602,7 +4610,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.targets_command == "recommend":
             try:
                 payload = _build_render_target_recommendations_payload(
-                    repo_root=repo_root,
+                    repo_root=None,
                     render_targets_path=render_targets_path,
                     report_input=args.report,
                     scene_input=args.scene,
@@ -4619,7 +4627,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Unknown targets command.", file=sys.stderr)
         return 2
     if args.command == "roles":
-        roles_path = repo_root / "ontology" / "roles.yaml"
+        roles_path = ontology /"roles.yaml"
         if args.roles_command == "list":
             try:
                 payload = _build_role_list_payload(roles_path=roles_path)
@@ -4649,7 +4657,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Unknown roles command.", file=sys.stderr)
         return 2
     if args.command == "translation":
-        translation_profiles_path = repo_root / "ontology" / "translation_profiles.yaml"
+        translation_profiles_path = ontology /"translation_profiles.yaml"
         if args.translation_command == "list":
             try:
                 payload = _build_translation_profile_list_payload(
@@ -4713,7 +4721,7 @@ def main(argv: list[str] | None = None) -> int:
                         report_in_path=Path(report_in_value),
                         report_out_path=Path(report_out_value),
                         translation_results=payload,
-                        repo_root=repo_root,
+                        repo_root=None,
                         profiles=profiles,
                     )
             except ValueError as exc:
@@ -4783,7 +4791,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Unknown translation command.", file=sys.stderr)
         return 2
     if args.command == "locks":
-        scene_locks_path = repo_root / "ontology" / "scene_locks.yaml"
+        scene_locks_path = ontology /"scene_locks.yaml"
         if args.locks_command == "list":
             try:
                 payload = _build_scene_lock_list_payload(
@@ -4819,7 +4827,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Unknown locks command.", file=sys.stderr)
         return 2
     if args.command == "ui-copy":
-        ui_copy_registry_path = repo_root / "ontology" / "ui_copy.yaml"
+        ui_copy_registry_path = ontology /"ui_copy.yaml"
         if args.ui_copy_command == "list":
             try:
                 payload = _build_ui_copy_list_payload(
@@ -4873,7 +4881,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Unknown ui-copy command.", file=sys.stderr)
         return 2
     if args.command == "ui-examples":
-        ui_examples_dir = repo_root / "examples" / "ui_screens"
+        ui_examples_dir = (_checkout_root / "examples" / "ui_screens") if _checkout_root is not None else Path("examples") / "ui_screens"
         if args.ui_examples_command == "list":
             try:
                 payload = _build_ui_examples_list_payload(
@@ -4919,7 +4927,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "lock":
         from mmo.core.lockfile import build_lockfile, verify_lockfile  # noqa: WPS433
 
-        schema_path = repo_root / "schemas" / "lockfile.schema.json"
+        schema_path = schemas /"lockfile.schema.json"
         stems_dir = Path(args.stems_dir)
 
         if args.lock_command == "write":
@@ -4992,7 +5000,7 @@ def main(argv: list[str] | None = None) -> int:
                 if isinstance(args.templates, str) and args.templates.strip():
                     template_ids = _parse_scene_template_ids_csv(args.templates)
                 return _run_scene_build_command(
-                    repo_root=repo_root,
+                    repo_root=None,
                     report_path=Path(args.report),
                     out_path=Path(args.out),
                     timeline_path=Path(args.timeline) if args.timeline else None,
@@ -5008,7 +5016,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.scene_command == "locks":
             try:
                 return _run_scene_locks_edit_command(
-                    repo_root=repo_root,
+                    repo_root=None,
                     scene_path=Path(args.scene),
                     out_path=Path(args.out),
                     operation=args.scene_locks_command,
@@ -5026,7 +5034,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.scene_intent_command == "set":
                 try:
                     return _run_scene_intent_set_command(
-                        repo_root=repo_root,
+                        repo_root=None,
                         scene_path=Path(args.scene),
                         out_path=Path(args.out),
                         scope=args.scope,
@@ -5042,7 +5050,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.scene_intent_command == "show":
                 try:
                     scene_payload = _load_json_object(Path(args.scene), label="Scene")
-                    _validate_scene_schema(repo_root=repo_root, scene_payload=scene_payload)
+                    _validate_scene_schema(repo_root=None, scene_payload=scene_payload)
                 except ValueError as exc:
                     print(str(exc), file=sys.stderr)
                     return 1
@@ -5059,7 +5067,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
         if args.scene_command == "template":
-            scene_templates_path = repo_root / "ontology" / "scene_templates.yaml"
+            scene_templates_path = ontology /"scene_templates.yaml"
             if args.scene_template_command == "list":
                 try:
                     payload = _build_scene_template_list_payload(
@@ -5097,7 +5105,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.scene_template_command == "apply":
                 try:
                     return _run_scene_template_apply_command(
-                        repo_root=repo_root,
+                        repo_root=None,
                         scene_path=Path(args.scene),
                         out_path=Path(args.out),
                         template_ids=args.template_ids,
@@ -5111,7 +5119,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.scene_template_command == "preview":
                 try:
                     return _run_scene_template_preview_command(
-                        repo_root=repo_root,
+                        repo_root=None,
                         scene_path=Path(args.scene),
                         template_ids=args.template_ids,
                         force=bool(args.force),
@@ -5128,7 +5136,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.scene_command in {"validate", "show"}:
             try:
                 scene_payload = _load_json_object(Path(args.scene), label="Scene")
-                _validate_scene_schema(repo_root=repo_root, scene_payload=scene_payload)
+                _validate_scene_schema(repo_root=None, scene_payload=scene_payload)
             except ValueError as exc:
                 print(str(exc), file=sys.stderr)
                 return 1
@@ -5151,7 +5159,7 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 target_ids = _parse_target_ids_csv(
                     args.targets,
-                    render_targets_path=repo_root / "ontology" / "render_targets.yaml",
+                    render_targets_path=ontology /"render_targets.yaml",
                 )
                 output_formats = _parse_output_formats_csv(args.output_formats)
                 contexts = (
@@ -5160,7 +5168,7 @@ def main(argv: list[str] | None = None) -> int:
                     else ["render"]
                 )
                 return _run_render_plan_build_command(
-                    repo_root=repo_root,
+                    repo_root=None,
                     scene_path=Path(args.scene),
                     target_ids=target_ids,
                     out_path=Path(args.out),
@@ -5180,7 +5188,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.render_plan_command == "to-variants":
             try:
                 return _run_render_plan_to_variants_command(
-                    repo_root=repo_root,
+                    repo_root=None,
                     presets_dir=presets_dir,
                     render_plan_path=Path(args.render_plan),
                     scene_path=Path(args.scene),
@@ -5201,7 +5209,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.render_plan_command == "plan":
             try:
                 return _run_render_plan_from_request_command(
-                    repo_root=repo_root,
+                    repo_root=None,
                     request_path=Path(args.request),
                     scene_path=Path(args.scene),
                     routing_plan_path=(
@@ -5227,7 +5235,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             _validate_json_payload(
                 render_plan_payload,
-                schema_path=repo_root / "schemas" / "render_plan.schema.json",
+                schema_path=schemas /"render_plan.schema.json",
                 payload_name="Render plan",
             )
         except ValueError as exc:
@@ -5259,7 +5267,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             _validate_json_payload(
                 plan_payload,
-                schema_path=repo_root / "schemas" / "render_plan.schema.json",
+                schema_path=schemas /"render_plan.schema.json",
                 payload_name="Render plan",
             )
             from mmo.core.render_reporting import build_render_report_from_plan  # noqa: WPS433
@@ -5267,7 +5275,7 @@ def main(argv: list[str] | None = None) -> int:
             report_payload = build_render_report_from_plan(plan_payload)
             _validate_json_payload(
                 report_payload,
-                schema_path=repo_root / "schemas" / "render_report.schema.json",
+                schema_path=schemas /"render_report.schema.json",
                 payload_name="Render report",
             )
             _write_json_file(out_path, report_payload)
@@ -5280,7 +5288,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "render-run":
         try:
             return _run_render_run_command(
-                repo_root=repo_root,
+                repo_root=None,
                 request_path=Path(args.request),
                 scene_path=Path(args.scene),
                 routing_plan_path=(
@@ -5344,7 +5352,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             _validate_json_payload(
                 routing_plan,
-                schema_path=repo_root / "schemas" / "routing_plan.schema.json",
+                schema_path=schemas /"routing_plan.schema.json",
                 payload_name="Routing plan",
             )
             output = render_routing_plan(routing_plan, output_format=args.format)
@@ -5449,7 +5457,7 @@ def main(argv: list[str] | None = None) -> int:
                     file=sys.stderr,
                 )
                 return 1
-            layouts_path = repo_root / "ontology" / "layouts.yaml"
+            layouts_path = ontology /"layouts.yaml"
             try:
                 layouts = load_layouts(layouts_path)
             except ValueError as exc:
@@ -5471,7 +5479,7 @@ def main(argv: list[str] | None = None) -> int:
                     tolerance_lufs=args.tolerance_lufs,
                     tolerance_true_peak_db=args.tolerance_true_peak,
                     tolerance_corr=args.tolerance_corr,
-                    repo_root=repo_root,
+                    repo_root=None,
                     meters=effective_meters,
                     max_seconds=effective_max_seconds,
                 )
@@ -5485,10 +5493,10 @@ def main(argv: list[str] | None = None) -> int:
                 )
 
                 report_payload = build_minimal_report_for_downmix_qa(
-                    repo_root=repo_root,
+                    repo_root=None,
                     qa_payload=report,
                     profile_id=effective_profile,
-                    profiles_path=repo_root / "ontology" / "policies" / "authority_profiles.yaml",
+                    profiles_path=ontology /"policies" / "authority_profiles.yaml",
                 )
                 report_payload["run_config"] = _downmix_qa_run_config(
                     profile_id=effective_profile,
@@ -5547,7 +5555,7 @@ def main(argv: list[str] | None = None) -> int:
 
             try:
                 payload = build_downmix_list_payload(
-                    repo_root=repo_root,
+                    repo_root=None,
                     include_layouts=want_layouts,
                     include_policies=want_policies,
                     include_conversions=want_conversions,
@@ -5624,7 +5632,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             try:
                 return _run_downmix_render(
-                    repo_root=repo_root,
+                    repo_root=None,
                     report_path=Path(args.report),
                     plugins_dir=Path(args.plugins),
                     out_manifest_path=Path(args.out_manifest),
@@ -5639,11 +5647,11 @@ def main(argv: list[str] | None = None) -> int:
             print("Unknown downmix command.", file=sys.stderr)
             return 2
 
-        layouts_path = repo_root / "ontology" / "layouts.yaml"
-        registry_path = repo_root / "ontology" / "policies" / "downmix.yaml"
+        layouts_path = ontology /"layouts.yaml"
+        registry_path = ontology /"policies" / "downmix.yaml"
         try:
             matrix = resolve_downmix_matrix(
-                repo_root=repo_root,
+                repo_root=None,
                 source_layout_id=args.source,
                 target_layout_id=args.target,
                 policy_id=args.policy,

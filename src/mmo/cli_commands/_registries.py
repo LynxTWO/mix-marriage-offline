@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from mmo.resources import ontology_dir, schemas_dir
+
 from mmo.cli_commands._helpers import (
     _BASELINE_RENDER_TARGET_ID,
     _PRESET_PREVIEW_DEFAULT_MAX_SECONDS,
@@ -288,12 +290,12 @@ def _build_preset_preview_payload(
 
     _validate_json_payload(
         effective_cfg,
-        schema_path=repo_root / "schemas" / "run_config.schema.json",
+        schema_path=schemas_dir() /"run_config.schema.json",
         payload_name="Preset preview effective_run_config",
     )
 
     help_payload = _build_preset_preview_help(
-        help_registry_path=repo_root / "ontology" / "help.yaml",
+        help_registry_path=ontology_dir() /"help.yaml",
         help_id=preset_payload.get("help_id")
         if isinstance(preset_payload.get("help_id"), str)
         else None,
@@ -918,7 +920,7 @@ def _write_report_with_translation_results(
     profile_map = (
         profiles
         if isinstance(profiles, dict)
-        else load_translation_profiles(repo_root / "ontology" / "translation_profiles.yaml")
+        else load_translation_profiles(ontology_dir() /"translation_profiles.yaml")
     )
     report_payload["translation_results"] = translation_results
     report_payload["translation_summary"] = build_translation_summary(
@@ -929,7 +931,7 @@ def _write_report_with_translation_results(
         report_payload["translation_reference"] = dict(translation_reference)
     _validate_json_payload(
         report_payload,
-        schema_path=repo_root / "schemas" / "report.schema.json",
+        schema_path=schemas_dir() /"report.schema.json",
         payload_name="Report",
     )
     try:
@@ -1044,7 +1046,7 @@ def _build_render_target_recommendations_payload(
             scene_payload = _load_json_object(auto_scene_path, label="Scene")
 
     return recommend_render_targets(
-        repo_root=repo_root,
+        repo_root=None,
         render_targets_path=render_targets_path,
         report=report_payload,
         scene=scene_payload,

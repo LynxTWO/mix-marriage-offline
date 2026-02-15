@@ -11,8 +11,7 @@ except ImportError:  # pragma: no cover - optional dependency
     jsonschema = None
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+from mmo.resources import schemas_dir
 
 
 def _load_json_object(path: Path, *, label: str) -> dict[str, Any]:
@@ -52,7 +51,7 @@ def _ui_screen_example_validator() -> Any:
     if jsonschema is None:
         raise RuntimeError("jsonschema is required to validate UI screen examples.")
 
-    schema_path = _repo_root() / "schemas" / "ui_screen_example.schema.json"
+    schema_path = schemas_dir() / "ui_screen_example.schema.json"
     schema = _load_json_object(schema_path, label="UI screen example schema")
     registry = _build_schema_registry(schema_path.parent)
     return jsonschema.Draft202012Validator(schema, registry=registry)

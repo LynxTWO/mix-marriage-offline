@@ -22,11 +22,9 @@ _PRESET_ALLOWED_KEYS = (
     | set(_PRESET_OPTIONAL_STRING_LIST_KEYS)
 )
 _PACK_REQUIRED_KEYS = {"pack_id", "label", "description", "preset_ids"}
+from mmo.resources import presets_dir as _presets_dir, schemas_dir
+
 _PACK_ALLOWED_KEYS = _PACK_REQUIRED_KEYS
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
 
 
 def _load_json_object(path: Path, *, label: str) -> dict[str, Any]:
@@ -296,7 +294,7 @@ def load_preset_index(presets_dir: Path) -> dict[str, Any]:
     normalized = _validate_preset_index_basic(index, index_path=index_path)
     _validate_payload_against_schema(
         normalized,
-        schema_path=_repo_root() / "schemas" / "presets_index.schema.json",
+        schema_path=schemas_dir() / "presets_index.schema.json",
         payload_name="Preset index",
     )
     return normalized
@@ -370,7 +368,7 @@ def get_preset_help_id(preset_id: str) -> str | None:
     if not normalized_preset_id:
         return None
 
-    presets_dir = _repo_root() / "presets"
+    presets_dir = _presets_dir()
     try:
         presets = list_presets(presets_dir)
     except ValueError:
@@ -452,7 +450,7 @@ def load_preset_run_config(presets_dir: Path, preset_id: str) -> dict[str, Any]:
     )
     _validate_payload_against_schema(
         preset_payload,
-        schema_path=_repo_root() / "schemas" / "run_config.schema.json",
+        schema_path=schemas_dir() / "run_config.schema.json",
         payload_name=f"Preset run config ({normalized_preset_id})",
     )
 

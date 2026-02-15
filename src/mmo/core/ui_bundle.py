@@ -21,8 +21,7 @@ _SCENE_LOCK_APPLIES_TO = {"object", "bed", "scene"}
 _UNKNOWN_LOCK_DESCRIPTION = "Unknown lock ID; definition not found in the scene lock registry."
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+from mmo.resources import ontology_dir, presets_dir as _presets_dir, schemas_dir
 
 
 def _numeric_value(value: Any) -> float | None:
@@ -423,7 +422,7 @@ def _dashboard_preset_recommendations(report: dict[str, Any]) -> list[dict[str, 
 
     from mmo.core.preset_recommendations import derive_preset_recommendations  # noqa: WPS433
 
-    derived = derive_preset_recommendations(report, _repo_root() / "presets")
+    derived = derive_preset_recommendations(report, _presets_dir())
     return _normalized_preset_recommendations(_iter_dict_list(derived))
 
 
@@ -527,7 +526,7 @@ def _load_scene_payload(scene_path: Path | None) -> dict[str, Any] | None:
     payload = _load_json_object(resolved_scene_path, label="Scene")
     _validate_json_payload(
         payload,
-        schema_path=_repo_root() / "schemas" / "scene.schema.json",
+        schema_path=schemas_dir() / "scene.schema.json",
         payload_name="Scene",
     )
     return payload
@@ -1482,7 +1481,7 @@ def _ui_bundle_render_targets(
         return render_targets_payload
 
     render_targets_payload["recommendations"] = recommend_render_targets(
-        repo_root=_repo_root(),
+        repo_root=None,
         report=report,
         scene=scene_payload,
     )
@@ -1519,7 +1518,7 @@ def build_ui_bundle(
     from mmo.core.scene_templates import list_scene_templates  # noqa: WPS433
     from mmo.core.ui_copy import load_ui_copy, resolve_ui_copy  # noqa: WPS433
 
-    gui_design_payload = load_gui_design(_repo_root() / "ontology" / "gui_design.yaml")
+    gui_design_payload = load_gui_design(ontology_dir() / "gui_design.yaml")
     recommendations = _recommendations(report)
     preset_recommendations = _dashboard_preset_recommendations(report)
     dashboard = {

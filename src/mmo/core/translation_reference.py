@@ -40,8 +40,7 @@ class _AudioCandidate:
     channel_count: int | None
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+from mmo.resources import ontology_dir
 
 
 def _coerce_str(value: Any) -> str:
@@ -115,9 +114,9 @@ def _path_from_result_value(
     return (root_out_dir / parsed).resolve()
 
 
-def _render_target_lookup(repo_root: Path) -> dict[str, dict[str, str | None]]:
+def _render_target_lookup() -> dict[str, dict[str, str | None]]:
     lookup: dict[str, dict[str, str | None]] = {}
-    for target in list_render_targets(repo_root / "ontology" / "render_targets.yaml"):
+    for target in list_render_targets(ontology_dir() / "render_targets.yaml"):
         target_id = _coerce_str(target.get("target_id")).strip()
         if not target_id:
             continue
@@ -558,11 +557,11 @@ def _render_downmix_reference_stereo(
     out_path: Path,
     source_layout_id: str,
     downmix_policy_id: str | None,
-    repo_root: Path,
+    repo_root: Path | None = None,
 ) -> None:
     sample_rate_hz, source_channels, source_chunks = _iter_wav_float64_chunks(source_audio_path)
     matrix = resolve_downmix_matrix(
-        repo_root=repo_root,
+        repo_root=None,
         source_layout_id=source_layout_id,
         target_layout_id=_STEREO_LAYOUT_ID,
         policy_id=downmix_policy_id,
@@ -634,8 +633,7 @@ def resolve_translation_reference_audio(
     prefer_target_ids: list[str] | None = None,
 ) -> tuple[Path, dict]:
     resolved_out_dir = out_dir.resolve()
-    repo_root = _repo_root()
-    render_targets = _render_target_lookup(repo_root)
+    render_targets = _render_target_lookup()
 
     candidates: list[_AudioCandidate] = []
     collectors: list[Any] = [
@@ -734,7 +732,7 @@ def resolve_translation_reference_audio(
                     out_path=resolved_output_path,
                     source_layout_id=source_layout_id,
                     downmix_policy_id=candidate.downmix_policy_id,
-                    repo_root=repo_root,
+                    repo_root=None,
                 )
             except TranslationReferenceResolutionError as exc:
                 if first_failure is None:

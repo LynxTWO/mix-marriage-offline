@@ -52,13 +52,10 @@ class PluginEntry:
     manifest: Dict[str, Any]
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
-
 def _ensure_repo_on_path() -> None:
-    root = _repo_root()
-    if str(root) not in sys.path:
+    from mmo.resources import _repo_checkout_root
+    root = _repo_checkout_root()
+    if root is not None and str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
 

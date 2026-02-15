@@ -19,12 +19,9 @@ _GUI_STATE_TABS: tuple[str, ...] = (
 )
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
-
 def _gui_state_schema_path() -> Path:
-    return _repo_root() / "schemas" / "gui_state.schema.json"
+    from mmo.resources import schemas_dir
+    return schemas_dir() / "gui_state.schema.json"
 
 
 def _load_json_object(path: Path, *, label: str) -> dict[str, Any]:

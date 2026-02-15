@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from mmo.dsp.downmix import load_layouts
+from mmo.resources import ontology_dir
 
 ROUTING_PLAN_SCHEMA_VERSION = "0.1.0"
 NO_SAFE_DEFAULT_MAPPING_NOTE = "No safe default mapping"
@@ -12,8 +13,6 @@ STEREO_FRONT_ONLY_NOTE = "Stereo routed to front L/R only"
 MONO_STEREO_NOTE = "Mono routed equally to L/R at -3.0 dB each"
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
 
 
 def _coerce_str(value: Any) -> str:
@@ -37,7 +36,7 @@ def _coerce_int(value: Any) -> int | None:
 
 def _safe_layout_channel_order(layout_id: str) -> list[str]:
     try:
-        layouts = load_layouts(_repo_root() / "ontology" / "layouts.yaml")
+        layouts = load_layouts(ontology_dir() / "layouts.yaml")
     except (RuntimeError, ValueError):
         return []
     layout = layouts.get(layout_id)

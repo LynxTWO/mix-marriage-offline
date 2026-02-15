@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional
 
+from mmo.resources import ontology_dir
+
 from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.backends.ffprobe_meta import find_ffprobe
@@ -204,7 +206,7 @@ def run_downmix_qa(
     tolerance_lufs: float = 1.0,
     tolerance_true_peak_db: float = 1.0,
     tolerance_corr: float = 0.15,
-    repo_root: Path,
+    repo_root: Path | None = None,
     meters: str = "truth",
     max_seconds: float = 120.0,
 ) -> Dict[str, Any]:
@@ -270,8 +272,8 @@ def run_downmix_qa(
             }
         }
 
-    layouts_path = repo_root / "ontology" / "layouts.yaml"
-    registry_path = repo_root / "ontology" / "policies" / "downmix.yaml"
+    layouts_path = ontology_dir() / "layouts.yaml"
+    registry_path = ontology_dir() / "policies" / "downmix.yaml"
     matrix = resolve_downmix_matrix(
         repo_root=repo_root,
         source_layout_id=source_layout_id,

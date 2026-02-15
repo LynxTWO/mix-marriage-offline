@@ -10,19 +10,15 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     yaml = None
 
-_DEFAULT_DOWNMIX_PATH = Path("ontology/policies/downmix.yaml")
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[4]
+from mmo.resources import data_root, ontology_dir
 
 
 def _resolve_registry_path(path: Path | None) -> Path:
     if path is None:
-        return _repo_root() / _DEFAULT_DOWNMIX_PATH
+        return ontology_dir() / "policies" / "downmix.yaml"
     if path.is_absolute():
         return path
-    return _repo_root() / path
+    return data_root() / path
 
 
 class DownmixRegistry:

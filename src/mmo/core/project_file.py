@@ -18,12 +18,9 @@ PROJECT_SCHEMA_VERSION = "0.1.0"
 _PROJECT_ID_CLEAN_RE = re.compile(r"[^A-Za-z0-9]+")
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
-
 def _project_schema_path() -> Path:
-    return _repo_root() / "schemas" / "project.schema.json"
+    from mmo.resources import schemas_dir
+    return schemas_dir() / "project.schema.json"
 
 
 def _utc_now_iso() -> str:

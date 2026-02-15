@@ -9,6 +9,8 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     jsonschema = None
 
+from mmo.resources import data_root, ontology_dir, schemas_dir
+
 try:
     import yaml
 except ImportError:  # pragma: no cover - optional dependency
@@ -24,7 +26,6 @@ ISSUE_SCENE_INTENT_PARAM_OUT_OF_RANGE = (
 )
 ISSUE_SCENE_INTENT_ENUM_INVALID = "ISSUE.VALIDATION.SCENE_INTENT_ENUM_INVALID"
 
-_DEFAULT_INTENT_PARAMS_PATH = Path("ontology/intent_params.yaml")
 _ADVISORY_SEVERITY = 40
 _OBJECT_PARAM_MAP = {
     "width": "INTENT.WIDTH",
@@ -37,16 +38,12 @@ _BED_PARAM_MAP = {
 }
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
-
 def _resolve_registry_path(path: Path | None) -> Path:
     if path is None:
-        return _repo_root() / _DEFAULT_INTENT_PARAMS_PATH
+        return ontology_dir() / "intent_params.yaml"
     if path.is_absolute():
         return path
-    return _repo_root() / path
+    return data_root() / path
 
 
 def _load_yaml_object(path: Path, *, label: str) -> dict[str, Any]:
@@ -116,7 +113,7 @@ def load_intent_params(path: Path | None = None) -> dict[str, Any]:
     payload = _load_yaml_object(resolved_path, label="Intent params registry")
     _validate_payload_against_schema(
         payload,
-        schema_path=_repo_root() / "schemas" / "intent_params.schema.json",
+        schema_path=schemas_dir() / "intent_params.schema.json",
         payload_name="Intent params registry",
     )
     return {

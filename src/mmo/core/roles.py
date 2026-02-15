@@ -8,24 +8,20 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     jsonschema = None
 
+from mmo.resources import data_root, ontology_dir, schemas_dir
+
 try:
     import yaml
 except ImportError:  # pragma: no cover - optional dependency
     yaml = None
 
-_DEFAULT_ROLES_PATH = Path("ontology/roles.yaml")
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
 
 def _resolve_registry_path(path: Path | None) -> Path:
     if path is None:
-        return _repo_root() / _DEFAULT_ROLES_PATH
+        return ontology_dir() / "roles.yaml"
     if path.is_absolute():
         return path
-    return _repo_root() / path
+    return data_root() / path
 
 
 def _load_yaml_object(path: Path, *, label: str) -> dict[str, Any]:
@@ -140,7 +136,7 @@ def load_roles(path: Path | None = None) -> dict[str, Any]:
     payload = _load_yaml_object(resolved_path, label="Roles registry")
     _validate_payload_against_schema(
         payload,
-        schema_path=_repo_root() / "schemas" / "roles.schema.json",
+        schema_path=schemas_dir() / "roles.schema.json",
         payload_name="Roles registry",
     )
 

@@ -24,11 +24,7 @@ class CompiledRoleLexiconEntry:
     compiled_regex: tuple[re.Pattern[str], ...]
 
 
-COMMON_ROLE_LEXICON_REL_PATH = Path("ontology") / "role_lexicon_common.yaml"
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+from mmo.resources import ontology_dir, schemas_dir
 
 
 def _load_yaml_object(path: Path, *, label: str) -> dict[str, Any]:
@@ -194,7 +190,7 @@ def _load_compiled_role_lexicon(
     payload = _load_yaml_object(path, label=label)
     _validate_payload_against_schema(
         payload,
-        schema_path=_repo_root() / "schemas" / "role_lexicon.schema.json",
+        schema_path=schemas_dir() / "role_lexicon.schema.json",
         payload_name=label,
     )
 
@@ -220,7 +216,7 @@ def load_common_role_lexicon(
     *,
     roles_payload: dict[str, Any] | None = None,
 ) -> dict[str, CompiledRoleLexiconEntry]:
-    common_path = path if isinstance(path, Path) else _repo_root() / COMMON_ROLE_LEXICON_REL_PATH
+    common_path = path if isinstance(path, Path) else ontology_dir() / "role_lexicon_common.yaml"
     return _load_compiled_role_lexicon(
         common_path,
         label="Common role lexicon",

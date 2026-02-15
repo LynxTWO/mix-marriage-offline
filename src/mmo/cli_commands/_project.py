@@ -9,6 +9,7 @@ from typing import Any
 
 from mmo.cli_commands._helpers import _load_json_object
 from mmo.core.run_config import normalize_run_config
+from mmo.resources import schemas_dir as _schemas_dir_fn
 
 __all__ = [
     "_project_last_run_payload",
@@ -128,7 +129,7 @@ def _run_project_validate(
     repo_root: Path,
 ) -> int:
     """Run project validate and print/write the result. Returns exit code."""
-    schemas_dir = repo_root / "schemas"
+    schemas_dir = _schemas_dir_fn()
     checks: list[dict[str, Any]] = []
 
     for rel_path, schema_basename, required in _VALIDATE_CHECKS:

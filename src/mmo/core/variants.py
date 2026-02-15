@@ -6,6 +6,13 @@ import re
 from pathlib import Path
 from typing import Any, Callable
 
+from mmo.resources import (
+    _repo_checkout_root,
+    ontology_dir,
+    presets_dir as _presets_dir,
+    schemas_dir,
+)
+
 from mmo.core.cache_keys import cache_key, hash_lockfile, hash_run_config
 from mmo.core.cache_store import (
     report_has_time_cap_stop_condition,
@@ -111,9 +118,9 @@ def _path_to_posix(path: Path) -> str:
 def _default_render_plan_targets_payload(
     *,
     report: dict[str, Any],
-    repo_root: Path,
+    repo_root: Path | None = None,
 ) -> dict[str, Any]:
-    targets = list_render_targets(repo_root / "ontology" / "render_targets.yaml")
+    targets = list_render_targets(ontology_dir() / "render_targets.yaml")
     by_target_id: dict[str, dict[str, Any]] = {}
     by_layout_id: dict[str, str] = {}
     for target in targets:
@@ -297,7 +304,7 @@ def _run_variant_downmix_qa(
     variant: dict[str, Any],
     stems_dir: Path,
     run_config: dict[str, Any],
-    repo_root: Path,
+    repo_root: Path | None = None,
 ) -> dict[str, Any]:
     qa_ref_path = _qa_ref_path_for_variant(variant)
     if qa_ref_path is None:
@@ -364,21 +371,21 @@ def _apply_variant_routing_step(
 def _refresh_report_after_downmix_qa(
     *,
     report: dict[str, Any],
-    repo_root: Path,
+    repo_root: Path | None = None,
     profile_id: str,
 ) -> None:
     apply_gates_to_report(
         report,
-        policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+        policy_path=ontology_dir() / "policies" / "gates.yaml",
         profile_id=profile_id,
-        profiles_path=repo_root / "ontology" / "policies" / "authority_profiles.yaml",
+        profiles_path=ontology_dir() / "policies" / "authority_profiles.yaml",
     )
     enrich_blocked_downmix_render_diagnostics(report)
     if isinstance(report.get("mix_complexity"), dict):
         report["vibe_signals"] = derive_vibe_signals(report)
         report["preset_recommendations"] = derive_preset_recommendations(
             report,
-            repo_root / "presets",
+            _presets_dir(),
         )
 
 
@@ -510,10 +517,17 @@ def _with_variant_out_dir(
     return _normalize_run_config_patch(merged)
 
 
-def _load_scan_builder(repo_root: Path) -> Callable[..., dict[str, Any]]:
-    module_path = (repo_root / "tools" / "scan_session.py").resolve()
-    cache_key = module_path.as_posix()
-    cached = _SCAN_SESSION_BUILDERS.get(cache_key)
+def _load_scan_builder(repo_root: Path | None = None) -> Callable[..., dict[str, Any]]:
+    if repo_root is not None:
+        module_path = (repo_root / "tools" / "scan_session.py").resolve()
+    else:
+        _checkout = _repo_checkout_root()
+        if _checkout is not None:
+            module_path = (_checkout / "tools" / "scan_session.py").resolve()
+        else:
+            module_path = Path("tools") / "scan_session.py"
+    cache_key_str = module_path.as_posix()
+    cached = _SCAN_SESSION_BUILDERS.get(cache_key_str)
     if cached is not None:
         return cached
 
@@ -525,7 +539,7 @@ def _load_scan_builder(repo_root: Path) -> Callable[..., dict[str, Any]]:
     build_report = getattr(module, "build_report", None)
     if not callable(build_report):
         raise ValueError(f"scan_session module missing build_report(): {module_path}")
-    _SCAN_SESSION_BUILDERS[cache_key] = build_report
+    _SCAN_SESSION_BUILDERS[cache_key_str] = build_report
     return build_report
 
 
@@ -922,7 +936,7 @@ def build_variant_plan(
 
 def run_variant_plan(
     plan: dict[str, Any],
-    repo_root: Path,
+    repo_root: Path | None = None,
     *,
     project_path: Path | None = None,
     deliverables_index_path: Path | None = None,
@@ -948,9 +962,11 @@ def run_variant_plan(
     base_run_config = normalize_run_config(base_run_config)
 
     variant_entries = _coerce_dict_list(plan.get("variants"))
-    presets_dir = repo_root / "presets"
-    report_schema_path = repo_root / "schemas" / "report.schema.json"
-    plugins = load_plugins(repo_root / "plugins")
+    _resolved_presets_dir = _presets_dir()
+    report_schema_path = schemas_dir() / "report.schema.json"
+    _checkout = _repo_checkout_root()
+    plugins_path = _checkout / "plugins" if _checkout else Path("plugins")
+    plugins = load_plugins(plugins_path)
     scan_builder = _load_scan_builder(repo_root)
     analysis_lock: dict[str, Any] | None = None
     if cache_enabled:
@@ -1000,7 +1016,7 @@ def run_variant_plan(
             effective_run_config = _merge_effective_run_config(
                 base_run_config=base_run_config,
                 variant=variant,
-                presets_dir=presets_dir,
+                presets_dir=_resolved_presets_dir,
             )
             effective_run_config = _with_variant_layout_overrides(
                 effective_run_config,
@@ -1059,10 +1075,9 @@ def run_variant_plan(
                     run_resolvers(report, plugins)
                     apply_gates_to_report(
                         report,
-                        policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+                        policy_path=ontology_dir() / "policies" / "gates.yaml",
                         profile_id=profile_id,
-                        profiles_path=repo_root
-                        / "ontology"
+                        profiles_path=ontology_dir()
                         / "policies"
                         / "authority_profiles.yaml",
                     )
@@ -1070,7 +1085,7 @@ def run_variant_plan(
                         report["vibe_signals"] = derive_vibe_signals(report)
                         report["preset_recommendations"] = derive_preset_recommendations(
                             report,
-                            repo_root / "presets",
+                            _presets_dir(),
                         )
                     report["run_config"] = normalize_run_config(effective_run_config)
                     _write_json(report_path, report)
@@ -1184,10 +1199,9 @@ def run_variant_plan(
                 render_report = _json_clone(report)
                 apply_gates_to_report(
                     render_report,
-                    policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+                    policy_path=ontology_dir() / "policies" / "gates.yaml",
                     profile_id=profile_id,
-                    profiles_path=repo_root
-                    / "ontology"
+                    profiles_path=ontology_dir()
                     / "policies"
                     / "authority_profiles.yaml",
                 )
@@ -1221,10 +1235,9 @@ def run_variant_plan(
                 apply_report = _json_clone(report)
                 apply_gates_to_report(
                     apply_report,
-                    policy_path=repo_root / "ontology" / "policies" / "gates.yaml",
+                    policy_path=ontology_dir() / "policies" / "gates.yaml",
                     profile_id=profile_id,
-                    profiles_path=repo_root
-                    / "ontology"
+                    profiles_path=ontology_dir()
                     / "policies"
                     / "authority_profiles.yaml",
                 )
@@ -1288,7 +1301,6 @@ def run_variant_plan(
                 try:
                     render_targets_payload = _default_render_plan_targets_payload(
                         report=report,
-                        repo_root=repo_root,
                     )
                     routing_plan_payload = report.get("routing_plan")
                     routing_plan_artifact_path: Path | None = None
@@ -1339,7 +1351,7 @@ def run_variant_plan(
                     render_manifest,
                     apply_manifest=apply_manifest,
                     applied_report=applied_report,
-                    help_registry_path=repo_root / "ontology" / "help.yaml",
+                    help_registry_path=ontology_dir() / "help.yaml",
                     project_path=project_path,
                     deliverables_index_path=deliverables_index_path,
                     listen_pack_path=listen_pack_path,

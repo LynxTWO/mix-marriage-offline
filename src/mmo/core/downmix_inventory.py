@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
+from mmo.resources import ontology_dir
+
 from mmo.dsp.downmix import (
     load_downmix_registry,
     load_layouts,
@@ -12,13 +14,13 @@ from mmo.dsp.downmix import (
 
 def build_downmix_list_payload(
     *,
-    repo_root: Path,
+    repo_root: Path | None = None,
     include_layouts: bool,
     include_policies: bool,
     include_conversions: bool,
 ) -> dict[str, list[dict[str, object]]]:
-    layouts = load_layouts(repo_root / "ontology" / "layouts.yaml")
-    registry = load_downmix_registry(repo_root / "ontology" / "policies" / "downmix.yaml")
+    layouts = load_layouts(ontology_dir() / "layouts.yaml")
+    registry = load_downmix_registry(ontology_dir() / "policies" / "downmix.yaml")
 
     payload: dict[str, list[dict[str, object]]] = {
         "layouts": [],

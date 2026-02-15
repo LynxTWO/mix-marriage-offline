@@ -18,20 +18,17 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     yaml = None
 
+from mmo.resources import data_root, ontology_dir, schemas_dir
+
 RENDER_TARGETS_SCHEMA_VERSION = "0.1.0"
-_DEFAULT_TARGETS_PATH = Path("ontology/render_targets.yaml")
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
 
 
 def _resolve_registry_path(path: Path | None) -> Path:
     if path is None:
-        return _repo_root() / _DEFAULT_TARGETS_PATH
+        return ontology_dir() / "render_targets.yaml"
     if path.is_absolute():
         return path
-    return _repo_root() / path
+    return data_root() / path
 
 
 def _load_yaml_object(path: Path, *, label: str) -> dict[str, Any]:
@@ -99,7 +96,7 @@ def _validate_target_order(targets: list[dict[str, Any]], *, path: Path) -> None
 
 
 def _validate_layout_ids(targets: list[dict[str, Any]], *, path: Path) -> None:
-    layouts_path = _repo_root() / "ontology" / "layouts.yaml"
+    layouts_path = ontology_dir() / "layouts.yaml"
     try:
         layouts = load_layouts(layouts_path)
     except (RuntimeError, ValueError) as exc:
@@ -121,7 +118,7 @@ def _validate_layout_ids(targets: list[dict[str, Any]], *, path: Path) -> None:
 
 
 def _speaker_positions_layouts() -> dict[str, dict[str, Any]]:
-    registry_path = _repo_root() / "ontology" / "speaker_positions.yaml"
+    registry_path = ontology_dir() / "speaker_positions.yaml"
     try:
         registry = load_speaker_positions(registry_path)
     except (RuntimeError, ValueError) as exc:
@@ -274,7 +271,7 @@ def load_render_targets(path: Path | None = None) -> dict[str, Any]:
     payload = _load_yaml_object(resolved_path, label="Render targets registry")
     _validate_payload_against_schema(
         payload,
-        schema_path=_repo_root() / "schemas" / "render_targets.schema.json",
+        schema_path=schemas_dir() / "render_targets.schema.json",
         payload_name="Render targets registry",
     )
 

@@ -56,12 +56,14 @@ def _coerce_number(value: Any) -> float | None:
     return None
 
 
-def _resolved_render_targets_path(repo_root: Path, render_targets_path: Path | None) -> Path:
+def _resolved_render_targets_path(repo_root: Path | None, render_targets_path: Path | None) -> Path:
+    from mmo.resources import data_root, ontology_dir
     if render_targets_path is None:
-        return repo_root / "ontology" / "render_targets.yaml"
+        return ontology_dir() / "render_targets.yaml"
     if render_targets_path.is_absolute():
         return render_targets_path
-    return repo_root / render_targets_path
+    base = repo_root if repo_root is not None else data_root()
+    return base / render_targets_path
 
 
 def _clamp_confidence(value: float) -> float:
@@ -141,7 +143,7 @@ def _format_threshold_reason(*, bed_id: str, diffuse: float, threshold: float) -
 
 def recommend_render_targets(
     *,
-    repo_root: Path,
+    repo_root: Path | None = None,
     render_targets_path: Path | None = None,
     report: dict[str, Any] | None = None,
     scene: dict[str, Any] | None = None,

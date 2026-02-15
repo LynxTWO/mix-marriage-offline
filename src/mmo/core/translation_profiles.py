@@ -14,19 +14,15 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     yaml = None
 
-_DEFAULT_TRANSLATION_PROFILES_PATH = Path("ontology/translation_profiles.yaml")
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+from mmo.resources import data_root, ontology_dir, schemas_dir
 
 
 def _resolve_registry_path(path: Path | None) -> Path:
     if path is None:
-        return _repo_root() / _DEFAULT_TRANSLATION_PROFILES_PATH
+        return ontology_dir() / "translation_profiles.yaml"
     if path.is_absolute():
         return path
-    return _repo_root() / path
+    return data_root() / path
 
 
 def _load_yaml_object(path: Path, *, label: str) -> dict[str, Any]:
@@ -100,7 +96,7 @@ def load_translation_profiles(path: Path | None = None) -> dict[str, dict[str, A
     payload = _load_yaml_object(resolved_path, label="Translation profiles registry")
     _validate_payload_against_schema(
         payload,
-        schema_path=_repo_root() / "schemas" / "translation_profiles.schema.json",
+        schema_path=schemas_dir() / "translation_profiles.schema.json",
         payload_name="Translation profiles registry",
     )
 

@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from mmo.resources import ontology_dir, schemas_dir
+
 from mmo.cli_commands._helpers import (
     _BASELINE_RENDER_TARGET_ID,
     _coerce_str,
@@ -132,7 +134,7 @@ def _build_validated_scene_payload(
         source_payload["created_from"] = created_from
     _validate_json_payload(
         scene_payload,
-        schema_path=repo_root / "schemas" / "scene.schema.json",
+        schema_path=schemas_dir() /"scene.schema.json",
         payload_name="Scene",
     )
     return scene_payload
@@ -150,19 +152,19 @@ def _run_scene_build_command(
     report = _load_report(report_path)
     _validate_json_payload(
         report,
-        schema_path=repo_root / "schemas" / "report.schema.json",
+        schema_path=schemas_dir() /"report.schema.json",
         payload_name="Report",
     )
     timeline_payload = _load_timeline_payload(timeline_path)
     scene_payload = _build_validated_scene_payload(
-        repo_root=repo_root,
+        repo_root=None,
         report=report,
         timeline_payload=timeline_payload,
         lock_hash=None,
         created_from="analyze",
     )
     scene_payload = _apply_scene_templates_to_payload(
-        repo_root=repo_root,
+        repo_root=None,
         scene_payload=scene_payload,
         template_ids=template_ids or [],
         force=force_templates,
@@ -171,10 +173,11 @@ def _run_scene_build_command(
     return 0
 
 
-def _validate_scene_schema(*, repo_root: Path, scene_payload: dict[str, Any]) -> None:
+def _validate_scene_schema(*, repo_root: Path | None = None, scene_payload: dict[str, Any]) -> None:
+    from mmo.resources import schemas_dir
     _validate_json_payload(
         scene_payload,
-        schema_path=repo_root / "schemas" / "scene.schema.json",
+        schema_path=schemas_dir() / "scene.schema.json",
         payload_name="Scene",
     )
 
@@ -191,7 +194,7 @@ def _validate_scene_intent_rules(
     repo_root: Path,
     scene_payload: dict[str, Any],
 ) -> None:
-    intent_params = load_intent_params(repo_root / "ontology" / "intent_params.yaml")
+    intent_params = load_intent_params(ontology_dir() /"intent_params.yaml")
     issues = validate_scene_intent(scene_payload, intent_params)
     if not issues:
         return
@@ -218,7 +221,7 @@ def _parse_scene_intent_cli_value(
         keys = ", ".join(sorted(INTENT_PARAM_KEY_TO_ID.keys()))
         raise ValueError(f"Unsupported scene intent key: {normalized_key!r}. Expected one of: {keys}")
 
-    intent_registry = load_intent_params(repo_root / "ontology" / "intent_params.yaml")
+    intent_registry = load_intent_params(ontology_dir() /"intent_params.yaml")
     params = intent_registry.get("params")
     if not isinstance(params, dict):
         raise ValueError("Intent params registry is invalid: params must be an object.")
@@ -254,7 +257,7 @@ def _run_scene_locks_edit_command(
     lock_id: str,
 ) -> int:
     scene_payload = _load_json_object(scene_path, label="Scene")
-    _validate_scene_schema(repo_root=repo_root, scene_payload=scene_payload)
+    _validate_scene_schema(repo_root=None, scene_payload=scene_payload)
 
     if operation == "add":
         edited = edit_scene_add_lock(scene_payload, scope, target_id, lock_id)
@@ -263,8 +266,8 @@ def _run_scene_locks_edit_command(
     else:
         raise ValueError(f"Unsupported scene lock operation: {operation}")
 
-    _validate_scene_schema(repo_root=repo_root, scene_payload=edited)
-    _validate_scene_intent_rules(repo_root=repo_root, scene_payload=edited)
+    _validate_scene_schema(repo_root=None, scene_payload=edited)
+    _validate_scene_intent_rules(repo_root=None, scene_payload=edited)
     _write_json_file(out_path, edited)
     return 0
 
@@ -280,9 +283,9 @@ def _run_scene_intent_set_command(
     value: str,
 ) -> int:
     scene_payload = _load_json_object(scene_path, label="Scene")
-    _validate_scene_schema(repo_root=repo_root, scene_payload=scene_payload)
+    _validate_scene_schema(repo_root=None, scene_payload=scene_payload)
     normalized_value = _parse_scene_intent_cli_value(
-        repo_root=repo_root,
+        repo_root=None,
         key=key,
         raw_value=value,
     )
@@ -294,8 +297,8 @@ def _run_scene_intent_set_command(
         key,
         normalized_value,
     )
-    _validate_scene_schema(repo_root=repo_root, scene_payload=edited)
-    _validate_scene_intent_rules(repo_root=repo_root, scene_payload=edited)
+    _validate_scene_schema(repo_root=None, scene_payload=edited)
+    _validate_scene_intent_rules(repo_root=None, scene_payload=edited)
     _write_json_file(out_path, edited)
     return 0
 
@@ -319,11 +322,11 @@ def _apply_scene_templates_to_payload(
         scene_payload,
         normalized_template_ids,
         force=force,
-        scene_templates_path=repo_root / "ontology" / "scene_templates.yaml",
-        scene_locks_path=repo_root / "ontology" / "scene_locks.yaml",
+        scene_templates_path=ontology_dir() /"scene_templates.yaml",
+        scene_locks_path=ontology_dir() /"scene_locks.yaml",
     )
-    _validate_scene_schema(repo_root=repo_root, scene_payload=edited)
-    _validate_scene_intent_rules(repo_root=repo_root, scene_payload=edited)
+    _validate_scene_schema(repo_root=None, scene_payload=edited)
+    _validate_scene_intent_rules(repo_root=None, scene_payload=edited)
     return edited
 
 
@@ -336,9 +339,9 @@ def _run_scene_template_apply_command(
     force: bool,
 ) -> int:
     scene_payload = _load_json_object(scene_path, label="Scene")
-    _validate_scene_schema(repo_root=repo_root, scene_payload=scene_payload)
+    _validate_scene_schema(repo_root=None, scene_payload=scene_payload)
     edited = _apply_scene_templates_to_payload(
-        repo_root=repo_root,
+        repo_root=None,
         scene_payload=scene_payload,
         template_ids=template_ids,
         force=force,
@@ -463,8 +466,8 @@ def _run_scene_template_preview_command(
         scene_payload,
         template_ids,
         force=force,
-        scene_templates_path=repo_root / "ontology" / "scene_templates.yaml",
-        scene_locks_path=repo_root / "ontology" / "scene_locks.yaml",
+        scene_templates_path=ontology_dir() /"scene_templates.yaml",
+        scene_locks_path=ontology_dir() /"scene_locks.yaml",
     )
     if output_format == "json":
         print(json.dumps(preview_payload, indent=2, sort_keys=True))
@@ -569,7 +572,7 @@ def _build_validated_render_plan_payload(
     )
     _validate_json_payload(
         render_plan_payload,
-        schema_path=repo_root / "schemas" / "render_plan.schema.json",
+        schema_path=schemas_dir() /"render_plan.schema.json",
         payload_name="Render plan",
     )
     return render_plan_payload
@@ -589,7 +592,7 @@ def _run_render_plan_build_command(
     scene_payload = _load_json_object(scene_path, label="Scene")
     _validate_json_payload(
         scene_payload,
-        schema_path=repo_root / "schemas" / "scene.schema.json",
+        schema_path=schemas_dir() /"scene.schema.json",
         payload_name="Scene",
     )
 
@@ -598,21 +601,21 @@ def _run_render_plan_build_command(
         routing_plan_payload = _load_json_object(routing_plan_path, label="Routing plan")
         _validate_json_payload(
             routing_plan_payload,
-            schema_path=repo_root / "schemas" / "routing_plan.schema.json",
+            schema_path=schemas_dir() /"routing_plan.schema.json",
             payload_name="Routing plan",
         )
         resolved_routing_plan_path = routing_plan_path
 
     render_targets_payload = _build_selected_render_targets_payload(
         target_ids=target_ids,
-        render_targets_path=repo_root / "ontology" / "render_targets.yaml",
+        render_targets_path=ontology_dir() /"render_targets.yaml",
     )
     policies: dict[str, str] = {}
     normalized_policy_id = _coerce_str(policy_id).strip()
     if normalized_policy_id:
         policies["downmix_policy_id"] = normalized_policy_id
     render_plan_payload = _build_validated_render_plan_payload(
-        repo_root=repo_root,
+        repo_root=None,
         scene_payload=scene_payload,
         scene_path=scene_path,
         render_targets_payload=render_targets_payload,
@@ -644,14 +647,14 @@ def _run_render_plan_from_request_command(
     request_payload = _load_json_object(request_path, label="Render request")
     _validate_json_payload(
         request_payload,
-        schema_path=repo_root / "schemas" / "render_request.schema.json",
+        schema_path=schemas_dir() /"render_request.schema.json",
         payload_name="Render request",
     )
 
     scene_payload = _load_json_object(scene_path, label="Scene")
     _validate_json_payload(
         scene_payload,
-        schema_path=repo_root / "schemas" / "scene.schema.json",
+        schema_path=schemas_dir() /"scene.schema.json",
         payload_name="Scene",
     )
     scene_for_plan = json.loads(json.dumps(scene_payload))
@@ -664,7 +667,7 @@ def _run_render_plan_from_request_command(
         )
         _validate_json_payload(
             routing_plan_payload,
-            schema_path=repo_root / "schemas" / "routing_plan.schema.json",
+            schema_path=schemas_dir() /"routing_plan.schema.json",
             payload_name="Routing plan",
         )
         routing_plan_payload = json.loads(json.dumps(routing_plan_payload))
@@ -673,14 +676,14 @@ def _run_render_plan_from_request_command(
         )
 
     layouts: dict[str, Any] | None = None
-    layouts_path = repo_root / "ontology" / "layouts.yaml"
+    layouts_path = ontology_dir() /"layouts.yaml"
     if layouts_path.is_file():
         from mmo.dsp.downmix import load_layouts  # noqa: WPS433
 
         layouts = load_layouts(layouts_path)
 
     render_targets_payload: dict[str, Any] | None = None
-    render_targets_path = repo_root / "ontology" / "render_targets.yaml"
+    render_targets_path = ontology_dir() /"render_targets.yaml"
     if render_targets_path.is_file():
         from mmo.core.render_targets import load_render_targets  # noqa: WPS433
 
@@ -695,7 +698,7 @@ def _run_render_plan_from_request_command(
     )
     _validate_json_payload(
         render_plan_payload,
-        schema_path=repo_root / "schemas" / "render_plan.schema.json",
+        schema_path=schemas_dir() /"render_plan.schema.json",
         payload_name="Render plan",
     )
     _write_json_file(out_path, render_plan_payload)
@@ -730,14 +733,14 @@ def _run_render_run_command(
     request_payload = _load_json_object(request_path, label="Render request")
     _validate_json_payload(
         request_payload,
-        schema_path=repo_root / "schemas" / "render_request.schema.json",
+        schema_path=schemas_dir() /"render_request.schema.json",
         payload_name="Render request",
     )
 
     scene_payload = _load_json_object(scene_path, label="Scene")
     _validate_json_payload(
         scene_payload,
-        schema_path=repo_root / "schemas" / "scene.schema.json",
+        schema_path=schemas_dir() /"scene.schema.json",
         payload_name="Scene",
     )
     scene_for_plan = json.loads(json.dumps(scene_payload))
@@ -750,7 +753,7 @@ def _run_render_run_command(
         )
         _validate_json_payload(
             routing_plan_payload,
-            schema_path=repo_root / "schemas" / "routing_plan.schema.json",
+            schema_path=schemas_dir() /"routing_plan.schema.json",
             payload_name="Routing plan",
         )
         routing_plan_payload = json.loads(json.dumps(routing_plan_payload))
@@ -760,14 +763,14 @@ def _run_render_run_command(
 
     # -- load optional registries -----------------------------------------------
     layouts: dict[str, Any] | None = None
-    layouts_path = repo_root / "ontology" / "layouts.yaml"
+    layouts_path = ontology_dir() /"layouts.yaml"
     if layouts_path.is_file():
         from mmo.dsp.downmix import load_layouts  # noqa: WPS433
 
         layouts = load_layouts(layouts_path)
 
     render_targets_payload: dict[str, Any] | None = None
-    render_targets_path = repo_root / "ontology" / "render_targets.yaml"
+    render_targets_path = ontology_dir() /"render_targets.yaml"
     if render_targets_path.is_file():
         from mmo.core.render_targets import load_render_targets  # noqa: WPS433
 
@@ -783,7 +786,7 @@ def _run_render_run_command(
     )
     _validate_json_payload(
         render_plan_payload,
-        schema_path=repo_root / "schemas" / "render_plan.schema.json",
+        schema_path=schemas_dir() /"render_plan.schema.json",
         payload_name="Render plan",
     )
 
@@ -795,7 +798,7 @@ def _run_render_run_command(
     )
     _validate_json_payload(
         render_report_payload,
-        schema_path=repo_root / "schemas" / "render_report.schema.json",
+        schema_path=schemas_dir() /"render_report.schema.json",
         payload_name="Render report",
     )
 
@@ -841,14 +844,14 @@ def _run_render_plan_to_variants_command(
     scene_payload = _load_json_object(scene_path, label="Scene")
     _validate_json_payload(
         scene_payload,
-        schema_path=repo_root / "schemas" / "scene.schema.json",
+        schema_path=schemas_dir() /"scene.schema.json",
         payload_name="Scene",
     )
 
     render_plan_payload = _load_json_object(render_plan_path, label="Render plan")
     _validate_json_payload(
         render_plan_payload,
-        schema_path=repo_root / "schemas" / "render_plan.schema.json",
+        schema_path=schemas_dir() /"render_plan.schema.json",
         payload_name="Render plan",
     )
 
@@ -865,7 +868,7 @@ def _run_render_plan_to_variants_command(
     )
     _validate_json_payload(
         variant_plan,
-        schema_path=repo_root / "schemas" / "variant_plan.schema.json",
+        schema_path=schemas_dir() /"variant_plan.schema.json",
         payload_name="Variant plan",
     )
     _write_json_file(out_path, variant_plan)
@@ -889,19 +892,19 @@ def _run_render_plan_to_variants_command(
 
     variant_result = run_variant_plan(
         variant_plan,
-        repo_root=repo_root,
+        repo_root=None,
         **run_variant_plan_kwargs,
     )
     _validate_json_payload(
         variant_result,
-        schema_path=repo_root / "schemas" / "variant_result.schema.json",
+        schema_path=schemas_dir() /"variant_result.schema.json",
         payload_name="Variant result",
     )
     _write_json_file(variant_result_path, variant_result)
 
     if listen_pack:
         listen_pack_payload = _build_validated_listen_pack(
-            repo_root=repo_root,
+            repo_root=None,
             presets_dir=presets_dir,
             variant_result=variant_result,
         )
@@ -909,7 +912,7 @@ def _run_render_plan_to_variants_command(
 
     if deliverables_index:
         deliverables_index_payload = _build_validated_deliverables_index_variants(
-            repo_root=repo_root,
+            repo_root=None,
             root_out_dir=resolved_out_dir,
             variant_result=variant_result,
         )

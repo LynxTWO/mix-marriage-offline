@@ -13,12 +13,9 @@ except ImportError:  # pragma: no cover - optional dependency
 TIMELINE_SCHEMA_VERSION = "0.1.0"
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
-
 def _timeline_schema_path() -> Path:
-    return _repo_root() / "schemas" / "timeline.schema.json"
+    from mmo.resources import schemas_dir
+    return schemas_dir() / "timeline.schema.json"
 
 
 def _load_json_object(path: Path, *, label: str) -> dict[str, Any]:

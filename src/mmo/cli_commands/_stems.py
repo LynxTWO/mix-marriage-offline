@@ -5,6 +5,7 @@ from typing import Any
 
 from mmo.cli_commands._helpers import _load_json_object, _validate_json_payload
 from mmo.core.stems_index import build_stems_index
+from mmo.resources import schemas_dir
 
 __all__ = [
     "_render_stem_sets_text",
@@ -45,7 +46,7 @@ def _load_stems_index_for_classification(
         payload = _load_json_object(path, label="Stems index")
         _validate_json_payload(
             payload,
-            schema_path=repo_root / "schemas" / "stems_index.schema.json",
+            schema_path=schemas_dir() /"stems_index.schema.json",
             payload_name="Stems index",
         )
         return payload, _path_ref(index_path)
@@ -54,7 +55,7 @@ def _load_stems_index_for_classification(
         payload = build_stems_index(Path(root_path), root_dir=root_path)
         _validate_json_payload(
             payload,
-            schema_path=repo_root / "schemas" / "stems_index.schema.json",
+            schema_path=schemas_dir() /"stems_index.schema.json",
             payload_name="Stems index",
         )
         return payload, _path_ref(root_path)
@@ -85,7 +86,7 @@ def _load_stems_map(*, repo_root: Path, map_path: Path) -> dict[str, Any]:
     payload = _load_json_object(map_path, label="Stems map")
     _validate_json_payload(
         payload,
-        schema_path=repo_root / "schemas" / "stems_map.schema.json",
+        schema_path=schemas_dir() /"stems_map.schema.json",
         payload_name="Stems map",
     )
     return payload

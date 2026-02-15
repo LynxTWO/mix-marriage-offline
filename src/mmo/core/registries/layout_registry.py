@@ -10,19 +10,15 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     yaml = None
 
-_DEFAULT_LAYOUTS_PATH = Path("ontology/layouts.yaml")
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[4]
+from mmo.resources import data_root, ontology_dir
 
 
 def _resolve_registry_path(path: Path | None) -> Path:
     if path is None:
-        return _repo_root() / _DEFAULT_LAYOUTS_PATH
+        return ontology_dir() / "layouts.yaml"
     if path.is_absolute():
         return path
-    return _repo_root() / path
+    return data_root() / path
 
 
 class LayoutRegistry:

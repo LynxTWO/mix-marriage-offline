@@ -9,14 +9,12 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     jsonschema = None
 
+from mmo.resources import schemas_dir
+
 try:
     import yaml
 except ImportError:  # pragma: no cover - optional dependency
     yaml = None
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
 
 
 def _load_yaml_object(path: Path, *, label: str) -> dict[str, Any]:
@@ -71,7 +69,7 @@ def load_gui_design(path: Path) -> dict[str, Any]:
     payload = _load_yaml_object(path, label="GUI design")
     _validate_payload_against_schema(
         payload,
-        schema_path=_repo_root() / "schemas" / "gui_design.schema.json",
+        schema_path=schemas_dir() / "gui_design.schema.json",
         payload_name="GUI design",
     )
     return payload

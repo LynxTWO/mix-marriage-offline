@@ -30,8 +30,7 @@ class _CompiledOverride:
     note: str | None
 
 
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+from mmo.resources import schemas_dir
 
 
 def _load_yaml_object(path: Path, *, label: str) -> dict[str, Any]:
@@ -224,7 +223,7 @@ def load_stems_overrides(path: Path) -> dict[str, Any]:
     payload = _load_yaml_object(path, label="Stems overrides")
     _validate_payload_against_schema(
         payload,
-        schema_path=_repo_root() / "schemas" / "stems_overrides.schema.json",
+        schema_path=schemas_dir() / "stems_overrides.schema.json",
         payload_name="Stems overrides",
     )
     rows = _overrides_rows(payload)

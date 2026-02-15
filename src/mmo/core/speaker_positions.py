@@ -14,20 +14,17 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     yaml = None
 
+from mmo.resources import data_root, ontology_dir, schemas_dir
+
 SPEAKER_POSITIONS_SCHEMA_VERSION = "0.1.0"
-_DEFAULT_SPEAKER_POSITIONS_PATH = Path("ontology/speaker_positions.yaml")
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
 
 
 def _resolve_registry_path(path: Path | None) -> Path:
     if path is None:
-        return _repo_root() / _DEFAULT_SPEAKER_POSITIONS_PATH
+        return ontology_dir() / "speaker_positions.yaml"
     if path.is_absolute():
         return path
-    return _repo_root() / path
+    return data_root() / path
 
 
 def _load_yaml_object(path: Path, *, label: str) -> dict[str, Any]:
@@ -166,7 +163,7 @@ def load_speaker_positions(path: Path | None = None) -> dict[str, Any]:
     payload = _load_yaml_object(resolved_path, label="Speaker positions registry")
     _validate_payload_against_schema(
         payload,
-        schema_path=_repo_root() / "schemas" / "speaker_positions.schema.json",
+        schema_path=schemas_dir() / "speaker_positions.schema.json",
         payload_name="Speaker positions registry",
     )
 

@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+from mmo.resources import ontology_dir
+
 try:
     import yaml
 except ImportError:  # pragma: no cover - environment issue
@@ -44,15 +46,15 @@ def load_downmix_registry(path: Path = Path("ontology/policies/downmix.yaml")) -
 
 def resolve_downmix_matrix(
     *,
-    repo_root: Path,
+    repo_root: Path | None = None,
     source_layout_id: str,
     target_layout_id: str,
     policy_id: str | None = None,
     layouts_path: Path | None = None,
     registry_path: Path | None = None,
 ) -> Dict[str, Any]:
-    layouts_path = layouts_path or (repo_root / "ontology" / "layouts.yaml")
-    registry_path = registry_path or (repo_root / "ontology" / "policies" / "downmix.yaml")
+    layouts_path = layouts_path or (ontology_dir() / "layouts.yaml")
+    registry_path = registry_path or (ontology_dir() / "policies" / "downmix.yaml")
     layouts = load_layouts(layouts_path)
     registry = load_downmix_registry(registry_path)
     return resolve_conversion(
@@ -205,14 +207,14 @@ def render_matrix(
     raise ValueError(f"Unsupported output format: {output_format}")
 
 
-def load_policy_pack(registry: Dict[str, Any], policy_id: str, repo_root: Path) -> Dict[str, Any]:
+def load_policy_pack(registry: Dict[str, Any], policy_id: str, repo_root: Path | None = None) -> Dict[str, Any]:
     policies = registry.get("downmix", {}).get("policies", {})
     if policy_id not in policies:
         raise ValueError(f"Unknown policy_id: {policy_id}")
     pack_file = policies[policy_id].get("file")
     if not isinstance(pack_file, str) or not pack_file:
         raise ValueError(f"Policy {policy_id} missing file path")
-    pack_path = repo_root / "ontology" / "policies" / pack_file
+    pack_path = ontology_dir() / "policies" / pack_file
     pack = load_yaml(pack_path)
     pack_meta = pack.get("downmix_policy_pack")
     if not isinstance(pack_meta, dict):
@@ -343,7 +345,7 @@ def compose_matrices(A: Dict[str, Any], B: Dict[str, Any]) -> Dict[str, Any]:
 def _find_policy_pack_for_matrix(
     registry: Dict[str, Any],
     matrix_id: str,
-    repo_root: Path,
+    repo_root: Path | None,
     cache: Dict[str, Dict[str, Any]],
 ) -> Tuple[str, Dict[str, Any]] | Tuple[None, None]:
     policies = registry.get("downmix", {}).get("policies", {})
@@ -360,7 +362,7 @@ def _find_policy_pack_for_matrix(
 def resolve_conversion(
     layouts: Dict[str, Any],
     registry: Dict[str, Any],
-    repo_root: Path,
+    repo_root: Path | None,
     source_layout_id: str,
     target_layout_id: str,
     policy_id: str | None = None,
