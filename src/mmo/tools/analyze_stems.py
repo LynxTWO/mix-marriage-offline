@@ -1,0 +1,233 @@
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+from mmo.resources import schemas_dir
+
+
+def _run_command(command: list[str]) -> int:
+    completed = subprocess.run(command, check=False)
+    return completed.returncode
+
+
+def _run_scan_session(
+    tools_dir: Path | None,
+    stems_dir: Path,
+    report_path: Path,
+    schema: str | None,
+    meters: str | None,
+    include_peak: bool,
+) -> int:
+    del tools_dir
+    command = [
+        sys.executable,
+        "-m",
+        "mmo.tools.scan_session",
+        str(stems_dir),
+        "--out",
+        str(report_path),
+    ]
+    if schema:
+        command.extend(["--schema", schema])
+    if meters:
+        command.extend(["--meters", meters])
+    if include_peak:
+        command.append("--peak")
+    return _run_command(command)
+
+
+def _run_pipeline(
+    tools_dir: Path | None,
+    report_path: Path,
+    output_path: Path,
+    plugins_dir: str,
+    profile_id: str,
+) -> int:
+    del tools_dir
+    command = [
+        sys.executable,
+        "-m",
+        "mmo.tools.run_pipeline",
+        "--report",
+        str(report_path),
+        "--plugins",
+        plugins_dir,
+        "--out",
+        str(output_path),
+    ]
+    if profile_id:
+        command.extend(["--profile", profile_id])
+    return _run_command(command)
+
+
+def _run_export_report(
+    tools_dir: Path | None,
+    report_path: Path,
+    csv_path: str | None,
+    pdf_path: str | None,
+) -> int:
+    del tools_dir
+    if not csv_path and not pdf_path:
+        return 0
+    command = [
+        sys.executable,
+        "-m",
+        "mmo.tools.export_report",
+        "--report",
+        str(report_path),
+    ]
+    if csv_path:
+        command.extend(["--csv", csv_path])
+    if pdf_path:
+        command.extend(["--pdf", pdf_path])
+    return _run_command(command)
+
+
+def _run_render_gain_trim(
+    tools_dir: Path | None,
+    stems_dir: Path,
+    report_path: Path,
+    out_dir: str | None,
+) -> int:
+    del tools_dir
+    if not out_dir:
+        return 0
+    command = [
+        sys.executable,
+        "-m",
+        "mmo.tools.render_gain_trim",
+        str(stems_dir),
+        "--report",
+        str(report_path),
+        "--out-dir",
+        out_dir,
+    ]
+    return _run_command(command)
+
+
+def _scan_report_path(out_report: Path) -> Path:
+    return out_report.with_name(f"{out_report.stem}.scan{out_report.suffix}")
+
+
+def _resolve_scan_schema(schema: str | None) -> str | None:
+    if schema == "schemas/report.schema.json":
+        return str(schemas_dir() / "report.schema.json")
+    return schema
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Scan stems, run the plugin pipeline, and export report artifacts.",
+        epilog=(
+            "Examples:\n"
+            "  analyze_stems.py ./stems --out-report out.json\n"
+            "  analyze_stems.py ./stems --out-report out.json --keep-scan\n"
+            "  analyze_stems.py ./stems --out-report out.json --meters truth --keep-scan\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("stems_dir", help="Path to a directory of audio stems.")
+    parser.add_argument(
+        "--out-report",
+        required=True,
+        help="Path to the output report JSON after running the pipeline.",
+    )
+    parser.add_argument(
+        "--plugins",
+        default="plugins",
+        help="Path to the plugins directory.",
+    )
+    parser.add_argument(
+        "--schema",
+        default="schemas/report.schema.json",
+        help="Optional report schema path for scan validation.",
+    )
+    parser.add_argument(
+        "--meters",
+        choices=["basic", "truth"],
+        default="basic",
+        help="Enable additional meter packs (basic or truth).",
+    )
+    parser.add_argument(
+        "--peak",
+        action="store_true",
+        help="Compute WAV sample peak meter readings for stems.",
+    )
+    parser.add_argument("--csv", default=None, help="Optional output CSV path.")
+    parser.add_argument("--pdf", default=None, help="Optional output PDF path.")
+    parser.add_argument(
+        "--render-gain-trim-out",
+        default=None,
+        help="Optional output directory for conservative gain/trim renders.",
+    )
+    parser.add_argument(
+        "--keep-scan",
+        action="store_true",
+        help="Keep the intermediate scan report JSON instead of deleting it.",
+    )
+    parser.add_argument(
+        "--profile",
+        default="PROFILE.ASSIST",
+        help="Authority profile ID for gate eligibility (default: PROFILE.ASSIST).",
+    )
+    args = parser.parse_args()
+
+    stems_dir = Path(args.stems_dir)
+    out_report = Path(args.out_report)
+    out_report.parent.mkdir(parents=True, exist_ok=True)
+    scan_report = _scan_report_path(out_report)
+    tools_dir: Path | None = None
+
+    exit_code = _run_scan_session(
+        tools_dir,
+        stems_dir,
+        scan_report,
+        _resolve_scan_schema(args.schema),
+        args.meters,
+        args.peak,
+    )
+    if exit_code != 0:
+        return exit_code
+
+    exit_code = _run_pipeline(
+        tools_dir,
+        scan_report,
+        out_report,
+        args.plugins,
+        args.profile,
+    )
+    if exit_code != 0:
+        return exit_code
+
+    if not args.keep_scan:
+        try:
+            scan_report.unlink()
+        except FileNotFoundError:
+            pass
+
+    exit_code = _run_export_report(
+        tools_dir,
+        out_report,
+        args.csv,
+        args.pdf,
+    )
+    if exit_code != 0:
+        return exit_code
+
+    exit_code = _run_render_gain_trim(
+        tools_dir,
+        stems_dir,
+        out_report,
+        args.render_gain_trim_out,
+    )
+    if exit_code != 0:
+        return exit_code
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

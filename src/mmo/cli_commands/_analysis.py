@@ -35,9 +35,11 @@ def _run_scan(
     meters: str | None,
     include_peak: bool,
 ) -> int:
+    del tools_dir
     command = [
         sys.executable,
-        str(tools_dir / "scan_session.py"),
+        "-m",
+        "mmo.tools.scan_session",
         str(stems_dir),
         "--out",
         str(out_path),
@@ -59,9 +61,11 @@ def _run_analyze(
     keep_scan: bool,
     profile_id: str,
 ) -> int:
+    del tools_dir
     command = [
         sys.executable,
-        str(tools_dir / "analyze_stems.py"),
+        "-m",
+        "mmo.tools.analyze_stems",
         str(stems_dir),
         "--out-report",
         str(out_report),
@@ -89,9 +93,13 @@ def _run_export(
     no_gates: bool,
     truncate_values: int,
 ) -> int:
+    if not csv_path and not pdf_path:
+        return 0
+    del tools_dir
     command = [
         sys.executable,
-        str(tools_dir / "export_report.py"),
+        "-m",
+        "mmo.tools.export_report",
         "--report",
         str(report_path),
     ]
@@ -105,8 +113,6 @@ def _run_export(
         command.append("--no-gates")
     if truncate_values != 200:
         command.extend(["--truncate-values", str(truncate_values)])
-    if len(command) == 4:
-        return 0
     return _run_command(command)
 
 
