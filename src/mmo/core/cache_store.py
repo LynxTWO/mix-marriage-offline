@@ -5,22 +5,17 @@ from pathlib import Path
 from typing import Any
 
 from mmo.core.cache_keys import cache_key, hash_lockfile, hash_run_config
+from mmo.resources import default_cache_dir
 
 try:
     import jsonschema
 except ImportError:  # pragma: no cover - environment issue
     jsonschema = None
 
-_DEFAULT_CACHE_DIRNAME = ".mmo_cache"
-
-
-def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
-
 
 def resolve_cache_dir(cache_dir: Path | str | None) -> Path:
     if cache_dir is None:
-        return (_repo_root() / _DEFAULT_CACHE_DIRNAME).resolve()
+        return default_cache_dir()
     return Path(cache_dir).expanduser().resolve()
 
 
