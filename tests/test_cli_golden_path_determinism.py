@@ -3,6 +3,7 @@
 Exercises the full sequence:
   project init (with --bundle) -> edit overrides -> project refresh (x2)
   -> stems audition (x2) -> index_stems_auditions -> listen_pack snapshot
+  -> scan (report.json) -> bundle (ui_bundle.json)
 
 Asserts byte-identical artifacts and identical stdout across reruns.
 """
@@ -251,6 +252,30 @@ class TestGoldenPathDeterminism(unittest.TestCase):
                 (json.dumps(lp, indent=2, sort_keys=True) + "\n").encode("utf-8")
             )
 
+            # Generate report.json via `mmo scan` (no meters/peak).
+            report_path = self.project_dir / "report.json"
+            exit_scan, _, stderr_scan = _run_main([
+                "scan",
+                str(self.stems_root),
+                "--out", str(report_path),
+            ])
+            self.assertEqual(exit_scan, 0, msg=f"mmo scan failed: {stderr_scan}")
+
+            # Generate ui_bundle.json via `mmo bundle`.
+            stems_index_path = self.project_dir / "stems" / "stems_index.json"
+            scene_path = self.project_dir / "drafts" / "scene.draft.json"
+            ui_bundle_path = self.project_dir / "ui_bundle.json"
+            exit_bundle, _, stderr_bundle = _run_main([
+                "bundle",
+                "--report", str(report_path),
+                "--listen-pack", str(lp_path),
+                "--stems-index", str(stems_index_path),
+                "--stems-map", str(map_path),
+                "--scene", str(scene_path),
+                "--out", str(ui_bundle_path),
+            ])
+            self.assertEqual(exit_bundle, 0, msg=f"mmo bundle failed: {stderr_bundle}")
+
             # Collect artifact hashes.
             artifacts = [
                 self.project_dir / "stems" / "stems_index.json",
@@ -259,6 +284,8 @@ class TestGoldenPathDeterminism(unittest.TestCase):
                 self.project_dir / "drafts" / "routing_plan.draft.json",
                 manifest_path,
                 lp_path,
+                report_path,
+                ui_bundle_path,
                 self.bundle_path,
             ]
             # Include all rendered audition WAVs.
