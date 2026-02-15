@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "mix-marriage-offline"
 description = "Offline mixing assistant for stem analysis."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 dynamic = ["version"]
 dependencies = [
   "PyYAML",
@@ -15,7 +15,7 @@ dependencies = [
 
 [project.optional-dependencies]
 pdf = ["reportlab>=4"]
-truth = ["numpy>=1.26"]
+truth = ["numpy>=2.0"]
 dev = ["pytest>=7.0"]
 
 [project.scripts]

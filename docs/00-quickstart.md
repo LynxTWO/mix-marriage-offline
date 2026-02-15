@@ -8,6 +8,28 @@ For deeper detail on any step, see the cross-references at the end.
 
 ---
 
+## Prerequisites
+
+**Supported operating systems:** Linux, Windows, macOS.
+
+**Supported Python versions:** 3.12, 3.13, 3.14.
+
+**FFmpeg** is optional but recommended.
+It is required for decoding non-WAV audio formats (MP3, FLAC, OGG, etc.)
+and for some QA features such as loudness metering.
+If FFmpeg is not on your `PATH`, you can point MMO at it with the
+`MMO_FFMPEG_PATH` environment variable:
+
+```bash
+export MMO_FFMPEG_PATH=/usr/local/bin/ffmpeg   # Linux / macOS
+set MMO_FFMPEG_PATH=C:\ffmpeg\bin\ffmpeg.exe   # Windows cmd
+```
+
+MMO will detect whether FFmpeg is available and gate features accordingly,
+with clear messages explaining how to enable them.
+
+---
+
 ## 1. Install and verify
 
 ```powershell
