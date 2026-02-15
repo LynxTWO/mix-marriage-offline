@@ -232,5 +232,113 @@ class TestProjectValidateErrors(unittest.TestCase):
         self.assertGreater(len(bad_check["errors"]), 0)
 
 
+class TestProjectValidateRenderArtifacts(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.project_dir = _init_project(_SANDBOX / "render_artifacts")
+        renders_dir = cls.project_dir / "renders"
+        renders_dir.mkdir(parents=True, exist_ok=True)
+        # Write minimal valid render artifacts.
+        _write_json(renders_dir / "render_request.json", {
+            "schema_version": "0.1.0",
+            "target_layout_id": "LAYOUT.2_0",
+            "scene_path": "scenes/test/scene.json",
+        })
+        _write_json(renders_dir / "render_plan.json", {
+            "schema_version": "0.1.0",
+            "plan_id": "PLAN.test.abcdef01",
+            "scene_path": "scenes/test/scene.json",
+            "targets": ["TARGET.STEREO.2_0"],
+            "policies": {},
+            "jobs": [
+                {
+                    "job_id": "JOB.001",
+                    "target_id": "TARGET.STEREO.2_0",
+                    "target_layout_id": "LAYOUT.2_0",
+                    "output_formats": ["wav"],
+                    "contexts": ["render"],
+                    "notes": ["Test job."],
+                },
+            ],
+        })
+        _write_json(renders_dir / "render_report.json", {
+            "schema_version": "0.1.0",
+            "request": {
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": "scenes/test/scene.json",
+            },
+            "jobs": [
+                {
+                    "job_id": "JOB.001",
+                    "status": "skipped",
+                    "output_files": [],
+                    "notes": ["reason: dry_run"],
+                },
+            ],
+            "policies_applied": {
+                "downmix_policy_id": None,
+                "gates_policy_id": None,
+                "matrix_id": None,
+            },
+            "qa_gates": {"status": "not_run", "gates": []},
+        })
+
+    def test_render_artifacts_validated_as_valid(self) -> None:
+        exit_code, stdout, stderr = _run_main([
+            "project", "validate", str(self.project_dir),
+        ])
+        self.assertEqual(exit_code, 0, msg=stderr)
+        result = json.loads(stdout)
+        self.assertTrue(result["ok"])
+        render_checks = [
+            c for c in result["checks"]
+            if c["file"].startswith("renders/")
+        ]
+        self.assertEqual(len(render_checks), 3)
+        for check in render_checks:
+            self.assertFalse(check["required"])
+            self.assertEqual(
+                check["status"], "valid",
+                msg=f"{check['file']} expected valid: {check}",
+            )
+
+
+class TestProjectValidateRenderPlanInvalid(unittest.TestCase):
+
+    def test_invalid_render_plan_rejected_with_deterministic_errors(self) -> None:
+        base = _SANDBOX / "bad_render_plan"
+        project_dir = _init_project(base)
+        renders_dir = project_dir / "renders"
+        renders_dir.mkdir(parents=True, exist_ok=True)
+        # Schema-invalid render_plan: missing required fields.
+        _write_json(renders_dir / "render_plan.json", {"wrong": True})
+
+        exit_code_a, stdout_a, _ = _run_main([
+            "project", "validate", str(project_dir),
+        ])
+        exit_code_b, stdout_b, _ = _run_main([
+            "project", "validate", str(project_dir),
+        ])
+        # Invalid render_plan should not block ok (it's optional),
+        # but should be reported as invalid.
+        result = json.loads(stdout_a)
+        bad_check = next(
+            c for c in result["checks"]
+            if c["file"] == "renders/render_plan.json"
+        )
+        self.assertEqual(bad_check["status"], "invalid")
+        self.assertGreater(len(bad_check["errors"]), 0)
+        # Deterministic: identical output across runs.
+        self.assertEqual(stdout_a, stdout_b)
+
+
+def _write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8",
+    )
+
+
 if __name__ == "__main__":
     unittest.main()

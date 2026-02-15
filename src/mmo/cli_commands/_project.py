@@ -25,6 +25,9 @@ __all__ = [
 _VALIDATE_CHECKS: list[tuple[str, str | None, bool]] = [
     ("drafts/routing_plan.draft.json", "routing_plan.schema.json", True),
     ("drafts/scene.draft.json", "scene.schema.json", True),
+    ("renders/render_plan.json", "render_plan.schema.json", False),
+    ("renders/render_report.json", "render_report.schema.json", False),
+    ("renders/render_request.json", "render_request.schema.json", False),
     ("report.json", "report.schema.json", False),
     ("stems/stems_index.json", "stems_index.schema.json", True),
     ("stems/stems_map.json", "stems_map.schema.json", True),
