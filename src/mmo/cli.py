@@ -2690,6 +2690,35 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="Path to render_plan JSON.",
     )
+    render_plan_plan_parser = render_plan_subparsers.add_parser(
+        "plan",
+        help="Build a render plan from a render_request JSON + scene JSON.",
+    )
+    render_plan_plan_parser.add_argument(
+        "--request",
+        required=True,
+        help="Path to render_request JSON.",
+    )
+    render_plan_plan_parser.add_argument(
+        "--scene",
+        required=True,
+        help="Path to scene JSON.",
+    )
+    render_plan_plan_parser.add_argument(
+        "--routing-plan",
+        default=None,
+        help="Optional path to routing_plan JSON.",
+    )
+    render_plan_plan_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output render_plan JSON.",
+    )
+    render_plan_plan_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite output file if it already exists.",
+    )
 
     timeline_parser = subparsers.add_parser("timeline", help="Timeline marker tools.")
     timeline_subparsers = timeline_parser.add_subparsers(
@@ -5090,6 +5119,24 @@ def main(argv: list[str] | None = None) -> int:
                     cache_dir=Path(args.cache_dir) if args.cache_dir else None,
                 )
             except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+
+        if args.render_plan_command == "plan":
+            try:
+                return _run_render_plan_from_request_command(
+                    repo_root=repo_root,
+                    request_path=Path(args.request),
+                    scene_path=Path(args.scene),
+                    routing_plan_path=(
+                        Path(args.routing_plan) if args.routing_plan else None
+                    ),
+                    out_path=Path(args.out),
+                    force=bool(getattr(args, "force", False)),
+                )
+            except (RuntimeError, ValueError) as exc:
                 print(str(exc), file=sys.stderr)
                 return 1
             except SystemExit as exc:

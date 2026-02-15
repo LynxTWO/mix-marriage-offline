@@ -17,6 +17,7 @@ from mmo.cli_commands._helpers import (
 from mmo.core.intent_params import load_intent_params, validate_scene_intent
 from mmo.core.render_plan import build_render_plan
 from mmo.core.render_plan_bridge import render_plan_to_variant_plan
+from mmo.core.render_planner import build_render_plan as build_render_plan_from_request
 from mmo.core.render_targets import (
     get_render_target,
     list_render_targets,
@@ -59,6 +60,7 @@ __all__ = [
     "_render_scene_intent_text",
     "_build_validated_render_plan_payload",
     "_run_render_plan_build_command",
+    "_run_render_plan_from_request_command",
     "_run_render_plan_to_variants_command",
     "_apply_run_config_to_render_many_variant_plan",
     "_build_scene_lock_list_payload",
@@ -617,6 +619,83 @@ def _run_render_plan_build_command(
         output_formats=output_formats,
         contexts=contexts,
         policies=policies,
+    )
+    _write_json_file(out_path, render_plan_payload)
+    return 0
+
+
+def _run_render_plan_from_request_command(
+    *,
+    repo_root: Path,
+    request_path: Path,
+    scene_path: Path,
+    routing_plan_path: Path | None,
+    out_path: Path,
+    force: bool,
+) -> int:
+    if out_path.exists() and not force:
+        print(
+            f"File exists (use --force to overwrite): {out_path.as_posix()}",
+            file=sys.stderr,
+        )
+        return 1
+
+    request_payload = _load_json_object(request_path, label="Render request")
+    _validate_json_payload(
+        request_payload,
+        schema_path=repo_root / "schemas" / "render_request.schema.json",
+        payload_name="Render request",
+    )
+
+    scene_payload = _load_json_object(scene_path, label="Scene")
+    _validate_json_payload(
+        scene_payload,
+        schema_path=repo_root / "schemas" / "scene.schema.json",
+        payload_name="Scene",
+    )
+    scene_for_plan = json.loads(json.dumps(scene_payload))
+    scene_for_plan["scene_path"] = scene_path.resolve().as_posix()
+
+    routing_plan_payload: dict[str, Any] | None = None
+    if routing_plan_path is not None:
+        routing_plan_payload = _load_json_object(
+            routing_plan_path, label="Routing plan",
+        )
+        _validate_json_payload(
+            routing_plan_payload,
+            schema_path=repo_root / "schemas" / "routing_plan.schema.json",
+            payload_name="Routing plan",
+        )
+        routing_plan_payload = json.loads(json.dumps(routing_plan_payload))
+        routing_plan_payload["routing_plan_path"] = (
+            routing_plan_path.resolve().as_posix()
+        )
+
+    layouts: dict[str, Any] | None = None
+    layouts_path = repo_root / "ontology" / "layouts.yaml"
+    if layouts_path.is_file():
+        from mmo.dsp.downmix import load_layouts  # noqa: WPS433
+
+        layouts = load_layouts(layouts_path)
+
+    render_targets_payload: dict[str, Any] | None = None
+    render_targets_path = repo_root / "ontology" / "render_targets.yaml"
+    if render_targets_path.is_file():
+        from mmo.core.render_targets import load_render_targets  # noqa: WPS433
+
+        render_targets_payload = load_render_targets(render_targets_path)
+
+    render_plan_payload = build_render_plan_from_request(
+        request_payload,
+        scene_for_plan,
+        routing_plan=routing_plan_payload,
+        layouts=layouts,
+        render_targets=render_targets_payload,
+    )
+    _validate_json_payload(
+        render_plan_payload,
+        schema_path=repo_root / "schemas" / "render_plan.schema.json",
+        payload_name="Render plan",
     )
     _write_json_file(out_path, render_plan_payload)
     return 0
