@@ -81,6 +81,12 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "target_ids": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/target_id" }
+            },
             "output_formats": {
               "type": "array",
               "items": {
@@ -150,6 +156,7 @@
       "properties": {
         "job_id": { "type": "string", "pattern": "^JOB\\.[0-9]{3}$" },
         "target_id": { "$ref": "#/$defs/target_id" },
+        "resolved_target_id": { "$ref": "#/$defs/target_id" },
         "target_layout_id": { "$ref": "#/$defs/layout_id" },
         "routing_plan_path": { "$ref": "#/$defs/posix_path" },
         "output_formats": {

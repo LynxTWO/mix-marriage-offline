@@ -251,6 +251,24 @@ python -m mmo gates show POLICY.GATES.CORE_V0 --format json
 
 ---
 
+## Render targets registry
+
+Render targets in Objective Core are explicit registry entries that pair a
+`LAYOUT.*` with output container and deterministic filename expectations.
+
+Inspect available targets:
+
+```powershell
+python -m mmo targets list --format text
+python -m mmo targets show TARGET.STEREO.2_0 --format json
+```
+
+`render-plan plan` resolves `jobs[].resolved_target_id` from this registry
+deterministically. If `render_request.options.target_ids` is provided, those
+IDs are validated and used explicitly.
+
+---
+
 ## Common pitfalls
 
 ### OneDrive locks

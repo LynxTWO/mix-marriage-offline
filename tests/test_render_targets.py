@@ -1,4 +1,4 @@
-import json
+﻿import json
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -12,32 +12,6 @@ from mmo.core.render_targets import (
     load_render_targets,
     resolve_render_target_id,
 )
-from mmo.core.speaker_positions import get_layout_positions
-from mmo.dsp.downmix import load_layouts
-
-
-def _geometry_rows(positions: object) -> list[tuple[int, float, float]]:
-    if not isinstance(positions, list):
-        return []
-
-    rows: list[tuple[int, float, float]] = []
-    for position in positions:
-        if not isinstance(position, dict):
-            continue
-        ch = position.get("ch")
-        azimuth_deg = position.get("azimuth_deg")
-        elevation_deg = position.get("elevation_deg")
-        if (
-            isinstance(ch, bool)
-            or not isinstance(ch, int)
-            or isinstance(azimuth_deg, bool)
-            or not isinstance(azimuth_deg, (int, float))
-            or isinstance(elevation_deg, bool)
-            or not isinstance(elevation_deg, (int, float))
-        ):
-            continue
-        rows.append((ch, float(azimuth_deg), float(elevation_deg)))
-    return rows
 
 
 class TestRenderTargetsRegistry(unittest.TestCase):
@@ -52,49 +26,27 @@ class TestRenderTargetsRegistry(unittest.TestCase):
         errors = list(validator.iter_errors(payload))
         self.assertEqual(errors, [])
 
-    def test_load_render_targets_layout_ids_exist_in_layouts_yaml(self) -> None:
+    def test_load_render_targets_is_deterministic(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
-        registry = load_render_targets(repo_root / "ontology" / "render_targets.yaml")
-        self.assertEqual(registry.get("schema_version"), "0.1.0")
+        targets_path = repo_root / "ontology" / "render_targets.yaml"
 
-        layouts = load_layouts(repo_root / "ontology" / "layouts.yaml")
-        targets = registry.get("targets")
+        first = load_render_targets(targets_path)
+        second = load_render_targets(targets_path)
+        self.assertEqual(first, second)
+        self.assertEqual(first.get("schema_version"), "0.1.0")
+
+        targets = first.get("targets")
         self.assertIsInstance(targets, list)
         if not isinstance(targets, list):
             return
         for target in targets:
             if not isinstance(target, dict):
                 continue
-            layout_id = target.get("layout_id")
-            if isinstance(layout_id, str):
-                self.assertIn(layout_id, layouts)
-
-    def test_load_render_targets_resolves_speaker_positions_refs(self) -> None:
-        repo_root = Path(__file__).resolve().parents[1]
-        registry = load_render_targets(repo_root / "ontology" / "render_targets.yaml")
-        targets = registry.get("targets")
-        self.assertIsInstance(targets, list)
-        if not isinstance(targets, list):
-            return
-
-        speaker_positions_path = repo_root / "ontology" / "speaker_positions.yaml"
-        for target in targets:
-            if not isinstance(target, dict):
-                continue
-            layout_id = target.get("layout_id")
-            if not isinstance(layout_id, str):
-                continue
-
-            resolved_positions = _geometry_rows(target.get("speaker_positions"))
-            canonical_positions = _geometry_rows(
-                get_layout_positions(layout_id, speaker_positions_path)
-            )
-            self.assertEqual(resolved_positions, canonical_positions)
-            self.assertEqual(
-                [ch for ch, _, _ in resolved_positions],
-                sorted(ch for ch, _, _ in resolved_positions),
-            )
-            self.assertNotIn("speaker_positions_ref", target)
+            self.assertIn("target_id", target)
+            self.assertIn("layout_id", target)
+            self.assertIn("container", target)
+            self.assertIn("channel_order", target)
+            self.assertIn("filename_template", target)
 
     def test_list_and_get_render_targets_are_deterministic(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -117,50 +69,24 @@ class TestRenderTargetsRegistry(unittest.TestCase):
         if isinstance(stereo, dict):
             self.assertEqual(stereo.get("layout_id"), "LAYOUT.2_0")
 
-    def test_resolve_render_target_id_accepts_aliases(self) -> None:
+    def test_resolve_render_target_id_accepts_casefold_exact_id(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         targets_path = repo_root / "ontology" / "render_targets.yaml"
         self.assertEqual(
-            resolve_render_target_id(" stereo   (streaming) ", targets_path),
+            resolve_render_target_id(" target.stereo.2_0 ", targets_path),
             "TARGET.STEREO.2_0",
-        )
-        self.assertEqual(
-            resolve_render_target_id("5.1(home  theater)", targets_path),
-            "TARGET.SURROUND.5_1",
-        )
-
-    def test_resolve_render_target_id_reports_ambiguous_aliases_deterministically(self) -> None:
-        with mock.patch(
-            "mmo.core.render_targets.list_render_targets",
-            return_value=[
-                {
-                    "target_id": "TARGET.ALPHA",
-                    "aliases": ["Shared Name"],
-                },
-                {
-                    "target_id": "TARGET.BETA",
-                    "aliases": ["shared   name"],
-                },
-            ],
-        ):
-            with self.assertRaises(ValueError) as ctx:
-                resolve_render_target_id("shared name")
-        self.assertEqual(
-            str(ctx.exception),
-            (
-                "Ambiguous render target token: shared name. Matching targets: "
-                "TARGET.ALPHA, TARGET.BETA"
-            ),
         )
 
     def test_resolve_render_target_id_reports_unknown_with_sorted_available_targets(self) -> None:
         with mock.patch(
-            "mmo.core.render_targets.list_render_targets",
-            return_value=[
-                {"target_id": "TARGET.SURROUND.5_1"},
-                {"target_id": "TARGET.STEREO.2_0"},
-            ],
-        ):
+            "mmo.core.render_targets.load_render_targets_registry",
+        ) as mocked_loader:
+            registry = mock.Mock()
+            registry.list_target_ids.return_value = [
+                "TARGET.STEREO.2_0",
+                "TARGET.SURROUND.5_1",
+            ]
+            mocked_loader.return_value = registry
             with self.assertRaises(ValueError) as ctx:
                 resolve_render_target_id("nope")
         self.assertEqual(

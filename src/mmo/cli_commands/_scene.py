@@ -17,6 +17,7 @@ from mmo.cli_commands._helpers import (
     _write_json_file,
 )
 from mmo.core.intent_params import load_intent_params, validate_scene_intent
+from mmo.core.registries.render_targets_registry import load_render_targets_registry
 from mmo.core.render_plan import build_render_plan
 from mmo.core.render_plan_bridge import render_plan_to_variant_plan
 from mmo.core.render_planner import build_render_plan as build_render_plan_from_request
@@ -702,12 +703,10 @@ def _run_render_plan_from_request_command(
 
         layouts = load_layouts(layouts_path)
 
-    render_targets_payload: dict[str, Any] | None = None
+    render_targets_registry = None
     render_targets_path = ontology_dir() /"render_targets.yaml"
     if render_targets_path.is_file():
-        from mmo.core.render_targets import load_render_targets  # noqa: WPS433
-
-        render_targets_payload = load_render_targets(render_targets_path)
+        render_targets_registry = load_render_targets_registry(render_targets_path)
 
     downmix_reg = None
     downmix_yaml = ontology_dir() / "policies" / "downmix.yaml"
@@ -723,7 +722,7 @@ def _run_render_plan_from_request_command(
         scene_for_plan,
         routing_plan=routing_plan_payload,
         layouts=layouts,
-        render_targets=render_targets_payload,
+        render_targets_registry=render_targets_registry,
         downmix_registry=downmix_reg,
         gates_policy_ids=known_gates_ids,
     )
@@ -800,12 +799,10 @@ def _run_render_run_command(
 
         layouts = load_layouts(layouts_path)
 
-    render_targets_payload: dict[str, Any] | None = None
+    render_targets_registry = None
     render_targets_path = ontology_dir() /"render_targets.yaml"
     if render_targets_path.is_file():
-        from mmo.core.render_targets import load_render_targets  # noqa: WPS433
-
-        render_targets_payload = load_render_targets(render_targets_path)
+        render_targets_registry = load_render_targets_registry(render_targets_path)
 
     downmix_reg = None
     downmix_yaml = ontology_dir() / "policies" / "downmix.yaml"
@@ -822,7 +819,7 @@ def _run_render_run_command(
         scene_for_plan,
         routing_plan=routing_plan_payload,
         layouts=layouts,
-        render_targets=render_targets_payload,
+        render_targets_registry=render_targets_registry,
         downmix_registry=downmix_reg,
         gates_policy_ids=known_gates_ids,
     )
@@ -1157,7 +1154,7 @@ def _parse_target_ids_csv(raw_value: str, *, render_targets_path: Path) -> list[
             selected.add(resolve_render_target_id(normalized, render_targets_path))
 
     if not selected:
-        raise ValueError("targets must include at least one target ID or alias.")
+        raise ValueError("targets must include at least one target ID.")
     return sorted(selected)
 
 

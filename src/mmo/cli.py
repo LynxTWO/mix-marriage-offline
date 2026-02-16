@@ -629,7 +629,7 @@ def main(argv: list[str] | None = None) -> int:
         "--targets",
         default=_BASELINE_RENDER_TARGET_ID,
         help=(
-            "Comma-separated target IDs or aliases for --render-many "
+            "Comma-separated target IDs for --render-many "
             "(default: TARGET.STEREO.2_0)."
         ),
     )
@@ -1426,12 +1426,12 @@ def main(argv: list[str] | None = None) -> int:
     targets_list_parser.add_argument(
         "--long",
         action="store_true",
-        help="Show notes and aliases in text output.",
+        help="Show extended fields and notes in text output.",
     )
     targets_show_parser = targets_subparsers.add_parser("show", help="Show one render target.")
     targets_show_parser.add_argument(
         "target_id",
-        help="Render target ID or alias (e.g., TARGET.STEREO.2_0, Stereo (streaming)).",
+        help="Render target ID (e.g., TARGET.STEREO.2_0).",
     )
     targets_show_parser.add_argument(
         "--format",
@@ -1900,7 +1900,7 @@ def main(argv: list[str] | None = None) -> int:
         "--targets",
         default=_BASELINE_RENDER_TARGET_ID,
         help=(
-            "Comma-separated target IDs or aliases for --render-many "
+            "Comma-separated target IDs for --render-many "
             "(default: TARGET.STEREO.2_0)."
         ),
     )
@@ -2632,8 +2632,8 @@ def main(argv: list[str] | None = None) -> int:
         "--targets",
         required=True,
         help=(
-            "Comma-separated target IDs or aliases "
-            "(e.g., TARGET.STEREO.2_0,5.1 (home theater))."
+            "Comma-separated target IDs "
+            "(e.g., TARGET.STEREO.2_0,TARGET.SURROUND.5_1)."
         ),
     )
     render_plan_build_parser.add_argument(
@@ -4645,8 +4645,8 @@ def main(argv: list[str] | None = None) -> int:
                     for item in payload:
                         print(
                             f"{item.get('target_id', '')}"
-                            f"  {item.get('label', '')}"
                             f"  {item.get('layout_id', '')}"
+                            f"  {item.get('container', '')}"
                         )
                 else:
                     for index, item in enumerate(payload):
@@ -4654,21 +4654,30 @@ def main(argv: list[str] | None = None) -> int:
                             print("")
                         print(
                             f"{item.get('target_id', '')}"
-                            f"  {item.get('label', '')}"
                             f"  {item.get('layout_id', '')}"
+                            f"  {item.get('container', '')}"
                         )
-                        aliases = item.get("aliases")
-                        normalized_aliases = (
+                        channel_order_layout_id = item.get("channel_order_layout_id")
+                        if (
+                            isinstance(channel_order_layout_id, str)
+                            and channel_order_layout_id.strip()
+                        ):
+                            print(f"channel_order_layout_id: {channel_order_layout_id}")
+                        channel_order = item.get("channel_order")
+                        normalized_channel_order = (
                             [
-                                alias
-                                for alias in aliases
-                                if isinstance(alias, str) and alias.strip()
+                                channel
+                                for channel in channel_order
+                                if isinstance(channel, str) and channel.strip()
                             ]
-                            if isinstance(aliases, list)
+                            if isinstance(channel_order, list)
                             else []
                         )
-                        if normalized_aliases:
-                            print(f"aliases: {', '.join(normalized_aliases)}")
+                        if normalized_channel_order:
+                            print(f"channel_order: {', '.join(normalized_channel_order)}")
+                        filename_template = item.get("filename_template")
+                        if isinstance(filename_template, str) and filename_template.strip():
+                            print(f"filename_template: {filename_template}")
                         notes = item.get("notes")
                         normalized_notes = (
                             [note for note in notes if isinstance(note, str) and note.strip()]

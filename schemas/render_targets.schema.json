@@ -9,49 +9,56 @@
     "schema_version": { "const": "0.1.0" },
     "targets": {
       "type": "array",
+      "minItems": 1,
       "items": { "$ref": "#/$defs/render_target" }
     }
   },
   "$defs": {
-    "speaker_position": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["ch", "azimuth_deg", "elevation_deg"],
-      "properties": {
-        "ch": { "type": "integer", "minimum": 0 },
-        "azimuth_deg": { "type": "number" },
-        "elevation_deg": { "type": "number" }
-      }
+    "target_id": {
+      "type": "string",
+      "pattern": "^TARGET\\.[A-Z0-9_]+(?:\\.[A-Z0-9_]+)*$"
+    },
+    "layout_id": {
+      "type": "string",
+      "pattern": "^LAYOUT\\.[A-Z0-9_]+(?:\\.[A-Z0-9_]+)*$"
+    },
+    "speaker_id": {
+      "type": "string",
+      "pattern": "^SPK\\.[A-Z0-9_]+(?:\\.[A-Z0-9_]+)*$"
+    },
+    "container": {
+      "type": "string",
+      "enum": ["wav", "flac", "wv", "aiff", "alac"]
+    },
+    "filename_template": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^\\\\]+$",
+      "allOf": [
+        { "pattern": "\\{container\\}" }
+      ]
     },
     "render_target": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "target_id",
-        "label",
         "layout_id",
-        "channel_order_ref",
-        "notes"
+        "container",
+        "filename_template"
       ],
       "properties": {
-        "target_id": { "type": "string", "pattern": "^TARGET\\.[A-Z0-9_.]+$" },
-        "label": { "type": "string", "minLength": 1 },
-        "layout_id": { "type": "string", "pattern": "^LAYOUT\\.[A-Z0-9_.]+$" },
-        "channel_order_ref": { "type": "string", "minLength": 1 },
-        "speaker_positions": {
+        "target_id": { "$ref": "#/$defs/target_id" },
+        "layout_id": { "$ref": "#/$defs/layout_id" },
+        "container": { "$ref": "#/$defs/container" },
+        "channel_order": {
           "type": "array",
-          "items": { "$ref": "#/$defs/speaker_position" }
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/speaker_id" }
         },
-        "speaker_positions_ref": {
-          "type": "string",
-          "pattern": "^LAYOUT\\.[A-Z0-9_.]+$"
-        },
-        "downmix_policy_id": { "type": "string", "minLength": 1 },
-        "safety_policy_id": { "type": "string", "minLength": 1 },
-        "aliases": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 }
-        },
+        "channel_order_layout_id": { "$ref": "#/$defs/layout_id" },
+        "filename_template": { "$ref": "#/$defs/filename_template" },
         "notes": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
@@ -59,12 +66,12 @@
       },
       "oneOf": [
         {
-          "required": ["speaker_positions"],
-          "not": { "required": ["speaker_positions_ref"] }
+          "required": ["channel_order"],
+          "not": { "required": ["channel_order_layout_id"] }
         },
         {
-          "required": ["speaker_positions_ref"],
-          "not": { "required": ["speaker_positions"] }
+          "required": ["channel_order_layout_id"],
+          "not": { "required": ["channel_order"] }
         }
       ]
     }

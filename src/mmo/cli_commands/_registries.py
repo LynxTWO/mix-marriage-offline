@@ -1077,39 +1077,23 @@ def _render_target_recommendations_text(payload: list[dict[str, Any]]) -> str:
 def _render_target_text(payload: dict[str, Any]) -> str:
     lines = [
         _coerce_str(payload.get("target_id")).strip(),
-        f"label: {_coerce_str(payload.get('label')).strip()}",
         f"layout_id: {_coerce_str(payload.get('layout_id')).strip()}",
-        f"channel_order_ref: {_coerce_str(payload.get('channel_order_ref')).strip()}",
+        f"container: {_coerce_str(payload.get('container')).strip()}",
+        f"filename_template: {_coerce_str(payload.get('filename_template')).strip()}",
     ]
 
-    aliases = payload.get("aliases")
-    normalized_aliases = (
-        [item for item in aliases if isinstance(item, str) and item.strip()]
-        if isinstance(aliases, list)
+    channel_order_layout_id = _coerce_str(payload.get("channel_order_layout_id")).strip()
+    if channel_order_layout_id:
+        lines.append(f"channel_order_layout_id: {channel_order_layout_id}")
+
+    channel_order = payload.get("channel_order")
+    normalized_channel_order = (
+        [item for item in channel_order if isinstance(item, str) and item.strip()]
+        if isinstance(channel_order, list)
         else []
     )
-    if normalized_aliases:
-        lines.append("aliases:")
-        for alias in normalized_aliases:
-            lines.append(f"- {alias}")
-
-    downmix_policy_id = _coerce_str(payload.get("downmix_policy_id")).strip()
-    safety_policy_id = _coerce_str(payload.get("safety_policy_id")).strip()
-    lines.append(f"downmix_policy_id: {downmix_policy_id or '(none)'}")
-    lines.append(f"safety_policy_id: {safety_policy_id or '(none)'}")
-
-    speaker_positions = payload.get("speaker_positions")
-    if isinstance(speaker_positions, list) and speaker_positions:
-        lines.append("speaker_positions:")
-        for position in speaker_positions:
-            if not isinstance(position, dict):
-                continue
-            ch = position.get("ch")
-            azimuth_deg = position.get("azimuth_deg")
-            elevation_deg = position.get("elevation_deg")
-            lines.append(
-                f"- ch={ch} azimuth_deg={azimuth_deg} elevation_deg={elevation_deg}"
-            )
+    if normalized_channel_order:
+        lines.append(f"channel_order: {', '.join(normalized_channel_order)}")
 
     notes = payload.get("notes")
     if isinstance(notes, list) and notes:

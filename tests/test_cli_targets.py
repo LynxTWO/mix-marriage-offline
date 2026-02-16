@@ -1,4 +1,4 @@
-import json
+﻿import json
 import os
 import subprocess
 import sys
@@ -57,6 +57,38 @@ class TestCliTargets(unittest.TestCase):
         self.assertEqual(target_ids, sorted(target_ids))
         self.assertIn("TARGET.STEREO.2_0", target_ids)
 
+    def test_targets_list_json_bytes_are_stable(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        command = [
+            self._python_cmd(),
+            "-m",
+            "mmo",
+            "targets",
+            "list",
+            "--format",
+            "json",
+        ]
+
+        first = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=False,
+            cwd=repo_root,
+            env=self._env(repo_root),
+        )
+        second = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=False,
+            cwd=repo_root,
+            env=self._env(repo_root),
+        )
+        self.assertEqual(first.returncode, 0, msg=first.stderr.decode("utf-8", errors="replace"))
+        self.assertEqual(second.returncode, 0, msg=second.stderr.decode("utf-8", errors="replace"))
+        self.assertEqual(first.stdout, second.stdout)
+
     def test_targets_show_text_is_deterministic(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         command = [
@@ -89,25 +121,14 @@ class TestCliTargets(unittest.TestCase):
         self.assertEqual(first.returncode, 0, msg=first.stderr)
         self.assertEqual(second.returncode, 0, msg=second.stderr)
         self.assertEqual(first.stdout, second.stdout)
-        self.assertIn("label: Stereo", first.stdout)
         self.assertIn("layout_id: LAYOUT.2_0", first.stdout)
-        self.assertIn("downmix_policy_id:", first.stdout)
-        self.assertIn("safety_policy_id:", first.stdout)
-        self.assertIn("notes:", first.stdout)
+        self.assertIn("container: wav", first.stdout)
+        self.assertIn("filename_template:", first.stdout)
+        self.assertIn("channel_order:", first.stdout)
 
-    def test_targets_show_accepts_alias_and_is_deterministic(self) -> None:
+    def test_targets_show_json_bytes_are_stable(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
-        alias_command = [
-            self._python_cmd(),
-            "-m",
-            "mmo",
-            "targets",
-            "show",
-            "  stereo   (streaming) ",
-            "--format",
-            "text",
-        ]
-        canonical_command = [
+        command = [
             self._python_cmd(),
             "-m",
             "mmo",
@@ -115,64 +136,28 @@ class TestCliTargets(unittest.TestCase):
             "show",
             "TARGET.STEREO.2_0",
             "--format",
-            "text",
+            "json",
         ]
 
         first = subprocess.run(
-            alias_command,
+            command,
             check=False,
             capture_output=True,
-            text=True,
+            text=False,
             cwd=repo_root,
             env=self._env(repo_root),
         )
         second = subprocess.run(
-            alias_command,
-            check=False,
-            capture_output=True,
-            text=True,
-            cwd=repo_root,
-            env=self._env(repo_root),
-        )
-        canonical = subprocess.run(
-            canonical_command,
-            check=False,
-            capture_output=True,
-            text=True,
-            cwd=repo_root,
-            env=self._env(repo_root),
-        )
-
-        self.assertEqual(first.returncode, 0, msg=first.stderr)
-        self.assertEqual(second.returncode, 0, msg=second.stderr)
-        self.assertEqual(canonical.returncode, 0, msg=canonical.stderr)
-        self.assertEqual(first.stdout, second.stdout)
-        self.assertEqual(first.stdout, canonical.stdout)
-        self.assertTrue(first.stdout.startswith("TARGET.STEREO.2_0\n"))
-
-    def test_targets_list_long_text_includes_aliases_and_notes(self) -> None:
-        repo_root = Path(__file__).resolve().parents[1]
-        command = [
-            self._python_cmd(),
-            "-m",
-            "mmo",
-            "targets",
-            "list",
-            "--long",
-            "--format",
-            "text",
-        ]
-        result = subprocess.run(
             command,
             check=False,
             capture_output=True,
-            text=True,
+            text=False,
             cwd=repo_root,
             env=self._env(repo_root),
         )
-        self.assertEqual(result.returncode, 0, msg=result.stderr)
-        self.assertIn("aliases: Stereo (streaming), Stereo (everyday)", result.stdout)
-        self.assertIn("notes:", result.stdout)
+        self.assertEqual(first.returncode, 0, msg=first.stderr.decode("utf-8", errors="replace"))
+        self.assertEqual(second.returncode, 0, msg=second.stderr.decode("utf-8", errors="replace"))
+        self.assertEqual(first.stdout, second.stdout)
 
 
 if __name__ == "__main__":

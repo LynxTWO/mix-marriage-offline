@@ -13,6 +13,7 @@ import json
 from pathlib import PurePosixPath
 from typing import Any
 
+from mmo.core.registries.render_targets_registry import RenderTargetsRegistry
 from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS
 
 RENDER_PLAN_SCHEMA_VERSION = "0.1.0"
@@ -160,24 +161,82 @@ def _build_job_outputs(
     return outputs
 
 
-def _find_render_target(
-    target_layout_id: str,
-    render_targets: dict[str, Any] | None,
-) -> tuple[str, str]:
-    if isinstance(render_targets, dict):
-        targets = render_targets.get("targets")
-        if isinstance(targets, list):
-            for target in targets:
-                if not isinstance(target, dict):
-                    continue
-                layout_id = _coerce_str(target.get("layout_id")).strip()
-                if layout_id == target_layout_id:
-                    target_id = _coerce_str(target.get("target_id")).strip()
-                    if target_id:
-                        return target_id, layout_id
+def _synthetic_target_id_for_layout(layout_id: str) -> str:
+    layout_suffix = layout_id.replace("LAYOUT.", "")
+    return f"TARGET.RENDER.{layout_suffix}"
 
-    layout_suffix = target_layout_id.replace("LAYOUT.", "")
-    return f"TARGET.RENDER.{layout_suffix}", target_layout_id
+
+def _normalize_requested_target_ids(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ValueError("request.options.target_ids must be an array of TARGET.* IDs.")
+
+    normalized: set[str] = set()
+    for item in value:
+        target_id = _coerce_str(item).strip()
+        if target_id:
+            normalized.add(target_id)
+    return sorted(normalized)
+
+
+def _requested_targets_by_layout(
+    requested_target_ids: list[str],
+    render_targets_registry: RenderTargetsRegistry,
+) -> dict[str, list[str]]:
+    by_layout: dict[str, list[str]] = {}
+    for target_id in requested_target_ids:
+        target = render_targets_registry.get_target(target_id)
+        layout_id = _coerce_str(target.get("layout_id")).strip()
+        if not layout_id:
+            continue
+        by_layout.setdefault(layout_id, []).append(target_id)
+
+    for layout_id in sorted(by_layout.keys()):
+        by_layout[layout_id] = sorted(by_layout[layout_id])
+    return by_layout
+
+
+def _resolve_target_for_layout(
+    *,
+    layout_id: str,
+    render_targets_registry: RenderTargetsRegistry | None,
+    requested_targets_by_layout: dict[str, list[str]] | None,
+) -> str | None:
+    if requested_targets_by_layout is not None:
+        selected = requested_targets_by_layout.get(layout_id, [])
+        if not selected:
+            requested_ids = sorted(
+                {
+                    target_id
+                    for target_ids in requested_targets_by_layout.values()
+                    for target_id in target_ids
+                }
+            )
+            raise ValueError(
+                f"No requested target_ids match layout_id: {layout_id}. "
+                f"Requested target_ids: {', '.join(requested_ids)}"
+            )
+        return selected[0]
+
+    if render_targets_registry is None:
+        return None
+
+    candidates = render_targets_registry.find_targets_for_layout(layout_id)
+    if not candidates:
+        return None
+
+    candidate_ids = sorted(
+        {
+            _coerce_str(candidate.get("target_id")).strip()
+            for candidate in candidates
+            if isinstance(candidate, dict)
+        }
+    )
+    candidate_ids = [target_id for target_id in candidate_ids if target_id]
+    if not candidate_ids:
+        return None
+    return candidate_ids[0]
 
 
 def _extract_layout_ids(request: dict[str, Any]) -> list[str]:
@@ -241,7 +300,7 @@ def build_render_plan(
     *,
     routing_plan: dict[str, Any] | None = None,
     layouts: dict[str, Any] | None = None,
-    render_targets: dict[str, Any] | None = None,
+    render_targets_registry: RenderTargetsRegistry | None = None,
     downmix_registry: Any | None = None,
     gates_policy_ids: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -253,7 +312,7 @@ def build_render_plan(
         routing_plan: Optional validated routing plan payload.
         layouts: Layouts registry dict (layout_id -> entry). If None,
             resolved section will use minimal data from the request.
-        render_targets: Optional render targets registry for target_id lookup.
+        render_targets_registry: Optional render targets registry for target_id lookup.
         downmix_registry: Optional DownmixRegistry for policy ID validation.
         gates_policy_ids: Optional list of known gates policy IDs for validation.
 
@@ -280,6 +339,17 @@ def build_render_plan(
     downmix_policy_id, gates_policy_id = _validate_policies(
         options_dict, downmix_registry, gates_policy_ids,
     )
+    requested_target_ids = _normalize_requested_target_ids(options_dict.get("target_ids"))
+    requested_targets_by_layout: dict[str, list[str]] | None = None
+    if requested_target_ids:
+        if render_targets_registry is None:
+            raise ValueError(
+                "request.options.target_ids was provided, but no render targets registry is available."
+            )
+        requested_targets_by_layout = _requested_targets_by_layout(
+            requested_target_ids,
+            render_targets_registry,
+        )
 
     # Build routing plan path.
     routing_plan_path = _coerce_str(request.get("routing_plan_path")).strip()
@@ -306,7 +376,8 @@ def build_render_plan(
             routing_plan_path=routing_plan_path,
             routing_plan=routing_plan,
             layouts=layouts,
-            render_targets=render_targets,
+            render_targets_registry=render_targets_registry,
+            requested_targets_by_layout=requested_targets_by_layout,
         )
 
     # ── Multi-target path ──
@@ -321,7 +392,8 @@ def build_render_plan(
         routing_plan_path=routing_plan_path,
         routing_plan=routing_plan,
         layouts=layouts,
-        render_targets=render_targets,
+        render_targets_registry=render_targets_registry,
+        requested_targets_by_layout=requested_targets_by_layout,
     )
 
 
@@ -337,10 +409,16 @@ def _build_single_target_plan(
     routing_plan_path: str,
     routing_plan: dict[str, Any] | None,
     layouts: dict[str, Any] | None,
-    render_targets: dict[str, Any] | None,
+    render_targets_registry: RenderTargetsRegistry | None,
+    requested_targets_by_layout: dict[str, list[str]] | None,
 ) -> dict[str, Any]:
     """Build plan for a single target_layout_id (original behavior, byte-identical)."""
-    target_id, _ = _find_render_target(layout_id, render_targets)
+    resolved_target_id = _resolve_target_for_layout(
+        layout_id=layout_id,
+        render_targets_registry=render_targets_registry,
+        requested_targets_by_layout=requested_targets_by_layout,
+    )
+    target_id = resolved_target_id or _synthetic_target_id_for_layout(layout_id)
 
     # Resolve layout metadata.
     if isinstance(layouts, dict) and layouts:
@@ -370,6 +448,8 @@ def _build_single_target_plan(
         "outputs": job_outputs,
         "notes": notes,
     }
+    if resolved_target_id is not None:
+        job["resolved_target_id"] = resolved_target_id
     if routing_plan_path:
         job["routing_plan_path"] = routing_plan_path
 
@@ -419,7 +499,8 @@ def _build_multi_target_plan(
     routing_plan_path: str,
     routing_plan: dict[str, Any] | None,
     layouts: dict[str, Any] | None,
-    render_targets: dict[str, Any] | None,
+    render_targets_registry: RenderTargetsRegistry | None,
+    requested_targets_by_layout: dict[str, list[str]] | None,
 ) -> dict[str, Any]:
     """Build plan for multiple target_layout_ids."""
     job_inputs = _build_job_inputs(scene, routing_plan)
@@ -428,7 +509,12 @@ def _build_multi_target_plan(
     resolved_layouts: list[dict[str, Any]] = []
 
     for idx, layout_id in enumerate(layout_ids):
-        target_id, _ = _find_render_target(layout_id, render_targets)
+        resolved_target_id = _resolve_target_for_layout(
+            layout_id=layout_id,
+            render_targets_registry=render_targets_registry,
+            requested_targets_by_layout=requested_targets_by_layout,
+        )
+        target_id = resolved_target_id or _synthetic_target_id_for_layout(layout_id)
         all_target_ids.append(target_id)
 
         # Resolve layout metadata.
@@ -458,6 +544,8 @@ def _build_multi_target_plan(
             "outputs": job_outputs,
             "notes": notes,
         }
+        if resolved_target_id is not None:
+            job["resolved_target_id"] = resolved_target_id
         if routing_plan_path:
             job["routing_plan_path"] = routing_plan_path
         jobs.append(job)

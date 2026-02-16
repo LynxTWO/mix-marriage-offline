@@ -83,6 +83,18 @@ def _request_with_options(scene_path: str) -> dict:
     }
 
 
+def _request_with_explicit_target_ids(scene_path: str) -> dict:
+    return {
+        "schema_version": "0.1.0",
+        "target_layout_ids": ["LAYOUT.2_0", "LAYOUT.7_1"],
+        "scene_path": scene_path,
+        "options": {
+            "target_ids": ["TARGET.SURROUND.7_1", "TARGET.STEREO.2_0"],
+            "output_formats": ["wav"],
+        },
+    }
+
+
 def _routing_plan() -> dict:
     return {
         "schema_version": "0.1.0",
@@ -156,6 +168,7 @@ class TestRenderPlanFromRequestCli(unittest.TestCase):
             self.assertIsInstance(jobs[0]["inputs"], list)
             self.assertIsInstance(jobs[0]["outputs"], list)
             self.assertGreater(len(jobs[0]["outputs"]), 0)
+            self.assertEqual(jobs[0]["resolved_target_id"], "TARGET.STEREO.2_0")
 
     def test_happy_path_with_options_and_routing_plan(self) -> None:
         validator = _schema_validator("render_plan.schema.json")
@@ -338,7 +351,7 @@ class TestRenderPlanFromRequestCli(unittest.TestCase):
             exit_code = main([
                 "render-plan", "build",
                 "--scene", str(scene_path),
-                "--targets", "Stereo (streaming)",
+                "--targets", "TARGET.STEREO.2_0",
                 "--out", str(out_path),
             ])
             self.assertEqual(exit_code, 0)
@@ -436,6 +449,23 @@ class TestRenderPlanFromRequestErrorPaths(unittest.TestCase):
             self.assertIn("POLICY.GATES.NONEXISTENT", err)
             self.assertIn("POLICY.GATES.CORE_V0", err)
 
+    def test_unknown_target_id_in_options_fails_with_sorted_known_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            scene_posix = (tp / "scene.json").resolve().as_posix()
+            rc, err = self._run_plan(tp, {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "target_ids": ["TARGET.DOES.NOT.EXIST"],
+                },
+            })
+            self.assertEqual(rc, 1)
+            self.assertIn("Unknown target_id: TARGET.DOES.NOT.EXIST", err)
+            self.assertIn("Known target_ids:", err)
+            self.assertIn("TARGET.STEREO.2_0", err)
+
     def test_routing_plan_path_mismatch_fails(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tp = Path(td)
@@ -524,8 +554,10 @@ class TestRenderPlanFromRequestMultiTarget(unittest.TestCase):
             self.assertEqual(len(jobs), 2)
             self.assertEqual(jobs[0]["job_id"], "JOB.001")
             self.assertEqual(jobs[0]["target_layout_id"], "LAYOUT.2_0")
+            self.assertEqual(jobs[0]["resolved_target_id"], "TARGET.STEREO.2_0")
             self.assertEqual(jobs[1]["job_id"], "JOB.002")
             self.assertEqual(jobs[1]["target_layout_id"], "LAYOUT.5_1")
+            self.assertEqual(jobs[1]["resolved_target_id"], "TARGET.SURROUND.5_1")
 
     def test_multi_target_determinism(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -589,6 +621,37 @@ class TestRenderPlanFromRequestMultiTarget(unittest.TestCase):
             jobs = payload["jobs"]
             self.assertEqual(jobs[0]["target_layout_id"], "LAYOUT.2_0")
             self.assertEqual(jobs[1]["target_layout_id"], "LAYOUT.5_1")
+            self.assertEqual(jobs[0]["resolved_target_id"], "TARGET.STEREO.2_0")
+            self.assertEqual(jobs[1]["resolved_target_id"], "TARGET.SURROUND.5_1")
+
+    def test_explicit_target_ids_are_resolved_per_layout(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            stems_dir.mkdir()
+
+            scene_path = temp_path / "scene.json"
+            request_path = temp_path / "render_request.json"
+            out_path = temp_path / "render_plan.json"
+
+            scene_posix = scene_path.resolve().as_posix()
+            _write_json(scene_path, _minimal_scene(stems_dir.resolve().as_posix()))
+            _write_json(request_path, _request_with_explicit_target_ids(scene_posix))
+
+            exit_code = main([
+                "render-plan", "plan",
+                "--request", str(request_path),
+                "--scene", str(scene_path),
+                "--out", str(out_path),
+            ])
+            self.assertEqual(exit_code, 0)
+
+            payload = json.loads(out_path.read_text(encoding="utf-8"))
+            jobs = payload["jobs"]
+            self.assertEqual(jobs[0]["target_layout_id"], "LAYOUT.2_0")
+            self.assertEqual(jobs[0]["resolved_target_id"], "TARGET.STEREO.2_0")
+            self.assertEqual(jobs[1]["target_layout_id"], "LAYOUT.7_1")
+            self.assertEqual(jobs[1]["resolved_target_id"], "TARGET.SURROUND.7_1")
 
 
 if __name__ == "__main__":
