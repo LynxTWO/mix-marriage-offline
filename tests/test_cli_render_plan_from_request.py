@@ -349,5 +349,111 @@ class TestRenderPlanFromRequestCli(unittest.TestCase):
             self.assertIn("targets", payload)
 
 
+class TestRenderPlanFromRequestErrorPaths(unittest.TestCase):
+    """Deterministic, stable error messages for invalid inputs."""
+
+    def _run_plan(
+        self,
+        temp_path: Path,
+        request_payload: dict,
+        *,
+        with_routing_plan: bool = False,
+    ) -> tuple[int, str]:
+        stems_dir = temp_path / "stems"
+        stems_dir.mkdir(exist_ok=True)
+
+        scene_path = temp_path / "scene.json"
+        request_path = temp_path / "render_request.json"
+        out_path = temp_path / "render_plan.json"
+
+        _write_json(scene_path, _minimal_scene(stems_dir.resolve().as_posix()))
+        _write_json(request_path, request_payload)
+
+        args = [
+            "render-plan", "plan",
+            "--request", str(request_path),
+            "--scene", str(scene_path),
+            "--out", str(out_path),
+        ]
+        if with_routing_plan:
+            rp_path = temp_path / "routing_plan.json"
+            _write_json(rp_path, _routing_plan())
+            args.extend(["--routing-plan", str(rp_path)])
+
+        stderr_capture = StringIO()
+        with redirect_stderr(stderr_capture):
+            exit_code = main(args)
+        return exit_code, stderr_capture.getvalue()
+
+    def test_unknown_layout_id_fails_with_sorted_known_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            scene_posix = (tp / "scene.json").resolve().as_posix()
+            rc, err = self._run_plan(tp, {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.DOES_NOT_EXIST",
+                "scene_path": scene_posix,
+            })
+            self.assertEqual(rc, 1)
+            self.assertIn("Unknown layout_id", err)
+            self.assertIn("LAYOUT.DOES_NOT_EXIST", err)
+            # Known IDs listed and sorted.
+            self.assertIn("LAYOUT.1_0", err)
+            self.assertIn("LAYOUT.2_0", err)
+            self.assertLess(err.index("LAYOUT.1_0"), err.index("LAYOUT.2_0"))
+
+    def test_unknown_downmix_policy_id_fails_with_sorted_known_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            scene_posix = (tp / "scene.json").resolve().as_posix()
+            rc, err = self._run_plan(tp, {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.5_1",
+                "scene_path": scene_posix,
+                "options": {
+                    "downmix_policy_id": "POLICY.DOWNMIX.FAKE_V99",
+                },
+            })
+            self.assertEqual(rc, 1)
+            self.assertIn("Unknown policy_id", err)
+            self.assertIn("POLICY.DOWNMIX.FAKE_V99", err)
+            self.assertIn("POLICY.DOWNMIX.STANDARD_FOLDOWN_V0", err)
+
+    def test_unknown_gates_policy_id_fails_with_sorted_known_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            scene_posix = (tp / "scene.json").resolve().as_posix()
+            rc, err = self._run_plan(tp, {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.5_1",
+                "scene_path": scene_posix,
+                "options": {
+                    "gates_policy_id": "POLICY.GATES.NONEXISTENT",
+                },
+            })
+            self.assertEqual(rc, 1)
+            self.assertIn("Unknown gates_policy_id", err)
+            self.assertIn("POLICY.GATES.NONEXISTENT", err)
+            self.assertIn("POLICY.GATES.CORE_V0", err)
+
+    def test_routing_plan_path_mismatch_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            scene_posix = (tp / "scene.json").resolve().as_posix()
+            rc, err = self._run_plan(
+                tp,
+                {
+                    "schema_version": "0.1.0",
+                    "target_layout_id": "LAYOUT.2_0",
+                    "scene_path": scene_posix,
+                    "routing_plan_path": "routing/plan.json",
+                },
+                with_routing_plan=False,
+            )
+            self.assertEqual(rc, 1)
+            self.assertIn("routing_plan_path is set", err)
+            self.assertIn("routing/plan.json", err)
+
+
 if __name__ == "__main__":
     unittest.main()

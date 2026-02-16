@@ -77,7 +77,27 @@ __all__ = [
     "_build_selected_render_targets_payload",
     "_default_render_plan_targets_payload",
     "_render_plan_policies_from_report",
+    "_load_gates_policy_ids",
 ]
+
+
+def _load_gates_policy_ids() -> list[str] | None:
+    """Return sorted list of known gates policy IDs from ontology, or None."""
+    gates_path = ontology_dir() / "policies" / "gates.yaml"
+    if not gates_path.is_file():
+        return None
+    try:
+        from mmo.core.gates import load_gates_policy  # noqa: WPS433
+
+        gates = load_gates_policy(gates_path)
+        meta = gates.get("_meta")
+        if isinstance(meta, dict):
+            pid = meta.get("policy_id")
+            if isinstance(pid, str) and pid:
+                return [pid]
+    except (RuntimeError, ValueError):
+        pass
+    return None
 
 
 def _render_scene_text(scene: dict[str, Any]) -> str:
@@ -689,12 +709,23 @@ def _run_render_plan_from_request_command(
 
         render_targets_payload = load_render_targets(render_targets_path)
 
+    downmix_reg = None
+    downmix_yaml = ontology_dir() / "policies" / "downmix.yaml"
+    if downmix_yaml.is_file():
+        from mmo.core.registries.downmix_registry import load_downmix_registry  # noqa: WPS433
+
+        downmix_reg = load_downmix_registry(downmix_yaml)
+
+    known_gates_ids = _load_gates_policy_ids()
+
     render_plan_payload = build_render_plan_from_request(
         request_payload,
         scene_for_plan,
         routing_plan=routing_plan_payload,
         layouts=layouts,
         render_targets=render_targets_payload,
+        downmix_registry=downmix_reg,
+        gates_policy_ids=known_gates_ids,
     )
     _validate_json_payload(
         render_plan_payload,
@@ -776,6 +807,15 @@ def _run_render_run_command(
 
         render_targets_payload = load_render_targets(render_targets_path)
 
+    downmix_reg = None
+    downmix_yaml = ontology_dir() / "policies" / "downmix.yaml"
+    if downmix_yaml.is_file():
+        from mmo.core.registries.downmix_registry import load_downmix_registry  # noqa: WPS433
+
+        downmix_reg = load_downmix_registry(downmix_yaml)
+
+    known_gates_ids = _load_gates_policy_ids()
+
     # -- build plan ------------------------------------------------------------
     render_plan_payload = build_render_plan_from_request(
         request_payload,
@@ -783,6 +823,8 @@ def _run_render_run_command(
         routing_plan=routing_plan_payload,
         layouts=layouts,
         render_targets=render_targets_payload,
+        downmix_registry=downmix_reg,
+        gates_policy_ids=known_gates_ids,
     )
     _validate_json_payload(
         render_plan_payload,

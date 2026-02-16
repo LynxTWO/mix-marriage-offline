@@ -52,7 +52,17 @@ def _resolve_layout(
 ) -> dict[str, Any]:
     entry = layouts.get(layout_id)
     if not isinstance(entry, dict):
-        raise ValueError(f"Unknown layout_id: {layout_id}")
+        known = sorted(
+            k for k in layouts if k != "_meta" and isinstance(layouts[k], dict)
+        )
+        if known:
+            raise ValueError(
+                f"Unknown layout_id: {layout_id}. "
+                f"Known layout_ids: {', '.join(known)}"
+            )
+        raise ValueError(
+            f"Unknown layout_id: {layout_id}. No layouts are available."
+        )
 
     channel_order = entry.get("channel_order")
     if not isinstance(channel_order, list) or not channel_order:
@@ -170,6 +180,8 @@ def build_render_plan(
     routing_plan: dict[str, Any] | None = None,
     layouts: dict[str, Any] | None = None,
     render_targets: dict[str, Any] | None = None,
+    downmix_registry: Any | None = None,
+    gates_policy_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     """Build a deterministic render plan from a validated render_request.
 
@@ -180,6 +192,8 @@ def build_render_plan(
         layouts: Layouts registry dict (layout_id -> entry). If None,
             resolved section will use minimal data from the request.
         render_targets: Optional render targets registry for target_id lookup.
+        downmix_registry: Optional DownmixRegistry for policy ID validation.
+        gates_policy_ids: Optional list of known gates policy IDs for validation.
 
     Returns:
         A render_plan payload conforming to render_plan.schema.json.
@@ -221,6 +235,24 @@ def build_render_plan(
     downmix_policy_id = _coerce_str(options_dict.get("downmix_policy_id")).strip() or None
     gates_policy_id = _coerce_str(options_dict.get("gates_policy_id")).strip() or None
 
+    # Validate policy IDs against registries when provided.
+    if downmix_policy_id and downmix_registry is not None:
+        # get_policy raises ValueError with sorted known IDs on miss.
+        downmix_registry.get_policy(downmix_policy_id)
+
+    if gates_policy_id and gates_policy_ids is not None:
+        if gates_policy_id not in gates_policy_ids:
+            known = sorted(gates_policy_ids)
+            if known:
+                raise ValueError(
+                    f"Unknown gates_policy_id: {gates_policy_id}. "
+                    f"Known gates_policy_ids: {', '.join(known)}"
+                )
+            raise ValueError(
+                f"Unknown gates_policy_id: {gates_policy_id}. "
+                f"No gates policies are available."
+            )
+
     resolved["downmix_policy_id"] = downmix_policy_id
     resolved["gates_policy_id"] = gates_policy_id
 
@@ -228,6 +260,13 @@ def build_render_plan(
     routing_plan_path = _coerce_str(request.get("routing_plan_path")).strip()
     if routing_plan_path:
         routing_plan_path = _to_posix(routing_plan_path)
+
+    # Validate routing plan path / argument consistency.
+    if routing_plan_path and routing_plan is None:
+        raise ValueError(
+            f"request.routing_plan_path is set ({routing_plan_path}) "
+            f"but no routing_plan was provided."
+        )
 
     # Build the single job.
     job_inputs = _build_job_inputs(scene, routing_plan)
