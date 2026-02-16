@@ -238,6 +238,19 @@ and summary counts. Use `--out diff.json` to write to a file.
 
 ---
 
+## Gates policies
+
+MMO ships an Objective Core gates policy that defines safety and authority
+boundaries (loudness ceilings, gain limits, approval requirements, etc.).
+Use the `gates` CLI to inspect the active policy:
+
+```powershell
+python -m mmo gates list
+python -m mmo gates show POLICY.GATES.CORE_V0 --format json
+```
+
+---
+
 ## Common pitfalls
 
 ### OneDrive locks

@@ -68,6 +68,7 @@ SCHEMA_ANCHORS: tuple[str, ...] = (
     "schemas/stems_map.schema.json",
     "schemas/stems_overrides.schema.json",
     "schemas/stems_audition_manifest.schema.json",
+    "schemas/gates_policies.schema.json",
 )
 
 SCENE_REGISTRIES_CHECK_ID = "SCENE.REGISTRIES"
@@ -108,6 +109,14 @@ ROLES_REGISTRY_LOADER: tuple[str, str, str] = (
 ROLE_LEXICON_COMMON_CHECK_ID = "ROLE_LEXICON.COMMON"
 ROLE_LEXICON_COMMON_TOOL = "src/mmo/core/role_lexicon.py"
 ROLE_LEXICON_COMMON_REL_PATH = "ontology/role_lexicon_common.yaml"
+
+GATES_REGISTRIES_CHECK_ID = "GATES.REGISTRIES"
+GATES_REGISTRIES_TOOL = "src/mmo/core/registries/gates_registry.py"
+GATES_REGISTRY_LOADER: tuple[str, str, str] = (
+    "load_gates_registry",
+    "mmo.core.registries.gates_registry",
+    "ontology/policies/gates.yaml",
+)
 
 
 def _tail_text(value: str, *, max_lines: int = 20, max_chars: int = 2000) -> str:
@@ -592,6 +601,66 @@ def _run_role_lexicon_common_check(*, repo_root: Path) -> dict[str, Any]:
     )
 
 
+def _gates_registry_summary(*, payload: Any) -> dict[str, int]:
+    if hasattr(payload, "get_gate_ids"):
+        return {"gates": len(payload.get_gate_ids())}
+    return {"gates": 0}
+
+
+def _run_gates_registries_check(*, repo_root: Path) -> dict[str, Any]:
+    loader_name, module_name, relative_path = GATES_REGISTRY_LOADER
+    details: dict[str, Any] = {"loaders": []}
+    errors: list[str] = []
+
+    registry_path = repo_root / relative_path
+    loader_details: dict[str, Any] = {
+        "loader": loader_name,
+        "module": module_name,
+        "path": relative_path,
+        "ok": True,
+    }
+
+    if not registry_path.is_file():
+        loader_details["ok"] = False
+        loader_details["error"] = f"Required registry is missing: {relative_path}"
+        errors.append(f"Required registry is missing: {relative_path}")
+        details["loaders"].append(loader_details)
+    else:
+        try:
+            module = importlib.import_module(module_name)
+            loader = getattr(module, loader_name)
+        except Exception as exc:
+            loader_details["ok"] = False
+            loader_details["error"] = str(exc)
+            errors.append(f"Failed to import {module_name}.{loader_name}: {exc}")
+            details["loaders"].append(loader_details)
+        else:
+            try:
+                payload = loader(registry_path)
+            except Exception as exc:
+                loader_details["ok"] = False
+                loader_details["error"] = str(exc)
+                errors.append(f"{loader_name} failed for {relative_path}: {exc}")
+                details["loaders"].append(loader_details)
+            else:
+                loader_details["summary"] = _gates_registry_summary(
+                    payload=payload,
+                )
+                details["loaders"].append(loader_details)
+
+    ok = not errors
+    if not ok:
+        errors.append("Run alone: python tools/validate_contracts.py --strict")
+    return _build_check_payload(
+        check_id=GATES_REGISTRIES_CHECK_ID,
+        ok=ok,
+        exit_code=0 if ok else 1,
+        tool=GATES_REGISTRIES_TOOL,
+        details=details,
+        errors=errors,
+    )
+
+
 def _run_schema_smoke_check(*, repo_root: Path) -> dict[str, Any]:
     details: dict[str, Any] = {"anchors": []}
     errors: list[str] = []
@@ -679,6 +748,7 @@ def run_contract_checks(*, repo_root: Path, strict: bool) -> dict[str, Any]:
     checks.append(_run_translation_registries_check(repo_root=repo_root))
     checks.append(_run_roles_registries_check(repo_root=repo_root))
     checks.append(_run_role_lexicon_common_check(repo_root=repo_root))
+    checks.append(_run_gates_registries_check(repo_root=repo_root))
     checks.append(_run_schema_smoke_check(repo_root=repo_root))
 
     failed = [check["check_id"] for check in checks if not check.get("ok")]

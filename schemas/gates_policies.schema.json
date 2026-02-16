@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/gates_policies.schema.json",
+  "title": "MMO Gates Policies Registry",
+  "description": "Validates ontology/policies/gates.yaml: a policy containing objective core gates.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["gates"],
+  "properties": {
+    "gates": {
+      "type": "object",
+      "properties": {
+        "_meta": {
+          "$ref": "#/$defs/gates_meta"
+        }
+      },
+      "patternProperties": {
+        "^GATE\\.[A-Z0-9_.]+$": {
+          "$ref": "#/$defs/gate_entry"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "gates_meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gates_version", "policy_id", "id_prefix"],
+      "properties": {
+        "gates_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_id": {
+          "type": "string",
+          "pattern": "^POLICY\\.GATES\\.[A-Z0-9_.]+$"
+        },
+        "id_prefix": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created_utc": {
+          "type": "string"
+        },
+        "contexts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "outcomes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "conventions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "gate_entry": {
+      "type": "object",
+      "required": ["label", "description", "kind"],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "safety",
+            "authority",
+            "action_prefix_limit",
+            "param_limit",
+            "count_limit",
+            "metric_delta_limit",
+            "lookup",
+            "capability"
+          ]
+        },
+        "default_enabled": {
+          "type": "boolean"
+        },
+        "config": {
+          "type": "object"
+        },
+        "limits": {
+          "type": "object"
+        },
+        "enforcement": {
+          "$ref": "#/$defs/enforcement"
+        },
+        "violation_reason_id": {
+          "type": "string",
+          "pattern": "^REASON\\.[A-Z0-9_.]+$"
+        },
+        "applies_to_params": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "applies_to_actions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "applies_to_actions_prefixes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "enforcement": {
+      "type": "object",
+      "properties": {
+        "suggest": {
+          "$ref": "#/$defs/outcome_or_level_enforcement"
+        },
+        "auto_apply": {
+          "$ref": "#/$defs/outcome_or_level_enforcement"
+        },
+        "render": {
+          "$ref": "#/$defs/outcome_or_level_enforcement"
+        },
+        "warn": {
+          "$ref": "#/$defs/level_enforcement"
+        },
+        "fail": {
+          "$ref": "#/$defs/level_enforcement"
+        }
+      },
+      "additionalProperties": false
+    },
+    "outcome_or_level_enforcement": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["allow", "suggest_only", "reject"]
+        },
+        {
+          "$ref": "#/$defs/level_enforcement"
+        }
+      ]
+    },
+    "level_enforcement": {
+      "type": "object",
+      "properties": {
+        "suggest": {
+          "type": "string",
+          "enum": ["allow", "suggest_only", "reject"]
+        },
+        "auto_apply": {
+          "type": "string",
+          "enum": ["allow", "suggest_only", "reject"]
+        },
+        "render": {
+          "type": "string",
+          "enum": ["allow", "suggest_only", "reject"]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

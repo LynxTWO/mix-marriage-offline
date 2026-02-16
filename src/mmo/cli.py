@@ -2080,6 +2080,24 @@ def main(argv: list[str] | None = None) -> int:
         help="Overwrite existing output zip.",
     )
 
+    gates_parser = subparsers.add_parser("gates", help="Gates policy registry tools.")
+    gates_subparsers = gates_parser.add_subparsers(dest="gates_command", required=True)
+    gates_list_parser = gates_subparsers.add_parser("list", help="List gates policy IDs.")
+    gates_list_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for the gates policy list.",
+    )
+    gates_show_parser = gates_subparsers.add_parser("show", help="Show one gates policy.")
+    gates_show_parser.add_argument("policy_id", help="Policy ID (e.g., POLICY.GATES.CORE_V0).")
+    gates_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for gates policy details.",
+    )
+
     downmix_parser = subparsers.add_parser("downmix", help="Downmix policy tools.")
     downmix_subparsers = downmix_parser.add_subparsers(dest="downmix_command", required=True)
     downmix_show_parser = downmix_subparsers.add_parser(
@@ -5435,6 +5453,56 @@ def main(argv: list[str] | None = None) -> int:
 
         print(output, end="")
         return 0
+    if args.command == "gates":
+        from mmo.core.registries.gates_registry import load_gates_registry  # noqa: WPS433
+
+        gates_path = ontology / "policies" / "gates.yaml"
+        if args.gates_command == "list":
+            try:
+                reg = load_gates_registry(gates_path)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            policy_ids = reg.get_policy_ids()
+            if args.format == "json":
+                print(json.dumps(policy_ids, indent=2, sort_keys=True))
+            else:
+                for pid in policy_ids:
+                    print(pid)
+            return 0
+
+        if args.gates_command == "show":
+            try:
+                reg = load_gates_registry(gates_path)
+                policy = reg.get_policy(args.policy_id)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            if args.format == "json":
+                print(json.dumps(policy, indent=2, sort_keys=True))
+            else:
+                pid = policy.get("policy_id", "")
+                print(pid)
+                meta = policy.get("meta")
+                if isinstance(meta, dict):
+                    version = meta.get("gates_version", "")
+                    if version:
+                        print(f"version: {version}")
+                gates_map = policy.get("gates")
+                if isinstance(gates_map, dict):
+                    print(f"gates: {len(gates_map)}")
+                    for gate_id in sorted(gates_map.keys()):
+                        gate = gates_map[gate_id]
+                        label = gate.get("label", "") if isinstance(gate, dict) else ""
+                        kind = gate.get("kind", "") if isinstance(gate, dict) else ""
+                        print(f"  {gate_id}: {label} [{kind}]")
+            return 0
+
+        print(f"Unknown gates command: {args.gates_command}", file=sys.stderr)
+        return 2
+
     if args.command == "downmix":
         from mmo.dsp.downmix import (  # noqa: WPS433
             load_layouts,
