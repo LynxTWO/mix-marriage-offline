@@ -166,6 +166,25 @@ class TestRenderGoldenPathDeterminism(unittest.TestCase):
             ])
             self.assertEqual(exit_render, 0, msg=f"render-run failed: {stderr_render}")
 
+            # 4b. mmo render-run (multi-target) --force
+            render_request_multi_path = self.project_dir / "renders" / "render_request_multi.json"
+            _write_json(render_request_multi_path, {
+                "schema_version": "0.1.0",
+                "target_layout_ids": ["LAYOUT.2_0", "LAYOUT.5_1"],
+                "scene_path": scene_posix,
+            })
+            render_plan_multi_path = self.project_dir / "renders" / "render_plan_multi.json"
+            render_report_multi_path = self.project_dir / "renders" / "render_report_multi.json"
+            exit_render_multi, _, stderr_render_multi = _run_main([
+                "render-run",
+                "--request", str(render_request_multi_path),
+                "--scene", str(scene_path),
+                "--plan-out", str(render_plan_multi_path),
+                "--report-out", str(render_report_multi_path),
+                "--force",
+            ])
+            self.assertEqual(exit_render_multi, 0, msg=f"render-run multi failed: {stderr_render_multi}")
+
             # 5. mmo bundle
             stems_index_path = self.project_dir / "stems" / "stems_index.json"
             stems_map_path = self.project_dir / "stems" / "stems_map.json"
@@ -210,6 +229,9 @@ class TestRenderGoldenPathDeterminism(unittest.TestCase):
                 render_request_path,
                 render_plan_path,
                 render_report_path,
+                render_request_multi_path,
+                render_plan_multi_path,
+                render_report_multi_path,
                 ui_bundle_path,
                 validation_path,
                 pack_path,

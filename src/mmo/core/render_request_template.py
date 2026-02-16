@@ -66,3 +66,55 @@ def build_render_request_template(
         payload["routing_plan_path"] = _to_posix(routing_plan_path)
 
     return payload
+
+
+def build_multi_render_request_template(
+    target_layout_ids: list[str],
+    *,
+    scene_path: str | None = None,
+    routing_plan_path: str | None = None,
+    layout_registry: LayoutRegistry | None = None,
+) -> dict[str, Any]:
+    """Build a deterministic, minimal render_request template for multiple targets.
+
+    Args:
+        target_layout_ids: List of LAYOUT.* IDs (sorted and deduplicated).
+        scene_path: Optional scene JSON path (will be POSIX-normalized).
+        routing_plan_path: Optional routing plan path (will be POSIX-normalized).
+        layout_registry: Pre-loaded registry; loads default if None.
+
+    Returns:
+        A dict that validates against render_request.schema.json
+        with ``target_layout_ids`` (not ``target_layout_id``).
+
+    Raises:
+        ValueError: If any target_layout_id is unknown (message lists known IDs sorted).
+        ValueError: If no valid layout IDs are provided.
+    """
+    registry = layout_registry or load_layout_registry()
+
+    # Deduplicate, sort, and validate each ID.
+    unique_ids = sorted(set(target_layout_ids))
+    if not unique_ids:
+        raise ValueError("target_layout_ids must contain at least one layout ID.")
+
+    for layout_id in unique_ids:
+        registry.get_layout(layout_id)
+
+    resolved_scene = _to_posix(scene_path) if scene_path else "scene.json"
+
+    payload: dict[str, Any] = {
+        "schema_version": _RENDER_REQUEST_SCHEMA_VERSION,
+        "target_layout_ids": unique_ids,
+        "scene_path": resolved_scene,
+        "options": {
+            "downmix_policy_id": _DEFAULT_DOWNMIX_POLICY_ID,
+            "dry_run": True,
+            "gates_policy_id": _DEFAULT_GATES_POLICY_ID,
+        },
+    }
+
+    if routing_plan_path is not None:
+        payload["routing_plan_path"] = _to_posix(routing_plan_path)
+
+    return payload

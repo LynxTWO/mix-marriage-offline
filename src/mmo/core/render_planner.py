@@ -89,10 +89,17 @@ def _resolve_layout(
 
 
 def _build_request_echo(request: dict[str, Any]) -> dict[str, Any]:
-    echo: dict[str, Any] = {
-        "target_layout_id": request["target_layout_id"],
-        "scene_path": request["scene_path"],
-    }
+    echo: dict[str, Any] = {}
+
+    # Multi-target: echo target_layout_ids; single: echo target_layout_id.
+    ids = request.get("target_layout_ids")
+    if isinstance(ids, list) and ids:
+        echo["target_layout_ids"] = sorted(set(ids))
+    else:
+        echo["target_layout_id"] = request["target_layout_id"]
+
+    echo["scene_path"] = request["scene_path"]
+
     routing_plan_path = _coerce_str(request.get("routing_plan_path")).strip()
     if routing_plan_path:
         echo["routing_plan_path"] = routing_plan_path
@@ -173,6 +180,61 @@ def _find_render_target(
     return f"TARGET.RENDER.{layout_suffix}", target_layout_id
 
 
+def _extract_layout_ids(request: dict[str, Any]) -> list[str]:
+    """Return sorted, deduplicated layout IDs from request."""
+    ids = request.get("target_layout_ids")
+    if isinstance(ids, list) and ids:
+        return sorted(set(_coerce_str(i).strip() for i in ids if _coerce_str(i).strip()))
+    single = _coerce_str(request.get("target_layout_id")).strip()
+    if single:
+        return [single]
+    raise ValueError("request must have target_layout_id or target_layout_ids.")
+
+
+def _build_job_notes(
+    target_layout_id: str,
+    routing_plan_path: str,
+    downmix_policy_id: str | None,
+) -> list[str]:
+    notes: list[str] = []
+    if target_layout_id in ("LAYOUT.2_0", "LAYOUT.1_0"):
+        notes.append(f"Target layout is {target_layout_id}")
+    if routing_plan_path:
+        notes.append("Routing plan applied")
+    if downmix_policy_id:
+        notes.append(f"Downmix policy: {downmix_policy_id}")
+    notes.sort()
+    return notes
+
+
+def _validate_policies(
+    options_dict: dict[str, Any],
+    downmix_registry: Any | None,
+    gates_policy_ids: list[str] | None,
+) -> tuple[str | None, str | None]:
+    """Extract and validate policy IDs. Returns (downmix_policy_id, gates_policy_id)."""
+    downmix_policy_id = _coerce_str(options_dict.get("downmix_policy_id")).strip() or None
+    gates_policy_id = _coerce_str(options_dict.get("gates_policy_id")).strip() or None
+
+    if downmix_policy_id and downmix_registry is not None:
+        downmix_registry.get_policy(downmix_policy_id)
+
+    if gates_policy_id and gates_policy_ids is not None:
+        if gates_policy_id not in gates_policy_ids:
+            known = sorted(gates_policy_ids)
+            if known:
+                raise ValueError(
+                    f"Unknown gates_policy_id: {gates_policy_id}. "
+                    f"Known gates_policy_ids: {', '.join(known)}"
+                )
+            raise ValueError(
+                f"Unknown gates_policy_id: {gates_policy_id}. "
+                f"No gates policies are available."
+            )
+
+    return downmix_policy_id, gates_policy_id
+
+
 def build_render_plan(
     request: dict[str, Any],
     scene: dict[str, Any],
@@ -203,58 +265,21 @@ def build_render_plan(
     if not isinstance(scene, dict):
         raise ValueError("scene must be an object.")
 
-    target_layout_id = _coerce_str(request.get("target_layout_id")).strip()
-    if not target_layout_id:
-        raise ValueError("request.target_layout_id is required.")
+    layout_ids = _extract_layout_ids(request)
+    is_multi = len(layout_ids) > 1 or isinstance(request.get("target_layout_ids"), list)
 
     scene_path = _coerce_str(request.get("scene_path")).strip()
     if not scene_path:
         raise ValueError("request.scene_path is required.")
     scene_path = _to_posix(scene_path)
 
-    # Resolve the target render target ID.
-    target_id, resolved_layout_id = _find_render_target(
-        target_layout_id, render_targets,
-    )
-
-    # Resolve layout metadata.
-    if isinstance(layouts, dict) and layouts:
-        resolved = _resolve_layout(target_layout_id, layouts)
-    else:
-        resolved = {
-            "target_layout_id": target_layout_id,
-            "channel_order": [f"SPK.CH{i}" for i in range(2)],
-        }
-
-    # Extract options.
+    # Extract and validate options/policies.
     options = request.get("options")
     options_dict = options if isinstance(options, dict) else {}
-
     output_formats = _normalize_output_formats(options_dict.get("output_formats"))
-
-    downmix_policy_id = _coerce_str(options_dict.get("downmix_policy_id")).strip() or None
-    gates_policy_id = _coerce_str(options_dict.get("gates_policy_id")).strip() or None
-
-    # Validate policy IDs against registries when provided.
-    if downmix_policy_id and downmix_registry is not None:
-        # get_policy raises ValueError with sorted known IDs on miss.
-        downmix_registry.get_policy(downmix_policy_id)
-
-    if gates_policy_id and gates_policy_ids is not None:
-        if gates_policy_id not in gates_policy_ids:
-            known = sorted(gates_policy_ids)
-            if known:
-                raise ValueError(
-                    f"Unknown gates_policy_id: {gates_policy_id}. "
-                    f"Known gates_policy_ids: {', '.join(known)}"
-                )
-            raise ValueError(
-                f"Unknown gates_policy_id: {gates_policy_id}. "
-                f"No gates policies are available."
-            )
-
-    resolved["downmix_policy_id"] = downmix_policy_id
-    resolved["gates_policy_id"] = gates_policy_id
+    downmix_policy_id, gates_policy_id = _validate_policies(
+        options_dict, downmix_registry, gates_policy_ids,
+    )
 
     # Build routing plan path.
     routing_plan_path = _coerce_str(request.get("routing_plan_path")).strip()
@@ -268,23 +293,76 @@ def build_render_plan(
             f"but no routing_plan was provided."
         )
 
+    if not is_multi:
+        # ── Single-target path (backward-compatible, byte-identical) ──
+        return _build_single_target_plan(
+            request=request,
+            scene=scene,
+            layout_id=layout_ids[0],
+            scene_path=scene_path,
+            output_formats=output_formats,
+            downmix_policy_id=downmix_policy_id,
+            gates_policy_id=gates_policy_id,
+            routing_plan_path=routing_plan_path,
+            routing_plan=routing_plan,
+            layouts=layouts,
+            render_targets=render_targets,
+        )
+
+    # ── Multi-target path ──
+    return _build_multi_target_plan(
+        request=request,
+        scene=scene,
+        layout_ids=layout_ids,
+        scene_path=scene_path,
+        output_formats=output_formats,
+        downmix_policy_id=downmix_policy_id,
+        gates_policy_id=gates_policy_id,
+        routing_plan_path=routing_plan_path,
+        routing_plan=routing_plan,
+        layouts=layouts,
+        render_targets=render_targets,
+    )
+
+
+def _build_single_target_plan(
+    *,
+    request: dict[str, Any],
+    scene: dict[str, Any],
+    layout_id: str,
+    scene_path: str,
+    output_formats: list[str],
+    downmix_policy_id: str | None,
+    gates_policy_id: str | None,
+    routing_plan_path: str,
+    routing_plan: dict[str, Any] | None,
+    layouts: dict[str, Any] | None,
+    render_targets: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Build plan for a single target_layout_id (original behavior, byte-identical)."""
+    target_id, _ = _find_render_target(layout_id, render_targets)
+
+    # Resolve layout metadata.
+    if isinstance(layouts, dict) and layouts:
+        resolved = _resolve_layout(layout_id, layouts)
+    else:
+        resolved = {
+            "target_layout_id": layout_id,
+            "channel_order": [f"SPK.CH{i}" for i in range(2)],
+        }
+
+    resolved["downmix_policy_id"] = downmix_policy_id
+    resolved["gates_policy_id"] = gates_policy_id
+
     # Build the single job.
     job_inputs = _build_job_inputs(scene, routing_plan)
-    job_outputs = _build_job_outputs(output_formats, target_layout_id, scene_path)
-
-    notes: list[str] = []
-    if target_layout_id in ("LAYOUT.2_0", "LAYOUT.1_0"):
-        notes.append(f"Target layout is {target_layout_id}")
-    if routing_plan_path:
-        notes.append("Routing plan applied")
-    if downmix_policy_id:
-        notes.append(f"Downmix policy: {downmix_policy_id}")
-    notes.sort()
+    job_outputs = _build_job_outputs(output_formats, layout_id, scene_path)
+    notes = _build_job_notes(layout_id, routing_plan_path, downmix_policy_id)
 
     job: dict[str, Any] = {
         "job_id": "JOB.001",
         "target_id": target_id,
-        "target_layout_id": target_layout_id,
+        "target_layout_id": layout_id,
         "output_formats": list(output_formats),
         "contexts": ["render"],
         "status": "planned",
@@ -326,4 +404,101 @@ def build_render_plan(
         "jobs": [job],
         "request": request_echo,
         "resolved": resolved,
+    }
+
+
+def _build_multi_target_plan(
+    *,
+    request: dict[str, Any],
+    scene: dict[str, Any],
+    layout_ids: list[str],
+    scene_path: str,
+    output_formats: list[str],
+    downmix_policy_id: str | None,
+    gates_policy_id: str | None,
+    routing_plan_path: str,
+    routing_plan: dict[str, Any] | None,
+    layouts: dict[str, Any] | None,
+    render_targets: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Build plan for multiple target_layout_ids."""
+    job_inputs = _build_job_inputs(scene, routing_plan)
+    all_target_ids: list[str] = []
+    jobs: list[dict[str, Any]] = []
+    resolved_layouts: list[dict[str, Any]] = []
+
+    for idx, layout_id in enumerate(layout_ids):
+        target_id, _ = _find_render_target(layout_id, render_targets)
+        all_target_ids.append(target_id)
+
+        # Resolve layout metadata.
+        if isinstance(layouts, dict) and layouts:
+            resolved = _resolve_layout(layout_id, layouts)
+        else:
+            resolved = {
+                "target_layout_id": layout_id,
+                "channel_order": [f"SPK.CH{i}" for i in range(2)],
+            }
+        resolved["downmix_policy_id"] = downmix_policy_id
+        resolved["gates_policy_id"] = gates_policy_id
+        resolved_layouts.append(resolved)
+
+        # Build job.
+        job_outputs = _build_job_outputs(output_formats, layout_id, scene_path)
+        notes = _build_job_notes(layout_id, routing_plan_path, downmix_policy_id)
+
+        job: dict[str, Any] = {
+            "job_id": f"JOB.{idx + 1:03d}",
+            "target_id": target_id,
+            "target_layout_id": layout_id,
+            "output_formats": list(output_formats),
+            "contexts": ["render"],
+            "status": "planned",
+            "inputs": list(job_inputs),
+            "outputs": job_outputs,
+            "notes": notes,
+        }
+        if routing_plan_path:
+            job["routing_plan_path"] = routing_plan_path
+        jobs.append(job)
+
+    # Build policies.
+    policies: dict[str, str] = {}
+    if gates_policy_id:
+        policies["gates_policy_id"] = gates_policy_id
+    if downmix_policy_id:
+        policies["downmix_policy_id"] = downmix_policy_id
+
+    # Targets list sorted.
+    all_target_ids = sorted(set(all_target_ids))
+
+    # Use first layout's resolved for backward-compat `resolved` field.
+    first_resolved = resolved_layouts[0]
+
+    # Assemble the plan (without plan_id first for hashing).
+    request_echo = _build_request_echo(request)
+    plan_without_id: dict[str, Any] = {
+        "schema_version": RENDER_PLAN_SCHEMA_VERSION,
+        "scene_path": scene_path,
+        "targets": all_target_ids,
+        "policies": policies,
+        "jobs": jobs,
+        "request": request_echo,
+        "resolved": first_resolved,
+        "resolved_layouts": resolved_layouts,
+    }
+
+    scene_id = _scene_id_from_scene(scene)
+    plan_id = f"PLAN.{scene_id}.{_hash8(plan_without_id)}"
+
+    return {
+        "schema_version": RENDER_PLAN_SCHEMA_VERSION,
+        "plan_id": plan_id,
+        "scene_path": scene_path,
+        "targets": all_target_ids,
+        "policies": policies,
+        "jobs": jobs,
+        "request": request_echo,
+        "resolved": first_resolved,
+        "resolved_layouts": resolved_layouts,
     }

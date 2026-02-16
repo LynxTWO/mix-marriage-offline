@@ -26,7 +26,12 @@
       "items": { "$ref": "#/$defs/job" }
     },
     "request": { "$ref": "#/$defs/request_echo" },
-    "resolved": { "$ref": "#/$defs/resolved" }
+    "resolved": { "$ref": "#/$defs/resolved" },
+    "resolved_layouts": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/resolved" }
+    }
   },
   "$defs": {
     "posix_path": {
@@ -57,9 +62,19 @@
     "request_echo": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["target_layout_id", "scene_path"],
+      "required": ["scene_path"],
+      "oneOf": [
+        { "required": ["target_layout_id"], "not": { "required": ["target_layout_ids"] } },
+        { "required": ["target_layout_ids"], "not": { "required": ["target_layout_id"] } }
+      ],
       "properties": {
         "target_layout_id": { "$ref": "#/$defs/layout_id" },
+        "target_layout_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/layout_id" }
+        },
         "scene_path": { "$ref": "#/$defs/posix_path" },
         "routing_plan_path": { "$ref": "#/$defs/posix_path" },
         "options": {

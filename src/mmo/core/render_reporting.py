@@ -24,22 +24,24 @@ def build_render_report_from_plan(
     request_echo = plan.get("request")
     scene_path = plan.get("scene_path", "")
 
-    if isinstance(request_echo, dict) and request_echo.get("target_layout_id"):
-        target_layout_id = request_echo["target_layout_id"]
-        request_scene_path = request_echo.get("scene_path", scene_path)
-    else:
-        # Fallback: derive from first job.
-        jobs_raw = plan.get("jobs")
-        if isinstance(jobs_raw, list) and jobs_raw:
-            target_layout_id = jobs_raw[0].get("target_layout_id", "")
-        else:
-            target_layout_id = ""
-        request_scene_path = scene_path
+    request_summary: dict[str, Any] = {}
 
-    request_summary: dict[str, Any] = {
-        "scene_path": request_scene_path,
-        "target_layout_id": target_layout_id,
-    }
+    if isinstance(request_echo, dict):
+        # Multi-target: echo has target_layout_ids.
+        target_layout_ids = request_echo.get("target_layout_ids")
+        if isinstance(target_layout_ids, list) and target_layout_ids:
+            request_summary["scene_path"] = request_echo.get("scene_path", scene_path)
+            request_summary["target_layout_ids"] = sorted(target_layout_ids)
+        elif request_echo.get("target_layout_id"):
+            request_summary["scene_path"] = request_echo.get("scene_path", scene_path)
+            request_summary["target_layout_id"] = request_echo["target_layout_id"]
+        else:
+            # Fallback: derive from first job.
+            request_summary = _summary_from_first_job(plan, scene_path)
+    else:
+        request_summary = _summary_from_first_job(plan, scene_path)
+
+    # Add routing_plan_path if present.
     routing_plan_path: str | None = None
     if isinstance(request_echo, dict):
         routing_plan_path = request_echo.get("routing_plan_path")
@@ -87,4 +89,20 @@ def build_render_report_from_plan(
         "qa_gates": qa_gates,
         "request": request_summary,
         "schema_version": "0.1.0",
+    }
+
+
+def _summary_from_first_job(
+    plan: dict[str, Any],
+    scene_path: str,
+) -> dict[str, Any]:
+    """Derive request_summary from the first job (fallback)."""
+    jobs_raw = plan.get("jobs")
+    if isinstance(jobs_raw, list) and jobs_raw:
+        target_layout_id = jobs_raw[0].get("target_layout_id", "")
+    else:
+        target_layout_id = ""
+    return {
+        "scene_path": scene_path,
+        "target_layout_id": target_layout_id,
     }

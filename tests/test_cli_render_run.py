@@ -488,5 +488,110 @@ class TestRenderRunErrorPaths(unittest.TestCase):
             self.assertIn("routing/plan.json", err)
 
 
+def _multi_target_request(scene_path: str) -> dict:
+    return {
+        "schema_version": "0.1.0",
+        "target_layout_ids": ["LAYOUT.2_0", "LAYOUT.5_1"],
+        "scene_path": scene_path,
+    }
+
+
+class TestRenderRunMultiTarget(unittest.TestCase):
+    """Multi-target render-run tests."""
+
+    def test_multi_target_plan_and_report_schema_valid(self) -> None:
+        plan_validator = _schema_validator("render_plan.schema.json")
+        report_validator = _schema_validator("render_report.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            scene_path = temp_path / "scene.json"
+            scene_posix = scene_path.resolve().as_posix()
+            exit_code, stdout, stderr, plan_out, report_out = _run_render_run(
+                temp_path,
+                request_payload=_multi_target_request(scene_posix),
+            )
+
+            self.assertEqual(exit_code, 0, msg=stderr)
+            self.assertTrue(plan_out.exists())
+            self.assertTrue(report_out.exists())
+
+            plan = json.loads(plan_out.read_text(encoding="utf-8"))
+            report = json.loads(report_out.read_text(encoding="utf-8"))
+            plan_validator.validate(plan)
+            report_validator.validate(report)
+
+    def test_multi_target_report_has_all_jobs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            scene_path = temp_path / "scene.json"
+            scene_posix = scene_path.resolve().as_posix()
+            exit_code, _, stderr, _, report_out = _run_render_run(
+                temp_path,
+                request_payload=_multi_target_request(scene_posix),
+            )
+
+            self.assertEqual(exit_code, 0, msg=stderr)
+            report = json.loads(report_out.read_text(encoding="utf-8"))
+            self.assertEqual(len(report["jobs"]), 2)
+            self.assertEqual(report["jobs"][0]["status"], "skipped")
+            self.assertEqual(report["jobs"][1]["status"], "skipped")
+            self.assertEqual(report["jobs"][0]["job_id"], "JOB.001")
+            self.assertEqual(report["jobs"][1]["job_id"], "JOB.002")
+
+    def test_multi_target_stdout_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            scene_path = temp_path / "scene.json"
+            scene_posix = scene_path.resolve().as_posix()
+            exit_code, stdout, stderr, _, _ = _run_render_run(
+                temp_path,
+                request_payload=_multi_target_request(scene_posix),
+            )
+
+            self.assertEqual(exit_code, 0, msg=stderr)
+            parsed = json.loads(stdout)
+            self.assertEqual(parsed["jobs"], 2)
+            self.assertEqual(parsed["targets"], sorted(parsed["targets"]))
+
+    def test_multi_target_determinism(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            stems_dir.mkdir()
+
+            scene_path = temp_path / "scene.json"
+            request_path = temp_path / "render_request.json"
+
+            scene_posix = scene_path.resolve().as_posix()
+            _write_json(scene_path, _minimal_scene(stems_dir.resolve().as_posix()))
+            _write_json(request_path, _multi_target_request(scene_posix))
+
+            plan_out_1 = temp_path / "plan1.json"
+            report_out_1 = temp_path / "report1.json"
+            plan_out_2 = temp_path / "plan2.json"
+            report_out_2 = temp_path / "report2.json"
+
+            exit1 = main([
+                "render-run",
+                "--request", str(request_path),
+                "--scene", str(scene_path),
+                "--plan-out", str(plan_out_1),
+                "--report-out", str(report_out_1),
+            ])
+            exit2 = main([
+                "render-run",
+                "--request", str(request_path),
+                "--scene", str(scene_path),
+                "--plan-out", str(plan_out_2),
+                "--report-out", str(report_out_2),
+            ])
+            self.assertEqual(exit1, 0)
+            self.assertEqual(exit2, 0)
+
+            self.assertEqual(plan_out_1.read_bytes(), plan_out_2.read_bytes())
+            self.assertEqual(report_out_1.read_bytes(), report_out_2.read_bytes())
+
+
 if __name__ == "__main__":
     unittest.main()

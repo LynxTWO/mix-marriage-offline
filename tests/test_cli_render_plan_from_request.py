@@ -455,5 +455,141 @@ class TestRenderPlanFromRequestErrorPaths(unittest.TestCase):
             self.assertIn("routing/plan.json", err)
 
 
+def _multi_target_request(scene_path: str) -> dict:
+    return {
+        "schema_version": "0.1.0",
+        "target_layout_ids": ["LAYOUT.2_0", "LAYOUT.5_1"],
+        "scene_path": scene_path,
+    }
+
+
+class TestRenderPlanFromRequestMultiTarget(unittest.TestCase):
+    """Multi-target render plan from request tests."""
+
+    def test_multi_target_produces_schema_valid_plan(self) -> None:
+        validator = _schema_validator("render_plan.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            stems_dir.mkdir()
+
+            scene_path = temp_path / "scene.json"
+            request_path = temp_path / "render_request.json"
+            out_path = temp_path / "render_plan.json"
+
+            scene_posix = scene_path.resolve().as_posix()
+            _write_json(scene_path, _minimal_scene(stems_dir.resolve().as_posix()))
+            _write_json(request_path, _multi_target_request(scene_posix))
+
+            exit_code = main([
+                "render-plan", "plan",
+                "--request", str(request_path),
+                "--scene", str(scene_path),
+                "--out", str(out_path),
+            ])
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(out_path.exists())
+
+            payload = json.loads(out_path.read_text(encoding="utf-8"))
+            validator.validate(payload)
+
+            # Verify request echo uses target_layout_ids.
+            self.assertIn("request", payload)
+            self.assertIn("target_layout_ids", payload["request"])
+            self.assertNotIn("target_layout_id", payload["request"])
+            self.assertEqual(
+                payload["request"]["target_layout_ids"],
+                ["LAYOUT.2_0", "LAYOUT.5_1"],
+            )
+
+            # Verify resolved section (first layout).
+            self.assertIn("resolved", payload)
+            self.assertEqual(
+                payload["resolved"]["target_layout_id"], "LAYOUT.2_0",
+            )
+
+            # Verify resolved_layouts has entries for both layouts.
+            self.assertIn("resolved_layouts", payload)
+            self.assertEqual(len(payload["resolved_layouts"]), 2)
+            self.assertEqual(
+                payload["resolved_layouts"][0]["target_layout_id"], "LAYOUT.2_0",
+            )
+            self.assertEqual(
+                payload["resolved_layouts"][1]["target_layout_id"], "LAYOUT.5_1",
+            )
+
+            # Verify jobs: 2 jobs, sorted by layout_id.
+            jobs = payload["jobs"]
+            self.assertEqual(len(jobs), 2)
+            self.assertEqual(jobs[0]["job_id"], "JOB.001")
+            self.assertEqual(jobs[0]["target_layout_id"], "LAYOUT.2_0")
+            self.assertEqual(jobs[1]["job_id"], "JOB.002")
+            self.assertEqual(jobs[1]["target_layout_id"], "LAYOUT.5_1")
+
+    def test_multi_target_determinism(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            stems_dir.mkdir()
+
+            scene_path = temp_path / "scene.json"
+            request_path = temp_path / "render_request.json"
+            out1 = temp_path / "plan1.json"
+            out2 = temp_path / "plan2.json"
+
+            scene_posix = scene_path.resolve().as_posix()
+            _write_json(scene_path, _minimal_scene(stems_dir.resolve().as_posix()))
+            _write_json(request_path, _multi_target_request(scene_posix))
+
+            exit1 = main([
+                "render-plan", "plan",
+                "--request", str(request_path),
+                "--scene", str(scene_path),
+                "--out", str(out1),
+            ])
+            exit2 = main([
+                "render-plan", "plan",
+                "--request", str(request_path),
+                "--scene", str(scene_path),
+                "--out", str(out2),
+            ])
+            self.assertEqual(exit1, 0)
+            self.assertEqual(exit2, 0)
+            self.assertEqual(out1.read_bytes(), out2.read_bytes())
+
+    def test_multi_target_job_order_by_layout_id(self) -> None:
+        """Reverse-order input still produces sorted jobs."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            stems_dir.mkdir()
+
+            scene_path = temp_path / "scene.json"
+            request_path = temp_path / "render_request.json"
+            out_path = temp_path / "render_plan.json"
+
+            scene_posix = scene_path.resolve().as_posix()
+            _write_json(scene_path, _minimal_scene(stems_dir.resolve().as_posix()))
+            _write_json(request_path, {
+                "schema_version": "0.1.0",
+                "target_layout_ids": ["LAYOUT.5_1", "LAYOUT.2_0"],
+                "scene_path": scene_posix,
+            })
+
+            exit_code = main([
+                "render-plan", "plan",
+                "--request", str(request_path),
+                "--scene", str(scene_path),
+                "--out", str(out_path),
+            ])
+            self.assertEqual(exit_code, 0)
+
+            payload = json.loads(out_path.read_text(encoding="utf-8"))
+            jobs = payload["jobs"]
+            self.assertEqual(jobs[0]["target_layout_id"], "LAYOUT.2_0")
+            self.assertEqual(jobs[1]["target_layout_id"], "LAYOUT.5_1")
+
+
 if __name__ == "__main__":
     unittest.main()

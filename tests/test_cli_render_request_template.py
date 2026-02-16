@@ -219,5 +219,74 @@ class TestRenderRequestTemplateBackslashNormalization(unittest.TestCase):
             self.assertNotIn("\\", payload["routing_plan_path"])
 
 
+class TestRenderRequestTemplateMultiTarget(unittest.TestCase):
+    """Multi-target render request template tests."""
+
+    def test_multi_target_template_is_schema_valid(self) -> None:
+        validator = _schema_validator(SCHEMA_PATH)
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "rr.json"
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                rc = main(["render-request", "template",
+                           "--target-layouts", "LAYOUT.2_0,LAYOUT.5_1",
+                           "--out", str(out)])
+            self.assertEqual(rc, 0)
+            payload = json.loads(out.read_text(encoding="utf-8"))
+            validator.validate(payload)
+            self.assertIn("target_layout_ids", payload)
+            self.assertNotIn("target_layout_id", payload)
+            self.assertEqual(payload["target_layout_ids"], ["LAYOUT.2_0", "LAYOUT.5_1"])
+
+    def test_multi_target_sorted_and_deduped(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "rr.json"
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                rc = main(["render-request", "template",
+                           "--target-layouts", "LAYOUT.5_1,LAYOUT.2_0,LAYOUT.5_1",
+                           "--out", str(out)])
+            self.assertEqual(rc, 0)
+            payload = json.loads(out.read_text(encoding="utf-8"))
+            self.assertEqual(payload["target_layout_ids"], ["LAYOUT.2_0", "LAYOUT.5_1"])
+
+    def test_multi_target_has_no_target_layout_id(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "rr.json"
+            stdout = StringIO()
+            with redirect_stdout(stdout):
+                rc = main(["render-request", "template",
+                           "--target-layouts", "LAYOUT.2_0",
+                           "--out", str(out)])
+            self.assertEqual(rc, 0)
+            payload = json.loads(out.read_text(encoding="utf-8"))
+            self.assertNotIn("target_layout_id", payload)
+            self.assertIn("target_layout_ids", payload)
+
+    def test_mutual_exclusivity_error(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "rr.json"
+            stderr = StringIO()
+            stdout = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                rc = main(["render-request", "template",
+                           "--target-layout", "LAYOUT.5_1",
+                           "--target-layouts", "LAYOUT.2_0,LAYOUT.5_1",
+                           "--out", str(out)])
+            self.assertEqual(rc, 1)
+            self.assertIn("exactly one", stderr.getvalue().lower())
+
+    def test_neither_target_flag_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "rr.json"
+            stderr = StringIO()
+            stdout = StringIO()
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                rc = main(["render-request", "template",
+                           "--out", str(out)])
+            self.assertEqual(rc, 1)
+            self.assertIn("exactly one", stderr.getvalue().lower())
+
+
 if __name__ == "__main__":
     unittest.main()

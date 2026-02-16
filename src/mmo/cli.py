@@ -2781,8 +2781,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     render_request_template_parser.add_argument(
         "--target-layout",
-        required=True,
-        help="Target layout ID (e.g. LAYOUT.5_1).",
+        default=None,
+        help="Target layout ID (e.g. LAYOUT.5_1). Mutually exclusive with --target-layouts.",
+    )
+    render_request_template_parser.add_argument(
+        "--target-layouts",
+        default=None,
+        help="Comma-separated target layout IDs (e.g. LAYOUT.2_0,LAYOUT.5_1). Mutually exclusive with --target-layout.",
     )
     render_request_template_parser.add_argument(
         "--scene",
@@ -5343,16 +5348,40 @@ def main(argv: list[str] | None = None) -> int:
                     file=sys.stderr,
                 )
                 return 1
+            has_single = args.target_layout is not None
+            has_multi = args.target_layouts is not None
+            if has_single == has_multi:
+                print(
+                    "Specify exactly one of --target-layout or --target-layouts.",
+                    file=sys.stderr,
+                )
+                return 1
             try:
-                from mmo.core.render_request_template import (  # noqa: WPS433
-                    build_render_request_template,
-                )
+                if has_multi:
+                    from mmo.core.render_request_template import (  # noqa: WPS433
+                        build_multi_render_request_template,
+                    )
 
-                payload = build_render_request_template(
-                    args.target_layout,
-                    scene_path=args.scene,
-                    routing_plan_path=args.routing_plan,
-                )
+                    raw_ids = [
+                        tid.strip()
+                        for tid in args.target_layouts.split(",")
+                        if tid.strip()
+                    ]
+                    payload = build_multi_render_request_template(
+                        raw_ids,
+                        scene_path=args.scene,
+                        routing_plan_path=args.routing_plan,
+                    )
+                else:
+                    from mmo.core.render_request_template import (  # noqa: WPS433
+                        build_render_request_template,
+                    )
+
+                    payload = build_render_request_template(
+                        args.target_layout,
+                        scene_path=args.scene,
+                        routing_plan_path=args.routing_plan,
+                    )
                 _validate_json_payload(
                     payload,
                     schema_path=schemas / "render_request.schema.json",
