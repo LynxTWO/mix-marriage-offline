@@ -2730,6 +2730,44 @@ def main(argv: list[str] | None = None) -> int:
         help="Overwrite output file if it already exists.",
     )
 
+    render_request_parser = subparsers.add_parser(
+        "render-request",
+        help="Render request artifact tools.",
+    )
+    render_request_subparsers = render_request_parser.add_subparsers(
+        dest="render_request_command",
+        required=True,
+    )
+    render_request_template_parser = render_request_subparsers.add_parser(
+        "template",
+        help="Generate a minimal, schema-valid render_request.json template.",
+    )
+    render_request_template_parser.add_argument(
+        "--target-layout",
+        required=True,
+        help="Target layout ID (e.g. LAYOUT.5_1).",
+    )
+    render_request_template_parser.add_argument(
+        "--scene",
+        default=None,
+        help="Optional path to scene JSON (POSIX-normalized in output).",
+    )
+    render_request_template_parser.add_argument(
+        "--routing-plan",
+        default=None,
+        help="Optional path to routing plan JSON (POSIX-normalized in output).",
+    )
+    render_request_template_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output render_request JSON.",
+    )
+    render_request_template_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite output file if it already exists.",
+    )
+
     render_report_parser = subparsers.add_parser(
         "render-report",
         help="Build a render_report JSON from a render_plan.",
@@ -5252,6 +5290,39 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(_render_render_plan_text(render_plan_payload))
         return 0
+    if args.command == "render-request":
+        if args.render_request_command == "template":
+            out_path = Path(args.out)
+            if out_path.exists() and not args.force:
+                print(
+                    f"File exists (use --force to overwrite): {out_path.as_posix()}",
+                    file=sys.stderr,
+                )
+                return 1
+            try:
+                from mmo.core.render_request_template import (  # noqa: WPS433
+                    build_render_request_template,
+                )
+
+                payload = build_render_request_template(
+                    args.target_layout,
+                    scene_path=args.scene,
+                    routing_plan_path=args.routing_plan,
+                )
+                _validate_json_payload(
+                    payload,
+                    schema_path=schemas / "render_request.schema.json",
+                    payload_name="Render request template",
+                )
+                _write_json_file(out_path, payload)
+                return 0
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+        print("Unknown render-request command.", file=sys.stderr)
+        return 2
     if args.command == "render-report":
         out_path = Path(args.out)
         if out_path.exists() and not args.force:
