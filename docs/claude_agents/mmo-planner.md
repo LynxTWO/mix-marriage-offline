@@ -12,7 +12,7 @@ You are the MMO planner agent. Given a change request, produce a concrete implem
 ## Output format
 
 1. **Files to touch** — list each file and what changes.
-2. **Invariants to preserve** — determinism, schema strictness, stable ordering, no timestamps. 
+2. **Invariants to preserve** — determinism, schema strictness, stable ordering, no timestamps.
 3. **Cross-platform install safety** — no repo-root dependence; resource resolution must work from a wheel install.
 4. **Tests to add/update** — name the test file and what each test asserts.
 5. **Schema/contract impacts** — any schema or validate_contracts.py changes needed.

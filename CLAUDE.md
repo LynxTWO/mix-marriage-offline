@@ -37,6 +37,15 @@ Rules:
 - `schemas/` JSON schemas; keep strict; update contracts + tests together.
 - `tools/` developer tools (validators, corpus scanners, pytest runners).
 - `tests/` deterministic tests; prefer fixtures; assert stable stdout/stderr.
+- `docs/claude_agents/` canonical Claude agent specs (shared via git).
+
+## Claude agent workflow
+Agent specs live in `docs/claude_agents/` (tracked in git) and are synced to
+the local `.claude/agents/` directory (gitignored) via:
+- `python tools/sync_claude_agents.py`
+
+Run this after cloning or pulling to keep your local agent definitions current.
+The sync is copy-only, allowlist-only, and deterministic.
 
 ## Non-negotiables
 1) Determinism:
