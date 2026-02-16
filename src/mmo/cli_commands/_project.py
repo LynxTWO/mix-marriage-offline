@@ -7,7 +7,11 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from mmo.cli_commands._helpers import _load_json_object
+from mmo.cli_commands._helpers import (
+    _load_json_object,
+    _validate_json_payload,
+    _write_json_file,
+)
 from mmo.core.run_config import normalize_run_config
 from mmo.resources import schemas_dir as _schemas_dir_fn
 
@@ -16,6 +20,7 @@ __all__ = [
     "_project_run_config_defaults",
     "_render_project_text",
     "_run_project_pack",
+    "_run_project_render_init",
     "_run_project_validate",
 ]
 
@@ -168,6 +173,98 @@ def _run_project_validate(
         out_path.write_text(output_text, encoding="utf-8")
 
     return 0 if ok else 2
+
+
+# ── project render-init ──────────────────────────────────────────
+
+
+def _run_project_render_init(
+    *,
+    project_dir: Path,
+    target_layout: str,
+    force: bool,
+) -> int:
+    """Create a render scaffold inside an existing project. Returns exit code."""
+    schemas_dir = _schemas_dir_fn()
+
+    # 1. Validate required project artifacts.
+    for rel_path, schema_basename, required in _VALIDATE_CHECKS:
+        if not required:
+            continue
+        check = _validate_one_check(
+            project_dir, schemas_dir, rel_path, schema_basename, required,
+        )
+        if check["status"] == "missing":
+            print(
+                f"Required project artifact missing: {rel_path}",
+                file=sys.stderr,
+            )
+            return 1
+        if check["status"] == "invalid":
+            errors_str = "; ".join(check.get("errors", []))
+            print(
+                f"Required project artifact invalid: {rel_path}: {errors_str}",
+                file=sys.stderr,
+            )
+            return 1
+
+    # 2. Build render request using existing core builder.
+    from mmo.core.render_request_template import (  # noqa: WPS433
+        build_render_request_template,
+    )
+
+    routing_plan_path: str | None = None
+    routing_plan_file = project_dir / "drafts" / "routing_plan.draft.json"
+    if routing_plan_file.is_file():
+        routing_plan_path = "drafts/routing_plan.draft.json"
+
+    try:
+        payload = build_render_request_template(
+            target_layout,
+            scene_path="drafts/scene.draft.json",
+            routing_plan_path=routing_plan_path,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    # 3. Validate against schema.
+    try:
+        _validate_json_payload(
+            payload,
+            schema_path=schemas_dir / "render_request.schema.json",
+            payload_name="Render request template",
+        )
+    except SystemExit as exc:
+        return int(exc.code) if isinstance(exc.code, int) else 1
+
+    # 4. Check overwrite.
+    renders_dir = project_dir / "renders"
+    request_path = renders_dir / "render_request.json"
+    if request_path.exists() and not force:
+        print(
+            f"File exists (use --force to overwrite): {request_path.as_posix()}",
+            file=sys.stderr,
+        )
+        return 1
+
+    # 5. Ensure renders/ dir exists and write file.
+    renders_dir.mkdir(parents=True, exist_ok=True)
+    _write_json_file(request_path, payload)
+
+    written: list[str] = ["renders/render_request.json"]
+    skipped: list[str] = []
+
+    # 6. Deterministic summary.
+    result: dict[str, Any] = {
+        "ok": True,
+        "project_dir": project_dir.resolve().as_posix(),
+        "skipped": skipped,
+        "target_layout_id": target_layout,
+        "written": written,
+    }
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
 
 
 # ── project pack ─────────────────────────────────────────────────

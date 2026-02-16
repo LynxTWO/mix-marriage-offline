@@ -2080,6 +2080,25 @@ def main(argv: list[str] | None = None) -> int:
         help="Overwrite existing output zip.",
     )
 
+    project_render_init_parser = project_subparsers.add_parser(
+        "render-init",
+        help="Create a render scaffold inside an existing project.",
+    )
+    project_render_init_parser.add_argument(
+        "project_dir",
+        help="Path to the project scaffold directory.",
+    )
+    project_render_init_parser.add_argument(
+        "--target-layout",
+        required=True,
+        help="Target layout ID (e.g. LAYOUT.5_1).",
+    )
+    project_render_init_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing renders/render_request.json.",
+    )
+
     gates_parser = subparsers.add_parser("gates", help="Gates policy registry tools.")
     gates_subparsers = gates_parser.add_subparsers(dest="gates_command", required=True)
     gates_list_parser = gates_subparsers.add_parser("list", help="List gates policy IDs.")
@@ -3950,6 +3969,13 @@ def main(argv: list[str] | None = None) -> int:
                 project_dir=Path(args.project_dir),
                 out_path=Path(args.out),
                 include_wavs=bool(getattr(args, "include_wavs", False)),
+                force=bool(getattr(args, "force", False)),
+            )
+
+        if args.project_command == "render-init":
+            return _run_project_render_init(
+                project_dir=Path(args.project_dir),
+                target_layout=args.target_layout,
                 force=bool(getattr(args, "force", False)),
             )
 
