@@ -2830,6 +2830,36 @@ def main(argv: list[str] | None = None) -> int:
         help="Overwrite output file if it already exists.",
     )
 
+    render_compat_parser = subparsers.add_parser(
+        "render-compat",
+        help="Validate deterministic compatibility across render request/plan/report artifacts.",
+    )
+    render_compat_parser.add_argument(
+        "--request",
+        required=True,
+        help="Path to render_request JSON.",
+    )
+    render_compat_parser.add_argument(
+        "--plan",
+        required=True,
+        help="Path to render_plan JSON.",
+    )
+    render_compat_parser.add_argument(
+        "--report",
+        default=None,
+        help="Optional path to render_report JSON.",
+    )
+    render_compat_parser.add_argument(
+        "--out",
+        default=None,
+        help="Optional path to output render compatibility JSON.",
+    )
+    render_compat_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite output file if it already exists.",
+    )
+
     render_run_parser = subparsers.add_parser(
         "render-run",
         help=(
@@ -5433,6 +5463,80 @@ def main(argv: list[str] | None = None) -> int:
             )
             _write_json_file(out_path, report_payload)
             return 0
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+    if args.command == "render-compat":
+        out_path = Path(args.out) if getattr(args, "out", None) else None
+        if out_path is not None and out_path.exists() and not args.force:
+            print(
+                f"File exists (use --force to overwrite): {out_path.as_posix()}",
+                file=sys.stderr,
+            )
+            return 1
+        try:
+            request_payload = _load_json_object(
+                Path(args.request),
+                label="Render request",
+            )
+            _validate_json_payload(
+                request_payload,
+                schema_path=schemas /"render_request.schema.json",
+                payload_name="Render request",
+            )
+
+            plan_payload = _load_json_object(
+                Path(args.plan),
+                label="Render plan",
+            )
+            _validate_json_payload(
+                plan_payload,
+                schema_path=schemas /"render_plan.schema.json",
+                payload_name="Render plan",
+            )
+
+            report_payload: dict[str, Any] | None = None
+            if args.report:
+                report_payload = _load_json_object(
+                    Path(args.report),
+                    label="Render report",
+                )
+                _validate_json_payload(
+                    report_payload,
+                    schema_path=schemas /"render_report.schema.json",
+                    payload_name="Render report",
+                )
+
+            from mmo.core.render_compat import (  # noqa: WPS433
+                validate_plan_report_compat,
+                validate_request_plan_compat,
+            )
+
+            issues = validate_request_plan_compat(request_payload, plan_payload)
+            if report_payload is not None:
+                issues.extend(validate_plan_report_compat(plan_payload, report_payload))
+            issues.sort(
+                key=lambda item: (
+                    _coerce_str(item.get("severity")).strip(),
+                    _coerce_str(item.get("issue_id")).strip(),
+                    _coerce_str(item.get("message")).strip(),
+                )
+            )
+
+            payload = {"issues": issues}
+            if out_path is None:
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                _write_json_file(out_path, payload)
+
+            has_errors = any(
+                _coerce_str(item.get("severity")).strip() == "error"
+                for item in issues
+                if isinstance(item, dict)
+            )
+            return 2 if has_errors else 0
         except (RuntimeError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 1
