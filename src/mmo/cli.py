@@ -2271,6 +2271,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Also write renders/event_log.jsonl.",
     )
     project_render_run_parser.add_argument(
+        "--preflight",
+        action="store_true",
+        help="Also write renders/render_preflight.json.",
+    )
+    project_render_run_parser.add_argument(
+        "--preflight-force",
+        action="store_true",
+        help="Overwrite existing renders/render_preflight.json when --preflight is used.",
+    )
+    project_render_run_parser.add_argument(
         "--event-log-force",
         action="store_true",
         help="Overwrite existing renders/event_log.jsonl when --event-log is used.",
@@ -3122,6 +3132,16 @@ def main(argv: list[str] | None = None) -> int:
         "--report-out",
         required=True,
         help="Path to output render_report JSON.",
+    )
+    render_run_parser.add_argument(
+        "--preflight-out",
+        default=None,
+        help="Optional path to output render_preflight JSON.",
+    )
+    render_run_parser.add_argument(
+        "--preflight-force",
+        action="store_true",
+        help="Overwrite preflight output file if it already exists.",
     )
     render_run_parser.add_argument(
         "--force",
@@ -4437,6 +4457,8 @@ def main(argv: list[str] | None = None) -> int:
                     project_dir=Path(args.project_dir),
                     force=bool(getattr(args, "force", False)),
                     event_log=bool(getattr(args, "event_log", False)),
+                    preflight=bool(getattr(args, "preflight", False)),
+                    preflight_force=bool(getattr(args, "preflight_force", False)),
                     event_log_force=bool(getattr(args, "event_log_force", False)),
                 )
             except (RuntimeError, ValueError) as exc:
@@ -6104,6 +6126,12 @@ def main(argv: list[str] | None = None) -> int:
                     else None
                 ),
                 event_log_force=bool(getattr(args, "event_log_force", False)),
+                preflight_out_path=(
+                    Path(args.preflight_out)
+                    if getattr(args, "preflight_out", None)
+                    else None
+                ),
+                preflight_force=bool(getattr(args, "preflight_force", False)),
             )
         except (RuntimeError, ValueError) as exc:
             print(str(exc), file=sys.stderr)

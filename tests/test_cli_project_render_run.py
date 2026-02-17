@@ -7,6 +7,7 @@ import os
 import unittest
 import wave
 from pathlib import Path
+from unittest.mock import patch
 
 import jsonschema
 from referencing import Registry, Resource
@@ -78,6 +79,8 @@ def _run_project_render_run(
     *,
     force: bool = False,
     event_log: bool = False,
+    preflight: bool = False,
+    preflight_force: bool = False,
     event_log_force: bool = False,
 ) -> tuple[int, str, str]:
     args = [
@@ -87,6 +90,10 @@ def _run_project_render_run(
         args.append("--force")
     if event_log:
         args.append("--event-log")
+    if preflight:
+        args.append("--preflight")
+    if preflight_force:
+        args.append("--preflight-force")
     if event_log_force:
         args.append("--event-log-force")
     return _run_main(args)
@@ -239,6 +246,156 @@ class TestProjectRenderRunOverwrite(unittest.TestCase):
         )
         self.assertEqual(exit_allowed, 0, msg=stderr_allowed)
         self.assertTrue(event_log_path.is_file())
+
+
+class TestProjectRenderRunPreflight(unittest.TestCase):
+
+    def test_writes_allowlisted_preflight_artifact_when_requested(self) -> None:
+        preflight_validator = _schema_validator("render_preflight.schema.json")
+        project_dir = _init_project(_SANDBOX / "preflight_happy")
+        _project_render_init(project_dir)
+
+        preflight_path = project_dir / "renders" / "render_preflight.json"
+        exit_code, stdout, stderr = _run_project_render_run(
+            project_dir,
+            preflight=True,
+        )
+        self.assertEqual(exit_code, 0, msg=stderr)
+        self.assertTrue(preflight_path.is_file())
+
+        payload = json.loads(preflight_path.read_text(encoding="utf-8"))
+        preflight_validator.validate(payload)
+        self.assertNotIn("\\", payload.get("plan_path", ""))
+        summary = json.loads(stdout)
+        self.assertIn(preflight_path.resolve().as_posix(), summary["paths_written"])
+
+    def test_preflight_bytes_are_deterministic(self) -> None:
+        project_dir = _init_project(_SANDBOX / "preflight_determinism")
+        _project_render_init(project_dir)
+        preflight_path = project_dir / "renders" / "render_preflight.json"
+
+        exit_a, stdout_a, stderr_a = _run_project_render_run(
+            project_dir,
+            preflight=True,
+        )
+        self.assertEqual(exit_a, 0, msg=stderr_a)
+        preflight_bytes_a = preflight_path.read_bytes()
+
+        exit_b, stdout_b, stderr_b = _run_project_render_run(
+            project_dir,
+            force=True,
+            preflight=True,
+            preflight_force=True,
+        )
+        self.assertEqual(exit_b, 0, msg=stderr_b)
+        preflight_bytes_b = preflight_path.read_bytes()
+
+        self.assertEqual(stdout_a, stdout_b)
+        self.assertEqual(preflight_bytes_a, preflight_bytes_b)
+
+    def test_preflight_overwrite_requires_preflight_force(self) -> None:
+        project_dir = _init_project(_SANDBOX / "preflight_overwrite")
+        _project_render_init(project_dir)
+        preflight_path = project_dir / "renders" / "render_preflight.json"
+
+        exit_first, _, stderr_first = _run_project_render_run(
+            project_dir,
+            preflight=True,
+        )
+        self.assertEqual(exit_first, 0, msg=stderr_first)
+        preflight_bytes_first = preflight_path.read_bytes()
+
+        exit_refused, _, stderr_refused = _run_project_render_run(
+            project_dir,
+            force=True,
+            preflight=True,
+        )
+        self.assertEqual(exit_refused, 1)
+        self.assertIn("File exists", stderr_refused)
+        self.assertIn("--preflight-force", stderr_refused)
+        self.assertEqual(preflight_bytes_first, preflight_path.read_bytes())
+
+        exit_forced, _, stderr_forced = _run_project_render_run(
+            project_dir,
+            force=True,
+            preflight=True,
+            preflight_force=True,
+        )
+        self.assertEqual(exit_forced, 0, msg=stderr_forced)
+        self.assertTrue(preflight_path.is_file())
+
+    def test_preflight_force_requires_preflight_flag(self) -> None:
+        project_dir = _init_project(_SANDBOX / "preflight_force_requires")
+        _project_render_init(project_dir)
+
+        exit_code, _, stderr = _run_project_render_run(
+            project_dir,
+            preflight_force=True,
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertIn("--preflight-force requires --preflight", stderr)
+
+    def test_preflight_errors_exit_two_and_skip_report_and_event_log(self) -> None:
+        project_dir = _init_project(_SANDBOX / "preflight_error_gate")
+        _project_render_init(project_dir)
+        plan_path = project_dir / "renders" / "render_plan.json"
+        preflight_path = project_dir / "renders" / "render_preflight.json"
+        report_path = project_dir / "renders" / "render_report.json"
+        event_log_path = project_dir / "renders" / "event_log.jsonl"
+
+        fake_preflight_payload = {
+            "schema_version": "0.1.0",
+            "plan_path": plan_path.resolve().as_posix(),
+            "plan_id": "PLAN.render.preflight.abcdef01",
+            "checks": [
+                {
+                    "job_id": "JOB.001",
+                    "input_count": 1,
+                    "status": "error",
+                    "input_checks": [
+                        {
+                            "path": "missing/input.wav",
+                            "role": "scene",
+                            "exists": False,
+                            "is_file": False,
+                            "ffprobe": {
+                                "status": "skipped",
+                                "reason": "input path does not exist",
+                            },
+                        }
+                    ],
+                }
+            ],
+            "issues": [
+                {
+                    "issue_id": "ISSUE.RENDER.PREFLIGHT.INPUT_MISSING",
+                    "severity": "error",
+                    "message": "Input path does not exist.",
+                    "evidence": {
+                        "job_id": "JOB.001",
+                        "path": "missing/input.wav",
+                        "role": "scene",
+                    },
+                }
+            ],
+        }
+
+        with patch(
+            "mmo.core.render_preflight.build_render_preflight_payload",
+            return_value=fake_preflight_payload,
+        ):
+            exit_code, stdout, stderr = _run_project_render_run(
+                project_dir,
+                preflight=True,
+                event_log=True,
+            )
+
+        self.assertEqual(exit_code, 2, msg=stderr)
+        self.assertEqual(stdout, "")
+        self.assertTrue(plan_path.is_file())
+        self.assertTrue(preflight_path.is_file())
+        self.assertFalse(report_path.exists())
+        self.assertFalse(event_log_path.exists())
 
 
 class TestProjectRenderRunForwardSlashPaths(unittest.TestCase):

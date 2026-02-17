@@ -747,8 +747,14 @@ def _run_render_run_command(
     force: bool,
     event_log_out_path: Path | None,
     event_log_force: bool,
+    preflight_out_path: Path | None = None,
+    preflight_force: bool = False,
 ) -> int:
     from mmo.core.render_reporting import build_render_report_from_plan  # noqa: WPS433
+
+    if preflight_force and preflight_out_path is None:
+        print("--preflight-force requires --preflight-out.", file=sys.stderr)
+        return 1
 
     # -- overwrite guard -------------------------------------------------------
     for out_path, label in (
@@ -771,6 +777,20 @@ def _run_render_run_command(
             (
                 "File exists (use --event-log-force to overwrite): "
                 f"{event_log_out_path.as_posix()}"
+            ),
+            file=sys.stderr,
+        )
+        return 1
+
+    if (
+        preflight_out_path is not None
+        and preflight_out_path.exists()
+        and not preflight_force
+    ):
+        print(
+            (
+                "File exists (use --preflight-force to overwrite): "
+                f"{preflight_out_path.as_posix()}"
             ),
             file=sys.stderr,
         )
@@ -845,6 +865,26 @@ def _run_render_run_command(
         schema_path=schemas_dir() /"render_plan.schema.json",
         payload_name="Render plan",
     )
+    _write_json_file(plan_out_path, render_plan_payload)
+
+    if preflight_out_path is not None:
+        from mmo.core.render_preflight import (  # noqa: WPS433
+            build_render_preflight_payload,
+            preflight_has_error_issues,
+        )
+
+        render_preflight_payload = build_render_preflight_payload(
+            render_plan_payload,
+            plan_path=plan_out_path,
+        )
+        _validate_json_payload(
+            render_preflight_payload,
+            schema_path=schemas_dir() / "render_preflight.schema.json",
+            payload_name="Render preflight",
+        )
+        _write_json_file(preflight_out_path, render_preflight_payload)
+        if preflight_has_error_issues(render_preflight_payload):
+            return 2
 
     # -- build report ----------------------------------------------------------
     render_report_payload = build_render_report_from_plan(
@@ -859,7 +899,6 @@ def _run_render_run_command(
     )
 
     # -- write outputs ---------------------------------------------------------
-    _write_json_file(plan_out_path, render_plan_payload)
     _write_json_file(report_out_path, render_report_payload)
 
     # -- optional event log ----------------------------------------------------

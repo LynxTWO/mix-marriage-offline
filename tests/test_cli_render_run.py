@@ -4,6 +4,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 import jsonschema
 from referencing import Registry, Resource
@@ -303,6 +304,165 @@ class TestRenderRunDeterminism(unittest.TestCase):
             self.assertEqual(parsed1["plan_id"], parsed2["plan_id"])
             self.assertEqual(parsed1["jobs"], parsed2["jobs"])
             self.assertEqual(parsed1["targets"], parsed2["targets"])
+
+
+class TestRenderRunPreflight(unittest.TestCase):
+    def test_preflight_bytes_are_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            preflight_a = temp_path / "preflight_a.json"
+            preflight_b = temp_path / "preflight_b.json"
+
+            exit_a, _, stderr_a, _, _ = _run_render_run(
+                temp_path,
+                extra_args=[
+                    "--preflight-out", str(preflight_a),
+                ],
+            )
+            exit_b, _, stderr_b, _, _ = _run_render_run(
+                temp_path,
+                extra_args=[
+                    "--preflight-out", str(preflight_b),
+                    "--force",
+                ],
+            )
+
+            self.assertEqual(exit_a, 0, msg=stderr_a)
+            self.assertEqual(exit_b, 0, msg=stderr_b)
+            self.assertTrue(preflight_a.exists())
+            self.assertTrue(preflight_b.exists())
+            self.assertEqual(preflight_a.read_bytes(), preflight_b.read_bytes())
+
+    def test_preflight_overwrite_requires_preflight_force(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            preflight_out = temp_path / "render_preflight.json"
+            preflight_out.write_text(
+                json.dumps({"existing": True}, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            existing_bytes = preflight_out.read_bytes()
+
+            exit_refused, _, stderr_refused, _, _ = _run_render_run(
+                temp_path,
+                extra_args=[
+                    "--preflight-out", str(preflight_out),
+                ],
+            )
+            self.assertEqual(exit_refused, 1)
+            self.assertIn("File exists", stderr_refused)
+            self.assertIn("--preflight-force", stderr_refused)
+            self.assertEqual(existing_bytes, preflight_out.read_bytes())
+
+            exit_allowed, _, stderr_allowed, _, _ = _run_render_run(
+                temp_path,
+                extra_args=[
+                    "--preflight-out", str(preflight_out),
+                    "--preflight-force",
+                ],
+            )
+            self.assertEqual(exit_allowed, 0, msg=stderr_allowed)
+            self.assertNotEqual(existing_bytes, preflight_out.read_bytes())
+
+    def test_preflight_force_requires_preflight_out(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            exit_code, _, stderr, _, _ = _run_render_run(
+                temp_path,
+                extra_args=["--preflight-force"],
+            )
+            self.assertEqual(exit_code, 1)
+            self.assertIn("--preflight-force requires --preflight-out", stderr)
+
+    def test_preflight_error_issues_exit_two_and_skip_report_and_event_log(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            preflight_out = temp_path / "render_preflight.json"
+            event_log_out = temp_path / "event_log.jsonl"
+
+            fake_preflight_payload = {
+                "schema_version": "0.1.0",
+                "plan_path": (temp_path / "render_plan.json").resolve().as_posix(),
+                "plan_id": "PLAN.render.preflight.abcdef01",
+                "checks": [
+                    {
+                        "job_id": "JOB.001",
+                        "input_count": 1,
+                        "status": "error",
+                        "input_checks": [
+                            {
+                                "path": "missing/input.wav",
+                                "role": "scene",
+                                "exists": False,
+                                "is_file": False,
+                                "ffprobe": {
+                                    "status": "skipped",
+                                    "reason": "input path does not exist",
+                                },
+                            }
+                        ],
+                    }
+                ],
+                "issues": [
+                    {
+                        "issue_id": "ISSUE.RENDER.PREFLIGHT.INPUT_MISSING",
+                        "severity": "error",
+                        "message": "Input path does not exist.",
+                        "evidence": {
+                            "job_id": "JOB.001",
+                            "path": "missing/input.wav",
+                            "role": "scene",
+                        },
+                    }
+                ],
+            }
+
+            with patch(
+                "mmo.core.render_preflight.build_render_preflight_payload",
+                return_value=fake_preflight_payload,
+            ):
+                exit_code, stdout, stderr, plan_out, report_out = _run_render_run(
+                    temp_path,
+                    extra_args=[
+                        "--preflight-out", str(preflight_out),
+                        "--event-log-out", str(event_log_out),
+                    ],
+                )
+
+            self.assertEqual(exit_code, 2, msg=stderr)
+            self.assertEqual(stdout, "")
+            self.assertTrue(plan_out.exists())
+            self.assertTrue(preflight_out.exists())
+            self.assertFalse(report_out.exists())
+            self.assertFalse(event_log_out.exists())
+
+    def test_preflight_payload_paths_use_forward_slashes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            preflight_out = temp_path / "render_preflight.json"
+
+            exit_code, _, stderr, _, _ = _run_render_run(
+                temp_path,
+                extra_args=[
+                    "--preflight-out", str(preflight_out),
+                ],
+            )
+            self.assertEqual(exit_code, 0, msg=stderr)
+
+            payload = json.loads(preflight_out.read_text(encoding="utf-8"))
+            self.assertNotIn("\\", payload.get("plan_path", ""))
+            for job_check in payload.get("checks", []):
+                if not isinstance(job_check, dict):
+                    continue
+                for input_check in job_check.get("input_checks", []):
+                    if isinstance(input_check, dict):
+                        self.assertNotIn("\\", str(input_check.get("path", "")))
+            for issue in payload.get("issues", []):
+                if not isinstance(issue, dict):
+                    continue
+                evidence = issue.get("evidence")
+                if isinstance(evidence, dict):
+                    self.assertNotIn("\\", str(evidence.get("path", "")))
 
 
 class TestRenderRunEventLog(unittest.TestCase):

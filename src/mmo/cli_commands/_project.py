@@ -956,12 +956,18 @@ def _run_project_render_run(
     project_dir: Path,
     force: bool,
     event_log: bool,
-    event_log_force: bool,
+    event_log_force: bool = False,
+    preflight: bool = False,
+    preflight_force: bool = False,
 ) -> int:
     """Run deterministic render-run using project-standard scaffold paths."""
     validate_exit = _validate_required_project_artifacts(project_dir)
     if validate_exit != 0:
         return validate_exit
+
+    if preflight_force and not preflight:
+        print("--preflight-force requires --preflight.", file=sys.stderr)
+        return 1
 
     request_path = project_dir / "renders" / "render_request.json"
     scene_path = project_dir / "drafts" / "scene.draft.json"
@@ -970,6 +976,9 @@ def _run_project_render_run(
     event_log_out_path: Path | None = None
     if event_log:
         event_log_out_path = project_dir / "renders" / "event_log.jsonl"
+    preflight_out_path: Path | None = None
+    if preflight:
+        preflight_out_path = project_dir / "renders" / "render_preflight.json"
 
     request_payload = _load_json_object(request_path, label="Render request")
     _validate_json_payload(
@@ -997,6 +1006,8 @@ def _run_project_render_run(
             force=force,
             event_log_out_path=event_log_out_path,
             event_log_force=event_log_force,
+            preflight_out_path=preflight_out_path,
+            preflight_force=preflight_force,
         )
     if exit_code != 0:
         return exit_code
@@ -1022,6 +1033,8 @@ def _run_project_render_run(
     ]
     if event_log_out_path is not None:
         paths_written.append(event_log_out_path.resolve().as_posix())
+    if preflight_out_path is not None:
+        paths_written.append(preflight_out_path.resolve().as_posix())
 
     summary: dict[str, Any] = {
         "job_count": job_count,
