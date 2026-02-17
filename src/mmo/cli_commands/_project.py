@@ -73,6 +73,41 @@ _PROJECT_BUNDLE_REQUIRED: frozenset[str] = frozenset(
 )
 
 
+def _coerce_str(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    return ""
+
+
+def _load_json_object_if_exists(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _render_compat_issue_sort_key(issue: dict[str, Any]) -> tuple[str, str, str, str]:
+    try:
+        evidence = json.dumps(
+            issue.get("evidence", {}),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    except TypeError:
+        evidence = "{}"
+    return (
+        _coerce_str(issue.get("severity")).strip(),
+        _coerce_str(issue.get("issue_id")).strip(),
+        _coerce_str(issue.get("message")).strip(),
+        evidence,
+    )
+
+
 def _validate_one_check(
     project_dir: Path,
     schemas_dir: Path,
@@ -214,7 +249,8 @@ def _run_project_validate(
     *,
     project_dir: Path,
     out_path: Path | None,
-    repo_root: Path,
+    repo_root: Path | None,
+    render_compat: bool = False,
 ) -> int:
     """Run project validate and print/write the result. Returns exit code."""
     schemas_dir = _schemas_dir_fn()
@@ -235,6 +271,7 @@ def _run_project_validate(
         c["status"] == "missing" and c["required"] for c in checks
     )
     ok = invalid_count == 0 and not has_missing_required
+    has_compat_errors = False
 
     result: dict[str, Any] = {
         "ok": ok,
@@ -248,6 +285,36 @@ def _run_project_validate(
         },
     }
 
+    if render_compat:
+        issues: list[dict[str, Any]] = []
+        render_request_path = project_dir / "renders" / "render_request.json"
+        render_plan_path = project_dir / "renders" / "render_plan.json"
+        render_report_path = project_dir / "renders" / "render_report.json"
+
+        request_payload = _load_json_object_if_exists(render_request_path)
+        plan_payload = _load_json_object_if_exists(render_plan_path)
+        report_payload = _load_json_object_if_exists(render_report_path)
+
+        if request_payload is not None and plan_payload is not None:
+            from mmo.core.render_compat import (  # noqa: WPS433
+                validate_plan_report_compat,
+                validate_request_plan_compat,
+            )
+
+            issues.extend(validate_request_plan_compat(request_payload, plan_payload))
+            if report_payload is not None:
+                issues.extend(validate_plan_report_compat(plan_payload, report_payload))
+
+        issues = [item for item in issues if isinstance(item, dict)]
+        issues.sort(key=_render_compat_issue_sort_key)
+        has_compat_errors = any(
+            _coerce_str(item.get("severity")).strip() == "error"
+            for item in issues
+        )
+        if has_compat_errors:
+            result["ok"] = False
+        result["render_compat"] = {"issues": issues}
+
     output_text = json.dumps(result, indent=2, sort_keys=True) + "\n"
     sys.stdout.write(output_text)
 
@@ -255,7 +322,7 @@ def _run_project_validate(
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(output_text, encoding="utf-8")
 
-    return 0 if ok else 2
+    return 2 if (not result["ok"] or has_compat_errors) else 0
 
 
 def _validate_required_project_artifacts(project_dir: Path) -> int:

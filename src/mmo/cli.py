@@ -2062,6 +2062,14 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Optional path to write validation result JSON.",
     )
+    project_validate_parser.add_argument(
+        "--render-compat",
+        action="store_true",
+        help=(
+            "Also validate render_request/render_plan/render_report compatibility "
+            "when corresponding files exist."
+        ),
+    )
 
     project_bundle_parser = project_subparsers.add_parser(
         "bundle",
@@ -4124,6 +4132,7 @@ def main(argv: list[str] | None = None) -> int:
                 project_dir=Path(args.project_dir),
                 out_path=Path(args.out) if args.out else None,
                 repo_root=None,
+                render_compat=bool(getattr(args, "render_compat", False)),
             )
 
         if args.project_command == "bundle":

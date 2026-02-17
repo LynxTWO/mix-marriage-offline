@@ -84,6 +84,7 @@ class TestProjectValidateHappyPath(unittest.TestCase):
         result = json.loads(stdout)
         self.assertIsInstance(result, dict)
         self.assertTrue(result["ok"])
+        self.assertNotIn("render_compat", result)
 
     def test_all_required_files_valid(self) -> None:
         _, stdout, _ = _run_main([
@@ -333,6 +334,105 @@ class TestProjectValidateRenderPlanInvalid(unittest.TestCase):
         self.assertGreater(len(bad_check["errors"]), 0)
         # Deterministic: identical output across runs.
         self.assertEqual(stdout_a, stdout_b)
+
+
+class TestProjectValidateRenderCompatFlag(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.project_dir = _init_project(_SANDBOX / "render_compat_flag")
+        renders_dir = cls.project_dir / "renders"
+        renders_dir.mkdir(parents=True, exist_ok=True)
+        _write_json(renders_dir / "render_request.json", {
+            "schema_version": "0.1.0",
+            "target_layout_id": "LAYOUT.2_0",
+            "scene_path": "scenes/test/request_scene.json",
+        })
+        _write_json(renders_dir / "render_plan.json", {
+            "schema_version": "0.1.0",
+            "plan_id": "PLAN.test.compat.0001",
+            "scene_path": "scenes/test/plan_scene.json",
+            "targets": ["TARGET.STEREO.2_0"],
+            "policies": {},
+            "jobs": [
+                {
+                    "job_id": "JOB.001",
+                    "target_id": "TARGET.STEREO.2_0",
+                    "target_layout_id": "LAYOUT.2_0",
+                    "output_formats": ["wav"],
+                    "contexts": ["render"],
+                    "notes": ["compat test job"],
+                },
+            ],
+            "request": {
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": "scenes/test/plan_scene.json",
+            },
+        })
+        _write_json(renders_dir / "render_report.json", {
+            "schema_version": "0.1.0",
+            "request": {
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": "scenes/test/report_scene.json",
+            },
+            "jobs": [
+                {
+                    "job_id": "JOB.001",
+                    "status": "skipped",
+                    "output_files": [],
+                    "notes": ["reason: dry_run", "target_layout_id: LAYOUT.2_0"],
+                },
+            ],
+            "policies_applied": {
+                "downmix_policy_id": None,
+                "gates_policy_id": None,
+                "matrix_id": None,
+            },
+            "qa_gates": {"status": "not_run", "gates": []},
+        })
+
+    def test_render_compat_flag_adds_issues_and_is_deterministic(self) -> None:
+        exit_code_a, stdout_a, stderr_a = _run_main([
+            "project", "validate", str(self.project_dir), "--render-compat",
+        ])
+        exit_code_b, stdout_b, stderr_b = _run_main([
+            "project", "validate", str(self.project_dir), "--render-compat",
+        ])
+        self.assertEqual(exit_code_a, 2, msg=stderr_a)
+        self.assertEqual(exit_code_b, 2, msg=stderr_b)
+        self.assertEqual(stdout_a, stdout_b)
+
+        result = json.loads(stdout_a)
+        self.assertIn("render_compat", result)
+        compat = result.get("render_compat")
+        self.assertIsInstance(compat, dict)
+        if not isinstance(compat, dict):
+            return
+        issues = compat.get("issues")
+        self.assertIsInstance(issues, list)
+        if not isinstance(issues, list):
+            return
+        self.assertGreater(len(issues), 0)
+
+        issue_sort_tuples = [
+            (
+                issue.get("severity"),
+                issue.get("issue_id"),
+                issue.get("message"),
+                json.dumps(issue.get("evidence", {}), sort_keys=True, separators=(",", ":")),
+            )
+            for issue in issues
+            if isinstance(issue, dict)
+        ]
+        self.assertEqual(issue_sort_tuples, sorted(issue_sort_tuples))
+
+        issue_ids = [
+            issue.get("issue_id")
+            for issue in issues
+            if isinstance(issue, dict)
+        ]
+        self.assertIn("ISSUE.RENDER.COMPAT.PLAN_REQUEST_SCENE_PATH_MISMATCH", issue_ids)
+        self.assertIn("ISSUE.RENDER.COMPAT.PLAN_REPORT_LINK_MISMATCH", issue_ids)
 
 
 class TestProjectValidateEventLogInvalid(unittest.TestCase):
