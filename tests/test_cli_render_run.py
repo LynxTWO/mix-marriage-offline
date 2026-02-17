@@ -145,6 +145,15 @@ def _run_render_run(
     return exit_code, stdout_capture.getvalue(), stderr_capture.getvalue(), plan_out, report_out
 
 
+def _read_jsonl(path: Path) -> list[dict]:
+    lines = [
+        line
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    return [json.loads(line) for line in lines]
+
+
 class TestRenderRunHappyPath(unittest.TestCase):
     def test_produces_schema_valid_plan_and_report(self) -> None:
         plan_validator = _schema_validator("render_plan.schema.json")
@@ -294,6 +303,143 @@ class TestRenderRunDeterminism(unittest.TestCase):
             self.assertEqual(parsed1["plan_id"], parsed2["plan_id"])
             self.assertEqual(parsed1["jobs"], parsed2["jobs"])
             self.assertEqual(parsed1["targets"], parsed2["targets"])
+
+
+class TestRenderRunEventLog(unittest.TestCase):
+    def test_writes_schema_valid_event_log_when_requested(self) -> None:
+        event_validator = _schema_validator("event.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            event_log_out = temp_path / "render_events.jsonl"
+            exit_code, _, stderr, plan_out, _ = _run_render_run(
+                temp_path,
+                extra_args=[
+                    "--event-log-out", str(event_log_out),
+                ],
+            )
+
+            self.assertEqual(exit_code, 0, msg=stderr)
+            self.assertTrue(event_log_out.exists())
+
+            events = _read_jsonl(event_log_out)
+            self.assertEqual(len(events), 4)
+            for event in events:
+                event_validator.validate(event)
+                for where_item in event.get("where", []):
+                    self.assertNotIn("\\", where_item)
+                evidence = event.get("evidence", {})
+                if isinstance(evidence, dict):
+                    for path_item in evidence.get("paths", []):
+                        self.assertNotIn("\\", path_item)
+
+            events_by_what = {
+                str(event.get("what", "")): event
+                for event in events
+            }
+            self.assertIn("render-run started", events_by_what)
+            self.assertIn("render plan built", events_by_what)
+            self.assertIn("render report built", events_by_what)
+            self.assertIn("render-run completed", events_by_what)
+
+            request_posix = (temp_path / "render_request.json").resolve().as_posix()
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            self.assertEqual(
+                events_by_what["render-run started"]["where"],
+                [request_posix, scene_posix],
+            )
+
+            plan_payload = json.loads(plan_out.read_text(encoding="utf-8"))
+            plan_event = events_by_what["render plan built"]
+            self.assertEqual(plan_event["where"], [plan_out.resolve().as_posix()])
+            plan_evidence = plan_event.get("evidence", {})
+            self.assertIn(plan_payload["plan_id"], plan_evidence.get("ids", []))
+            for target in sorted(plan_payload.get("targets", [])):
+                self.assertIn(target, plan_evidence.get("ids", []))
+            metrics = {
+                metric.get("name"): metric.get("value")
+                for metric in plan_evidence.get("metrics", [])
+                if isinstance(metric, dict)
+            }
+            self.assertEqual(metrics.get("job_count"), len(plan_payload.get("jobs", [])))
+
+            report_event = events_by_what["render report built"]
+            report_notes = report_event.get("evidence", {}).get("notes", [])
+            self.assertIn("status=skipped", report_notes)
+            self.assertIn("reason=dry_run", report_notes)
+
+    def test_event_log_bytes_are_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            event_log_a = temp_path / "events_a.jsonl"
+            event_log_b = temp_path / "events_b.jsonl"
+
+            exit_a, _, stderr_a, _, _ = _run_render_run(
+                temp_path,
+                extra_args=[
+                    "--event-log-out", str(event_log_a),
+                ],
+            )
+            exit_b, _, stderr_b, _, _ = _run_render_run(
+                temp_path,
+                extra_args=[
+                    "--event-log-out", str(event_log_b),
+                    "--force",
+                ],
+            )
+
+            self.assertEqual(exit_a, 0, msg=stderr_a)
+            self.assertEqual(exit_b, 0, msg=stderr_b)
+            self.assertEqual(event_log_a.read_bytes(), event_log_b.read_bytes())
+
+    def test_event_log_overwrite_requires_event_log_force(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            event_log_out = temp_path / "events.jsonl"
+
+            exit_first, _, stderr_first, _, _ = _run_render_run(
+                temp_path,
+                extra_args=[
+                    "--event-log-out", str(event_log_out),
+                ],
+            )
+            self.assertEqual(exit_first, 0, msg=stderr_first)
+            first_bytes = event_log_out.read_bytes()
+
+            exit_refused, _, stderr_refused, _, _ = _run_render_run(
+                temp_path,
+                extra_args=[
+                    "--event-log-out", str(event_log_out),
+                    "--force",
+                ],
+            )
+            self.assertEqual(exit_refused, 1)
+            self.assertIn("--event-log-force", stderr_refused)
+            self.assertEqual(first_bytes, event_log_out.read_bytes())
+
+            exit_allowed, _, stderr_allowed, _, _ = _run_render_run(
+                temp_path,
+                extra_args=[
+                    "--event-log-out", str(event_log_out),
+                    "--force",
+                    "--event-log-force",
+                ],
+            )
+            self.assertEqual(exit_allowed, 0, msg=stderr_allowed)
+            self.assertTrue(event_log_out.exists())
+
+    def test_stdout_unchanged_when_event_log_flag_omitted(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            exit_code, stdout, stderr, _, _ = _run_render_run(temp_path)
+            self.assertEqual(exit_code, 0, msg=stderr)
+
+            self.assertNotIn("render-run started", stdout)
+            self.assertNotIn("render plan built", stdout)
+            self.assertNotIn("render report built", stdout)
+            self.assertNotIn("render-run completed", stdout)
+            parsed = json.loads(stdout)
+            self.assertIn("plan_id", parsed)
 
 
 class TestRenderRunOverwrite(unittest.TestCase):

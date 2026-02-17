@@ -17,6 +17,7 @@ from mmo.cli_commands._helpers import (
     _write_json_file,
 )
 from mmo.core.intent_params import load_intent_params, validate_scene_intent
+from mmo.core.event_log import new_event_id, write_event_log
 from mmo.core.registries.render_targets_registry import load_render_targets_registry
 from mmo.core.render_plan import build_render_plan
 from mmo.core.render_plan_bridge import render_plan_to_variant_plan
@@ -744,6 +745,8 @@ def _run_render_run_command(
     plan_out_path: Path,
     report_out_path: Path,
     force: bool,
+    event_log_out_path: Path | None,
+    event_log_force: bool,
 ) -> int:
     from mmo.core.render_reporting import build_render_report_from_plan  # noqa: WPS433
 
@@ -758,6 +761,20 @@ def _run_render_run_command(
                 file=sys.stderr,
             )
             return 1
+
+    if (
+        event_log_out_path is not None
+        and event_log_out_path.exists()
+        and not event_log_force
+    ):
+        print(
+            (
+                "File exists (use --event-log-force to overwrite): "
+                f"{event_log_out_path.as_posix()}"
+            ),
+            file=sys.stderr,
+        )
+        return 1
 
     # -- validate inputs -------------------------------------------------------
     request_payload = _load_json_object(request_path, label="Render request")
@@ -844,6 +861,110 @@ def _run_render_run_command(
     # -- write outputs ---------------------------------------------------------
     _write_json_file(plan_out_path, render_plan_payload)
     _write_json_file(report_out_path, render_report_payload)
+
+    # -- optional event log ----------------------------------------------------
+    if event_log_out_path is not None:
+        def _ordered_unique(values: list[str]) -> list[str]:
+            seen: set[str] = set()
+            ordered: list[str] = []
+            for value in values:
+                normalized = _coerce_str(value).strip()
+                if not normalized or normalized in seen:
+                    continue
+                seen.add(normalized)
+                ordered.append(normalized)
+            return ordered
+
+        plan_id = _coerce_str(render_plan_payload.get("plan_id")).strip()
+        jobs = render_plan_payload.get("jobs")
+        job_count = len(jobs) if isinstance(jobs, list) else 0
+
+        raw_targets = render_plan_payload.get("targets")
+        targets = sorted(
+            {
+                _coerce_str(item).strip()
+                for item in (raw_targets if isinstance(raw_targets, list) else [])
+                if _coerce_str(item).strip()
+            }
+        )
+
+        request_posix = request_path.resolve().as_posix()
+        scene_posix = scene_path.resolve().as_posix()
+        plan_out_posix = plan_out_path.resolve().as_posix()
+        report_out_posix = report_out_path.resolve().as_posix()
+
+        started_where = [request_posix, scene_posix]
+        if routing_plan_path is not None:
+            started_where.append(routing_plan_path.resolve().as_posix())
+        started_where = _ordered_unique(started_where)
+
+        plan_ids = [plan_id] if plan_id else []
+        plan_ids.extend(targets)
+        plan_ids = _ordered_unique(plan_ids)
+
+        completed_where = _ordered_unique([plan_out_posix, report_out_posix])
+
+        events: list[dict[str, Any]] = [
+            {
+                "kind": "info",
+                "scope": "render",
+                "what": "render-run started",
+                "why": "Validated render-run inputs for deterministic dry-run artifacts.",
+                "where": started_where,
+                "evidence": {
+                    "codes": ["RENDER.RUN.STARTED"],
+                    "paths": started_where,
+                },
+            },
+            {
+                "kind": "action",
+                "scope": "render",
+                "what": "render plan built",
+                "why": "Built deterministic render plan from request and scene inputs.",
+                "where": [plan_out_posix],
+                "evidence": {
+                    "codes": ["RENDER.RUN.PLAN_BUILT"],
+                    "ids": plan_ids,
+                    "paths": [plan_out_posix],
+                    "metrics": [{"name": "job_count", "value": job_count}],
+                },
+            },
+            {
+                "kind": "action",
+                "scope": "render",
+                "what": "render report built",
+                "why": "Built deterministic dry-run render report without audio rendering.",
+                "where": [report_out_posix],
+                "evidence": {
+                    "codes": ["RENDER.RUN.REPORT_BUILT"],
+                    "paths": [report_out_posix],
+                    "notes": ["status=skipped", "reason=dry_run"],
+                },
+            },
+            {
+                "kind": "info",
+                "scope": "render",
+                "what": "render-run completed",
+                "why": "Completed render-run dry-run artifact generation.",
+                "where": completed_where,
+                "evidence": {
+                    "codes": ["RENDER.RUN.COMPLETED"],
+                    "paths": completed_where,
+                },
+            },
+        ]
+
+        events_with_ids: list[dict[str, Any]] = []
+        for event in events:
+            event_payload = dict(event)
+            event_payload["event_id"] = new_event_id(event_payload)
+            events_with_ids.append(event_payload)
+
+        write_event_log(
+            events_with_ids,
+            event_log_out_path,
+            force=event_log_force,
+        )
 
     # -- deterministic stdout summary ------------------------------------------
     plan_id = render_plan_payload.get("plan_id", "")

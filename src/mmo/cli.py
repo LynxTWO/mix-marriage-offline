@@ -2899,6 +2899,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Overwrite output files if they already exist.",
     )
+    render_run_parser.add_argument(
+        "--event-log-out",
+        default=None,
+        help="Optional path to output event log JSONL.",
+    )
+    render_run_parser.add_argument(
+        "--event-log-force",
+        action="store_true",
+        help="Overwrite event log output file if it already exists.",
+    )
 
     timeline_parser = subparsers.add_parser("timeline", help="Timeline marker tools.")
     timeline_subparsers = timeline_parser.add_subparsers(
@@ -5593,6 +5603,12 @@ def main(argv: list[str] | None = None) -> int:
                 plan_out_path=Path(args.plan_out),
                 report_out_path=Path(args.report_out),
                 force=bool(getattr(args, "force", False)),
+                event_log_out_path=(
+                    Path(args.event_log_out)
+                    if getattr(args, "event_log_out", None)
+                    else None
+                ),
+                event_log_force=bool(getattr(args, "event_log_force", False)),
             )
         except (RuntimeError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
