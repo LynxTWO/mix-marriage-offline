@@ -1785,18 +1785,23 @@ def main(argv: list[str] | None = None) -> int:
 
     project_show_parser = project_subparsers.add_parser(
         "show",
-        help="Display one project file.",
+        help="Show deterministic, allowlisted project artifact metadata.",
+    )
+    project_show_parser.add_argument(
+        "project_dir",
+        nargs="?",
+        help="Path to the project directory.",
     )
     project_show_parser.add_argument(
         "--project",
-        required=True,
-        help="Path to a project JSON file.",
+        default=None,
+        help=argparse.SUPPRESS,
     )
     project_show_parser.add_argument(
         "--format",
         choices=["json", "text"],
-        default="text",
-        help="Output format for project display.",
+        default="json",
+        help="Output format for project show output.",
     )
 
     project_run_parser = project_subparsers.add_parser(
@@ -3696,16 +3701,50 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.project_command == "show":
-            try:
-                project_payload = load_project(Path(args.project))
-            except (RuntimeError, ValueError) as exc:
-                print(str(exc), file=sys.stderr)
+            legacy_project_path = getattr(args, "project", None)
+            project_dir_arg = getattr(args, "project_dir", None)
+            has_legacy_project = (
+                isinstance(legacy_project_path, str)
+                and bool(legacy_project_path.strip())
+            )
+            has_project_dir = (
+                isinstance(project_dir_arg, str)
+                and bool(project_dir_arg.strip())
+            )
+
+            if has_legacy_project and has_project_dir:
+                print(
+                    "Specify either <project_dir> or --project, not both.",
+                    file=sys.stderr,
+                )
                 return 1
-            if args.format == "json":
-                print(json.dumps(project_payload, indent=2, sort_keys=True))
-            else:
-                print(_render_project_text(project_payload))
-            return 0
+
+            if has_legacy_project:
+                try:
+                    project_payload = load_project(Path(legacy_project_path))
+                except (RuntimeError, ValueError) as exc:
+                    print(str(exc), file=sys.stderr)
+                    return 1
+                if args.format == "json":
+                    print(json.dumps(project_payload, indent=2, sort_keys=True))
+                else:
+                    print(_render_project_text(project_payload))
+                return 0
+
+            if not has_project_dir:
+                print(
+                    (
+                        "Missing project directory. Usage: "
+                        "mmo project show <project_dir> [--format json|text]."
+                    ),
+                    file=sys.stderr,
+                )
+                return 1
+
+            return _run_project_show(
+                project_dir=Path(project_dir_arg),
+                output_format=args.format,
+            )
 
         if args.project_command == "run":
             project_path = Path(args.project)

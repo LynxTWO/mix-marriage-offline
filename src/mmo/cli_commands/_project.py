@@ -30,6 +30,7 @@ __all__ = [
     "_run_project_pack",
     "_run_project_render_init",
     "_run_project_render_run",
+    "_run_project_show",
     "_run_project_validate",
 ]
 
@@ -73,6 +74,26 @@ _PROJECT_BUNDLE_REQUIRED: frozenset[str] = frozenset(
     }
 )
 
+_PROJECT_SHOW_ALLOWLIST: tuple[str, ...] = tuple(
+    sorted(
+        set(rel for rel, _, _ in _VALIDATE_CHECKS)
+        | set(_PROJECT_BUNDLE_ALLOWLIST)
+        | {"listen_pack.json"}
+    )
+)
+_PROJECT_SHOW_REQUIRED: frozenset[str] = frozenset(
+    {
+        rel
+        for rel, _, required in _VALIDATE_CHECKS
+        if required
+    }
+)
+_PROJECT_SHOW_SCHEMA_BY_ARTIFACT: dict[str, str | None] = {
+    rel: schema_basename
+    for rel, schema_basename, _ in _VALIDATE_CHECKS
+}
+_PROJECT_SHOW_SCHEMA_BY_ARTIFACT["listen_pack.json"] = "listen_pack.schema.json"
+
 
 def _coerce_str(value: Any) -> str:
     if isinstance(value, str):
@@ -107,6 +128,179 @@ def _render_compat_issue_sort_key(issue: dict[str, Any]) -> tuple[str, str, str,
         _coerce_str(issue.get("message")).strip(),
         evidence,
     )
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(65536)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _schema_version_from_schema_payload(
+    payload: dict[str, Any],
+) -> str | None:
+    properties = payload.get("properties")
+    if not isinstance(properties, dict):
+        return None
+    for key in ("schema_version", "version"):
+        raw_schema_version = properties.get(key)
+        if not isinstance(raw_schema_version, dict):
+            continue
+
+        schema_version = raw_schema_version.get("const")
+        if isinstance(schema_version, str) and schema_version.strip():
+            return schema_version.strip()
+
+        enum_values = raw_schema_version.get("enum")
+        if (
+            isinstance(enum_values, list)
+            and len(enum_values) == 1
+            and isinstance(enum_values[0], str)
+            and enum_values[0].strip()
+        ):
+            return enum_values[0].strip()
+    return None
+
+
+def _schema_version_for_basename(
+    *,
+    schema_basename: str,
+    schemas_dir: Path,
+) -> str | None:
+    schema_path = schemas_dir / schema_basename
+    if not schema_path.is_file():
+        return None
+    try:
+        payload = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return _schema_version_from_schema_payload(payload)
+
+
+def _build_project_show_payload(*, project_dir: Path) -> dict[str, Any]:
+    if not project_dir.exists():
+        raise ValueError(f"Project directory does not exist: {project_dir.as_posix()}")
+    if not project_dir.is_dir():
+        raise ValueError(f"Project path is not a directory: {project_dir.as_posix()}")
+
+    resolved_project_dir = project_dir.resolve()
+    schemas_dir = _schemas_dir_fn()
+
+    schema_versions: dict[str, str | None] = {}
+    for schema_basename in sorted(
+        {
+            schema_name
+            for schema_name in _PROJECT_SHOW_SCHEMA_BY_ARTIFACT.values()
+            if isinstance(schema_name, str) and schema_name.strip()
+        }
+    ):
+        schema_versions[schema_basename] = _schema_version_for_basename(
+            schema_basename=schema_basename,
+            schemas_dir=schemas_dir,
+        )
+
+    artifacts: list[dict[str, Any]] = []
+    artifact_markers: dict[str, str] = {}
+    for rel_path in _PROJECT_SHOW_ALLOWLIST:
+        full_path = resolved_project_dir / rel_path
+        exists = full_path.is_file()
+        sha256_hex: str | None = None
+        if exists:
+            try:
+                sha256_hex = _sha256_file(full_path)
+            except OSError as exc:
+                raise ValueError(
+                    (
+                        "Failed to read allowlisted project artifact: "
+                        f"{full_path.as_posix()}: {exc}"
+                    )
+                ) from exc
+
+        last_built_marker = f"sha256:{sha256_hex}" if sha256_hex else "missing"
+        artifact_markers[rel_path] = last_built_marker
+        artifacts.append(
+            {
+                "path": rel_path,
+                "absolute_path": full_path.as_posix(),
+                "required": rel_path in _PROJECT_SHOW_REQUIRED,
+                "schema": _PROJECT_SHOW_SCHEMA_BY_ARTIFACT.get(rel_path),
+                "exists": exists,
+                "sha256": sha256_hex,
+                "last_built_marker": last_built_marker,
+            }
+        )
+
+    marker_seed = (
+        "\n".join(
+            f"{rel_path}:{artifact_markers[rel_path]}"
+            for rel_path in _PROJECT_SHOW_ALLOWLIST
+        )
+        + "\n"
+    ).encode("utf-8")
+    project_marker = f"sha256:{hashlib.sha256(marker_seed).hexdigest()}"
+
+    return {
+        "project_dir": resolved_project_dir.as_posix(),
+        "schema_versions": schema_versions,
+        "artifacts": artifacts,
+        "last_built_markers": {
+            "project": project_marker,
+            "artifacts": artifact_markers,
+        },
+    }
+
+
+def _render_project_show_text(payload: dict[str, Any]) -> str:
+    lines: list[str] = []
+    project_dir = payload.get("project_dir", "")
+    lines.append(f"project_dir: {project_dir}")
+
+    markers = payload.get("last_built_markers")
+    if isinstance(markers, dict):
+        project_marker = markers.get("project")
+        if isinstance(project_marker, str):
+            lines.append(f"project_marker: {project_marker}")
+
+    lines.append("schema_versions:")
+    schema_versions = payload.get("schema_versions")
+    if isinstance(schema_versions, dict) and schema_versions:
+        for schema_basename in sorted(schema_versions.keys()):
+            raw_version = schema_versions.get(schema_basename)
+            version = raw_version if isinstance(raw_version, str) else "(unknown)"
+            lines.append(f"  {schema_basename}: {version}")
+    else:
+        lines.append("  (none)")
+
+    lines.append("artifacts:")
+    raw_artifacts = payload.get("artifacts")
+    if isinstance(raw_artifacts, list) and raw_artifacts:
+        for artifact in raw_artifacts:
+            if not isinstance(artifact, dict):
+                continue
+            rel_path = _coerce_str(artifact.get("path")).strip()
+            exists = bool(artifact.get("exists"))
+            exists_text = "true" if exists else "false"
+            sha256_hex = artifact.get("sha256")
+            sha256_text = sha256_hex if isinstance(sha256_hex, str) else "-"
+            marker = artifact.get("last_built_marker")
+            marker_text = marker if isinstance(marker, str) else "missing"
+            lines.append(
+                (
+                    f"  {rel_path}  exists={exists_text}  "
+                    f"sha256={sha256_text}  marker={marker_text}"
+                )
+            )
+    else:
+        lines.append("  (none)")
+
+    return "\n".join(lines)
 
 
 def _validate_one_check(
@@ -324,6 +518,29 @@ def _run_project_validate(
         out_path.write_text(output_text, encoding="utf-8")
 
     return 2 if (not result["ok"] or has_compat_errors) else 0
+
+
+def _run_project_show(
+    *,
+    project_dir: Path,
+    output_format: str,
+) -> int:
+    try:
+        payload = _build_project_show_payload(project_dir=project_dir)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    if output_format == "json":
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+
+    if output_format == "text":
+        print(_render_project_show_text(payload))
+        return 0
+
+    print(f"Unsupported format: {output_format}", file=sys.stderr)
+    return 2
 
 
 def _run_project_build_gui(
@@ -888,11 +1105,7 @@ def _run_project_bundle(
 
 
 # Allowlisted artifact relative paths eligible for packing.
-_PACK_ARTIFACTS: list[str] = [
-    rel for rel, _, _ in _VALIDATE_CHECKS
-] + [
-    "listen_pack.json",
-]
+_PACK_ARTIFACTS: list[str] = list(_PROJECT_SHOW_ALLOWLIST)
 
 # Fixed date_time for all zip entries (no real timestamps).
 _ZIP_DATE_TIME = (2000, 1, 1, 0, 0, 0)
