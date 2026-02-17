@@ -22,6 +22,7 @@ from mmo.resources import (
 )
 
 __all__ = [
+    "_run_project_build_gui",
     "_project_last_run_payload",
     "_project_run_config_defaults",
     "_render_project_text",
@@ -323,6 +324,206 @@ def _run_project_validate(
         out_path.write_text(output_text, encoding="utf-8")
 
     return 2 if (not result["ok"] or has_compat_errors) else 0
+
+
+def _run_project_build_gui(
+    *,
+    project_dir: Path,
+    pack_out_path: Path,
+    force: bool,
+    scan: bool,
+    scan_stems_dir: Path | None,
+    scan_out_path: Path | None,
+    event_log: bool,
+    event_log_force: bool,
+) -> int:
+    """Run deterministic project GUI build pipeline with explicit-safe flags."""
+    project_dir_resolved = project_dir.resolve()
+    bundle_out_path = project_dir / "ui_bundle.json"
+    validation_out_path = project_dir / "validation.json"
+    render_plan_path = project_dir / "renders" / "render_plan.json"
+    render_report_path = project_dir / "renders" / "render_report.json"
+    event_log_path = project_dir / "renders" / "event_log.jsonl"
+    default_scan_out_path = project_dir / "report.json"
+
+    if event_log_force and not event_log:
+        print("--event-log-force requires --event-log.", file=sys.stderr)
+        return 1
+
+    normalized_scan_out: Path | None = None
+    if scan:
+        if scan_stems_dir is None:
+            print("--scan requires --scan-stems.", file=sys.stderr)
+            return 1
+        if scan_out_path is None:
+            print("--scan requires --scan-out.", file=sys.stderr)
+            return 1
+        normalized_scan_out = scan_out_path.resolve()
+        expected_scan_out = default_scan_out_path.resolve()
+        if normalized_scan_out != expected_scan_out:
+            print(
+                (
+                    "--scan-out must be the allowlisted project report path: "
+                    f"{expected_scan_out.as_posix()}"
+                ),
+                file=sys.stderr,
+            )
+            return 1
+    else:
+        if scan_stems_dir is not None:
+            print("--scan-stems requires --scan.", file=sys.stderr)
+            return 1
+        if scan_out_path is not None:
+            print("--scan-out requires --scan.", file=sys.stderr)
+            return 1
+
+    blocked_force_paths: list[Path] = []
+    if scan and normalized_scan_out is not None and normalized_scan_out.exists() and not force:
+        blocked_force_paths.append(normalized_scan_out)
+    if render_plan_path.exists() and not force:
+        blocked_force_paths.append(render_plan_path)
+    if render_report_path.exists() and not force:
+        blocked_force_paths.append(render_report_path)
+    if bundle_out_path.exists() and not force:
+        blocked_force_paths.append(bundle_out_path)
+    if validation_out_path.exists() and not force:
+        blocked_force_paths.append(validation_out_path)
+    if pack_out_path.exists() and not force:
+        blocked_force_paths.append(pack_out_path)
+
+    blocked_event_log_path: Path | None = None
+    if event_log and event_log_path.exists() and not event_log_force:
+        blocked_event_log_path = event_log_path
+
+    if blocked_force_paths or blocked_event_log_path is not None:
+        for blocked_path in blocked_force_paths:
+            print(
+                f"File exists (use --force to overwrite): {blocked_path.as_posix()}",
+                file=sys.stderr,
+            )
+        if blocked_event_log_path is not None:
+            print(
+                (
+                    "File exists (use --event-log-force to overwrite): "
+                    f"{blocked_event_log_path.as_posix()}"
+                ),
+                file=sys.stderr,
+            )
+        return 1
+
+    step_rows: list[dict[str, Any]] = []
+    paths_written: list[str] = []
+
+    if scan:
+        from mmo.cli_commands._analysis import _run_scan  # noqa: WPS433
+
+        if normalized_scan_out is None or scan_stems_dir is None:
+            print("Scan configuration error.", file=sys.stderr)
+            return 1
+        scan_exit = _run_scan(
+            tools_dir=project_dir,
+            stems_dir=scan_stems_dir,
+            out_path=normalized_scan_out,
+            meters=None,
+            include_peak=False,
+        )
+        if scan_exit != 0:
+            return scan_exit
+        step_rows.append(
+            {
+                "name": "scan",
+                "out": normalized_scan_out.as_posix(),
+                "ran": True,
+                "stems_dir": scan_stems_dir.resolve().as_posix(),
+            }
+        )
+        paths_written.append(normalized_scan_out.as_posix())
+    else:
+        step_rows.append({"name": "scan", "ran": False})
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        render_run_exit = _run_project_render_run(
+            project_dir=project_dir,
+            force=force,
+            event_log=event_log,
+            event_log_force=event_log_force,
+        )
+    if render_run_exit != 0:
+        return render_run_exit
+    step_rows.append(
+        {
+            "event_log": event_log,
+            "name": "project-render-run",
+            "ran": True,
+        }
+    )
+    paths_written.append(render_plan_path.resolve().as_posix())
+    paths_written.append(render_report_path.resolve().as_posix())
+    if event_log:
+        paths_written.append(event_log_path.resolve().as_posix())
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        bundle_exit = _run_project_bundle(
+            project_dir=project_dir,
+            out_path=bundle_out_path,
+            force=force,
+        )
+    if bundle_exit != 0:
+        return bundle_exit
+    step_rows.append(
+        {
+            "name": "project-bundle",
+            "out": bundle_out_path.resolve().as_posix(),
+            "ran": True,
+        }
+    )
+    paths_written.append(bundle_out_path.resolve().as_posix())
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        validate_exit = _run_project_validate(
+            project_dir=project_dir,
+            out_path=validation_out_path,
+            repo_root=None,
+            render_compat=False,
+        )
+    if validate_exit != 0:
+        return validate_exit
+    step_rows.append(
+        {
+            "name": "project-validate",
+            "out": validation_out_path.resolve().as_posix(),
+            "ran": True,
+        }
+    )
+    paths_written.append(validation_out_path.resolve().as_posix())
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        pack_exit = _run_project_pack(
+            project_dir=project_dir,
+            out_path=pack_out_path,
+            include_wavs=False,
+            force=force,
+        )
+    if pack_exit != 0:
+        return pack_exit
+    step_rows.append(
+        {
+            "name": "project-pack",
+            "out": pack_out_path.resolve().as_posix(),
+            "ran": True,
+        }
+    )
+    paths_written.append(pack_out_path.resolve().as_posix())
+
+    summary: dict[str, Any] = {
+        "ok": True,
+        "pack_out": pack_out_path.resolve().as_posix(),
+        "paths_written": sorted(set(paths_written)),
+        "project_dir": project_dir_resolved.as_posix(),
+        "steps": step_rows,
+    }
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
 
 
 def _validate_required_project_artifacts(project_dir: Path) -> int:

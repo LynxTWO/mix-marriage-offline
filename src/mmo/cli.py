@@ -2114,6 +2114,50 @@ def main(argv: list[str] | None = None) -> int:
         help="Overwrite existing output zip.",
     )
 
+    project_build_gui_parser = project_subparsers.add_parser(
+        "build-gui",
+        help="Run deterministic GUI build pipeline for an existing project.",
+    )
+    project_build_gui_parser.add_argument(
+        "project_dir",
+        help="Path to the project scaffold directory.",
+    )
+    project_build_gui_parser.add_argument(
+        "--pack-out",
+        required=True,
+        help="Path to output project zip.",
+    )
+    project_build_gui_parser.add_argument(
+        "--scan",
+        action="store_true",
+        help="Run scan step before render/bundle/validate.",
+    )
+    project_build_gui_parser.add_argument(
+        "--scan-stems",
+        default=None,
+        help="Path to stems directory used by --scan.",
+    )
+    project_build_gui_parser.add_argument(
+        "--scan-out",
+        default=None,
+        help="Report output path for --scan (must be <project_dir>/report.json).",
+    )
+    project_build_gui_parser.add_argument(
+        "--event-log",
+        action="store_true",
+        help="Also write renders/event_log.jsonl during render-run step.",
+    )
+    project_build_gui_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite force-guarded outputs for this pipeline.",
+    )
+    project_build_gui_parser.add_argument(
+        "--event-log-force",
+        action="store_true",
+        help="Overwrite renders/event_log.jsonl when --event-log is used.",
+    )
+
     project_render_init_parser = project_subparsers.add_parser(
         "render-init",
         help="Create a render scaffold inside an existing project.",
@@ -4155,6 +4199,34 @@ def main(argv: list[str] | None = None) -> int:
                 include_wavs=bool(getattr(args, "include_wavs", False)),
                 force=bool(getattr(args, "force", False)),
             )
+
+        if args.project_command == "build-gui":
+            try:
+                return _run_project_build_gui(
+                    project_dir=Path(args.project_dir),
+                    pack_out_path=Path(args.pack_out),
+                    force=bool(getattr(args, "force", False)),
+                    scan=bool(getattr(args, "scan", False)),
+                    scan_stems_dir=(
+                        Path(args.scan_stems)
+                        if isinstance(getattr(args, "scan_stems", None), str)
+                        and args.scan_stems.strip()
+                        else None
+                    ),
+                    scan_out_path=(
+                        Path(args.scan_out)
+                        if isinstance(getattr(args, "scan_out", None), str)
+                        and args.scan_out.strip()
+                        else None
+                    ),
+                    event_log=bool(getattr(args, "event_log", False)),
+                    event_log_force=bool(getattr(args, "event_log_force", False)),
+                )
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
 
         if args.project_command == "render-init":
             has_single = args.target_layout is not None
