@@ -16,12 +16,16 @@ from mmo.cli_commands._helpers import (
 )
 from mmo.core.event_log import validate_event_log_jsonl
 from mmo.core.run_config import normalize_run_config
-from mmo.resources import schemas_dir as _schemas_dir_fn
+from mmo.resources import (
+    ontology_dir as _ontology_dir_fn,
+    schemas_dir as _schemas_dir_fn,
+)
 
 __all__ = [
     "_project_last_run_payload",
     "_project_run_config_defaults",
     "_render_project_text",
+    "_run_project_bundle",
     "_run_project_pack",
     "_run_project_render_init",
     "_run_project_render_run",
@@ -46,6 +50,27 @@ _VALIDATE_CHECKS: list[tuple[str, str | None, bool]] = [
     ("stems_auditions/manifest.json", "stems_audition_manifest.schema.json", False),
     ("ui_bundle.json", "ui_bundle.schema.json", False),
 ]
+
+_PROJECT_BUNDLE_ALLOWLIST: tuple[str, ...] = (
+    "report.json",
+    "listen_pack.json",
+    "stems/stems_index.json",
+    "stems/stems_map.json",
+    "drafts/scene.draft.json",
+    "drafts/routing_plan.draft.json",
+    "renders/render_request.json",
+    "renders/render_plan.json",
+    "renders/render_report.json",
+    "renders/event_log.jsonl",
+)
+
+_PROJECT_BUNDLE_REQUIRED: frozenset[str] = frozenset(
+    {
+        "report.json",
+        "stems/stems_index.json",
+        "stems/stems_map.json",
+    }
+)
 
 
 def _validate_one_check(
@@ -434,6 +459,81 @@ def _run_project_render_run(
 
 
 # ── project pack ─────────────────────────────────────────────────
+
+# ƒ"?ƒ"? project bundle ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?
+
+def _run_project_bundle(
+    *,
+    project_dir: Path,
+    out_path: Path,
+    force: bool,
+) -> int:
+    """Build ui_bundle.json from allowlisted project artifacts."""
+    if out_path.exists() and not force:
+        print(
+            f"File exists (use --force to overwrite): {out_path.as_posix()}",
+            file=sys.stderr,
+        )
+        return 1
+
+    existing_paths: dict[str, Path] = {}
+    for rel in _PROJECT_BUNDLE_ALLOWLIST:
+        candidate = project_dir / rel
+        if candidate.is_file():
+            existing_paths[rel] = candidate
+
+    missing_required = sorted(
+        rel for rel in _PROJECT_BUNDLE_REQUIRED
+        if rel not in existing_paths
+    )
+    if missing_required:
+        for rel in missing_required:
+            print(f"Required project artifact missing: {rel}", file=sys.stderr)
+        return 1
+
+    report = _load_json_object(existing_paths["report.json"], label="Report")
+
+    from mmo.core.ui_bundle import build_ui_bundle  # noqa: WPS433
+
+    render_plan_path = existing_paths.get("renders/render_plan.json")
+    bundle = build_ui_bundle(
+        report,
+        None,
+        help_registry_path=_ontology_dir_fn() / "help.yaml",
+        ui_copy_path=_ontology_dir_fn() / "ui_copy.yaml",
+        listen_pack_path=existing_paths.get("listen_pack.json"),
+        scene_path=existing_paths.get("drafts/scene.draft.json"),
+        render_plan_path=render_plan_path,
+        stems_index_path=existing_paths.get("stems/stems_index.json"),
+        stems_map_path=existing_paths.get("stems/stems_map.json"),
+        render_request_path=existing_paths.get("renders/render_request.json"),
+        render_plan_artifact_path=render_plan_path,
+        render_report_path=existing_paths.get("renders/render_report.json"),
+        event_log_path=existing_paths.get("renders/event_log.jsonl"),
+    )
+    _validate_json_payload(
+        bundle,
+        schema_path=_schemas_dir_fn() / "ui_bundle.schema.json",
+        payload_name="UI bundle",
+    )
+    _write_json_file(out_path, bundle)
+
+    result: dict[str, Any] = {
+        "included": [
+            rel for rel in _PROJECT_BUNDLE_ALLOWLIST
+            if rel in existing_paths
+        ],
+        "missing": [
+            rel for rel in _PROJECT_BUNDLE_ALLOWLIST
+            if rel not in existing_paths
+        ],
+        "ok": True,
+        "out": out_path.resolve().as_posix(),
+        "project_dir": project_dir.resolve().as_posix(),
+    }
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
 
 # Allowlisted artifact relative paths eligible for packing.
 _PACK_ARTIFACTS: list[str] = [

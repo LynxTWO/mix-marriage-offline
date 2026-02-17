@@ -2063,6 +2063,25 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to write validation result JSON.",
     )
 
+    project_bundle_parser = project_subparsers.add_parser(
+        "bundle",
+        help="Build ui_bundle.json from allowlisted project artifacts.",
+    )
+    project_bundle_parser.add_argument(
+        "project_dir",
+        help="Path to the project scaffold directory.",
+    )
+    project_bundle_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output ui_bundle.json.",
+    )
+    project_bundle_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing output bundle.",
+    )
+
     project_pack_parser = project_subparsers.add_parser(
         "pack",
         help="Pack project artifacts into a deterministic zip.",
@@ -4096,6 +4115,19 @@ def main(argv: list[str] | None = None) -> int:
                 out_path=Path(args.out) if args.out else None,
                 repo_root=None,
             )
+
+        if args.project_command == "bundle":
+            try:
+                return _run_project_bundle(
+                    project_dir=Path(args.project_dir),
+                    out_path=Path(args.out),
+                    force=bool(getattr(args, "force", False)),
+                )
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
 
         if args.project_command == "pack":
             return _run_project_pack(
