@@ -1997,6 +1997,7 @@ class TestUiBundle(unittest.TestCase):
             temp_path = Path(temp_dir)
             render_request_path = temp_path / "render_request.json"
             render_plan_path = temp_path / "render_plan.json"
+            render_preflight_path = temp_path / "render_preflight.json"
             render_report_path = temp_path / "render_report.json"
 
             render_request_path.write_text(
@@ -2005,6 +2006,21 @@ class TestUiBundle(unittest.TestCase):
             )
             render_plan_path.write_text(
                 json.dumps(_sample_render_plan(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            render_preflight_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "0.1.0",
+                        "plan_path": render_plan_path.resolve().as_posix(),
+                        "plan_id": "PLAN.bundle.preflight.abcdef01",
+                        "checks": [],
+                        "issues": [],
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
                 encoding="utf-8",
             )
             render_report_path.write_text(
@@ -2018,6 +2034,7 @@ class TestUiBundle(unittest.TestCase):
                 help_registry_path=help_registry_path,
                 render_request_path=render_request_path,
                 render_plan_artifact_path=render_plan_path,
+                render_preflight_path=render_preflight_path,
                 render_report_path=render_report_path,
             )
 
@@ -2028,7 +2045,7 @@ class TestUiBundle(unittest.TestCase):
         if not isinstance(render_block, dict):
             return
 
-        for key in ("render_request", "render_plan", "render_report"):
+        for key in ("render_request", "render_plan", "render_preflight", "render_report"):
             entry = render_block.get(key)
             self.assertIsInstance(entry, dict, msg=f"Missing or invalid: render.{key}")
             if not isinstance(entry, dict):
@@ -2047,6 +2064,7 @@ class TestUiBundle(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             missing_request = temp_path / "missing_render_request.json"
+            missing_preflight = temp_path / "missing_render_preflight.json"
             missing_report = temp_path / "missing_render_report.json"
 
             bundle = build_ui_bundle(
@@ -2054,6 +2072,7 @@ class TestUiBundle(unittest.TestCase):
                 None,
                 help_registry_path=help_registry_path,
                 render_request_path=missing_request,
+                render_preflight_path=missing_preflight,
                 render_report_path=missing_report,
             )
 
@@ -2064,7 +2083,7 @@ class TestUiBundle(unittest.TestCase):
         if not isinstance(render_block, dict):
             return
 
-        for key in ("render_request", "render_report"):
+        for key in ("render_request", "render_preflight", "render_report"):
             entry = render_block.get(key)
             self.assertIsInstance(entry, dict, msg=f"Missing render.{key}")
             if not isinstance(entry, dict):
@@ -2101,6 +2120,7 @@ class TestUiBundle(unittest.TestCase):
                 json.dumps({"schema_version": "0.1.0"}, indent=2) + "\n",
                 encoding="utf-8",
             )
+            missing_preflight = temp_path / "no_such_render_preflight.json"
             missing_report = temp_path / "no_such_render_report.json"
 
             bundle_a = build_ui_bundle(
@@ -2108,6 +2128,7 @@ class TestUiBundle(unittest.TestCase):
                 None,
                 help_registry_path=help_registry_path,
                 render_request_path=render_request_path,
+                render_preflight_path=missing_preflight,
                 render_report_path=missing_report,
             )
             bundle_b = build_ui_bundle(
@@ -2115,6 +2136,7 @@ class TestUiBundle(unittest.TestCase):
                 None,
                 help_registry_path=help_registry_path,
                 render_request_path=render_request_path,
+                render_preflight_path=missing_preflight,
                 render_report_path=missing_report,
             )
 
@@ -2323,6 +2345,7 @@ class TestUiBundle(unittest.TestCase):
             report_path = temp_path / "report.json"
             render_request_path = temp_path / "render_request.json"
             render_plan_path = temp_path / "render_plan.json"
+            render_preflight_path = temp_path / "render_preflight.json"
             render_report_path = temp_path / "render_report.json"
             out_bundle_path = temp_path / "ui_bundle.json"
 
@@ -2336,6 +2359,21 @@ class TestUiBundle(unittest.TestCase):
             )
             render_plan_path.write_text(
                 json.dumps(_sample_render_plan(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            render_preflight_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "0.1.0",
+                        "plan_path": render_plan_path.resolve().as_posix(),
+                        "plan_id": "PLAN.bundle.preflight.abcdef01",
+                        "checks": [],
+                        "issues": [],
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
                 encoding="utf-8",
             )
             render_report_path.write_text(
@@ -2352,6 +2390,8 @@ class TestUiBundle(unittest.TestCase):
                     str(render_request_path),
                     "--render-plan",
                     str(render_plan_path),
+                    "--render-preflight",
+                    str(render_preflight_path),
                     "--render-report",
                     str(render_report_path),
                     "--out",
@@ -2369,7 +2409,7 @@ class TestUiBundle(unittest.TestCase):
             if not isinstance(render_block, dict):
                 return
 
-            for key in ("render_request", "render_plan", "render_report"):
+            for key in ("render_request", "render_plan", "render_preflight", "render_report"):
                 entry = render_block.get(key)
                 self.assertIsInstance(entry, dict, msg=f"Missing: render.{key}")
                 if isinstance(entry, dict):

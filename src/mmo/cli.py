@@ -996,6 +996,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to render_report JSON artifact.",
     )
     bundle_parser.add_argument(
+        "--render-preflight",
+        default=None,
+        help="Optional path to render_preflight JSON artifact.",
+    )
+    bundle_parser.add_argument(
         "--event-log",
         default=None,
         help="Optional path to event log JSONL artifact.",
@@ -2133,6 +2138,11 @@ def main(argv: list[str] | None = None) -> int:
         "--plugins",
         default="plugins",
         help="Path to plugins directory used by --include-plugins.",
+    )
+    project_bundle_parser.add_argument(
+        "--render-preflight",
+        default=None,
+        help="Optional path to render_preflight JSON artifact.",
     )
 
     project_pack_parser = project_subparsers.add_parser(
@@ -4313,6 +4323,12 @@ def main(argv: list[str] | None = None) -> int:
                         if bool(getattr(args, "include_plugins", False))
                         else None
                     ),
+                    render_preflight_path=(
+                        Path(args.render_preflight)
+                        if isinstance(getattr(args, "render_preflight", None), str)
+                        and args.render_preflight.strip()
+                        else None
+                    ),
                 )
             except (RuntimeError, ValueError) as exc:
                 print(str(exc), file=sys.stderr)
@@ -4763,6 +4779,11 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 event_log_path=(
                     Path(args.event_log) if getattr(args, "event_log", None) else None
+                ),
+                render_preflight_path=(
+                    Path(args.render_preflight)
+                    if getattr(args, "render_preflight", None)
+                    else None
                 ),
             )
         except ValueError as exc:

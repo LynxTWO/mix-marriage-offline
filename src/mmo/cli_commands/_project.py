@@ -43,6 +43,7 @@ _VALIDATE_CHECKS: list[tuple[str, str | None, bool]] = [
     ("drafts/scene.draft.json", "scene.schema.json", True),
     ("renders/event_log.jsonl", "event.schema.json", False),
     ("renders/render_plan.json", "render_plan.schema.json", False),
+    ("renders/render_preflight.json", "render_preflight.schema.json", False),
     ("renders/render_report.json", "render_report.schema.json", False),
     ("renders/render_request.json", "render_request.schema.json", False),
     ("report.json", "report.schema.json", False),
@@ -62,6 +63,7 @@ _PROJECT_BUNDLE_ALLOWLIST: tuple[str, ...] = (
     "drafts/routing_plan.draft.json",
     "renders/render_request.json",
     "renders/render_plan.json",
+    "renders/render_preflight.json",
     "renders/render_report.json",
     "renders/event_log.jsonl",
 )
@@ -1042,6 +1044,7 @@ def _run_project_bundle(
     force: bool,
     include_plugins: bool = False,
     plugins_dir: Path | None = None,
+    render_preflight_path: Path | None = None,
 ) -> int:
     """Build ui_bundle.json from allowlisted project artifacts."""
     if out_path.exists() and not force:
@@ -1082,6 +1085,11 @@ def _run_project_bundle(
     from mmo.core.ui_bundle import build_ui_bundle  # noqa: WPS433
 
     render_plan_path = existing_paths.get("renders/render_plan.json")
+    render_preflight_artifact_path = (
+        render_preflight_path
+        if render_preflight_path is not None
+        else existing_paths.get("renders/render_preflight.json")
+    )
     bundle = build_ui_bundle(
         report,
         None,
@@ -1094,6 +1102,7 @@ def _run_project_bundle(
         stems_map_path=existing_paths.get("stems/stems_map.json"),
         render_request_path=existing_paths.get("renders/render_request.json"),
         render_plan_artifact_path=render_plan_path,
+        render_preflight_path=render_preflight_artifact_path,
         render_report_path=existing_paths.get("renders/render_report.json"),
         event_log_path=existing_paths.get("renders/event_log.jsonl"),
         plugins=plugins_payload,

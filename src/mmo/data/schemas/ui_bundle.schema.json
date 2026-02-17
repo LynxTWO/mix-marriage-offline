@@ -736,6 +736,7 @@
       "properties": {
         "render_request": { "$ref": "#/$defs/render_artifact_pointer" },
         "render_plan": { "$ref": "#/$defs/render_artifact_pointer" },
+        "render_preflight": { "$ref": "#/$defs/render_artifact_pointer" },
         "render_report": { "$ref": "#/$defs/render_artifact_pointer" }
       }
     },

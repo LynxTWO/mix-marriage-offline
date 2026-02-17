@@ -264,6 +264,13 @@ class TestProjectValidateRenderArtifacts(unittest.TestCase):
                 },
             ],
         })
+        _write_json(renders_dir / "render_preflight.json", {
+            "schema_version": "0.1.0",
+            "plan_path": (renders_dir / "render_plan.json").resolve().as_posix(),
+            "plan_id": "PLAN.test.abcdef01",
+            "checks": [],
+            "issues": [],
+        })
         _write_json(renders_dir / "render_report.json", {
             "schema_version": "0.1.0",
             "request": {
@@ -298,7 +305,7 @@ class TestProjectValidateRenderArtifacts(unittest.TestCase):
             c for c in result["checks"]
             if c["file"].startswith("renders/")
         ]
-        self.assertEqual(len(render_checks), 4)
+        self.assertEqual(len(render_checks), 5)
         for check in render_checks:
             self.assertFalse(check["required"])
             self.assertEqual(

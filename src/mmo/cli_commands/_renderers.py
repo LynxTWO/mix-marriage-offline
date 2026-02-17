@@ -351,6 +351,7 @@ def _run_bundle(
     render_request_path: Path | None = None,
     render_report_path: Path | None = None,
     event_log_path: Path | None = None,
+    render_preflight_path: Path | None = None,
     include_plugins: bool = False,
     plugins_dir: Path | None = None,
 ) -> int:
@@ -397,6 +398,7 @@ def _run_bundle(
         gui_state_path=gui_state_path,
         render_request_path=render_request_path,
         render_plan_artifact_path=render_plan_path,
+        render_preflight_path=render_preflight_path,
         render_report_path=render_report_path,
         event_log_path=event_log_path,
         plugins=plugins_payload,

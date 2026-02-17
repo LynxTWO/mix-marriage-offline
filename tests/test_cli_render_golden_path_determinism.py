@@ -2,7 +2,7 @@
 
 Exercises the full sequence:
   project init (with --bundle) -> edit overrides -> project refresh
-  -> write render_request -> scan (report.json) -> render-run
+  -> write render_request -> scan (report.json) -> render-run -> render-preflight
   -> bundle (ui_bundle.json) -> project validate -> project pack
 
 Runs the pipeline twice and asserts byte-identical artifacts and identical
@@ -169,7 +169,17 @@ class TestRenderGoldenPathDeterminism(unittest.TestCase):
             ])
             self.assertEqual(exit_render, 0, msg=f"render-run failed: {stderr_render}")
 
-            # 4b. mmo render-run (multi-target) --force
+            # 4b. mmo render-preflight --force
+            render_preflight_path = self.project_dir / "renders" / "render_preflight.json"
+            exit_preflight, _, stderr_preflight = _run_main([
+                "render-preflight",
+                "--plan", str(render_plan_path),
+                "--out", str(render_preflight_path),
+                "--force",
+            ])
+            self.assertEqual(exit_preflight, 0, msg=f"render-preflight failed: {stderr_preflight}")
+
+            # 4c. mmo render-run (multi-target) --force
             render_request_multi_path = self.project_dir / "renders" / "render_request_multi.json"
             _write_json(render_request_multi_path, {
                 "schema_version": "0.1.0",
@@ -197,6 +207,7 @@ class TestRenderGoldenPathDeterminism(unittest.TestCase):
                 "--report", str(report_path),
                 "--render-request", str(render_request_path),
                 "--render-plan", str(render_plan_path),
+                "--render-preflight", str(render_preflight_path),
                 "--render-report", str(render_report_path),
                 "--event-log", str(event_log_path),
                 "--stems-index", str(stems_index_path),
@@ -232,6 +243,7 @@ class TestRenderGoldenPathDeterminism(unittest.TestCase):
                 report_path,
                 render_request_path,
                 render_plan_path,
+                render_preflight_path,
                 render_report_path,
                 event_log_path,
                 render_request_multi_path,

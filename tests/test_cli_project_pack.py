@@ -291,6 +291,13 @@ class TestProjectPackRenderArtifacts(unittest.TestCase):
                 },
             ],
         })
+        _write_json(renders_dir / "render_preflight.json", {
+            "schema_version": "0.1.0",
+            "plan_path": (renders_dir / "render_plan.json").resolve().as_posix(),
+            "plan_id": "PLAN.test.abcdef01",
+            "checks": [],
+            "issues": [],
+        })
         _write_json(renders_dir / "render_report.json", {
             "schema_version": "0.1.0",
             "request": {
@@ -330,6 +337,7 @@ class TestProjectPackRenderArtifacts(unittest.TestCase):
         self.assertIn("renders/event_log.jsonl", names)
         self.assertIn("renders/render_request.json", names)
         self.assertIn("renders/render_plan.json", names)
+        self.assertIn("renders/render_preflight.json", names)
         self.assertIn("renders/render_report.json", names)
         self.assertNotIn("renders/ignored.log", names)
         self.assertNotIn("logs/event_log.jsonl", names)
@@ -346,6 +354,7 @@ class TestProjectPackRenderArtifacts(unittest.TestCase):
         self.assertIn("renders/event_log.jsonl", manifest_paths)
         self.assertIn("renders/render_request.json", manifest_paths)
         self.assertIn("renders/render_plan.json", manifest_paths)
+        self.assertIn("renders/render_preflight.json", manifest_paths)
         self.assertIn("renders/render_report.json", manifest_paths)
         self.assertNotIn("renders/ignored.log", manifest_paths)
         self.assertNotIn("logs/event_log.jsonl", manifest_paths)

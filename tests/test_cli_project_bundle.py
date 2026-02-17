@@ -59,6 +59,7 @@ def _run_project_bundle(
     force: bool = False,
     include_plugins: bool = False,
     plugins_dir: Path | None = None,
+    render_preflight_path: Path | None = None,
 ) -> tuple[int, str, str]:
     args = [
         "project", "bundle", str(project_dir),
@@ -74,6 +75,8 @@ def _run_project_bundle(
                 str(plugins_dir if plugins_dir is not None else (_REPO_ROOT / "plugins")),
             ]
         )
+    if render_preflight_path is not None:
+        args.extend(["--render-preflight", str(render_preflight_path)])
     return _run_main(args)
 
 
@@ -116,6 +119,27 @@ def _init_full_render_project(base: Path) -> Path:
         "--event-log",
     ])
     assert exit_code == 0, f"project render-run failed: {stderr}"
+
+    render_plan_path = project_dir / "renders" / "render_plan.json"
+    render_preflight_path = project_dir / "renders" / "render_preflight.json"
+    render_plan = json.loads(render_plan_path.read_text(encoding="utf-8"))
+    plan_id_raw = render_plan.get("plan_id")
+    plan_id = plan_id_raw if isinstance(plan_id_raw, str) and plan_id_raw else "PLAN.test.abcdef01"
+    render_preflight_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "plan_path": render_plan_path.resolve().as_posix(),
+                "plan_id": plan_id,
+                "checks": [],
+                "issues": [],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     return project_dir
 
 
@@ -179,6 +203,7 @@ class TestProjectBundle(unittest.TestCase):
         for key, rel in (
             ("render_request", "renders/render_request.json"),
             ("render_plan", "renders/render_plan.json"),
+            ("render_preflight", "renders/render_preflight.json"),
             ("render_report", "renders/render_report.json"),
         ):
             pointer = render.get(key)
@@ -195,6 +220,47 @@ class TestProjectBundle(unittest.TestCase):
             self.assertTrue(event_log_pointer["exists"])
             self.assertTrue(event_log_pointer["path"].endswith("renders/event_log.jsonl"))
             self.assertNotIn("\\", event_log_pointer["path"])
+
+    def test_render_preflight_pointer_can_be_explicitly_overridden(self) -> None:
+        custom_preflight_path = _SANDBOX / "full" / "custom" / "render_preflight_custom.json"
+        custom_preflight_path.parent.mkdir(parents=True, exist_ok=True)
+        render_plan_path = self.project_dir / "renders" / "render_plan.json"
+        custom_preflight_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "0.1.0",
+                    "plan_path": render_plan_path.resolve().as_posix(),
+                    "plan_id": "PLAN.custom.preflight.abcdef01",
+                    "checks": [],
+                    "issues": [],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        out_path = _SANDBOX / "full" / "ui_bundle_render_preflight_override.json"
+        exit_code, _, stderr = _run_project_bundle(
+            self.project_dir,
+            out_path,
+            render_preflight_path=custom_preflight_path,
+        )
+        self.assertEqual(exit_code, 0, msg=stderr)
+
+        bundle = json.loads(out_path.read_text(encoding="utf-8"))
+        render = bundle.get("render")
+        self.assertIsInstance(render, dict)
+        if not isinstance(render, dict):
+            return
+        pointer = render.get("render_preflight")
+        self.assertIsInstance(pointer, dict)
+        if not isinstance(pointer, dict):
+            return
+        self.assertTrue(pointer["exists"])
+        self.assertEqual(pointer["path"], custom_preflight_path.resolve().as_posix())
+        self.assertIsInstance(pointer["sha256"], str)
 
     def test_include_plugins_embeds_plugin_schema_pointers_and_hashes(self) -> None:
         out_path = _SANDBOX / "full" / "ui_bundle_plugins.json"
