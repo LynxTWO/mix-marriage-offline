@@ -2106,6 +2106,30 @@ def main(argv: list[str] | None = None) -> int:
         help="Overwrite existing renders/render_request.json.",
     )
 
+    project_render_run_parser = project_subparsers.add_parser(
+        "render-run",
+        help="Run dry-run render plan+report using project-standard paths.",
+    )
+    project_render_run_parser.add_argument(
+        "project_dir",
+        help="Path to the project scaffold directory.",
+    )
+    project_render_run_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing renders/render_plan.json and renders/render_report.json.",
+    )
+    project_render_run_parser.add_argument(
+        "--event-log",
+        action="store_true",
+        help="Also write renders/event_log.jsonl.",
+    )
+    project_render_run_parser.add_argument(
+        "--event-log-force",
+        action="store_true",
+        help="Overwrite existing renders/event_log.jsonl when --event-log is used.",
+    )
+
     gates_parser = subparsers.add_parser("gates", help="Gates policy registry tools.")
     gates_subparsers = gates_parser.add_subparsers(dest="gates_command", required=True)
     gates_list_parser = gates_subparsers.add_parser("list", help="List gates policy IDs.")
@@ -4087,6 +4111,20 @@ def main(argv: list[str] | None = None) -> int:
                 target_layout=args.target_layout,
                 force=bool(getattr(args, "force", False)),
             )
+
+        if args.project_command == "render-run":
+            try:
+                return _run_project_render_run(
+                    project_dir=Path(args.project_dir),
+                    force=bool(getattr(args, "force", False)),
+                    event_log=bool(getattr(args, "event_log", False)),
+                    event_log_force=bool(getattr(args, "event_log_force", False)),
+                )
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
 
         print("Unknown project command.", file=sys.stderr)
         return 2

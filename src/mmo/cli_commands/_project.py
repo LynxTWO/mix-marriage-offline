@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import json
 import sys
 import zipfile
@@ -22,6 +24,7 @@ __all__ = [
     "_render_project_text",
     "_run_project_pack",
     "_run_project_render_init",
+    "_run_project_render_run",
     "_run_project_validate",
 ]
 
@@ -230,19 +233,9 @@ def _run_project_validate(
     return 0 if ok else 2
 
 
-# ── project render-init ──────────────────────────────────────────
-
-
-def _run_project_render_init(
-    *,
-    project_dir: Path,
-    target_layout: str,
-    force: bool,
-) -> int:
-    """Create a render scaffold inside an existing project. Returns exit code."""
+def _validate_required_project_artifacts(project_dir: Path) -> int:
+    """Validate required project artifacts needed by project render commands."""
     schemas_dir = _schemas_dir_fn()
-
-    # 1. Validate required project artifacts.
     for rel_path, schema_basename, required in _VALIDATE_CHECKS:
         if not required:
             continue
@@ -262,6 +255,25 @@ def _run_project_render_init(
                 file=sys.stderr,
             )
             return 1
+    return 0
+
+
+# ── project render-init ──────────────────────────────────────────
+
+
+def _run_project_render_init(
+    *,
+    project_dir: Path,
+    target_layout: str,
+    force: bool,
+) -> int:
+    """Create a render scaffold inside an existing project. Returns exit code."""
+    schemas_dir = _schemas_dir_fn()
+
+    # 1. Validate required project artifacts.
+    validate_exit = _validate_required_project_artifacts(project_dir)
+    if validate_exit != 0:
+        return validate_exit
 
     # 2. Build render request using existing core builder.
     from mmo.core.render_request_template import (  # noqa: WPS433
@@ -319,6 +331,105 @@ def _run_project_render_init(
         "written": written,
     }
     print(json.dumps(result, indent=2, sort_keys=True))
+    return 0
+
+
+def _routing_plan_path_from_request(
+    *,
+    project_dir: Path,
+    request_payload: dict[str, Any],
+) -> Path | None:
+    raw_routing_path = request_payload.get("routing_plan_path")
+    if not isinstance(raw_routing_path, str):
+        return None
+    normalized = raw_routing_path.strip()
+    if not normalized:
+        return None
+    routing_plan_path = Path(normalized)
+    if routing_plan_path.is_absolute():
+        return routing_plan_path
+    return project_dir / routing_plan_path
+
+
+def _run_project_render_run(
+    *,
+    project_dir: Path,
+    force: bool,
+    event_log: bool,
+    event_log_force: bool,
+) -> int:
+    """Run deterministic render-run using project-standard scaffold paths."""
+    validate_exit = _validate_required_project_artifacts(project_dir)
+    if validate_exit != 0:
+        return validate_exit
+
+    request_path = project_dir / "renders" / "render_request.json"
+    scene_path = project_dir / "drafts" / "scene.draft.json"
+    plan_out_path = project_dir / "renders" / "render_plan.json"
+    report_out_path = project_dir / "renders" / "render_report.json"
+    event_log_out_path: Path | None = None
+    if event_log:
+        event_log_out_path = project_dir / "renders" / "event_log.jsonl"
+
+    request_payload = _load_json_object(request_path, label="Render request")
+    _validate_json_payload(
+        request_payload,
+        schema_path=_schemas_dir_fn() / "render_request.schema.json",
+        payload_name="Render request",
+    )
+    routing_plan_path = _routing_plan_path_from_request(
+        project_dir=project_dir,
+        request_payload=request_payload,
+    )
+
+    from mmo.cli_commands._scene import _run_render_run_command  # noqa: WPS433
+
+    # Reuse canonical render-run internals while keeping project wrapper
+    # summary deterministic and command-specific.
+    with contextlib.redirect_stdout(io.StringIO()):
+        exit_code = _run_render_run_command(
+            repo_root=None,
+            request_path=request_path,
+            scene_path=scene_path,
+            routing_plan_path=routing_plan_path,
+            plan_out_path=plan_out_path,
+            report_out_path=report_out_path,
+            force=force,
+            event_log_out_path=event_log_out_path,
+            event_log_force=event_log_force,
+        )
+    if exit_code != 0:
+        return exit_code
+
+    plan_payload = _load_json_object(plan_out_path, label="Render plan")
+    raw_targets = plan_payload.get("targets")
+    if isinstance(raw_targets, list):
+        targets = sorted(
+            {
+                item.strip()
+                for item in raw_targets
+                if isinstance(item, str) and item.strip()
+            }
+        )
+    else:
+        targets = []
+    jobs = plan_payload.get("jobs")
+    job_count = len(jobs) if isinstance(jobs, list) else 0
+
+    paths_written = [
+        plan_out_path.resolve().as_posix(),
+        report_out_path.resolve().as_posix(),
+    ]
+    if event_log_out_path is not None:
+        paths_written.append(event_log_out_path.resolve().as_posix())
+
+    summary: dict[str, Any] = {
+        "job_count": job_count,
+        "paths_written": paths_written,
+        "plan_id": str(plan_payload.get("plan_id", "")),
+        "targets": targets,
+    }
+    print(json.dumps(summary, indent=2, sort_keys=True))
     return 0
 
 
