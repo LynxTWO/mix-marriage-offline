@@ -54,6 +54,7 @@ SCHEMA_ANCHORS: tuple[str, ...] = (
     "schemas/report.schema.json",
     "schemas/ui_bundle.schema.json",
     "schemas/gui_state.schema.json",
+    "schemas/event.schema.json",
     "schemas/scene.schema.json",
     "schemas/render_targets.schema.json",
     "schemas/roles.schema.json",

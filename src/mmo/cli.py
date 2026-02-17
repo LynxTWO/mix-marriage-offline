@@ -84,6 +84,7 @@ from mmo.core.project_file import (
     update_project_last_run,
     write_project,
 )
+from mmo.core.event_log import new_event_id, write_event_log
 from mmo.core.gui_state import default_gui_state, validate_gui_state
 from mmo.core.routing import (
     apply_routing_plan_to_report,
@@ -2927,6 +2928,27 @@ def main(argv: list[str] | None = None) -> int:
         default="text",
         help="Output format for timeline display.",
     )
+
+    event_log_parser = subparsers.add_parser("event-log", help="Event log artifact tools.")
+    event_log_subparsers = event_log_parser.add_subparsers(
+        dest="event_log_command",
+        required=True,
+    )
+    event_log_demo_parser = event_log_subparsers.add_parser(
+        "demo",
+        help="Write a deterministic demo event log JSONL.",
+    )
+    event_log_demo_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output event log JSONL.",
+    )
+    event_log_demo_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite output file if it already exists.",
+    )
+
     gui_state_parser = subparsers.add_parser("gui-state", help="GUI state artifact tools.")
     gui_state_subparsers = gui_state_parser.add_subparsers(
         dest="gui_state_command",
@@ -5578,6 +5600,83 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(timeline_payload, indent=2, sort_keys=True))
         else:
             print(_render_timeline_text(timeline_payload))
+        return 0
+    if args.command == "event-log":
+        if args.event_log_command != "demo":
+            print("Unknown event-log command.", file=sys.stderr)
+            return 2
+
+        demo_events: list[dict[str, Any]] = [
+            {
+                "kind": "info",
+                "scope": "stems",
+                "what": "Indexed stem inputs",
+                "why": "Prepared deterministic source map for routing.",
+                "where": ["stems/stems_index.json", "STEMSET.DEMO.A"],
+                "evidence": {
+                    "codes": ["STEMS.INDEXED"],
+                    "ids": ["STEMSET.DEMO.A"],
+                    "paths": ["stems/stems_index.json"],
+                    "metrics": [{"name": "stem_count", "value": 4}],
+                    "notes": ["Indexed by rel_path sort."],
+                },
+            },
+            {
+                "kind": "action",
+                "scope": "render",
+                "what": "Planned stereo dry-run",
+                "why": "Validated render graph without writing audio.",
+                "where": ["render/render_plan.json", "TARGET.STEREO.2_0"],
+                "confidence": 0.99,
+                "evidence": {
+                    "codes": ["RENDER.PLAN.CREATED"],
+                    "ids": ["TARGET.STEREO.2_0"],
+                    "paths": ["render/render_plan.json"],
+                    "metrics": [{"name": "job_count", "value": 1}],
+                    "notes": ["No wall-clock timestamps were captured."],
+                },
+            },
+            {
+                "kind": "warn",
+                "scope": "qa",
+                "what": "Translation checks skipped",
+                "why": "Reference audio was not provided.",
+                "where": ["qa/translation_summary.json", "TRANS.MONO.COLLAPSE"],
+                "confidence": 0.67,
+                "evidence": {
+                    "codes": ["QA.TRANSLATION.SKIPPED"],
+                    "ids": ["TRANS.MONO.COLLAPSE"],
+                    "paths": ["qa/translation_summary.json"],
+                    "metrics": [{"name": "profiles_checked", "value": 0}],
+                    "notes": ["Demo fixture intentionally omits reference audio."],
+                },
+            },
+        ]
+
+        events_with_ids: list[dict[str, Any]] = []
+        for event in demo_events:
+            event_payload = dict(event)
+            event_payload["event_id"] = new_event_id(event_payload)
+            events_with_ids.append(event_payload)
+
+        try:
+            out_path = Path(args.out)
+            write_event_log(events_with_ids, out_path, force=bool(args.force))
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "event_count": len(events_with_ids),
+                    "out_path": out_path.resolve().as_posix(),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
         return 0
     if args.command == "gui-state":
         if args.gui_state_command == "validate":
