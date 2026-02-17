@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/ui_layout_snapshot.schema.json",
+  "title": "MMO UI Layout Snapshot",
+  "description": "Deterministic machine output for a resolved layout at a concrete viewport and scale.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "layout_path",
+    "layout_id",
+    "viewport",
+    "grid",
+    "container",
+    "selected_breakpoint_id",
+    "sections",
+    "widgets",
+    "violations",
+    "ok"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "layout_path": { "$ref": "#/$defs/posix_abs_path" },
+    "layout_id": { "$ref": "#/$defs/layout_id" },
+    "viewport": { "$ref": "#/$defs/viewport" },
+    "grid": { "$ref": "#/$defs/grid_snapshot" },
+    "container": { "$ref": "#/$defs/container_snapshot" },
+    "selected_breakpoint_id": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "null" }
+      ]
+    },
+    "sections": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/section_box" }
+    },
+    "widgets": {
+      "type": "array",
+      "description": "Sorted lexicographically by widget_id.",
+      "items": { "$ref": "#/$defs/widget_box" }
+    },
+    "violations": {
+      "type": "array",
+      "description": "Sorted deterministically by severity/issue_id/widget evidence.",
+      "items": { "$ref": "#/$defs/violation" }
+    },
+    "ok": { "type": "boolean" }
+  },
+  "$defs": {
+    "layout_id": {
+      "type": "string",
+      "pattern": "^[A-Z0-9_.-]+$",
+      "minLength": 1
+    },
+    "section_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+$",
+      "minLength": 1
+    },
+    "widget_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+$",
+      "minLength": 1
+    },
+    "posix_abs_path": {
+      "type": "string",
+      "pattern": "^(?:[A-Za-z]:/|/).+"
+    },
+    "non_negative_number": {
+      "type": "number",
+      "minimum": 0
+    },
+    "positive_number": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "viewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width_px", "height_px", "scale"],
+      "properties": {
+        "width_px": { "type": "integer", "minimum": 1 },
+        "height_px": { "type": "integer", "minimum": 1 },
+        "scale": { "$ref": "#/$defs/positive_number" }
+      }
+    },
+    "grid_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["columns", "gap_px", "row_height_px", "margin_px"],
+      "properties": {
+        "columns": { "const": 12 },
+        "gap_px": { "$ref": "#/$defs/non_negative_number" },
+        "row_height_px": { "$ref": "#/$defs/positive_number" },
+        "margin_px": { "$ref": "#/$defs/non_negative_number" }
+      }
+    },
+    "container_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section_gap_px"],
+      "properties": {
+        "section_gap_px": { "$ref": "#/$defs/non_negative_number" }
+      }
+    },
+    "section_box": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section_id", "x_px", "y_px", "width_px", "height_px"],
+      "properties": {
+        "section_id": { "$ref": "#/$defs/section_id" },
+        "x_px": { "type": "number" },
+        "y_px": { "type": "number" },
+        "width_px": { "$ref": "#/$defs/non_negative_number" },
+        "height_px": { "$ref": "#/$defs/non_negative_number" }
+      }
+    },
+    "widget_box": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "widget_id",
+        "section_id",
+        "param_ref",
+        "col_start",
+        "col_span",
+        "row_start",
+        "row_span",
+        "x_px",
+        "y_px",
+        "width_px",
+        "height_px",
+        "min_width_px",
+        "min_height_px"
+      ],
+      "properties": {
+        "widget_id": { "$ref": "#/$defs/widget_id" },
+        "section_id": { "$ref": "#/$defs/section_id" },
+        "param_ref": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Z0-9_.-]+$",
+              "minLength": 1
+            },
+            { "type": "null" }
+          ]
+        },
+        "col_start": { "type": "integer", "minimum": 1 },
+        "col_span": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "row_start": { "type": "integer", "minimum": 1 },
+        "row_span": { "type": "integer", "minimum": 1 },
+        "x_px": { "type": "number" },
+        "y_px": { "type": "number" },
+        "width_px": { "$ref": "#/$defs/non_negative_number" },
+        "height_px": { "$ref": "#/$defs/non_negative_number" },
+        "min_width_px": { "$ref": "#/$defs/non_negative_number" },
+        "min_height_px": { "$ref": "#/$defs/non_negative_number" }
+      }
+    },
+    "violation_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section_id", "widget_id"],
+      "properties": {
+        "section_id": { "$ref": "#/$defs/section_id" },
+        "widget_id": { "$ref": "#/$defs/widget_id" },
+        "other_widget_id": { "$ref": "#/$defs/widget_id" },
+        "viewport_width_px": { "type": "integer", "minimum": 1 },
+        "viewport_height_px": { "type": "integer", "minimum": 1 },
+        "x_px": { "type": "number" },
+        "y_px": { "type": "number" },
+        "width_px": { "$ref": "#/$defs/non_negative_number" },
+        "height_px": { "$ref": "#/$defs/non_negative_number" },
+        "required_min_width_px": { "$ref": "#/$defs/non_negative_number" },
+        "required_min_height_px": { "$ref": "#/$defs/non_negative_number" }
+      }
+    },
+    "violation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue_id", "severity", "message", "evidence"],
+      "properties": {
+        "issue_id": {
+          "type": "string",
+          "pattern": "^ISSUE\\.UI\\.LAYOUT\\.[A-Z0-9_]+$"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["error", "warn"]
+        },
+        "message": { "type": "string", "minLength": 1 },
+        "evidence": { "$ref": "#/$defs/violation_evidence" }
+      }
+    }
+  }
+}

@@ -3007,6 +3007,40 @@ def main(argv: list[str] | None = None) -> int:
         help="Overwrite output file if it already exists.",
     )
 
+    ui_layout_snapshot_parser = subparsers.add_parser(
+        "ui-layout-snapshot",
+        help=(
+            "Build a deterministic UI layout snapshot with computed widget bounds "
+            "and layout violations."
+        ),
+    )
+    ui_layout_snapshot_parser.add_argument(
+        "--layout",
+        required=True,
+        help="Path to ui_layout JSON.",
+    )
+    ui_layout_snapshot_parser.add_argument(
+        "--viewport",
+        required=True,
+        help="Viewport in WxH form (for example: 1280x720).",
+    )
+    ui_layout_snapshot_parser.add_argument(
+        "--scale",
+        type=float,
+        default=1.0,
+        help="Viewport scale multiplier (default: 1.0).",
+    )
+    ui_layout_snapshot_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output ui_layout_snapshot JSON.",
+    )
+    ui_layout_snapshot_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite output file if it already exists.",
+    )
+
     render_report_parser = subparsers.add_parser(
         "render-report",
         help="Build a render_report JSON from a render_plan.",
@@ -3289,6 +3323,8 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
+    if len(raw_argv) >= 2 and raw_argv[0] == "ui" and raw_argv[1] == "layout-snapshot":
+        raw_argv = ["ui-layout-snapshot", *raw_argv[2:]]
     args = parser.parse_args(raw_argv)
     from mmo.resources import (
         _repo_checkout_root,
@@ -5896,6 +5932,48 @@ def main(argv: list[str] | None = None) -> int:
             )
             _write_json_file(out_path, preflight_payload)
             return 2 if preflight_has_error_issues(preflight_payload) else 0
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+    if args.command == "ui-layout-snapshot":
+        out_path = Path(args.out)
+        if out_path.exists() and not args.force:
+            print(
+                f"File exists (use --force to overwrite): {out_path.as_posix()}",
+                file=sys.stderr,
+            )
+            return 1
+        try:
+            layout_path = Path(args.layout)
+            layout_payload = _load_json_object(layout_path, label="UI layout")
+            _validate_json_payload(
+                layout_payload,
+                schema_path=schemas / "ui_layout.schema.json",
+                payload_name="UI layout",
+            )
+            from mmo.core.ui_layout import (  # noqa: WPS433
+                build_ui_layout_snapshot,
+                parse_viewport_spec,
+                snapshot_has_violations,
+            )
+
+            viewport_width_px, viewport_height_px = parse_viewport_spec(args.viewport)
+            snapshot_payload = build_ui_layout_snapshot(
+                layout_payload,
+                layout_path=layout_path,
+                viewport_width_px=viewport_width_px,
+                viewport_height_px=viewport_height_px,
+                scale=float(args.scale),
+            )
+            _validate_json_payload(
+                snapshot_payload,
+                schema_path=schemas / "ui_layout_snapshot.schema.json",
+                payload_name="UI layout snapshot",
+            )
+            _write_json_file(out_path, snapshot_payload)
+            return 2 if snapshot_has_violations(snapshot_payload) else 0
         except (RuntimeError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 1

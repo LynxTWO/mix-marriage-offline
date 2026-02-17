@@ -64,6 +64,8 @@ SCHEMA_ANCHORS: tuple[str, ...] = (
     "schemas/render_request.schema.json",
     "schemas/render_report.schema.json",
     "schemas/render_preflight.schema.json",
+    "schemas/ui_layout.schema.json",
+    "schemas/ui_layout_snapshot.schema.json",
     "schemas/presets_index.schema.json",
     "schemas/lockfile.schema.json",
     "schemas/role_lexicon.schema.json",

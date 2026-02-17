@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/ui_layout.schema.json",
+  "title": "MMO UI Layout Contract",
+  "description": "Human-authored, machine-checkable layout contract for deterministic GUI planning.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "layout_id", "grid", "container", "sections"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "layout_id": { "$ref": "#/$defs/layout_id" },
+    "grid": { "$ref": "#/$defs/grid" },
+    "container": { "$ref": "#/$defs/container" },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/section" }
+    },
+    "breakpoints": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/breakpoint" }
+    }
+  },
+  "$defs": {
+    "layout_id": {
+      "type": "string",
+      "pattern": "^[A-Z0-9_.-]+$",
+      "minLength": 1
+    },
+    "section_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+$",
+      "minLength": 1
+    },
+    "widget_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+$",
+      "minLength": 1
+    },
+    "param_ref": {
+      "type": "string",
+      "pattern": "^[A-Z0-9_.-]+$",
+      "minLength": 1
+    },
+    "non_negative_number": {
+      "type": "number",
+      "minimum": 0
+    },
+    "positive_number": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "grid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["columns", "gap_px", "row_height_px", "margin_px"],
+      "properties": {
+        "columns": { "const": 12 },
+        "gap_px": { "$ref": "#/$defs/non_negative_number" },
+        "row_height_px": { "$ref": "#/$defs/positive_number" },
+        "margin_px": { "$ref": "#/$defs/non_negative_number" }
+      }
+    },
+    "container": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section_gap_px"],
+      "properties": {
+        "section_gap_px": { "$ref": "#/$defs/non_negative_number" }
+      }
+    },
+    "widget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["widget_id", "col_span", "row_span"],
+      "properties": {
+        "widget_id": { "$ref": "#/$defs/widget_id" },
+        "label": { "type": "string" },
+        "param_ref": { "$ref": "#/$defs/param_ref" },
+        "col_span": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "row_span": { "type": "integer", "minimum": 1 },
+        "col_start": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "row_start": { "type": "integer", "minimum": 1 },
+        "min_width_px": { "$ref": "#/$defs/non_negative_number" },
+        "min_height_px": { "$ref": "#/$defs/non_negative_number" }
+      },
+      "dependentRequired": {
+        "col_start": ["row_start"],
+        "row_start": ["col_start"]
+      }
+    },
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section_id", "widgets"],
+      "properties": {
+        "section_id": { "$ref": "#/$defs/section_id" },
+        "label": { "type": "string" },
+        "col_span": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "min_height_px": { "$ref": "#/$defs/non_negative_number" },
+        "widgets": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/widget" }
+        }
+      }
+    },
+    "grid_overrides": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gap_px": { "$ref": "#/$defs/non_negative_number" },
+        "row_height_px": { "$ref": "#/$defs/positive_number" },
+        "margin_px": { "$ref": "#/$defs/non_negative_number" }
+      }
+    },
+    "container_overrides": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "section_gap_px": { "$ref": "#/$defs/non_negative_number" }
+      }
+    },
+    "breakpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["breakpoint_id"],
+      "properties": {
+        "breakpoint_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "minLength": 1
+        },
+        "min_viewport_width_px": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_viewport_width_px": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "scale_multiplier": { "$ref": "#/$defs/positive_number" },
+        "grid_overrides": { "$ref": "#/$defs/grid_overrides" },
+        "container_overrides": { "$ref": "#/$defs/container_overrides" }
+      }
+    }
+  }
+}
