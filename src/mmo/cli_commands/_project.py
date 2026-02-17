@@ -286,10 +286,49 @@ def _validate_required_project_artifacts(project_dir: Path) -> int:
 # ── project render-init ──────────────────────────────────────────
 
 
+def _parse_layout_ids_csv(raw_value: str, *, flag_name: str) -> list[str]:
+    if not isinstance(raw_value, str):
+        raise ValueError(f"{flag_name} must be a comma-separated string.")
+
+    selected = {
+        item.strip()
+        for item in raw_value.split(",")
+        if isinstance(item, str) and item.strip()
+    }
+    if not selected:
+        raise ValueError(f"{flag_name} must include at least one layout ID.")
+    return sorted(selected)
+
+
+def _parse_target_ids_csv(raw_value: str) -> list[str]:
+    if not isinstance(raw_value, str):
+        raise ValueError("target-ids must be a comma-separated string.")
+
+    selected = {
+        item.strip()
+        for item in raw_value.split(",")
+        if isinstance(item, str) and item.strip()
+    }
+    if not selected:
+        raise ValueError("target-ids must include at least one target ID.")
+
+    normalized_target_ids = sorted(selected)
+    from mmo.core.registries.render_targets_registry import (  # noqa: WPS433
+        load_render_targets_registry,
+    )
+
+    target_registry = load_render_targets_registry()
+    for target_id in normalized_target_ids:
+        target_registry.get_target(target_id)
+    return normalized_target_ids
+
+
 def _run_project_render_init(
     *,
     project_dir: Path,
-    target_layout: str,
+    target_layout: str | None,
+    target_layouts: str | None,
+    target_ids: str | None,
     force: bool,
 ) -> int:
     """Create a render scaffold inside an existing project. Returns exit code."""
@@ -302,8 +341,18 @@ def _run_project_render_init(
 
     # 2. Build render request using existing core builder.
     from mmo.core.render_request_template import (  # noqa: WPS433
+        build_multi_render_request_template,
         build_render_request_template,
     )
+
+    has_single = isinstance(target_layout, str) and bool(target_layout.strip())
+    has_multi = isinstance(target_layouts, str) and bool(target_layouts.strip())
+    if has_single == has_multi:
+        print(
+            "Specify exactly one of --target-layout or --target-layouts.",
+            file=sys.stderr,
+        )
+        return 1
 
     routing_plan_path: str | None = None
     routing_plan_file = project_dir / "drafts" / "routing_plan.draft.json"
@@ -311,11 +360,34 @@ def _run_project_render_init(
         routing_plan_path = "drafts/routing_plan.draft.json"
 
     try:
-        payload = build_render_request_template(
-            target_layout,
-            scene_path="drafts/scene.draft.json",
-            routing_plan_path=routing_plan_path,
-        )
+        if has_multi:
+            normalized_layout_ids = _parse_layout_ids_csv(
+                target_layouts if target_layouts is not None else "",
+                flag_name="target-layouts",
+            )
+            payload = build_multi_render_request_template(
+                normalized_layout_ids,
+                scene_path="drafts/scene.draft.json",
+                routing_plan_path=routing_plan_path,
+            )
+        else:
+            normalized_layout_id = (
+                target_layout.strip()
+                if isinstance(target_layout, str)
+                else ""
+            )
+            payload = build_render_request_template(
+                normalized_layout_id,
+                scene_path="drafts/scene.draft.json",
+                routing_plan_path=routing_plan_path,
+            )
+
+        if target_ids is not None:
+            normalized_target_ids = _parse_target_ids_csv(target_ids)
+            options = payload.get("options")
+            options_payload = dict(options) if isinstance(options, dict) else {}
+            options_payload["target_ids"] = normalized_target_ids
+            payload["options"] = options_payload
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
@@ -352,9 +424,21 @@ def _run_project_render_init(
         "ok": True,
         "project_dir": project_dir.resolve().as_posix(),
         "skipped": skipped,
-        "target_layout_id": target_layout,
         "written": written,
     }
+    if has_multi:
+        target_layout_ids = payload.get("target_layout_ids")
+        if isinstance(target_layout_ids, list):
+            result["target_layout_ids"] = list(target_layout_ids)
+    else:
+        target_layout_id = payload.get("target_layout_id")
+        if isinstance(target_layout_id, str):
+            result["target_layout_id"] = target_layout_id
+    options_payload = payload.get("options")
+    if isinstance(options_payload, dict):
+        target_ids_payload = options_payload.get("target_ids")
+        if isinstance(target_ids_payload, list):
+            result["target_ids"] = list(target_ids_payload)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 

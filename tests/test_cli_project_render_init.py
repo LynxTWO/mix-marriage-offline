@@ -69,6 +69,19 @@ def _schema_validator() -> jsonschema.Draft202012Validator:
     return jsonschema.Draft202012Validator(root_schema, registry=registry)
 
 
+def _extract_known_ids(stderr_text: str, *, marker: str) -> list[str]:
+    marker_idx = stderr_text.find(marker)
+    if marker_idx < 0:
+        return []
+    suffix = stderr_text[marker_idx + len(marker):]
+    first_line = suffix.splitlines()[0]
+    return [
+        item.strip()
+        for item in first_line.split(",")
+        if isinstance(item, str) and item.strip()
+    ]
+
+
 # -- module setup / teardown -------------------------------------------------
 
 def setUpModule() -> None:
@@ -189,6 +202,32 @@ class TestRenderInitDeterminism(unittest.TestCase):
         self.assertEqual(exit_code_a, 0)
         self.assertEqual(exit_code_b, 0)
         self.assertEqual(stdout_a, stdout_b)
+
+    def test_multi_target_deterministic_bytes_across_runs(self) -> None:
+        exit_code_a, _, stderr_a = _run_main([
+            "project", "render-init", str(self.project_dir),
+            "--target-layouts", "LAYOUT.5_1,LAYOUT.2_0",
+            "--force",
+        ])
+        self.assertEqual(exit_code_a, 0, msg=stderr_a)
+        rr_path = self.project_dir / "renders" / "render_request.json"
+        payload_a = json.loads(rr_path.read_text(encoding="utf-8"))
+        bytes_a = rr_path.read_bytes()
+
+        exit_code_b, _, stderr_b = _run_main([
+            "project", "render-init", str(self.project_dir),
+            "--target-layouts", "LAYOUT.2_0,LAYOUT.5_1",
+            "--force",
+        ])
+        self.assertEqual(exit_code_b, 0, msg=stderr_b)
+        payload_b = json.loads(rr_path.read_text(encoding="utf-8"))
+        bytes_b = rr_path.read_bytes()
+
+        self.assertNotIn("target_layout_id", payload_a)
+        self.assertNotIn("target_layout_id", payload_b)
+        self.assertEqual(payload_a["target_layout_ids"], ["LAYOUT.2_0", "LAYOUT.5_1"])
+        self.assertEqual(payload_b["target_layout_ids"], ["LAYOUT.2_0", "LAYOUT.5_1"])
+        self.assertEqual(bytes_a, bytes_b)
 
 
 class TestRenderInitOverwrite(unittest.TestCase):
@@ -311,6 +350,39 @@ class TestRenderInitForwardSlashPaths(unittest.TestCase):
         self.assertNotIn("\\", stdout, "Backslashes found in stdout summary")
 
 
+class TestRenderInitTargetSelection(unittest.TestCase):
+
+    def test_target_ids_written_sorted_without_inference(self) -> None:
+        project_dir = _init_project(_SANDBOX / "target_ids_sorted")
+        exit_code, _, stderr = _run_main([
+            "project", "render-init", str(project_dir),
+            "--target-layout", "LAYOUT.5_1",
+            "--target-ids", "TARGET.SURROUND.5_1,TARGET.STEREO.2_0,TARGET.SURROUND.5_1",
+        ])
+        self.assertEqual(exit_code, 0, msg=stderr)
+
+        payload = json.loads(
+            (project_dir / "renders" / "render_request.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            payload["options"]["target_ids"],
+            ["TARGET.STEREO.2_0", "TARGET.SURROUND.5_1"],
+        )
+
+    def test_unknown_target_id_fails_with_sorted_known_ids(self) -> None:
+        project_dir = _init_project(_SANDBOX / "target_id_unknown")
+        exit_code, _, stderr = _run_main([
+            "project", "render-init", str(project_dir),
+            "--target-layout", "LAYOUT.2_0",
+            "--target-ids", "TARGET.DOES_NOT_EXIST",
+        ])
+        self.assertEqual(exit_code, 1)
+        self.assertIn("Unknown target_id: TARGET.DOES_NOT_EXIST", stderr)
+        known_ids = _extract_known_ids(stderr, marker="Known target_ids:")
+        self.assertGreater(len(known_ids), 0)
+        self.assertEqual(known_ids, sorted(known_ids))
+
+
 class TestRenderInitInvalidScaffold(unittest.TestCase):
 
     def test_empty_dir_fails(self) -> None:
@@ -331,6 +403,41 @@ class TestRenderInitInvalidScaffold(unittest.TestCase):
         ])
         self.assertEqual(exit_code, 1)
         self.assertIn("LAYOUT.DOES_NOT_EXIST", stderr)
+        known_ids = _extract_known_ids(stderr, marker="Known layout_ids:")
+        self.assertGreater(len(known_ids), 0)
+        self.assertEqual(known_ids, sorted(known_ids))
+
+
+class TestRenderInitMutualExclusivity(unittest.TestCase):
+
+    def test_both_target_flags_error_is_deterministic(self) -> None:
+        project_dir = _init_project(_SANDBOX / "target_flags_both")
+        args = [
+            "project", "render-init", str(project_dir),
+            "--target-layout", "LAYOUT.2_0",
+            "--target-layouts", "LAYOUT.2_0,LAYOUT.5_1",
+        ]
+        exit_a, _, stderr_a = _run_main(args)
+        exit_b, _, stderr_b = _run_main(args)
+
+        self.assertEqual(exit_a, 1)
+        self.assertEqual(exit_b, 1)
+        self.assertEqual(stderr_a, stderr_b)
+        self.assertEqual(
+            stderr_a.strip(),
+            "Specify exactly one of --target-layout or --target-layouts.",
+        )
+
+    def test_neither_target_flag_errors(self) -> None:
+        project_dir = _init_project(_SANDBOX / "target_flags_neither")
+        exit_code, _, stderr = _run_main([
+            "project", "render-init", str(project_dir),
+        ])
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(
+            stderr.strip(),
+            "Specify exactly one of --target-layout or --target-layouts.",
+        )
 
 
 if __name__ == "__main__":

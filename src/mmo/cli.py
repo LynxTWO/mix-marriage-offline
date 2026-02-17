@@ -2116,8 +2116,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     project_render_init_parser.add_argument(
         "--target-layout",
-        required=True,
-        help="Target layout ID (e.g. LAYOUT.5_1).",
+        default=None,
+        help="Target layout ID (e.g. LAYOUT.5_1). Mutually exclusive with --target-layouts.",
+    )
+    project_render_init_parser.add_argument(
+        "--target-layouts",
+        default=None,
+        help="Comma-separated target layout IDs (e.g. LAYOUT.2_0,LAYOUT.5_1). Mutually exclusive with --target-layout.",
+    )
+    project_render_init_parser.add_argument(
+        "--target-ids",
+        default=None,
+        help="Optional comma-separated explicit TARGET IDs (e.g. TARGET.STEREO.2_0,TARGET.SURROUND.5_1).",
     )
     project_render_init_parser.add_argument(
         "--force",
@@ -4138,9 +4148,19 @@ def main(argv: list[str] | None = None) -> int:
             )
 
         if args.project_command == "render-init":
+            has_single = args.target_layout is not None
+            has_multi = args.target_layouts is not None
+            if has_single == has_multi:
+                print(
+                    "Specify exactly one of --target-layout or --target-layouts.",
+                    file=sys.stderr,
+                )
+                return 1
             return _run_project_render_init(
                 project_dir=Path(args.project_dir),
                 target_layout=args.target_layout,
+                target_layouts=args.target_layouts,
+                target_ids=args.target_ids,
                 force=bool(getattr(args, "force", False)),
             )
 

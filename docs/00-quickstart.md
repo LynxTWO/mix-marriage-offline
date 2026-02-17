@@ -267,6 +267,14 @@ python -m mmo targets show TARGET.STEREO.2_0 --format json
 deterministically. If `render_request.options.target_ids` is provided, those
 IDs are validated and used explicitly.
 
+Initialize a project render request with multiple layouts and explicit targets:
+
+```powershell
+python -m mmo project render-init "project_out" `
+  --target-layouts "LAYOUT.2_0,LAYOUT.5_1" `
+  --target-ids "TARGET.STEREO.2_0,TARGET.SURROUND.5_1"
+```
+
 ---
 
 ## Common pitfalls
