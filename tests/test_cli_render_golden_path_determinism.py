@@ -156,6 +156,7 @@ class TestRenderGoldenPathDeterminism(unittest.TestCase):
             # 4. mmo render-run --force
             render_plan_path = self.project_dir / "renders" / "render_plan.json"
             render_report_path = self.project_dir / "renders" / "render_report.json"
+            event_log_path = self.project_dir / "renders" / "event_log.jsonl"
             exit_render, render_stdout, stderr_render = _run_main([
                 "render-run",
                 "--request", str(render_request_path),
@@ -163,6 +164,8 @@ class TestRenderGoldenPathDeterminism(unittest.TestCase):
                 "--plan-out", str(render_plan_path),
                 "--report-out", str(render_report_path),
                 "--force",
+                "--event-log-out", str(event_log_path),
+                "--event-log-force",
             ])
             self.assertEqual(exit_render, 0, msg=f"render-run failed: {stderr_render}")
 
@@ -195,6 +198,7 @@ class TestRenderGoldenPathDeterminism(unittest.TestCase):
                 "--render-request", str(render_request_path),
                 "--render-plan", str(render_plan_path),
                 "--render-report", str(render_report_path),
+                "--event-log", str(event_log_path),
                 "--stems-index", str(stems_index_path),
                 "--stems-map", str(stems_map_path),
                 "--scene", str(scene_path),
@@ -229,6 +233,7 @@ class TestRenderGoldenPathDeterminism(unittest.TestCase):
                 render_request_path,
                 render_plan_path,
                 render_report_path,
+                event_log_path,
                 render_request_multi_path,
                 render_plan_multi_path,
                 render_report_multi_path,

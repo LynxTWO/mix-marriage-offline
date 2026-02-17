@@ -84,7 +84,7 @@ from mmo.core.project_file import (
     update_project_last_run,
     write_project,
 )
-from mmo.core.event_log import new_event_id, write_event_log
+from mmo.core.event_log import new_event_id, validate_event_log_jsonl, write_event_log
 from mmo.core.env_doctor import build_env_doctor_report, render_env_doctor_text
 from mmo.core.gui_state import default_gui_state, validate_gui_state
 from mmo.core.routing import (
@@ -2980,6 +2980,26 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Overwrite output file if it already exists.",
     )
+    event_log_validate_parser = event_log_subparsers.add_parser(
+        "validate",
+        help="Validate an event log JSONL file.",
+    )
+    event_log_validate_parser.add_argument(
+        "--in",
+        dest="in_path",
+        required=True,
+        help="Path to event log JSONL input.",
+    )
+    event_log_validate_parser.add_argument(
+        "--out",
+        default=None,
+        help="Optional path to write validation report JSON.",
+    )
+    event_log_validate_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite validation output if it already exists.",
+    )
 
     gui_state_parser = subparsers.add_parser("gui-state", help="GUI state artifact tools.")
     gui_state_subparsers = gui_state_parser.add_subparsers(
@@ -5658,6 +5678,61 @@ def main(argv: list[str] | None = None) -> int:
             print(render_env_doctor_text(payload), end="")
         return 0
     if args.command == "event-log":
+        if args.event_log_command == "validate":
+            out_path = Path(args.out) if getattr(args, "out", None) else None
+            if out_path is not None and out_path.exists() and not args.force:
+                print(
+                    f"File exists (use --force to overwrite): {out_path.as_posix()}",
+                    file=sys.stderr,
+                )
+                return 1
+
+            try:
+                result = validate_event_log_jsonl(Path(args.in_path))
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            raw_issues = result.get("issues")
+            normalized_issues: list[dict[str, Any]] = []
+            if isinstance(raw_issues, list):
+                for raw_issue in raw_issues:
+                    if not isinstance(raw_issue, dict):
+                        continue
+                    line = raw_issue.get("line")
+                    issue_id = raw_issue.get("issue_id")
+                    message = raw_issue.get("message")
+                    if not isinstance(line, int):
+                        continue
+                    if not isinstance(issue_id, str):
+                        continue
+                    if not isinstance(message, str):
+                        continue
+                    normalized_issues.append(
+                        {
+                            "line": line,
+                            "issue_id": issue_id.strip(),
+                            "message": message.strip(),
+                        }
+                    )
+            normalized_issues.sort(
+                key=lambda issue: (
+                    issue["line"],
+                    issue["issue_id"],
+                    issue["message"],
+                )
+            )
+            result["issues"] = normalized_issues
+
+            output_text = json.dumps(result, indent=2, sort_keys=True) + "\n"
+            sys.stdout.write(output_text)
+
+            if out_path is not None:
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                out_path.write_text(output_text, encoding="utf-8")
+
+            return 0 if not normalized_issues else 2
+
         if args.event_log_command != "demo":
             print("Unknown event-log command.", file=sys.stderr)
             return 2

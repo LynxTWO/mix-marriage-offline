@@ -10,6 +10,7 @@ import zipfile
 from pathlib import Path
 
 from mmo.cli import main
+from mmo.core.event_log import new_event_id, write_event_log
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SANDBOX = (
@@ -311,6 +312,11 @@ class TestProjectPackRenderArtifacts(unittest.TestCase):
             },
             "qa_gates": {"status": "not_run", "gates": []},
         })
+        _write_valid_event_log(renders_dir / "event_log.jsonl")
+        (renders_dir / "ignored.log").write_text("not allowlisted\n", encoding="utf-8")
+        outside_logs = cls.project_dir / "logs"
+        outside_logs.mkdir(parents=True, exist_ok=True)
+        (outside_logs / "event_log.jsonl").write_text("not allowlisted\n", encoding="utf-8")
 
     def test_render_artifacts_in_zip(self) -> None:
         out = _SANDBOX / "render_pack" / "pack.zip"
@@ -321,9 +327,12 @@ class TestProjectPackRenderArtifacts(unittest.TestCase):
         self.assertEqual(exit_code, 0, msg=stderr)
         with zipfile.ZipFile(out, "r") as zf:
             names = zf.namelist()
+        self.assertIn("renders/event_log.jsonl", names)
         self.assertIn("renders/render_request.json", names)
         self.assertIn("renders/render_plan.json", names)
         self.assertIn("renders/render_report.json", names)
+        self.assertNotIn("renders/ignored.log", names)
+        self.assertNotIn("logs/event_log.jsonl", names)
 
     def test_render_artifacts_in_manifest(self) -> None:
         out = _SANDBOX / "render_pack" / "pack_manifest.zip"
@@ -334,9 +343,12 @@ class TestProjectPackRenderArtifacts(unittest.TestCase):
         with zipfile.ZipFile(out, "r") as zf:
             manifest = json.loads(zf.read("manifest.json"))
         manifest_paths = [e["path"] for e in manifest["files"]]
+        self.assertIn("renders/event_log.jsonl", manifest_paths)
         self.assertIn("renders/render_request.json", manifest_paths)
         self.assertIn("renders/render_plan.json", manifest_paths)
         self.assertIn("renders/render_report.json", manifest_paths)
+        self.assertNotIn("renders/ignored.log", manifest_paths)
+        self.assertNotIn("logs/event_log.jsonl", manifest_paths)
         # Manifest still sorted.
         self.assertEqual(manifest_paths, sorted(manifest_paths))
 
@@ -376,6 +388,22 @@ def _write_json(path: Path, payload: dict) -> None:
     path.write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8",
     )
+
+
+def _write_valid_event_log(path: Path) -> None:
+    event = {
+        "kind": "info",
+        "scope": "render",
+        "what": "render-run completed",
+        "why": "Deterministic dry-run completed.",
+        "where": ["renders/render_plan.json"],
+        "evidence": {
+            "codes": ["RENDER.RUN.COMPLETED"],
+            "paths": ["renders/render_plan.json"],
+        },
+    }
+    event["event_id"] = new_event_id(event)
+    write_event_log([event], path, force=True)
 
 
 if __name__ == "__main__":

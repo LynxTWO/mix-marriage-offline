@@ -12,6 +12,7 @@ from mmo.cli_commands._helpers import (
     _validate_json_payload,
     _write_json_file,
 )
+from mmo.core.event_log import validate_event_log_jsonl
 from mmo.core.run_config import normalize_run_config
 from mmo.resources import schemas_dir as _schemas_dir_fn
 
@@ -31,6 +32,7 @@ __all__ = [
 _VALIDATE_CHECKS: list[tuple[str, str | None, bool]] = [
     ("drafts/routing_plan.draft.json", "routing_plan.schema.json", True),
     ("drafts/scene.draft.json", "scene.schema.json", True),
+    ("renders/event_log.jsonl", "event.schema.json", False),
     ("renders/render_plan.json", "render_plan.schema.json", False),
     ("renders/render_report.json", "render_report.schema.json", False),
     ("renders/render_request.json", "render_request.schema.json", False),
@@ -68,6 +70,59 @@ def _validate_one_check(
             entry["errors"] = [str(exc)]
             return entry
         entry["status"] = "valid"
+        return entry
+
+    if rel_path.endswith(".jsonl"):
+        try:
+            report = validate_event_log_jsonl(file_path)
+        except (RuntimeError, ValueError) as exc:
+            entry["status"] = "invalid"
+            entry["errors"] = [str(exc)]
+            return entry
+
+        raw_issues = report.get("issues")
+        if not isinstance(raw_issues, list) or not raw_issues:
+            entry["status"] = "valid"
+            return entry
+
+        normalized_issues: list[dict[str, Any]] = []
+        for raw_issue in raw_issues:
+            if not isinstance(raw_issue, dict):
+                continue
+            line = raw_issue.get("line")
+            issue_id = raw_issue.get("issue_id")
+            message = raw_issue.get("message")
+            if not isinstance(line, int):
+                continue
+            if not isinstance(issue_id, str) or not issue_id.strip():
+                continue
+            if not isinstance(message, str) or not message.strip():
+                continue
+            normalized_issues.append(
+                {
+                    "line": line,
+                    "issue_id": issue_id.strip(),
+                    "message": message.strip(),
+                }
+            )
+
+        normalized_issues.sort(
+            key=lambda issue: (
+                issue["line"],
+                issue["issue_id"],
+                issue["message"],
+            )
+        )
+        entry["status"] = "invalid"
+        entry["issues"] = normalized_issues
+        entry["errors"] = [
+            (
+                f"line {issue['line']}: "
+                f"{issue['issue_id']}: "
+                f"{issue['message']}"
+            )
+            for issue in normalized_issues
+        ]
         return entry
 
     # JSON files: load + schema-validate.

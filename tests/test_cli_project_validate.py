@@ -9,6 +9,7 @@ import wave
 from pathlib import Path
 
 from mmo.cli import main
+from mmo.core.event_log import new_event_id, write_event_log
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SANDBOX = (
@@ -283,6 +284,7 @@ class TestProjectValidateRenderArtifacts(unittest.TestCase):
             },
             "qa_gates": {"status": "not_run", "gates": []},
         })
+        _write_valid_event_log(renders_dir / "event_log.jsonl")
 
     def test_render_artifacts_validated_as_valid(self) -> None:
         exit_code, stdout, stderr = _run_main([
@@ -295,7 +297,7 @@ class TestProjectValidateRenderArtifacts(unittest.TestCase):
             c for c in result["checks"]
             if c["file"].startswith("renders/")
         ]
-        self.assertEqual(len(render_checks), 3)
+        self.assertEqual(len(render_checks), 4)
         for check in render_checks:
             self.assertFalse(check["required"])
             self.assertEqual(
@@ -331,6 +333,83 @@ class TestProjectValidateRenderPlanInvalid(unittest.TestCase):
         self.assertGreater(len(bad_check["errors"]), 0)
         # Deterministic: identical output across runs.
         self.assertEqual(stdout_a, stdout_b)
+
+
+class TestProjectValidateEventLogInvalid(unittest.TestCase):
+
+    def test_invalid_event_log_rejected_with_line_issue_message(self) -> None:
+        base = _SANDBOX / "bad_event_log"
+        project_dir = _init_project(base)
+        event_log_path = project_dir / "renders" / "event_log.jsonl"
+        event_log_path.parent.mkdir(parents=True, exist_ok=True)
+        event_log_path.write_text(
+            (
+                '{"kind":"info","scope":"render"\n'
+                '"not-an-object"\n'
+                '{"kind":"info","scope":"render"}\n'
+            ),
+            encoding="utf-8",
+        )
+
+        exit_code_a, stdout_a, _ = _run_main([
+            "project", "validate", str(project_dir),
+        ])
+        exit_code_b, stdout_b, _ = _run_main([
+            "project", "validate", str(project_dir),
+        ])
+        self.assertEqual(exit_code_a, 2)
+        self.assertEqual(exit_code_b, 2)
+
+        result = json.loads(stdout_a)
+        check = next(
+            item
+            for item in result["checks"]
+            if item["file"] == "renders/event_log.jsonl"
+        )
+        self.assertEqual(check["status"], "invalid")
+
+        issues = check.get("issues")
+        self.assertIsInstance(issues, list)
+        if not isinstance(issues, list):
+            return
+        self.assertGreater(len(issues), 0)
+        self.assertEqual(
+            issues,
+            sorted(
+                issues,
+                key=lambda issue: (
+                    issue["line"],
+                    issue["issue_id"],
+                    issue["message"],
+                ),
+            ),
+        )
+        self.assertEqual(issues[0]["line"], 1)
+        self.assertTrue(issues[0]["issue_id"].startswith("ISSUE.EVENT_LOG."))
+
+        errors = check.get("errors")
+        self.assertIsInstance(errors, list)
+        if isinstance(errors, list):
+            self.assertTrue(any("line 1:" in item for item in errors))
+            self.assertTrue(any("ISSUE.EVENT_LOG." in item for item in errors))
+
+        self.assertEqual(stdout_a, stdout_b)
+
+
+def _write_valid_event_log(path: Path) -> None:
+    event = {
+        "kind": "info",
+        "scope": "render",
+        "what": "render-run completed",
+        "why": "Deterministic dry-run completed.",
+        "where": ["renders/render_plan.json"],
+        "evidence": {
+            "codes": ["RENDER.RUN.COMPLETED"],
+            "paths": ["renders/render_plan.json"],
+        },
+    }
+    event["event_id"] = new_event_id(event)
+    write_event_log([event], path, force=True)
 
 
 def _write_json(path: Path, payload: dict) -> None:
