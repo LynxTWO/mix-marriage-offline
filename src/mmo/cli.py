@@ -2977,6 +2977,26 @@ def main(argv: list[str] | None = None) -> int:
         help="Overwrite output file if it already exists.",
     )
 
+    render_preflight_parser = subparsers.add_parser(
+        "render-preflight",
+        help="Run deterministic preflight checks against render_plan job inputs.",
+    )
+    render_preflight_parser.add_argument(
+        "--plan",
+        required=True,
+        help="Path to render_plan JSON.",
+    )
+    render_preflight_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output render_preflight JSON.",
+    )
+    render_preflight_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite output file if it already exists.",
+    )
+
     render_report_parser = subparsers.add_parser(
         "render-report",
         help="Build a render_report JSON from a render_plan.",
@@ -5819,6 +5839,47 @@ def main(argv: list[str] | None = None) -> int:
                 return int(exc.code) if isinstance(exc.code, int) else 1
         print("Unknown render-request command.", file=sys.stderr)
         return 2
+    if args.command == "render-preflight":
+        out_path = Path(args.out)
+        if out_path.exists() and not args.force:
+            print(
+                f"File exists (use --force to overwrite): {out_path.as_posix()}",
+                file=sys.stderr,
+            )
+            return 1
+        try:
+            plan_path = Path(args.plan)
+            plan_payload = _load_json_object(
+                plan_path,
+                label="Render plan",
+            )
+            _validate_json_payload(
+                plan_payload,
+                schema_path=schemas / "render_plan.schema.json",
+                payload_name="Render plan",
+            )
+
+            from mmo.core.render_preflight import (  # noqa: WPS433
+                build_render_preflight_payload,
+                preflight_has_error_issues,
+            )
+
+            preflight_payload = build_render_preflight_payload(
+                plan_payload,
+                plan_path=plan_path,
+            )
+            _validate_json_payload(
+                preflight_payload,
+                schema_path=schemas / "render_preflight.schema.json",
+                payload_name="Render preflight",
+            )
+            _write_json_file(out_path, preflight_payload)
+            return 2 if preflight_has_error_issues(preflight_payload) else 0
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
     if args.command == "render-report":
         out_path = Path(args.out)
         if out_path.exists() and not args.force:

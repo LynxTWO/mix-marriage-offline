@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/render_preflight.schema.json",
+  "title": "MMO Render Preflight",
+  "description": "Deterministic preflight checks for render_plan job inputs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_path",
+    "plan_id",
+    "checks",
+    "issues"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "plan_path": { "$ref": "#/$defs/posix_path" },
+    "plan_id": { "$ref": "#/$defs/plan_id" },
+    "checks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/job_check" }
+    },
+    "issues": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/issue" }
+    }
+  },
+  "$defs": {
+    "plan_id": {
+      "type": "string",
+      "pattern": "^PLAN\\.[A-Za-z0-9_.-]+\\.[0-9a-f]{8}$"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^JOB\\.[0-9]{3}$"
+    },
+    "posix_path": {
+      "type": "string",
+      "pattern": "^[^\\\\]+$",
+      "minLength": 1
+    },
+    "ffprobe_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ok", "skipped"]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sample_rate": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "channel_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "duration_seconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "const": "ok" } },
+            "required": ["status"]
+          },
+          "then": {
+            "required": ["sample_rate", "channel_count", "duration_seconds"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "status": { "const": "skipped" } },
+            "required": ["status"]
+          },
+          "then": {
+            "required": ["reason"]
+          }
+        }
+      ]
+    },
+    "input_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "role", "exists", "is_file", "ffprobe"],
+      "properties": {
+        "path": { "$ref": "#/$defs/posix_path" },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exists": {
+          "type": "boolean"
+        },
+        "is_file": {
+          "type": "boolean"
+        },
+        "ffprobe": { "$ref": "#/$defs/ffprobe_result" }
+      }
+    },
+    "job_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["job_id", "input_count", "status", "input_checks"],
+      "properties": {
+        "job_id": { "$ref": "#/$defs/job_id" },
+        "input_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "status": {
+          "type": "string",
+          "enum": ["ok", "error"]
+        },
+        "input_checks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/input_check" }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["job_id", "path", "role"],
+      "properties": {
+        "job_id": { "$ref": "#/$defs/job_id" },
+        "path": { "$ref": "#/$defs/posix_path" },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue_id", "severity", "message", "evidence"],
+      "properties": {
+        "issue_id": {
+          "type": "string",
+          "pattern": "^ISSUE\\.RENDER\\.PREFLIGHT\\.[A-Z0-9_]+$"
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["error", "warn"]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    }
+  }
+}
