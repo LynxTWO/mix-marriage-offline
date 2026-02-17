@@ -9,6 +9,10 @@ Priority for cache directory:
   1. ``MMO_CACHE_DIR`` env var.
   2. ``<repo_root>/.mmo_cache`` when running from a checkout.
   3. OS-appropriate user cache path.
+
+Priority for temporary directory:
+  1. ``MMO_TEMP_DIR`` env var.
+  2. ``<repo_root>/.mmo_tmp/<pid>`` when running from a checkout.
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ from typing import Optional
 # -- internal helpers --------------------------------------------------------
 
 _REQUIRED_SUBDIRS = ("schemas", "ontology", "presets")
+_TEMP_DIR_ERROR_MESSAGE = "MMO temporary directory is unavailable."
 
 
 def _has_required_subdirs(root: Path) -> bool:
@@ -136,3 +141,44 @@ def _os_cache_dir() -> Path:
     if xdg:
         return Path(xdg).resolve() / "mmo"
     return Path.home() / ".cache" / "mmo"
+
+
+def _ensure_real_directory(path: Path) -> Path:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        resolved = path.resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise RuntimeError(_TEMP_DIR_ERROR_MESSAGE) from exc
+
+    if not resolved.is_dir():
+        raise RuntimeError(_TEMP_DIR_ERROR_MESSAGE)
+    probe = resolved / f".mmo_temp_probe_{os.getpid()}"
+    try:
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError as exc:
+        raise RuntimeError(_TEMP_DIR_ERROR_MESSAGE) from exc
+    finally:
+        if probe.exists():
+            try:
+                probe.unlink()
+            except OSError:
+                pass
+    return resolved
+
+
+def default_temp_dir() -> Path:
+    """Return a deterministic repo-local temporary directory."""
+    env = os.environ.get("MMO_TEMP_DIR")
+    if env:
+        return _ensure_real_directory(Path(env).expanduser())
+
+    repo = _repo_checkout_root()
+    if repo is None:
+        raise RuntimeError(_TEMP_DIR_ERROR_MESSAGE)
+    return _ensure_real_directory(repo / ".mmo_tmp" / str(os.getpid()))
+
+
+def temp_dir() -> Path:
+    """Alias for :func:`default_temp_dir`."""
+    return default_temp_dir()

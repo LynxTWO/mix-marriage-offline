@@ -1,7 +1,10 @@
 import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Optional
+
+import pytest
 
 
 def _resolved_path(path_value: str) -> Optional[Path]:
@@ -57,3 +60,46 @@ def pytest_sessionstart(session) -> None:
 
 
 _prefer_repo_src()
+
+
+def _to_posix(path: Path) -> str:
+    return path.resolve().as_posix()
+
+
+def _is_within(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _enforce_repo_local_temp_dir() -> None:
+    from mmo.resources import temp_dir
+
+    temp_root = temp_dir()
+    temp_root_text = os.fspath(temp_root)
+
+    original_env = {name: os.environ.get(name) for name in ("TMPDIR", "TMP", "TEMP")}
+    original_tempdir = tempfile.tempdir
+    try:
+        os.environ["TMPDIR"] = temp_root_text
+        os.environ["TMP"] = temp_root_text
+        os.environ["TEMP"] = temp_root_text
+        tempfile.tempdir = temp_root_text
+
+        active_temp = Path(tempfile.gettempdir()).resolve()
+        resolved_root = temp_root.resolve()
+        assert _is_within(active_temp, resolved_root), (
+            "tempfile.gettempdir() must be inside repo-local temp root: "
+            f"tempfile={_to_posix(active_temp)} root={_to_posix(resolved_root)}"
+        )
+        yield
+    finally:
+        tempfile.tempdir = original_tempdir
+        for name, value in original_env.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value

@@ -21,6 +21,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from mmo.core.session import build_session_from_stems_dir  # noqa: E402
+from mmo.resources import temp_dir  # noqa: E402
 from mmo.core.validators import validate_session  # noqa: E402
 
 
@@ -114,7 +115,10 @@ def _run_fixture(
     if force_missing:
         os.environ["MMO_FFPROBE_PATH"] = os.fspath(Path("__missing_ffprobe__"))
 
-    with tempfile.TemporaryDirectory(prefix="mmo_session_fixture_") as tmp_dir:
+    with tempfile.TemporaryDirectory(
+        prefix="mmo_session_fixture_",
+        dir=os.fspath(temp_dir()),
+    ) as tmp_dir:
         stems_dir = Path(tmp_dir) / "stems"
         stems_dir.mkdir(parents=True, exist_ok=True)
 

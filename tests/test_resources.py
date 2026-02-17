@@ -90,5 +90,33 @@ class TestDefaultCacheDir(unittest.TestCase):
             self.assertEqual(d, Path(tmp).resolve())
 
 
+class TestDefaultTempDir(unittest.TestCase):
+    def test_default_temp_dir_is_absolute_directory(self) -> None:
+        from mmo.resources import default_temp_dir
+
+        d = default_temp_dir()
+        self.assertIsInstance(d, Path)
+        self.assertTrue(d.is_absolute(), f"Expected absolute path, got {d}")
+        self.assertTrue(d.is_dir(), f"Expected directory, got {d}")
+
+    def test_mmo_temp_dir_override(self) -> None:
+        from mmo.resources import default_temp_dir
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(os.environ, {"MMO_TEMP_DIR": tmp}):
+                d = default_temp_dir()
+            self.assertEqual(d, Path(tmp).resolve())
+
+    def test_default_temp_dir_repo_root_missing_raises_stable_error(self) -> None:
+        from mmo import resources
+
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("MMO_TEMP_DIR", None)
+            with mock.patch("mmo.resources._repo_checkout_root", return_value=None):
+                with self.assertRaises(RuntimeError) as raised:
+                    resources.default_temp_dir()
+        self.assertEqual(str(raised.exception), "MMO temporary directory is unavailable.")
+
+
 if __name__ == "__main__":
     unittest.main()
