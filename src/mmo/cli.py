@@ -986,6 +986,22 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to plugins directory used by --include-plugins.",
     )
     bundle_parser.add_argument(
+        "--include-plugin-layouts",
+        action="store_true",
+        help=(
+            "When used with --include-plugins, also include ui_layout path/hash metadata "
+            "for each plugin."
+        ),
+    )
+    bundle_parser.add_argument(
+        "--include-plugin-layout-snapshots",
+        action="store_true",
+        help=(
+            "When used with --include-plugin-layouts, also generate deterministic "
+            "ui_layout_snapshot metadata (path/hash/violations_count)."
+        ),
+    )
+    bundle_parser.add_argument(
         "--render-request",
         default=None,
         help="Optional path to render_request JSON artifact.",
@@ -1286,6 +1302,14 @@ def main(argv: list[str] | None = None) -> int:
         choices=["json", "text"],
         default="text",
         help="Output format for plugin details.",
+    )
+    plugins_show_parser.add_argument(
+        "--include-ui-layout-snapshot",
+        action="store_true",
+        help=(
+            "Generate and include deterministic ui_layout_snapshot metadata "
+            "(path/hash/violations_count) when ui_layout is present."
+        ),
     )
 
     presets_parser = subparsers.add_parser("presets", help="Run config preset tools.")
@@ -2140,6 +2164,22 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to plugins directory used by --include-plugins.",
     )
     project_bundle_parser.add_argument(
+        "--include-plugin-layouts",
+        action="store_true",
+        help=(
+            "When used with --include-plugins, also include ui_layout path/hash metadata "
+            "for each plugin."
+        ),
+    )
+    project_bundle_parser.add_argument(
+        "--include-plugin-layout-snapshots",
+        action="store_true",
+        help=(
+            "When used with --include-plugin-layouts, also generate deterministic "
+            "ui_layout_snapshot metadata (path/hash/violations_count)."
+        ),
+    )
+    project_bundle_parser.add_argument(
         "--render-preflight",
         default=None,
         help="Optional path to render_preflight JSON artifact.",
@@ -2221,6 +2261,22 @@ def main(argv: list[str] | None = None) -> int:
         "--plugins",
         default="plugins",
         help="Path to plugins directory used by --include-plugins.",
+    )
+    project_build_gui_parser.add_argument(
+        "--include-plugin-layouts",
+        action="store_true",
+        help=(
+            "When used with --include-plugins, also include ui_layout path/hash metadata "
+            "for each plugin."
+        ),
+    )
+    project_build_gui_parser.add_argument(
+        "--include-plugin-layout-snapshots",
+        action="store_true",
+        help=(
+            "When used with --include-plugin-layouts, also generate deterministic "
+            "ui_layout_snapshot metadata (path/hash/violations_count)."
+        ),
     )
 
     project_render_init_parser = project_subparsers.add_parser(
@@ -4374,6 +4430,12 @@ def main(argv: list[str] | None = None) -> int:
                     out_path=Path(args.out),
                     force=bool(getattr(args, "force", False)),
                     include_plugins=bool(getattr(args, "include_plugins", False)),
+                    include_plugin_layouts=bool(
+                        getattr(args, "include_plugin_layouts", False)
+                    ),
+                    include_plugin_layout_snapshots=bool(
+                        getattr(args, "include_plugin_layout_snapshots", False)
+                    ),
                     plugins_dir=(
                         Path(args.plugins)
                         if bool(getattr(args, "include_plugins", False))
@@ -4422,6 +4484,12 @@ def main(argv: list[str] | None = None) -> int:
                     event_log=bool(getattr(args, "event_log", False)),
                     event_log_force=bool(getattr(args, "event_log_force", False)),
                     include_plugins=bool(getattr(args, "include_plugins", False)),
+                    include_plugin_layouts=bool(
+                        getattr(args, "include_plugin_layouts", False)
+                    ),
+                    include_plugin_layout_snapshots=bool(
+                        getattr(args, "include_plugin_layout_snapshots", False)
+                    ),
                     plugins_dir=(
                         Path(args.plugins)
                         if bool(getattr(args, "include_plugins", False))
@@ -4824,6 +4892,12 @@ def main(argv: list[str] | None = None) -> int:
                 gui_state_path=Path(args.gui_state) if args.gui_state else None,
                 ui_locale=args.ui_locale,
                 include_plugins=bool(getattr(args, "include_plugins", False)),
+                include_plugin_layouts=bool(
+                    getattr(args, "include_plugin_layouts", False)
+                ),
+                include_plugin_layout_snapshots=bool(
+                    getattr(args, "include_plugin_layout_snapshots", False)
+                ),
                 plugins_dir=(
                     Path(args.plugins)
                     if bool(getattr(args, "include_plugins", False))
@@ -4930,6 +5004,9 @@ def main(argv: list[str] | None = None) -> int:
                 payload = _build_plugins_show_payload(
                     plugins_dir=Path(args.plugins),
                     plugin_id=args.plugin_id,
+                    include_ui_layout_snapshot=bool(
+                        getattr(args, "include_ui_layout_snapshot", False)
+                    ),
                 )
             except (RuntimeError, ValueError, AttributeError, OSError) as exc:
                 print(str(exc), file=sys.stderr)

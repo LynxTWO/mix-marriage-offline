@@ -5,9 +5,19 @@ import json
 from pathlib import Path
 from typing import Any
 
+try:
+    import jsonschema
+except ImportError:  # pragma: no cover - optional dependency
+    jsonschema = None
+
 from mmo.core.pipeline import load_plugins
+from mmo.resources import schemas_dir
 
 _CONFIG_SCHEMA_JSON_POINTER = "/config_schema"
+_UI_LAYOUT_MANIFEST_FIELD = "ui_layout"
+_DEFAULT_SNAPSHOT_VIEWPORT_WIDTH_PX = 1280
+_DEFAULT_SNAPSHOT_VIEWPORT_HEIGHT_PX = 720
+_DEFAULT_SNAPSHOT_SCALE = 1.0
 
 
 def _path_to_posix(path: Path) -> str:
@@ -38,7 +48,7 @@ def _sha256_file(path: Path) -> str:
     return hasher.hexdigest()
 
 
-def _canonical_json_sha256(payload: dict[str, Any]) -> str:
+def _canonical_json_sha256(payload: Any) -> str:
     canonical = json.dumps(
         payload,
         sort_keys=True,
@@ -50,6 +60,97 @@ def _canonical_json_sha256(payload: dict[str, Any]) -> str:
 
 def _clone_json_object(payload: dict[str, Any]) -> dict[str, Any]:
     return json.loads(json.dumps(payload))
+
+
+def _load_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except OSError as exc:
+        raise ValueError(f"Failed to read {label} JSON from {path}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} JSON is not valid JSON: {path}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} JSON must be an object: {path}")
+    return payload
+
+
+def _validate_json_payload(
+    payload: dict[str, Any],
+    *,
+    schema_basename: str,
+    payload_name: str,
+) -> None:
+    if jsonschema is None:
+        raise RuntimeError("jsonschema is required to validate plugin UI layout payloads.")
+
+    from mmo.core.schema_registry import build_schema_registry, load_json_schema  # noqa: WPS433
+
+    schema_path = schemas_dir() / schema_basename
+    schema = load_json_schema(schema_path)
+    registry = build_schema_registry(schema_path.parent)
+    validator = jsonschema.Draft202012Validator(schema, registry=registry)
+    errors = sorted(validator.iter_errors(payload), key=lambda err: list(err.path))
+    if not errors:
+        return
+
+    lines: list[str] = []
+    for err in errors:
+        path = ".".join(str(item) for item in err.path) or "$"
+        lines.append(f"- {path}: {err.message}")
+    details = "\n".join(lines)
+    raise ValueError(f"{payload_name} schema validation failed:\n{details}")
+
+
+def _resolve_manifest_relative_file(
+    *,
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    field_name: str,
+) -> Path | None:
+    raw_value = manifest.get(field_name)
+    if raw_value is None:
+        return None
+    if not isinstance(raw_value, str):
+        raise ValueError(
+            f"Manifest field '{field_name}' must be a string: {manifest_path.as_posix()}"
+        )
+    normalized = raw_value.strip()
+    if not normalized:
+        raise ValueError(
+            f"Manifest field '{field_name}' must be a non-empty relative path: {manifest_path.as_posix()}"
+        )
+    candidate_rel = Path(normalized)
+    if candidate_rel.is_absolute():
+        raise ValueError(
+            f"Manifest field '{field_name}' must be a relative path: {manifest_path.as_posix()}"
+        )
+
+    plugin_dir = manifest_path.resolve().parent
+    candidate = (plugin_dir / candidate_rel).resolve()
+    try:
+        candidate.relative_to(plugin_dir)
+    except ValueError as exc:
+        raise ValueError(
+            (
+                f"Manifest field '{field_name}' must resolve inside the plugin directory: "
+                f"{manifest_path.as_posix()}"
+            )
+        ) from exc
+    if not candidate.exists():
+        raise ValueError(
+            (
+                f"Manifest field '{field_name}' references a missing file: "
+                f"{candidate.as_posix()}"
+            )
+        )
+    if not candidate.is_file():
+        raise ValueError(
+            (
+                f"Manifest field '{field_name}' must reference a file: "
+                f"{candidate.as_posix()}"
+            )
+        )
+    return candidate
 
 
 def _config_schema_payload(
@@ -78,26 +179,96 @@ def _config_schema_payload(
     return payload
 
 
+def _ui_layout_payload(
+    *,
+    manifest_path: Path,
+    manifest: dict[str, Any],
+) -> tuple[dict[str, Any], Path | None]:
+    layout_path = _resolve_manifest_relative_file(
+        manifest_path=manifest_path,
+        manifest=manifest,
+        field_name=_UI_LAYOUT_MANIFEST_FIELD,
+    )
+    if layout_path is None:
+        return {
+            "present": False,
+            "path": None,
+            "sha256": None,
+        }, None
+    return {
+        "present": True,
+        "path": _path_to_posix(layout_path),
+        "sha256": _sha256_file(layout_path),
+    }, layout_path
+
+
+def _ui_layout_snapshot_payload(
+    *,
+    layout_path: Path,
+) -> dict[str, Any]:
+    from mmo.core.ui_layout import build_ui_layout_snapshot  # noqa: WPS433
+
+    layout_payload = _load_json_object(layout_path, label="UI layout")
+    _validate_json_payload(
+        layout_payload,
+        schema_basename="ui_layout.schema.json",
+        payload_name="UI layout",
+    )
+    snapshot_payload = build_ui_layout_snapshot(
+        layout_payload,
+        layout_path=layout_path,
+        viewport_width_px=_DEFAULT_SNAPSHOT_VIEWPORT_WIDTH_PX,
+        viewport_height_px=_DEFAULT_SNAPSHOT_VIEWPORT_HEIGHT_PX,
+        scale=_DEFAULT_SNAPSHOT_SCALE,
+    )
+    _validate_json_payload(
+        snapshot_payload,
+        schema_basename="ui_layout_snapshot.schema.json",
+        payload_name="UI layout snapshot",
+    )
+    violations = snapshot_payload.get("violations")
+    violations_count = len(violations) if isinstance(violations, list) else 0
+    return {
+        "present": True,
+        "path": _path_to_posix(layout_path),
+        "sha256": _canonical_json_sha256(snapshot_payload),
+        "violations_count": violations_count,
+    }
+
+
 def build_plugins_config_schema_index(
     *,
     plugins_dir: Path,
     include_schema: bool = False,
+    include_ui_layout: bool = False,
+    include_ui_layout_snapshot: bool = False,
 ) -> dict[str, Any]:
     resolved_plugins_dir = _validate_plugins_dir(plugins_dir)
+    include_ui_layout_effective = include_ui_layout or include_ui_layout_snapshot
     rows: list[dict[str, Any]] = []
     for plugin in load_plugins(resolved_plugins_dir):
-        rows.append(
-            {
-                "plugin_id": plugin.plugin_id,
-                "plugin_type": plugin.plugin_type,
-                "version": plugin.version or "",
-                "config_schema": _config_schema_payload(
-                    manifest_path=plugin.manifest_path,
-                    manifest=plugin.manifest,
-                    include_schema=include_schema,
-                ),
-            }
-        )
+        row: dict[str, Any] = {
+            "plugin_id": plugin.plugin_id,
+            "plugin_type": plugin.plugin_type,
+            "version": plugin.version or "",
+            "config_schema": _config_schema_payload(
+                manifest_path=plugin.manifest_path,
+                manifest=plugin.manifest,
+                include_schema=include_schema,
+            ),
+        }
+        ui_layout_path: Path | None = None
+        if include_ui_layout_effective:
+            ui_layout, ui_layout_path = _ui_layout_payload(
+                manifest_path=plugin.manifest_path,
+                manifest=plugin.manifest,
+            )
+            row["ui_layout"] = ui_layout
+        if include_ui_layout_snapshot and ui_layout_path is not None:
+            row["ui_layout_snapshot"] = _ui_layout_snapshot_payload(
+                layout_path=ui_layout_path,
+            )
+        rows.append(row)
 
     rows.sort(
         key=lambda row: (
@@ -116,6 +287,7 @@ def build_plugin_show_payload(
     *,
     plugins_dir: Path,
     plugin_id: str,
+    include_ui_layout_snapshot: bool = False,
 ) -> dict[str, Any]:
     resolved_plugins_dir = _validate_plugins_dir(plugins_dir)
     normalized_plugin_id = plugin_id.strip() if isinstance(plugin_id, str) else ""
@@ -155,7 +327,11 @@ def build_plugin_show_payload(
         "capabilities": plugin_capabilities,
         "manifest": _clone_json_object(target_plugin.manifest),
     }
-    return {
+    ui_layout_payload, ui_layout_path = _ui_layout_payload(
+        manifest_path=target_plugin.manifest_path,
+        manifest=target_plugin.manifest,
+    )
+    payload: dict[str, Any] = {
         "plugins_dir": _path_to_posix(resolved_plugins_dir),
         "plugin": plugin_payload,
         "config_schema": _config_schema_payload(
@@ -163,4 +339,10 @@ def build_plugin_show_payload(
             manifest=target_plugin.manifest,
             include_schema=True,
         ),
+        "ui_layout": ui_layout_payload,
     }
+    if include_ui_layout_snapshot and ui_layout_path is not None:
+        payload["ui_layout_snapshot"] = _ui_layout_snapshot_payload(
+            layout_path=ui_layout_path,
+        )
+    return payload

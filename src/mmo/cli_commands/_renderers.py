@@ -353,9 +353,20 @@ def _run_bundle(
     event_log_path: Path | None = None,
     render_preflight_path: Path | None = None,
     include_plugins: bool = False,
+    include_plugin_layouts: bool = False,
+    include_plugin_layout_snapshots: bool = False,
     plugins_dir: Path | None = None,
 ) -> int:
     from mmo.core.ui_bundle import build_ui_bundle  # noqa: WPS433
+
+    if include_plugin_layout_snapshots and not include_plugin_layouts:
+        raise ValueError(
+            "--include-plugin-layout-snapshots requires --include-plugin-layouts."
+        )
+    if (include_plugin_layouts or include_plugin_layout_snapshots) and not include_plugins:
+        raise ValueError(
+            "--include-plugin-layouts requires --include-plugins."
+        )
 
     report = _load_report(report_path)
     render_manifest: dict[str, Any] | None = None
@@ -377,6 +388,8 @@ def _run_bundle(
         plugins_payload = build_plugins_config_schema_index(
             plugins_dir=normalized_plugins_dir,
             include_schema=False,
+            include_ui_layout=include_plugin_layouts,
+            include_ui_layout_snapshot=include_plugin_layout_snapshots,
         )
 
     bundle = build_ui_bundle(

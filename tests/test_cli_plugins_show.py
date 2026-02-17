@@ -13,10 +13,48 @@ class TestCliPluginsShow(unittest.TestCase):
     def _python_cmd(self) -> str:
         return os.fspath(os.getenv("PYTHON", "") or sys.executable)
 
-    def _write_temp_plugin(self, plugins_dir: Path) -> tuple[str, Path]:
+    def _layout_payload(self) -> dict[str, object]:
+        return {
+            "schema_version": "0.1.0",
+            "layout_id": "LAYOUT.PLUGIN.RENDERER.TEMP_FORM",
+            "grid": {
+                "columns": 12,
+                "gap_px": 16,
+                "row_height_px": 48,
+                "margin_px": 24,
+            },
+            "container": {"section_gap_px": 16},
+            "sections": [
+                {
+                    "section_id": "main",
+                    "widgets": [
+                        {
+                            "widget_id": "widget.main.gain_db",
+                            "col_span": 6,
+                            "row_span": 1,
+                            "param_ref": "PARAM.RENDERER.GAIN_DB",
+                        },
+                        {
+                            "widget_id": "widget.main.mode",
+                            "col_span": 6,
+                            "row_span": 1,
+                            "param_ref": "PARAM.RENDERER.MODE",
+                        },
+                    ],
+                }
+            ],
+        }
+
+    def _write_temp_plugin(self, plugins_dir: Path) -> tuple[str, Path, Path]:
         plugin_id = "PLUGIN.RENDERER.TEMP_FORM"
         manifest_path = plugins_dir / "renderers" / "temp_form.plugin.yaml"
+        layout_path = manifest_path.parent / "ui" / "layout.json"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        layout_path.parent.mkdir(parents=True, exist_ok=True)
+        layout_path.write_text(
+            json.dumps(self._layout_payload(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
         manifest_path.write_text(
             "\n".join(
                 [
@@ -29,6 +67,7 @@ class TestCliPluginsShow(unittest.TestCase):
                     'mmo_min_version: "0.1.0"',
                     'ontology_min_version: "0.1.0"',
                     'entrypoint: "plugins.renderers.safe_renderer:SafeRenderer"',
+                    'ui_layout: "ui/layout.json"',
                     "config_schema:",
                     '  "$schema": "https://json-schema.org/draft/2020-12/schema"',
                     '  "type": "object"',
@@ -43,7 +82,7 @@ class TestCliPluginsShow(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        return plugin_id, manifest_path
+        return plugin_id, manifest_path, layout_path
 
     def _run_plugins_show(
         self,
@@ -51,23 +90,27 @@ class TestCliPluginsShow(unittest.TestCase):
         plugin_id: str,
         plugins_dir: Path,
         output_format: str,
+        include_ui_layout_snapshot: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         repo_root = Path(__file__).resolve().parents[1]
         env = os.environ.copy()
         env["PYTHONPATH"] = str(repo_root / "src")
+        args = [
+            self._python_cmd(),
+            "-m",
+            "mmo",
+            "plugins",
+            "show",
+            plugin_id,
+            "--plugins",
+            str(plugins_dir),
+            "--format",
+            output_format,
+        ]
+        if include_ui_layout_snapshot:
+            args.append("--include-ui-layout-snapshot")
         return subprocess.run(
-            [
-                self._python_cmd(),
-                "-m",
-                "mmo",
-                "plugins",
-                "show",
-                plugin_id,
-                "--plugins",
-                str(plugins_dir),
-                "--format",
-                output_format,
-            ],
+            args,
             check=False,
             capture_output=True,
             text=True,
@@ -78,9 +121,10 @@ class TestCliPluginsShow(unittest.TestCase):
     def test_plugins_show_json_includes_config_schema_payload(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             plugins_dir = Path(temp_dir) / "plugins"
-            plugin_id, manifest_path = self._write_temp_plugin(plugins_dir)
+            plugin_id, manifest_path, layout_path = self._write_temp_plugin(plugins_dir)
             expected_plugins_dir = plugins_dir.resolve().as_posix()
             expected_manifest_path = manifest_path.resolve().as_posix()
+            expected_layout_path = layout_path.resolve().as_posix()
 
             first = self._run_plugins_show(
                 plugin_id=plugin_id,
@@ -131,10 +175,54 @@ class TestCliPluginsShow(unittest.TestCase):
         if isinstance(schema_payload, dict):
             jsonschema.Draft202012Validator.check_schema(schema_payload)
 
+        ui_layout = payload.get("ui_layout")
+        self.assertIsInstance(ui_layout, dict)
+        if not isinstance(ui_layout, dict):
+            return
+        self.assertTrue(ui_layout.get("present"))
+        self.assertEqual(ui_layout.get("path"), expected_layout_path)
+        self.assertIsInstance(ui_layout.get("sha256"), str)
+        self.assertEqual(len(ui_layout.get("sha256", "")), 64)
+        self.assertNotIn("ui_layout_snapshot", payload)
+
+    def test_plugins_show_json_can_include_ui_layout_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            plugins_dir = Path(temp_dir) / "plugins"
+            plugin_id, _, layout_path = self._write_temp_plugin(plugins_dir)
+            expected_layout_path = layout_path.resolve().as_posix()
+
+            first = self._run_plugins_show(
+                plugin_id=plugin_id,
+                plugins_dir=plugins_dir,
+                output_format="json",
+                include_ui_layout_snapshot=True,
+            )
+            second = self._run_plugins_show(
+                plugin_id=plugin_id,
+                plugins_dir=plugins_dir,
+                output_format="json",
+                include_ui_layout_snapshot=True,
+            )
+
+        self.assertEqual(first.returncode, 0, msg=first.stderr)
+        self.assertEqual(second.returncode, 0, msg=second.stderr)
+        self.assertEqual(first.stdout, second.stdout)
+
+        payload = json.loads(first.stdout)
+        snapshot = payload.get("ui_layout_snapshot")
+        self.assertIsInstance(snapshot, dict)
+        if not isinstance(snapshot, dict):
+            return
+        self.assertTrue(snapshot.get("present"))
+        self.assertEqual(snapshot.get("path"), expected_layout_path)
+        self.assertIsInstance(snapshot.get("sha256"), str)
+        self.assertEqual(len(snapshot.get("sha256", "")), 64)
+        self.assertEqual(snapshot.get("violations_count"), 0)
+
     def test_plugins_show_text_includes_schema_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             plugins_dir = Path(temp_dir) / "plugins"
-            plugin_id, _ = self._write_temp_plugin(plugins_dir)
+            plugin_id, _, _ = self._write_temp_plugin(plugins_dir)
 
             result = self._run_plugins_show(
                 plugin_id=plugin_id,
@@ -147,6 +235,9 @@ class TestCliPluginsShow(unittest.TestCase):
         self.assertIn("config_schema.present: True", result.stdout)
         self.assertIn("config_schema.pointer:", result.stdout)
         self.assertIn("config_schema.sha256:", result.stdout)
+        self.assertIn("ui_layout.present: True", result.stdout)
+        self.assertIn("ui_layout.path:", result.stdout)
+        self.assertIn("ui_layout.sha256:", result.stdout)
 
     def test_plugins_show_unknown_plugin_returns_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

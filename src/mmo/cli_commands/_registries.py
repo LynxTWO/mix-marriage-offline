@@ -1381,10 +1381,12 @@ def _build_plugins_show_payload(
     *,
     plugins_dir: Path,
     plugin_id: str,
+    include_ui_layout_snapshot: bool = False,
 ) -> dict[str, Any]:
     return build_plugin_show_payload(
         plugins_dir=plugins_dir,
         plugin_id=plugin_id,
+        include_ui_layout_snapshot=include_ui_layout_snapshot,
     )
 
 
@@ -1392,8 +1394,14 @@ def _render_plugins_show_text(payload: dict[str, Any]) -> str:
     lines: list[str] = []
     plugin_payload = payload.get("plugin")
     config_schema_payload = payload.get("config_schema")
+    ui_layout_payload = payload.get("ui_layout")
+    ui_layout_snapshot_payload = payload.get("ui_layout_snapshot")
 
-    if not isinstance(plugin_payload, dict) or not isinstance(config_schema_payload, dict):
+    if (
+        not isinstance(plugin_payload, dict)
+        or not isinstance(config_schema_payload, dict)
+        or not isinstance(ui_layout_payload, dict)
+    ):
         return "(invalid payload)"
 
     lines.append(f"plugin_id: {plugin_payload.get('plugin_id', '')}")
@@ -1421,6 +1429,34 @@ def _render_plugins_show_text(payload: dict[str, Any]) -> str:
     schema_sha256 = config_schema_payload.get("sha256")
     schema_sha256_text = schema_sha256 if isinstance(schema_sha256, str) else "-"
     lines.append(f"config_schema.sha256: {schema_sha256_text}")
+
+    ui_layout_path = ui_layout_payload.get("path")
+    ui_layout_path_text = ui_layout_path if isinstance(ui_layout_path, str) else "-"
+    ui_layout_sha = ui_layout_payload.get("sha256")
+    ui_layout_sha_text = ui_layout_sha if isinstance(ui_layout_sha, str) else "-"
+    lines.append(f"ui_layout.present: {ui_layout_payload.get('present') is True}")
+    lines.append(f"ui_layout.path: {ui_layout_path_text}")
+    lines.append(f"ui_layout.sha256: {ui_layout_sha_text}")
+
+    if isinstance(ui_layout_snapshot_payload, dict):
+        snapshot_path = ui_layout_snapshot_payload.get("path")
+        snapshot_path_text = snapshot_path if isinstance(snapshot_path, str) else "-"
+        snapshot_sha = ui_layout_snapshot_payload.get("sha256")
+        snapshot_sha_text = snapshot_sha if isinstance(snapshot_sha, str) else "-"
+        snapshot_violations = ui_layout_snapshot_payload.get("violations_count")
+        snapshot_violations_text = (
+            str(snapshot_violations)
+            if isinstance(snapshot_violations, int)
+            and not isinstance(snapshot_violations, bool)
+            and snapshot_violations >= 0
+            else "-"
+        )
+        lines.append(
+            f"ui_layout_snapshot.present: {ui_layout_snapshot_payload.get('present') is True}"
+        )
+        lines.append(f"ui_layout_snapshot.path: {snapshot_path_text}")
+        lines.append(f"ui_layout_snapshot.sha256: {snapshot_sha_text}")
+        lines.append(f"ui_layout_snapshot.violations_count: {snapshot_violations_text}")
 
     raw_schema = config_schema_payload.get("schema")
     if isinstance(raw_schema, dict):

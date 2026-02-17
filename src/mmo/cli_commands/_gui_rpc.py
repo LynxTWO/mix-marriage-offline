@@ -67,6 +67,8 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
                 "event_log_force": "boolean",
                 "force": "boolean",
                 "include_plugins": "boolean",
+                "include_plugin_layouts": "boolean",
+                "include_plugin_layout_snapshots": "boolean",
                 "plugins": "string",
                 "scan": "boolean",
                 "scan_out": "string",
@@ -83,6 +85,10 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
                     "force": True,
                     "pack_out": "C:/mmo/project/project_gui.zip",
                     "project_dir": "C:/mmo/project",
+                    "include_plugins": True,
+                    "include_plugin_layouts": True,
+                    "include_plugin_layout_snapshots": False,
+                    "plugins": "C:/mmo/plugins",
                     "scan": True,
                     "scan_out": "C:/mmo/project/report.json",
                     "scan_stems": "C:/mmo/stems",
@@ -377,6 +383,8 @@ def _handle_project_build_gui(params: dict[str, Any]) -> dict[str, Any]:
             "event_log",
             "event_log_force",
             "include_plugins",
+            "include_plugin_layouts",
+            "include_plugin_layout_snapshots",
             "plugins",
         },
     )
@@ -432,6 +440,18 @@ def _handle_project_build_gui(params: dict[str, Any]) -> dict[str, Any]:
         name="include_plugins",
         default=False,
     )
+    include_plugin_layouts = _optional_bool_param(
+        method="project.build_gui",
+        params=params,
+        name="include_plugin_layouts",
+        default=False,
+    )
+    include_plugin_layout_snapshots = _optional_bool_param(
+        method="project.build_gui",
+        params=params,
+        name="include_plugin_layout_snapshots",
+        default=False,
+    )
     plugins = _optional_str_param(
         method="project.build_gui",
         params=params,
@@ -454,6 +474,8 @@ def _handle_project_build_gui(params: dict[str, Any]) -> dict[str, Any]:
             event_log=event_log,
             event_log_force=event_log_force,
             include_plugins=include_plugins,
+            include_plugin_layouts=include_plugin_layouts,
+            include_plugin_layout_snapshots=include_plugin_layout_snapshots,
             plugins_dir=plugins_dir,
         ),
     )

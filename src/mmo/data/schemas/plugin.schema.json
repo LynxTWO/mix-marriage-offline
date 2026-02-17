@@ -68,6 +68,11 @@
       "type": "object",
       "description": "Optional JSON Schema fragment describing plugin-specific configuration.",
       "additionalProperties": true
+    },
+    "ui_layout": {
+      "type": "string",
+      "description": "Optional relative path to a plugin UI layout JSON file inside the plugin directory.",
+      "pattern": "^(?![A-Za-z]:/)(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
     }
   },
   "$defs": {

@@ -556,6 +556,8 @@ def _run_project_build_gui(
     event_log: bool,
     event_log_force: bool,
     include_plugins: bool = False,
+    include_plugin_layouts: bool = False,
+    include_plugin_layout_snapshots: bool = False,
     plugins_dir: Path | None = None,
 ) -> int:
     """Run deterministic project GUI build pipeline with explicit-safe flags."""
@@ -689,6 +691,8 @@ def _run_project_build_gui(
             out_path=bundle_out_path,
             force=force,
             include_plugins=include_plugins,
+            include_plugin_layouts=include_plugin_layouts,
+            include_plugin_layout_snapshots=include_plugin_layout_snapshots,
             plugins_dir=plugins_dir,
         )
     if bundle_exit != 0:
@@ -1056,10 +1060,22 @@ def _run_project_bundle(
     out_path: Path,
     force: bool,
     include_plugins: bool = False,
+    include_plugin_layouts: bool = False,
+    include_plugin_layout_snapshots: bool = False,
     plugins_dir: Path | None = None,
     render_preflight_path: Path | None = None,
 ) -> int:
     """Build ui_bundle.json from allowlisted project artifacts."""
+    if include_plugin_layout_snapshots and not include_plugin_layouts:
+        print(
+            "--include-plugin-layout-snapshots requires --include-plugin-layouts.",
+            file=sys.stderr,
+        )
+        return 1
+    if (include_plugin_layouts or include_plugin_layout_snapshots) and not include_plugins:
+        print("--include-plugin-layouts requires --include-plugins.", file=sys.stderr)
+        return 1
+
     if out_path.exists() and not force:
         print(
             f"File exists (use --force to overwrite): {out_path.as_posix()}",
@@ -1093,6 +1109,8 @@ def _run_project_bundle(
         plugins_payload = build_plugins_config_schema_index(
             plugins_dir=normalized_plugins_dir,
             include_schema=False,
+            include_ui_layout=include_plugin_layouts,
+            include_ui_layout_snapshot=include_plugin_layout_snapshots,
         )
 
     from mmo.core.ui_bundle import build_ui_bundle  # noqa: WPS433

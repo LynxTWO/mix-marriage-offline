@@ -44,6 +44,62 @@ class TestCliBundlePointers(unittest.TestCase):
     def _python_cmd(self) -> str:
         return os.fspath(os.getenv("PYTHON", "") or sys.executable)
 
+    def _sample_layout_payload(self) -> dict[str, object]:
+        return {
+            "schema_version": "0.1.0",
+            "layout_id": "LAYOUT.PLUGIN.RENDERER.BUNDLE",
+            "grid": {
+                "columns": 12,
+                "gap_px": 16,
+                "row_height_px": 48,
+                "margin_px": 24,
+            },
+            "container": {"section_gap_px": 16},
+            "sections": [
+                {
+                    "section_id": "main",
+                    "widgets": [
+                        {
+                            "widget_id": "widget.main.gain_db",
+                            "col_span": 12,
+                            "row_span": 1,
+                            "param_ref": "PARAM.RENDERER.GAIN_DB",
+                        }
+                    ],
+                }
+            ],
+        }
+
+    def _write_temp_plugin_with_layout(self, plugins_dir: Path) -> tuple[str, Path]:
+        plugin_id = "PLUGIN.RENDERER.BUNDLE_LAYOUT"
+        manifest_path = plugins_dir / "renderers" / "bundle_layout.plugin.yaml"
+        layout_path = manifest_path.parent / "ui" / "layout.json"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        layout_path.parent.mkdir(parents=True, exist_ok=True)
+        layout_path.write_text(
+            json.dumps(self._sample_layout_payload(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        manifest_path.write_text(
+            "\n".join(
+                [
+                    f'plugin_id: "{plugin_id}"',
+                    'plugin_type: "renderer"',
+                    'name: "Bundle Layout Renderer"',
+                    'version: "0.1.0"',
+                    'license: "Apache-2.0"',
+                    'description: "Renderer fixture for plugin layout bundle tests."',
+                    'mmo_min_version: "0.1.0"',
+                    'ontology_min_version: "0.1.0"',
+                    'entrypoint: "plugins.renderers.safe_renderer:SafeRenderer"',
+                    'ui_layout: "ui/layout.json"',
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return plugin_id, layout_path
+
     def test_bundle_command_embeds_project_subset_and_pointers(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
@@ -276,6 +332,181 @@ class TestCliBundlePointers(unittest.TestCase):
             if not isinstance(entries, list):
                 return
             self.assertTrue(len(entries) >= 2)
+
+    def test_bundle_command_include_plugin_layouts_requires_include_plugins(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            report_path = temp_path / "report.json"
+            out_bundle_path = temp_path / "ui_bundle.json"
+            report_path.write_text(
+                json.dumps(_sample_report_payload(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(repo_root / "src")
+            result = subprocess.run(
+                [
+                    self._python_cmd(),
+                    "-m",
+                    "mmo",
+                    "bundle",
+                    "--report",
+                    str(report_path),
+                    "--include-plugin-layouts",
+                    "--out",
+                    str(out_bundle_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+                cwd=repo_root,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("--include-plugin-layouts requires --include-plugins", result.stderr)
+
+    def test_bundle_command_include_plugin_layout_snapshots_requires_layouts(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            report_path = temp_path / "report.json"
+            out_bundle_path = temp_path / "ui_bundle.json"
+            report_path.write_text(
+                json.dumps(_sample_report_payload(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(repo_root / "src")
+            result = subprocess.run(
+                [
+                    self._python_cmd(),
+                    "-m",
+                    "mmo",
+                    "bundle",
+                    "--report",
+                    str(report_path),
+                    "--include-plugins",
+                    "--include-plugin-layout-snapshots",
+                    "--plugins",
+                    str(repo_root / "plugins"),
+                    "--out",
+                    str(out_bundle_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+                cwd=repo_root,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(
+                "--include-plugin-layout-snapshots requires --include-plugin-layouts",
+                result.stderr,
+            )
+
+    def test_bundle_command_include_plugin_layouts_and_snapshots_is_deterministic(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            report_path = temp_path / "report.json"
+            out_bundle_path = temp_path / "ui_bundle.json"
+            plugins_dir = temp_path / "plugins"
+            plugin_id, layout_path = self._write_temp_plugin_with_layout(plugins_dir)
+            expected_layout_path = layout_path.resolve().as_posix()
+            report_path.write_text(
+                json.dumps(_sample_report_payload(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(repo_root / "src")
+            args = [
+                self._python_cmd(),
+                "-m",
+                "mmo",
+                "bundle",
+                "--report",
+                str(report_path),
+                "--include-plugins",
+                "--include-plugin-layouts",
+                "--include-plugin-layout-snapshots",
+                "--plugins",
+                str(plugins_dir),
+                "--out",
+                str(out_bundle_path),
+            ]
+            first = subprocess.run(
+                args,
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+                cwd=repo_root,
+            )
+            self.assertEqual(first.returncode, 0, msg=first.stderr)
+            first_bytes = out_bundle_path.read_bytes()
+
+            second = subprocess.run(
+                args,
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+                cwd=repo_root,
+            )
+            self.assertEqual(second.returncode, 0, msg=second.stderr)
+            second_bytes = out_bundle_path.read_bytes()
+            self.assertEqual(first_bytes, second_bytes)
+
+            bundle = json.loads(out_bundle_path.read_text(encoding="utf-8"))
+            validator.validate(bundle)
+            plugins_payload = bundle.get("plugins")
+            self.assertIsInstance(plugins_payload, dict)
+            if not isinstance(plugins_payload, dict):
+                return
+            entries = plugins_payload.get("entries")
+            self.assertIsInstance(entries, list)
+            if not isinstance(entries, list):
+                return
+
+            plugin_entry = next(
+                (
+                    item
+                    for item in entries
+                    if isinstance(item, dict)
+                    and item.get("plugin_id") == plugin_id
+                ),
+                None,
+            )
+            self.assertIsInstance(plugin_entry, dict)
+            if not isinstance(plugin_entry, dict):
+                return
+
+            ui_layout = plugin_entry.get("ui_layout")
+            self.assertIsInstance(ui_layout, dict)
+            if not isinstance(ui_layout, dict):
+                return
+            self.assertTrue(ui_layout.get("present"))
+            self.assertEqual(ui_layout.get("path"), expected_layout_path)
+            self.assertIsInstance(ui_layout.get("sha256"), str)
+            self.assertEqual(len(ui_layout.get("sha256", "")), 64)
+
+            snapshot = plugin_entry.get("ui_layout_snapshot")
+            self.assertIsInstance(snapshot, dict)
+            if not isinstance(snapshot, dict):
+                return
+            self.assertTrue(snapshot.get("present"))
+            self.assertEqual(snapshot.get("path"), expected_layout_path)
+            self.assertIsInstance(snapshot.get("sha256"), str)
+            self.assertEqual(len(snapshot.get("sha256", "")), 64)
+            self.assertEqual(snapshot.get("violations_count"), 0)
 
 
 if __name__ == "__main__":

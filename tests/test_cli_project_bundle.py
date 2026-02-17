@@ -58,6 +58,8 @@ def _run_project_bundle(
     *,
     force: bool = False,
     include_plugins: bool = False,
+    include_plugin_layouts: bool = False,
+    include_plugin_layout_snapshots: bool = False,
     plugins_dir: Path | None = None,
     render_preflight_path: Path | None = None,
 ) -> tuple[int, str, str]:
@@ -75,6 +77,10 @@ def _run_project_bundle(
                 str(plugins_dir if plugins_dir is not None else (_REPO_ROOT / "plugins")),
             ]
         )
+    if include_plugin_layouts:
+        args.append("--include-plugin-layouts")
+    if include_plugin_layout_snapshots:
+        args.append("--include-plugin-layout-snapshots")
     if render_preflight_path is not None:
         args.extend(["--render-preflight", str(render_preflight_path)])
     return _run_main(args)
@@ -351,6 +357,31 @@ class TestProjectBundle(unittest.TestCase):
         bytes_b = out_path.read_bytes()
 
         self.assertEqual(bytes_a, bytes_b)
+
+    def test_include_plugin_layouts_requires_include_plugins(self) -> None:
+        out_path = _SANDBOX / "full" / "ui_bundle_plugins_layouts_requires_plugins.json"
+        exit_code, _, stderr = _run_project_bundle(
+            self.project_dir,
+            out_path,
+            include_plugin_layouts=True,
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertIn("--include-plugin-layouts requires --include-plugins", stderr)
+
+    def test_include_plugin_layout_snapshots_requires_layouts(self) -> None:
+        out_path = _SANDBOX / "full" / "ui_bundle_plugins_snapshots_requires_layouts.json"
+        exit_code, _, stderr = _run_project_bundle(
+            self.project_dir,
+            out_path,
+            include_plugins=True,
+            include_plugin_layout_snapshots=True,
+            plugins_dir=_REPO_ROOT / "plugins",
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertIn(
+            "--include-plugin-layout-snapshots requires --include-plugin-layouts",
+            stderr,
+        )
 
     def test_overwrite_refusal_and_allow(self) -> None:
         out_path = _SANDBOX / "full" / "ui_bundle_overwrite.json"

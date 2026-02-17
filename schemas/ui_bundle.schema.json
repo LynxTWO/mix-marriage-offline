@@ -760,6 +760,27 @@
         "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" }
       }
     },
+    "plugin_ui_layout_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["present", "path", "sha256"],
+      "properties": {
+        "present": { "type": "boolean" },
+        "path": { "type": ["string", "null"], "pattern": "^(?:[A-Za-z]:/|/).+" },
+        "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "plugin_ui_layout_snapshot_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["present", "path", "sha256", "violations_count"],
+      "properties": {
+        "present": { "type": "boolean" },
+        "path": { "type": ["string", "null"], "pattern": "^(?:[A-Za-z]:/|/).+" },
+        "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+        "violations_count": { "type": "integer", "minimum": 0 }
+      }
+    },
     "plugin_summary_entry": {
       "type": "object",
       "additionalProperties": false,
@@ -774,7 +795,9 @@
           "enum": ["detector", "resolver", "renderer"]
         },
         "version": { "type": "string" },
-        "config_schema": { "$ref": "#/$defs/plugin_config_schema_ref" }
+        "config_schema": { "$ref": "#/$defs/plugin_config_schema_ref" },
+        "ui_layout": { "$ref": "#/$defs/plugin_ui_layout_ref" },
+        "ui_layout_snapshot": { "$ref": "#/$defs/plugin_ui_layout_snapshot_ref" }
       }
     },
     "plugins_payload": {
