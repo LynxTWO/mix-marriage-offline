@@ -553,6 +553,8 @@ def _run_project_build_gui(
     scan_out_path: Path | None,
     event_log: bool,
     event_log_force: bool,
+    include_plugins: bool = False,
+    plugins_dir: Path | None = None,
 ) -> int:
     """Run deterministic project GUI build pipeline with explicit-safe flags."""
     project_dir_resolved = project_dir.resolve()
@@ -684,6 +686,8 @@ def _run_project_build_gui(
             project_dir=project_dir,
             out_path=bundle_out_path,
             force=force,
+            include_plugins=include_plugins,
+            plugins_dir=plugins_dir,
         )
     if bundle_exit != 0:
         return bundle_exit
@@ -1036,6 +1040,8 @@ def _run_project_bundle(
     project_dir: Path,
     out_path: Path,
     force: bool,
+    include_plugins: bool = False,
+    plugins_dir: Path | None = None,
 ) -> int:
     """Build ui_bundle.json from allowlisted project artifacts."""
     if out_path.exists() and not force:
@@ -1061,6 +1067,17 @@ def _run_project_bundle(
         return 1
 
     report = _load_json_object(existing_paths["report.json"], label="Report")
+    plugins_payload: dict[str, Any] | None = None
+    if include_plugins:
+        from mmo.core.plugin_schema_index import (  # noqa: WPS433
+            build_plugins_config_schema_index,
+        )
+
+        normalized_plugins_dir = plugins_dir if plugins_dir is not None else Path("plugins")
+        plugins_payload = build_plugins_config_schema_index(
+            plugins_dir=normalized_plugins_dir,
+            include_schema=False,
+        )
 
     from mmo.core.ui_bundle import build_ui_bundle  # noqa: WPS433
 
@@ -1079,6 +1096,7 @@ def _run_project_bundle(
         render_plan_artifact_path=render_plan_path,
         render_report_path=existing_paths.get("renders/render_report.json"),
         event_log_path=existing_paths.get("renders/event_log.jsonl"),
+        plugins=plugins_payload,
     )
     _validate_json_payload(
         bundle,

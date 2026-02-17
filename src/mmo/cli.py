@@ -975,6 +975,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to gui_state JSON for GUI pointer metadata.",
     )
     bundle_parser.add_argument(
+        "--include-plugins",
+        action="store_true",
+        help="Embed plugin config schema pointers/hashes in ui_bundle.json.",
+    )
+    bundle_parser.add_argument(
+        "--plugins",
+        default="plugins",
+        help="Path to plugins directory used by --include-plugins.",
+    )
+    bundle_parser.add_argument(
         "--render-request",
         default=None,
         help="Optional path to render_request JSON artifact.",
@@ -1251,6 +1261,25 @@ def main(argv: list[str] | None = None) -> int:
         choices=["json", "text"],
         default="text",
         help="Output format for the plugin list.",
+    )
+    plugins_show_parser = plugins_subparsers.add_parser(
+        "show",
+        help="Show one plugin record and config schema metadata.",
+    )
+    plugins_show_parser.add_argument(
+        "plugin_id",
+        help="Plugin ID (e.g., PLUGIN.RENDERER.SAFE).",
+    )
+    plugins_show_parser.add_argument(
+        "--plugins",
+        default="plugins",
+        help="Path to plugins directory.",
+    )
+    plugins_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for plugin details.",
     )
 
     presets_parser = subparsers.add_parser("presets", help="Run config preset tools.")
@@ -2094,6 +2123,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Overwrite existing output bundle.",
     )
+    project_bundle_parser.add_argument(
+        "--include-plugins",
+        action="store_true",
+        help="Embed plugin config schema pointers/hashes in ui_bundle.json.",
+    )
+    project_bundle_parser.add_argument(
+        "--plugins",
+        default="plugins",
+        help="Path to plugins directory used by --include-plugins.",
+    )
 
     project_pack_parser = project_subparsers.add_parser(
         "pack",
@@ -2161,6 +2200,16 @@ def main(argv: list[str] | None = None) -> int:
         "--event-log-force",
         action="store_true",
         help="Overwrite renders/event_log.jsonl when --event-log is used.",
+    )
+    project_build_gui_parser.add_argument(
+        "--include-plugins",
+        action="store_true",
+        help="Embed plugin config schema pointers/hashes in ui_bundle.json.",
+    )
+    project_build_gui_parser.add_argument(
+        "--plugins",
+        default="plugins",
+        help="Path to plugins directory used by --include-plugins.",
     )
 
     project_render_init_parser = project_subparsers.add_parser(
@@ -4224,6 +4273,12 @@ def main(argv: list[str] | None = None) -> int:
                     project_dir=Path(args.project_dir),
                     out_path=Path(args.out),
                     force=bool(getattr(args, "force", False)),
+                    include_plugins=bool(getattr(args, "include_plugins", False)),
+                    plugins_dir=(
+                        Path(args.plugins)
+                        if bool(getattr(args, "include_plugins", False))
+                        else None
+                    ),
                 )
             except (RuntimeError, ValueError) as exc:
                 print(str(exc), file=sys.stderr)
@@ -4260,6 +4315,12 @@ def main(argv: list[str] | None = None) -> int:
                     ),
                     event_log=bool(getattr(args, "event_log", False)),
                     event_log_force=bool(getattr(args, "event_log_force", False)),
+                    include_plugins=bool(getattr(args, "include_plugins", False)),
+                    plugins_dir=(
+                        Path(args.plugins)
+                        if bool(getattr(args, "include_plugins", False))
+                        else None
+                    ),
                 )
             except (RuntimeError, ValueError) as exc:
                 print(str(exc), file=sys.stderr)
@@ -4654,6 +4715,12 @@ def main(argv: list[str] | None = None) -> int:
                 timeline_path=None,
                 gui_state_path=Path(args.gui_state) if args.gui_state else None,
                 ui_locale=args.ui_locale,
+                include_plugins=bool(getattr(args, "include_plugins", False)),
+                plugins_dir=(
+                    Path(args.plugins)
+                    if bool(getattr(args, "include_plugins", False))
+                    else None
+                ),
                 render_request_path=(
                     Path(args.render_request) if getattr(args, "render_request", None) else None
                 ),
@@ -4743,6 +4810,22 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps({"plugins": payload}, indent=2, sort_keys=True))
             else:
                 print(_render_plugins_list_text(payload))
+            return 0
+
+        if args.plugins_command == "show":
+            try:
+                payload = _build_plugins_show_payload(
+                    plugins_dir=Path(args.plugins),
+                    plugin_id=args.plugin_id,
+                )
+            except (RuntimeError, ValueError, AttributeError, OSError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_plugins_show_text(payload))
             return 0
 
         print("Unknown plugins command.", file=sys.stderr)

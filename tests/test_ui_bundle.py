@@ -2380,6 +2380,41 @@ class TestUiBundle(unittest.TestCase):
             # render_plan_summary should also be present (from the same --render-plan)
             self.assertIn("render_plan_summary", bundle)
 
+    def test_build_ui_bundle_includes_optional_plugins_block(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        plugins_payload = {
+            "plugins_dir": "/tmp/plugins",
+            "entries": [
+                {
+                    "plugin_id": "PLUGIN.RENDERER.SAFE",
+                    "plugin_type": "renderer",
+                    "version": "0.1.0",
+                    "config_schema": {
+                        "present": False,
+                        "pointer": {
+                            "manifest_path": "/tmp/plugins/renderers/safe_renderer.plugin.yaml",
+                            "manifest_sha256": "a" * 64,
+                            "json_pointer": "/config_schema",
+                        },
+                        "sha256": None,
+                    },
+                }
+            ],
+        }
+
+        bundle = build_ui_bundle(
+            report,
+            None,
+            help_registry_path=help_registry_path,
+            plugins=plugins_payload,
+        )
+        validator.validate(bundle)
+        self.assertEqual(bundle.get("plugins"), plugins_payload)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -57,6 +57,8 @@ def _run_project_bundle(
     out_path: Path,
     *,
     force: bool = False,
+    include_plugins: bool = False,
+    plugins_dir: Path | None = None,
 ) -> tuple[int, str, str]:
     args = [
         "project", "bundle", str(project_dir),
@@ -64,6 +66,14 @@ def _run_project_bundle(
     ]
     if force:
         args.append("--force")
+    if include_plugins:
+        args.append("--include-plugins")
+        args.extend(
+            [
+                "--plugins",
+                str(plugins_dir if plugins_dir is not None else (_REPO_ROOT / "plugins")),
+            ]
+        )
     return _run_main(args)
 
 
@@ -185,6 +195,96 @@ class TestProjectBundle(unittest.TestCase):
             self.assertTrue(event_log_pointer["exists"])
             self.assertTrue(event_log_pointer["path"].endswith("renders/event_log.jsonl"))
             self.assertNotIn("\\", event_log_pointer["path"])
+
+    def test_include_plugins_embeds_plugin_schema_pointers_and_hashes(self) -> None:
+        out_path = _SANDBOX / "full" / "ui_bundle_plugins.json"
+        exit_code, _, stderr = _run_project_bundle(
+            self.project_dir,
+            out_path,
+            include_plugins=True,
+            plugins_dir=_REPO_ROOT / "plugins",
+        )
+        self.assertEqual(exit_code, 0, msg=stderr)
+
+        bundle = json.loads(out_path.read_text(encoding="utf-8"))
+        self.validator.validate(bundle)
+
+        plugins_payload = bundle.get("plugins")
+        self.assertIsInstance(plugins_payload, dict)
+        if not isinstance(plugins_payload, dict):
+            return
+
+        self.assertEqual(
+            plugins_payload.get("plugins_dir"),
+            (_REPO_ROOT / "plugins").resolve().as_posix(),
+        )
+        entries = plugins_payload.get("entries")
+        self.assertIsInstance(entries, list)
+        if not isinstance(entries, list):
+            return
+
+        self.assertTrue(len(entries) >= 2)
+        plugin_ids = [
+            item.get("plugin_id")
+            for item in entries
+            if isinstance(item, dict)
+            and isinstance(item.get("plugin_id"), str)
+        ]
+        self.assertEqual(plugin_ids, sorted(plugin_ids))
+
+        safe_entry = next(
+            (
+                item
+                for item in entries
+                if isinstance(item, dict)
+                and item.get("plugin_id") == "PLUGIN.RENDERER.SAFE"
+            ),
+            None,
+        )
+        self.assertIsNotNone(safe_entry)
+        if not isinstance(safe_entry, dict):
+            return
+
+        config_schema = safe_entry.get("config_schema")
+        self.assertIsInstance(config_schema, dict)
+        if not isinstance(config_schema, dict):
+            return
+        self.assertFalse(config_schema.get("present"))
+        self.assertIsNone(config_schema.get("sha256"))
+        pointer = config_schema.get("pointer")
+        self.assertIsInstance(pointer, dict)
+        if isinstance(pointer, dict):
+            self.assertTrue(
+                pointer.get("manifest_path", "").endswith(
+                    "plugins/renderers/safe_renderer.plugin.yaml"
+                )
+            )
+            self.assertEqual(pointer.get("json_pointer"), "/config_schema")
+            self.assertIsInstance(pointer.get("manifest_sha256"), str)
+            self.assertEqual(len(pointer.get("manifest_sha256", "")), 64)
+
+    def test_include_plugins_is_deterministic_across_runs(self) -> None:
+        out_path = _SANDBOX / "full" / "ui_bundle_plugins_determinism.json"
+        exit_a, _, stderr_a = _run_project_bundle(
+            self.project_dir,
+            out_path,
+            include_plugins=True,
+            plugins_dir=_REPO_ROOT / "plugins",
+        )
+        self.assertEqual(exit_a, 0, msg=stderr_a)
+        bytes_a = out_path.read_bytes()
+
+        exit_b, _, stderr_b = _run_project_bundle(
+            self.project_dir,
+            out_path,
+            force=True,
+            include_plugins=True,
+            plugins_dir=_REPO_ROOT / "plugins",
+        )
+        self.assertEqual(exit_b, 0, msg=stderr_b)
+        bytes_b = out_path.read_bytes()
+
+        self.assertEqual(bytes_a, bytes_b)
 
     def test_overwrite_refusal_and_allow(self) -> None:
         out_path = _SANDBOX / "full" / "ui_bundle_overwrite.json"

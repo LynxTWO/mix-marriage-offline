@@ -223,6 +223,60 @@ class TestCliBundlePointers(unittest.TestCase):
                 },
             )
 
+    def test_bundle_command_optional_plugins_block(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            report_path = temp_path / "report.json"
+            out_bundle_path = temp_path / "ui_bundle.json"
+            report_path.write_text(
+                json.dumps(_sample_report_payload(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(repo_root / "src")
+            result = subprocess.run(
+                [
+                    self._python_cmd(),
+                    "-m",
+                    "mmo",
+                    "bundle",
+                    "--report",
+                    str(report_path),
+                    "--include-plugins",
+                    "--plugins",
+                    str(repo_root / "plugins"),
+                    "--out",
+                    str(out_bundle_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+                cwd=repo_root,
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            bundle = json.loads(out_bundle_path.read_text(encoding="utf-8"))
+            validator.validate(bundle)
+
+            plugins_payload = bundle.get("plugins")
+            self.assertIsInstance(plugins_payload, dict)
+            if not isinstance(plugins_payload, dict):
+                return
+
+            self.assertEqual(
+                plugins_payload.get("plugins_dir"),
+                (repo_root / "plugins").resolve().as_posix(),
+            )
+            entries = plugins_payload.get("entries")
+            self.assertIsInstance(entries, list)
+            if not isinstance(entries, list):
+                return
+            self.assertTrue(len(entries) >= 2)
+
 
 if __name__ == "__main__":
     unittest.main()

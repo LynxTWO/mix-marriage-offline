@@ -83,6 +83,8 @@ def _run_build_gui(
     force: bool = False,
     event_log: bool = False,
     event_log_force: bool = False,
+    include_plugins: bool = False,
+    plugins_dir: Path | None = None,
 ) -> tuple[int, str, str]:
     args = [
         "project", "build-gui", str(project_dir),
@@ -98,6 +100,14 @@ def _run_build_gui(
         args.append("--event-log")
     if event_log_force:
         args.append("--event-log-force")
+    if include_plugins:
+        args.append("--include-plugins")
+        args.extend(
+            [
+                "--plugins",
+                str(plugins_dir if plugins_dir is not None else (_REPO_ROOT / "plugins")),
+            ]
+        )
     return _run_main(args)
 
 
@@ -293,6 +303,35 @@ class TestProjectBuildGuiArtifacts(unittest.TestCase):
         self.assertTrue(summary["ok"])
         self.assertEqual(summary["pack_out"], pack_out.resolve().as_posix())
         self.assertEqual(summary["project_dir"], project_dir.resolve().as_posix())
+
+    def test_build_gui_include_plugins_flag_embeds_plugins_block(self) -> None:
+        project_dir, stems_root = _init_project(_SANDBOX / "plugins_block")
+        pack_out = project_dir / "project_gui.zip"
+        scan_out = project_dir / "report.json"
+
+        exit_code, _, stderr = _run_build_gui(
+            project_dir,
+            pack_out=pack_out,
+            scan=True,
+            scan_stems=stems_root,
+            scan_out=scan_out,
+            force=True,
+            event_log=True,
+            event_log_force=True,
+            include_plugins=True,
+            plugins_dir=_REPO_ROOT / "plugins",
+        )
+        self.assertEqual(exit_code, 0, msg=stderr)
+
+        bundle_path = project_dir / "ui_bundle.json"
+        bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
+        plugins_payload = bundle.get("plugins")
+        self.assertIsInstance(plugins_payload, dict)
+        if isinstance(plugins_payload, dict):
+            self.assertEqual(
+                plugins_payload.get("plugins_dir"),
+                (_REPO_ROOT / "plugins").resolve().as_posix(),
+            )
 
 
 if __name__ == "__main__":

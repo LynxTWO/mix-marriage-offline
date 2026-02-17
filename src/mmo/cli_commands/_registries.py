@@ -45,6 +45,9 @@ from mmo.core.run_config import (
     normalize_run_config,
 )
 from mmo.core.scene_locks import get_scene_lock, list_scene_locks
+from mmo.core.plugin_schema_index import (
+    build_plugin_show_payload,
+)
 from mmo.core.target_recommendations import recommend_render_targets
 from mmo.core.translation_audition import render_translation_auditions
 from mmo.core.translation_checks import run_translation_checks
@@ -112,7 +115,9 @@ __all__ = [
     "_build_ui_examples_list_payload",
     "_build_ui_examples_show_payload",
     "_build_plugins_list_payload",
+    "_build_plugins_show_payload",
     "_render_plugins_list_text",
+    "_render_plugins_show_text",
     "_print_lock_verify_summary",
 ]
 
@@ -1369,6 +1374,61 @@ def _render_plugins_list_text(payload: list[dict[str, Any]]) -> str:
         lines.append(
             f"{plugin_id} (max_channels={max_channels}) contexts={contexts} scene={scene}"
         )
+    return "\n".join(lines)
+
+
+def _build_plugins_show_payload(
+    *,
+    plugins_dir: Path,
+    plugin_id: str,
+) -> dict[str, Any]:
+    return build_plugin_show_payload(
+        plugins_dir=plugins_dir,
+        plugin_id=plugin_id,
+    )
+
+
+def _render_plugins_show_text(payload: dict[str, Any]) -> str:
+    lines: list[str] = []
+    plugin_payload = payload.get("plugin")
+    config_schema_payload = payload.get("config_schema")
+
+    if not isinstance(plugin_payload, dict) or not isinstance(config_schema_payload, dict):
+        return "(invalid payload)"
+
+    lines.append(f"plugin_id: {plugin_payload.get('plugin_id', '')}")
+    lines.append(f"plugin_type: {plugin_payload.get('plugin_type', '')}")
+    lines.append(f"version: {plugin_payload.get('version', '')}")
+    lines.append(f"manifest_path: {plugin_payload.get('manifest_path', '')}")
+    lines.append(f"manifest_sha256: {plugin_payload.get('manifest_sha256', '')}")
+
+    pointer_payload = config_schema_payload.get("pointer")
+    pointer_path = ""
+    pointer_json_pointer = ""
+    pointer_manifest_sha256 = ""
+    if isinstance(pointer_payload, dict):
+        pointer_path = _coerce_str(pointer_payload.get("manifest_path"))
+        pointer_json_pointer = _coerce_str(pointer_payload.get("json_pointer"))
+        pointer_manifest_sha256 = _coerce_str(pointer_payload.get("manifest_sha256"))
+
+    pointer_text = pointer_path
+    if pointer_path and pointer_json_pointer:
+        pointer_text = f"{pointer_path}#{pointer_json_pointer}"
+
+    lines.append(f"config_schema.present: {config_schema_payload.get('present') is True}")
+    lines.append(f"config_schema.pointer: {pointer_text}")
+    lines.append(f"config_schema.pointer_manifest_sha256: {pointer_manifest_sha256}")
+    schema_sha256 = config_schema_payload.get("sha256")
+    schema_sha256_text = schema_sha256 if isinstance(schema_sha256, str) else "-"
+    lines.append(f"config_schema.sha256: {schema_sha256_text}")
+
+    raw_schema = config_schema_payload.get("schema")
+    if isinstance(raw_schema, dict):
+        lines.append("config_schema.schema:")
+        lines.append(json.dumps(raw_schema, indent=2, sort_keys=True))
+    else:
+        lines.append("config_schema.schema: (none)")
+
     return "\n".join(lines)
 
 

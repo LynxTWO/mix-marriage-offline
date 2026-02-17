@@ -351,6 +351,8 @@ def _run_bundle(
     render_request_path: Path | None = None,
     render_report_path: Path | None = None,
     event_log_path: Path | None = None,
+    include_plugins: bool = False,
+    plugins_dir: Path | None = None,
 ) -> int:
     from mmo.core.ui_bundle import build_ui_bundle  # noqa: WPS433
 
@@ -364,6 +366,17 @@ def _run_bundle(
         apply_manifest = _load_json_object(apply_manifest_path, label="Apply manifest")
     if applied_report_path is not None:
         applied_report = _load_json_object(applied_report_path, label="Applied report")
+    plugins_payload: dict[str, Any] | None = None
+    if include_plugins:
+        from mmo.core.plugin_schema_index import (  # noqa: WPS433
+            build_plugins_config_schema_index,
+        )
+
+        normalized_plugins_dir = plugins_dir if plugins_dir is not None else Path("plugins")
+        plugins_payload = build_plugins_config_schema_index(
+            plugins_dir=normalized_plugins_dir,
+            include_schema=False,
+        )
 
     bundle = build_ui_bundle(
         report,
@@ -386,6 +399,7 @@ def _run_bundle(
         render_plan_artifact_path=render_plan_path,
         render_report_path=render_report_path,
         event_log_path=event_log_path,
+        plugins=plugins_payload,
     )
     _validate_json_payload(
         bundle,
