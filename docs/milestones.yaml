@@ -1,0 +1,28 @@
+milestones:
+  - id: MVP.CLI
+    title: MVP CLI
+    state: in_progress
+    links:
+      - docs/STATUS.md#mvp-cli
+      - docs/06-roadmap.md#v03-cli-skeleton
+
+  - id: MVP.GUI
+    title: MVP GUI
+    state: planned
+    links:
+      - docs/STATUS.md#mvp-gui
+      - docs/11-gui-vision.md#rollout-milestones
+
+  - id: DSP.PHASE1
+    title: DSP Phase 1
+    state: planned
+    links:
+      - docs/STATUS.md#dsp-phase-1
+      - docs/02-architecture.md#dsp-pipeline
+
+  - id: DOCS.STATUS.SYSTEM
+    title: Status plus milestones plus changelog
+    state: done
+    links:
+      - docs/STATUS.md#status-system
+      - docs/05-fixtures-and-ci.md#validation

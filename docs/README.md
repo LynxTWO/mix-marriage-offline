@@ -8,6 +8,10 @@ The numeric prefixes reflect a recommended reading order. Gaps may exist as docu
 
 - [00-quickstart.md](00-quickstart.md)
   Golden-path walkthrough: stems to project scaffold in five minutes.
+- [STATUS.md](STATUS.md)
+  Live project checklist with milestone definitions and done criteria.
+- [milestones.yaml](milestones.yaml)
+  Machine-readable milestone IDs, states, and doc section links.
 
 ## Recommended reading order
 
