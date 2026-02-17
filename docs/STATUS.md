@@ -8,6 +8,9 @@ This is the single-page milestone checklist for current delivery phases.
 - `[x]` done
 - `[ ]` not done
 
+## Contribution Rule
+PRs must keep status tracking current: update `docs/STATUS.md` and `docs/milestones.yaml` when milestone state actually changes, and update `CHANGELOG.md` under `## [Unreleased]` when user-facing behavior changes.
+
 ## MVP-CLI
 State: `in_progress`
 

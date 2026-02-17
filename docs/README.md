@@ -13,6 +13,13 @@ The numeric prefixes reflect a recommended reading order. Gaps may exist as docu
 - [milestones.yaml](milestones.yaml)
   Machine-readable milestone IDs, states, and doc section links.
 
+## Contribution workflow
+
+- [Status system (`STATUS.md` + `milestones.yaml`)](STATUS.md)
+  Keep milestone checklist state and machine-readable milestone state aligned.
+- [PR checklist template](../.github/pull_request_template.md)
+  Required checklist for milestone links, state moves, changelog updates, and validation/tests reporting.
+
 ## Recommended reading order
 
 1. [00-proposal.md](00-proposal.md)
