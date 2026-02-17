@@ -85,6 +85,7 @@ from mmo.core.project_file import (
     write_project,
 )
 from mmo.core.event_log import new_event_id, write_event_log
+from mmo.core.env_doctor import build_env_doctor_report, render_env_doctor_text
 from mmo.core.gui_state import default_gui_state, validate_gui_state
 from mmo.core.routing import (
     apply_routing_plan_to_report,
@@ -2929,6 +2930,22 @@ def main(argv: list[str] | None = None) -> int:
         help="Output format for timeline display.",
     )
 
+    env_parser = subparsers.add_parser("env", help="Environment diagnostic tools.")
+    env_subparsers = env_parser.add_subparsers(
+        dest="env_command",
+        required=True,
+    )
+    env_doctor_parser = env_subparsers.add_parser(
+        "doctor",
+        help="Print a deterministic environment diagnostics report.",
+    )
+    env_doctor_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="json",
+        help="Output format (default: json).",
+    )
+
     event_log_parser = subparsers.add_parser("event-log", help="Event log artifact tools.")
     event_log_subparsers = event_log_parser.add_subparsers(
         dest="event_log_command",
@@ -5600,6 +5617,21 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(timeline_payload, indent=2, sort_keys=True))
         else:
             print(_render_timeline_text(timeline_payload))
+        return 0
+    if args.command == "env":
+        if args.env_command != "doctor":
+            print("Unknown env command.", file=sys.stderr)
+            return 2
+        try:
+            payload = build_env_doctor_report()
+        except (RuntimeError, ValueError, OSError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+        if args.format == "json":
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        else:
+            print(render_env_doctor_text(payload), end="")
         return 0
     if args.command == "event-log":
         if args.event_log_command != "demo":
