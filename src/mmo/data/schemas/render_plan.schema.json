@@ -47,9 +47,62 @@
       "type": "string",
       "pattern": "^LAYOUT\\.[A-Z0-9_.]+$"
     },
+    "downmix_policy_id": {
+      "type": "string",
+      "pattern": "^POLICY\\.DOWNMIX\\.[A-Z0-9_.]+$"
+    },
     "speaker_id": {
       "type": "string",
       "pattern": "^SPK\\.[A-Z0-9_.]+$"
+    },
+    "downmix_route_step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from_layout_id", "to_layout_id"],
+      "properties": {
+        "from_layout_id": { "$ref": "#/$defs/layout_id" },
+        "to_layout_id": { "$ref": "#/$defs/layout_id" },
+        "matrix_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "downmix_route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from_layout_id", "to_layout_id", "policy_id", "kind"],
+      "properties": {
+        "from_layout_id": { "$ref": "#/$defs/layout_id" },
+        "to_layout_id": { "$ref": "#/$defs/layout_id" },
+        "policy_id": { "$ref": "#/$defs/downmix_policy_id" },
+        "kind": {
+          "type": "string",
+          "enum": ["direct", "composed"]
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/downmix_route_step" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "const": "direct" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "not": { "required": ["steps"] }
+          }
+        },
+        {
+          "if": {
+            "properties": { "kind": { "const": "composed" } },
+            "required": ["kind"]
+          },
+          "then": {
+            "required": ["steps"]
+          }
+        }
+      ]
     },
     "policies": {
       "type": "object",
@@ -159,6 +212,11 @@
         "resolved_target_id": { "$ref": "#/$defs/target_id" },
         "target_layout_id": { "$ref": "#/$defs/layout_id" },
         "routing_plan_path": { "$ref": "#/$defs/posix_path" },
+        "downmix_routes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/downmix_route" }
+        },
         "output_formats": {
           "type": "array",
           "items": {

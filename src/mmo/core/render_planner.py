@@ -18,6 +18,8 @@ from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS
 
 RENDER_PLAN_SCHEMA_VERSION = "0.1.0"
 _OUTPUT_FORMAT_ORDER = tuple(LOSSLESS_OUTPUT_FORMATS)
+_STEREO_LAYOUT_ID = "LAYOUT.2_0"
+_DEFAULT_DOWNMIX_POLICY_ID = "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
 
 
 def _coerce_str(value: Any) -> str:
@@ -266,6 +268,182 @@ def _build_job_notes(
     return notes
 
 
+def _known_layout_ids(layouts: dict[str, Any] | None) -> list[str]:
+    if not isinstance(layouts, dict):
+        return []
+    return sorted(
+        {
+            layout_id
+            for layout_id, entry in layouts.items()
+            if layout_id != "_meta" and isinstance(entry, dict)
+        }
+    )
+
+
+def _known_policy_ids(downmix_registry: Any | None) -> list[str]:
+    if downmix_registry is None:
+        return []
+    return sorted(
+        {
+            _coerce_str(policy_id).strip()
+            for policy_id in downmix_registry.list_policy_ids()
+            if _coerce_str(policy_id).strip()
+        }
+    )
+
+
+def _effective_policy_id_for_identity_route(
+    *,
+    downmix_policy_id: str | None,
+    downmix_registry: Any | None,
+    source_layout_id: str,
+) -> str:
+    selected = _coerce_str(downmix_policy_id).strip()
+    if selected:
+        return selected
+
+    if downmix_registry is not None:
+        default_for_source = _coerce_str(
+            downmix_registry.default_policy_for_source(source_layout_id)
+        ).strip()
+        if default_for_source:
+            return default_for_source
+        known_policy_ids = _known_policy_ids(downmix_registry)
+        if _DEFAULT_DOWNMIX_POLICY_ID in known_policy_ids:
+            return _DEFAULT_DOWNMIX_POLICY_ID
+        if known_policy_ids:
+            return known_policy_ids[0]
+
+    return _DEFAULT_DOWNMIX_POLICY_ID
+
+
+def _no_route_error(
+    *,
+    from_layout_id: str,
+    to_layout_id: str,
+    policy_id: str | None,
+    downmix_registry: Any | None,
+    layouts: dict[str, Any] | None,
+) -> ValueError:
+    selected_policy = _coerce_str(policy_id).strip() or "(default)"
+    known_policy_ids = _known_policy_ids(downmix_registry)
+    known_layouts = _known_layout_ids(layouts)
+
+    policy_label = ", ".join(known_policy_ids) if known_policy_ids else "(none)"
+    layout_label = ", ".join(known_layouts) if known_layouts else "(none)"
+    return ValueError(
+        "No downmix route found: "
+        f"{from_layout_id} -> {to_layout_id} "
+        f"(policy_id={selected_policy}). "
+        f"Known policy_ids: {policy_label}. "
+        f"Known layout_ids: {layout_label}"
+    )
+
+
+def _normalize_composed_steps(
+    *,
+    steps_raw: Any,
+    from_layout_id: str,
+    to_layout_id: str,
+) -> list[dict[str, str]]:
+    if not isinstance(steps_raw, list) or not steps_raw:
+        raise ValueError(
+            "Composed downmix route is missing steps: "
+            f"{from_layout_id} -> {to_layout_id}"
+        )
+
+    normalized_steps: list[dict[str, str]] = []
+    for step in steps_raw:
+        if not isinstance(step, dict):
+            raise ValueError(
+                "Composed downmix route has an invalid step entry: "
+                f"{from_layout_id} -> {to_layout_id}"
+            )
+        step_from = _coerce_str(step.get("source_layout_id")).strip()
+        step_to = _coerce_str(step.get("target_layout_id")).strip()
+        if not step_from or not step_to:
+            raise ValueError(
+                "Composed downmix route step is missing source/target layout IDs: "
+                f"{from_layout_id} -> {to_layout_id}"
+            )
+        row: dict[str, str] = {
+            "from_layout_id": step_from,
+            "to_layout_id": step_to,
+        }
+        matrix_id = _coerce_str(step.get("matrix_id")).strip()
+        if matrix_id:
+            row["matrix_id"] = matrix_id
+        normalized_steps.append(row)
+    return normalized_steps
+
+
+def _build_downmix_routes(
+    *,
+    target_layout_id: str,
+    downmix_policy_id: str | None,
+    downmix_registry: Any | None,
+    layouts: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    if downmix_registry is None:
+        raise ValueError("Downmix registry is required to build downmix_routes.")
+
+    # Identity route for stereo targets remains deterministic and explicit.
+    if target_layout_id == _STEREO_LAYOUT_ID:
+        return [
+            {
+                "from_layout_id": target_layout_id,
+                "to_layout_id": _STEREO_LAYOUT_ID,
+                "policy_id": _effective_policy_id_for_identity_route(
+                    downmix_policy_id=downmix_policy_id,
+                    downmix_registry=downmix_registry,
+                    source_layout_id=target_layout_id,
+                ),
+                "kind": "direct",
+            }
+        ]
+
+    try:
+        resolved = downmix_registry.resolve(
+            downmix_policy_id,
+            target_layout_id,
+            _STEREO_LAYOUT_ID,
+        )
+    except ValueError as exc:
+        raise _no_route_error(
+            from_layout_id=target_layout_id,
+            to_layout_id=_STEREO_LAYOUT_ID,
+            policy_id=downmix_policy_id,
+            downmix_registry=downmix_registry,
+            layouts=layouts,
+        ) from exc
+
+    resolved_policy_id = _coerce_str(resolved.get("policy_id")).strip()
+    if not resolved_policy_id:
+        resolved_policy_id = _effective_policy_id_for_identity_route(
+            downmix_policy_id=downmix_policy_id,
+            downmix_registry=downmix_registry,
+            source_layout_id=target_layout_id,
+        )
+
+    route: dict[str, Any] = {
+        "from_layout_id": target_layout_id,
+        "to_layout_id": _STEREO_LAYOUT_ID,
+        "policy_id": resolved_policy_id,
+    }
+
+    if _coerce_str(resolved.get("matrix_id")).strip():
+        route["kind"] = "direct"
+        return [route]
+
+    route["kind"] = "composed"
+    route["steps"] = _normalize_composed_steps(
+        steps_raw=resolved.get("steps"),
+        from_layout_id=target_layout_id,
+        to_layout_id=_STEREO_LAYOUT_ID,
+    )
+    return [route]
+
+
 def _validate_policies(
     options_dict: dict[str, Any],
     downmix_registry: Any | None,
@@ -378,6 +556,7 @@ def build_render_plan(
             layouts=layouts,
             render_targets_registry=render_targets_registry,
             requested_targets_by_layout=requested_targets_by_layout,
+            downmix_registry=downmix_registry,
         )
 
     # ── Multi-target path ──
@@ -394,6 +573,7 @@ def build_render_plan(
         layouts=layouts,
         render_targets_registry=render_targets_registry,
         requested_targets_by_layout=requested_targets_by_layout,
+        downmix_registry=downmix_registry,
     )
 
 
@@ -411,6 +591,7 @@ def _build_single_target_plan(
     layouts: dict[str, Any] | None,
     render_targets_registry: RenderTargetsRegistry | None,
     requested_targets_by_layout: dict[str, list[str]] | None,
+    downmix_registry: Any | None,
 ) -> dict[str, Any]:
     """Build plan for a single target_layout_id (original behavior, byte-identical)."""
     resolved_target_id = _resolve_target_for_layout(
@@ -441,6 +622,12 @@ def _build_single_target_plan(
         "job_id": "JOB.001",
         "target_id": target_id,
         "target_layout_id": layout_id,
+        "downmix_routes": _build_downmix_routes(
+            target_layout_id=layout_id,
+            downmix_policy_id=downmix_policy_id,
+            downmix_registry=downmix_registry,
+            layouts=layouts,
+        ),
         "output_formats": list(output_formats),
         "contexts": ["render"],
         "status": "planned",
@@ -501,6 +688,7 @@ def _build_multi_target_plan(
     layouts: dict[str, Any] | None,
     render_targets_registry: RenderTargetsRegistry | None,
     requested_targets_by_layout: dict[str, list[str]] | None,
+    downmix_registry: Any | None,
 ) -> dict[str, Any]:
     """Build plan for multiple target_layout_ids."""
     job_inputs = _build_job_inputs(scene, routing_plan)
@@ -537,6 +725,12 @@ def _build_multi_target_plan(
             "job_id": f"JOB.{idx + 1:03d}",
             "target_id": target_id,
             "target_layout_id": layout_id,
+            "downmix_routes": _build_downmix_routes(
+                target_layout_id=layout_id,
+                downmix_policy_id=downmix_policy_id,
+                downmix_registry=downmix_registry,
+                layouts=layouts,
+            ),
             "output_formats": list(output_formats),
             "contexts": ["render"],
             "status": "planned",

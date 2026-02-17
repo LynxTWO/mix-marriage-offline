@@ -169,6 +169,21 @@ class TestRenderPlanFromRequestCli(unittest.TestCase):
             self.assertIsInstance(jobs[0]["outputs"], list)
             self.assertGreater(len(jobs[0]["outputs"]), 0)
             self.assertEqual(jobs[0]["resolved_target_id"], "TARGET.STEREO.2_0")
+            self.assertIn("downmix_routes", jobs[0])
+            self.assertIsInstance(jobs[0]["downmix_routes"], list)
+            self.assertEqual(len(jobs[0]["downmix_routes"]), 1)
+            self.assertEqual(
+                jobs[0]["downmix_routes"][0]["from_layout_id"],
+                "LAYOUT.2_0",
+            )
+            self.assertEqual(
+                jobs[0]["downmix_routes"][0]["to_layout_id"],
+                "LAYOUT.2_0",
+            )
+            self.assertEqual(
+                jobs[0]["downmix_routes"][0]["kind"],
+                "direct",
+            )
 
     def test_happy_path_with_options_and_routing_plan(self) -> None:
         validator = _schema_validator("render_plan.schema.json")
@@ -214,6 +229,17 @@ class TestRenderPlanFromRequestCli(unittest.TestCase):
             # Output formats from request options.
             self.assertEqual(
                 payload["jobs"][0]["output_formats"], ["wav", "flac"],
+            )
+            self.assertEqual(
+                payload["jobs"][0]["downmix_routes"],
+                [
+                    {
+                        "from_layout_id": "LAYOUT.5_1",
+                        "kind": "direct",
+                        "policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
+                        "to_layout_id": "LAYOUT.2_0",
+                    }
+                ],
             )
 
     def test_overwrite_refusal_without_force(self) -> None:
@@ -465,6 +491,37 @@ class TestRenderPlanFromRequestErrorPaths(unittest.TestCase):
             self.assertIn("Unknown target_id: TARGET.DOES.NOT.EXIST", err)
             self.assertIn("Known target_ids:", err)
             self.assertIn("TARGET.STEREO.2_0", err)
+
+    def test_known_policy_without_route_fails_stably(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            scene_posix = (tp / "scene.json").resolve().as_posix()
+            rc, err = self._run_plan(tp, {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.5_1",
+                "scene_path": scene_posix,
+                "options": {
+                    "downmix_policy_id": "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0",
+                },
+            })
+            self.assertEqual(rc, 1)
+            self.assertIn("No downmix route found: LAYOUT.5_1 -> LAYOUT.2_0", err)
+            self.assertIn("policy_id=POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0", err)
+            self.assertIn("Known policy_ids:", err)
+            self.assertIn("POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0", err)
+            self.assertIn("POLICY.DOWNMIX.STANDARD_FOLDOWN_V0", err)
+            self.assertLess(
+                err.index("POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"),
+                err.index("POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"),
+            )
+            self.assertIn("Known layout_ids:", err)
+            self.assertIn("LAYOUT.1_0", err)
+            self.assertIn("LAYOUT.2_0", err)
+            known_layouts_section = err.split("Known layout_ids:", 1)[1].splitlines()[0]
+            self.assertLess(
+                known_layouts_section.index("LAYOUT.1_0"),
+                known_layouts_section.index("LAYOUT.2_0"),
+            )
 
     def test_routing_plan_path_mismatch_fails(self) -> None:
         with tempfile.TemporaryDirectory() as td:
