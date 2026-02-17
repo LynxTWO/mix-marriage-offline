@@ -155,6 +155,7 @@ from mmo.cli_commands._scene import *  # noqa: F401,F403
 from mmo.cli_commands._registries import *  # noqa: F401,F403
 from mmo.cli_commands._workflows import *  # noqa: F401,F403
 from mmo.cli_commands._project import *  # noqa: F401,F403
+from mmo.cli_commands._gui_rpc import *  # noqa: F401,F403
 from mmo.cli_commands._utilities import *  # noqa: F401,F403
 
 
@@ -3120,6 +3121,19 @@ def main(argv: list[str] | None = None) -> int:
         help="Output format (default: json).",
     )
 
+    gui_parser = subparsers.add_parser(
+        "gui",
+        help="Framework-agnostic GUI bridge tools.",
+    )
+    gui_subparsers = gui_parser.add_subparsers(
+        dest="gui_command",
+        required=True,
+    )
+    gui_subparsers.add_parser(
+        "rpc",
+        help="Run newline-delimited JSON RPC over stdin/stdout.",
+    )
+
     event_log_parser = subparsers.add_parser("event-log", help="Event log artifact tools.")
     event_log_subparsers = event_log_parser.add_subparsers(
         dest="event_log_command",
@@ -5970,6 +5984,11 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(render_env_doctor_text(payload), end="")
         return 0
+    if args.command == "gui":
+        if args.gui_command != "rpc":
+            print("Unknown gui command.", file=sys.stderr)
+            return 2
+        return _run_gui_rpc()
     if args.command == "event-log":
         if args.event_log_command == "validate":
             out_path = Path(args.out) if getattr(args, "out", None) else None
