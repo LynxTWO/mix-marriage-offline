@@ -9,7 +9,9 @@ import wave
 from pathlib import Path
 from unittest.mock import patch
 
+from mmo import __version__ as _MMO_VERSION
 from mmo.cli import main
+from mmo.cli_commands import _gui_rpc
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SANDBOX = (
@@ -161,6 +163,111 @@ class TestGuiRpcStableErrors(unittest.TestCase):
                     "message": "MMO temporary directory is unavailable.",
                 },
                 "id": "req-env",
+                "ok": False,
+            },
+        )
+
+
+class TestGuiRpcDiscover(unittest.TestCase):
+    def test_rpc_discover_is_byte_identical_across_runs(self) -> None:
+        request = {
+            "id": "req-discover",
+            "method": "rpc.discover",
+            "params": {},
+        }
+        exit_a, responses_a, stdout_a, stderr_a = _run_rpc([request])
+        exit_b, responses_b, stdout_b, stderr_b = _run_rpc([request])
+
+        self.assertEqual(exit_a, 0)
+        self.assertEqual(exit_b, 0)
+        self.assertEqual(stderr_a, "")
+        self.assertEqual(stderr_b, "")
+        self.assertEqual(stdout_a, stdout_b)
+        self.assertEqual(responses_a, responses_b)
+        self.assertNotIn("\\", stdout_a)
+
+        self.assertEqual(len(responses_a), 1)
+        response = responses_a[0]
+        self.assertEqual(response["id"], "req-discover")
+        self.assertTrue(response["ok"])
+
+        result = response["result"]
+        self.assertEqual(result["rpc_version"], "1")
+        expected_build = (
+            _MMO_VERSION.strip()
+            if isinstance(_MMO_VERSION, str) and _MMO_VERSION.strip()
+            else "unknown"
+        )
+        self.assertEqual(result["server_build"], expected_build)
+
+    def test_rpc_discover_methods_match_allowlist_sorted(self) -> None:
+        exit_code, responses, _, stderr = _run_rpc(
+            [
+                {
+                    "id": "req-discover-methods",
+                    "method": "rpc.discover",
+                    "params": {},
+                }
+            ]
+        )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr, "")
+        self.assertEqual(len(responses), 1)
+
+        response = responses[0]
+        self.assertTrue(response["ok"])
+        result = response["result"]
+
+        methods = result["methods"]
+        expected_methods = sorted(_gui_rpc._RPC_METHOD_HANDLERS.keys())
+        self.assertEqual(methods, expected_methods)
+
+        method_details = result["method_details"]
+        self.assertEqual(sorted(method_details.keys()), methods)
+        for method_name in methods:
+            self.assertIn(method_name, method_details)
+            details = method_details[method_name]
+            self.assertIn("params_schema", details)
+            self.assertIn("result_shape", details)
+            params_schema = details["params_schema"]
+            self.assertIn("required", params_schema)
+            self.assertIn("optional", params_schema)
+            self.assertIn("examples", params_schema)
+
+    def test_unknown_method_behavior_unchanged_after_rpc_discover(self) -> None:
+        requests = [
+            {
+                "id": "req-discover",
+                "method": "rpc.discover",
+                "params": {},
+            },
+            {
+                "id": "req-unknown-after-discover",
+                "method": "project.destroy_everything",
+                "params": {},
+            },
+        ]
+        exit_a, responses_a, stdout_a, stderr_a = _run_rpc(requests)
+        exit_b, responses_b, stdout_b, stderr_b = _run_rpc(requests)
+
+        self.assertEqual(exit_a, 0)
+        self.assertEqual(exit_b, 0)
+        self.assertEqual(stderr_a, "")
+        self.assertEqual(stderr_b, "")
+        self.assertEqual(stdout_a, stdout_b)
+        self.assertEqual(responses_a, responses_b)
+
+        self.assertEqual(len(responses_a), 2)
+        self.assertTrue(responses_a[0]["ok"])
+        self.assertEqual(
+            responses_a[1],
+            {
+                "error": {
+                    "code": "RPC.UNKNOWN_METHOD",
+                    "message": "Unknown method: project.destroy_everything",
+                },
+                "id": "req-unknown-after-discover",
                 "ok": False,
             },
         )

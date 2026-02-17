@@ -15,6 +15,11 @@ from mmo.cli_commands._project import (
 )
 from mmo.core.env_doctor import build_env_doctor_report
 
+try:
+    from mmo import __version__ as _MMO_VERSION
+except Exception:  # pragma: no cover - import should succeed in normal installs
+    _MMO_VERSION = "unknown"
+
 __all__ = ["_run_gui_rpc"]
 
 
@@ -29,6 +34,185 @@ class _RpcMethodError(RuntimeError):
     def __init__(self, *, message: str) -> None:
         super().__init__(message)
         self.message = message
+
+
+_RPC_VERSION = "1"
+
+_RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
+    "env.doctor": {
+        "params_schema": {
+            "required": {},
+            "optional": {},
+            "examples": [
+                {},
+            ],
+        },
+        "result_shape": {
+            "keys": [
+                "checks",
+                "env_overrides",
+                "paths",
+                "python",
+            ],
+        },
+    },
+    "project.build_gui": {
+        "params_schema": {
+            "required": {
+                "pack_out": "string",
+                "project_dir": "string",
+            },
+            "optional": {
+                "event_log": "boolean",
+                "event_log_force": "boolean",
+                "force": "boolean",
+                "include_plugins": "boolean",
+                "plugins": "string",
+                "scan": "boolean",
+                "scan_out": "string",
+                "scan_stems": "string",
+            },
+            "examples": [
+                {
+                    "pack_out": "C:/mmo/project/project_gui.zip",
+                    "project_dir": "C:/mmo/project",
+                },
+                {
+                    "event_log": True,
+                    "event_log_force": True,
+                    "force": True,
+                    "pack_out": "C:/mmo/project/project_gui.zip",
+                    "project_dir": "C:/mmo/project",
+                    "scan": True,
+                    "scan_out": "C:/mmo/project/report.json",
+                    "scan_stems": "C:/mmo/stems",
+                },
+            ],
+        },
+        "result_shape": {
+            "keys": [
+                "ok",
+                "pack_out",
+                "paths_written",
+                "project_dir",
+                "steps",
+            ],
+        },
+    },
+    "project.pack": {
+        "params_schema": {
+            "required": {
+                "out": "string",
+                "project_dir": "string",
+            },
+            "optional": {
+                "force": "boolean",
+                "include_wavs": "boolean",
+            },
+            "examples": [
+                {
+                    "out": "C:/mmo/project/project_pack.zip",
+                    "project_dir": "C:/mmo/project",
+                },
+            ],
+        },
+        "result_shape": {
+            "keys": [
+                "file_count",
+                "ok",
+                "out",
+            ],
+        },
+    },
+    "project.show": {
+        "params_schema": {
+            "required": {
+                "project_dir": "string",
+            },
+            "optional": {},
+            "examples": [
+                {
+                    "project_dir": "C:/mmo/project",
+                },
+            ],
+        },
+        "result_shape": {
+            "keys": [
+                "artifacts",
+                "last_built_markers",
+                "project_dir",
+                "schema_versions",
+            ],
+        },
+    },
+    "project.validate": {
+        "params_schema": {
+            "required": {
+                "project_dir": "string",
+            },
+            "optional": {
+                "out": "string",
+                "render_compat": "boolean",
+            },
+            "examples": [
+                {
+                    "project_dir": "C:/mmo/project",
+                },
+                {
+                    "project_dir": "C:/mmo/project",
+                    "render_compat": True,
+                },
+            ],
+        },
+        "result_shape": {
+            "keys": [
+                "checks",
+                "ok",
+                "project_dir",
+                "summary",
+            ],
+            "optional_keys": [
+                "render_compat",
+            ],
+        },
+    },
+    "rpc.discover": {
+        "params_schema": {
+            "required": {},
+            "optional": {},
+            "examples": [
+                {},
+            ],
+        },
+        "result_shape": {
+            "keys": [
+                "method_details",
+                "methods",
+                "rpc_version",
+                "server_build",
+            ],
+        },
+    },
+}
+
+
+def _server_build() -> str:
+    if isinstance(_MMO_VERSION, str) and _MMO_VERSION.strip():
+        return _MMO_VERSION.strip()
+    return "unknown"
+
+
+def _build_rpc_discover_payload() -> dict[str, Any]:
+    methods = sorted(_RPC_METHOD_HANDLERS.keys())
+    return {
+        "rpc_version": _RPC_VERSION,
+        "server_build": _server_build(),
+        "methods": methods,
+        "method_details": {
+            method: _RPC_DISCOVER_METHOD_DETAILS[method]
+            for method in methods
+        },
+    }
 
 
 def _error_response(
@@ -350,12 +534,22 @@ def _handle_project_pack(params: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _handle_rpc_discover(params: dict[str, Any]) -> dict[str, Any]:
+    _validate_allowed_params(
+        method="rpc.discover",
+        params=params,
+        allowed=set(),
+    )
+    return _build_rpc_discover_payload()
+
+
 _RPC_METHOD_HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "env.doctor": _handle_env_doctor,
     "project.show": _handle_project_show,
     "project.build_gui": _handle_project_build_gui,
     "project.validate": _handle_project_validate,
     "project.pack": _handle_project_pack,
+    "rpc.discover": _handle_rpc_discover,
 }
 
 
