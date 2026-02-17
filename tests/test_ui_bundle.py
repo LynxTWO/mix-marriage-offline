@@ -2154,6 +2154,165 @@ class TestUiBundle(unittest.TestCase):
         if isinstance(entry, dict):
             self.assertNotIn("\\", entry["path"])
 
+    # -- event_log pointer -----------------------------------------------------
+
+    def test_build_ui_bundle_includes_event_log_pointer_when_provided(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            event_log_path = temp_path / "events.jsonl"
+            event_log_path.write_text(
+                '{"event_id":"EVT.aaaaaaaaaaaa","kind":"info","scope":"render","what":"x","why":"x","where":["x"],"evidence":{}}\n',
+                encoding="utf-8",
+            )
+
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                event_log_path=event_log_path,
+            )
+
+        validator.validate(bundle)
+        event_log_pointer = bundle.get("event_log")
+        self.assertIsInstance(event_log_pointer, dict)
+        if not isinstance(event_log_pointer, dict):
+            return
+        self.assertTrue(event_log_pointer["exists"])
+        self.assertIsInstance(event_log_pointer["sha256"], str)
+        self.assertEqual(len(event_log_pointer["sha256"]), 64)
+        self.assertNotIn("\\", event_log_pointer["path"])
+
+    def test_build_ui_bundle_event_log_missing_file(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            missing_event_log = temp_path / "missing_events.jsonl"
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                event_log_path=missing_event_log,
+            )
+
+        validator.validate(bundle)
+        event_log_pointer = bundle.get("event_log")
+        self.assertIsInstance(event_log_pointer, dict)
+        if not isinstance(event_log_pointer, dict):
+            return
+        self.assertFalse(event_log_pointer["exists"])
+        self.assertIsNone(event_log_pointer["sha256"])
+        self.assertNotIn("\\", event_log_pointer["path"])
+
+    def test_build_ui_bundle_event_log_determinism(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            event_log_path = temp_path / "events.jsonl"
+            event_log_path.write_text(
+                '{"event_id":"EVT.aaaaaaaaaaaa","kind":"info","scope":"render","what":"x","why":"x","where":["x"],"evidence":{}}\n',
+                encoding="utf-8",
+            )
+
+            bundle_a = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                event_log_path=event_log_path,
+            )
+            bundle_b = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                event_log_path=event_log_path,
+            )
+
+        bytes_a = json.dumps(bundle_a, indent=2, sort_keys=True).encode("utf-8")
+        bytes_b = json.dumps(bundle_b, indent=2, sort_keys=True).encode("utf-8")
+        self.assertEqual(bytes_a, bytes_b)
+
+    def test_build_ui_bundle_event_log_path_hygiene(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            event_log_path = temp_path / "events.jsonl"
+            event_log_path.write_text(
+                '{"event_id":"EVT.aaaaaaaaaaaa","kind":"info","scope":"render","what":"x","why":"x","where":["x"],"evidence":{}}\n',
+                encoding="utf-8",
+            )
+            backslash_path = Path(str(event_log_path).replace("/", "\\"))
+
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                event_log_path=backslash_path,
+            )
+
+        validator.validate(bundle)
+        event_log_pointer = bundle.get("event_log")
+        self.assertIsInstance(event_log_pointer, dict)
+        if isinstance(event_log_pointer, dict):
+            self.assertNotIn("\\", event_log_pointer["path"])
+
+    def test_cli_bundle_with_event_log_pointer(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            report_path = temp_path / "report.json"
+            event_log_path = temp_path / "events.jsonl"
+            out_bundle_path = temp_path / "ui_bundle.json"
+
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            event_log_path.write_text(
+                '{"event_id":"EVT.aaaaaaaaaaaa","kind":"info","scope":"render","what":"x","why":"x","where":["x"],"evidence":{}}\n',
+                encoding="utf-8",
+            )
+
+            exit_code = main(
+                [
+                    "bundle",
+                    "--report",
+                    str(report_path),
+                    "--event-log",
+                    str(event_log_path),
+                    "--out",
+                    str(out_bundle_path),
+                ]
+            )
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(out_bundle_path.exists())
+
+            bundle = json.loads(out_bundle_path.read_text(encoding="utf-8"))
+            validator.validate(bundle)
+            event_log_pointer = bundle.get("event_log")
+            self.assertIsInstance(event_log_pointer, dict)
+            if isinstance(event_log_pointer, dict):
+                self.assertTrue(event_log_pointer["exists"])
+                self.assertIsInstance(event_log_pointer["sha256"], str)
+                self.assertNotIn("\\", event_log_pointer["path"])
+
     def test_cli_bundle_with_render_artifacts(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")

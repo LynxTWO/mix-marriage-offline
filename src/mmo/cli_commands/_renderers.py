@@ -350,6 +350,7 @@ def _run_bundle(
     ui_locale: str | None = None,
     render_request_path: Path | None = None,
     render_report_path: Path | None = None,
+    event_log_path: Path | None = None,
 ) -> int:
     from mmo.core.ui_bundle import build_ui_bundle  # noqa: WPS433
 
@@ -384,6 +385,7 @@ def _run_bundle(
         render_request_path=render_request_path,
         render_plan_artifact_path=render_plan_path,
         render_report_path=render_report_path,
+        event_log_path=event_log_path,
     )
     _validate_json_payload(
         bundle,

@@ -1510,6 +1510,7 @@ def build_ui_bundle(
     render_request_path: Path | None = None,
     render_plan_artifact_path: Path | None = None,
     render_report_path: Path | None = None,
+    event_log_path: Path | None = None,
 ) -> dict[str, Any]:
     from mmo.core.gui_design import load_gui_design  # noqa: WPS433
     from mmo.core.help_registry import load_help_registry, resolve_help_entries  # noqa: WPS433
@@ -1650,6 +1651,8 @@ def build_ui_bundle(
     )
     if render_block is not None:
         payload["render"] = render_block
+    if event_log_path is not None:
+        payload["event_log"] = _render_artifact_pointer(event_log_path)
 
     pointers = _bundle_pointers(
         project_path=project_path,

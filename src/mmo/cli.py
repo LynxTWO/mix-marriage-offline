@@ -985,6 +985,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to render_report JSON artifact.",
     )
     bundle_parser.add_argument(
+        "--event-log",
+        default=None,
+        help="Optional path to event log JSONL artifact.",
+    )
+    bundle_parser.add_argument(
         "--ui-locale",
         default=None,
         help="Optional UI copy locale (default: registry default_locale).",
@@ -4424,6 +4429,9 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 render_report_path=(
                     Path(args.render_report) if getattr(args, "render_report", None) else None
+                ),
+                event_log_path=(
+                    Path(args.event_log) if getattr(args, "event_log", None) else None
                 ),
             )
         except ValueError as exc:

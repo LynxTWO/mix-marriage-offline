@@ -39,7 +39,8 @@
     "pointers": { "$ref": "#/$defs/pointers" },
     "project_init": { "$ref": "#/$defs/project_init_pointers" },
     "stems_auditions": { "$ref": "#/$defs/stems_auditions_pointers" },
-    "render": { "$ref": "#/$defs/render_artifacts" }
+    "render": { "$ref": "#/$defs/render_artifacts" },
+    "event_log": { "$ref": "#/$defs/render_artifact_pointer" }
   },
   "$defs": {
     "posix_abs_path": {
@@ -365,16 +366,29 @@
       "additionalProperties": false,
       "required": [
         "target_id",
-        "label",
-        "layout_id",
-        "channel_order_ref",
-        "notes"
+        "layout_id"
       ],
       "properties": {
         "target_id": { "type": "string", "pattern": "^TARGET\\.[A-Z0-9_.]+$" },
         "label": { "type": "string", "minLength": 1 },
         "layout_id": { "type": "string", "pattern": "^LAYOUT\\.[A-Z0-9_.]+$" },
         "channel_order_ref": { "type": "string", "minLength": 1 },
+        "container": { "type": "string", "enum": ["wav", "flac", "wv", "aiff", "alac"] },
+        "channel_order": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^SPK\\.[A-Z0-9_.]+$" }
+        },
+        "channel_order_layout_id": {
+          "type": "string",
+          "pattern": "^LAYOUT\\.[A-Z0-9_.]+$"
+        },
+        "filename_template": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\\\]+$"
+        },
         "speaker_positions": {
           "type": "array",
           "items": { "$ref": "#/$defs/render_target_speaker_position" }
