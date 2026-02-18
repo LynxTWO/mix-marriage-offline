@@ -1,0 +1,10 @@
+{
+  "name": "mmo-gui-dev-shell",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "test": "node tests/run_tests.mjs"
+  }
+}

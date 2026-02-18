@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MMO GUI Dev Shell</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="panel">
+        <h1>MMO GUI Dev Shell</h1>
+        <p>Thin client over <code>mmo gui rpc</code> for smoke-testing the first real GUI loop.</p>
+      </header>
+
+      <section class="panel">
+        <h2>RPC Discover</h2>
+        <div class="row">
+          <button id="discover-button" type="button">Call rpc.discover</button>
+        </div>
+        <ul id="methods-list" class="methods-list"></ul>
+      </section>
+
+      <section class="panel">
+        <h2>Environment</h2>
+        <div class="row">
+          <button id="doctor-button" type="button">Call env.doctor</button>
+        </div>
+        <pre id="doctor-output" class="code-block"></pre>
+      </section>
+
+      <section class="panel">
+        <h2>Project</h2>
+        <label>
+          Project directory
+          <input id="project-dir-input" type="text" placeholder="C:/.../project or /.../project" />
+        </label>
+        <label>
+          Stems root (for scan)
+          <input id="stems-root-input" type="text" placeholder="C:/.../stems_root or /.../stems_root" />
+        </label>
+        <label>
+          Pack output
+          <input id="pack-out-input" type="text" placeholder="project_gui_shell.zip path" />
+        </label>
+        <label>
+          Plugins directory
+          <input id="plugins-dir-input" type="text" value="plugins" />
+        </label>
+        <div class="row">
+          <button id="show-project-button" type="button">Call project.show</button>
+          <button id="build-gui-button" type="button">Call project.build_gui + refresh</button>
+        </div>
+        <pre id="project-output" class="code-block"></pre>
+      </section>
+
+      <section class="panel">
+        <h2>Plugin Forms</h2>
+        <p class="subtle">
+          Uses plugin <code>config_schema</code>, <code>ui_hints</code>, and computed
+          <code>ui_layout_snapshot</code>.
+        </p>
+        <div id="plugins-container" class="plugins-container"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Status</h2>
+        <pre id="status-output" class="code-block"></pre>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

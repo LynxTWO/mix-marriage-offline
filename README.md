@@ -63,6 +63,7 @@ Key reads:
 - Product vision: [docs/09-product-vision.md](docs/09-product-vision.md)
 - Authority modes: [docs/10-authority-profiles.md](docs/10-authority-profiles.md)
 - GUI vision: [docs/11-gui-vision.md](docs/11-gui-vision.md)
+- GUI dev shell: [docs/12-gui-dev.md](docs/12-gui-dev.md)
 
 ---
 
