@@ -30,6 +30,7 @@ __all__ = [
     "_run_project_pack",
     "_run_project_render_init",
     "_run_project_render_run",
+    "_run_project_write_render_request",
     "_run_project_show",
     "_run_project_validate",
 ]
@@ -97,6 +98,21 @@ _PROJECT_SHOW_SCHEMA_BY_ARTIFACT: dict[str, str | None] = {
     for rel, schema_basename, _ in _VALIDATE_CHECKS
 }
 _PROJECT_SHOW_SCHEMA_BY_ARTIFACT["listen_pack.json"] = "listen_pack.schema.json"
+
+_PROJECT_RENDER_REQUEST_EDITABLE_FIELDS: frozenset[str] = frozenset(
+    {
+        "dry_run",
+        "policies",
+        "target_ids",
+        "target_layout_ids",
+    }
+)
+_PROJECT_RENDER_REQUEST_POLICY_FIELDS: frozenset[str] = frozenset(
+    {
+        "downmix_policy_id",
+        "gates_policy_id",
+    }
+)
 
 
 def _coerce_str(value: Any) -> str:
@@ -820,6 +836,328 @@ def _parse_target_ids_csv(raw_value: str) -> list[str]:
     for target_id in normalized_target_ids:
         target_registry.get_target(target_id)
     return normalized_target_ids
+
+
+def _parse_write_render_request_set_entries(
+    set_entries: list[str],
+) -> dict[str, str]:
+    if not isinstance(set_entries, list) or not set_entries:
+        raise ValueError("Provide at least one --set key=value entry.")
+
+    updates: dict[str, str] = {}
+    for raw_entry in set_entries:
+        if not isinstance(raw_entry, str):
+            raise ValueError("Each --set entry must be a key=value string.")
+        key_part, separator, value_part = raw_entry.partition("=")
+        key = key_part.strip()
+        if not separator or not key:
+            raise ValueError("Each --set entry must use key=value with a non-empty key.")
+        if key in updates:
+            raise ValueError(f"Duplicate --set key: {key}")
+        updates[key] = value_part.strip()
+    return updates
+
+
+def _parse_write_render_request_bool(
+    raw_value: Any,
+    *,
+    field_name: str,
+) -> bool:
+    if isinstance(raw_value, bool):
+        return raw_value
+    if isinstance(raw_value, str):
+        normalized = raw_value.strip().casefold()
+        if normalized == "true":
+            return True
+        if normalized == "false":
+            return False
+    raise ValueError(f"{field_name} must be a boolean (true or false).")
+
+
+def _parse_write_render_request_id_list(
+    raw_value: Any,
+    *,
+    field_name: str,
+) -> list[str]:
+    if isinstance(raw_value, list):
+        normalized: list[str] = []
+        for item in raw_value:
+            if not isinstance(item, str) or not item.strip():
+                raise ValueError(
+                    f"{field_name} entries must be non-empty strings.",
+                )
+            normalized.append(item.strip())
+        deduped = sorted(set(normalized))
+        if not deduped:
+            raise ValueError(f"{field_name} must include at least one ID.")
+        return deduped
+
+    if not isinstance(raw_value, str):
+        raise ValueError(f"{field_name} must be a comma-separated string or list.")
+
+    raw_text = raw_value.strip()
+    if not raw_text:
+        raise ValueError(f"{field_name} must include at least one ID.")
+
+    if raw_text.startswith("["):
+        try:
+            parsed = json.loads(raw_text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"{field_name} must be valid JSON when using list syntax.",
+            ) from exc
+        return _parse_write_render_request_id_list(parsed, field_name=field_name)
+
+    deduped = sorted(
+        {
+            item.strip()
+            for item in raw_text.split(",")
+            if isinstance(item, str) and item.strip()
+        }
+    )
+    if not deduped:
+        raise ValueError(f"{field_name} must include at least one ID.")
+    return deduped
+
+
+def _normalize_write_render_request_target_layout_ids(
+    raw_value: Any,
+) -> list[str]:
+    layout_ids = _parse_write_render_request_id_list(
+        raw_value,
+        field_name="target_layout_ids",
+    )
+
+    from mmo.core.registries.layout_registry import (  # noqa: WPS433
+        load_layout_registry,
+    )
+
+    registry = load_layout_registry()
+    for layout_id in layout_ids:
+        registry.get_layout(layout_id)
+    return layout_ids
+
+
+def _normalize_write_render_request_target_ids(raw_value: Any) -> list[str]:
+    target_ids = _parse_write_render_request_id_list(
+        raw_value,
+        field_name="target_ids",
+    )
+    return _parse_target_ids_csv(",".join(target_ids))
+
+
+def _normalize_write_render_request_policies(
+    raw_value: Any,
+) -> dict[str, str]:
+    parsed: dict[str, Any]
+    if isinstance(raw_value, dict):
+        parsed = dict(raw_value)
+    elif isinstance(raw_value, str):
+        raw_text = raw_value.strip()
+        if not raw_text:
+            raise ValueError("policies must include at least one policy key.")
+        if raw_text.startswith("{"):
+            try:
+                parsed_json = json.loads(raw_text)
+            except json.JSONDecodeError as exc:
+                raise ValueError(
+                    "policies must be valid JSON when using object syntax.",
+                ) from exc
+            if not isinstance(parsed_json, dict):
+                raise ValueError("policies must decode to an object.")
+            parsed = dict(parsed_json)
+        else:
+            parsed = {}
+            for raw_pair in raw_text.split(","):
+                pair = raw_pair.strip()
+                if not pair:
+                    continue
+                key_part, separator, value_part = pair.partition("=")
+                key = key_part.strip()
+                value = value_part.strip()
+                if not separator or not key or not value:
+                    raise ValueError(
+                        "policies must use comma-separated key=value pairs.",
+                    )
+                if key in parsed:
+                    raise ValueError(f"Duplicate policies key: {key}")
+                parsed[key] = value
+            if not parsed:
+                raise ValueError("policies must include at least one policy key.")
+    else:
+        raise ValueError("policies must be an object or string value.")
+
+    unknown_policy_keys = sorted(
+        key
+        for key in parsed
+        if key not in _PROJECT_RENDER_REQUEST_POLICY_FIELDS
+    )
+    if unknown_policy_keys:
+        allowed = ", ".join(sorted(_PROJECT_RENDER_REQUEST_POLICY_FIELDS))
+        joined = ", ".join(unknown_policy_keys)
+        raise ValueError(
+            f"Unknown policies key(s): {joined}. Allowed keys: {allowed}.",
+        )
+
+    normalized: dict[str, str] = {}
+    for key in sorted(parsed):
+        raw_policy_id = parsed[key]
+        if not isinstance(raw_policy_id, str) or not raw_policy_id.strip():
+            raise ValueError(
+                f"policies.{key} must be a non-empty string.",
+            )
+        normalized[key] = raw_policy_id.strip()
+    return normalized
+
+
+def _normalize_write_render_request_updates(
+    raw_updates: dict[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(raw_updates, dict) or not raw_updates:
+        raise ValueError("Provide at least one editable field update.")
+
+    unknown_fields = sorted(
+        key
+        for key in raw_updates
+        if key not in _PROJECT_RENDER_REQUEST_EDITABLE_FIELDS
+    )
+    if unknown_fields:
+        allowed = ", ".join(sorted(_PROJECT_RENDER_REQUEST_EDITABLE_FIELDS))
+        joined = ", ".join(unknown_fields)
+        raise ValueError(f"Unknown editable field(s): {joined}. Allowed keys: {allowed}.")
+
+    normalized: dict[str, Any] = {}
+    if "dry_run" in raw_updates:
+        normalized["dry_run"] = _parse_write_render_request_bool(
+            raw_updates.get("dry_run"),
+            field_name="dry_run",
+        )
+    if "target_ids" in raw_updates:
+        normalized["target_ids"] = _normalize_write_render_request_target_ids(
+            raw_updates.get("target_ids"),
+        )
+    if "target_layout_ids" in raw_updates:
+        normalized["target_layout_ids"] = _normalize_write_render_request_target_layout_ids(
+            raw_updates.get("target_layout_ids"),
+        )
+    if "policies" in raw_updates:
+        normalized["policies"] = _normalize_write_render_request_policies(
+            raw_updates.get("policies"),
+        )
+    return normalized
+
+
+def _run_project_write_render_request(
+    *,
+    project_dir: Path,
+    set_entries: list[str] | None = None,
+    updates: dict[str, Any] | None = None,
+) -> int:
+    if not project_dir.exists():
+        print(
+            f"Project directory does not exist: {project_dir.as_posix()}",
+            file=sys.stderr,
+        )
+        return 1
+    if not project_dir.is_dir():
+        print(
+            f"Project path is not a directory: {project_dir.as_posix()}",
+            file=sys.stderr,
+        )
+        return 1
+
+    if set_entries is not None and updates is not None:
+        print(
+            "Specify updates from either --set entries or RPC params, not both.",
+            file=sys.stderr,
+        )
+        return 1
+
+    request_path = project_dir / "renders" / "render_request.json"
+    if request_path.exists() and not request_path.is_file():
+        print(
+            f"Render request path is not a file: {request_path.as_posix()}",
+            file=sys.stderr,
+        )
+        return 1
+    if not request_path.is_file():
+        print(
+            (
+                "Render request file is missing: "
+                f"{request_path.as_posix()} (run `mmo project render-init` first)."
+            ),
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        request_payload = _load_json_object(request_path, label="Render request")
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    try:
+        if updates is not None:
+            raw_updates = dict(updates)
+        else:
+            raw_updates = _parse_write_render_request_set_entries(
+                set_entries if isinstance(set_entries, list) else [],
+            )
+        normalized_updates = _normalize_write_render_request_updates(raw_updates)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    options_payload = request_payload.get("options")
+    options = dict(options_payload) if isinstance(options_payload, dict) else {}
+    updated_fields: list[str] = []
+
+    if "dry_run" in normalized_updates:
+        options["dry_run"] = normalized_updates["dry_run"]
+        updated_fields.append("dry_run")
+
+    if "target_ids" in normalized_updates:
+        options["target_ids"] = normalized_updates["target_ids"]
+        updated_fields.append("target_ids")
+
+    if "policies" in normalized_updates:
+        policies = normalized_updates["policies"]
+        if isinstance(policies, dict):
+            for policy_key in sorted(policies):
+                options[policy_key] = policies[policy_key]
+        updated_fields.append("policies")
+
+    if updated_fields:
+        request_payload["options"] = options
+
+    if "target_layout_ids" in normalized_updates:
+        request_payload["target_layout_ids"] = normalized_updates["target_layout_ids"]
+        request_payload.pop("target_layout_id", None)
+        updated_fields.append("target_layout_ids")
+
+    try:
+        _validate_json_payload(
+            request_payload,
+            schema_path=_schemas_dir_fn() / "render_request.schema.json",
+            payload_name="Render request",
+        )
+    except SystemExit as exc:
+        return int(exc.code) if isinstance(exc.code, int) else 1
+
+    _write_json_file(request_path, request_payload)
+
+    summary: dict[str, Any] = {
+        "ok": True,
+        "project_dir": project_dir.resolve().as_posix(),
+        "updated_fields": sorted(updated_fields),
+        "written": ["renders/render_request.json"],
+    }
+    for key in ("dry_run", "target_ids", "target_layout_ids", "policies"):
+        if key in normalized_updates:
+            summary[key] = normalized_updates[key]
+
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
 
 
 def _run_project_render_init(

@@ -12,6 +12,7 @@ from mmo.cli_commands._project import (
     _run_project_pack,
     _run_project_show,
     _run_project_validate,
+    _run_project_write_render_request,
 )
 from mmo.core.env_doctor import build_env_doctor_report
 
@@ -37,6 +38,14 @@ class _RpcMethodError(RuntimeError):
 
 
 _RPC_VERSION = "1"
+_PROJECT_WRITE_RENDER_REQUEST_ALLOWED_SET_KEYS: frozenset[str] = frozenset(
+    {
+        "dry_run",
+        "policies",
+        "target_ids",
+        "target_layout_ids",
+    }
+)
 
 _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
     "env.doctor": {
@@ -184,6 +193,49 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
             ],
         },
     },
+    "project.write_render_request": {
+        "params_schema": {
+            "required": {
+                "project_dir": "string",
+                "set": "object",
+            },
+            "optional": {},
+            "examples": [
+                {
+                    "project_dir": "C:/mmo/project",
+                    "set": {
+                        "dry_run": False,
+                        "target_ids": [
+                            "TARGET.STEREO.2_0",
+                            "TARGET.SURROUND.5_1",
+                        ],
+                        "target_layout_ids": [
+                            "LAYOUT.2_0",
+                            "LAYOUT.5_1",
+                        ],
+                        "policies": {
+                            "downmix_policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
+                            "gates_policy_id": "POLICY.GATES.CORE_V0",
+                        },
+                    },
+                },
+            ],
+        },
+        "result_shape": {
+            "keys": [
+                "ok",
+                "project_dir",
+                "updated_fields",
+                "written",
+            ],
+            "optional_keys": [
+                "dry_run",
+                "policies",
+                "target_ids",
+                "target_layout_ids",
+            ],
+        },
+    },
     "rpc.discover": {
         "params_schema": {
             "required": {},
@@ -266,6 +318,21 @@ def _require_str_param(*, method: str, params: dict[str, Any], name: str) -> str
             message=f"{method} param '{name}' must be a non-empty string.",
         )
     return raw_value.strip()
+
+
+def _require_object_param(
+    *,
+    method: str,
+    params: dict[str, Any],
+    name: str,
+) -> dict[str, Any]:
+    raw_value = params.get(name)
+    if not isinstance(raw_value, dict):
+        raise _RpcRequestError(
+            code="RPC.INVALID_PARAMS",
+            message=f"{method} param '{name}' must be a JSON object.",
+        )
+    return dict(raw_value)
 
 
 def _optional_str_param(
@@ -566,6 +633,54 @@ def _handle_project_pack(params: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _handle_project_write_render_request(params: dict[str, Any]) -> dict[str, Any]:
+    _validate_allowed_params(
+        method="project.write_render_request",
+        params=params,
+        allowed={"project_dir", "set"},
+    )
+    project_dir = _require_str_param(
+        method="project.write_render_request",
+        params=params,
+        name="project_dir",
+    )
+    updates = _require_object_param(
+        method="project.write_render_request",
+        params=params,
+        name="set",
+    )
+    if not updates:
+        raise _RpcRequestError(
+            code="RPC.INVALID_PARAMS",
+            message=(
+                "project.write_render_request param 'set' must include at least "
+                "one editable field."
+            ),
+        )
+    unknown_keys = sorted(
+        key
+        for key in updates
+        if key not in _PROJECT_WRITE_RENDER_REQUEST_ALLOWED_SET_KEYS
+    )
+    if unknown_keys:
+        joined = ", ".join(unknown_keys)
+        allowed = ", ".join(sorted(_PROJECT_WRITE_RENDER_REQUEST_ALLOWED_SET_KEYS))
+        raise _RpcRequestError(
+            code="RPC.INVALID_PARAMS",
+            message=(
+                "project.write_render_request param 'set' received unknown keys: "
+                f"{joined}. Allowed keys: {allowed}"
+            ),
+        )
+    return _call_json_command(
+        method="project.write_render_request",
+        invoke=lambda: _run_project_write_render_request(
+            project_dir=Path(project_dir),
+            updates=updates,
+        ),
+    )
+
+
 def _handle_rpc_discover(params: dict[str, Any]) -> dict[str, Any]:
     _validate_allowed_params(
         method="rpc.discover",
@@ -581,6 +696,7 @@ _RPC_METHOD_HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "project.build_gui": _handle_project_build_gui,
     "project.validate": _handle_project_validate,
     "project.pack": _handle_project_pack,
+    "project.write_render_request": _handle_project_write_render_request,
     "rpc.discover": _handle_rpc_discover,
 }
 

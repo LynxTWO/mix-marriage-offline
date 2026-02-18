@@ -167,6 +167,43 @@ class TestGuiRpcStableErrors(unittest.TestCase):
             },
         )
 
+    def test_project_write_render_request_unknown_set_key_is_invalid_params(self) -> None:
+        project_dir, _ = _init_project(_SANDBOX / "stable_error_write_request")
+        exit_code, responses, _, stderr = _run_rpc(
+            [
+                {
+                    "id": "req-write-invalid",
+                    "method": "project.write_render_request",
+                    "params": {
+                        "project_dir": str(project_dir),
+                        "set": {
+                            "scene_path": "drafts/scene.draft.json",
+                        },
+                    },
+                }
+            ]
+        )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr, "")
+        self.assertEqual(
+            responses,
+            [
+                {
+                    "error": {
+                        "code": "RPC.INVALID_PARAMS",
+                        "message": (
+                            "project.write_render_request param 'set' received unknown keys: "
+                            "scene_path. Allowed keys: dry_run, policies, target_ids, "
+                            "target_layout_ids"
+                        ),
+                    },
+                    "id": "req-write-invalid",
+                    "ok": False,
+                }
+            ],
+        )
+
 
 class TestGuiRpcDiscover(unittest.TestCase):
     def test_rpc_discover_is_byte_identical_across_runs(self) -> None:
@@ -292,6 +329,27 @@ class TestGuiRpcDeterminism(unittest.TestCase):
                 "params": {},
             },
             {
+                "id": "6",
+                "method": "project.write_render_request",
+                "params": {
+                    "project_dir": str(self.project_dir),
+                    "set": {
+                        "dry_run": True,
+                        "target_ids": [
+                            "TARGET.STEREO.2_0",
+                            "TARGET.STEREO.2_0",
+                        ],
+                        "target_layout_ids": [
+                            "LAYOUT.2_0",
+                        ],
+                        "policies": {
+                            "gates_policy_id": "POLICY.GATES.CORE_V0",
+                            "downmix_policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
+                        },
+                    },
+                },
+            },
+            {
                 "id": "2",
                 "method": "project.build_gui",
                 "params": {
@@ -333,7 +391,7 @@ class TestGuiRpcDeterminism(unittest.TestCase):
             },
         ]
 
-    def test_five_supported_methods_are_deterministic(self) -> None:
+    def test_six_supported_methods_are_deterministic(self) -> None:
         exit_a, responses_a, stdout_a, stderr_a = _run_rpc(self._requests())
         exit_b, responses_b, stdout_b, stderr_b = _run_rpc(self._requests())
 
@@ -345,9 +403,9 @@ class TestGuiRpcDeterminism(unittest.TestCase):
         self.assertEqual(responses_a, responses_b)
         self.assertNotIn("\\", stdout_a)
 
-        self.assertEqual(len(responses_a), 5)
+        self.assertEqual(len(responses_a), 6)
         by_id = {item["id"]: item for item in responses_a}
-        for request_id in ("1", "2", "3", "4", "5"):
+        for request_id in ("1", "2", "3", "4", "5", "6"):
             self.assertIn(request_id, by_id)
             self.assertTrue(by_id[request_id]["ok"])
 
@@ -377,6 +435,22 @@ class TestGuiRpcDeterminism(unittest.TestCase):
         self.assertEqual(
             pack_result["out"],
             (self.project_dir / "project_pack_rpc.zip").resolve().as_posix(),
+        )
+
+        write_result = by_id["6"]["result"]
+        self.assertTrue(write_result["ok"])
+        self.assertEqual(
+            write_result["updated_fields"],
+            ["dry_run", "policies", "target_ids", "target_layout_ids"],
+        )
+        request_payload = json.loads(
+            (self.project_dir / "renders" / "render_request.json")
+            .read_text(encoding="utf-8")
+        )
+        self.assertTrue(request_payload["options"]["dry_run"])
+        self.assertEqual(
+            request_payload["target_layout_ids"],
+            ["LAYOUT.2_0"],
         )
 
 

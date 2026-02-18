@@ -2408,6 +2408,26 @@ def main(argv: list[str] | None = None) -> int:
         help="Overwrite existing renders/render_request.json.",
     )
 
+    project_write_render_request_parser = project_subparsers.add_parser(
+        "write-render-request",
+        help="Safely edit allowlisted fields in renders/render_request.json.",
+    )
+    project_write_render_request_parser.add_argument(
+        "project_dir",
+        help="Path to the project scaffold directory.",
+    )
+    project_write_render_request_parser.add_argument(
+        "--set",
+        dest="set_entries",
+        action="append",
+        default=[],
+        metavar="key=value",
+        help=(
+            "Editable fields only: dry_run, target_ids, target_layout_ids, policies. "
+            "Repeat --set for multiple updates."
+        ),
+    )
+
     project_render_run_parser = project_subparsers.add_parser(
         "render-run",
         help="Run render plan+report using project-standard paths.",
@@ -4657,6 +4677,18 @@ def main(argv: list[str] | None = None) -> int:
                 target_ids=args.target_ids,
                 force=bool(getattr(args, "force", False)),
             )
+
+        if args.project_command == "write-render-request":
+            try:
+                return _run_project_write_render_request(
+                    project_dir=Path(args.project_dir),
+                    set_entries=list(getattr(args, "set_entries", [])),
+                )
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
 
         if args.project_command == "render-run":
             try:
