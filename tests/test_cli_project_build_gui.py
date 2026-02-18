@@ -84,6 +84,7 @@ def _run_build_gui(
     event_log: bool = False,
     event_log_force: bool = False,
     include_plugins: bool = False,
+    include_plugin_ui_hints: bool = False,
     plugins_dir: Path | None = None,
 ) -> tuple[int, str, str]:
     args = [
@@ -108,6 +109,8 @@ def _run_build_gui(
                 str(plugins_dir if plugins_dir is not None else (_REPO_ROOT / "plugins")),
             ]
         )
+    if include_plugin_ui_hints:
+        args.append("--include-plugin-ui-hints")
     return _run_main(args)
 
 
@@ -248,6 +251,23 @@ class TestProjectBuildGuiOverwriteGuards(unittest.TestCase):
         self.assertIn("--event-log-force", stderr_refused)
         self.assertEqual(event_log_bytes_first, event_log_path.read_bytes())
 
+    def test_include_plugin_ui_hints_requires_include_plugins(self) -> None:
+        project_dir, stems_root = _init_project(_SANDBOX / "ui_hints_guard")
+        pack_out = project_dir / "project_gui.zip"
+        scan_out = project_dir / "report.json"
+
+        exit_code, _, stderr = _run_build_gui(
+            project_dir,
+            pack_out=pack_out,
+            scan=True,
+            scan_stems=stems_root,
+            scan_out=scan_out,
+            force=True,
+            include_plugin_ui_hints=True,
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertIn("--include-plugin-ui-hints requires --include-plugins", stderr)
+
 
 class TestProjectBuildGuiArtifacts(unittest.TestCase):
     def test_artifacts_exist_and_are_schema_valid(self) -> None:
@@ -319,6 +339,7 @@ class TestProjectBuildGuiArtifacts(unittest.TestCase):
             event_log=True,
             event_log_force=True,
             include_plugins=True,
+            include_plugin_ui_hints=True,
             plugins_dir=_REPO_ROOT / "plugins",
         )
         self.assertEqual(exit_code, 0, msg=stderr)
@@ -332,6 +353,17 @@ class TestProjectBuildGuiArtifacts(unittest.TestCase):
                 plugins_payload.get("plugins_dir"),
                 (_REPO_ROOT / "plugins").resolve().as_posix(),
             )
+            entries = plugins_payload.get("entries")
+            self.assertIsInstance(entries, list)
+            if isinstance(entries, list) and entries:
+                first_entry = entries[0]
+                self.assertIsInstance(first_entry, dict)
+                if isinstance(first_entry, dict):
+                    ui_hints = first_entry.get("ui_hints")
+                    self.assertIsInstance(ui_hints, dict)
+                    if isinstance(ui_hints, dict):
+                        self.assertIn("hint_count", ui_hints)
+                        self.assertIn("hints", ui_hints)
 
 
 if __name__ == "__main__":

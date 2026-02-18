@@ -179,6 +179,32 @@ def _config_schema_payload(
     return payload
 
 
+def _ui_hints_payload(
+    *,
+    manifest_path: Path,
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    from mmo.core.ui_hints import extract_ui_hints_rows  # noqa: WPS433
+
+    resolved_manifest_path = manifest_path.resolve()
+    manifest_sha256 = _sha256_file(resolved_manifest_path)
+    raw_schema = manifest.get("config_schema")
+    schema_present = isinstance(raw_schema, dict)
+    hint_rows = extract_ui_hints_rows(raw_schema) if schema_present else []
+    hints_sha256 = _canonical_json_sha256(hint_rows) if schema_present else None
+    return {
+        "present": schema_present,
+        "pointer": {
+            "manifest_path": resolved_manifest_path.as_posix(),
+            "manifest_sha256": manifest_sha256,
+            "json_pointer": _CONFIG_SCHEMA_JSON_POINTER,
+        },
+        "sha256": hints_sha256,
+        "hint_count": len(hint_rows),
+        "hints": hint_rows,
+    }
+
+
 def _ui_layout_payload(
     *,
     manifest_path: Path,
@@ -242,6 +268,7 @@ def build_plugins_config_schema_index(
     include_schema: bool = False,
     include_ui_layout: bool = False,
     include_ui_layout_snapshot: bool = False,
+    include_ui_hints: bool = False,
 ) -> dict[str, Any]:
     resolved_plugins_dir = _validate_plugins_dir(plugins_dir)
     include_ui_layout_effective = include_ui_layout or include_ui_layout_snapshot
@@ -268,6 +295,11 @@ def build_plugins_config_schema_index(
             row["ui_layout_snapshot"] = _ui_layout_snapshot_payload(
                 layout_path=ui_layout_path,
             )
+        if include_ui_hints:
+            row["ui_hints"] = _ui_hints_payload(
+                manifest_path=plugin.manifest_path,
+                manifest=plugin.manifest,
+            )
         rows.append(row)
 
     rows.sort(
@@ -288,6 +320,7 @@ def build_plugin_show_payload(
     plugins_dir: Path,
     plugin_id: str,
     include_ui_layout_snapshot: bool = False,
+    include_ui_hints: bool = False,
 ) -> dict[str, Any]:
     resolved_plugins_dir = _validate_plugins_dir(plugins_dir)
     normalized_plugin_id = plugin_id.strip() if isinstance(plugin_id, str) else ""
@@ -344,5 +377,10 @@ def build_plugin_show_payload(
     if include_ui_layout_snapshot and ui_layout_path is not None:
         payload["ui_layout_snapshot"] = _ui_layout_snapshot_payload(
             layout_path=ui_layout_path,
+        )
+    if include_ui_hints:
+        payload["ui_hints"] = _ui_hints_payload(
+            manifest_path=target_plugin.manifest_path,
+            manifest=target_plugin.manifest,
         )
     return payload

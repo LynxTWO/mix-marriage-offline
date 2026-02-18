@@ -69,6 +69,7 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
                 "include_plugins": "boolean",
                 "include_plugin_layouts": "boolean",
                 "include_plugin_layout_snapshots": "boolean",
+                "include_plugin_ui_hints": "boolean",
                 "plugins": "string",
                 "scan": "boolean",
                 "scan_out": "string",
@@ -88,6 +89,7 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
                     "include_plugins": True,
                     "include_plugin_layouts": True,
                     "include_plugin_layout_snapshots": False,
+                    "include_plugin_ui_hints": True,
                     "plugins": "C:/mmo/plugins",
                     "scan": True,
                     "scan_out": "C:/mmo/project/report.json",
@@ -385,6 +387,7 @@ def _handle_project_build_gui(params: dict[str, Any]) -> dict[str, Any]:
             "include_plugins",
             "include_plugin_layouts",
             "include_plugin_layout_snapshots",
+            "include_plugin_ui_hints",
             "plugins",
         },
     )
@@ -452,6 +455,12 @@ def _handle_project_build_gui(params: dict[str, Any]) -> dict[str, Any]:
         name="include_plugin_layout_snapshots",
         default=False,
     )
+    include_plugin_ui_hints = _optional_bool_param(
+        method="project.build_gui",
+        params=params,
+        name="include_plugin_ui_hints",
+        default=False,
+    )
     plugins = _optional_str_param(
         method="project.build_gui",
         params=params,
@@ -476,6 +485,7 @@ def _handle_project_build_gui(params: dict[str, Any]) -> dict[str, Any]:
             include_plugins=include_plugins,
             include_plugin_layouts=include_plugin_layouts,
             include_plugin_layout_snapshots=include_plugin_layout_snapshots,
+            include_plugin_ui_hints=include_plugin_ui_hints,
             plugins_dir=plugins_dir,
         ),
     )

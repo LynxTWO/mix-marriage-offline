@@ -56,6 +56,19 @@ class TestPluginSchemaIndex(unittest.TestCase):
                     'ontology_min_version: "0.1.0"',
                     'entrypoint: "plugins.renderers.safe_renderer:SafeRenderer"',
                     'ui_layout: "ui/layout.json"',
+                    "config_schema:",
+                    '  "$schema": "https://json-schema.org/draft/2020-12/schema"',
+                    '  "type": "object"',
+                    '  "additionalProperties": false',
+                    '  "properties":',
+                    '    "threshold_db":',
+                    '      "type": "number"',
+                    '      "minimum": -24',
+                    '      "maximum": 0',
+                    '      "x_mmo_ui":',
+                    '        "widget": "fader"',
+                    '        "units": "dB"',
+                    '        "step": 0.5',
                     "",
                 ]
             ),
@@ -96,12 +109,14 @@ class TestPluginSchemaIndex(unittest.TestCase):
                 include_schema=False,
                 include_ui_layout=True,
                 include_ui_layout_snapshot=True,
+                include_ui_hints=True,
             )
             second = build_plugins_config_schema_index(
                 plugins_dir=plugins_dir,
                 include_schema=False,
                 include_ui_layout=True,
                 include_ui_layout_snapshot=True,
+                include_ui_hints=True,
             )
 
         bytes_first = json.dumps(first, indent=2, sort_keys=True).encode("utf-8")
@@ -141,6 +156,33 @@ class TestPluginSchemaIndex(unittest.TestCase):
         self.assertIsInstance(snapshot.get("sha256"), str)
         self.assertEqual(len(snapshot.get("sha256", "")), 64)
         self.assertEqual(snapshot.get("violations_count"), 0)
+
+        ui_hints = row.get("ui_hints")
+        self.assertIsInstance(ui_hints, dict)
+        if not isinstance(ui_hints, dict):
+            return
+        self.assertTrue(ui_hints.get("present"))
+        self.assertIsInstance(ui_hints.get("sha256"), str)
+        self.assertEqual(len(ui_hints.get("sha256", "")), 64)
+        self.assertEqual(ui_hints.get("hint_count"), 1)
+
+        pointer = ui_hints.get("pointer")
+        self.assertIsInstance(pointer, dict)
+        if isinstance(pointer, dict):
+            self.assertEqual(pointer.get("json_pointer"), "/config_schema")
+
+        hints = ui_hints.get("hints")
+        self.assertIsInstance(hints, list)
+        if not isinstance(hints, list) or not hints:
+            return
+        first_hint = hints[0]
+        self.assertIsInstance(first_hint, dict)
+        if not isinstance(first_hint, dict):
+            return
+        self.assertEqual(
+            first_hint.get("json_pointer"),
+            "/properties/threshold_db/x_mmo_ui",
+        )
 
 
 if __name__ == "__main__":

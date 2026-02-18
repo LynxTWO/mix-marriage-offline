@@ -77,6 +77,10 @@ class TestCliPluginsShow(unittest.TestCase):
                     '      "type": "number"',
                     '      "minimum": -6',
                     '      "maximum": 6',
+                    '      "x_mmo_ui":',
+                    '        "widget": "fader"',
+                    '        "units": "dB"',
+                    '        "step": 0.5',
                     "",
                 ]
             ),
@@ -91,6 +95,7 @@ class TestCliPluginsShow(unittest.TestCase):
         plugins_dir: Path,
         output_format: str,
         include_ui_layout_snapshot: bool = False,
+        include_ui_hints: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         repo_root = Path(__file__).resolve().parents[1]
         env = os.environ.copy()
@@ -109,6 +114,8 @@ class TestCliPluginsShow(unittest.TestCase):
         ]
         if include_ui_layout_snapshot:
             args.append("--include-ui-layout-snapshot")
+        if include_ui_hints:
+            args.append("--include-ui-hints")
         return subprocess.run(
             args,
             check=False,
@@ -219,6 +226,57 @@ class TestCliPluginsShow(unittest.TestCase):
         self.assertEqual(len(snapshot.get("sha256", "")), 64)
         self.assertEqual(snapshot.get("violations_count"), 0)
 
+    def test_plugins_show_json_can_include_ui_hints(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            plugins_dir = Path(temp_dir) / "plugins"
+            plugin_id, manifest_path, _ = self._write_temp_plugin(plugins_dir)
+            expected_manifest_path = manifest_path.resolve().as_posix()
+
+            first = self._run_plugins_show(
+                plugin_id=plugin_id,
+                plugins_dir=plugins_dir,
+                output_format="json",
+                include_ui_hints=True,
+            )
+            second = self._run_plugins_show(
+                plugin_id=plugin_id,
+                plugins_dir=plugins_dir,
+                output_format="json",
+                include_ui_hints=True,
+            )
+
+        self.assertEqual(first.returncode, 0, msg=first.stderr)
+        self.assertEqual(second.returncode, 0, msg=second.stderr)
+        self.assertEqual(first.stdout, second.stdout)
+
+        payload = json.loads(first.stdout)
+        ui_hints = payload.get("ui_hints")
+        self.assertIsInstance(ui_hints, dict)
+        if not isinstance(ui_hints, dict):
+            return
+        self.assertTrue(ui_hints.get("present"))
+        self.assertEqual(ui_hints.get("hint_count"), 1)
+        self.assertIsInstance(ui_hints.get("sha256"), str)
+        self.assertEqual(len(ui_hints.get("sha256", "")), 64)
+
+        pointer = ui_hints.get("pointer")
+        self.assertIsInstance(pointer, dict)
+        if isinstance(pointer, dict):
+            self.assertEqual(pointer.get("manifest_path"), expected_manifest_path)
+            self.assertEqual(pointer.get("json_pointer"), "/config_schema")
+            self.assertIsInstance(pointer.get("manifest_sha256"), str)
+            self.assertEqual(len(pointer.get("manifest_sha256", "")), 64)
+
+        hints = ui_hints.get("hints")
+        self.assertIsInstance(hints, list)
+        if not isinstance(hints, list) or not hints:
+            return
+        first_hint = hints[0]
+        self.assertIsInstance(first_hint, dict)
+        if not isinstance(first_hint, dict):
+            return
+        self.assertEqual(first_hint.get("json_pointer"), "/properties/gain_db/x_mmo_ui")
+
     def test_plugins_show_text_includes_schema_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             plugins_dir = Path(temp_dir) / "plugins"
@@ -238,6 +296,25 @@ class TestCliPluginsShow(unittest.TestCase):
         self.assertIn("ui_layout.present: True", result.stdout)
         self.assertIn("ui_layout.path:", result.stdout)
         self.assertIn("ui_layout.sha256:", result.stdout)
+
+    def test_plugins_show_text_can_include_ui_hints(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            plugins_dir = Path(temp_dir) / "plugins"
+            plugin_id, _, _ = self._write_temp_plugin(plugins_dir)
+
+            result = self._run_plugins_show(
+                plugin_id=plugin_id,
+                plugins_dir=plugins_dir,
+                output_format="text",
+                include_ui_hints=True,
+            )
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("ui_hints.present: True", result.stdout)
+        self.assertIn("ui_hints.pointer:", result.stdout)
+        self.assertIn("ui_hints.sha256:", result.stdout)
+        self.assertIn("ui_hints.hint_count: 1", result.stdout)
+        self.assertIn('"json_pointer": "/properties/gain_db/x_mmo_ui"', result.stdout)
 
     def test_plugins_show_unknown_plugin_returns_error(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

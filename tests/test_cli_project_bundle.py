@@ -60,6 +60,7 @@ def _run_project_bundle(
     include_plugins: bool = False,
     include_plugin_layouts: bool = False,
     include_plugin_layout_snapshots: bool = False,
+    include_plugin_ui_hints: bool = False,
     plugins_dir: Path | None = None,
     render_preflight_path: Path | None = None,
 ) -> tuple[int, str, str]:
@@ -81,6 +82,8 @@ def _run_project_bundle(
         args.append("--include-plugin-layouts")
     if include_plugin_layout_snapshots:
         args.append("--include-plugin-layout-snapshots")
+    if include_plugin_ui_hints:
+        args.append("--include-plugin-ui-hints")
     if render_preflight_path is not None:
         args.extend(["--render-preflight", str(render_preflight_path)])
     return _run_main(args)
@@ -358,6 +361,79 @@ class TestProjectBundle(unittest.TestCase):
 
         self.assertEqual(bytes_a, bytes_b)
 
+    def test_include_plugin_ui_hints_embeds_ui_hints_block(self) -> None:
+        out_path = _SANDBOX / "full" / "ui_bundle_plugins_ui_hints.json"
+        exit_code, _, stderr = _run_project_bundle(
+            self.project_dir,
+            out_path,
+            include_plugins=True,
+            include_plugin_ui_hints=True,
+            plugins_dir=_REPO_ROOT / "plugins",
+        )
+        self.assertEqual(exit_code, 0, msg=stderr)
+
+        bundle = json.loads(out_path.read_text(encoding="utf-8"))
+        self.validator.validate(bundle)
+        plugins_payload = bundle.get("plugins")
+        self.assertIsInstance(plugins_payload, dict)
+        if not isinstance(plugins_payload, dict):
+            return
+        entries = plugins_payload.get("entries")
+        self.assertIsInstance(entries, list)
+        if not isinstance(entries, list):
+            return
+
+        safe_entry = next(
+            (
+                item
+                for item in entries
+                if isinstance(item, dict)
+                and item.get("plugin_id") == "PLUGIN.RENDERER.SAFE"
+            ),
+            None,
+        )
+        self.assertIsInstance(safe_entry, dict)
+        if not isinstance(safe_entry, dict):
+            return
+        ui_hints = safe_entry.get("ui_hints")
+        self.assertIsInstance(ui_hints, dict)
+        if not isinstance(ui_hints, dict):
+            return
+        self.assertFalse(ui_hints.get("present"))
+        self.assertEqual(ui_hints.get("hint_count"), 0)
+        self.assertEqual(ui_hints.get("hints"), [])
+        self.assertIsNone(ui_hints.get("sha256"))
+        pointer = ui_hints.get("pointer")
+        self.assertIsInstance(pointer, dict)
+        if isinstance(pointer, dict):
+            self.assertEqual(pointer.get("json_pointer"), "/config_schema")
+            self.assertIsInstance(pointer.get("manifest_sha256"), str)
+            self.assertEqual(len(pointer.get("manifest_sha256", "")), 64)
+
+    def test_include_plugin_ui_hints_is_deterministic_across_runs(self) -> None:
+        out_path = _SANDBOX / "full" / "ui_bundle_plugins_ui_hints_determinism.json"
+        exit_a, _, stderr_a = _run_project_bundle(
+            self.project_dir,
+            out_path,
+            include_plugins=True,
+            include_plugin_ui_hints=True,
+            plugins_dir=_REPO_ROOT / "plugins",
+        )
+        self.assertEqual(exit_a, 0, msg=stderr_a)
+        bytes_a = out_path.read_bytes()
+
+        exit_b, _, stderr_b = _run_project_bundle(
+            self.project_dir,
+            out_path,
+            force=True,
+            include_plugins=True,
+            include_plugin_ui_hints=True,
+            plugins_dir=_REPO_ROOT / "plugins",
+        )
+        self.assertEqual(exit_b, 0, msg=stderr_b)
+        bytes_b = out_path.read_bytes()
+        self.assertEqual(bytes_a, bytes_b)
+
     def test_include_plugin_layouts_requires_include_plugins(self) -> None:
         out_path = _SANDBOX / "full" / "ui_bundle_plugins_layouts_requires_plugins.json"
         exit_code, _, stderr = _run_project_bundle(
@@ -367,6 +443,16 @@ class TestProjectBundle(unittest.TestCase):
         )
         self.assertEqual(exit_code, 1)
         self.assertIn("--include-plugin-layouts requires --include-plugins", stderr)
+
+    def test_include_plugin_ui_hints_requires_include_plugins(self) -> None:
+        out_path = _SANDBOX / "full" / "ui_bundle_plugins_ui_hints_requires_plugins.json"
+        exit_code, _, stderr = _run_project_bundle(
+            self.project_dir,
+            out_path,
+            include_plugin_ui_hints=True,
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertIn("--include-plugin-ui-hints requires --include-plugins", stderr)
 
     def test_include_plugin_layout_snapshots_requires_layouts(self) -> None:
         out_path = _SANDBOX / "full" / "ui_bundle_plugins_snapshots_requires_layouts.json"

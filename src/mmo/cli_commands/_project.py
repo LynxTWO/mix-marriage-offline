@@ -558,6 +558,7 @@ def _run_project_build_gui(
     include_plugins: bool = False,
     include_plugin_layouts: bool = False,
     include_plugin_layout_snapshots: bool = False,
+    include_plugin_ui_hints: bool = False,
     plugins_dir: Path | None = None,
 ) -> int:
     """Run deterministic project GUI build pipeline with explicit-safe flags."""
@@ -693,6 +694,7 @@ def _run_project_build_gui(
             include_plugins=include_plugins,
             include_plugin_layouts=include_plugin_layouts,
             include_plugin_layout_snapshots=include_plugin_layout_snapshots,
+            include_plugin_ui_hints=include_plugin_ui_hints,
             plugins_dir=plugins_dir,
         )
     if bundle_exit != 0:
@@ -1062,6 +1064,7 @@ def _run_project_bundle(
     include_plugins: bool = False,
     include_plugin_layouts: bool = False,
     include_plugin_layout_snapshots: bool = False,
+    include_plugin_ui_hints: bool = False,
     plugins_dir: Path | None = None,
     render_preflight_path: Path | None = None,
 ) -> int:
@@ -1074,6 +1077,9 @@ def _run_project_bundle(
         return 1
     if (include_plugin_layouts or include_plugin_layout_snapshots) and not include_plugins:
         print("--include-plugin-layouts requires --include-plugins.", file=sys.stderr)
+        return 1
+    if include_plugin_ui_hints and not include_plugins:
+        print("--include-plugin-ui-hints requires --include-plugins.", file=sys.stderr)
         return 1
 
     if out_path.exists() and not force:
@@ -1111,6 +1117,7 @@ def _run_project_bundle(
             include_schema=False,
             include_ui_layout=include_plugin_layouts,
             include_ui_layout_snapshot=include_plugin_layout_snapshots,
+            include_ui_hints=include_plugin_ui_hints,
         )
 
     from mmo.core.ui_bundle import build_ui_bundle  # noqa: WPS433

@@ -994,6 +994,14 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     bundle_parser.add_argument(
+        "--include-plugin-ui-hints",
+        action="store_true",
+        help=(
+            "When used with --include-plugins, also include ui_hints extracted "
+            "from each plugin config_schema."
+        ),
+    )
+    bundle_parser.add_argument(
         "--include-plugin-layout-snapshots",
         action="store_true",
         help=(
@@ -1309,6 +1317,14 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Generate and include deterministic ui_layout_snapshot metadata "
             "(path/hash/violations_count) when ui_layout is present."
+        ),
+    )
+    plugins_show_parser.add_argument(
+        "--include-ui-hints",
+        action="store_true",
+        help=(
+            "Extract and include ui_hints metadata from plugin config_schema "
+            "(pointer/hash/hint_count/hints)."
         ),
     )
 
@@ -2215,6 +2231,14 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     project_bundle_parser.add_argument(
+        "--include-plugin-ui-hints",
+        action="store_true",
+        help=(
+            "When used with --include-plugins, also include ui_hints extracted "
+            "from each plugin config_schema."
+        ),
+    )
+    project_bundle_parser.add_argument(
         "--include-plugin-layout-snapshots",
         action="store_true",
         help=(
@@ -2311,6 +2335,14 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "When used with --include-plugins, also include ui_layout path/hash metadata "
             "for each plugin."
+        ),
+    )
+    project_build_gui_parser.add_argument(
+        "--include-plugin-ui-hints",
+        action="store_true",
+        help=(
+            "When used with --include-plugins, also include ui_hints extracted "
+            "from each plugin config_schema."
         ),
     )
     project_build_gui_parser.add_argument(
@@ -4481,6 +4513,9 @@ def main(argv: list[str] | None = None) -> int:
                     include_plugin_layout_snapshots=bool(
                         getattr(args, "include_plugin_layout_snapshots", False)
                     ),
+                    include_plugin_ui_hints=bool(
+                        getattr(args, "include_plugin_ui_hints", False)
+                    ),
                     plugins_dir=(
                         Path(args.plugins)
                         if bool(getattr(args, "include_plugins", False))
@@ -4534,6 +4569,9 @@ def main(argv: list[str] | None = None) -> int:
                     ),
                     include_plugin_layout_snapshots=bool(
                         getattr(args, "include_plugin_layout_snapshots", False)
+                    ),
+                    include_plugin_ui_hints=bool(
+                        getattr(args, "include_plugin_ui_hints", False)
                     ),
                     plugins_dir=(
                         Path(args.plugins)
@@ -4943,6 +4981,9 @@ def main(argv: list[str] | None = None) -> int:
                 include_plugin_layout_snapshots=bool(
                     getattr(args, "include_plugin_layout_snapshots", False)
                 ),
+                include_plugin_ui_hints=bool(
+                    getattr(args, "include_plugin_ui_hints", False)
+                ),
                 plugins_dir=(
                     Path(args.plugins)
                     if bool(getattr(args, "include_plugins", False))
@@ -5052,6 +5093,7 @@ def main(argv: list[str] | None = None) -> int:
                     include_ui_layout_snapshot=bool(
                         getattr(args, "include_ui_layout_snapshot", False)
                     ),
+                    include_ui_hints=bool(getattr(args, "include_ui_hints", False)),
                 )
             except (RuntimeError, ValueError, AttributeError, OSError) as exc:
                 print(str(exc), file=sys.stderr)

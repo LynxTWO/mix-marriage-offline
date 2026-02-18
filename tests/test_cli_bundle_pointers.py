@@ -93,6 +93,19 @@ class TestCliBundlePointers(unittest.TestCase):
                     'ontology_min_version: "0.1.0"',
                     'entrypoint: "plugins.renderers.safe_renderer:SafeRenderer"',
                     'ui_layout: "ui/layout.json"',
+                    "config_schema:",
+                    '  "$schema": "https://json-schema.org/draft/2020-12/schema"',
+                    '  "type": "object"',
+                    '  "additionalProperties": false',
+                    '  "properties":',
+                    '    "gain_db":',
+                    '      "type": "number"',
+                    '      "minimum": -6',
+                    '      "maximum": 6',
+                    '      "x_mmo_ui":',
+                    '        "widget": "fader"',
+                    '        "units": "dB"',
+                    '        "step": 0.5',
                     "",
                 ]
             ),
@@ -409,7 +422,42 @@ class TestCliBundlePointers(unittest.TestCase):
                 result.stderr,
             )
 
-    def test_bundle_command_include_plugin_layouts_and_snapshots_is_deterministic(self) -> None:
+    def test_bundle_command_include_plugin_ui_hints_requires_include_plugins(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            report_path = temp_path / "report.json"
+            out_bundle_path = temp_path / "ui_bundle.json"
+            report_path.write_text(
+                json.dumps(_sample_report_payload(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            env = os.environ.copy()
+            env["PYTHONPATH"] = str(repo_root / "src")
+            result = subprocess.run(
+                [
+                    self._python_cmd(),
+                    "-m",
+                    "mmo",
+                    "bundle",
+                    "--report",
+                    str(report_path),
+                    "--include-plugin-ui-hints",
+                    "--out",
+                    str(out_bundle_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=env,
+                cwd=repo_root,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("--include-plugin-ui-hints requires --include-plugins", result.stderr)
+
+    def test_bundle_command_include_plugin_layouts_snapshots_and_ui_hints_is_deterministic(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
 
@@ -437,6 +485,7 @@ class TestCliBundlePointers(unittest.TestCase):
                 "--include-plugins",
                 "--include-plugin-layouts",
                 "--include-plugin-layout-snapshots",
+                "--include-plugin-ui-hints",
                 "--plugins",
                 str(plugins_dir),
                 "--out",
@@ -507,6 +556,22 @@ class TestCliBundlePointers(unittest.TestCase):
             self.assertIsInstance(snapshot.get("sha256"), str)
             self.assertEqual(len(snapshot.get("sha256", "")), 64)
             self.assertEqual(snapshot.get("violations_count"), 0)
+
+            ui_hints = plugin_entry.get("ui_hints")
+            self.assertIsInstance(ui_hints, dict)
+            if not isinstance(ui_hints, dict):
+                return
+            self.assertTrue(ui_hints.get("present"))
+            self.assertEqual(ui_hints.get("hint_count"), 1)
+            self.assertIsInstance(ui_hints.get("sha256"), str)
+            self.assertEqual(len(ui_hints.get("sha256", "")), 64)
+            hints = ui_hints.get("hints")
+            self.assertIsInstance(hints, list)
+            if isinstance(hints, list) and hints:
+                self.assertEqual(
+                    hints[0].get("json_pointer"),
+                    "/properties/gain_db/x_mmo_ui",
+                )
 
 
 if __name__ == "__main__":

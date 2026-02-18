@@ -1382,11 +1382,13 @@ def _build_plugins_show_payload(
     plugins_dir: Path,
     plugin_id: str,
     include_ui_layout_snapshot: bool = False,
+    include_ui_hints: bool = False,
 ) -> dict[str, Any]:
     return build_plugin_show_payload(
         plugins_dir=plugins_dir,
         plugin_id=plugin_id,
         include_ui_layout_snapshot=include_ui_layout_snapshot,
+        include_ui_hints=include_ui_hints,
     )
 
 
@@ -1396,6 +1398,7 @@ def _render_plugins_show_text(payload: dict[str, Any]) -> str:
     config_schema_payload = payload.get("config_schema")
     ui_layout_payload = payload.get("ui_layout")
     ui_layout_snapshot_payload = payload.get("ui_layout_snapshot")
+    ui_hints_payload = payload.get("ui_hints")
 
     if (
         not isinstance(plugin_payload, dict)
@@ -1457,6 +1460,42 @@ def _render_plugins_show_text(payload: dict[str, Any]) -> str:
         lines.append(f"ui_layout_snapshot.path: {snapshot_path_text}")
         lines.append(f"ui_layout_snapshot.sha256: {snapshot_sha_text}")
         lines.append(f"ui_layout_snapshot.violations_count: {snapshot_violations_text}")
+
+    if isinstance(ui_hints_payload, dict):
+        hints_pointer_payload = ui_hints_payload.get("pointer")
+        hints_pointer_path = ""
+        hints_pointer_json_pointer = ""
+        hints_pointer_manifest_sha256 = ""
+        if isinstance(hints_pointer_payload, dict):
+            hints_pointer_path = _coerce_str(hints_pointer_payload.get("manifest_path"))
+            hints_pointer_json_pointer = _coerce_str(
+                hints_pointer_payload.get("json_pointer")
+            )
+            hints_pointer_manifest_sha256 = _coerce_str(
+                hints_pointer_payload.get("manifest_sha256")
+            )
+        hints_pointer_text = hints_pointer_path
+        if hints_pointer_path and hints_pointer_json_pointer:
+            hints_pointer_text = f"{hints_pointer_path}#{hints_pointer_json_pointer}"
+        hints_sha256 = ui_hints_payload.get("sha256")
+        hints_sha256_text = hints_sha256 if isinstance(hints_sha256, str) else "-"
+        hints_count = ui_hints_payload.get("hint_count")
+        hints_count_text = (
+            str(hints_count)
+            if isinstance(hints_count, int) and not isinstance(hints_count, bool)
+            else "-"
+        )
+        lines.append(f"ui_hints.present: {ui_hints_payload.get('present') is True}")
+        lines.append(f"ui_hints.pointer: {hints_pointer_text}")
+        lines.append(
+            f"ui_hints.pointer_manifest_sha256: {hints_pointer_manifest_sha256}"
+        )
+        lines.append(f"ui_hints.sha256: {hints_sha256_text}")
+        lines.append(f"ui_hints.hint_count: {hints_count_text}")
+        raw_hints = ui_hints_payload.get("hints")
+        if isinstance(raw_hints, list):
+            lines.append("ui_hints.hints:")
+            lines.append(json.dumps(raw_hints, indent=2, sort_keys=True))
 
     raw_schema = config_schema_payload.get("schema")
     if isinstance(raw_schema, dict):

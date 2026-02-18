@@ -235,6 +235,12 @@ class TestGuiRpcDiscover(unittest.TestCase):
             self.assertIn("optional", params_schema)
             self.assertIn("examples", params_schema)
 
+        project_build_gui_optional = method_details["project.build_gui"]["params_schema"][
+            "optional"
+        ]
+        self.assertIn("include_plugin_ui_hints", project_build_gui_optional)
+        self.assertIn("plugins", project_build_gui_optional)
+
     def test_unknown_method_behavior_unchanged_after_rpc_discover(self) -> None:
         requests = [
             {
@@ -297,6 +303,9 @@ class TestGuiRpcDeterminism(unittest.TestCase):
                     "force": True,
                     "event_log": True,
                     "event_log_force": True,
+                    "include_plugins": True,
+                    "include_plugin_ui_hints": True,
+                    "plugins": str(_REPO_ROOT / "plugins"),
                 },
             },
             {

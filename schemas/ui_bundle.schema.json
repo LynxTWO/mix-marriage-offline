@@ -781,6 +781,30 @@
         "violations_count": { "type": "integer", "minimum": 0 }
       }
     },
+    "plugin_ui_hint_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["json_pointer", "hint"],
+      "properties": {
+        "json_pointer": { "type": "string", "pattern": "^/" },
+        "hint": {}
+      }
+    },
+    "plugin_ui_hints_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["present", "pointer", "sha256", "hint_count", "hints"],
+      "properties": {
+        "present": { "type": "boolean" },
+        "pointer": { "$ref": "#/$defs/plugin_schema_pointer" },
+        "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+        "hint_count": { "type": "integer", "minimum": 0 },
+        "hints": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/plugin_ui_hint_row" }
+        }
+      }
+    },
     "plugin_summary_entry": {
       "type": "object",
       "additionalProperties": false,
@@ -796,6 +820,7 @@
         },
         "version": { "type": "string" },
         "config_schema": { "$ref": "#/$defs/plugin_config_schema_ref" },
+        "ui_hints": { "$ref": "#/$defs/plugin_ui_hints_ref" },
         "ui_layout": { "$ref": "#/$defs/plugin_ui_layout_ref" },
         "ui_layout_snapshot": { "$ref": "#/$defs/plugin_ui_layout_snapshot_ref" }
       }
