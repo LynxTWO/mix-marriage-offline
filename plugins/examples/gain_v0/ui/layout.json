@@ -1,0 +1,42 @@
+{
+  "schema_version": "0.1.0",
+  "layout_id": "LAYOUT.PLUGIN.RENDERER.EXAMPLE_GAIN_V0",
+  "grid": {
+    "columns": 12,
+    "gap_px": 16,
+    "row_height_px": 56,
+    "margin_px": 24
+  },
+  "container": {
+    "section_gap_px": 16
+  },
+  "sections": [
+    {
+      "section_id": "main",
+      "label": "Gain Controls",
+      "widgets": [
+        {
+          "widget_id": "widget.main.gain_db",
+          "label": "Gain",
+          "param_ref": "PARAM.RENDERER.GAIN_DB",
+          "col_span": 4,
+          "row_span": 1
+        },
+        {
+          "widget_id": "widget.main.macro_mix",
+          "label": "Macro",
+          "param_ref": "PARAM.RENDERER.MACRO_MIX",
+          "col_span": 4,
+          "row_span": 1
+        },
+        {
+          "widget_id": "widget.main.bypass",
+          "label": "Bypass",
+          "param_ref": "PARAM.RENDERER.BYPASS",
+          "col_span": 4,
+          "row_span": 1
+        }
+      ]
+    }
+  ]
+}

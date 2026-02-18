@@ -17,6 +17,8 @@ The numeric prefixes reflect a recommended reading order. Gaps may exist as docu
 
 - [Status system (`STATUS.md` + `milestones.yaml`)](STATUS.md)
   Keep milestone checklist state and machine-readable milestone state aligned.
+- [13-plugin-authoring.md](13-plugin-authoring.md)
+  Minimum viable plugin package checklist for GUI-visible plugin metadata.
 - [PR checklist template](../.github/pull_request_template.md)
   Required checklist for milestone links, state moves, changelog updates, and validation/tests reporting.
 
@@ -27,12 +29,13 @@ The numeric prefixes reflect a recommended reading order. Gaps may exist as docu
 3. [02-architecture.md](02-architecture.md)  
 4. [03-ontology.md](03-ontology.md)  
 5. [04-plugin-api.md](04-plugin-api.md)  
-6. [05-fixtures-and-ci.md](05-fixtures-and-ci.md)  
-7. [06-roadmap.md](06-roadmap.md)  
-8. [07-export-guides.md](07-export-guides.md)  
-9. [08-policy-validation.md](08-policy-validation.md)  
-10. [PROJECT_INSTRUCTIONS.md](PROJECT_INSTRUCTIONS.md)  
-11. [SCENE_AND_RENDER_CONTRACT_OVERVIEW.md](SCENE_AND_RENDER_CONTRACT_OVERVIEW.md)  
+6. [13-plugin-authoring.md](13-plugin-authoring.md)  
+7. [05-fixtures-and-ci.md](05-fixtures-and-ci.md)  
+8. [06-roadmap.md](06-roadmap.md)  
+9. [07-export-guides.md](07-export-guides.md)  
+10. [08-policy-validation.md](08-policy-validation.md)  
+11. [PROJECT_INSTRUCTIONS.md](PROJECT_INSTRUCTIONS.md)  
+12. [SCENE_AND_RENDER_CONTRACT_OVERVIEW.md](SCENE_AND_RENDER_CONTRACT_OVERVIEW.md)  
 
 ## Scene-first contracts
 

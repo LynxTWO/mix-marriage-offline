@@ -1437,7 +1437,7 @@ def _render_plugins_list_text(payload: list[dict[str, Any]]) -> str:
 def _build_plugins_show_payload(
     *,
     plugins_dir: Path,
-    plugin_id: str,
+    plugin_id: str | None,
     include_ui_layout_snapshot: bool = False,
     include_ui_hints: bool = False,
 ) -> dict[str, Any]:

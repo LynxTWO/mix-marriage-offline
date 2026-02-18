@@ -1,0 +1,67 @@
+plugin_id: "PLUGIN.RENDERER.EXAMPLE_GAIN_V0"
+plugin_type: "renderer"
+name: "Example Gain v0"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Starter plugin pack with UI schema, hints, and layout metadata."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "plugins.renderers.safe_renderer:SafeRenderer"
+capabilities:
+  max_channels: 32
+  supported_contexts:
+    - "render"
+    - "auto_apply"
+  notes:
+    - "Starter plugin pack for GUI-first smoke coverage."
+ui_layout: "ui/layout.json"
+config_schema:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: "object"
+  additionalProperties: false
+  properties:
+    gain_db:
+      type: "number"
+      minimum: -24
+      maximum: 24
+      default: 0
+      description: "Main gain trim in dB."
+      x_mmo_ui:
+        widget: "knob"
+        units: "dB"
+        step: 0.5
+        fine_step: 0.1
+        modifier_key: "shift"
+        min: -24
+        max: 24
+        group: "main"
+        order: 0
+        help: "Primary gain control."
+    macro_mix:
+      type: "number"
+      minimum: 0
+      maximum: 100
+      default: 50
+      description: "Macro control example for grouped shaping."
+      x_mmo_ui:
+        widget: "knob"
+        units: "%"
+        step: 1
+        min: 0
+        max: 100
+        group: "macro"
+        order: 1
+        help: "Macro control example."
+    bypass:
+      type: "boolean"
+      default: false
+      description: "Bypass all processing."
+      x_mmo_ui:
+        widget: "toggle"
+        group: "main"
+        order: 2
+        help: "True bypass."
+  required:
+    - "gain_db"
+    - "macro_mix"
+    - "bypass"

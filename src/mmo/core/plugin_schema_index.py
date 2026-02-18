@@ -318,34 +318,61 @@ def build_plugins_config_schema_index(
 def build_plugin_show_payload(
     *,
     plugins_dir: Path,
-    plugin_id: str,
+    plugin_id: str | None = None,
     include_ui_layout_snapshot: bool = False,
     include_ui_hints: bool = False,
 ) -> dict[str, Any]:
     resolved_plugins_dir = _validate_plugins_dir(plugins_dir)
-    normalized_plugin_id = plugin_id.strip() if isinstance(plugin_id, str) else ""
-    if not normalized_plugin_id:
-        raise ValueError("plugin_id must be a non-empty string.")
-
     plugins = load_plugins(resolved_plugins_dir)
-    target_plugin = next(
-        (item for item in plugins if item.plugin_id == normalized_plugin_id),
-        None,
-    )
-    if target_plugin is None:
-        available_plugin_ids = ", ".join(
-            item.plugin_id
-            for item in plugins
-            if isinstance(item.plugin_id, str) and item.plugin_id
+    normalized_plugin_id = plugin_id.strip() if isinstance(plugin_id, str) else ""
+    target_plugin: Any | None = None
+    if normalized_plugin_id:
+        target_plugin = next(
+            (item for item in plugins if item.plugin_id == normalized_plugin_id),
+            None,
         )
-        if available_plugin_ids:
-            raise ValueError(
-                f"Unknown plugin_id: {normalized_plugin_id}. "
-                f"Available plugins: {available_plugin_ids}"
+        if target_plugin is None:
+            available_plugin_ids = ", ".join(
+                item.plugin_id
+                for item in plugins
+                if isinstance(item.plugin_id, str) and item.plugin_id
             )
-        raise ValueError(
-            f"Unknown plugin_id: {normalized_plugin_id}. No plugins were discovered."
-        )
+            if available_plugin_ids:
+                raise ValueError(
+                    f"Unknown plugin_id: {normalized_plugin_id}. "
+                    f"Available plugins: {available_plugin_ids}"
+                )
+            raise ValueError(
+                f"Unknown plugin_id: {normalized_plugin_id}. No plugins were discovered."
+            )
+    else:
+        def _is_examples_manifest_path(manifest_path: Path) -> bool:
+            try:
+                relative_path = manifest_path.resolve().relative_to(resolved_plugins_dir)
+            except ValueError:
+                return False
+            return bool(relative_path.parts) and relative_path.parts[0].lower() == "examples"
+
+        plugins_with_ui_metadata = [
+            item
+            for item in plugins
+            if isinstance(item.manifest, dict)
+            and isinstance(item.manifest.get("config_schema"), dict)
+            and isinstance(item.manifest.get("ui_layout"), str)
+            and item.manifest.get("ui_layout", "").strip()
+        ]
+        if plugins_with_ui_metadata:
+            plugins_with_ui_metadata.sort(
+                key=lambda item: (
+                    0 if _is_examples_manifest_path(item.manifest_path) else 1,
+                    str(item.plugin_id),
+                )
+            )
+            target_plugin = plugins_with_ui_metadata[0]
+        elif plugins:
+            target_plugin = plugins[0]
+        else:
+            raise ValueError("No plugins were discovered.")
 
     plugin_capabilities: dict[str, Any] = {}
     if target_plugin.capabilities is not None:

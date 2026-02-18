@@ -1318,7 +1318,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     plugins_show_parser.add_argument(
         "plugin_id",
-        help="Plugin ID (e.g., PLUGIN.RENDERER.SAFE).",
+        nargs="?",
+        default=None,
+        help=(
+            "Optional plugin ID (e.g., PLUGIN.RENDERER.SAFE). "
+            "When omitted, selects the first plugin with config_schema + ui_layout."
+        ),
     )
     plugins_show_parser.add_argument(
         "--plugins",
