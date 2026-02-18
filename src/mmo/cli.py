@@ -1721,6 +1721,49 @@ def main(argv: list[str] | None = None) -> int:
         help="Output format for scene lock details.",
     )
 
+    ui_hints_parser = subparsers.add_parser(
+        "ui-hints",
+        help="Plugin config schema UI hint tools.",
+    )
+    ui_hints_subparsers = ui_hints_parser.add_subparsers(
+        dest="ui_hints_command",
+        required=True,
+    )
+    ui_hints_lint_parser = ui_hints_subparsers.add_parser(
+        "lint",
+        help="Lint x_mmo_ui blocks inside a plugin config schema.",
+    )
+    ui_hints_lint_parser.add_argument(
+        "--schema",
+        required=True,
+        help="Path to plugin config schema JSON.",
+    )
+    ui_hints_lint_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for lint results.",
+    )
+    ui_hints_extract_parser = ui_hints_subparsers.add_parser(
+        "extract",
+        help="Extract x_mmo_ui blocks into a deterministic JSON artifact.",
+    )
+    ui_hints_extract_parser.add_argument(
+        "--schema",
+        required=True,
+        help="Path to plugin config schema JSON.",
+    )
+    ui_hints_extract_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output ui_hints JSON.",
+    )
+    ui_hints_extract_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite output file if it already exists.",
+    )
+
     ui_copy_parser = subparsers.add_parser("ui-copy", help="UI copy registry tools.")
     ui_copy_subparsers = ui_copy_parser.add_subparsers(
         dest="ui_copy_command",
@@ -3401,6 +3444,8 @@ def main(argv: list[str] | None = None) -> int:
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
     if len(raw_argv) >= 2 and raw_argv[0] == "ui" and raw_argv[1] == "layout-snapshot":
         raw_argv = ["ui-layout-snapshot", *raw_argv[2:]]
+    if len(raw_argv) >= 2 and raw_argv[0] == "ui" and raw_argv[1] == "hints":
+        raw_argv = ["ui-hints", *raw_argv[2:]]
     args = parser.parse_args(raw_argv)
     from mmo.resources import (
         _repo_checkout_root,
@@ -5511,6 +5556,71 @@ def main(argv: list[str] | None = None) -> int:
                 print(_render_scene_lock_text(payload))
             return 0
         print("Unknown locks command.", file=sys.stderr)
+        return 2
+    if args.command == "ui-hints":
+        from mmo.core.ui_hints import (  # noqa: WPS433
+            build_ui_hints_extract_payload,
+            build_ui_hints_lint_payload,
+            ui_hints_has_errors,
+        )
+
+        schema_path = Path(args.schema)
+        try:
+            config_schema = _load_json_object(schema_path, label="Config schema")
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+
+        if args.ui_hints_command == "lint":
+            try:
+                lint_payload = build_ui_hints_lint_payload(
+                    config_schema=config_schema,
+                    schema_path=schema_path,
+                )
+            except RuntimeError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            if args.format == "json":
+                print(json.dumps(lint_payload, indent=2, sort_keys=True))
+            else:
+                hint_count = lint_payload.get("hint_count", 0)
+                error_count = lint_payload.get("error_count", 0)
+                if lint_payload.get("ok"):
+                    print(f"UI hints lint OK ({hint_count} hint(s) checked).")
+                else:
+                    print(
+                        "UI hints lint failed "
+                        f"({error_count} error(s) across {hint_count} hint(s))."
+                    )
+                    for error in lint_payload.get("errors", []):
+                        if not isinstance(error, dict):
+                            continue
+                        pointer = error.get("json_pointer", "")
+                        path = error.get("path", "")
+                        message = error.get("message", "")
+                        if path == "/":
+                            print(f"- {pointer}: {message}")
+                        else:
+                            print(f"- {pointer}{path}: {message}")
+            return 2 if ui_hints_has_errors(lint_payload) else 0
+
+        if args.ui_hints_command == "extract":
+            out_path = Path(args.out)
+            if out_path.exists() and not args.force:
+                print(
+                    f"File exists (use --force to overwrite): {out_path.as_posix()}",
+                    file=sys.stderr,
+                )
+                return 1
+            extract_payload = build_ui_hints_extract_payload(
+                config_schema=config_schema,
+                schema_path=schema_path,
+            )
+            _write_json_file(out_path, extract_payload)
+            return 0
+
+        print("Unknown ui-hints command.", file=sys.stderr)
         return 2
     if args.command == "ui-copy":
         ui_copy_registry_path = ontology /"ui_copy.yaml"

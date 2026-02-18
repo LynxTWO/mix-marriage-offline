@@ -226,6 +226,10 @@ class TestValidateContracts(unittest.TestCase):
             msg=scene_registries,
         )
 
+    def test_validate_contracts_includes_ui_hints_schema_anchor(self) -> None:
+        script_text = self._validator_script().read_text(encoding="utf-8")
+        self.assertIn("schemas/ui_hints.schema.json", script_text)
+
 
 if __name__ == "__main__":
     unittest.main()
