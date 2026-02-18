@@ -115,9 +115,12 @@ __all__ = [
     "_build_ui_examples_list_payload",
     "_build_ui_examples_show_payload",
     "_build_plugins_list_payload",
+    "_build_plugins_ui_lint_payload",
     "_build_plugins_show_payload",
     "_render_plugins_list_text",
+    "_render_plugins_ui_lint_text",
     "_render_plugins_show_text",
+    "_plugins_ui_lint_has_errors",
     "_print_lock_verify_summary",
 ]
 
@@ -1328,6 +1331,60 @@ def _build_plugins_list_payload(*, plugins_dir: Path) -> list[dict[str, Any]]:
             row["capabilities"] = plugin.capabilities.to_dict()
         payload.append(row)
     return payload
+
+
+def _build_plugins_ui_lint_payload(*, plugins_dir: Path) -> dict[str, Any]:
+    from mmo.core.plugin_ui_contract import (  # noqa: WPS433
+        build_plugin_ui_contract_lint_payload,
+    )
+
+    return build_plugin_ui_contract_lint_payload(plugins_dir=plugins_dir)
+
+
+def _plugins_ui_lint_has_errors(payload: dict[str, Any]) -> bool:
+    issue_counts = payload.get("issue_counts")
+    if not isinstance(issue_counts, dict):
+        return False
+    error_count = issue_counts.get("error")
+    return isinstance(error_count, int) and error_count > 0
+
+
+def _render_plugins_ui_lint_text(payload: dict[str, Any]) -> str:
+    issue_counts = payload.get("issue_counts")
+    plugin_count = payload.get("plugin_count")
+    issues = payload.get("issues")
+    if (
+        not isinstance(issue_counts, dict)
+        or not isinstance(plugin_count, int)
+        or not isinstance(issues, list)
+    ):
+        return "(invalid payload)"
+
+    error_count = issue_counts.get("error", 0)
+    warn_count = issue_counts.get("warn", 0)
+    if payload.get("ok") is True:
+        lines = [
+            (
+                "Plugin UI lint OK "
+                f"({plugin_count} plugin(s), {error_count} error(s), {warn_count} warning(s))."
+            )
+        ]
+    else:
+        lines = [
+            (
+                "Plugin UI lint failed "
+                f"({plugin_count} plugin(s), {error_count} error(s), {warn_count} warning(s))."
+            )
+        ]
+    for issue in issues:
+        if not isinstance(issue, dict):
+            continue
+        severity = _coerce_str(issue.get("severity")).strip()
+        plugin_id = _coerce_str(issue.get("plugin_id")).strip()
+        issue_id = _coerce_str(issue.get("issue_id")).strip()
+        message = _coerce_str(issue.get("message")).strip()
+        lines.append(f"- [{severity}] {plugin_id} {issue_id}: {message}")
+    return "\n".join(lines)
 
 
 def _render_plugins_list_text(payload: list[dict[str, Any]]) -> str:

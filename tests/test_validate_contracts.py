@@ -15,6 +15,7 @@ REQUIRED_CHECK_IDS = [
     "UI.EXAMPLES",
     "ONTOLOGY.REFS",
     "PLUGINS",
+    "PLUGINS.UI",
     "PKG.MIRROR",
     "DOCS.MILESTONES",
     "SCENE.REGISTRIES",
@@ -31,6 +32,7 @@ REQUIRED_TOOL_SCRIPTS = [
     "validate_ui_examples.py",
     "validate_ontology_refs.py",
     "validate_plugins.py",
+    "validate_plugins_ui.py",
     "validate_packaged_data_mirror.py",
     "validate_milestones.py",
 ]

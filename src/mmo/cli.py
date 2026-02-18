@@ -1292,6 +1292,21 @@ def main(argv: list[str] | None = None) -> int:
         default="text",
         help="Output format for the plugin list.",
     )
+    plugins_ui_lint_parser = plugins_subparsers.add_parser(
+        "ui-lint",
+        help="Lint plugin ui_layout and x_mmo_ui contracts together.",
+    )
+    plugins_ui_lint_parser.add_argument(
+        "--plugins",
+        default="plugins",
+        help="Path to plugins directory.",
+    )
+    plugins_ui_lint_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for plugin UI contract linting.",
+    )
     plugins_show_parser = plugins_subparsers.add_parser(
         "show",
         help="Show one plugin record and config schema metadata.",
@@ -5084,6 +5099,19 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(_render_plugins_list_text(payload))
             return 0
+
+        if args.plugins_command == "ui-lint":
+            try:
+                payload = _build_plugins_ui_lint_payload(plugins_dir=Path(args.plugins))
+            except (RuntimeError, ValueError, AttributeError, OSError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_plugins_ui_lint_text(payload))
+            return 2 if _plugins_ui_lint_has_errors(payload) else 0
 
         if args.plugins_command == "show":
             try:

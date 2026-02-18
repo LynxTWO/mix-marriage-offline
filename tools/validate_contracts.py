@@ -45,6 +45,11 @@ EXTERNAL_CHECKS: tuple[ExternalCheckSpec, ...] = (
         "tools/validate_plugins.py",
         ("plugins", "--schema", "schemas/plugin.schema.json"),
     ),
+    ExternalCheckSpec(
+        "PLUGINS.UI",
+        "tools/validate_plugins_ui.py",
+        ("--plugins", "plugins"),
+    ),
     ExternalCheckSpec("PKG.MIRROR", "tools/validate_packaged_data_mirror.py", ()),
     ExternalCheckSpec("DOCS.MILESTONES", "tools/validate_milestones.py", ("--repo-root", ".")),
 )
