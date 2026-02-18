@@ -2417,6 +2417,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Also write renders/event_log.jsonl.",
     )
     project_render_run_parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="Also write renders/render_execute.json.",
+    )
+    project_render_run_parser.add_argument(
+        "--execute-out",
+        default=None,
+        help="Optional path to render_execute JSON (implies execute artifact).",
+    )
+    project_render_run_parser.add_argument(
         "--preflight",
         action="store_true",
         help="Also write renders/render_preflight.json.",
@@ -2430,6 +2440,14 @@ def main(argv: list[str] | None = None) -> int:
         "--event-log-force",
         action="store_true",
         help="Overwrite existing renders/event_log.jsonl when --event-log is used.",
+    )
+    project_render_run_parser.add_argument(
+        "--execute-force",
+        action="store_true",
+        help=(
+            "Overwrite existing render_execute output when --execute or "
+            "--execute-out is used."
+        ),
     )
 
     gates_parser = subparsers.add_parser("gates", help="Gates policy registry tools.")
@@ -3303,6 +3321,19 @@ def main(argv: list[str] | None = None) -> int:
         "--event-log-force",
         action="store_true",
         help="Overwrite event log output file if it already exists.",
+    )
+    render_run_parser.add_argument(
+        "--execute-out",
+        default=None,
+        help=(
+            "Optional path to output render_execute JSON "
+            "(requires request options dry_run=false)."
+        ),
+    )
+    render_run_parser.add_argument(
+        "--execute-force",
+        action="store_true",
+        help="Overwrite execute output file if it already exists.",
     )
 
     timeline_parser = subparsers.add_parser("timeline", help="Timeline marker tools.")
@@ -4626,6 +4657,14 @@ def main(argv: list[str] | None = None) -> int:
                     preflight=bool(getattr(args, "preflight", False)),
                     preflight_force=bool(getattr(args, "preflight_force", False)),
                     event_log_force=bool(getattr(args, "event_log_force", False)),
+                    execute=bool(getattr(args, "execute", False)),
+                    execute_out_path=(
+                        Path(args.execute_out)
+                        if isinstance(getattr(args, "execute_out", None), str)
+                        and args.execute_out.strip()
+                        else None
+                    ),
+                    execute_force=bool(getattr(args, "execute_force", False)),
                 )
             except (RuntimeError, ValueError) as exc:
                 print(str(exc), file=sys.stderr)
@@ -6389,6 +6428,12 @@ def main(argv: list[str] | None = None) -> int:
                     else None
                 ),
                 preflight_force=bool(getattr(args, "preflight_force", False)),
+                execute_out_path=(
+                    Path(args.execute_out)
+                    if getattr(args, "execute_out", None)
+                    else None
+                ),
+                execute_force=bool(getattr(args, "execute_force", False)),
             )
         except (RuntimeError, ValueError) as exc:
             print(str(exc), file=sys.stderr)

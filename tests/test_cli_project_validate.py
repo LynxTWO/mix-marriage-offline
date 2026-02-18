@@ -292,6 +292,36 @@ class TestProjectValidateRenderArtifacts(unittest.TestCase):
             },
             "qa_gates": {"status": "not_run", "gates": []},
         })
+        _write_json(renders_dir / "render_execute.json", {
+            "schema_version": "0.1.0",
+            "run_id": "RUN.0123456789abcdef",
+            "request_sha256": "0" * 64,
+            "plan_sha256": "1" * 64,
+            "jobs": [
+                {
+                    "job_id": "JOB.001",
+                    "inputs": [
+                        {
+                            "path": (renders_dir / "input.wav").resolve().as_posix(),
+                            "sha256": "2" * 64,
+                        }
+                    ],
+                    "outputs": [
+                        {
+                            "path": (renders_dir / "output.wav").resolve().as_posix(),
+                            "sha256": "3" * 64,
+                        }
+                    ],
+                    "ffmpeg_version": "ffmpeg version N-12345-gdeadbeef",
+                    "ffmpeg_commands": [
+                        {
+                            "args": ["ffmpeg", "-version"],
+                            "determinism_flags": [],
+                        }
+                    ],
+                }
+            ],
+        })
         _write_valid_event_log(renders_dir / "event_log.jsonl")
 
     def test_render_artifacts_validated_as_valid(self) -> None:
@@ -305,7 +335,7 @@ class TestProjectValidateRenderArtifacts(unittest.TestCase):
             c for c in result["checks"]
             if c["file"].startswith("renders/")
         ]
-        self.assertEqual(len(render_checks), 5)
+        self.assertEqual(len(render_checks), 6)
         for check in render_checks:
             self.assertFalse(check["required"])
             self.assertEqual(

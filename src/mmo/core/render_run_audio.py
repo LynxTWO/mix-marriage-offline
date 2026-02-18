@@ -5,17 +5,26 @@ from __future__ import annotations
 import math
 import random
 import struct
+import subprocess
 import wave
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterator, Sequence
 
+from mmo.core.render_execute import resolve_ffmpeg_version
 from mmo.core.render_reporting import build_render_report_from_plan
-from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples
+from mmo.dsp.backends.ffmpeg_decode import (
+    build_ffmpeg_decode_command,
+    iter_ffmpeg_float64_samples,
+)
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.decoders import read_metadata
 from mmo.dsp.io import read_wav_metadata, sha256_file
 from mmo.dsp.meters import iter_wav_float64_samples
-from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS, transcode_wav_to_format
+from mmo.dsp.transcode import (
+    LOSSLESS_OUTPUT_FORMATS,
+    ffmpeg_determinism_flags,
+    transcode_wav_to_format,
+)
 
 _STEREO_LAYOUT_ID = "LAYOUT.2_0"
 _OUTPUT_FORMAT_ORDER = tuple(LOSSLESS_OUTPUT_FORMATS)
@@ -66,9 +75,11 @@ def build_render_report_with_audio(
     scene_payload: dict[str, Any],
     scene_path: Path,
     report_out_path: Path,
-) -> dict[str, Any]:
-    """Render stereo deliverables and return a schema-valid render report payload."""
+    capture_execute_trace: bool = False,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Render stereo deliverables and return report payload plus execute job trace."""
     job = _single_stereo_job_or_raise(plan_payload)
+    job_id = _coerce_str(job.get("job_id")).strip() or "JOB.001"
     source_path = _resolve_single_source_or_raise(scene_payload)
     source_metadata = _read_source_metadata_or_raise(source_path)
     _validate_source_layout_or_raise(source_metadata)
@@ -110,20 +121,21 @@ def build_render_report_with_audio(
     elif keep_wav_output:
         wav_path = _fallback_output_path(
             report_dir=report_dir,
-            job_id=_coerce_str(job.get("job_id")).strip() or "JOB.001",
+            job_id=job_id,
             output_format="wav",
         )
     else:
         wav_path = _intermediate_wav_path(
             report_dir=report_dir,
-            job_id=_coerce_str(job.get("job_id")).strip() or "JOB.001",
+            job_id=job_id,
         )
 
     ffmpeg_cmd_for_decode: Sequence[str] | None = None
     ffmpeg_cmd_for_encode: Sequence[str] | None = None
     needs_ffmpeg_decode = source_path.suffix.lower() in _FFMPEG_EXTENSIONS
     needs_ffmpeg_encode = any(fmt != "wav" for fmt in output_formats)
-    if needs_ffmpeg_decode or needs_ffmpeg_encode:
+    needs_ffmpeg_for_trace = keep_wav_output and capture_execute_trace
+    if needs_ffmpeg_decode or needs_ffmpeg_encode or needs_ffmpeg_for_trace:
         ffmpeg_cmd_for_decode = resolve_ffmpeg_cmd()
         ffmpeg_cmd_for_encode = ffmpeg_cmd_for_decode
         if ffmpeg_cmd_for_decode is None:
@@ -131,9 +143,12 @@ def build_render_report_with_audio(
                 issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
                 message=(
                     "ffmpeg is required for requested render-run operation "
-                    "(decode and/or encode lossless non-WAV audio)."
+                    "(decode and/or encode lossless non-WAV audio, "
+                    "or deterministic execution tracing)."
                 ),
             )
+
+    ffmpeg_command_rows: list[dict[str, Any]] = []
 
     float_samples_iter: Iterator[list[float]]
     if source_path.suffix.lower() in _WAV_EXTENSIONS:
@@ -146,6 +161,13 @@ def build_render_report_with_audio(
             raise RenderRunRefusalError(
                 issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
                 message="ffmpeg is required to decode non-WAV source audio.",
+            )
+        if capture_execute_trace:
+            ffmpeg_command_rows.append(
+                {
+                    "args": build_ffmpeg_decode_command(source_path, ffmpeg_cmd_for_decode),
+                    "determinism_flags": [],
+                }
             )
         float_samples_iter = iter_ffmpeg_float64_samples(source_path, ffmpeg_cmd_for_decode)
 
@@ -166,6 +188,22 @@ def build_render_report_with_audio(
 
     output_files: list[dict[str, Any]] = []
     try:
+        if keep_wav_output and capture_execute_trace:
+            if ffmpeg_cmd_for_encode is None:
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
+                    message=(
+                        "ffmpeg is required to normalize WAV output metadata "
+                        "for deterministic execution tracing."
+                    ),
+                )
+            _normalize_wav_for_determinism(
+                ffmpeg_cmd=ffmpeg_cmd_for_encode,
+                wav_path=wav_path,
+                bit_depth=output_bit_depth,
+                command_rows=ffmpeg_command_rows,
+            )
+
         if keep_wav_output:
             output_files.append(
                 _output_file_payload(
@@ -195,12 +233,25 @@ def build_render_report_with_audio(
                         issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
                         message="ffmpeg is required to encode non-WAV deliverables.",
                     )
+                transcode_command_rows: list[list[str]] | None = []
+                if not capture_execute_trace:
+                    transcode_command_rows = None
                 transcode_wav_to_format(
                     ffmpeg_cmd_for_encode,
                     wav_path,
                     target_path,
                     output_format,
+                    command_recorder=transcode_command_rows,
                 )
+                if transcode_command_rows:
+                    ffmpeg_command_rows.append(
+                        {
+                            "args": transcode_command_rows[-1],
+                            "determinism_flags": list(
+                                ffmpeg_determinism_flags(for_wav=False)
+                            ),
+                        }
+                    )
             except RenderRunRefusalError:
                 raise
             except ValueError as exc:
@@ -252,7 +303,29 @@ def build_render_report_with_audio(
         "source_layout_id: LAYOUT.2_0",
         "target_layout_id: LAYOUT.2_0",
     ]
-    return report_payload
+
+    execute_job_row: dict[str, Any] | None = None
+    if capture_execute_trace:
+        ffmpeg_cmd_for_trace = ffmpeg_cmd_for_encode or ffmpeg_cmd_for_decode
+        if ffmpeg_cmd_for_trace is None:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
+                message="ffmpeg is required to capture deterministic execute traces.",
+            )
+        output_paths = _output_paths_from_rows(output_files)
+        if not output_paths:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_ENCODE_FAILED,
+                message="No output paths were produced for deterministic execute tracing.",
+            )
+        execute_job_row = {
+            "job_id": job_id,
+            "input_paths": [source_path.resolve()],
+            "output_paths": output_paths,
+            "ffmpeg_version": resolve_ffmpeg_version(ffmpeg_cmd_for_trace),
+            "ffmpeg_commands": ffmpeg_command_rows,
+        }
+    return report_payload, execute_job_row
 
 
 def _coerce_str(value: Any) -> str:
@@ -697,6 +770,104 @@ def _int_samples_to_bytes(samples: list[int], bit_depth: int) -> bytes:
         issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
         message=f"Unsupported output bit depth: {bit_depth}",
     )
+
+
+def _path_arg(path: Path) -> str:
+    return path.resolve().as_posix()
+
+
+def _wav_codec_for_bit_depth(bit_depth: int) -> str:
+    codecs = {
+        16: "pcm_s16le",
+        24: "pcm_s24le",
+        32: "pcm_s32le",
+    }
+    codec = codecs.get(bit_depth)
+    if codec is None:
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+            message=f"Unsupported output bit depth: {bit_depth}",
+        )
+    return codec
+
+
+def _normalize_wav_for_determinism(
+    *,
+    ffmpeg_cmd: Sequence[str],
+    wav_path: Path,
+    bit_depth: int,
+    command_rows: list[dict[str, Any]],
+) -> None:
+    deterministic_flags = list(ffmpeg_determinism_flags(for_wav=True))
+    tmp_path = wav_path.with_suffix(wav_path.suffix + ".tmp")
+    command = list(ffmpeg_cmd) + [
+        "-v",
+        "error",
+        "-nostdin",
+        "-y",
+        "-i",
+        _path_arg(wav_path),
+        *deterministic_flags,
+        "-f",
+        "wav",
+        "-c:a",
+        _wav_codec_for_bit_depth(bit_depth),
+        _path_arg(tmp_path),
+    ]
+    completed = subprocess.run(
+        command,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        message = completed.stderr.strip() or completed.stdout.strip()
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+        if message:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_ENCODE_FAILED,
+                message=f"ffmpeg WAV normalization failed: {message}",
+            )
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_ENCODE_FAILED,
+            message=f"ffmpeg WAV normalization failed with exit code {completed.returncode}",
+        )
+
+    try:
+        tmp_path.replace(wav_path)
+    except OSError as exc:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_ENCODE_FAILED,
+            message=f"Failed to finalize deterministic WAV output: {exc}",
+        ) from exc
+    command_rows.append(
+        {
+            "args": command,
+            "determinism_flags": deterministic_flags,
+        }
+    )
+
+
+def _output_paths_from_rows(output_files: list[dict[str, Any]]) -> list[Path]:
+    deduped: dict[str, Path] = {}
+    for row in output_files:
+        if not isinstance(row, dict):
+            continue
+        raw_path = _coerce_str(row.get("file_path")).strip()
+        if not raw_path:
+            continue
+        resolved = Path(raw_path).resolve()
+        deduped.setdefault(resolved.as_posix(), resolved)
+    return [deduped[path] for path in sorted(deduped.keys())]
 
 
 def _output_file_payload(

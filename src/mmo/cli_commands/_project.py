@@ -42,6 +42,7 @@ _VALIDATE_CHECKS: list[tuple[str, str | None, bool]] = [
     ("drafts/routing_plan.draft.json", "routing_plan.schema.json", True),
     ("drafts/scene.draft.json", "scene.schema.json", True),
     ("renders/event_log.jsonl", "event.schema.json", False),
+    ("renders/render_execute.json", "render_execute.schema.json", False),
     ("renders/render_plan.json", "render_plan.schema.json", False),
     ("renders/render_preflight.json", "render_preflight.schema.json", False),
     ("renders/render_report.json", "render_report.schema.json", False),
@@ -63,6 +64,7 @@ _PROJECT_BUNDLE_ALLOWLIST: tuple[str, ...] = (
     "drafts/routing_plan.draft.json",
     "renders/render_request.json",
     "renders/render_plan.json",
+    "renders/render_execute.json",
     "renders/render_preflight.json",
     "renders/render_report.json",
     "renders/event_log.jsonl",
@@ -965,6 +967,9 @@ def _run_project_render_run(
     event_log_force: bool = False,
     preflight: bool = False,
     preflight_force: bool = False,
+    execute: bool = False,
+    execute_out_path: Path | None = None,
+    execute_force: bool = False,
 ) -> int:
     """Run deterministic render-run using project-standard scaffold paths."""
     validate_exit = _validate_required_project_artifacts(project_dir)
@@ -973,6 +978,9 @@ def _run_project_render_run(
 
     if preflight_force and not preflight:
         print("--preflight-force requires --preflight.", file=sys.stderr)
+        return 1
+    if execute_force and not execute and execute_out_path is None:
+        print("--execute-force requires --execute or --execute-out.", file=sys.stderr)
         return 1
 
     request_path = project_dir / "renders" / "render_request.json"
@@ -985,6 +993,9 @@ def _run_project_render_run(
     preflight_out_path: Path | None = None
     if preflight:
         preflight_out_path = project_dir / "renders" / "render_preflight.json"
+    resolved_execute_out_path: Path | None = execute_out_path
+    if resolved_execute_out_path is None and execute:
+        resolved_execute_out_path = project_dir / "renders" / "render_execute.json"
 
     request_payload = _load_json_object(request_path, label="Render request")
     _validate_json_payload(
@@ -1014,6 +1025,8 @@ def _run_project_render_run(
             event_log_force=event_log_force,
             preflight_out_path=preflight_out_path,
             preflight_force=preflight_force,
+            execute_out_path=resolved_execute_out_path,
+            execute_force=execute_force,
         )
     if exit_code != 0:
         return exit_code
@@ -1041,6 +1054,8 @@ def _run_project_render_run(
         paths_written.append(event_log_out_path.resolve().as_posix())
     if preflight_out_path is not None:
         paths_written.append(preflight_out_path.resolve().as_posix())
+    if resolved_execute_out_path is not None and resolved_execute_out_path.is_file():
+        paths_written.append(resolved_execute_out_path.resolve().as_posix())
 
     summary: dict[str, Any] = {
         "job_count": job_count,

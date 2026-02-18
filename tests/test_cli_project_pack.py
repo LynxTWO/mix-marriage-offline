@@ -319,6 +319,36 @@ class TestProjectPackRenderArtifacts(unittest.TestCase):
             },
             "qa_gates": {"status": "not_run", "gates": []},
         })
+        _write_json(renders_dir / "render_execute.json", {
+            "schema_version": "0.1.0",
+            "run_id": "RUN.0123456789abcdef",
+            "request_sha256": "0" * 64,
+            "plan_sha256": "1" * 64,
+            "jobs": [
+                {
+                    "job_id": "JOB.001",
+                    "inputs": [
+                        {
+                            "path": "stems/mix.wav",
+                            "sha256": "2" * 64,
+                        }
+                    ],
+                    "outputs": [
+                        {
+                            "path": "renders/mix.wav",
+                            "sha256": "3" * 64,
+                        }
+                    ],
+                    "ffmpeg_version": "ffmpeg version N-12345-gdeadbeef",
+                    "ffmpeg_commands": [
+                        {
+                            "args": ["ffmpeg", "-version"],
+                            "determinism_flags": [],
+                        }
+                    ],
+                }
+            ],
+        })
         _write_valid_event_log(renders_dir / "event_log.jsonl")
         (renders_dir / "ignored.log").write_text("not allowlisted\n", encoding="utf-8")
         outside_logs = cls.project_dir / "logs"
@@ -337,6 +367,7 @@ class TestProjectPackRenderArtifacts(unittest.TestCase):
         self.assertIn("renders/event_log.jsonl", names)
         self.assertIn("renders/render_request.json", names)
         self.assertIn("renders/render_plan.json", names)
+        self.assertIn("renders/render_execute.json", names)
         self.assertIn("renders/render_preflight.json", names)
         self.assertIn("renders/render_report.json", names)
         self.assertNotIn("renders/ignored.log", names)
@@ -354,6 +385,7 @@ class TestProjectPackRenderArtifacts(unittest.TestCase):
         self.assertIn("renders/event_log.jsonl", manifest_paths)
         self.assertIn("renders/render_request.json", manifest_paths)
         self.assertIn("renders/render_plan.json", manifest_paths)
+        self.assertIn("renders/render_execute.json", manifest_paths)
         self.assertIn("renders/render_preflight.json", manifest_paths)
         self.assertIn("renders/render_report.json", manifest_paths)
         self.assertNotIn("renders/ignored.log", manifest_paths)

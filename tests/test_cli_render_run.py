@@ -14,6 +14,7 @@ from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
 from mmo.cli import main
+from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.io import sha256_file
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -372,6 +373,68 @@ class TestRenderRunAudioExecution(unittest.TestCase):
             self.assertIn("mix_a.wav", stderr)
             self.assertIn("mix_b.wav", stderr)
             self.assertFalse(report_out.exists())
+
+
+class TestRenderRunExecuteArtifact(unittest.TestCase):
+    def test_execute_artifact_and_wav_are_byte_identical_across_runs(self) -> None:
+        if resolve_ffmpeg_cmd() is None:
+            self.skipTest("ffmpeg not available")
+
+        execute_validator = _schema_validator("render_execute.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            source_path = stems_dir / "mix.wav"
+            _write_pcm16_wav(source_path, channels=2, duration_s=1.0)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                },
+            }
+
+            execute_a = temp_path / "render_execute_a.json"
+            exit_a, _, stderr_a, _, report_out = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--execute-out", str(execute_a),
+                ],
+            )
+            self.assertEqual(exit_a, 0, msg=stderr_a)
+            self.assertTrue(execute_a.is_file())
+            execute_payload_a = json.loads(execute_a.read_text(encoding="utf-8"))
+            execute_validator.validate(execute_payload_a)
+
+            report_a = json.loads(report_out.read_text(encoding="utf-8"))
+            output_path_a = Path(report_a["jobs"][0]["output_files"][0]["file_path"])
+            wav_bytes_a = output_path_a.read_bytes()
+
+            execute_b = temp_path / "render_execute_b.json"
+            exit_b, _, stderr_b, _, report_out_b = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--force",
+                    "--execute-out", str(execute_b),
+                ],
+            )
+            self.assertEqual(exit_b, 0, msg=stderr_b)
+            self.assertTrue(execute_b.is_file())
+            execute_payload_b = json.loads(execute_b.read_text(encoding="utf-8"))
+            execute_validator.validate(execute_payload_b)
+
+            report_b = json.loads(report_out_b.read_text(encoding="utf-8"))
+            output_path_b = Path(report_b["jobs"][0]["output_files"][0]["file_path"])
+            wav_bytes_b = output_path_b.read_bytes()
+
+            self.assertEqual(wav_bytes_a, wav_bytes_b)
+            self.assertEqual(execute_a.read_bytes(), execute_b.read_bytes())
 
 
 class TestRenderRunDeterminism(unittest.TestCase):
@@ -840,6 +903,65 @@ class TestRenderRunOverwrite(unittest.TestCase):
             report = json.loads(report_out.read_text(encoding="utf-8"))
             self.assertEqual(plan["schema_version"], "0.1.0")
             self.assertEqual(report["schema_version"], "0.1.0")
+
+    def test_execute_out_overwrite_requires_execute_force(self) -> None:
+        if resolve_ffmpeg_cmd() is None:
+            self.skipTest("ffmpeg not available")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            _write_pcm16_wav(stems_dir / "mix.wav", channels=2)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {"dry_run": False},
+            }
+            execute_out = temp_path / "render_execute.json"
+
+            exit_first, _, stderr_first, _, _ = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--execute-out", str(execute_out),
+                ],
+            )
+            self.assertEqual(exit_first, 0, msg=stderr_first)
+
+            exit_refused, _, stderr_refused, _, _ = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--force",
+                    "--execute-out", str(execute_out),
+                ],
+            )
+            self.assertEqual(exit_refused, 1)
+            self.assertIn("--execute-force", stderr_refused)
+
+            exit_allowed, _, stderr_allowed, _, _ = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--force",
+                    "--execute-out", str(execute_out),
+                    "--execute-force",
+                ],
+            )
+            self.assertEqual(exit_allowed, 0, msg=stderr_allowed)
+
+    def test_execute_force_requires_execute_out(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            exit_code, _, stderr, _, _ = _run_render_run(
+                temp_path,
+                extra_args=["--execute-force"],
+            )
+            self.assertEqual(exit_code, 1)
+            self.assertIn("--execute-force requires --execute-out", stderr)
 
 
 class TestRenderRunBackslashRejection(unittest.TestCase):

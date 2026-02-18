@@ -120,6 +120,37 @@ FULL_RENDER_REPORT = {
     },
 }
 
+MINIMAL_RENDER_EXECUTE = {
+    "schema_version": "0.1.0",
+    "run_id": "RUN.0123456789abcdef",
+    "request_sha256": "0" * 64,
+    "plan_sha256": "1" * 64,
+    "jobs": [
+        {
+            "job_id": "JOB.001",
+            "inputs": [
+                {
+                    "path": "stems/mix.wav",
+                    "sha256": "2" * 64,
+                }
+            ],
+            "outputs": [
+                {
+                    "path": "renders/render_outputs/job_001/mix.wav",
+                    "sha256": "3" * 64,
+                }
+            ],
+            "ffmpeg_version": "ffmpeg version N-12345-gdeadbeef",
+            "ffmpeg_commands": [
+                {
+                    "args": ["ffmpeg", "-version"],
+                    "determinism_flags": [],
+                }
+            ],
+        }
+    ],
+}
+
 
 class TestRenderRequestSchema(unittest.TestCase):
     def setUp(self) -> None:
@@ -239,6 +270,34 @@ class TestRenderReportSchema(unittest.TestCase):
         self.assertGreater(len(errors), 0)
 
 
+class TestRenderExecuteSchema(unittest.TestCase):
+    def setUp(self) -> None:
+        self.validator = _validator("render_execute.schema.json")
+
+    def test_schema_is_valid_draft_2020_12(self) -> None:
+        schema_path = SCHEMAS_DIR / "render_execute.schema.json"
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        jsonschema.Draft202012Validator.check_schema(schema)
+
+    def test_minimal_execute_validates(self) -> None:
+        errors = list(self.validator.iter_errors(MINIMAL_RENDER_EXECUTE))
+        self.assertEqual(errors, [])
+
+    def test_missing_required_fields_rejected(self) -> None:
+        for field in ("schema_version", "run_id", "request_sha256", "plan_sha256", "jobs"):
+            with self.subTest(missing=field):
+                payload = dict(MINIMAL_RENDER_EXECUTE)
+                del payload[field]
+                errors = list(self.validator.iter_errors(payload))
+                self.assertGreater(len(errors), 0)
+
+    def test_invalid_run_id_rejected(self) -> None:
+        payload = json.loads(json.dumps(MINIMAL_RENDER_EXECUTE))
+        payload["run_id"] = "RUN.not_hex"
+        errors = list(self.validator.iter_errors(payload))
+        self.assertGreater(len(errors), 0)
+
+
 class TestRenderSchemasRegistered(unittest.TestCase):
     def test_render_request_in_schema_anchors(self) -> None:
         from importlib import import_module
@@ -252,6 +311,7 @@ class TestRenderSchemasRegistered(unittest.TestCase):
         text = contracts_path.read_text(encoding="utf-8")
         self.assertIn("schemas/render_request.schema.json", text)
         self.assertIn("schemas/render_report.schema.json", text)
+        self.assertIn("schemas/render_execute.schema.json", text)
 
 
 class TestLayoutsAndDownmixOntologyPresent(unittest.TestCase):

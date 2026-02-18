@@ -672,7 +672,6 @@ def _run_render_plan_from_request_command(
         schema_path=schemas_dir() /"render_request.schema.json",
         payload_name="Render request",
     )
-
     scene_payload = _load_json_object(scene_path, label="Scene")
     _validate_json_payload(
         scene_payload,
@@ -749,7 +748,10 @@ def _run_render_run_command(
     event_log_force: bool,
     preflight_out_path: Path | None = None,
     preflight_force: bool = False,
+    execute_out_path: Path | None = None,
+    execute_force: bool = False,
 ) -> int:
+    from mmo.core.render_execute import build_render_execute_payload  # noqa: WPS433
     from mmo.core.render_reporting import build_render_report_from_plan  # noqa: WPS433
     from mmo.core.render_run_audio import (  # noqa: WPS433
         build_render_report_with_audio,
@@ -758,6 +760,9 @@ def _run_render_run_command(
 
     if preflight_force and preflight_out_path is None:
         print("--preflight-force requires --preflight-out.", file=sys.stderr)
+        return 1
+    if execute_force and execute_out_path is None:
+        print("--execute-force requires --execute-out.", file=sys.stderr)
         return 1
 
     # -- overwrite guard -------------------------------------------------------
@@ -807,6 +812,26 @@ def _run_render_run_command(
         schema_path=schemas_dir() /"render_request.schema.json",
         payload_name="Render request",
     )
+    dry_run_enabled = request_dry_run_enabled(request_payload)
+    if execute_out_path is not None and dry_run_enabled:
+        print(
+            "--execute-out requires request options dry_run=false.",
+            file=sys.stderr,
+        )
+        return 1
+    if (
+        execute_out_path is not None
+        and execute_out_path.exists()
+        and not execute_force
+    ):
+        print(
+            (
+                "File exists (use --execute-force to overwrite): "
+                f"{execute_out_path.as_posix()}"
+            ),
+            file=sys.stderr,
+        )
+        return 1
 
     scene_payload = _load_json_object(scene_path, label="Scene")
     _validate_json_payload(
@@ -891,7 +916,7 @@ def _run_render_run_command(
             return 2
 
     # -- build report ----------------------------------------------------------
-    dry_run_enabled = request_dry_run_enabled(request_payload)
+    execute_job_rows: list[dict[str, Any]] = []
     report_status_note = "status=skipped"
     report_reason_note = "reason=dry_run"
     report_built_why = (
@@ -906,13 +931,16 @@ def _run_render_run_command(
             reason="dry_run",
         )
     else:
-        render_report_payload = build_render_report_with_audio(
+        render_report_payload, execute_job_row = build_render_report_with_audio(
             plan_payload=render_plan_payload,
             request_payload=request_payload,
             scene_payload=scene_payload,
             scene_path=scene_path,
             report_out_path=report_out_path,
+            capture_execute_trace=(execute_out_path is not None),
         )
+        if isinstance(execute_job_row, dict):
+            execute_job_rows.append(execute_job_row)
         report_status_note = "status=completed"
         report_reason_note = "reason=rendered"
         report_built_why = (
@@ -928,6 +956,18 @@ def _run_render_run_command(
 
     # -- write outputs ---------------------------------------------------------
     _write_json_file(report_out_path, render_report_payload)
+    if execute_out_path is not None:
+        render_execute_payload = build_render_execute_payload(
+            request_payload=request_payload,
+            plan_payload=render_plan_payload,
+            job_rows=execute_job_rows,
+        )
+        _validate_json_payload(
+            render_execute_payload,
+            schema_path=schemas_dir() / "render_execute.schema.json",
+            payload_name="Render execute",
+        )
+        _write_json_file(execute_out_path, render_execute_payload)
 
     # -- optional event log ----------------------------------------------------
     if event_log_out_path is not None:

@@ -7,23 +7,32 @@ from pathlib import Path
 from typing import Iterator, Sequence
 
 
-def iter_ffmpeg_float64_samples(
-    path: Path, ffmpeg_cmd: Sequence[str], chunk_frames: int = 4096
-) -> Iterator[list[float]]:
-    if chunk_frames <= 0:
-        raise ValueError("chunk_frames must be positive")
+def _path_arg(path: Path) -> str:
+    return path.resolve().as_posix()
 
-    cmd = list(ffmpeg_cmd) + [
+
+def build_ffmpeg_decode_command(path: Path, ffmpeg_cmd: Sequence[str]) -> list[str]:
+    """Build deterministic ffmpeg decode command for float64 PCM streaming."""
+    return list(ffmpeg_cmd) + [
         "-v",
         "error",
         "-i",
-        str(path),
+        _path_arg(path),
         "-f",
         "f64le",
         "-acodec",
         "pcm_f64le",
         "-",
     ]
+
+
+def iter_ffmpeg_float64_samples(
+    path: Path, ffmpeg_cmd: Sequence[str], chunk_frames: int = 4096
+) -> Iterator[list[float]]:
+    if chunk_frames <= 0:
+        raise ValueError("chunk_frames must be positive")
+
+    cmd = build_ffmpeg_decode_command(path, ffmpeg_cmd)
 
     try:
         proc = subprocess.Popen(

@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/render_execute.schema.json",
+  "title": "MMO Render Execute",
+  "description": "Deterministic execution artifact for render-run dry_run=false jobs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "request_sha256",
+    "plan_sha256",
+    "jobs"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "run_id": { "$ref": "#/$defs/run_id" },
+    "request_sha256": { "$ref": "#/$defs/sha256" },
+    "plan_sha256": { "$ref": "#/$defs/sha256" },
+    "jobs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/job" }
+    }
+  },
+  "$defs": {
+    "posix_path": {
+      "type": "string",
+      "pattern": "^[^\\\\]+$",
+      "minLength": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^RUN\\.[0-9a-f]{16}$"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^JOB\\.[0-9]{3}$"
+    },
+    "file_pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/posix_path" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "ffmpeg_command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["args", "determinism_flags"],
+      "properties": {
+        "args": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "determinism_flags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "inputs",
+        "outputs",
+        "ffmpeg_version",
+        "ffmpeg_commands"
+      ],
+      "properties": {
+        "job_id": { "$ref": "#/$defs/job_id" },
+        "inputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/file_pointer" }
+        },
+        "outputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/file_pointer" }
+        },
+        "ffmpeg_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ffmpeg_commands": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/ffmpeg_command" }
+        }
+      }
+    }
+  }
+}
