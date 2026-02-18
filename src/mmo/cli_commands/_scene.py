@@ -751,6 +751,10 @@ def _run_render_run_command(
     preflight_force: bool = False,
 ) -> int:
     from mmo.core.render_reporting import build_render_report_from_plan  # noqa: WPS433
+    from mmo.core.render_run_audio import (  # noqa: WPS433
+        build_render_report_with_audio,
+        request_dry_run_enabled,
+    )
 
     if preflight_force and preflight_out_path is None:
         print("--preflight-force requires --preflight-out.", file=sys.stderr)
@@ -887,11 +891,35 @@ def _run_render_run_command(
             return 2
 
     # -- build report ----------------------------------------------------------
-    render_report_payload = build_render_report_from_plan(
-        render_plan_payload,
-        status="skipped",
-        reason="dry_run",
+    dry_run_enabled = request_dry_run_enabled(request_payload)
+    report_status_note = "status=skipped"
+    report_reason_note = "reason=dry_run"
+    report_built_why = (
+        "Built deterministic dry-run render report without audio rendering."
     )
+    completed_why = "Completed render-run dry-run artifact generation."
+
+    if dry_run_enabled:
+        render_report_payload = build_render_report_from_plan(
+            render_plan_payload,
+            status="skipped",
+            reason="dry_run",
+        )
+    else:
+        render_report_payload = build_render_report_with_audio(
+            plan_payload=render_plan_payload,
+            request_payload=request_payload,
+            scene_payload=scene_payload,
+            scene_path=scene_path,
+            report_out_path=report_out_path,
+        )
+        report_status_note = "status=completed"
+        report_reason_note = "reason=rendered"
+        report_built_why = (
+            "Rendered deterministic stereo downmix deliverables for supported PR52 scope."
+        )
+        completed_why = "Completed render-run stereo downmix deliverable rendering."
+
     _validate_json_payload(
         render_report_payload,
         schema_path=schemas_dir() /"render_report.schema.json",
@@ -948,7 +976,7 @@ def _run_render_run_command(
                 "kind": "info",
                 "scope": "render",
                 "what": "render-run started",
-                "why": "Validated render-run inputs for deterministic dry-run artifacts.",
+                "why": "Validated render-run inputs for deterministic artifact generation.",
                 "where": started_where,
                 "evidence": {
                     "codes": ["RENDER.RUN.STARTED"],
@@ -972,19 +1000,19 @@ def _run_render_run_command(
                 "kind": "action",
                 "scope": "render",
                 "what": "render report built",
-                "why": "Built deterministic dry-run render report without audio rendering.",
+                "why": report_built_why,
                 "where": [report_out_posix],
                 "evidence": {
                     "codes": ["RENDER.RUN.REPORT_BUILT"],
                     "paths": [report_out_posix],
-                    "notes": ["status=skipped", "reason=dry_run"],
+                    "notes": [report_status_note, report_reason_note],
                 },
             },
             {
                 "kind": "info",
                 "scope": "render",
                 "what": "render-run completed",
-                "why": "Completed render-run dry-run artifact generation.",
+                "why": completed_why,
                 "where": completed_where,
                 "evidence": {
                     "codes": ["RENDER.RUN.COMPLETED"],

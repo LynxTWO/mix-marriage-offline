@@ -2400,7 +2400,7 @@ def main(argv: list[str] | None = None) -> int:
 
     project_render_run_parser = project_subparsers.add_parser(
         "render-run",
-        help="Run dry-run render plan+report using project-standard paths.",
+        help="Run render plan+report using project-standard paths.",
     )
     project_render_run_parser.add_argument(
         "project_dir",
@@ -3251,7 +3251,7 @@ def main(argv: list[str] | None = None) -> int:
         "render-run",
         help=(
             "Build a render plan from a render_request + scene, "
-            "then build a render report (dry_run) in one pass."
+            "then execute render-run (or dry-run) and write a render report."
         ),
     )
     render_run_parser.add_argument(

@@ -1,16 +1,20 @@
 import json
+import math
+import struct
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
+import wave
 
 import jsonschema
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
 from mmo.cli import main
+from mmo.dsp.io import sha256_file
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCHEMAS_DIR = REPO_ROOT / "schemas"
@@ -155,6 +159,31 @@ def _read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in lines]
 
 
+def _write_pcm16_wav(
+    path: Path,
+    *,
+    channels: int,
+    sample_rate_hz: int = 48000,
+    duration_s: float = 0.05,
+) -> None:
+    frames = max(1, int(sample_rate_hz * duration_s))
+    samples: list[int] = []
+    for frame_index in range(frames):
+        value = int(
+            0.35
+            * 32767.0
+            * math.sin(2.0 * math.pi * 330.0 * frame_index / sample_rate_hz)
+        )
+        for _ in range(channels):
+            samples.append(value)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(channels)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate_hz)
+        handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+
+
 class TestRenderRunHappyPath(unittest.TestCase):
     def test_produces_schema_valid_plan_and_report(self) -> None:
         plan_validator = _schema_validator("render_plan.schema.json")
@@ -225,6 +254,124 @@ class TestRenderRunHappyPath(unittest.TestCase):
                 plan["resolved"]["downmix_policy_id"],
                 "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
             )
+
+
+class TestRenderRunAudioExecution(unittest.TestCase):
+    def test_executes_stereo_source_when_dry_run_false(self) -> None:
+        report_validator = _schema_validator("render_report.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            source_path = stems_dir / "mix.wav"
+            _write_pcm16_wav(source_path, channels=2)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                },
+            }
+            exit_code, _, stderr, _, report_out = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+            )
+            self.assertEqual(exit_code, 0, msg=stderr)
+
+            report = json.loads(report_out.read_text(encoding="utf-8"))
+            report_validator.validate(report)
+
+            job = report["jobs"][0]
+            self.assertEqual(job["status"], "completed")
+            self.assertIn("reason: rendered", job.get("notes", []))
+            output_files = job.get("output_files", [])
+            self.assertEqual(len(output_files), 1)
+            output_file = output_files[0]
+            self.assertEqual(output_file.get("format"), "wav")
+            self.assertEqual(output_file.get("channel_count"), 2)
+            self.assertEqual(output_file.get("sample_rate_hz"), 48000)
+
+            rendered_path = Path(str(output_file["file_path"]))
+            self.assertTrue(rendered_path.is_file())
+            self.assertEqual(output_file.get("sha256"), sha256_file(rendered_path))
+
+    def test_refuses_multi_target_with_stable_issue_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            _write_pcm16_wav(stems_dir / "mix.wav", channels=2)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_ids": ["LAYOUT.2_0", "LAYOUT.5_1"],
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                },
+            }
+            exit_code, _, stderr, _, report_out = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+            )
+
+            self.assertEqual(exit_code, 1)
+            self.assertIn("ISSUE.RENDER.RUN.DOWNMIX_SCOPE_UNSUPPORTED", stderr)
+            self.assertFalse(report_out.exists())
+
+    def test_refuses_non_stereo_source_with_stable_issue_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            _write_pcm16_wav(stems_dir / "mix.wav", channels=1)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                },
+            }
+            exit_code, _, stderr, _, report_out = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+            )
+
+            self.assertEqual(exit_code, 1)
+            self.assertIn("ISSUE.RENDER.RUN.SOURCE_LAYOUT_UNSUPPORTED", stderr)
+            self.assertFalse(report_out.exists())
+
+    def test_refuses_multiple_sources_with_stable_issue_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            _write_pcm16_wav(stems_dir / "mix_a.wav", channels=2)
+            _write_pcm16_wav(stems_dir / "mix_b.wav", channels=2)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                },
+            }
+            exit_code, _, stderr, _, report_out = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+            )
+
+            self.assertEqual(exit_code, 1)
+            self.assertIn("ISSUE.RENDER.RUN.SOURCE_COUNT_UNSUPPORTED", stderr)
+            self.assertIn("mix_a.wav", stderr)
+            self.assertIn("mix_b.wav", stderr)
+            self.assertFalse(report_out.exists())
 
 
 class TestRenderRunDeterminism(unittest.TestCase):
