@@ -1020,6 +1020,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to render_report JSON artifact.",
     )
     bundle_parser.add_argument(
+        "--render-execute",
+        default=None,
+        help="Optional path to render_execute JSON artifact.",
+    )
+    bundle_parser.add_argument(
         "--render-preflight",
         default=None,
         help="Optional path to render_preflight JSON artifact.",
@@ -5045,6 +5050,11 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 render_request_path=(
                     Path(args.render_request) if getattr(args, "render_request", None) else None
+                ),
+                render_execute_path=(
+                    Path(args.render_execute)
+                    if getattr(args, "render_execute", None)
+                    else None
                 ),
                 render_report_path=(
                     Path(args.render_report) if getattr(args, "render_report", None) else None

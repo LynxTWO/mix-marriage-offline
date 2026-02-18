@@ -73,6 +73,7 @@ def _render_artifacts_block(
     *,
     render_request_path: Path | None,
     render_plan_artifact_path: Path | None,
+    render_execute_path: Path | None,
     render_preflight_path: Path | None,
     render_report_path: Path | None,
 ) -> dict[str, Any] | None:
@@ -81,6 +82,8 @@ def _render_artifacts_block(
         block["render_request"] = _render_artifact_pointer(render_request_path)
     if render_plan_artifact_path is not None:
         block["render_plan"] = _render_artifact_pointer(render_plan_artifact_path)
+    if render_execute_path is not None:
+        block["render_execute"] = _render_artifact_pointer(render_execute_path)
     if render_preflight_path is not None:
         block["render_preflight"] = _render_artifact_pointer(render_preflight_path)
     if render_report_path is not None:
@@ -1512,6 +1515,7 @@ def build_ui_bundle(
     stems_auditions: dict[str, Any] | None = None,
     render_request_path: Path | None = None,
     render_plan_artifact_path: Path | None = None,
+    render_execute_path: Path | None = None,
     render_preflight_path: Path | None = None,
     render_report_path: Path | None = None,
     event_log_path: Path | None = None,
@@ -1652,6 +1656,7 @@ def build_ui_bundle(
     render_block = _render_artifacts_block(
         render_request_path=render_request_path,
         render_plan_artifact_path=render_plan_artifact_path,
+        render_execute_path=render_execute_path,
         render_preflight_path=render_preflight_path,
         render_report_path=render_report_path,
     )

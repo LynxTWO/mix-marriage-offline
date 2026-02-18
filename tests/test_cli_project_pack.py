@@ -349,6 +349,7 @@ class TestProjectPackRenderArtifacts(unittest.TestCase):
                 }
             ],
         })
+        _write_tiny_wav(renders_dir / "mix.wav", channels=2)
         _write_valid_event_log(renders_dir / "event_log.jsonl")
         (renders_dir / "ignored.log").write_text("not allowlisted\n", encoding="utf-8")
         outside_logs = cls.project_dir / "logs"
@@ -370,6 +371,7 @@ class TestProjectPackRenderArtifacts(unittest.TestCase):
         self.assertIn("renders/render_execute.json", names)
         self.assertIn("renders/render_preflight.json", names)
         self.assertIn("renders/render_report.json", names)
+        self.assertNotIn("renders/mix.wav", names)
         self.assertNotIn("renders/ignored.log", names)
         self.assertNotIn("logs/event_log.jsonl", names)
 
@@ -388,6 +390,7 @@ class TestProjectPackRenderArtifacts(unittest.TestCase):
         self.assertIn("renders/render_execute.json", manifest_paths)
         self.assertIn("renders/render_preflight.json", manifest_paths)
         self.assertIn("renders/render_report.json", manifest_paths)
+        self.assertNotIn("renders/mix.wav", manifest_paths)
         self.assertNotIn("renders/ignored.log", manifest_paths)
         self.assertNotIn("logs/event_log.jsonl", manifest_paths)
         # Manifest still sorted.

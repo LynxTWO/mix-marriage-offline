@@ -130,10 +130,49 @@ def _init_full_render_project(base: Path) -> Path:
     assert exit_code == 0, f"project render-run failed: {stderr}"
 
     render_plan_path = project_dir / "renders" / "render_plan.json"
+    render_execute_path = project_dir / "renders" / "render_execute.json"
     render_preflight_path = project_dir / "renders" / "render_preflight.json"
     render_plan = json.loads(render_plan_path.read_text(encoding="utf-8"))
     plan_id_raw = render_plan.get("plan_id")
     plan_id = plan_id_raw if isinstance(plan_id_raw, str) and plan_id_raw else "PLAN.test.abcdef01"
+    render_execute_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1.0",
+                "run_id": "RUN.project.bundle.abcdef01",
+                "request_sha256": "0" * 64,
+                "plan_sha256": "1" * 64,
+                "jobs": [
+                    {
+                        "job_id": "JOB.001",
+                        "inputs": [
+                            {
+                                "path": render_plan_path.resolve().as_posix(),
+                                "sha256": "2" * 64,
+                            }
+                        ],
+                        "outputs": [
+                            {
+                                "path": render_plan_path.resolve().as_posix(),
+                                "sha256": "3" * 64,
+                            }
+                        ],
+                        "ffmpeg_version": "ffmpeg version N-12345-gdeadbeef",
+                        "ffmpeg_commands": [
+                            {
+                                "args": ["ffmpeg", "-version"],
+                                "determinism_flags": [],
+                            }
+                        ],
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     render_preflight_path.write_text(
         json.dumps(
             {
@@ -212,6 +251,7 @@ class TestProjectBundle(unittest.TestCase):
         for key, rel in (
             ("render_request", "renders/render_request.json"),
             ("render_plan", "renders/render_plan.json"),
+            ("render_execute", "renders/render_execute.json"),
             ("render_preflight", "renders/render_preflight.json"),
             ("render_report", "renders/render_report.json"),
         ):

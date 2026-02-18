@@ -16,9 +16,11 @@ import json
 import os
 import unittest
 import wave
+import zipfile
 from pathlib import Path
 
 from mmo.cli import main
+from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SANDBOX = (
@@ -265,6 +267,117 @@ class TestRenderGoldenPathDeterminism(unittest.TestCase):
         # All artifact SHA-256 hashes identical
         self.assertGreater(len(snap_1), 0, "No artifacts found")
         self.assertEqual(snap_1, snap_2, msg="Artifact snapshot differs between runs")
+
+    def test_execute_tiny_fixture_is_deterministic_and_pack_excludes_rendered_audio(self) -> None:
+        """Execute-path golden run stays deterministic and pack excludes rendered outputs."""
+        if resolve_ffmpeg_cmd() is None:
+            self.skipTest("ffmpeg not available")
+
+        base = _SANDBOX / "golden_execute_tiny"
+        stems_root = base / "stems_root"
+        _write_tiny_wav(stems_root / "stems" / "mix.wav", channels=2)
+        project_dir = base / "project"
+
+        exit_init, _, stderr_init = _run_main([
+            "project", "init",
+            "--stems-root", str(stems_root),
+            "--out-dir", str(project_dir),
+            "--bundle", str(base / "bundle_init.json"),
+        ])
+        self.assertEqual(exit_init, 0, msg=f"project init failed: {stderr_init}")
+
+        def _full_run() -> tuple[str, dict[str, str]]:
+            exit_refresh, _, stderr_refresh = _run_main([
+                "project", "refresh",
+                "--project-dir", str(project_dir),
+                "--stems-root", str(stems_root),
+            ])
+            self.assertEqual(exit_refresh, 0, msg=f"refresh failed: {stderr_refresh}")
+
+            report_path = project_dir / "report.json"
+            exit_scan, _, stderr_scan = _run_main([
+                "scan",
+                str(stems_root),
+                "--out", str(report_path),
+            ])
+            self.assertEqual(exit_scan, 0, msg=f"scan failed: {stderr_scan}")
+
+            scene_path = project_dir / "drafts" / "scene.draft.json"
+            render_request_path = project_dir / "renders" / "render_request.json"
+            _write_json(render_request_path, {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_path.resolve().as_posix(),
+                "options": {"dry_run": False},
+            })
+
+            exit_render, render_stdout, stderr_render = _run_main([
+                "project", "render-run", str(project_dir),
+                "--force",
+                "--event-log",
+                "--event-log-force",
+                "--preflight",
+                "--preflight-force",
+                "--execute",
+                "--execute-force",
+            ])
+            self.assertEqual(exit_render, 0, msg=f"project render-run failed: {stderr_render}")
+
+            ui_bundle_path = project_dir / "ui_bundle.json"
+            exit_bundle, _, stderr_bundle = _run_main([
+                "project", "bundle", str(project_dir),
+                "--out", str(ui_bundle_path),
+                "--force",
+            ])
+            self.assertEqual(exit_bundle, 0, msg=f"project bundle failed: {stderr_bundle}")
+
+            validation_path = project_dir / "validation.json"
+            exit_validate, stdout_validate, _ = _run_main([
+                "project", "validate", str(project_dir),
+                "--out", str(validation_path),
+            ])
+            self.assertEqual(exit_validate, 0, msg=f"project validate failed: {stdout_validate}")
+
+            pack_path = project_dir / "project.zip"
+            exit_pack, _, stderr_pack = _run_main([
+                "project", "pack", str(project_dir),
+                "--out", str(pack_path),
+                "--force",
+            ])
+            self.assertEqual(exit_pack, 0, msg=f"project pack failed: {stderr_pack}")
+
+            render_report_path = project_dir / "renders" / "render_report.json"
+            render_report = json.loads(render_report_path.read_text(encoding="utf-8"))
+            rendered_output_path = Path(render_report["jobs"][0]["output_files"][0]["file_path"])
+            self.assertTrue(rendered_output_path.is_file())
+
+            with zipfile.ZipFile(pack_path, "r") as zf:
+                pack_names = zf.namelist()
+            self.assertIn("renders/render_execute.json", pack_names)
+            rendered_rel = rendered_output_path.resolve().relative_to(project_dir.resolve()).as_posix()
+            self.assertNotIn(rendered_rel, pack_names)
+
+            artifacts = [
+                report_path,
+                render_request_path,
+                project_dir / "renders" / "render_plan.json",
+                project_dir / "renders" / "render_execute.json",
+                project_dir / "renders" / "render_preflight.json",
+                render_report_path,
+                project_dir / "renders" / "event_log.jsonl",
+                ui_bundle_path,
+                validation_path,
+                pack_path,
+                rendered_output_path,
+            ]
+            return render_stdout, _snapshot_bytes(artifacts)
+
+        stdout_1, snap_1 = _full_run()
+        stdout_2, snap_2 = _full_run()
+
+        self.assertEqual(stdout_1, stdout_2, msg="project render-run stdout differs")
+        self.assertGreater(len(snap_1), 0, "No execute-path artifacts found")
+        self.assertEqual(snap_1, snap_2, msg="Execute-path artifact snapshot differs")
 
 
 if __name__ == "__main__":

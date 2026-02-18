@@ -1155,6 +1155,7 @@ def _run_project_bundle(
         stems_map_path=existing_paths.get("stems/stems_map.json"),
         render_request_path=existing_paths.get("renders/render_request.json"),
         render_plan_artifact_path=render_plan_path,
+        render_execute_path=existing_paths.get("renders/render_execute.json"),
         render_preflight_path=render_preflight_artifact_path,
         render_report_path=existing_paths.get("renders/render_report.json"),
         event_log_path=existing_paths.get("renders/event_log.jsonl"),
