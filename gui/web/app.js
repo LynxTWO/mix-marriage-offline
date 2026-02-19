@@ -15,6 +15,7 @@ const statusOutput = document.getElementById("status-output");
 const pluginsContainer = document.getElementById("plugins-container");
 const chainContainer = document.getElementById("chain-container");
 const chainOutput = document.getElementById("chain-output");
+const intentOutput = document.getElementById("intent-output");
 
 const projectDirInput = document.getElementById("project-dir-input");
 const stemsRootInput = document.getElementById("stems-root-input");
@@ -27,6 +28,14 @@ const state = {
   pluginsById: new Map(),
   editablePluginIds: [],
   pluginChain: [],
+  renderRequestIntent: {
+    dry_run: null,
+    plugin_chain_length: 0,
+    policies: {},
+    render_request_path: "",
+    target_ids: [],
+    target_layout_ids: [],
+  },
 };
 
 function normalizePath(value) {
@@ -94,6 +103,25 @@ async function loadUiBundle(uiBundlePath) {
   const plugins = Array.isArray(payload.plugins) ? payload.plugins : [];
   renderPluginForms(plugins);
   _setEditablePlugins(plugins);
+}
+
+async function loadRenderRequest(renderRequestPath) {
+  const response = await fetch("/api/render-request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ render_request_path: renderRequestPath }),
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || `HTTP ${response.status}`);
+  }
+  if (!_isObject(payload.render_request)) {
+    throw new Error("render_request payload missing.");
+  }
+  return {
+    path: typeof payload.render_request_path === "string" ? payload.render_request_path : "",
+    payload: payload.render_request,
+  };
 }
 
 function renderMethods(methods) {
@@ -357,6 +385,77 @@ function _defaultParamsForPlugin(plugin) {
   return defaults;
 }
 
+function _normalizeIdList(rawValue) {
+  if (!Array.isArray(rawValue)) {
+    return [];
+  }
+  const unique = new Set();
+  for (const value of rawValue) {
+    if (typeof value !== "string") {
+      continue;
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      continue;
+    }
+    unique.add(trimmed);
+  }
+  return Array.from(unique).sort();
+}
+
+function _renderIntentPreview() {
+  const pluginChain = _pluginChainPayload();
+  intentOutput.textContent = JSON.stringify(
+    {
+      ...state.renderRequestIntent,
+      plugin_chain: pluginChain,
+      plugin_chain_length: pluginChain.length,
+    },
+    null,
+    2,
+  );
+}
+
+function _resetRenderRequestIntent() {
+  state.renderRequestIntent = {
+    dry_run: null,
+    plugin_chain_length: 0,
+    policies: {},
+    render_request_path: "",
+    target_ids: [],
+    target_layout_ids: [],
+  };
+  state.pluginChain = [];
+  renderPluginChainEditor();
+  _renderIntentPreview();
+}
+
+function _hydrateRenderRequestIntent(renderRequestPath, renderRequestPayload) {
+  const payload = _isObject(renderRequestPayload) ? renderRequestPayload : {};
+  const options = _isObject(payload.options) ? payload.options : {};
+
+  const policies = {};
+  if (typeof options.downmix_policy_id === "string" && options.downmix_policy_id.trim()) {
+    policies.downmix_policy_id = options.downmix_policy_id.trim();
+  }
+  if (typeof options.gates_policy_id === "string" && options.gates_policy_id.trim()) {
+    policies.gates_policy_id = options.gates_policy_id.trim();
+  }
+
+  state.pluginChain = _chainFromRpcPayload(options.plugin_chain);
+  state.renderRequestIntent = {
+    dry_run: typeof options.dry_run === "boolean" ? options.dry_run : null,
+    plugin_chain_length: state.pluginChain.length,
+    policies,
+    render_request_path: renderRequestPath,
+    target_ids: _normalizeIdList(options.target_ids),
+    target_layout_ids: _normalizeIdList(payload.target_layout_ids),
+  };
+
+  renderPluginChainEditor();
+  _renderIntentPreview();
+}
+
 function _normalizeChainStage(stage) {
   if (!_isObject(stage)) {
     return null;
@@ -369,7 +468,7 @@ function _normalizeChainStage(stage) {
   const normalized = { plugin_id: pluginId };
 
   const paramsRaw = _isObject(stage.params) ? stage.params : {};
-  const paramKeys = Object.keys(paramsRaw).sort();
+  const paramKeys = Object.keys(paramsRaw);
   if (paramKeys.length > 0) {
     const params = {};
     for (const key of paramKeys) {
@@ -401,6 +500,7 @@ function _renderChainPayloadPreview() {
   const chain = _pluginChainPayload();
   if (chain.length === 0) {
     chainOutput.textContent = "Plugin chain is empty.";
+    _renderIntentPreview();
     return;
   }
   chainOutput.textContent = JSON.stringify(
@@ -413,6 +513,7 @@ function _renderChainPayloadPreview() {
     null,
     2,
   );
+  _renderIntentPreview();
 }
 
 function _clearStageParam(stage, name) {
@@ -720,7 +821,13 @@ async function savePluginChain() {
   });
   projectOutput.textContent = JSON.stringify(result, null, 2);
   state.pluginChain = _chainFromRpcPayload(result.plugin_chain);
+  state.renderRequestIntent = {
+    ...state.renderRequestIntent,
+    dry_run: false,
+    plugin_chain_length: state.pluginChain.length,
+  };
   renderPluginChainEditor();
+  _renderIntentPreview();
   setStatus("project.write_render_request completed.");
 }
 
@@ -758,21 +865,29 @@ async function refreshDoctor() {
   setStatus("env.doctor completed.");
 }
 
-function _uiBundlePathFromProjectShow(projectShow) {
+function _artifactPathFromProjectShow(projectShow, artifactPath) {
   if (!projectShow || typeof projectShow !== "object") {
     return "";
   }
   const artifacts = Array.isArray(projectShow.artifacts) ? projectShow.artifacts : [];
-  const uiBundle = artifacts.find(
+  const match = artifacts.find(
     (artifact) =>
       artifact &&
       typeof artifact === "object" &&
-      artifact.path === "ui_bundle.json" &&
+      artifact.path === artifactPath &&
       artifact.exists === true,
   );
-  return uiBundle && typeof uiBundle.absolute_path === "string"
-    ? uiBundle.absolute_path
+  return match && typeof match.absolute_path === "string"
+    ? match.absolute_path
     : "";
+}
+
+function _uiBundlePathFromProjectShow(projectShow) {
+  return _artifactPathFromProjectShow(projectShow, "ui_bundle.json");
+}
+
+function _renderRequestPathFromProjectShow(projectShow) {
+  return _artifactPathFromProjectShow(projectShow, "renders/render_request.json");
 }
 
 async function refreshProjectShow() {
@@ -784,16 +899,27 @@ async function refreshProjectShow() {
   const result = await apiRpc("project.show", { project_dir: projectDir });
   state.projectShow = result;
   projectOutput.textContent = JSON.stringify(result, null, 2);
-  setStatus("project.show completed.");
+  setStatus("project.show completed. Hydrating state...");
 
   const uiBundlePath = _uiBundlePathFromProjectShow(result);
   if (uiBundlePath) {
     setStatus("Loading ui_bundle and plugin forms...");
     await loadUiBundle(uiBundlePath);
-    setStatus("ui_bundle loaded.");
+    setStatus("ui_bundle loaded. Reading render_request...");
   } else {
     renderPluginForms([]);
     _setEditablePlugins([]);
+    setStatus("ui_bundle missing. Reading render_request...");
+  }
+
+  const renderRequestPath = _renderRequestPathFromProjectShow(result);
+  if (renderRequestPath) {
+    const renderRequest = await loadRenderRequest(renderRequestPath);
+    _hydrateRenderRequestIntent(renderRequest.path, renderRequest.payload);
+    setStatus("project.show hydration completed.");
+  } else {
+    _resetRenderRequestIntent();
+    setStatus("project.show completed (render_request missing).");
   }
 }
 

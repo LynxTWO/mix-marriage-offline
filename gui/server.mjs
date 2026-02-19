@@ -87,6 +87,11 @@ function _pluginSnapshotOutPath(pluginId) {
   return path.join(os.tmpdir(), `mmo_gui_snapshot_${safePluginId}_${suffix}.json`);
 }
 
+function _looksLikeRenderRequestPath(pathValue) {
+  const normalized = _pathToPosix(path.resolve(pathValue));
+  return normalized.endsWith("/renders/render_request.json");
+}
+
 async function _loadSnapshot(layoutPath, viewport) {
   const tempOut = _pluginSnapshotOutPath(path.basename(layoutPath));
   try {
@@ -216,6 +221,41 @@ async function _handleUiBundleRequest(response, body) {
   });
 }
 
+async function _handleRenderRequestRead(response, body) {
+  const renderRequestPathRaw = body.render_request_path;
+  if (typeof renderRequestPathRaw !== "string" || !renderRequestPathRaw.trim()) {
+    _sendJson(response, 400, { error: "render_request_path must be a non-empty string." });
+    return;
+  }
+  const renderRequestPath = path.resolve(renderRequestPathRaw);
+  if (!_looksLikeRenderRequestPath(renderRequestPath)) {
+    _sendJson(response, 400, {
+      error: "render_request_path must point to renders/render_request.json.",
+    });
+    return;
+  }
+
+  let payload;
+  try {
+    const raw = await fs.readFile(renderRequestPath, "utf8");
+    payload = JSON.parse(raw);
+  } catch (error) {
+    _sendJson(response, 400, {
+      error: `Failed to read render_request JSON: ${error instanceof Error ? error.message : String(error)}`,
+    });
+    return;
+  }
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+    _sendJson(response, 400, { error: "render_request JSON must be an object." });
+    return;
+  }
+
+  _sendJson(response, 200, {
+    render_request_path: _pathToPosix(renderRequestPath),
+    render_request: payload,
+  });
+}
+
 async function _handleApiRequest(request, response, pathname) {
   if (request.method === "POST" && pathname === "/api/rpc") {
     let body;
@@ -259,6 +299,20 @@ async function _handleApiRequest(request, response, pathname) {
       return true;
     }
     await _handleUiBundleRequest(response, body);
+    return true;
+  }
+
+  if (request.method === "POST" && pathname === "/api/render-request") {
+    let body;
+    try {
+      body = await _readJsonBody(request);
+    } catch (error) {
+      _sendJson(response, 400, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return true;
+    }
+    await _handleRenderRequestRead(response, body);
     return true;
   }
 
