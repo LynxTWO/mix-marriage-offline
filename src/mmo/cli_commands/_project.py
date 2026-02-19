@@ -1390,37 +1390,43 @@ def _run_project_render_run(
     if resolved_execute_out_path is None and execute:
         resolved_execute_out_path = project_dir / "renders" / "render_execute.json"
 
-    request_payload = _load_json_object(request_path, label="Render request")
-    _validate_json_payload(
-        request_payload,
-        schema_path=_schemas_dir_fn() / "render_request.schema.json",
-        payload_name="Render request",
-    )
-    routing_plan_path = _routing_plan_path_from_request(
-        project_dir=project_dir,
-        request_payload=request_payload,
-    )
-
-    from mmo.cli_commands._scene import _run_render_run_command  # noqa: WPS433
-
-    # Reuse canonical render-run internals while keeping project wrapper
-    # summary deterministic and command-specific.
-    with contextlib.redirect_stdout(io.StringIO()):
-        exit_code = _run_render_run_command(
-            repo_root=None,
-            request_path=request_path,
-            scene_path=scene_path,
-            routing_plan_path=routing_plan_path,
-            plan_out_path=plan_out_path,
-            report_out_path=report_out_path,
-            force=force,
-            event_log_out_path=event_log_out_path,
-            event_log_force=event_log_force,
-            preflight_out_path=preflight_out_path,
-            preflight_force=preflight_force,
-            execute_out_path=resolved_execute_out_path,
-            execute_force=execute_force,
+    try:
+        request_payload = _load_json_object(request_path, label="Render request")
+        _validate_json_payload(
+            request_payload,
+            schema_path=_schemas_dir_fn() / "render_request.schema.json",
+            payload_name="Render request",
         )
+        routing_plan_path = _routing_plan_path_from_request(
+            project_dir=project_dir,
+            request_payload=request_payload,
+        )
+
+        from mmo.cli_commands._scene import _run_render_run_command  # noqa: WPS433
+
+        # Reuse canonical render-run internals while keeping project wrapper
+        # summary deterministic and command-specific.
+        with contextlib.redirect_stdout(io.StringIO()):
+            exit_code = _run_render_run_command(
+                repo_root=None,
+                request_path=request_path,
+                scene_path=scene_path,
+                routing_plan_path=routing_plan_path,
+                plan_out_path=plan_out_path,
+                report_out_path=report_out_path,
+                force=force,
+                event_log_out_path=event_log_out_path,
+                event_log_force=event_log_force,
+                preflight_out_path=preflight_out_path,
+                preflight_force=preflight_force,
+                execute_out_path=resolved_execute_out_path,
+                execute_force=execute_force,
+            )
+    except (RuntimeError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    except SystemExit as exc:
+        return int(exc.code) if isinstance(exc.code, int) else 1
     if exit_code != 0:
         return exit_code
 

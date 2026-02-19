@@ -204,6 +204,54 @@ class TestGuiRpcStableErrors(unittest.TestCase):
             ],
         )
 
+    def test_project_render_run_refusal_is_method_failed_with_stable_issue_id(self) -> None:
+        project_dir, _ = _init_project(_SANDBOX / "stable_error_render_run_refusal")
+        exit_code, responses, _, stderr = _run_rpc(
+            [
+                {
+                    "id": "req-write-render-run-refusal",
+                    "method": "project.write_render_request",
+                    "params": {
+                        "project_dir": str(project_dir),
+                        "set": {
+                            "dry_run": False,
+                        },
+                    },
+                },
+                {
+                    "id": "req-render-run-refusal",
+                    "method": "project.render_run",
+                    "params": {
+                        "project_dir": str(project_dir),
+                        "force": True,
+                        "event_log": True,
+                        "event_log_force": True,
+                        "execute": True,
+                        "execute_force": True,
+                    },
+                },
+            ],
+        )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr, "")
+        self.assertEqual(len(responses), 2)
+
+        self.assertTrue(responses[0]["ok"])
+        refusal_response = responses[1]
+        self.assertEqual(refusal_response["id"], "req-render-run-refusal")
+        self.assertFalse(refusal_response["ok"])
+
+        error = refusal_response.get("error")
+        self.assertIsInstance(error, dict)
+        if not isinstance(error, dict):
+            return
+
+        self.assertEqual(error.get("code"), "RPC.METHOD_FAILED")
+        message = str(error.get("message", ""))
+        self.assertRegex(message, r"ISSUE\.RENDER\.RUN\.[A-Z0-9_]+")
+        self.assertNotIn("Internal RPC error.", message)
+
 
 class TestGuiRpcDiscover(unittest.TestCase):
     def test_rpc_discover_is_byte_identical_across_runs(self) -> None:
