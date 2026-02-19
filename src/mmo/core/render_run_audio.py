@@ -331,12 +331,15 @@ def build_render_report_with_audio(
         )
     report_job["status"] = "completed"
     report_job["output_files"] = output_files
-    report_job["notes"] = [
+    report_notes = [
         "reason: rendered",
         f"source_file: {source_path.resolve().as_posix()}",
         "source_layout_id: LAYOUT.2_0",
         "target_layout_id: LAYOUT.2_0",
     ]
+    if plugin_chain_enabled:
+        report_notes.append("macro_mix applied as linear blend.")
+    report_job["notes"] = report_notes
 
     execute_job_row: dict[str, Any] | None = None
     if capture_execute_trace:
@@ -385,6 +388,22 @@ def _coerce_dict(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     return {}
+
+
+def _coerce_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, float) and value in (0.0, 1.0):
+        return bool(int(value))
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off"}:
+            return False
+    return None
 
 
 def _coerce_float(value: Any) -> float | None:
@@ -503,20 +522,87 @@ def _render_wav_with_plugin_chain(
                 issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
                 message=f"{_GAIN_V0_PLUGIN_ID} requires numeric params.gain_db.",
             )
+        bypass_raw = params.get("bypass")
+        bypass = False
+        if bypass_raw is not None:
+            bypass = _coerce_bool(bypass_raw)
+            if bypass is None:
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                    message=f"{_GAIN_V0_PLUGIN_ID} requires boolean params.bypass when provided.",
+                )
+        raw_macro_mix = params.get("macro_mix")
+        if raw_macro_mix is None:
+            macro_mix = 1.0
+            macro_mix_input = 1.0
+        else:
+            macro_mix_input = _coerce_float(raw_macro_mix)
+            if macro_mix_input is None:
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                    message=(
+                        f"{_GAIN_V0_PLUGIN_ID} requires numeric params.macro_mix "
+                        "in [0.0, 1.0] or [0.0, 100.0]."
+                    ),
+                )
+            if 0.0 <= macro_mix_input <= 1.0:
+                macro_mix = macro_mix_input
+            elif 0.0 <= macro_mix_input <= 100.0:
+                macro_mix = macro_mix_input / 100.0
+            else:
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                    message=(
+                        f"{_GAIN_V0_PLUGIN_ID} requires params.macro_mix "
+                        "in [0.0, 1.0] or [0.0, 100.0]."
+                    ),
+                )
         linear_gain = float(math.pow(10.0, gain_db / 20.0))
-        rendered = np.multiply(
-            rendered,
-            np.float32(linear_gain),
-            dtype=np.float32,
-        )
-        rendered = np.clip(rendered, -1.0, 1.0).astype(np.float32, copy=False)
+        if bypass:
+            stage_what = "plugin stage bypassed"
+            stage_why = (
+                "Bypass enabled; preserved dry stereo float32 buffer without gain "
+                "or wet/dry mixing."
+            )
+        else:
+            stage_what = "plugin stage applied"
+            wet = np.multiply(
+                rendered,
+                np.float32(linear_gain),
+                dtype=np.float32,
+            )
+            wet = np.clip(wet, -1.0, 1.0).astype(np.float32, copy=False)
+            if macro_mix <= 0.0:
+                stage_why = "macro_mix=0 selected dry signal path (linear blend endpoint)."
+            elif macro_mix >= 1.0:
+                rendered = wet
+                stage_why = "macro_mix=1 selected fully wet signal path."
+            else:
+                dry = rendered
+                rendered = np.add(
+                    np.multiply(
+                        dry,
+                        np.float32(1.0 - macro_mix),
+                        dtype=np.float32,
+                    ),
+                    np.multiply(
+                        wet,
+                        np.float32(macro_mix),
+                        dtype=np.float32,
+                    ),
+                    dtype=np.float32,
+                )
+                rendered = np.clip(rendered, -1.0, 1.0).astype(np.float32, copy=False)
+                stage_why = (
+                    "Applied gain_v0 wet path and macro_mix as a linear dry/wet blend."
+                )
         stage_token = f"plugin_chain.stage.{stage_index:03d}.{plugin_id}"
         step_events.append(
             {
                 "kind": "action",
                 "scope": "render",
-                "what": "plugin stage applied",
-                "why": "Applied gain_v0 stage to stereo float32 buffer.",
+                "what": stage_what,
+                "why": stage_why,
                 "where": [source_posix, stage_token],
                 "confidence": None,
                 "evidence": {
@@ -525,6 +611,9 @@ def _render_wav_with_plugin_chain(
                     "metrics": [
                         {"name": "stage_index", "value": stage_index},
                         {"name": "gain_db", "value": gain_db},
+                        {"name": "macro_mix", "value": macro_mix},
+                        {"name": "macro_mix_input", "value": macro_mix_input},
+                        {"name": "bypass", "value": 1.0 if bypass else 0.0},
                     ],
                 },
             }

@@ -422,6 +422,115 @@ class TestRenderRunAudioExecution(unittest.TestCase):
             self.assertEqual(wav_bytes_a, wav_bytes_b)
             self.assertEqual(event_bytes_a, event_bytes_b)
 
+    def test_plugin_chain_gain_v0_honors_bypass_and_macro_mix_linear_blend(self) -> None:
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("numpy not available")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            source_path = stems_dir / "mix.wav"
+            _write_pcm16_wav(source_path, channels=2, duration_s=1.0)
+            source_bytes = source_path.read_bytes()
+            source_peak = _pcm16_abs_peak(source_path)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            event_log_out = temp_path / "render_events.jsonl"
+
+            def _render_with_params(params: dict[str, object]) -> tuple[dict, Path, dict[str, object]]:
+                request_payload = {
+                    "schema_version": "0.1.0",
+                    "target_layout_id": "LAYOUT.2_0",
+                    "scene_path": scene_posix,
+                    "options": {
+                        "dry_run": False,
+                        "plugin_chain": [
+                            {
+                                "plugin_id": "gain_v0",
+                                "params": params,
+                            }
+                        ],
+                    },
+                }
+                exit_code, _, stderr, _, report_out = _run_render_run(
+                    temp_path,
+                    request_payload=request_payload,
+                    extra_args=[
+                        "--force",
+                        "--event-log-out", str(event_log_out),
+                        "--event-log-force",
+                    ],
+                )
+                self.assertEqual(exit_code, 0, msg=stderr)
+                report = json.loads(report_out.read_text(encoding="utf-8"))
+                rendered_path = Path(report["jobs"][0]["output_files"][0]["file_path"])
+                events = _read_jsonl(event_log_out)
+                stage_event = next(
+                    (
+                        event
+                        for event in events
+                        if isinstance(event, dict)
+                        and isinstance(event.get("evidence"), dict)
+                        and "RENDER.RUN.PLUGIN.STAGE_APPLIED"
+                        in event.get("evidence", {}).get("codes", [])
+                    ),
+                    None,
+                )
+                self.assertIsNotNone(stage_event)
+                metrics: dict[str, object] = {
+                    str(item.get("name")): item.get("value")
+                    for item in stage_event.get("evidence", {}).get("metrics", [])
+                    if isinstance(item, dict)
+                }
+                return report, rendered_path, metrics
+
+            report_bypass, bypass_path, bypass_metrics = _render_with_params(
+                {"gain_db": -18.0, "macro_mix": 1.0, "bypass": True}
+            )
+            self.assertEqual(source_bytes, bypass_path.read_bytes())
+            self.assertEqual(sha256_file(source_path), sha256_file(bypass_path))
+            self.assertIn(
+                "macro_mix applied as linear blend.",
+                report_bypass["jobs"][0].get("notes", []),
+            )
+            self.assertAlmostEqual(float(bypass_metrics.get("bypass", -1.0)), 1.0, delta=1e-8)
+            self.assertAlmostEqual(float(bypass_metrics.get("macro_mix", -1.0)), 1.0, delta=1e-8)
+            self.assertAlmostEqual(
+                float(bypass_metrics.get("macro_mix_input", -1.0)),
+                1.0,
+                delta=1e-8,
+            )
+
+            _, mix0_path, mix0_metrics = _render_with_params(
+                {"gain_db": -6.0, "macro_mix": 0.0, "bypass": False}
+            )
+            self.assertEqual(source_bytes, mix0_path.read_bytes())
+            self.assertAlmostEqual(float(mix0_metrics.get("bypass", -1.0)), 0.0, delta=1e-8)
+            self.assertAlmostEqual(float(mix0_metrics.get("macro_mix", -1.0)), 0.0, delta=1e-8)
+
+            _, mix05_path, mix05_metrics = _render_with_params(
+                {"gain_db": -6.0, "macro_mix": 0.5, "bypass": False}
+            )
+            mix05_peak = _pcm16_abs_peak(mix05_path)
+            mix05_ratio = mix05_peak / source_peak if source_peak else 0.0
+            expected_mix05_ratio = 0.5 + (0.5 * math.pow(10.0, -6.0 / 20.0))
+            self.assertAlmostEqual(mix05_ratio, expected_mix05_ratio, delta=0.02)
+            self.assertAlmostEqual(float(mix05_metrics.get("bypass", -1.0)), 0.0, delta=1e-8)
+            self.assertAlmostEqual(float(mix05_metrics.get("macro_mix", -1.0)), 0.5, delta=1e-8)
+
+            _, mix1_path, mix1_metrics = _render_with_params(
+                {"gain_db": -6.0, "macro_mix": 1.0, "bypass": False}
+            )
+            mix1_peak = _pcm16_abs_peak(mix1_path)
+            mix1_ratio = mix1_peak / source_peak if source_peak else 0.0
+            self.assertAlmostEqual(mix1_ratio, math.pow(10.0, -6.0 / 20.0), delta=0.02)
+            self.assertAlmostEqual(float(mix1_metrics.get("bypass", -1.0)), 0.0, delta=1e-8)
+            self.assertAlmostEqual(float(mix1_metrics.get("macro_mix", -1.0)), 1.0, delta=1e-8)
+            self.assertGreater(mix05_peak, mix1_peak)
+            self.assertLess(mix05_peak, source_peak)
+
     def test_plugin_chain_gain_v0_accepts_flac_source_and_is_deterministic(self) -> None:
         try:
             import numpy  # noqa: F401
