@@ -278,6 +278,12 @@ class TestGuiRpcDiscover(unittest.TestCase):
         self.assertIn("include_plugin_ui_hints", project_build_gui_optional)
         self.assertIn("plugins", project_build_gui_optional)
 
+        project_render_run_optional = method_details["project.render_run"]["params_schema"][
+            "optional"
+        ]
+        self.assertIn("execute", project_render_run_optional)
+        self.assertIn("execute_out", project_render_run_optional)
+
     def test_unknown_method_behavior_unchanged_after_rpc_discover(self) -> None:
         requests = [
             {
@@ -359,6 +365,16 @@ class TestGuiRpcDeterminism(unittest.TestCase):
             },
             {
                 "id": "2",
+                "method": "project.render_run",
+                "params": {
+                    "project_dir": str(self.project_dir),
+                    "force": True,
+                    "event_log": True,
+                    "event_log_force": True,
+                },
+            },
+            {
+                "id": "7",
                 "method": "project.build_gui",
                 "params": {
                     "project_dir": str(self.project_dir),
@@ -399,7 +415,7 @@ class TestGuiRpcDeterminism(unittest.TestCase):
             },
         ]
 
-    def test_six_supported_methods_are_deterministic(self) -> None:
+    def test_seven_supported_methods_are_deterministic(self) -> None:
         exit_a, responses_a, stdout_a, stderr_a = _run_rpc(self._requests())
         exit_b, responses_b, stdout_b, stderr_b = _run_rpc(self._requests())
 
@@ -411,9 +427,9 @@ class TestGuiRpcDeterminism(unittest.TestCase):
         self.assertEqual(responses_a, responses_b)
         self.assertNotIn("\\", stdout_a)
 
-        self.assertEqual(len(responses_a), 6)
+        self.assertEqual(len(responses_a), 7)
         by_id = {item["id"]: item for item in responses_a}
-        for request_id in ("1", "2", "3", "4", "5", "6"):
+        for request_id in ("1", "2", "3", "4", "5", "6", "7"):
             self.assertIn(request_id, by_id)
             self.assertTrue(by_id[request_id]["ok"])
 
@@ -431,7 +447,13 @@ class TestGuiRpcDeterminism(unittest.TestCase):
         self.assertIn("ok", validate_result)
         self.assertIn("summary", validate_result)
 
-        build_gui_result = by_id["2"]["result"]
+        render_run_result = by_id["2"]["result"]
+        self.assertIn("job_count", render_run_result)
+        self.assertIn("plan_id", render_run_result)
+        self.assertIn("targets", render_run_result)
+        self.assertIn("paths_written", render_run_result)
+
+        build_gui_result = by_id["7"]["result"]
         self.assertTrue(build_gui_result["ok"])
         self.assertEqual(
             build_gui_result["pack_out"],

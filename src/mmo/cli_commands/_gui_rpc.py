@@ -10,6 +10,7 @@ from typing import Any, Callable, TextIO
 from mmo.cli_commands._project import (
     _run_project_build_gui,
     _run_project_pack,
+    _run_project_render_run,
     _run_project_show,
     _run_project_validate,
     _run_project_write_render_request,
@@ -114,6 +115,52 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
                 "paths_written",
                 "project_dir",
                 "steps",
+            ],
+        },
+    },
+    "project.render_run": {
+        "params_schema": {
+            "required": {
+                "project_dir": "string",
+            },
+            "optional": {
+                "event_log": "boolean",
+                "event_log_force": "boolean",
+                "execute": "boolean",
+                "execute_force": "boolean",
+                "execute_out": "string",
+                "force": "boolean",
+                "preflight": "boolean",
+                "preflight_force": "boolean",
+            },
+            "examples": [
+                {
+                    "force": True,
+                    "project_dir": "C:/mmo/project",
+                },
+                {
+                    "event_log": True,
+                    "event_log_force": True,
+                    "execute": True,
+                    "execute_force": True,
+                    "force": True,
+                    "project_dir": "C:/mmo/project",
+                    "preflight": True,
+                    "preflight_force": True,
+                },
+                {
+                    "execute_out": "C:/mmo/project/renders/render_execute.json",
+                    "force": True,
+                    "project_dir": "C:/mmo/project",
+                },
+            ],
+        },
+        "result_shape": {
+            "keys": [
+                "job_count",
+                "paths_written",
+                "plan_id",
+                "targets",
             ],
         },
     },
@@ -566,6 +613,92 @@ def _handle_project_build_gui(params: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+def _handle_project_render_run(params: dict[str, Any]) -> dict[str, Any]:
+    _validate_allowed_params(
+        method="project.render_run",
+        params=params,
+        allowed={
+            "project_dir",
+            "force",
+            "event_log",
+            "event_log_force",
+            "preflight",
+            "preflight_force",
+            "execute",
+            "execute_out",
+            "execute_force",
+        },
+    )
+    project_dir = _require_str_param(
+        method="project.render_run",
+        params=params,
+        name="project_dir",
+    )
+    force = _optional_bool_param(
+        method="project.render_run",
+        params=params,
+        name="force",
+        default=False,
+    )
+    event_log = _optional_bool_param(
+        method="project.render_run",
+        params=params,
+        name="event_log",
+        default=False,
+    )
+    event_log_force = _optional_bool_param(
+        method="project.render_run",
+        params=params,
+        name="event_log_force",
+        default=False,
+    )
+    preflight = _optional_bool_param(
+        method="project.render_run",
+        params=params,
+        name="preflight",
+        default=False,
+    )
+    preflight_force = _optional_bool_param(
+        method="project.render_run",
+        params=params,
+        name="preflight_force",
+        default=False,
+    )
+    execute = _optional_bool_param(
+        method="project.render_run",
+        params=params,
+        name="execute",
+        default=False,
+    )
+    execute_out = _optional_str_param(
+        method="project.render_run",
+        params=params,
+        name="execute_out",
+        default=None,
+    )
+    execute_force = _optional_bool_param(
+        method="project.render_run",
+        params=params,
+        name="execute_force",
+        default=False,
+    )
+    execute_out_path = Path(execute_out) if isinstance(execute_out, str) else None
+    return _call_json_command(
+        method="project.render_run",
+        invoke=lambda: _run_project_render_run(
+            project_dir=Path(project_dir),
+            force=force,
+            event_log=event_log,
+            event_log_force=event_log_force,
+            preflight=preflight,
+            preflight_force=preflight_force,
+            execute=execute,
+            execute_out_path=execute_out_path,
+            execute_force=execute_force,
+        ),
+    )
+
+
 def _handle_project_validate(params: dict[str, Any]) -> dict[str, Any]:
     _validate_allowed_params(
         method="project.validate",
@@ -702,6 +835,7 @@ _RPC_METHOD_HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "env.doctor": _handle_env_doctor,
     "project.show": _handle_project_show,
     "project.build_gui": _handle_project_build_gui,
+    "project.render_run": _handle_project_render_run,
     "project.validate": _handle_project_validate,
     "project.pack": _handle_project_pack,
     "project.write_render_request": _handle_project_write_render_request,

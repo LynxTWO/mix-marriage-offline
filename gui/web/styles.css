@@ -94,6 +94,15 @@ button:hover {
   margin-bottom: 0.65rem;
 }
 
+.row.align-end {
+  align-items: end;
+}
+
+.inline-field {
+  min-width: 230px;
+  margin: 0;
+}
+
 .methods-list {
   margin: 0;
   padding-left: 1.1rem;
@@ -120,6 +129,11 @@ button:hover {
 .plugins-container {
   display: grid;
   gap: 0.85rem;
+}
+
+.chain-container {
+  display: grid;
+  gap: 0.75rem;
 }
 
 .plugin-card {
@@ -183,6 +197,51 @@ button:hover {
   border: 1px solid #f3c7cd;
   border-radius: 6px;
   padding: 0.45rem;
+}
+
+.chain-stage {
+  border: 1px solid #bdd3df;
+  border-radius: 8px;
+  padding: 0.7rem;
+  background: #f9fcff;
+}
+
+.chain-stage-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.chain-stage-title {
+  font-weight: 600;
+}
+
+.chain-controls {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.chain-controls button {
+  padding: 0.3rem 0.55rem;
+  font-size: 0.86rem;
+}
+
+.field-input-json {
+  width: 100%;
+  min-height: 62px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.45rem 0.55rem;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.82rem;
+}
+
+.field-input-invalid {
+  border-color: #b72f3d;
+  background: #fff2f4;
 }
 
 @media (max-width: 740px) {

@@ -64,6 +64,26 @@
       </section>
 
       <section class="panel">
+        <h2>Plugin Chain Editor</h2>
+        <p class="subtle">
+          Build a <code>render_request.options.plugin_chain</code> from schema-capable plugins,
+          then persist via <code>project.write_render_request</code> with
+          <code>dry_run=false</code>.
+        </p>
+        <div class="row align-end">
+          <label class="inline-field">
+            Add plugin
+            <select id="chain-plugin-select"></select>
+          </label>
+          <button id="chain-add-button" type="button">Add to chain</button>
+          <button id="chain-save-button" type="button">Save chain + dry_run=false</button>
+          <button id="run-render-button" type="button">Run render (project.render_run)</button>
+        </div>
+        <div id="chain-container" class="chain-container"></div>
+        <pre id="chain-output" class="code-block"></pre>
+      </section>
+
+      <section class="panel">
         <h2>Status</h2>
         <pre id="status-output" class="code-block"></pre>
       </section>
