@@ -102,6 +102,7 @@ _PROJECT_SHOW_SCHEMA_BY_ARTIFACT["listen_pack.json"] = "listen_pack.schema.json"
 _PROJECT_RENDER_REQUEST_EDITABLE_FIELDS: frozenset[str] = frozenset(
     {
         "dry_run",
+        "plugin_chain",
         "policies",
         "target_ids",
         "target_layout_ids",
@@ -1010,6 +1011,46 @@ def _normalize_write_render_request_policies(
     return normalized
 
 
+def _normalize_write_render_request_plugin_chain(
+    raw_value: Any,
+) -> list[dict[str, Any]]:
+    parsed: Any = raw_value
+    if isinstance(raw_value, str):
+        raw_text = raw_value.strip()
+        if not raw_text:
+            raise ValueError("plugin_chain must be a non-empty JSON array.")
+        try:
+            parsed = json.loads(raw_text)
+        except json.JSONDecodeError as exc:
+            raise ValueError("plugin_chain must be a valid JSON array.") from exc
+
+    if not isinstance(parsed, list) or not parsed:
+        raise ValueError("plugin_chain must be a non-empty list.")
+
+    normalized_chain: list[dict[str, Any]] = []
+    for stage_index, raw_stage in enumerate(parsed, start=1):
+        if not isinstance(raw_stage, dict):
+            raise ValueError(f"plugin_chain[{stage_index}] must be an object.")
+
+        plugin_id = raw_stage.get("plugin_id")
+        if not isinstance(plugin_id, str) or not plugin_id.strip():
+            raise ValueError(
+                f"plugin_chain[{stage_index}].plugin_id must be a non-empty string.",
+            )
+
+        stage_payload: dict[str, Any] = {"plugin_id": plugin_id.strip().lower()}
+        if "params" in raw_stage:
+            params = raw_stage.get("params")
+            if not isinstance(params, dict):
+                raise ValueError(
+                    f"plugin_chain[{stage_index}].params must be an object when provided.",
+                )
+            stage_payload["params"] = dict(params)
+        normalized_chain.append(stage_payload)
+
+    return normalized_chain
+
+
 def _normalize_write_render_request_updates(
     raw_updates: dict[str, Any],
 ) -> dict[str, Any]:
@@ -1031,6 +1072,10 @@ def _normalize_write_render_request_updates(
         normalized["dry_run"] = _parse_write_render_request_bool(
             raw_updates.get("dry_run"),
             field_name="dry_run",
+        )
+    if "plugin_chain" in raw_updates:
+        normalized["plugin_chain"] = _normalize_write_render_request_plugin_chain(
+            raw_updates.get("plugin_chain"),
         )
     if "target_ids" in raw_updates:
         normalized["target_ids"] = _normalize_write_render_request_target_ids(
@@ -1127,6 +1172,10 @@ def _run_project_write_render_request(
                 options[policy_key] = policies[policy_key]
         updated_fields.append("policies")
 
+    if "plugin_chain" in normalized_updates:
+        options["plugin_chain"] = normalized_updates["plugin_chain"]
+        updated_fields.append("plugin_chain")
+
     if updated_fields:
         request_payload["options"] = options
 
@@ -1152,7 +1201,13 @@ def _run_project_write_render_request(
         "updated_fields": sorted(updated_fields),
         "written": ["renders/render_request.json"],
     }
-    for key in ("dry_run", "target_ids", "target_layout_ids", "policies"):
+    for key in (
+        "dry_run",
+        "target_ids",
+        "target_layout_ids",
+        "policies",
+        "plugin_chain",
+    ):
         if key in normalized_updates:
             summary[key] = normalized_updates[key]
 

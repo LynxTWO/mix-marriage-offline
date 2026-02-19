@@ -101,6 +101,8 @@ class TestProjectWriteRenderRequest(unittest.TestCase):
                 "\"downmix_policy_id\":\"POLICY.DOWNMIX.STANDARD_FOLDOWN_V0\""
                 "}"
             ),
+            "--set",
+            "plugin_chain=[{\"plugin_id\":\"gain_v0\",\"params\":{\"gain_db\":-3.0}}]",
         ]
 
     def test_writes_deterministically_with_allowlisted_fields_only(self) -> None:
@@ -134,11 +136,20 @@ class TestProjectWriteRenderRequest(unittest.TestCase):
             payload["options"]["gates_policy_id"],
             "POLICY.GATES.CORE_V0",
         )
+        self.assertEqual(
+            payload["options"]["plugin_chain"],
+            [
+                {
+                    "plugin_id": "gain_v0",
+                    "params": {"gain_db": -3.0},
+                }
+            ],
+        )
 
         summary = json.loads(stdout_a)
         self.assertEqual(
             summary["updated_fields"],
-            ["dry_run", "policies", "target_ids", "target_layout_ids"],
+            ["dry_run", "plugin_chain", "policies", "target_ids", "target_layout_ids"],
         )
 
     def test_refuses_unknown_set_key_with_stable_error(self) -> None:
@@ -157,7 +168,7 @@ class TestProjectWriteRenderRequest(unittest.TestCase):
         self.assertEqual(stderr_a, stderr_b)
         self.assertIn("Unknown editable field(s): scene_path.", stderr_a)
         self.assertIn(
-            "Allowed keys: dry_run, policies, target_ids, target_layout_ids.",
+            "Allowed keys: dry_run, plugin_chain, policies, target_ids, target_layout_ids.",
             stderr_a,
         )
 

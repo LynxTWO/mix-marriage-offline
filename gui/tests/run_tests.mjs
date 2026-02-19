@@ -1,7 +1,9 @@
 import { run as runPluginFormsTests } from "./plugin_forms.test.mjs";
+import { run as runMmoCliRunnerTests } from "./mmo_cli_runner.test.mjs";
 import { run as runRpcClientTests } from "./rpc_process_client.test.mjs";
 
 const suites = [
+  { name: "mmo_cli_runner", run: runMmoCliRunnerTests },
   { name: "plugin_forms", run: runPluginFormsTests },
   { name: "rpc_process_client", run: runRpcClientTests },
 ];

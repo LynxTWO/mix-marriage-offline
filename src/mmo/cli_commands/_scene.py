@@ -917,6 +917,7 @@ def _run_render_run_command(
 
     # -- build report ----------------------------------------------------------
     execute_job_rows: list[dict[str, Any]] = []
+    plugin_step_events: list[dict[str, Any]] = []
     report_status_note = "status=skipped"
     report_reason_note = "reason=dry_run"
     report_built_why = (
@@ -931,7 +932,11 @@ def _run_render_run_command(
             reason="dry_run",
         )
     else:
-        render_report_payload, execute_job_row = build_render_report_with_audio(
+        (
+            render_report_payload,
+            execute_job_row,
+            plugin_step_events,
+        ) = build_render_report_with_audio(
             plan_payload=render_plan_payload,
             request_payload=request_payload,
             scene_payload=scene_payload,
@@ -1018,6 +1023,7 @@ def _run_render_run_command(
                 "what": "render-run started",
                 "why": "Validated render-run inputs for deterministic artifact generation.",
                 "where": started_where,
+                "confidence": None,
                 "evidence": {
                     "codes": ["RENDER.RUN.STARTED"],
                     "paths": started_where,
@@ -1029,6 +1035,7 @@ def _run_render_run_command(
                 "what": "render plan built",
                 "why": "Built deterministic render plan from request and scene inputs.",
                 "where": [plan_out_posix],
+                "confidence": None,
                 "evidence": {
                     "codes": ["RENDER.RUN.PLAN_BUILT"],
                     "ids": plan_ids,
@@ -1036,30 +1043,37 @@ def _run_render_run_command(
                     "metrics": [{"name": "job_count", "value": job_count}],
                 },
             },
-            {
-                "kind": "action",
-                "scope": "render",
-                "what": "render report built",
-                "why": report_built_why,
-                "where": [report_out_posix],
-                "evidence": {
-                    "codes": ["RENDER.RUN.REPORT_BUILT"],
-                    "paths": [report_out_posix],
-                    "notes": [report_status_note, report_reason_note],
-                },
-            },
-            {
-                "kind": "info",
-                "scope": "render",
-                "what": "render-run completed",
-                "why": completed_why,
-                "where": completed_where,
-                "evidence": {
-                    "codes": ["RENDER.RUN.COMPLETED"],
-                    "paths": completed_where,
-                },
-            },
         ]
+        events.extend(plugin_step_events)
+        events.extend(
+            [
+                {
+                    "kind": "action",
+                    "scope": "render",
+                    "what": "render report built",
+                    "why": report_built_why,
+                    "where": [report_out_posix],
+                    "confidence": None,
+                    "evidence": {
+                        "codes": ["RENDER.RUN.REPORT_BUILT"],
+                        "paths": [report_out_posix],
+                        "notes": [report_status_note, report_reason_note],
+                    },
+                },
+                {
+                    "kind": "info",
+                    "scope": "render",
+                    "what": "render-run completed",
+                    "why": completed_why,
+                    "where": completed_where,
+                    "confidence": None,
+                    "evidence": {
+                        "codes": ["RENDER.RUN.COMPLETED"],
+                        "paths": completed_where,
+                    },
+                },
+            ]
+        )
 
         events_with_ids: list[dict[str, Any]] = []
         for event in events:

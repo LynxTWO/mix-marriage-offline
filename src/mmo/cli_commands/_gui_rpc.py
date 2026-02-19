@@ -41,6 +41,7 @@ _RPC_VERSION = "1"
 _PROJECT_WRITE_RENDER_REQUEST_ALLOWED_SET_KEYS: frozenset[str] = frozenset(
     {
         "dry_run",
+        "plugin_chain",
         "policies",
         "target_ids",
         "target_layout_ids",
@@ -217,6 +218,12 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
                             "downmix_policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
                             "gates_policy_id": "POLICY.GATES.CORE_V0",
                         },
+                        "plugin_chain": [
+                            {
+                                "plugin_id": "gain_v0",
+                                "params": {"gain_db": -3.0},
+                            }
+                        ],
                     },
                 },
             ],
@@ -230,6 +237,7 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
             ],
             "optional_keys": [
                 "dry_run",
+                "plugin_chain",
                 "policies",
                 "target_ids",
                 "target_layout_ids",

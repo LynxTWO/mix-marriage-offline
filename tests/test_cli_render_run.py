@@ -185,6 +185,19 @@ def _write_pcm16_wav(
         handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
 
 
+def _pcm16_abs_peak(path: Path) -> int:
+    with wave.open(str(path), "rb") as handle:
+        sample_width = handle.getsampwidth()
+        if sample_width != 2:
+            raise ValueError(f"Expected 16-bit WAV, got sample width {sample_width}")
+        frame_count = handle.getnframes()
+        frames = handle.readframes(frame_count)
+    if not frames:
+        return 0
+    samples = struct.unpack(f"<{len(frames) // 2}h", frames)
+    return max(abs(value) for value in samples)
+
+
 class TestRenderRunHappyPath(unittest.TestCase):
     def test_produces_schema_valid_plan_and_report(self) -> None:
         plan_validator = _schema_validator("render_plan.schema.json")
@@ -298,6 +311,94 @@ class TestRenderRunAudioExecution(unittest.TestCase):
             rendered_path = Path(str(output_file["file_path"]))
             self.assertTrue(rendered_path.is_file())
             self.assertEqual(output_file.get("sha256"), sha256_file(rendered_path))
+
+    def test_plugin_chain_gain_v0_applies_gain_and_is_deterministic(self) -> None:
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("numpy not available")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            source_path = stems_dir / "mix.wav"
+            _write_pcm16_wav(source_path, channels=2, duration_s=1.0)
+            source_peak = _pcm16_abs_peak(source_path)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                    "plugin_chain": [
+                        {
+                            "plugin_id": "gain_v0",
+                            "params": {
+                                "gain_db": -6.0,
+                            },
+                        }
+                    ],
+                },
+            }
+            event_log_out = temp_path / "render_events.jsonl"
+            exit_a, _, stderr_a, _, report_out_a = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--event-log-out", str(event_log_out),
+                ],
+            )
+            self.assertEqual(exit_a, 0, msg=stderr_a)
+
+            report_a = json.loads(report_out_a.read_text(encoding="utf-8"))
+            rendered_path_a = Path(report_a["jobs"][0]["output_files"][0]["file_path"])
+            wav_bytes_a = rendered_path_a.read_bytes()
+            event_bytes_a = event_log_out.read_bytes()
+
+            rendered_peak = _pcm16_abs_peak(rendered_path_a)
+            self.assertGreater(source_peak, rendered_peak)
+            gain_ratio = rendered_peak / source_peak if source_peak else 0.0
+            self.assertAlmostEqual(gain_ratio, math.pow(10.0, -6.0 / 20.0), delta=0.02)
+
+            events = _read_jsonl(event_log_out)
+            plugin_events = [
+                event
+                for event in events
+                if isinstance(event, dict)
+                and isinstance(event.get("evidence"), dict)
+                and any(
+                    str(code).startswith("RENDER.RUN.PLUGIN.")
+                    for code in event.get("evidence", {}).get("codes", [])
+                )
+            ]
+            self.assertEqual(len(plugin_events), 3)
+            for event in plugin_events:
+                self.assertTrue(event.get("what"))
+                self.assertTrue(event.get("why"))
+                self.assertTrue(event.get("where"))
+                self.assertIn("confidence", event)
+                self.assertIsNone(event.get("confidence"))
+
+            exit_b, _, stderr_b, _, report_out_b = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--force",
+                    "--event-log-out", str(event_log_out),
+                    "--event-log-force",
+                ],
+            )
+            self.assertEqual(exit_b, 0, msg=stderr_b)
+
+            report_b = json.loads(report_out_b.read_text(encoding="utf-8"))
+            rendered_path_b = Path(report_b["jobs"][0]["output_files"][0]["file_path"])
+            wav_bytes_b = rendered_path_b.read_bytes()
+            event_bytes_b = event_log_out.read_bytes()
+
+            self.assertEqual(wav_bytes_a, wav_bytes_b)
+            self.assertEqual(event_bytes_a, event_bytes_b)
 
     def test_refuses_multi_target_with_stable_issue_id(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

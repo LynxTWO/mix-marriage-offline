@@ -194,7 +194,7 @@ class TestGuiRpcStableErrors(unittest.TestCase):
                         "code": "RPC.INVALID_PARAMS",
                         "message": (
                             "project.write_render_request param 'set' received unknown keys: "
-                            "scene_path. Allowed keys: dry_run, policies, target_ids, "
+                            "scene_path. Allowed keys: dry_run, plugin_chain, policies, target_ids, "
                             "target_layout_ids"
                         ),
                     },
@@ -346,6 +346,14 @@ class TestGuiRpcDeterminism(unittest.TestCase):
                             "gates_policy_id": "POLICY.GATES.CORE_V0",
                             "downmix_policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
                         },
+                        "plugin_chain": [
+                            {
+                                "plugin_id": "gain_v0",
+                                "params": {
+                                    "gain_db": -3.0,
+                                },
+                            }
+                        ],
                     },
                 },
             },
@@ -441,13 +449,24 @@ class TestGuiRpcDeterminism(unittest.TestCase):
         self.assertTrue(write_result["ok"])
         self.assertEqual(
             write_result["updated_fields"],
-            ["dry_run", "policies", "target_ids", "target_layout_ids"],
+            ["dry_run", "plugin_chain", "policies", "target_ids", "target_layout_ids"],
         )
         request_payload = json.loads(
             (self.project_dir / "renders" / "render_request.json")
             .read_text(encoding="utf-8")
         )
         self.assertTrue(request_payload["options"]["dry_run"])
+        self.assertEqual(
+            request_payload["options"]["plugin_chain"],
+            [
+                {
+                    "plugin_id": "gain_v0",
+                    "params": {
+                        "gain_db": -3.0,
+                    },
+                }
+            ],
+        )
         self.assertEqual(
             request_payload["target_layout_ids"],
             ["LAYOUT.2_0"],

@@ -35,6 +35,7 @@ _SOURCE_EXTENSIONS = _WAV_EXTENSIONS | _FFMPEG_EXTENSIONS | _LOSSY_EXTENSIONS
 _BIT_DEPTHS = frozenset({16, 24, 32})
 _INTERMEDIATE_ROOT = ".mmo_tmp/render_run"
 _FLOAT_MAX = math.nextafter(1.0, 0.0)
+_GAIN_V0_PLUGIN_ID = "gain_v0"
 
 ISSUE_RENDER_RUN_DOWNMIX_SCOPE_UNSUPPORTED = "ISSUE.RENDER.RUN.DOWNMIX_SCOPE_UNSUPPORTED"
 ISSUE_RENDER_RUN_SOURCE_STEMS_DIR_INVALID = "ISSUE.RENDER.RUN.SOURCE_STEMS_DIR_INVALID"
@@ -47,6 +48,10 @@ ISSUE_RENDER_RUN_OPTION_UNSUPPORTED = "ISSUE.RENDER.RUN.OPTION_UNSUPPORTED"
 ISSUE_RENDER_RUN_FFMPEG_REQUIRED = "ISSUE.RENDER.RUN.FFMPEG_REQUIRED"
 ISSUE_RENDER_RUN_DECODE_FAILED = "ISSUE.RENDER.RUN.DECODE_FAILED"
 ISSUE_RENDER_RUN_ENCODE_FAILED = "ISSUE.RENDER.RUN.ENCODE_FAILED"
+ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID = "ISSUE.RENDER.RUN.PLUGIN_CHAIN_INVALID"
+ISSUE_RENDER_RUN_PLUGIN_SOURCE_FORMAT_UNSUPPORTED = (
+    "ISSUE.RENDER.RUN.PLUGIN_SOURCE_FORMAT_UNSUPPORTED"
+)
 
 
 class RenderRunRefusalError(ValueError):
@@ -76,7 +81,7 @@ def build_render_report_with_audio(
     scene_path: Path,
     report_out_path: Path,
     capture_execute_trace: bool = False,
-) -> tuple[dict[str, Any], dict[str, Any] | None]:
+) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, Any]]]:
     """Render stereo deliverables and return report payload plus execute job trace."""
     job = _single_stereo_job_or_raise(plan_payload)
     job_id = _coerce_str(job.get("job_id")).strip() or "JOB.001"
@@ -108,6 +113,9 @@ def build_render_report_with_audio(
         scene_path=scene_path,
     )
     report_dir = report_out_path.resolve().parent
+    plugin_chain = _plugin_chain_from_request(request_payload)
+    plugin_chain_enabled = bool(plugin_chain)
+    plugin_step_events: list[dict[str, Any]] = []
 
     wav_path: Path
     keep_wav_output = "wav" in output_formats
@@ -132,7 +140,16 @@ def build_render_report_with_audio(
 
     ffmpeg_cmd_for_decode: Sequence[str] | None = None
     ffmpeg_cmd_for_encode: Sequence[str] | None = None
-    needs_ffmpeg_decode = source_path.suffix.lower() in _FFMPEG_EXTENSIONS
+    source_extension = source_path.suffix.lower()
+    if plugin_chain_enabled and source_extension not in _WAV_EXTENSIONS:
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_PLUGIN_SOURCE_FORMAT_UNSUPPORTED,
+            message=(
+                "Plugin-chain render-run currently supports only WAV source input. "
+                f"source={source_path.resolve().as_posix()}"
+            ),
+        )
+    needs_ffmpeg_decode = (source_extension in _FFMPEG_EXTENSIONS) and not plugin_chain_enabled
     needs_ffmpeg_encode = any(fmt != "wav" for fmt in output_formats)
     needs_ffmpeg_for_trace = keep_wav_output and capture_execute_trace
     if needs_ffmpeg_decode or needs_ffmpeg_encode or needs_ffmpeg_for_trace:
@@ -150,34 +167,46 @@ def build_render_report_with_audio(
 
     ffmpeg_command_rows: list[dict[str, Any]] = []
 
-    float_samples_iter: Iterator[list[float]]
-    if source_path.suffix.lower() in _WAV_EXTENSIONS:
-        float_samples_iter = iter_wav_float64_samples(
-            source_path,
-            error_context="render-run stereo downmix",
-        )
-    else:
-        if ffmpeg_cmd_for_decode is None:
-            raise RenderRunRefusalError(
-                issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
-                message="ffmpeg is required to decode non-WAV source audio.",
-            )
-        if capture_execute_trace:
-            ffmpeg_command_rows.append(
-                {
-                    "args": build_ffmpeg_decode_command(source_path, ffmpeg_cmd_for_decode),
-                    "determinism_flags": [],
-                }
-            )
-        float_samples_iter = iter_ffmpeg_float64_samples(source_path, ffmpeg_cmd_for_decode)
-
     try:
-        _write_stereo_wav(
-            float_samples_iter=float_samples_iter,
-            output_path=wav_path,
-            sample_rate_hz=source_rate_hz,
-            bit_depth=output_bit_depth,
-        )
+        if plugin_chain_enabled:
+            plugin_step_events = _render_wav_with_plugin_chain(
+                source_path=source_path,
+                output_path=wav_path,
+                sample_rate_hz=source_rate_hz,
+                bit_depth=output_bit_depth,
+                plugin_chain=plugin_chain,
+            )
+        else:
+            float_samples_iter: Iterator[list[float]]
+            if source_extension in _WAV_EXTENSIONS:
+                float_samples_iter = iter_wav_float64_samples(
+                    source_path,
+                    error_context="render-run stereo downmix",
+                )
+            else:
+                if ffmpeg_cmd_for_decode is None:
+                    raise RenderRunRefusalError(
+                        issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
+                        message="ffmpeg is required to decode non-WAV source audio.",
+                    )
+                if capture_execute_trace:
+                    ffmpeg_command_rows.append(
+                        {
+                            "args": build_ffmpeg_decode_command(source_path, ffmpeg_cmd_for_decode),
+                            "determinism_flags": [],
+                        }
+                    )
+                float_samples_iter = iter_ffmpeg_float64_samples(
+                    source_path,
+                    ffmpeg_cmd_for_decode,
+                )
+
+            _write_stereo_wav(
+                float_samples_iter=float_samples_iter,
+                output_path=wav_path,
+                sample_rate_hz=source_rate_hz,
+                bit_depth=output_bit_depth,
+            )
     except RenderRunRefusalError:
         raise
     except ValueError as exc:
@@ -325,7 +354,7 @@ def build_render_report_with_audio(
             "ffmpeg_version": resolve_ffmpeg_version(ffmpeg_cmd_for_trace),
             "ffmpeg_commands": ffmpeg_command_rows,
         }
-    return report_payload, execute_job_row
+    return report_payload, execute_job_row, plugin_step_events
 
 
 def _coerce_str(value: Any) -> str:
@@ -351,6 +380,256 @@ def _coerce_dict(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     return {}
+
+
+def _coerce_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _plugin_chain_from_request(request_payload: dict[str, Any]) -> list[dict[str, Any]]:
+    options = _coerce_dict(request_payload.get("options"))
+    if "plugin_chain" not in options:
+        return []
+    raw_chain = options.get("plugin_chain")
+    if not isinstance(raw_chain, list) or not raw_chain:
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+            message="options.plugin_chain must be a non-empty list when provided.",
+        )
+    normalized_chain: list[dict[str, Any]] = []
+    for stage_index, raw_stage in enumerate(raw_chain, start=1):
+        if not isinstance(raw_stage, dict):
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                message=f"options.plugin_chain[{stage_index}] must be an object.",
+            )
+        plugin_id = _coerce_str(raw_stage.get("plugin_id")).strip().lower()
+        if not plugin_id:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                message=f"options.plugin_chain[{stage_index}].plugin_id is required.",
+            )
+        normalized_chain.append(
+            {
+                "plugin_id": plugin_id,
+                "params": _coerce_dict(raw_stage.get("params")),
+            }
+        )
+    return normalized_chain
+
+
+def _render_wav_with_plugin_chain(
+    *,
+    source_path: Path,
+    output_path: Path,
+    sample_rate_hz: int,
+    bit_depth: int,
+    plugin_chain: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    try:
+        import numpy as np
+    except ImportError as exc:  # pragma: no cover - env-dependent
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+            message=(
+                "options.plugin_chain requires numpy runtime support. "
+                "Install numpy or remove plugin_chain from the request."
+            ),
+        ) from exc
+
+    if bit_depth not in _BIT_DEPTHS:
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+            message=f"Unsupported output bit depth: {bit_depth}",
+        )
+
+    stereo_samples = _read_stereo_wav_float32(source_path)
+    frame_count = int(stereo_samples.shape[0])
+
+    source_posix = source_path.resolve().as_posix()
+    output_posix = output_path.resolve().as_posix()
+    step_events: list[dict[str, Any]] = [
+        {
+            "kind": "action",
+            "scope": "render",
+            "what": "plugin chain source loaded",
+            "why": "Loaded stereo WAV source into float32 buffer for deterministic plugin execution.",
+            "where": [source_posix],
+            "confidence": None,
+            "evidence": {
+                "codes": ["RENDER.RUN.PLUGIN.SOURCE_LOADED"],
+                "paths": [source_posix],
+                "metrics": [
+                    {"name": "channel_count", "value": 2},
+                    {"name": "frame_count", "value": frame_count},
+                ],
+            },
+        },
+    ]
+
+    rendered = stereo_samples
+    for stage_index, stage in enumerate(plugin_chain, start=1):
+        plugin_id = _coerce_str(stage.get("plugin_id")).strip().lower()
+        params = _coerce_dict(stage.get("params"))
+        if plugin_id != _GAIN_V0_PLUGIN_ID:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                message=(
+                    "Unsupported plugin_chain stage. "
+                    f"stage={stage_index}, plugin_id={plugin_id or '(missing)'}"
+                ),
+            )
+        gain_db = _coerce_float(params.get("gain_db"))
+        if gain_db is None:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                message=f"{_GAIN_V0_PLUGIN_ID} requires numeric params.gain_db.",
+            )
+        linear_gain = float(math.pow(10.0, gain_db / 20.0))
+        rendered = np.multiply(
+            rendered,
+            np.float32(linear_gain),
+            dtype=np.float32,
+        )
+        rendered = np.clip(rendered, -1.0, 1.0).astype(np.float32, copy=False)
+        stage_token = f"plugin_chain.stage.{stage_index:03d}.{plugin_id}"
+        step_events.append(
+            {
+                "kind": "action",
+                "scope": "render",
+                "what": "plugin stage applied",
+                "why": "Applied gain_v0 stage to stereo float32 buffer.",
+                "where": [source_posix, stage_token],
+                "confidence": None,
+                "evidence": {
+                    "codes": ["RENDER.RUN.PLUGIN.STAGE_APPLIED"],
+                    "ids": [plugin_id],
+                    "metrics": [
+                        {"name": "stage_index", "value": stage_index},
+                        {"name": "gain_db", "value": gain_db},
+                    ],
+                },
+            }
+        )
+
+    _write_stereo_pcm_wav_from_float32(
+        float32_samples=rendered,
+        output_path=output_path,
+        sample_rate_hz=sample_rate_hz,
+        bit_depth=bit_depth,
+    )
+    step_events.append(
+        {
+            "kind": "action",
+            "scope": "render",
+            "what": "plugin chain output written",
+            "why": "Wrote deterministic PCM WAV from plugin-chain float32 output buffer.",
+            "where": [output_posix],
+            "confidence": None,
+            "evidence": {
+                "codes": ["RENDER.RUN.PLUGIN.OUTPUT_WRITTEN"],
+                "paths": [output_posix],
+                "metrics": [
+                    {"name": "bit_depth", "value": bit_depth},
+                    {"name": "frame_count", "value": frame_count},
+                    {"name": "stage_count", "value": len(plugin_chain)},
+                ],
+            },
+        }
+    )
+    return step_events
+
+
+def _read_stereo_wav_float32(path: Path) -> Any:
+    import numpy as np
+
+    chunks: list[Any] = []
+    for float_samples in iter_wav_float64_samples(
+        path,
+        error_context="render-run plugin-chain decode",
+    ):
+        if len(float_samples) % 2 != 0:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_DECODE_FAILED,
+                message="Decoded sample stream is not frame-aligned for stereo.",
+            )
+        if not float_samples:
+            continue
+        chunk = np.asarray(float_samples, dtype=np.float32).reshape(-1, 2)
+        chunks.append(chunk)
+    if not chunks:
+        return np.zeros((0, 2), dtype=np.float32)
+    return np.concatenate(chunks, axis=0).astype(np.float32, copy=False)
+
+
+def _write_stereo_pcm_wav_from_float32(
+    *,
+    float32_samples: Any,
+    output_path: Path,
+    sample_rate_hz: int,
+    bit_depth: int,
+) -> None:
+    import numpy as np
+
+    if bit_depth not in _BIT_DEPTHS:
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+            message=f"Unsupported output bit depth: {bit_depth}",
+        )
+
+    samples = np.asarray(float32_samples, dtype=np.float32)
+    if samples.ndim != 2 or samples.shape[1] != 2:
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+            message="Plugin-chain runner expects a stereo float32 sample matrix.",
+        )
+    interleaved = samples.reshape(-1)
+    pcm_bytes = _float32_to_pcm_bytes(interleaved, bit_depth)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(output_path), "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(bit_depth // 8)
+        handle.setframerate(sample_rate_hz)
+        handle.writeframes(pcm_bytes)
+
+
+def _float32_to_pcm_bytes(float_samples: Any, bit_depth: int) -> bytes:
+    import numpy as np
+
+    samples = np.asarray(float_samples, dtype=np.float32)
+    samples64 = np.asarray(samples, dtype=np.float64)
+
+    if bit_depth == 16:
+        scaled = np.rint(samples64 * float(2**15))
+        clamped = np.clip(scaled, -32768.0, 32767.0).astype("<i2")
+        return clamped.tobytes()
+    if bit_depth == 24:
+        scaled = np.rint(samples64 * float(2**23))
+        clamped = np.clip(scaled, -8388608.0, 8388607.0).astype(np.int32)
+        unsigned = (clamped & 0xFFFFFF).astype(np.uint32)
+        data = np.empty(unsigned.size * 3, dtype=np.uint8)
+        data[0::3] = (unsigned & 0xFF).astype(np.uint8)
+        data[1::3] = ((unsigned >> 8) & 0xFF).astype(np.uint8)
+        data[2::3] = ((unsigned >> 16) & 0xFF).astype(np.uint8)
+        return data.tobytes()
+    if bit_depth == 32:
+        scaled = np.rint(samples64 * float(2**31))
+        clamped = np.clip(scaled, -2147483648.0, 2147483647.0).astype("<i4")
+        return clamped.tobytes()
+    raise RenderRunRefusalError(
+        issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+        message=f"Unsupported output bit depth: {bit_depth}",
+    )
 
 
 def _single_stereo_job_or_raise(plan_payload: dict[str, Any]) -> dict[str, Any]:

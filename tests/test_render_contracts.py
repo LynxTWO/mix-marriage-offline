@@ -51,6 +51,12 @@ FULL_RENDER_REQUEST = {
         "sample_rate_hz": 48000,
         "bit_depth": 24,
         "dry_run": False,
+        "plugin_chain": [
+            {
+                "plugin_id": "gain_v0",
+                "params": {"gain_db": -3.0},
+            }
+        ],
     },
 }
 
@@ -198,6 +204,19 @@ class TestRenderRequestSchema(unittest.TestCase):
     def test_invalid_output_format_rejected(self) -> None:
         payload = dict(MINIMAL_RENDER_REQUEST)
         payload["options"] = {"output_formats": ["mp3"]}
+        errors = list(self.validator.iter_errors(payload))
+        self.assertGreater(len(errors), 0)
+
+    def test_invalid_plugin_chain_shape_rejected(self) -> None:
+        payload = dict(MINIMAL_RENDER_REQUEST)
+        payload["options"] = {
+            "plugin_chain": [
+                {
+                    "plugin_id": "gain_v0",
+                    "params": "not_an_object",
+                }
+            ]
+        }
         errors = list(self.validator.iter_errors(payload))
         self.assertGreater(len(errors), 0)
 

@@ -32,6 +32,15 @@ export function buildCliCandidates() {
   const pythonBin = typeof process.env.MMO_GUI_PYTHON_BIN === "string" && process.env.MMO_GUI_PYTHON_BIN.trim()
     ? process.env.MMO_GUI_PYTHON_BIN.trim()
     : "python";
+  const pythonModuleArgs = ["-m", "mmo"];
+
+  const pythonFallbackCandidate = {
+    command: pythonBin,
+    baseArgs: pythonModuleArgs,
+    cwd: REPO_ROOT,
+    env: _pythonEnv(),
+  };
+  pythonFallbackCandidate.label = _candidateLabel(pythonFallbackCandidate);
 
   return [
     {
@@ -41,13 +50,7 @@ export function buildCliCandidates() {
       env: { ...process.env },
       label: mmoBin,
     },
-    {
-      command: pythonBin,
-      baseArgs: ["-m", "mmo"],
-      cwd: REPO_ROOT,
-      env: _pythonEnv(),
-      label: `${pythonBin} -m mmo`,
-    },
+    pythonFallbackCandidate,
   ];
 }
 
@@ -61,13 +64,21 @@ export function buildRpcCommandCandidates(cliCandidates = buildCliCandidates()) 
   }));
 }
 
-function _runCommandOnce(candidate, args, { stdinText = "", timeoutMs = 15_000 } = {}) {
+function _runCommandOnce(
+  candidate,
+  args,
+  {
+    stdinText = "",
+    timeoutMs = 15_000,
+    spawnProcess = spawn,
+  } = {},
+) {
   return new Promise((resolve) => {
     let settled = false;
     let stdout = "";
     let stderr = "";
 
-    const child = spawn(candidate.command, [...candidate.baseArgs, ...args], {
+    const child = spawnProcess(candidate.command, [...candidate.baseArgs, ...args], {
       cwd: candidate.cwd,
       env: candidate.env,
       stdio: ["pipe", "pipe", "pipe"],
@@ -138,11 +149,12 @@ export async function runMmoCli(
     stdinText = "",
     timeoutMs = 15_000,
     candidates = buildCliCandidates(),
+    spawnProcess = spawn,
   } = {},
 ) {
   const failures = [];
   for (const candidate of candidates) {
-    const result = await _runCommandOnce(candidate, args, { stdinText, timeoutMs });
+    const result = await _runCommandOnce(candidate, args, { stdinText, timeoutMs, spawnProcess });
     if (result.error === null && acceptedExitCodes.includes(result.code)) {
       return {
         ...result,
