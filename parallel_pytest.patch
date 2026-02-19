@@ -1,0 +1,48 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index 86035ec..9adc132 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -16,7 +16,7 @@ dependencies = [
+ [project.optional-dependencies]
+ pdf = ["reportlab>=4"]
+ truth = ["numpy>=2.0"]
+-dev = ["pytest>=7.0"]
++dev = ["pytest>=7.0", "pytest-xdist>=3.6.1"]
+ 
+ [project.scripts]
+ mmo = "mmo.cli:main"
+diff --git a/tools/run_pytest.cmd b/tools/run_pytest.cmd
+index 2c7d8b9..72982ef 100644
+--- a/tools/run_pytest.cmd
++++ b/tools/run_pytest.cmd
+@@ -27,5 +27,13 @@ set "TMP=%TMP_ROOT%"
+ set "TEMP=%TMP_ROOT%"
+ set "TMPDIR=%TMP_ROOT%"
+ 
+-python -m pytest %* --basetemp "%BASE_TEMP%"
++REM Optional parallelism via pytest-xdist.
++REM Set MMO_PYTEST_N to a worker count (e.g. 4) or "auto".
++REM Example: set MMO_PYTEST_N=auto & tools\run_pytest.cmd -q
++set "PYTEST_XDIST_ARGS="
++if defined MMO_PYTEST_N (
++  set "PYTEST_XDIST_ARGS=-n %MMO_PYTEST_N% --dist loadscope"
++)
++
++python -m pytest %PYTEST_XDIST_ARGS% %* --basetemp "%BASE_TEMP%"
+ exit /b %ERRORLEVEL%
+diff --git a/tools/run_pytest.ps1 b/tools/run_pytest.ps1
+index 8f9505f..16749da 100644
+--- a/tools/run_pytest.ps1
++++ b/tools/run_pytest.ps1
+@@ -11,5 +11,10 @@ $env:TMP = $tmpRoot
+ $env:TEMP = $tmpRoot
+ $env:TMPDIR = $tmpRoot
+ 
+-& python -m pytest @args --basetemp $baseTemp
++$xdist = @()
++if ($env:MMO_PYTEST_N) {
++  $xdist = @('-n', $env:MMO_PYTEST_N, '--dist', 'loadscope')
++}
++
++& python -m pytest @xdist @args --basetemp $baseTemp
+ exit $LASTEXITCODE
