@@ -1,4 +1,4 @@
-import { buildFormFields } from "/lib/plugin_forms.mjs";
+import { buildFormFields, orderFieldsByLayout, resolveFieldStep } from "/lib/plugin_forms.mjs";
 
 const discoverButton = document.getElementById("discover-button");
 const doctorButton = document.getElementById("doctor-button");
@@ -29,6 +29,7 @@ const stemsRootInput = document.getElementById("stems-root-input");
 const packOutInput = document.getElementById("pack-out-input");
 const pluginsDirInput = document.getElementById("plugins-dir-input");
 const chainPluginSelect = document.getElementById("chain-plugin-select");
+const fineModeIndicator = document.getElementById("fine-mode-indicator");
 
 const state = {
   projectShow: null,
@@ -50,6 +51,12 @@ const state = {
     report: null,
     timelineFilterJob: "",
     timelineFilterStage: "",
+  },
+  modifierState: {
+    shift: false,
+    alt: false,
+    ctrl: false,
+    meta: false,
   },
 };
 
@@ -81,6 +88,105 @@ function _deepClone(value) {
     return value;
   }
   return JSON.parse(JSON.stringify(value));
+}
+
+function _isFiniteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function _normalizeModifierKey(value) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (normalized === "alt" || normalized === "ctrl" || normalized === "meta") {
+    return normalized;
+  }
+  return "shift";
+}
+
+function _modifierStateFromKeyboardEvent(event) {
+  return {
+    shift: Boolean(event?.shiftKey),
+    alt: Boolean(event?.altKey),
+    ctrl: Boolean(event?.ctrlKey),
+    meta: Boolean(event?.metaKey),
+  };
+}
+
+function _modifierStateChanged(nextState) {
+  return (
+    state.modifierState.shift !== nextState.shift
+    || state.modifierState.alt !== nextState.alt
+    || state.modifierState.ctrl !== nextState.ctrl
+    || state.modifierState.meta !== nextState.meta
+  );
+}
+
+function _renderFineModeIndicator() {
+  if (!fineModeIndicator) {
+    return;
+  }
+  const active = (
+    state.modifierState.shift
+    || state.modifierState.alt
+    || state.modifierState.ctrl
+    || state.modifierState.meta
+  );
+  fineModeIndicator.classList.toggle("active", active);
+  fineModeIndicator.textContent = active ? "Fine" : "Normal";
+}
+
+function _activeStepForInput(input) {
+  const baseStep = Number(input.dataset.mmoStep || "");
+  if (!Number.isFinite(baseStep) || baseStep <= 0) {
+    return null;
+  }
+  const fineStep = Number(input.dataset.mmoFineStep || "");
+  const modifierKey = _normalizeModifierKey(input.dataset.mmoModifierKey);
+  if (Number.isFinite(fineStep) && fineStep > 0 && state.modifierState[modifierKey] === true) {
+    return fineStep;
+  }
+  return baseStep;
+}
+
+function _refreshFineSteps() {
+  const inputs = document.querySelectorAll("[data-mmo-step]");
+  for (const input of inputs) {
+    const step = _activeStepForInput(input);
+    if (step === null) {
+      input.removeAttribute("step");
+      continue;
+    }
+    input.step = String(step);
+  }
+  _renderFineModeIndicator();
+}
+
+function _setModifierState(nextState) {
+  if (!_modifierStateChanged(nextState)) {
+    return;
+  }
+  state.modifierState = {
+    shift: nextState.shift,
+    alt: nextState.alt,
+    ctrl: nextState.ctrl,
+    meta: nextState.meta,
+  };
+  _refreshFineSteps();
+}
+
+function _bindFineStepInput(input, field) {
+  const baseStep = resolveFieldStep(field, {});
+  if (!_isFiniteNumber(baseStep) || baseStep <= 0) {
+    return;
+  }
+  input.dataset.mmoStep = String(baseStep);
+  if (_isFiniteNumber(field.fineStep) && field.fineStep > 0) {
+    input.dataset.mmoFineStep = String(field.fineStep);
+  }
+  input.dataset.mmoModifierKey = _normalizeModifierKey(field.modifierKey);
+  const liveStep = resolveFieldStep(field, state.modifierState);
+  if (_isFiniteNumber(liveStep) && liveStep > 0) {
+    input.step = String(liveStep);
+  }
 }
 
 async function apiRpc(method, params = {}) {
@@ -249,46 +355,224 @@ function _renderLayoutSnapshot(container, plugin) {
   }
 }
 
+function _encodeSelectValue(value) {
+  return JSON.stringify(value);
+}
+
+function _decodeSelectValue(rawValue) {
+  if (typeof rawValue !== "string") {
+    return rawValue;
+  }
+  try {
+    return JSON.parse(rawValue);
+  } catch {
+    return rawValue;
+  }
+}
+
+function _setNumericBounds(input, field) {
+  if (_isFiniteNumber(field.minimum)) {
+    input.min = String(field.minimum);
+  }
+  if (_isFiniteNumber(field.maximum)) {
+    input.max = String(field.maximum);
+  }
+}
+
+function _withUnits(control, field) {
+  if (typeof field.units !== "string" || !field.units) {
+    return control;
+  }
+  const wrapped = document.createElement("div");
+  wrapped.className = "control-with-units";
+  wrapped.appendChild(control);
+
+  const units = document.createElement("span");
+  units.className = "control-units";
+  units.textContent = field.units;
+  wrapped.appendChild(units);
+  return wrapped;
+}
+
+function _numericControlValue(value, field) {
+  if (_isFiniteNumber(value)) {
+    return value;
+  }
+  if (_isFiniteNumber(field.minimum)) {
+    return field.minimum;
+  }
+  if (_isFiniteNumber(field.maximum)) {
+    return field.maximum;
+  }
+  return 0;
+}
+
+function _snapshotLayoutForOrdering(snapshot) {
+  const widgets = Array.isArray(snapshot?.widgets)
+    ? snapshot.widgets.filter((widget) => _isObject(widget))
+    : [];
+  if (widgets.length === 0) {
+    return null;
+  }
+
+  const sortedWidgets = [...widgets].sort((left, right) => {
+    const leftY = _isFiniteNumber(left.y_px) ? left.y_px : 0;
+    const rightY = _isFiniteNumber(right.y_px) ? right.y_px : 0;
+    if (leftY !== rightY) {
+      return leftY - rightY;
+    }
+    const leftX = _isFiniteNumber(left.x_px) ? left.x_px : 0;
+    const rightX = _isFiniteNumber(right.x_px) ? right.x_px : 0;
+    if (leftX !== rightX) {
+      return leftX - rightX;
+    }
+    const leftId = typeof left.widget_id === "string" ? left.widget_id : "";
+    const rightId = typeof right.widget_id === "string" ? right.widget_id : "";
+    return leftId.localeCompare(rightId);
+  });
+
+  return {
+    sections: [
+      {
+        section_id: "snapshot",
+        widgets: sortedWidgets,
+      },
+    ],
+  };
+}
+
+function _orderedFieldsByLayout(plugin, fields) {
+  const layoutPresent = _isObject(plugin?.ui_layout) && plugin.ui_layout.present !== false;
+  if (!layoutPresent) {
+    return { orderedFields: fields, moreFields: [], hasLayout: false };
+  }
+
+  const fromLayout = orderFieldsByLayout(fields, plugin?.ui_layout_document);
+  if (fromLayout.hasLayout) {
+    return fromLayout;
+  }
+  const snapshotLayout = _snapshotLayoutForOrdering(plugin?.ui_layout_snapshot);
+  const fromSnapshot = orderFieldsByLayout(fields, snapshotLayout);
+  if (fromSnapshot.hasLayout) {
+    return fromSnapshot;
+  }
+  return { orderedFields: fields, moreFields: [], hasLayout: false };
+}
+
+function _renderFieldLabel(field) {
+  const label = document.createElement("div");
+  const requiredTag = field.required ? " (required)" : "";
+  const widgetHint = field.hint?.widget ? ` [${field.hint.widget}]` : "";
+  label.innerHTML = `<strong>${field.label}</strong>${requiredTag}${widgetHint}<div class="field-meta">${field.name}${field.description ? ` - ${field.description}` : ""}</div>`;
+  return label;
+}
+
+function _appendFieldRow(container, field, inputNode) {
+  const row = document.createElement("div");
+  row.className = "field-row";
+  row.appendChild(_renderFieldLabel(field));
+  row.appendChild(inputNode);
+  container.appendChild(row);
+}
+
+function _selectOptionsForField(field) {
+  if (Array.isArray(field.selectOptions) && field.selectOptions.length > 0) {
+    return field.selectOptions;
+  }
+  return Array.isArray(field.enumValues)
+    ? field.enumValues.map((value) => ({ value, label: String(value) }))
+    : [];
+}
+
+function _createSelectInput(field, currentValue, { disabled = false, onChange = null } = {}) {
+  const select = document.createElement("select");
+  select.disabled = disabled;
+  const options = _selectOptionsForField(field);
+  const encodedCurrent = _encodeSelectValue(currentValue);
+  for (const optionRow of options) {
+    const option = document.createElement("option");
+    option.value = _encodeSelectValue(optionRow.value);
+    option.textContent = optionRow.label;
+    option.selected = option.value === encodedCurrent;
+    select.appendChild(option);
+  }
+  if (typeof onChange === "function") {
+    select.addEventListener("change", () => {
+      onChange(_decodeSelectValue(select.value), select.value);
+    });
+  }
+  return select;
+}
+
+function _createReadOnlyRangeInput(field, currentValue) {
+  const controls = document.createElement("div");
+  controls.className = "range-with-entry";
+
+  const rangeInput = document.createElement("input");
+  rangeInput.type = "range";
+  rangeInput.disabled = true;
+  const numericInput = document.createElement("input");
+  numericInput.type = "number";
+  numericInput.disabled = true;
+
+  const value = _numericControlValue(currentValue, field);
+  rangeInput.value = String(value);
+  numericInput.value = String(value);
+  _setNumericBounds(rangeInput, field);
+  _setNumericBounds(numericInput, field);
+  _bindFineStepInput(rangeInput, field);
+  _bindFineStepInput(numericInput, field);
+
+  controls.appendChild(rangeInput);
+  controls.appendChild(numericInput);
+  return _withUnits(controls, field);
+}
+
 function _renderFieldInput(field) {
+  const currentValue = field.defaultValue;
+
   if (field.inputKind === "checkbox") {
     const input = document.createElement("input");
     input.type = "checkbox";
-    input.checked = Boolean(field.defaultValue);
+    input.checked = Boolean(currentValue);
     input.disabled = true;
-    return input;
+    return _withUnits(input, field);
   }
 
   if (field.inputKind === "select") {
-    const select = document.createElement("select");
-    select.disabled = true;
-    for (const value of field.enumValues) {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = value;
-      if (value === field.defaultValue) {
-        option.selected = true;
-      }
-      select.appendChild(option);
-    }
-    return select;
+    return _withUnits(_createSelectInput(field, currentValue, { disabled: true }), field);
+  }
+
+  if (field.inputKind === "range") {
+    return _createReadOnlyRangeInput(field, currentValue);
   }
 
   const input = document.createElement("input");
   input.type = field.inputKind === "number" ? "number" : "text";
   input.disabled = true;
-  if (field.defaultValue !== null && field.defaultValue !== undefined) {
-    input.value = String(field.defaultValue);
+  if (currentValue !== null && currentValue !== undefined) {
+    input.value = String(currentValue);
   }
-  if (field.minimum !== null) {
-    input.min = String(field.minimum);
+  if (field.inputKind === "number") {
+    _setNumericBounds(input, field);
+    _bindFineStepInput(input, field);
   }
-  if (field.maximum !== null) {
-    input.max = String(field.maximum);
+  return _withUnits(input, field);
+}
+
+function _appendMoreSection(container, fields, renderInput) {
+  if (!Array.isArray(fields) || fields.length === 0) {
+    return;
   }
-  if (field.step !== null) {
-    input.step = String(field.step);
+  const section = document.createElement("section");
+  section.className = "field-more";
+  const heading = document.createElement("h4");
+  heading.textContent = "More";
+  section.appendChild(heading);
+  for (const field of fields) {
+    _appendFieldRow(section, field, renderInput(field));
   }
-  return input;
+  container.appendChild(section);
 }
 
 function renderPluginForms(plugins) {
@@ -333,17 +617,12 @@ function renderPluginForms(plugins) {
         noProps.textContent = "config_schema has no form fields.";
         card.appendChild(noProps);
       } else {
-        for (const field of fields) {
-          const row = document.createElement("div");
-          row.className = "field-row";
-
-          const label = document.createElement("div");
-          const requiredTag = field.required ? " (required)" : "";
-          const widgetHint = field.hint?.widget ? ` [${field.hint.widget}]` : "";
-          label.innerHTML = `<strong>${field.label}</strong>${requiredTag}${widgetHint}<div class="field-meta">${field.name}${field.description ? ` - ${field.description}` : ""}</div>`;
-          row.appendChild(label);
-          row.appendChild(_renderFieldInput(field));
-          card.appendChild(row);
+        const ordered = _orderedFieldsByLayout(plugin, fields);
+        for (const field of ordered.orderedFields) {
+          _appendFieldRow(card, field, _renderFieldInput(field));
+        }
+        if (ordered.hasLayout) {
+          _appendMoreSection(card, ordered.moreFields, _renderFieldInput);
         }
       }
     }
@@ -351,6 +630,7 @@ function renderPluginForms(plugins) {
     _renderLayoutSnapshot(card, plugin);
     pluginsContainer.appendChild(card);
   }
+  _refreshFineSteps();
 }
 
 function _isEditablePlugin(plugin) {
@@ -1077,6 +1357,84 @@ function _stageFieldValue(stage, field) {
   return field.defaultValue;
 }
 
+function _parseNumericFieldValue(field, rawValue) {
+  const raw = typeof rawValue === "string" ? rawValue.trim() : "";
+  if (!raw) {
+    return { empty: true };
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) {
+    return { error: `Field ${field.name} must be numeric.` };
+  }
+  if (field.type === "integer" && !Number.isInteger(parsed)) {
+    return { error: `Field ${field.name} must be an integer.` };
+  }
+  if (_isFiniteNumber(field.minimum) && parsed < field.minimum) {
+    return { error: `Field ${field.name} must be >= ${field.minimum}.` };
+  }
+  if (_isFiniteNumber(field.maximum) && parsed > field.maximum) {
+    return { error: `Field ${field.name} must be <= ${field.maximum}.` };
+  }
+  return { value: parsed };
+}
+
+function _commitNumericParam(stage, field, rawValue) {
+  const parsed = _parseNumericFieldValue(field, rawValue);
+  if (parsed.empty) {
+    if (field.required) {
+      setStatus(`Field ${field.name} is required.`);
+      return null;
+    }
+    _clearStageParam(stage, field.name);
+    _renderChainPayloadPreview();
+    return null;
+  }
+  if (parsed.error) {
+    setStatus(parsed.error);
+    return null;
+  }
+  _setStageParam(stage, field.name, parsed.value);
+  _renderChainPayloadPreview();
+  return parsed.value;
+}
+
+function _createChainRangeInput(stage, field, currentValue) {
+  const controls = document.createElement("div");
+  controls.className = "range-with-entry";
+
+  const rangeInput = document.createElement("input");
+  rangeInput.type = "range";
+  const textInput = document.createElement("input");
+  textInput.type = "number";
+
+  _setNumericBounds(rangeInput, field);
+  _setNumericBounds(textInput, field);
+  _bindFineStepInput(rangeInput, field);
+  _bindFineStepInput(textInput, field);
+
+  const startValue = _numericControlValue(currentValue, field);
+  rangeInput.value = String(startValue);
+  textInput.value = String(startValue);
+
+  rangeInput.addEventListener("input", () => {
+    textInput.value = rangeInput.value;
+  });
+  rangeInput.addEventListener("change", () => {
+    _setStageParam(stage, field.name, Number(rangeInput.value));
+    _renderChainPayloadPreview();
+  });
+  textInput.addEventListener("change", () => {
+    const committed = _commitNumericParam(stage, field, textInput.value);
+    if (_isFiniteNumber(committed)) {
+      rangeInput.value = String(committed);
+    }
+  });
+
+  controls.appendChild(rangeInput);
+  controls.appendChild(textInput);
+  return _withUnits(controls, field);
+}
+
 function _renderChainFieldInput(stage, field) {
   const currentValue = _stageFieldValue(stage, field);
 
@@ -1088,27 +1446,39 @@ function _renderChainFieldInput(stage, field) {
       _setStageParam(stage, field.name, input.checked);
       _renderChainPayloadPreview();
     });
-    return input;
+    return _withUnits(input, field);
   }
 
   if (field.inputKind === "select") {
-    const select = document.createElement("select");
-    for (const value of field.enumValues) {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = value;
-      option.selected = currentValue === value;
-      select.appendChild(option);
-    }
-    select.addEventListener("change", () => {
-      if (!select.value && !field.required) {
-        _clearStageParam(stage, field.name);
-      } else {
-        _setStageParam(stage, field.name, select.value);
+    const select = _createSelectInput(
+      field,
+      currentValue,
+      {
+        onChange: (decodedValue, rawValue) => {
+          if (!rawValue && !field.required) {
+            _clearStageParam(stage, field.name);
+          } else {
+            _setStageParam(stage, field.name, decodedValue);
+          }
+          _renderChainPayloadPreview();
+        },
+      },
+    );
+    if (!field.required) {
+      const emptyOption = document.createElement("option");
+      emptyOption.value = "";
+      emptyOption.textContent = "(unset)";
+      emptyOption.selected = currentValue === null || currentValue === undefined;
+      select.insertBefore(emptyOption, select.firstChild);
+      if (emptyOption.selected) {
+        select.value = "";
       }
-      _renderChainPayloadPreview();
-    });
-    return select;
+    }
+    return _withUnits(select, field);
+  }
+
+  if (field.inputKind === "range") {
+    return _createChainRangeInput(stage, field, currentValue);
   }
 
   if (field.inputKind === "number") {
@@ -1119,39 +1489,12 @@ function _renderChainFieldInput(stage, field) {
     } else if (currentValue !== null && currentValue !== undefined) {
       input.value = String(currentValue);
     }
-    if (field.minimum !== null) {
-      input.min = String(field.minimum);
-    }
-    if (field.maximum !== null) {
-      input.max = String(field.maximum);
-    }
-    if (field.step !== null) {
-      input.step = String(field.step);
-    }
+    _setNumericBounds(input, field);
+    _bindFineStepInput(input, field);
     input.addEventListener("change", () => {
-      const raw = input.value.trim();
-      if (!raw) {
-        if (field.required) {
-          setStatus(`Field ${field.name} is required.`);
-          return;
-        }
-        _clearStageParam(stage, field.name);
-        _renderChainPayloadPreview();
-        return;
-      }
-      const parsed = Number(raw);
-      if (!Number.isFinite(parsed)) {
-        setStatus(`Field ${field.name} must be numeric.`);
-        return;
-      }
-      if (field.type === "integer" && !Number.isInteger(parsed)) {
-        setStatus(`Field ${field.name} must be an integer.`);
-        return;
-      }
-      _setStageParam(stage, field.name, parsed);
-      _renderChainPayloadPreview();
+      _commitNumericParam(stage, field, input.value);
     });
-    return input;
+    return _withUnits(input, field);
   }
 
   if (field.inputKind === "json") {
@@ -1203,7 +1546,7 @@ function _renderChainFieldInput(stage, field) {
     }
     _renderChainPayloadPreview();
   });
-  return input;
+  return _withUnits(input, field);
 }
 
 function _moveChainStage(stageIndex, delta) {
@@ -1288,23 +1631,19 @@ function renderPluginChainEditor() {
       return;
     }
 
-    for (const field of fields) {
-      const row = document.createElement("div");
-      row.className = "field-row";
-
-      const label = document.createElement("div");
-      const requiredTag = field.required ? " (required)" : "";
-      const widgetHint = field.hint?.widget ? ` [${field.hint.widget}]` : "";
-      label.innerHTML = `<strong>${field.label}</strong>${requiredTag}${widgetHint}<div class="field-meta">${field.name}${field.description ? ` - ${field.description}` : ""}</div>`;
-      row.appendChild(label);
-      row.appendChild(_renderChainFieldInput(stage, field));
-      card.appendChild(row);
+    const ordered = _orderedFieldsByLayout(plugin, fields);
+    for (const field of ordered.orderedFields) {
+      _appendFieldRow(card, field, _renderChainFieldInput(stage, field));
+    }
+    if (ordered.hasLayout) {
+      _appendMoreSection(card, ordered.moreFields, (field) => _renderChainFieldInput(stage, field));
     }
 
     chainContainer.appendChild(card);
   });
 
   _renderChainPayloadPreview();
+  _refreshFineSteps();
 }
 
 function _chainFromRpcPayload(rawChain) {
@@ -1587,10 +1926,29 @@ timelineStageFilter.addEventListener("change", () => {
   _renderTimelineEntries();
 });
 
+window.addEventListener("keydown", (event) => {
+  _setModifierState(_modifierStateFromKeyboardEvent(event));
+});
+
+window.addEventListener("keyup", (event) => {
+  _setModifierState(_modifierStateFromKeyboardEvent(event));
+});
+
+window.addEventListener("blur", () => {
+  _setModifierState({
+    shift: false,
+    alt: false,
+    ctrl: false,
+    meta: false,
+  });
+});
+
 projectDirInput.addEventListener("change", maybeSeedPackOut);
 projectDirInput.addEventListener("blur", maybeSeedPackOut);
 
 renderChainPluginSelect();
 renderPluginChainEditor();
 renderRenderArtifactsViewer();
+_renderFineModeIndicator();
+_refreshFineSteps();
 setStatus("Ready. Start with rpc.discover.");

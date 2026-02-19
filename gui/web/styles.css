@@ -56,6 +56,33 @@ h3 {
   font-size: 0.96rem;
 }
 
+.fine-indicator-row {
+  margin: 0.35rem 0 0;
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.fine-indicator {
+  display: inline-block;
+  min-width: 4rem;
+  text-align: center;
+  border: 1px solid #b9c8d2;
+  border-radius: 999px;
+  padding: 0.12rem 0.55rem;
+  background: #edf3f7;
+  color: #40505c;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.fine-indicator.active {
+  border-color: #0b5f87;
+  background: #0b5f87;
+  color: #ffffff;
+}
+
 label {
   display: grid;
   gap: 0.3rem;
@@ -164,6 +191,44 @@ button:hover {
   gap: 0.55rem;
   align-items: center;
   margin-bottom: 0.45rem;
+}
+
+.field-more {
+  margin-top: 0.55rem;
+  border-top: 1px dashed #d7e1e8;
+  padding-top: 0.55rem;
+}
+
+.field-more h4 {
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.range-with-entry {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) 100px;
+  gap: 0.45rem;
+  align-items: center;
+  width: 100%;
+}
+
+.range-with-entry input[type="range"] {
+  width: 100%;
+}
+
+.control-with-units {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.control-units {
+  color: var(--muted);
+  font-size: 0.86rem;
+  min-width: 2.1rem;
 }
 
 .field-meta {
@@ -275,6 +340,10 @@ button:hover {
 
 @media (max-width: 740px) {
   .field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .range-with-entry {
     grid-template-columns: 1fr;
   }
 }

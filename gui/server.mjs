@@ -96,6 +96,15 @@ function _pluginSnapshotOutPath(pluginId) {
   return path.join(os.tmpdir(), `mmo_gui_snapshot_${safePluginId}_${suffix}.json`);
 }
 
+async function _loadJsonObject(pathValue) {
+  const raw = await fs.readFile(pathValue, "utf8");
+  const parsed = JSON.parse(raw);
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+  return parsed;
+}
+
 function _looksLikeRenderRequestPath(pathValue) {
   const normalized = _pathToPosix(path.resolve(pathValue));
   return normalized.endsWith("/renders/render_request.json");
@@ -158,12 +167,7 @@ async function _loadSnapshot(layoutPath, viewport) {
       ],
       { acceptedExitCodes: [0, 2], timeoutMs: 20_000 },
     );
-    const snapshotRaw = await fs.readFile(tempOut, "utf8");
-    const parsed = JSON.parse(snapshotRaw);
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return null;
-    }
-    return parsed;
+    return await _loadJsonObject(tempOut);
   } finally {
     await fs.unlink(tempOut).catch(() => {});
   }
@@ -203,10 +207,16 @@ async function _enrichPluginEntry(pluginEntry, pluginsDir, viewport) {
         : [];
 
     let layoutSnapshot = null;
+    let layoutDocument = null;
     const layoutPath = typeof pluginDetails?.ui_layout?.path === "string"
       ? pluginDetails.ui_layout.path
       : null;
     if (layoutPath) {
+      try {
+        layoutDocument = await _loadJsonObject(layoutPath);
+      } catch {
+        layoutDocument = null;
+      }
       layoutSnapshot = await _loadSnapshot(layoutPath, viewport);
     }
 
@@ -217,6 +227,7 @@ async function _enrichPluginEntry(pluginEntry, pluginsDir, viewport) {
       config_schema: configSchema && typeof configSchema === "object" ? configSchema : null,
       ui_hints: uiHints,
       ui_layout: pluginDetails?.ui_layout || entry?.ui_layout || null,
+      ui_layout_document: layoutDocument,
       ui_layout_snapshot_meta: pluginDetails?.ui_layout_snapshot || entry?.ui_layout_snapshot || null,
       ui_layout_snapshot: layoutSnapshot,
     };
