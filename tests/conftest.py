@@ -75,7 +75,7 @@ def _is_within(path: Path, root: Path) -> bool:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _enforce_repo_local_temp_dir() -> None:
+def _enforce_selected_temp_dir() -> None:
     from mmo.resources import temp_dir
 
     temp_root = temp_dir()
@@ -92,7 +92,7 @@ def _enforce_repo_local_temp_dir() -> None:
         active_temp = Path(tempfile.gettempdir()).resolve()
         resolved_root = temp_root.resolve()
         assert _is_within(active_temp, resolved_root), (
-            "tempfile.gettempdir() must be inside repo-local temp root: "
+            "tempfile.gettempdir() must be inside selected temp root: "
             f"tempfile={_to_posix(active_temp)} root={_to_posix(resolved_root)}"
         )
         yield

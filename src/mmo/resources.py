@@ -12,13 +12,16 @@ Priority for cache directory:
 
 Priority for temporary directory:
   1. ``MMO_TEMP_DIR`` env var.
-  2. ``<repo_root>/.mmo_tmp/<pid>`` when running from a checkout.
+  2. ``<os_temp>/mmo_tmp/<pid>``.
+  3. ``<repo_root>/.mmo_tmp/<pid>`` when running from a checkout.
 """
 
 from __future__ import annotations
 
 import os
 import sys
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -26,6 +29,14 @@ from typing import Optional
 
 _REQUIRED_SUBDIRS = ("schemas", "ontology", "presets")
 _TEMP_DIR_ERROR_MESSAGE = "MMO temporary directory is unavailable."
+
+
+@dataclass(frozen=True)
+class TempDirSelection:
+    path: Path
+    root: Path
+    source: str
+    fallback: bool
 
 
 def _has_required_subdirs(root: Path) -> bool:
@@ -167,16 +178,52 @@ def _ensure_real_directory(path: Path) -> Path:
     return resolved
 
 
-def default_temp_dir() -> Path:
-    """Return a deterministic repo-local temporary directory."""
+def _os_temp_root() -> Path:
+    base = Path(tempfile.gettempdir()).expanduser()
+    pid_text = str(os.getpid())
+    if base.name == pid_text and base.parent.name == "mmo_tmp":
+        return base.parent
+    if base.name == "mmo_tmp":
+        return base
+    return base / "mmo_tmp"
+
+
+def _temp_dir_candidates() -> list[tuple[str, Path, Path]]:
+    candidates: list[tuple[str, Path, Path]] = []
     env = os.environ.get("MMO_TEMP_DIR")
     if env:
-        return _ensure_real_directory(Path(env).expanduser())
+        env_path = Path(env).expanduser()
+        candidates.append(("env:MMO_TEMP_DIR", env_path, env_path))
+
+    os_temp_root = _os_temp_root()
+    candidates.append(("os_temp", os_temp_root / str(os.getpid()), os_temp_root))
 
     repo = _repo_checkout_root()
-    if repo is None:
-        raise RuntimeError(_TEMP_DIR_ERROR_MESSAGE)
-    return _ensure_real_directory(repo / ".mmo_tmp" / str(os.getpid()))
+    if repo is not None:
+        repo_temp_root = repo / ".mmo_tmp"
+        candidates.append(("repo_local", repo_temp_root / str(os.getpid()), repo_temp_root))
+
+    return candidates
+
+
+def temp_dir_selection() -> TempDirSelection:
+    for index, (source, candidate_path, candidate_root) in enumerate(_temp_dir_candidates()):
+        try:
+            resolved = _ensure_real_directory(candidate_path)
+        except RuntimeError:
+            continue
+        return TempDirSelection(
+            path=resolved,
+            root=candidate_root.resolve(),
+            source=source,
+            fallback=index > 0,
+        )
+    raise RuntimeError(_TEMP_DIR_ERROR_MESSAGE)
+
+
+def default_temp_dir() -> Path:
+    """Return a writable temporary directory selected from ordered candidates."""
+    return temp_dir_selection().path
 
 
 def temp_dir() -> Path:

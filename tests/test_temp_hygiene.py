@@ -6,9 +6,6 @@ from pathlib import Path
 
 from mmo.resources import temp_dir
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-_MMO_TMP_ROOT = (_REPO_ROOT / ".mmo_tmp").resolve()
-
 
 def _is_within(path: Path, root: Path) -> bool:
     try:
@@ -19,13 +16,14 @@ def _is_within(path: Path, root: Path) -> bool:
 
 
 class TestTempHygiene(unittest.TestCase):
-    def test_tempfile_gettempdir_is_repo_local(self) -> None:
+    def test_tempfile_gettempdir_is_within_selected_temp_root(self) -> None:
+        selected_root = temp_dir().resolve()
         current_temp = Path(tempfile.gettempdir()).resolve()
         self.assertTrue(
-            _is_within(current_temp, _MMO_TMP_ROOT),
+            _is_within(current_temp, selected_root),
             (
-                "Expected tempfile.gettempdir() to be inside repo-local temp root: "
-                f"tempfile={current_temp.as_posix()} root={_MMO_TMP_ROOT.as_posix()}"
+                "Expected tempfile.gettempdir() to be inside selected temp root: "
+                f"tempfile={current_temp.as_posix()} root={selected_root.as_posix()}"
             ),
         )
 

@@ -12,7 +12,7 @@ from mmo.resources import (
     ontology_dir,
     presets_dir,
     schemas_dir,
-    temp_dir,
+    temp_dir_selection,
 )
 
 _ENV_OVERRIDE_KEYS: tuple[str, ...] = (
@@ -76,13 +76,24 @@ def _env_override_entry(name: str) -> dict[str, Any]:
     }
 
 
+def _temp_root_selection_text(*, source: str, root: Path, fallback: bool) -> str:
+    fallback_text = "true" if fallback else "false"
+    return f"source={source};root={_normalize_path(root)};fallback={fallback_text}"
+
+
 def build_env_doctor_report() -> dict[str, Any]:
     resolved_data_root = data_root()
     resolved_schemas_dir = schemas_dir()
     resolved_ontology_dir = ontology_dir()
     resolved_presets_dir = presets_dir()
     resolved_cache_dir = default_cache_dir()
-    resolved_temp_dir = temp_dir()
+    resolved_temp_selection = temp_dir_selection()
+    resolved_temp_dir = resolved_temp_selection.path
+    temp_root_selection = _temp_root_selection_text(
+        source=resolved_temp_selection.source,
+        root=resolved_temp_selection.root,
+        fallback=resolved_temp_selection.fallback,
+    )
 
     env_overrides = {
         name: _env_override_entry(name)
@@ -102,6 +113,7 @@ def build_env_doctor_report() -> dict[str, Any]:
             "presets_dir": _normalize_path(resolved_presets_dir),
             "schemas_dir": _normalize_path(resolved_schemas_dir),
             "temp_dir": _normalize_path(resolved_temp_dir),
+            "temp_root_selection": temp_root_selection,
         },
         "checks": {
             "cache_dir_writable": _is_writable_directory(resolved_cache_dir),
@@ -138,6 +150,7 @@ def render_env_doctor_text(report: dict[str, Any]) -> str:
         f"paths.presets_dir={_as_text(paths_payload.get('presets_dir'))}",
         f"paths.cache_dir={_as_text(paths_payload.get('cache_dir'))}",
         f"paths.temp_dir={_as_text(paths_payload.get('temp_dir'))}",
+        f"paths.temp_root_selection={_as_text(paths_payload.get('temp_root_selection'))}",
         f"checks.cache_dir_writable={_as_bool_text(checks_payload.get('cache_dir_writable'))}",
         f"checks.temp_dir_writable={_as_bool_text(checks_payload.get('temp_dir_writable'))}",
         f"checks.data_root_readable={_as_bool_text(checks_payload.get('data_root_readable'))}",

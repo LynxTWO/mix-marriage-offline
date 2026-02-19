@@ -40,6 +40,7 @@ class TestCliEnvDoctor(unittest.TestCase):
             payload["paths"]["presets_dir"],
             payload["paths"]["cache_dir"],
             payload["paths"]["temp_dir"],
+            payload["paths"]["temp_root_selection"],
             payload["env_overrides"]["MMO_DATA_ROOT"]["path"],
             payload["env_overrides"]["MMO_CACHE_DIR"]["path"],
             payload["env_overrides"]["MMO_TEMP_DIR"]["path"],
@@ -82,6 +83,7 @@ class TestCliEnvDoctor(unittest.TestCase):
                 "presets_dir",
                 "schemas_dir",
                 "temp_dir",
+                "temp_root_selection",
             ],
         )
         self.assertEqual(
@@ -102,6 +104,9 @@ class TestCliEnvDoctor(unittest.TestCase):
         self.assertTrue(payload["checks"]["cache_dir_writable"])
         self.assertTrue(payload["checks"]["temp_dir_writable"])
         self.assertTrue(payload["checks"]["data_root_readable"])
+        self.assertIn("source=", payload["paths"]["temp_root_selection"])
+        self.assertIn("root=", payload["paths"]["temp_root_selection"])
+        self.assertIn("fallback=", payload["paths"]["temp_root_selection"])
         self._assert_forward_slash_paths(payload)
 
     def test_env_doctor_text_has_stable_line_order(self) -> None:
@@ -136,6 +141,7 @@ class TestCliEnvDoctor(unittest.TestCase):
                 "paths.presets_dir",
                 "paths.cache_dir",
                 "paths.temp_dir",
+                "paths.temp_root_selection",
                 "checks.cache_dir_writable",
                 "checks.temp_dir_writable",
                 "checks.data_root_readable",
@@ -153,3 +159,5 @@ class TestCliEnvDoctor(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+# hash-pad-111
