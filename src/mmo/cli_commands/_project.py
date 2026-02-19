@@ -1369,6 +1369,9 @@ def _run_project_render_run(
     if validate_exit != 0:
         return validate_exit
 
+    if event_log_force and not event_log:
+        print("--event-log-force requires --event-log.", file=sys.stderr)
+        return 1
     if preflight_force and not preflight:
         print("--preflight-force requires --preflight.", file=sys.stderr)
         return 1
@@ -1453,8 +1456,14 @@ def _run_project_render_run(
         paths_written.append(event_log_out_path.resolve().as_posix())
     if preflight_out_path is not None:
         paths_written.append(preflight_out_path.resolve().as_posix())
+    run_id: str | None = None
     if resolved_execute_out_path is not None and resolved_execute_out_path.is_file():
         paths_written.append(resolved_execute_out_path.resolve().as_posix())
+        execute_payload = _load_json_object_if_exists(resolved_execute_out_path)
+        if isinstance(execute_payload, dict):
+            raw_run_id = execute_payload.get("run_id")
+            if isinstance(raw_run_id, str) and raw_run_id.strip():
+                run_id = raw_run_id.strip()
 
     summary: dict[str, Any] = {
         "job_count": job_count,
@@ -1462,6 +1471,8 @@ def _run_project_render_run(
         "plan_id": str(plan_payload.get("plan_id", "")),
         "targets": targets,
     }
+    if run_id is not None:
+        summary["run_id"] = run_id
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0
 

@@ -162,6 +162,9 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
                 "plan_id",
                 "targets",
             ],
+            "optional_keys": [
+                "run_id",
+            ],
         },
     },
     "project.pack": {

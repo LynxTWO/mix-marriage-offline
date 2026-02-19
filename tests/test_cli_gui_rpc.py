@@ -253,6 +253,188 @@ class TestGuiRpcStableErrors(unittest.TestCase):
         self.assertNotIn("Internal RPC error.", message)
 
 
+class TestGuiRpcProjectRenderRun(unittest.TestCase):
+    def test_event_log_force_requires_event_log_gate(self) -> None:
+        project_dir, _ = _init_project(_SANDBOX / "render_run_event_log_force_gate")
+        exit_code, responses, _, stderr = _run_rpc(
+            [
+                {
+                    "id": "req-render-run-event-log-force-only",
+                    "method": "project.render_run",
+                    "params": {
+                        "project_dir": str(project_dir),
+                        "force": True,
+                        "event_log_force": True,
+                    },
+                }
+            ]
+        )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr, "")
+        self.assertEqual(len(responses), 1)
+
+        response = responses[0]
+        self.assertEqual(response["id"], "req-render-run-event-log-force-only")
+        self.assertFalse(response["ok"])
+        error = response.get("error")
+        self.assertIsInstance(error, dict)
+        if not isinstance(error, dict):
+            return
+        self.assertEqual(error.get("code"), "RPC.METHOD_FAILED")
+        self.assertIn("--event-log-force requires --event-log", str(error.get("message", "")))
+
+    def test_safe_run_supports_explicit_gates_and_returns_run_id(self) -> None:
+        project_dir, _ = _init_project(_SANDBOX / "render_run_safe_run")
+
+        def _fake_render_run_command(
+            *,
+            repo_root: Path,
+            request_path: Path,
+            scene_path: Path,
+            routing_plan_path: Path | None,
+            plan_out_path: Path,
+            report_out_path: Path,
+            force: bool,
+            event_log_out_path: Path | None,
+            event_log_force: bool,
+            preflight_out_path: Path | None = None,
+            preflight_force: bool = False,
+            execute_out_path: Path | None = None,
+            execute_force: bool = False,
+        ) -> int:
+            del repo_root, request_path, scene_path, routing_plan_path
+            del force, event_log_force, preflight_force, execute_force
+            plan_out_path.parent.mkdir(parents=True, exist_ok=True)
+            plan_out_path.write_text(
+                json.dumps(
+                    {
+                        "plan_id": "PLAN.rpc.safe_run.01234567",
+                        "jobs": [
+                            {"job_id": "JOB.1"},
+                            {"job_id": "JOB.2"},
+                        ],
+                        "targets": [
+                            "TARGET.STEREO.2_0",
+                            "TARGET.STEREO.2_0",
+                        ],
+                    },
+                    indent=2,
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            report_out_path.parent.mkdir(parents=True, exist_ok=True)
+            report_out_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "0.1.0",
+                        "plan_id": "PLAN.rpc.safe_run.01234567",
+                    },
+                    indent=2,
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            if preflight_out_path is not None:
+                preflight_out_path.parent.mkdir(parents=True, exist_ok=True)
+                preflight_out_path.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": "0.1.0",
+                            "plan_id": "PLAN.rpc.safe_run.01234567",
+                            "checks": [],
+                            "issues": [],
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    ),
+                    encoding="utf-8",
+                )
+            if execute_out_path is not None:
+                execute_out_path.parent.mkdir(parents=True, exist_ok=True)
+                execute_out_path.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": "0.1.0",
+                            "run_id": "RUN.0123456789abcdef",
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    ),
+                    encoding="utf-8",
+                )
+            if event_log_out_path is not None:
+                event_log_out_path.parent.mkdir(parents=True, exist_ok=True)
+                event_log_out_path.write_text(
+                    json.dumps(
+                        {
+                            "kind": "info",
+                            "what": "render-run completed",
+                        },
+                        sort_keys=True,
+                    ) + "\n",
+                    encoding="utf-8",
+                )
+            return 0
+
+        with patch(
+            "mmo.cli_commands._scene._run_render_run_command",
+            side_effect=_fake_render_run_command,
+        ):
+            exit_code, responses, _, stderr = _run_rpc(
+                [
+                    {
+                        "id": "req-write",
+                        "method": "project.write_render_request",
+                        "params": {
+                            "project_dir": str(project_dir),
+                            "set": {
+                                "dry_run": False,
+                            },
+                        },
+                    },
+                    {
+                        "id": "req-safe-run",
+                        "method": "project.render_run",
+                        "params": {
+                            "project_dir": str(project_dir),
+                            "force": True,
+                            "event_log": True,
+                            "event_log_force": True,
+                            "preflight": True,
+                            "preflight_force": True,
+                            "execute": True,
+                            "execute_force": True,
+                        },
+                    },
+                ]
+            )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr, "")
+        self.assertEqual(len(responses), 2)
+        self.assertTrue(responses[0]["ok"])
+        self.assertTrue(responses[1]["ok"])
+
+        result = responses[1]["result"]
+        self.assertEqual(result["run_id"], "RUN.0123456789abcdef")
+        self.assertEqual(result["job_count"], 2)
+        self.assertEqual(result["plan_id"], "PLAN.rpc.safe_run.01234567")
+        self.assertEqual(result["targets"], ["TARGET.STEREO.2_0"])
+
+        expected_paths = [
+            (project_dir / "renders" / "render_plan.json").resolve().as_posix(),
+            (project_dir / "renders" / "render_report.json").resolve().as_posix(),
+            (project_dir / "renders" / "event_log.jsonl").resolve().as_posix(),
+            (project_dir / "renders" / "render_preflight.json").resolve().as_posix(),
+            (project_dir / "renders" / "render_execute.json").resolve().as_posix(),
+        ]
+        self.assertEqual(result["paths_written"], expected_paths)
+        for path_value in result["paths_written"]:
+            self.assertNotIn("\\", path_value)
+
+
 class TestGuiRpcDiscover(unittest.TestCase):
     def test_rpc_discover_is_byte_identical_across_runs(self) -> None:
         request = {
@@ -329,8 +511,17 @@ class TestGuiRpcDiscover(unittest.TestCase):
         project_render_run_optional = method_details["project.render_run"]["params_schema"][
             "optional"
         ]
+        self.assertIn("event_log", project_render_run_optional)
+        self.assertIn("event_log_force", project_render_run_optional)
+        self.assertIn("preflight", project_render_run_optional)
+        self.assertIn("preflight_force", project_render_run_optional)
         self.assertIn("execute", project_render_run_optional)
+        self.assertIn("execute_force", project_render_run_optional)
         self.assertIn("execute_out", project_render_run_optional)
+
+        project_render_run_shape = method_details["project.render_run"]["result_shape"]
+        optional_keys = project_render_run_shape.get("optional_keys", [])
+        self.assertIn("run_id", optional_keys)
 
     def test_unknown_method_behavior_unchanged_after_rpc_discover(self) -> None:
         requests = [
