@@ -16,7 +16,7 @@ dependencies = [
 [project.optional-dependencies]
 pdf = ["reportlab>=4"]
 truth = ["numpy>=2.0"]
-dev = ["pytest>=7.0"]
+dev = ["pytest>=7.0", "pytest-xdist>=3.6.1"]
 
 [project.scripts]
 mmo = "mmo.cli:main"

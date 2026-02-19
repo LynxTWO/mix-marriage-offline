@@ -11,5 +11,10 @@ $env:TMP = $tmpRoot
 $env:TEMP = $tmpRoot
 $env:TMPDIR = $tmpRoot
 
-& python -m pytest @args --basetemp $baseTemp
+$xdist = @()
+if ($env:MMO_PYTEST_N) {
+  $xdist = @('-n', $env:MMO_PYTEST_N, '--dist', 'loadscope')
+}
+
+& python -m pytest @xdist @args --basetemp $baseTemp
 exit $LASTEXITCODE

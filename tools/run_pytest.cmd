@@ -27,5 +27,13 @@ set "TMP=%TMP_ROOT%"
 set "TEMP=%TMP_ROOT%"
 set "TMPDIR=%TMP_ROOT%"
 
-python -m pytest %* --basetemp "%BASE_TEMP%"
+REM Optional parallelism via pytest-xdist.
+REM Set MMO_PYTEST_N to a worker count (e.g. 4) or "auto".
+REM Example: set MMO_PYTEST_N=auto & tools\run_pytest.cmd -q
+set "PYTEST_XDIST_ARGS="
+if defined MMO_PYTEST_N (
+  set "PYTEST_XDIST_ARGS=-n %MMO_PYTEST_N% --dist loadscope"
+)
+
+python -m pytest %PYTEST_XDIST_ARGS% %* --basetemp "%BASE_TEMP%"
 exit /b %ERRORLEVEL%
