@@ -22,6 +22,15 @@ const _MIME_TYPES = {
   ".mjs": "text/javascript; charset=utf-8",
 };
 
+const _ALLOWED_RENDER_ARTIFACT_NAMES = new Set([
+  "event_log.jsonl",
+  "render_execute.json",
+  "render_plan.json",
+  "render_preflight.json",
+  "render_report.json",
+  "render_request.json",
+]);
+
 function _pathToPosix(pathValue) {
   return pathValue.replace(/\\/g, "/");
 }
@@ -90,6 +99,47 @@ function _pluginSnapshotOutPath(pluginId) {
 function _looksLikeRenderRequestPath(pathValue) {
   const normalized = _pathToPosix(path.resolve(pathValue));
   return normalized.endsWith("/renders/render_request.json");
+}
+
+function _renderArtifactInfo(pathValue) {
+  const normalized = _pathToPosix(path.resolve(pathValue));
+  const match = normalized.match(/\/renders\/([^/]+)$/);
+  if (!match) {
+    return null;
+  }
+  const artifactName = match[1].toLowerCase();
+  if (!_ALLOWED_RENDER_ARTIFACT_NAMES.has(artifactName)) {
+    return null;
+  }
+  return {
+    artifactName,
+    normalizedPath: normalized,
+  };
+}
+
+function _parseJsonLines(text) {
+  const entries = [];
+  const lines = text.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const rawLine = lines[index];
+    const line = rawLine.trim();
+    if (!line) {
+      continue;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(line);
+    } catch (error) {
+      throw new Error(
+        `Invalid JSONL at line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error(`JSONL line ${index + 1} must be a JSON object.`);
+    }
+    entries.push(parsed);
+  }
+  return entries;
 }
 
 async function _loadSnapshot(layoutPath, viewport) {
@@ -256,6 +306,56 @@ async function _handleRenderRequestRead(response, body) {
   });
 }
 
+async function _handleRenderArtifactRead(response, body) {
+  const artifactPathRaw = body.artifact_path;
+  if (typeof artifactPathRaw !== "string" || !artifactPathRaw.trim()) {
+    _sendJson(response, 400, { error: "artifact_path must be a non-empty string." });
+    return;
+  }
+
+  const artifactPath = path.resolve(artifactPathRaw);
+  const artifactInfo = _renderArtifactInfo(artifactPath);
+  if (!artifactInfo) {
+    _sendJson(response, 400, {
+      error: "artifact_path must point to an allowlisted renders artifact file.",
+    });
+    return;
+  }
+
+  let raw;
+  try {
+    raw = await fs.readFile(artifactPath, "utf8");
+  } catch (error) {
+    _sendJson(response, 400, {
+      error: `Failed to read render artifact: ${error instanceof Error ? error.message : String(error)}`,
+    });
+    return;
+  }
+
+  let artifact;
+  const format = artifactInfo.artifactName.endsWith(".jsonl") ? "jsonl" : "json";
+  try {
+    artifact = format === "jsonl" ? _parseJsonLines(raw) : JSON.parse(raw);
+  } catch (error) {
+    _sendJson(response, 400, {
+      error: `Failed to parse render artifact: ${error instanceof Error ? error.message : String(error)}`,
+    });
+    return;
+  }
+
+  if (format === "json" && (artifact === null || typeof artifact !== "object")) {
+    _sendJson(response, 400, { error: "Render artifact JSON must be an object or array." });
+    return;
+  }
+
+  _sendJson(response, 200, {
+    artifact_name: artifactInfo.artifactName,
+    artifact_path: artifactInfo.normalizedPath,
+    format,
+    artifact,
+  });
+}
+
 async function _handleApiRequest(request, response, pathname) {
   if (request.method === "POST" && pathname === "/api/rpc") {
     let body;
@@ -313,6 +413,20 @@ async function _handleApiRequest(request, response, pathname) {
       return true;
     }
     await _handleRenderRequestRead(response, body);
+    return true;
+  }
+
+  if (request.method === "POST" && pathname === "/api/render-artifact") {
+    let body;
+    try {
+      body = await _readJsonBody(request);
+    } catch (error) {
+      _sendJson(response, 400, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return true;
+    }
+    await _handleRenderArtifactRead(response, body);
     return true;
   }
 

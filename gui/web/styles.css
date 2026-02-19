@@ -51,6 +51,11 @@ h2 {
   font-size: 1.05rem;
 }
 
+h3 {
+  margin: 0.7rem 0 0.45rem 0;
+  font-size: 0.96rem;
+}
+
 label {
   display: grid;
   gap: 0.3rem;
@@ -134,6 +139,11 @@ button:hover {
 .chain-container {
   display: grid;
   gap: 0.75rem;
+}
+
+.timeline-container {
+  display: grid;
+  gap: 0.6rem;
 }
 
 .plugin-card {
@@ -242,6 +252,25 @@ button:hover {
 .field-input-invalid {
   border-color: #b72f3d;
   background: #fff2f4;
+}
+
+.timeline-item {
+  border: 1px solid #d5e2ea;
+  border-radius: 8px;
+  padding: 0.55rem;
+  background: #fbfdff;
+}
+
+.timeline-item-title {
+  font-size: 0.93rem;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+
+.timeline-item-meta {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
 }
 
 @media (max-width: 740px) {

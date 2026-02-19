@@ -16,6 +16,13 @@ const pluginsContainer = document.getElementById("plugins-container");
 const chainContainer = document.getElementById("chain-container");
 const chainOutput = document.getElementById("chain-output");
 const intentOutput = document.getElementById("intent-output");
+const renderSummaryOutput = document.getElementById("render-summary-output");
+const determinismOutput = document.getElementById("determinism-output");
+const renderRefusalOutput = document.getElementById("render-refusal-output");
+const renderExecuteOutput = document.getElementById("render-execute-output");
+const timelineContainer = document.getElementById("timeline-container");
+const timelineJobFilter = document.getElementById("timeline-job-filter");
+const timelineStageFilter = document.getElementById("timeline-stage-filter");
 
 const projectDirInput = document.getElementById("project-dir-input");
 const stemsRootInput = document.getElementById("stems-root-input");
@@ -35,6 +42,14 @@ const state = {
     render_request_path: "",
     target_ids: [],
     target_layout_ids: [],
+  },
+  renderArtifacts: {
+    eventLogEntries: [],
+    execute: null,
+    lastRefusal: null,
+    report: null,
+    timelineFilterJob: "",
+    timelineFilterStage: "",
   },
 };
 
@@ -85,7 +100,10 @@ async function apiRpc(method, params = {}) {
   if (rpcResponse.ok !== true) {
     const code = rpcResponse.error?.code || "RPC.ERROR";
     const message = rpcResponse.error?.message || "Unknown RPC error.";
-    throw new Error(`${code}: ${message}`);
+    const error = new Error(`${code}: ${message}`);
+    error.rpcCode = code;
+    error.rpcMessage = message;
+    throw error;
   }
   return rpcResponse.result || {};
 }
@@ -121,6 +139,24 @@ async function loadRenderRequest(renderRequestPath) {
   return {
     path: typeof payload.render_request_path === "string" ? payload.render_request_path : "",
     payload: payload.render_request,
+  };
+}
+
+async function loadRenderArtifact(artifactPath) {
+  const response = await fetch("/api/render-artifact", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ artifact_path: artifactPath }),
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || `HTTP ${response.status}`);
+  }
+  return {
+    artifact: payload.artifact,
+    artifactName: typeof payload.artifact_name === "string" ? payload.artifact_name : "",
+    format: typeof payload.format === "string" ? payload.format : "",
+    path: typeof payload.artifact_path === "string" ? payload.artifact_path : "",
   };
 }
 
@@ -401,6 +437,507 @@ function _normalizeIdList(rawValue) {
     unique.add(trimmed);
   }
   return Array.from(unique).sort();
+}
+
+function _extractIssueId(text) {
+  const candidate = typeof text === "string" ? text : "";
+  const match = candidate.match(/ISSUE\.RENDER\.RUN\.[A-Z0-9_]+/);
+  return match ? match[0] : "";
+}
+
+function _resetRenderArtifactsState() {
+  state.renderArtifacts = {
+    eventLogEntries: [],
+    execute: null,
+    lastRefusal: null,
+    report: null,
+    timelineFilterJob: "",
+    timelineFilterStage: "",
+  };
+}
+
+function _recordRenderRefusal(error) {
+  const rpcCode = typeof error?.rpcCode === "string" ? error.rpcCode : "RPC.ERROR";
+  const rpcMessage = typeof error?.rpcMessage === "string"
+    ? error.rpcMessage
+    : (error instanceof Error ? error.message : String(error));
+  const issueId = _extractIssueId(rpcMessage);
+  state.renderArtifacts.lastRefusal = {
+    issue_id: issueId || null,
+    message: rpcMessage,
+    rpc_code: rpcCode,
+  };
+}
+
+function _clearRenderRefusal() {
+  state.renderArtifacts.lastRefusal = null;
+}
+
+function _extractReasonFromNotes(notes) {
+  if (!Array.isArray(notes)) {
+    return "";
+  }
+  for (const item of notes) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const trimmed = item.trim();
+    if (!trimmed) {
+      continue;
+    }
+    if (trimmed.toLowerCase().startsWith("reason:")) {
+      return trimmed.slice("reason:".length).trim();
+    }
+  }
+  return "";
+}
+
+function _extractIssueIdFromNotes(notes) {
+  if (!Array.isArray(notes)) {
+    return "";
+  }
+  for (const item of notes) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const issueId = _extractIssueId(item);
+    if (issueId) {
+      return issueId;
+    }
+  }
+  return "";
+}
+
+function _artifactPathToJobIds() {
+  const map = new Map();
+  const append = (pathValue, jobId) => {
+    const normalizedPath = normalizePath(pathValue);
+    if (!normalizedPath || !jobId) {
+      return;
+    }
+    const current = map.get(normalizedPath) || new Set();
+    current.add(jobId);
+    map.set(normalizedPath, current);
+  };
+
+  const executeJobs = Array.isArray(state.renderArtifacts.execute?.jobs)
+    ? state.renderArtifacts.execute.jobs
+    : [];
+  for (const job of executeJobs) {
+    if (!_isObject(job)) {
+      continue;
+    }
+    const jobId = typeof job.job_id === "string" ? job.job_id.trim() : "";
+    if (!jobId) {
+      continue;
+    }
+    const inputs = Array.isArray(job.inputs) ? job.inputs : [];
+    for (const input of inputs) {
+      if (_isObject(input) && typeof input.path === "string") {
+        append(input.path, jobId);
+      }
+    }
+    const outputs = Array.isArray(job.outputs) ? job.outputs : [];
+    for (const output of outputs) {
+      if (_isObject(output) && typeof output.path === "string") {
+        append(output.path, jobId);
+      }
+    }
+  }
+
+  const reportJobs = Array.isArray(state.renderArtifacts.report?.jobs)
+    ? state.renderArtifacts.report.jobs
+    : [];
+  for (const job of reportJobs) {
+    if (!_isObject(job)) {
+      continue;
+    }
+    const jobId = typeof job.job_id === "string" ? job.job_id.trim() : "";
+    if (!jobId) {
+      continue;
+    }
+    const outputs = Array.isArray(job.output_files) ? job.output_files : [];
+    for (const output of outputs) {
+      if (_isObject(output) && typeof output.file_path === "string") {
+        append(output.file_path, jobId);
+      }
+    }
+  }
+  return map;
+}
+
+function _inferEventJobIds(event, pathToJobIds) {
+  const jobIds = new Set();
+  const evidence = _isObject(event?.evidence) ? event.evidence : {};
+  const evidenceIds = Array.isArray(evidence.ids) ? evidence.ids : [];
+  for (const item of evidenceIds) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const trimmed = item.trim();
+    if (/^JOB\.[0-9]{3}$/.test(trimmed)) {
+      jobIds.add(trimmed);
+    }
+  }
+
+  const where = Array.isArray(event?.where) ? event.where : [];
+  for (const item of where) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const normalizedPath = normalizePath(item);
+    if (!normalizedPath) {
+      continue;
+    }
+    const mapped = pathToJobIds.get(normalizedPath);
+    if (!mapped) {
+      continue;
+    }
+    for (const jobId of mapped) {
+      jobIds.add(jobId);
+    }
+  }
+
+  const evidencePaths = Array.isArray(evidence.paths) ? evidence.paths : [];
+  for (const item of evidencePaths) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const normalizedPath = normalizePath(item);
+    if (!normalizedPath) {
+      continue;
+    }
+    const mapped = pathToJobIds.get(normalizedPath);
+    if (!mapped) {
+      continue;
+    }
+    for (const jobId of mapped) {
+      jobIds.add(jobId);
+    }
+  }
+  return Array.from(jobIds).sort();
+}
+
+function _inferEventStage(event) {
+  const where = Array.isArray(event?.where) ? event.where : [];
+  for (const item of where) {
+    if (typeof item === "string" && item.startsWith("plugin_chain.stage.")) {
+      return item;
+    }
+  }
+  const evidence = _isObject(event?.evidence) ? event.evidence : {};
+  const metrics = Array.isArray(evidence.metrics) ? evidence.metrics : [];
+  const stageMetric = metrics.find(
+    (metric) => _isObject(metric) && metric.name === "stage_index",
+  );
+  if (_isObject(stageMetric) && typeof stageMetric.value === "number") {
+    return `plugin_chain.stage.${String(stageMetric.value).padStart(3, "0")}`;
+  }
+  const codes = Array.isArray(evidence.codes) ? evidence.codes : [];
+  if (codes.length > 0 && typeof codes[0] === "string" && codes[0].trim()) {
+    return codes[0].trim();
+  }
+  return "general";
+}
+
+function _annotatedEventLogEntries() {
+  const entries = Array.isArray(state.renderArtifacts.eventLogEntries)
+    ? state.renderArtifacts.eventLogEntries
+    : [];
+  const pathToJobIds = _artifactPathToJobIds();
+  return entries.map((event, index) => {
+    const jobIds = _inferEventJobIds(event, pathToJobIds);
+    const stage = _inferEventStage(event);
+    const evidence = _isObject(event?.evidence) ? event.evidence : {};
+    const codes = Array.isArray(evidence.codes)
+      ? evidence.codes.filter((code) => typeof code === "string" && code.trim())
+      : [];
+    return {
+      ...event,
+      _codes: codes,
+      _index: index + 1,
+      _job_ids: jobIds,
+      _stage: stage,
+    };
+  });
+}
+
+function _setSelectOptions(selectElement, options, selectedValue) {
+  selectElement.innerHTML = "";
+  for (const optionRow of options) {
+    const option = document.createElement("option");
+    option.value = optionRow.value;
+    option.textContent = optionRow.label;
+    option.selected = optionRow.value === selectedValue;
+    selectElement.appendChild(option);
+  }
+}
+
+function _renderTimelineEntries() {
+  const entries = _annotatedEventLogEntries();
+  const availableJobIds = new Set();
+  const availableStages = new Set();
+  for (const entry of entries) {
+    for (const jobId of entry._job_ids) {
+      availableJobIds.add(jobId);
+    }
+    if (typeof entry._stage === "string" && entry._stage.trim()) {
+      availableStages.add(entry._stage);
+    }
+  }
+
+  const knownJobFilter = state.renderArtifacts.timelineFilterJob;
+  const knownStageFilter = state.renderArtifacts.timelineFilterStage;
+  const sortedJobIds = Array.from(availableJobIds).sort();
+  const sortedStages = Array.from(availableStages).sort();
+
+  if (knownJobFilter && !availableJobIds.has(knownJobFilter)) {
+    state.renderArtifacts.timelineFilterJob = "";
+  }
+  if (knownStageFilter && !availableStages.has(knownStageFilter)) {
+    state.renderArtifacts.timelineFilterStage = "";
+  }
+
+  _setSelectOptions(
+    timelineJobFilter,
+    [
+      { value: "", label: "All jobs" },
+      ...sortedJobIds.map((jobId) => ({ value: jobId, label: jobId })),
+    ],
+    state.renderArtifacts.timelineFilterJob,
+  );
+  _setSelectOptions(
+    timelineStageFilter,
+    [
+      { value: "", label: "All stages" },
+      ...sortedStages.map((stage) => ({ value: stage, label: stage })),
+    ],
+    state.renderArtifacts.timelineFilterStage,
+  );
+
+  const filtered = entries.filter((entry) => {
+    if (state.renderArtifacts.timelineFilterJob) {
+      if (!entry._job_ids.includes(state.renderArtifacts.timelineFilterJob)) {
+        return false;
+      }
+    }
+    if (state.renderArtifacts.timelineFilterStage) {
+      if (entry._stage !== state.renderArtifacts.timelineFilterStage) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  timelineContainer.innerHTML = "";
+  if (filtered.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "subtle";
+    empty.textContent = "No event log entries match the selected filters.";
+    timelineContainer.appendChild(empty);
+    return;
+  }
+
+  for (const entry of filtered) {
+    const article = document.createElement("article");
+    article.className = "timeline-item";
+
+    const title = document.createElement("div");
+    title.className = "timeline-item-title";
+    const what = typeof entry.what === "string" ? entry.what : "(no what)";
+    title.textContent = `#${entry._index} ${what}`;
+    article.appendChild(title);
+
+    const meta = document.createElement("div");
+    meta.className = "timeline-item-meta";
+    const kind = typeof entry.kind === "string" ? entry.kind : "-";
+    const scope = typeof entry.scope === "string" ? entry.scope : "-";
+    const jobIds = entry._job_ids.length > 0 ? entry._job_ids.join(", ") : "-";
+    meta.textContent = `kind=${kind}  scope=${scope}  job_id=${jobIds}  stage=${entry._stage}`;
+    article.appendChild(meta);
+
+    const details = document.createElement("pre");
+    details.className = "code-block";
+    details.textContent = JSON.stringify(
+      {
+        event_id: entry.event_id || null,
+        ts_utc: entry.ts_utc || null,
+        why: entry.why || "",
+        codes: entry._codes,
+        where: Array.isArray(entry.where) ? entry.where : [],
+      },
+      null,
+      2,
+    );
+    article.appendChild(details);
+    timelineContainer.appendChild(article);
+  }
+}
+
+function _renderRunSummaryBlock() {
+  const report = _isObject(state.renderArtifacts.report) ? state.renderArtifacts.report : null;
+  const jobs = Array.isArray(report?.jobs) ? report.jobs : [];
+  const summaryJobs = jobs
+    .filter((job) => _isObject(job))
+    .map((job) => {
+      const notes = Array.isArray(job.notes) ? job.notes : [];
+      const refusalReason = _extractReasonFromNotes(notes);
+      const refusalIssueId = _extractIssueId(refusalReason) || _extractIssueIdFromNotes(notes);
+      return {
+        job_id: typeof job.job_id === "string" ? job.job_id : "",
+        output_count: Array.isArray(job.output_files) ? job.output_files.length : 0,
+        refusal_issue_id: refusalIssueId || null,
+        refusal_reason: refusalReason || null,
+        status: typeof job.status === "string" ? job.status : "unknown",
+      };
+    });
+
+  renderSummaryOutput.textContent = JSON.stringify(
+    {
+      event_log_entries: Array.isArray(state.renderArtifacts.eventLogEntries)
+        ? state.renderArtifacts.eventLogEntries.length
+        : 0,
+      jobs: summaryJobs,
+      qa_status: report?.qa_gates?.status || null,
+      refusal: state.renderArtifacts.lastRefusal,
+      report_present: Boolean(report),
+    },
+    null,
+    2,
+  );
+}
+
+function _renderExecutePointersBlock() {
+  const execute = _isObject(state.renderArtifacts.execute) ? state.renderArtifacts.execute : null;
+  if (!execute) {
+    renderExecuteOutput.textContent = "render_execute.json not present for current project state.";
+    return;
+  }
+
+  const executeJobs = Array.isArray(execute.jobs) ? execute.jobs : [];
+  const compact = executeJobs
+    .filter((job) => _isObject(job))
+    .map((job) => ({
+      ffmpeg_argv: Array.isArray(job.ffmpeg_commands)
+        ? job.ffmpeg_commands
+          .filter((command) => _isObject(command))
+          .map((command) => Array.isArray(command.args) ? command.args : [])
+        : [],
+      ffmpeg_version: typeof job.ffmpeg_version === "string" ? job.ffmpeg_version : "",
+      inputs: Array.isArray(job.inputs) ? job.inputs : [],
+      job_id: typeof job.job_id === "string" ? job.job_id : "",
+      outputs: Array.isArray(job.outputs) ? job.outputs : [],
+    }));
+
+  renderExecuteOutput.textContent = JSON.stringify(
+    {
+      jobs: compact,
+      plan_sha256: execute.plan_sha256 || null,
+      request_sha256: execute.request_sha256 || null,
+      run_id: execute.run_id || null,
+    },
+    null,
+    2,
+  );
+}
+
+function _renderDeterminismReceipt() {
+  const execute = _isObject(state.renderArtifacts.execute) ? state.renderArtifacts.execute : null;
+  const outputSha = new Set();
+
+  const executeJobs = Array.isArray(execute?.jobs) ? execute.jobs : [];
+  for (const job of executeJobs) {
+    if (!_isObject(job)) {
+      continue;
+    }
+    const outputs = Array.isArray(job.outputs) ? job.outputs : [];
+    for (const output of outputs) {
+      if (_isObject(output) && typeof output.sha256 === "string" && output.sha256.trim()) {
+        outputSha.add(output.sha256.trim());
+      }
+    }
+  }
+
+  if (outputSha.size === 0) {
+    const reportJobs = Array.isArray(state.renderArtifacts.report?.jobs)
+      ? state.renderArtifacts.report.jobs
+      : [];
+    for (const job of reportJobs) {
+      if (!_isObject(job)) {
+        continue;
+      }
+      const outputs = Array.isArray(job.output_files) ? job.output_files : [];
+      for (const output of outputs) {
+        if (_isObject(output) && typeof output.sha256 === "string" && output.sha256.trim()) {
+          outputSha.add(output.sha256.trim());
+        }
+      }
+    }
+  }
+
+  determinismOutput.textContent = JSON.stringify(
+    {
+      output_sha256: Array.from(outputSha).sort(),
+      plan_sha: execute?.plan_sha256 || null,
+      request_sha: execute?.request_sha256 || null,
+      run_id: execute?.run_id || null,
+    },
+    null,
+    2,
+  );
+}
+
+function _renderRefusalBlock() {
+  if (state.renderArtifacts.lastRefusal) {
+    renderRefusalOutput.textContent = JSON.stringify(state.renderArtifacts.lastRefusal, null, 2);
+    return;
+  }
+  renderRefusalOutput.textContent = "No refusal captured in this session.";
+}
+
+function renderRenderArtifactsViewer() {
+  _renderRunSummaryBlock();
+  _renderDeterminismReceipt();
+  _renderRefusalBlock();
+  _renderExecutePointersBlock();
+  _renderTimelineEntries();
+}
+
+async function refreshRenderArtifactsFromProjectShow(projectShow) {
+  const reportPath = _artifactPathFromProjectShow(projectShow, "renders/render_report.json");
+  const executePath = _artifactPathFromProjectShow(projectShow, "renders/render_execute.json");
+  const eventLogPath = _artifactPathFromProjectShow(projectShow, "renders/event_log.jsonl");
+
+  let reportPayload = null;
+  let executePayload = null;
+  let eventLogEntries = [];
+
+  if (reportPath) {
+    const reportArtifact = await loadRenderArtifact(reportPath);
+    if (_isObject(reportArtifact.artifact)) {
+      reportPayload = reportArtifact.artifact;
+    }
+  }
+  if (executePath) {
+    const executeArtifact = await loadRenderArtifact(executePath);
+    if (_isObject(executeArtifact.artifact)) {
+      executePayload = executeArtifact.artifact;
+    }
+  }
+  if (eventLogPath) {
+    const eventLogArtifact = await loadRenderArtifact(eventLogPath);
+    if (Array.isArray(eventLogArtifact.artifact)) {
+      eventLogEntries = eventLogArtifact.artifact;
+    }
+  }
+
+  state.renderArtifacts = {
+    ...state.renderArtifacts,
+    eventLogEntries,
+    execute: executePayload,
+    report: reportPayload,
+  };
+  renderRenderArtifactsViewer();
 }
 
 function _renderIntentPreview() {
@@ -837,15 +1374,24 @@ async function runProjectRender() {
     throw new Error("Project directory is required.");
   }
 
+  _clearRenderRefusal();
+  renderRenderArtifactsViewer();
   setStatus("Calling project.render_run...");
-  const result = await apiRpc("project.render_run", {
-    project_dir: projectDir,
-    force: true,
-    event_log: true,
-    event_log_force: true,
-    execute: true,
-    execute_force: true,
-  });
+  let result;
+  try {
+    result = await apiRpc("project.render_run", {
+      project_dir: projectDir,
+      force: true,
+      event_log: true,
+      event_log_force: true,
+      execute: true,
+      execute_force: true,
+    });
+  } catch (error) {
+    _recordRenderRefusal(error);
+    renderRenderArtifactsViewer();
+    throw error;
+  }
   projectOutput.textContent = JSON.stringify(result, null, 2);
   setStatus("project.render_run completed. Refreshing project.show...");
   await refreshProjectShow();
@@ -916,9 +1462,16 @@ async function refreshProjectShow() {
   if (renderRequestPath) {
     const renderRequest = await loadRenderRequest(renderRequestPath);
     _hydrateRenderRequestIntent(renderRequest.path, renderRequest.payload);
-    setStatus("project.show hydration completed.");
   } else {
     _resetRenderRequestIntent();
+  }
+
+  setStatus("Loading render artifacts...");
+  await refreshRenderArtifactsFromProjectShow(result);
+
+  if (renderRequestPath) {
+    setStatus("project.show hydration completed.");
+  } else {
     setStatus("project.show completed (render_request missing).");
   }
 }
@@ -1024,9 +1577,20 @@ runRenderButton.addEventListener("click", async () => {
   }
 });
 
+timelineJobFilter.addEventListener("change", () => {
+  state.renderArtifacts.timelineFilterJob = timelineJobFilter.value;
+  _renderTimelineEntries();
+});
+
+timelineStageFilter.addEventListener("change", () => {
+  state.renderArtifacts.timelineFilterStage = timelineStageFilter.value;
+  _renderTimelineEntries();
+});
+
 projectDirInput.addEventListener("change", maybeSeedPackOut);
 projectDirInput.addEventListener("blur", maybeSeedPackOut);
 
 renderChainPluginSelect();
 renderPluginChainEditor();
+renderRenderArtifactsViewer();
 setStatus("Ready. Start with rpc.discover.");

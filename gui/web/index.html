@@ -86,6 +86,34 @@
       </section>
 
       <section class="panel">
+        <h2>Render Artifacts Viewer</h2>
+        <p class="subtle">
+          Shows post-run artifacts in-place: per-job status, execute pointers/hashes, event timeline,
+          and determinism receipt.
+        </p>
+        <h3>Run Summary</h3>
+        <pre id="render-summary-output" class="code-block"></pre>
+        <h3>Determinism Receipt</h3>
+        <pre id="determinism-output" class="code-block"></pre>
+        <h3>Refusal Details</h3>
+        <pre id="render-refusal-output" class="code-block"></pre>
+        <h3>Execute Pointers + Hashes</h3>
+        <pre id="render-execute-output" class="code-block"></pre>
+        <h3>Event Timeline</h3>
+        <div class="row align-end">
+          <label class="inline-field">
+            Job filter
+            <select id="timeline-job-filter"></select>
+          </label>
+          <label class="inline-field">
+            Stage filter
+            <select id="timeline-stage-filter"></select>
+          </label>
+        </div>
+        <div id="timeline-container" class="timeline-container"></div>
+      </section>
+
+      <section class="panel">
         <h2>Status</h2>
         <pre id="status-output" class="code-block"></pre>
       </section>
