@@ -32,6 +32,11 @@ REM Set MMO_PYTEST_N to a worker count (e.g. 4) or "auto".
 REM Example: set MMO_PYTEST_N=auto & tools\run_pytest.cmd -q
 set "PYTEST_XDIST_ARGS="
 if defined MMO_PYTEST_N (
+  python -c "import xdist" >nul 2>&1
+  if errorlevel 1 (
+    >&2 echo MMO_PYTEST_N is set but pytest-xdist is not installed. Install dev deps.
+    exit /b 2
+  )
   set "PYTEST_XDIST_ARGS=-n %MMO_PYTEST_N% --dist loadscope"
 )
 

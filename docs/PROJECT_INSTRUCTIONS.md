@@ -84,9 +84,14 @@ Stereo stems with baked pan/width are inference-only:
 - Preferred pytest entrypoint (Windows/OneDrive safe):
   - `tools\run_pytest.cmd -q`
   - `tools\run_pytest.cmd -q tests/test_tools_stem_corpus_scan.py`
-- `tools\run_pytest.cmd` forces `TMP`, `TEMP`, and `TMPDIR` into `<repo>\.tmp_pytest` and sets pytest `--basetemp` there so tempfile output does not pollute repo root and cleanup stays allowlist-only.
+- `tools\run_pytest.cmd` forces `TMP`, `TEMP`, and `TMPDIR` into a repo-local temp directory from `mmo.resources.temp_dir()` and sets pytest `--basetemp` there.
 - Optional PowerShell runner (useful if you need a `.ps1` entrypoint):
   - `powershell -NoProfile -ExecutionPolicy Bypass -File tools\run_pytest.ps1 -q`
+- Linux/WSL shell runner:
+  - `tools/run_pytest.sh -q`
+- Optional parallelism for all three runners:
+  - Set `MMO_PYTEST_N` to a worker count (for example `4`) or `auto`.
+  - If `MMO_PYTEST_N` is set and `pytest-xdist` is missing, the runner exits with a clear install hint.
 - If you see `.git\index.lock` permission denied:
   - Pause OneDrive sync for this repo.
   - Close Explorer tabs/windows on the repo.
@@ -102,7 +107,7 @@ Never use regex, glob patterns, name-length heuristics, or root-level sweeps.
 
 | Directory | Purpose |
 |---|---|
-| `.tmp_pytest/` | pytest temp (forced by `run_pytest.cmd`) |
+| `.tmp_pytest/` | pytest basetemp (`run_pytest.ps1` / `run_pytest.sh`) |
 | `.tmp_codex/` | Codex tooling temp |
 | `.tmp_claude/` | Claude tooling temp |
 | `sandbox_tmp/` | Sandbox temp |
