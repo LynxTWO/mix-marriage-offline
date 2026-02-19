@@ -1,6 +1,8 @@
 import json
 import math
+import os
 import struct
+import subprocess
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -198,6 +200,26 @@ def _pcm16_abs_peak(path: Path) -> int:
     return max(abs(value) for value in samples)
 
 
+def _encode_flac(source_wav: Path, output_flac: Path, ffmpeg_cmd: list[str]) -> None:
+    output_flac.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        list(ffmpeg_cmd)
+        + [
+            "-v",
+            "error",
+            "-y",
+            "-i",
+            os.fspath(source_wav),
+            "-c:a",
+            "flac",
+            os.fspath(output_flac),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
 class TestRenderRunHappyPath(unittest.TestCase):
     def test_produces_schema_valid_plan_and_report(self) -> None:
         plan_validator = _schema_validator("render_plan.schema.json")
@@ -380,6 +402,88 @@ class TestRenderRunAudioExecution(unittest.TestCase):
                 self.assertTrue(event.get("where"))
                 self.assertIn("confidence", event)
                 self.assertIsNone(event.get("confidence"))
+
+            exit_b, _, stderr_b, _, report_out_b = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--force",
+                    "--event-log-out", str(event_log_out),
+                    "--event-log-force",
+                ],
+            )
+            self.assertEqual(exit_b, 0, msg=stderr_b)
+
+            report_b = json.loads(report_out_b.read_text(encoding="utf-8"))
+            rendered_path_b = Path(report_b["jobs"][0]["output_files"][0]["file_path"])
+            wav_bytes_b = rendered_path_b.read_bytes()
+            event_bytes_b = event_log_out.read_bytes()
+
+            self.assertEqual(wav_bytes_a, wav_bytes_b)
+            self.assertEqual(event_bytes_a, event_bytes_b)
+
+    def test_plugin_chain_gain_v0_accepts_flac_source_and_is_deterministic(self) -> None:
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("numpy not available")
+
+        ffmpeg_cmd = resolve_ffmpeg_cmd()
+        if ffmpeg_cmd is None:
+            self.skipTest("ffmpeg not available")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            source_wav = temp_path / "source.wav"
+            source_flac = stems_dir / "mix.flac"
+            _write_pcm16_wav(source_wav, channels=2, duration_s=1.0)
+            _encode_flac(source_wav, source_flac, list(ffmpeg_cmd))
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                    "plugin_chain": [
+                        {
+                            "plugin_id": "gain_v0",
+                            "params": {
+                                "gain_db": -6.0,
+                            },
+                        }
+                    ],
+                },
+            }
+            event_log_out = temp_path / "render_events.jsonl"
+            exit_a, _, stderr_a, _, report_out_a = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--event-log-out", str(event_log_out),
+                ],
+            )
+            self.assertEqual(exit_a, 0, msg=stderr_a)
+
+            report_a = json.loads(report_out_a.read_text(encoding="utf-8"))
+            rendered_path_a = Path(report_a["jobs"][0]["output_files"][0]["file_path"])
+            wav_bytes_a = rendered_path_a.read_bytes()
+            event_bytes_a = event_log_out.read_bytes()
+
+            events = _read_jsonl(event_log_out)
+            plugin_events = [
+                event
+                for event in events
+                if isinstance(event, dict)
+                and isinstance(event.get("evidence"), dict)
+                and any(
+                    str(code).startswith("RENDER.RUN.PLUGIN.")
+                    for code in event.get("evidence", {}).get("codes", [])
+                )
+            ]
+            self.assertEqual(len(plugin_events), 3)
 
             exit_b, _, stderr_b, _, report_out_b = _run_render_run(
                 temp_path,

@@ -141,15 +141,7 @@ def build_render_report_with_audio(
     ffmpeg_cmd_for_decode: Sequence[str] | None = None
     ffmpeg_cmd_for_encode: Sequence[str] | None = None
     source_extension = source_path.suffix.lower()
-    if plugin_chain_enabled and source_extension not in _WAV_EXTENSIONS:
-        raise RenderRunRefusalError(
-            issue_id=ISSUE_RENDER_RUN_PLUGIN_SOURCE_FORMAT_UNSUPPORTED,
-            message=(
-                "Plugin-chain render-run currently supports only WAV source input. "
-                f"source={source_path.resolve().as_posix()}"
-            ),
-        )
-    needs_ffmpeg_decode = (source_extension in _FFMPEG_EXTENSIONS) and not plugin_chain_enabled
+    needs_ffmpeg_decode = source_extension in _FFMPEG_EXTENSIONS
     needs_ffmpeg_encode = any(fmt != "wav" for fmt in output_formats)
     needs_ffmpeg_for_trace = keep_wav_output and capture_execute_trace
     if needs_ffmpeg_decode or needs_ffmpeg_encode or needs_ffmpeg_for_trace:
@@ -169,12 +161,25 @@ def build_render_report_with_audio(
 
     try:
         if plugin_chain_enabled:
+            if capture_execute_trace and source_extension in _FFMPEG_EXTENSIONS:
+                if ffmpeg_cmd_for_decode is None:
+                    raise RenderRunRefusalError(
+                        issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
+                        message="ffmpeg is required to decode non-WAV source audio.",
+                    )
+                ffmpeg_command_rows.append(
+                    {
+                        "args": build_ffmpeg_decode_command(source_path, ffmpeg_cmd_for_decode),
+                        "determinism_flags": [],
+                    }
+                )
             plugin_step_events = _render_wav_with_plugin_chain(
                 source_path=source_path,
                 output_path=wav_path,
                 sample_rate_hz=source_rate_hz,
                 bit_depth=output_bit_depth,
                 plugin_chain=plugin_chain,
+                ffmpeg_cmd_for_decode=ffmpeg_cmd_for_decode,
             )
         else:
             float_samples_iter: Iterator[list[float]]
@@ -434,6 +439,7 @@ def _render_wav_with_plugin_chain(
     sample_rate_hz: int,
     bit_depth: int,
     plugin_chain: list[dict[str, Any]],
+    ffmpeg_cmd_for_decode: Sequence[str] | None,
 ) -> list[dict[str, Any]]:
     try:
         import numpy as np
@@ -452,7 +458,10 @@ def _render_wav_with_plugin_chain(
             message=f"Unsupported output bit depth: {bit_depth}",
         )
 
-    stereo_samples = _read_stereo_wav_float32(source_path)
+    stereo_samples = _read_stereo_source_float32(
+        source_path,
+        ffmpeg_cmd=ffmpeg_cmd_for_decode,
+    )
     frame_count = int(stereo_samples.shape[0])
 
     source_posix = source_path.resolve().as_posix()
@@ -462,7 +471,7 @@ def _render_wav_with_plugin_chain(
             "kind": "action",
             "scope": "render",
             "what": "plugin chain source loaded",
-            "why": "Loaded stereo WAV source into float32 buffer for deterministic plugin execution.",
+            "why": "Loaded stereo source into float32 buffer for deterministic plugin execution.",
             "where": [source_posix],
             "confidence": None,
             "evidence": {
@@ -549,14 +558,30 @@ def _render_wav_with_plugin_chain(
     return step_events
 
 
-def _read_stereo_wav_float32(path: Path) -> Any:
+def _read_stereo_source_float32(
+    path: Path,
+    *,
+    ffmpeg_cmd: Sequence[str] | None,
+) -> Any:
     import numpy as np
 
+    source_extension = path.suffix.lower()
+    float_samples_iter: Iterator[list[float]]
+    if source_extension in _WAV_EXTENSIONS:
+        float_samples_iter = iter_wav_float64_samples(
+            path,
+            error_context="render-run plugin-chain decode",
+        )
+    else:
+        if ffmpeg_cmd is None:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
+                message="ffmpeg is required to decode non-WAV source audio.",
+            )
+        float_samples_iter = iter_ffmpeg_float64_samples(path, ffmpeg_cmd)
+
     chunks: list[Any] = []
-    for float_samples in iter_wav_float64_samples(
-        path,
-        error_context="render-run plugin-chain decode",
-    ):
+    for float_samples in float_samples_iter:
         if len(float_samples) % 2 != 0:
             raise RenderRunRefusalError(
                 issue_id=ISSUE_RENDER_RUN_DECODE_FAILED,
