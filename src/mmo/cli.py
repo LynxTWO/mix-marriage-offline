@@ -159,6 +159,11 @@ from mmo.cli_commands._gui_rpc import *  # noqa: F401,F403
 from mmo.cli_commands._utilities import *  # noqa: F401,F403
 
 
+def _normalize_cli_path_arg(path_text: str) -> str:
+    """Treat backslashes as separators so POSIX runners can parse Windows-style input."""
+    return path_text.replace("\\", "/")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="MMO command-line tools.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -5720,7 +5725,7 @@ def main(argv: list[str] | None = None) -> int:
             ui_hints_has_errors,
         )
 
-        schema_path = Path(args.schema)
+        schema_path = Path(_normalize_cli_path_arg(args.schema))
         try:
             config_schema = _load_json_object(schema_path, label="Config schema")
         except ValueError as exc:

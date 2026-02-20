@@ -1,6 +1,7 @@
 """Tests for tools/stem_corpus_diff.py — corpus stats diff tool."""
 
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -8,7 +9,7 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _TOOL = _REPO_ROOT / "tools" / "stem_corpus_diff.py"
-_SANDBOX = _REPO_ROOT / "sandbox_tmp" / "test_corpus_diff"
+_SANDBOX = _REPO_ROOT / "sandbox_tmp" / "test_corpus_diff" / str(os.getpid())
 
 
 def _write_json(path: Path, payload: dict) -> None:

@@ -3,6 +3,7 @@
 import contextlib
 import io
 import json
+import os
 import unittest
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from mmo.cli import main
 from mmo.core.role_lexicon import merge_suggestions_into_lexicon, render_role_lexicon_yaml
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_SANDBOX = _REPO_ROOT / "sandbox_tmp" / "test_cli_rl_merge"
+_SANDBOX = _REPO_ROOT / "sandbox_tmp" / "test_cli_rl_merge" / str(os.getpid())
 
 
 def _run_main(args: list[str]) -> tuple[int, str, str]:

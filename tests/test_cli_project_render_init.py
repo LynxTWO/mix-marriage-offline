@@ -101,14 +101,20 @@ class TestRenderInitHappyPath(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.project_dir = _init_project(_SANDBOX / "happy")
+        exit_code, _, stderr = _run_main([
+            "project", "render-init", str(cls.project_dir),
+            "--target-layout", "LAYOUT.5_1",
+        ])
+        assert exit_code == 0, f"project render-init failed: {stderr}"
 
     def test_creates_render_request_and_exits_zero(self) -> None:
+        project_dir = _init_project(_SANDBOX / "happy_create_only")
         exit_code, stdout, stderr = _run_main([
-            "project", "render-init", str(self.project_dir),
+            "project", "render-init", str(project_dir),
             "--target-layout", "LAYOUT.5_1",
         ])
         self.assertEqual(exit_code, 0, msg=stderr)
-        rr_path = self.project_dir / "renders" / "render_request.json"
+        rr_path = project_dir / "renders" / "render_request.json"
         self.assertTrue(rr_path.is_file())
 
     def test_render_request_is_schema_valid(self) -> None:

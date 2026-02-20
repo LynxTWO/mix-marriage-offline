@@ -39,7 +39,8 @@ def _coerce_str(value: Any) -> str:
 
 
 def _path_to_posix(path: Path) -> str:
-    return path.resolve().as_posix()
+    # Normalize mixed Windows/POSIX separators before resolving.
+    return Path(str(path).replace("\\", "/")).resolve().as_posix()
 
 
 def _sha256_of_file(path: Path) -> str:

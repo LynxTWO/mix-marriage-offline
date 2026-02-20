@@ -27,7 +27,7 @@ if [[ -n "${PYTEST_N}" ]]; then
     echo "MMO_PYTEST_N is set but pytest-xdist is not installed. Install dev deps." >&2
     exit 2
   }
-  exec "${PYTHON_BIN}" -m pytest -n "${PYTEST_N}" --basetemp "${BASE_TEMP}" "$@"
+  exec "${PYTHON_BIN}" -m pytest -n "${PYTEST_N}" --dist loadscope --basetemp "${BASE_TEMP}" "$@"
 else
   exec "${PYTHON_BIN}" -m pytest --basetemp "${BASE_TEMP}" "$@"
 fi
