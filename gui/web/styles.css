@@ -186,6 +186,21 @@ button:hover {
   margin-bottom: 0.45rem;
 }
 
+.toggle-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.toggle-inline input[type="checkbox"] {
+  width: auto;
+}
+
+.audition-receipt {
+  margin: 0;
+}
+
 .audition-sha {
   display: block;
   font-size: 0.78rem;

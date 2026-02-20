@@ -316,6 +316,21 @@ class TestRenderExecuteSchema(unittest.TestCase):
         errors = list(self.validator.iter_errors(payload))
         self.assertGreater(len(errors), 0)
 
+    def test_pointer_meters_validate_when_present(self) -> None:
+        payload = json.loads(json.dumps(MINIMAL_RENDER_EXECUTE))
+        payload["jobs"][0]["inputs"][0]["meters"] = {
+            "peak_dbfs": -1.2,
+            "rms_dbfs": -9.4,
+            "integrated_lufs": -10.0,
+        }
+        payload["jobs"][0]["outputs"][0]["meters"] = {
+            "peak_dbfs": None,
+            "rms_dbfs": None,
+            "integrated_lufs": None,
+        }
+        errors = list(self.validator.iter_errors(payload))
+        self.assertEqual(errors, [])
+
 
 class TestRenderSchemasRegistered(unittest.TestCase):
     def test_render_request_in_schema_anchors(self) -> None:

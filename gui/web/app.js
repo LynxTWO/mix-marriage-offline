@@ -1,4 +1,9 @@
 import { buildFormFields, orderFieldsByLayout, resolveFieldStep } from "/lib/plugin_forms.mjs";
+import {
+  computeAuditionCompensation,
+  formatAuditionCompensationReceipt,
+  resolveAuditionLoudnessDb,
+} from "/lib/audition_loudness.mjs";
 
 const discoverButton = document.getElementById("discover-button");
 const doctorButton = document.getElementById("doctor-button");
@@ -31,6 +36,9 @@ const auditionPlayOutputButton = document.getElementById("audition-play-output-b
 const auditionInputSha = document.getElementById("audition-input-sha");
 const auditionOutputSha = document.getElementById("audition-output-sha");
 const auditionAudio = document.getElementById("audition-audio");
+const auditionLoudnessMatchLabel = document.getElementById("audition-loudness-match-label");
+const auditionLoudnessMatchToggle = document.getElementById("audition-loudness-match-toggle");
+const auditionLoudnessReceipt = document.getElementById("audition-loudness-receipt");
 const auditionStatus = document.getElementById("audition-status");
 
 const projectDirInput = document.getElementById("project-dir-input");
@@ -62,8 +70,10 @@ const state = {
     timelineFilterStage: "",
   },
   audition: {
+    activeStream: "",
     inputSlot: 0,
     jobId: "",
+    loudnessMatchEnabled: true,
     outputSlot: 0,
   },
   modifierState: {
@@ -73,6 +83,10 @@ const state = {
     meta: false,
   },
 };
+const AUDITION_ALLOW_BOOST = false;
+let auditionAudioContext = null;
+let auditionAudioGainNode = null;
+let auditionAudioSourceNode = null;
 
 function normalizePath(value) {
   if (typeof value !== "string") {
@@ -1008,6 +1022,111 @@ function _setAuditionStatus(text) {
   }
 }
 
+function _setAuditionReceipt(text) {
+  if (auditionLoudnessReceipt) {
+    auditionLoudnessReceipt.textContent = text;
+  }
+}
+
+function _renderAuditionLoudnessToggle({ disabled } = { disabled: false }) {
+  if (auditionLoudnessMatchToggle) {
+    auditionLoudnessMatchToggle.checked = state.audition.loudnessMatchEnabled === true;
+    auditionLoudnessMatchToggle.disabled = Boolean(disabled);
+  }
+  if (auditionLoudnessMatchLabel) {
+    auditionLoudnessMatchLabel.textContent = `Loudness match: ${state.audition.loudnessMatchEnabled ? "On" : "Off"}`;
+  }
+}
+
+function _audioContextConstructor() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  if (typeof window.AudioContext === "function") {
+    return window.AudioContext;
+  }
+  if (typeof window.webkitAudioContext === "function") {
+    return window.webkitAudioContext;
+  }
+  return null;
+}
+
+async function _ensureAuditionGainNode() {
+  if (!auditionAudio) {
+    return null;
+  }
+  const AudioContextCtor = _audioContextConstructor();
+  if (!AudioContextCtor) {
+    return null;
+  }
+  if (!auditionAudioContext) {
+    auditionAudioContext = new AudioContextCtor();
+  }
+  if (!auditionAudioSourceNode) {
+    auditionAudioSourceNode = auditionAudioContext.createMediaElementSource(auditionAudio);
+    auditionAudioGainNode = auditionAudioContext.createGain();
+    auditionAudioSourceNode.connect(auditionAudioGainNode);
+    auditionAudioGainNode.connect(auditionAudioContext.destination);
+  }
+  if (auditionAudioContext.state === "suspended") {
+    try {
+      await auditionAudioContext.resume();
+    } catch {
+      // Browser policy can block resume outside a trusted gesture.
+    }
+  }
+  return auditionAudioGainNode;
+}
+
+async function _applyAuditionGainDb(gainDb) {
+  const gainNode = await _ensureAuditionGainNode();
+  if (!gainNode) {
+    return;
+  }
+  const linear = Math.pow(10, gainDb / 20);
+  gainNode.gain.value = linear;
+}
+
+function _selectedAuditionJobOrNull() {
+  const jobs = Array.isArray(state.renderArtifacts.execute?.jobs)
+    ? state.renderArtifacts.execute.jobs.filter((job) => _isObject(job))
+    : [];
+  const selected = jobs.find((job) => job.job_id === state.audition.jobId);
+  return selected || null;
+}
+
+function _auditionCompensationResult(streamKind, selectedJob) {
+  const resolvedJob = _isObject(selectedJob) ? selectedJob : _selectedAuditionJobOrNull();
+  const inputPointer = _selectedPointerOrNull(resolvedJob, "input", state.audition.inputSlot);
+  const outputPointer = _selectedPointerOrNull(resolvedJob, "output", state.audition.outputSlot);
+  return computeAuditionCompensation({
+    rmsInputDbfs: resolveAuditionLoudnessDb(inputPointer),
+    rmsOutputDbfs: resolveAuditionLoudnessDb(outputPointer),
+    streamKind,
+    allowBoost: AUDITION_ALLOW_BOOST,
+  });
+}
+
+function _renderAuditionReceipt(selectedJob, streamKind) {
+  if (!state.audition.loudnessMatchEnabled) {
+    _setAuditionReceipt(formatAuditionCompensationReceipt(null, { enabled: false }));
+    return;
+  }
+  const result = _auditionCompensationResult(streamKind, selectedJob);
+  _setAuditionReceipt(formatAuditionCompensationReceipt(result, { enabled: true }));
+}
+
+async function _applyAuditionCompensation(streamKind, selectedJob) {
+  if (!state.audition.loudnessMatchEnabled) {
+    await _applyAuditionGainDb(0);
+    _renderAuditionReceipt(selectedJob, streamKind);
+    return;
+  }
+  const result = _auditionCompensationResult(streamKind, selectedJob);
+  await _applyAuditionGainDb(result.gainDb);
+  _renderAuditionReceipt(selectedJob, streamKind);
+}
+
 function _renderAuditionPanel() {
   if (
     !auditionJobSelect
@@ -1037,6 +1156,9 @@ function _renderAuditionPanel() {
     auditionPlayOutputButton.disabled = true;
     auditionInputSha.textContent = "sha256: -";
     auditionOutputSha.textContent = "sha256: -";
+    _renderAuditionLoudnessToggle({ disabled: true });
+    _setAuditionReceipt("Loudness match unavailable: no render_execute jobs.");
+    state.audition.activeStream = "";
     _setAuditionStatus("No render_execute jobs available for audition.");
     return;
   }
@@ -1094,6 +1216,9 @@ function _renderAuditionPanel() {
   const selectedOutput = _selectedPointerOrNull(selectedJob, "output", state.audition.outputSlot);
   auditionInputSha.textContent = `sha256: ${selectedInput?.sha256 || "-"}`;
   auditionOutputSha.textContent = `sha256: ${selectedOutput?.sha256 || "-"}`;
+  _renderAuditionLoudnessToggle({ disabled: false });
+  const previewStream = state.audition.activeStream === "input" ? "input" : "output";
+  _renderAuditionReceipt(selectedJob, previewStream);
   _setAuditionStatus(`Ready: ${state.audition.jobId}`);
 }
 
@@ -1116,6 +1241,8 @@ async function _playAudition(streamKind) {
   if (!auditionAudio) {
     return;
   }
+  state.audition.activeStream = streamKind;
+  await _applyAuditionCompensation(streamKind, _selectedAuditionJobOrNull());
   const label = streamKind === "input" ? "input" : "output";
   const url = _auditionUrl(streamKind);
   auditionAudio.src = url;
@@ -2126,6 +2253,16 @@ if (auditionOutputSlotSelect) {
   });
 }
 
+if (auditionLoudnessMatchToggle) {
+  auditionLoudnessMatchToggle.addEventListener("change", () => {
+    state.audition.loudnessMatchEnabled = auditionLoudnessMatchToggle.checked;
+    _renderAuditionPanel();
+    if (state.audition.activeStream === "input" || state.audition.activeStream === "output") {
+      void _applyAuditionCompensation(state.audition.activeStream, _selectedAuditionJobOrNull());
+    }
+  });
+}
+
 if (auditionPlayInputButton) {
   auditionPlayInputButton.addEventListener("click", async () => {
     try {
@@ -2169,6 +2306,10 @@ window.addEventListener("blur", () => {
 
 projectDirInput.addEventListener("change", maybeSeedPackOut);
 projectDirInput.addEventListener("blur", maybeSeedPackOut);
+
+if (auditionLoudnessMatchToggle) {
+  state.audition.loudnessMatchEnabled = auditionLoudnessMatchToggle.checked;
+}
 
 renderChainPluginSelect();
 renderPluginChainEditor();

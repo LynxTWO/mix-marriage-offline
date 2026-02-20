@@ -8,7 +8,9 @@ import subprocess
 from pathlib import Path
 from typing import Any, Sequence
 
+from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.io import sha256_file
+from mmo.dsp.stream_meters import compute_stream_meters
 
 
 def _coerce_str(value: Any) -> str:
@@ -76,13 +78,29 @@ def _normalize_paths(raw_paths: Any) -> list[Path]:
     return [normalized[key] for key in sorted(normalized.keys())]
 
 
-def _file_pointer(path: Path) -> dict[str, str]:
+def _file_pointer(
+    path: Path,
+    *,
+    ffmpeg_cmd: Sequence[str] | None,
+    meters_cache: dict[str, dict[str, float | None]],
+) -> dict[str, Any]:
     resolved = path.resolve()
     if not resolved.is_file():
         raise ValueError(f"render_execute file pointer path is missing: {resolved.as_posix()}")
+    key = resolved.as_posix()
+    if key not in meters_cache:
+        meters_cache[key] = compute_stream_meters(
+            resolved,
+            ffmpeg_cmd=ffmpeg_cmd,
+        )
     return {
-        "path": resolved.as_posix(),
+        "path": key,
         "sha256": sha256_file(resolved),
+        "meters": {
+            "peak_dbfs": meters_cache[key].get("peak_dbfs"),
+            "rms_dbfs": meters_cache[key].get("rms_dbfs"),
+            "integrated_lufs": meters_cache[key].get("integrated_lufs"),
+        },
     }
 
 
@@ -134,6 +152,8 @@ def build_render_execute_payload(
     request_sha256 = _canonical_sha256(request_payload)
     plan_sha256 = _canonical_sha256(plan_payload)
     run_id = _run_id(request_sha256=request_sha256, plan_sha256=plan_sha256)
+    ffmpeg_cmd = resolve_ffmpeg_cmd()
+    meters_cache: dict[str, dict[str, float | None]] = {}
 
     jobs: list[dict[str, Any]] = []
     for row in job_rows:
@@ -158,8 +178,22 @@ def build_render_execute_payload(
         jobs.append(
             {
                 "job_id": job_id,
-                "inputs": [_file_pointer(path) for path in input_paths],
-                "outputs": [_file_pointer(path) for path in output_paths],
+                "inputs": [
+                    _file_pointer(
+                        path,
+                        ffmpeg_cmd=ffmpeg_cmd,
+                        meters_cache=meters_cache,
+                    )
+                    for path in input_paths
+                ],
+                "outputs": [
+                    _file_pointer(
+                        path,
+                        ffmpeg_cmd=ffmpeg_cmd,
+                        meters_cache=meters_cache,
+                    )
+                    for path in output_paths
+                ],
                 "ffmpeg_version": ffmpeg_version,
                 "ffmpeg_commands": ffmpeg_commands,
             }

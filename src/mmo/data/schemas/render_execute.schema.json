@@ -46,7 +46,24 @@
       "required": ["path", "sha256"],
       "properties": {
         "path": { "$ref": "#/$defs/posix_path" },
-        "sha256": { "$ref": "#/$defs/sha256" }
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "meters": { "$ref": "#/$defs/audio_meters" }
+      }
+    },
+    "dbfs_value": {
+      "anyOf": [
+        { "type": "number" },
+        { "type": "null" }
+      ]
+    },
+    "audio_meters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["peak_dbfs", "rms_dbfs", "integrated_lufs"],
+      "properties": {
+        "peak_dbfs": { "$ref": "#/$defs/dbfs_value" },
+        "rms_dbfs": { "$ref": "#/$defs/dbfs_value" },
+        "integrated_lufs": { "$ref": "#/$defs/dbfs_value" }
       }
     },
     "ffmpeg_command": {
