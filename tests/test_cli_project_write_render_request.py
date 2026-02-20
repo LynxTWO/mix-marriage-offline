@@ -172,6 +172,96 @@ class TestProjectWriteRenderRequest(unittest.TestCase):
             stderr_a,
         )
 
+    def test_refuses_invalid_plugin_chain_params_with_stable_order(self) -> None:
+        args = [
+            "project",
+            "write-render-request",
+            str(self.project_dir),
+            "--set",
+            (
+                "plugin_chain=[{"
+                "\"plugin_id\":\"gain_v0\","
+                "\"params\":{\"gain_db\":-6.0,\"bypass\":\"yes\",\"macro_mix\":\"bad\",\"junk\":1}"
+                "}]"
+            ),
+        ]
+        exit_a, _, stderr_a = _run_main(args)
+        exit_b, _, stderr_b = _run_main(args)
+
+        self.assertEqual(exit_a, 1)
+        self.assertEqual(exit_b, 1)
+        self.assertEqual(stderr_a, stderr_b)
+        self.assertIn(
+            "plugin_chain validation failed:",
+            stderr_a,
+        )
+        self.assertIn("plugin_chain[1].params has unknown key(s): junk.", stderr_a)
+        self.assertIn("plugin_chain[1].params.bypass must be a boolean.", stderr_a)
+        self.assertIn("plugin_chain[1].params.macro_mix must be a number.", stderr_a)
+        self.assertLess(
+            stderr_a.index("unknown key(s): junk"),
+            stderr_a.index("params.bypass must be a boolean"),
+        )
+        self.assertLess(
+            stderr_a.index("params.bypass must be a boolean"),
+            stderr_a.index("params.macro_mix must be a number"),
+        )
+
+    def test_clamps_numeric_plugin_params_and_reports_notes(self) -> None:
+        args = [
+            "project",
+            "write-render-request",
+            str(self.project_dir),
+            "--set",
+            (
+                "plugin_chain=[{"
+                "\"plugin_id\":\"gain_v0\","
+                "\"params\":{\"gain_db\":99.0,\"macro_mix\":200.0}"
+                "}]"
+            ),
+        ]
+        exit_code, stdout, stderr = _run_main(args)
+        self.assertEqual(exit_code, 0, msg=stderr)
+        self.assertEqual(stderr, "")
+
+        summary = json.loads(stdout)
+        self.assertIn("plugin_chain_notes", summary)
+        self.assertEqual(
+            summary["plugin_chain"],
+            [
+                {
+                    "plugin_id": "gain_v0",
+                    "params": {"gain_db": 24.0, "macro_mix": 100.0},
+                }
+            ],
+        )
+        self.assertTrue(
+            any(
+                "plugin_chain[1].params.gain_db clamped from 99.0 to 24.0"
+                in note
+                for note in summary["plugin_chain_notes"]
+            )
+        )
+        self.assertTrue(
+            any(
+                "plugin_chain[1].params.macro_mix clamped from 200.0 to 100.0"
+                in note
+                for note in summary["plugin_chain_notes"]
+            )
+        )
+
+        request_path = self.project_dir / "renders" / "render_request.json"
+        payload = json.loads(request_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            payload["options"]["plugin_chain"],
+            [
+                {
+                    "plugin_id": "gain_v0",
+                    "params": {"gain_db": 24.0, "macro_mix": 100.0},
+                }
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

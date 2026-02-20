@@ -613,6 +613,66 @@ class TestRenderRunAudioExecution(unittest.TestCase):
             self.assertEqual(wav_bytes_a, wav_bytes_b)
             self.assertEqual(event_bytes_a, event_bytes_b)
 
+    def test_plugin_chain_clamp_notes_are_recorded_in_report(self) -> None:
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("numpy not available")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            source_path = stems_dir / "mix.wav"
+            _write_pcm16_wav(source_path, channels=2, duration_s=1.0)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                    "plugin_chain": [
+                        {
+                            "plugin_id": "gain_v0",
+                            "params": {
+                                "gain_db": 99.0,
+                                "macro_mix": 200.0,
+                            },
+                        }
+                    ],
+                },
+            }
+
+            exit_code, _, stderr, _, report_out = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+            )
+            self.assertEqual(exit_code, 0, msg=stderr)
+
+            report = json.loads(report_out.read_text(encoding="utf-8"))
+            notes = report["jobs"][0].get("notes", [])
+            self.assertTrue(
+                any(
+                    (
+                        "plugin_chain_note: options.plugin_chain[1].params.gain_db "
+                        "clamped from 99.0 to 24.0"
+                    )
+                    in note
+                    for note in notes
+                )
+            )
+            self.assertTrue(
+                any(
+                    (
+                        "plugin_chain_note: options.plugin_chain[1].params.macro_mix "
+                        "clamped from 200.0 to 100.0"
+                    )
+                    in note
+                    for note in notes
+                )
+            )
+
     def test_refuses_multi_target_with_stable_issue_id(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -1375,6 +1435,62 @@ class TestRenderRunErrorPaths(unittest.TestCase):
             self.assertEqual(rc, 1)
             self.assertIn("routing_plan_path is set", err)
             self.assertIn("routing/plan.json", err)
+
+    def test_plugin_chain_invalid_params_refusal_is_deterministic_and_ordered(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            _write_pcm16_wav(tp / "stems" / "mix.wav", channels=2)
+            scene_posix = (tp / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                    "plugin_chain": [
+                        {
+                            "plugin_id": "gain_v0",
+                            "params": {
+                                "gain_db": -6.0,
+                                "bypass": "yes",
+                                "macro_mix": "bad",
+                                "junk": 1,
+                            },
+                        }
+                    ],
+                },
+            }
+            rc_a, _, err_a, _, report_a = _run_render_run(tp, request_payload=request_payload)
+            rc_b, _, err_b, _, report_b = _run_render_run(
+                tp,
+                request_payload=request_payload,
+                extra_args=["--force"],
+            )
+
+            self.assertEqual(rc_a, 1)
+            self.assertEqual(rc_b, 1)
+            self.assertEqual(err_a, err_b)
+            self.assertFalse(report_a.exists())
+            self.assertFalse(report_b.exists())
+            self.assertIn("ISSUE.RENDER.RUN.PLUGIN_CHAIN_INVALID", err_a)
+            self.assertIn("options.plugin_chain validation failed:", err_a)
+            self.assertIn("options.plugin_chain[1].params has unknown key(s): junk.", err_a)
+            self.assertIn(
+                "options.plugin_chain[1].params.bypass must be a boolean.",
+                err_a,
+            )
+            self.assertIn(
+                "options.plugin_chain[1].params.macro_mix must be a number.",
+                err_a,
+            )
+            self.assertLess(
+                err_a.index("unknown key(s): junk"),
+                err_a.index("params.bypass must be a boolean"),
+            )
+            self.assertLess(
+                err_a.index("params.bypass must be a boolean"),
+                err_a.index("params.macro_mix must be a number"),
+            )
 
 
 def _multi_target_request(scene_path: str) -> dict:

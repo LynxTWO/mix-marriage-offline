@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import random
 import struct
@@ -25,6 +26,11 @@ from mmo.dsp.transcode import (
     ffmpeg_determinism_flags,
     transcode_wav_to_format,
 )
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover - optional dependency
+    yaml = None
 
 _STEREO_LAYOUT_ID = "LAYOUT.2_0"
 _OUTPUT_FORMAT_ORDER = tuple(LOSSLESS_OUTPUT_FORMATS)
@@ -52,6 +58,424 @@ ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID = "ISSUE.RENDER.RUN.PLUGIN_CHAIN_INVALID"
 ISSUE_RENDER_RUN_PLUGIN_SOURCE_FORMAT_UNSUPPORTED = (
     "ISSUE.RENDER.RUN.PLUGIN_SOURCE_FORMAT_UNSUPPORTED"
 )
+
+_PLUGIN_CHAIN_CONFIG_SCHEMA_FALLBACKS_BY_ID: dict[str, dict[str, Any]] = {
+    _GAIN_V0_PLUGIN_ID: {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "gain_db": {"type": "number", "minimum": -24, "maximum": 24},
+            "macro_mix": {"type": "number", "minimum": 0, "maximum": 100},
+            "bypass": {"type": "boolean"},
+        },
+    },
+}
+_PLUGIN_CHAIN_RUNTIME_REQUIRED_PARAMS: dict[str, tuple[str, ...]] = {
+    _GAIN_V0_PLUGIN_ID: ("gain_db",),
+}
+_PLUGIN_CHAIN_CONFIG_SCHEMA_CACHE: dict[str, dict[str, Any]] | None = None
+
+
+def _clone_json_payload(payload: Any) -> Any:
+    return json.loads(json.dumps(payload))
+
+
+def _normalize_plugin_id_alias(value: str) -> str:
+    cleaned = [
+        (char.lower() if char.isalnum() else "_")
+        for char in value
+    ]
+    collapsed = "".join(cleaned).strip("_")
+    while "__" in collapsed:
+        collapsed = collapsed.replace("__", "_")
+    return collapsed
+
+
+def _plugin_manifest_aliases(
+    *,
+    manifest_path: Path,
+    manifest: dict[str, Any],
+) -> list[str]:
+    aliases: set[str] = set()
+
+    file_stem = manifest_path.stem
+    if file_stem.endswith(".plugin"):
+        file_stem = file_stem[:-7]
+    stem_alias = _normalize_plugin_id_alias(file_stem)
+    if stem_alias:
+        aliases.add(stem_alias)
+
+    raw_plugin_id = _coerce_str(manifest.get("plugin_id")).strip()
+    if raw_plugin_id:
+        full_alias = _normalize_plugin_id_alias(raw_plugin_id.replace(".", "_"))
+        if full_alias:
+            aliases.add(full_alias)
+        tail_alias = _normalize_plugin_id_alias(raw_plugin_id.split(".")[-1])
+        if tail_alias:
+            aliases.add(tail_alias)
+
+    return sorted(aliases)
+
+
+def _plugins_search_roots() -> list[Path]:
+    candidates: list[Path] = []
+
+    try:
+        from mmo.resources import _repo_checkout_root  # noqa: WPS433
+    except Exception:  # pragma: no cover - defensive fallback
+        _repo_checkout_root = None
+
+    if callable(_repo_checkout_root):
+        repo_root = _repo_checkout_root()
+        if repo_root is not None:
+            candidates.append((repo_root / "plugins").resolve())
+
+    candidates.append((Path.cwd() / "plugins").resolve())
+
+    roots: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        candidate_key = candidate.as_posix()
+        if candidate_key in seen:
+            continue
+        seen.add(candidate_key)
+        roots.append(candidate)
+    return roots
+
+
+def _load_yaml_mapping(path: Path) -> dict[str, Any] | None:
+    if yaml is None:
+        return None
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            payload = yaml.safe_load(handle)
+    except OSError:
+        return None
+    except Exception:  # pragma: no cover - yaml errors differ by version
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _collect_plugin_chain_config_schemas() -> dict[str, dict[str, Any]]:
+    schemas_by_alias: dict[str, dict[str, Any]] = {}
+
+    manifest_patterns = ("plugin.yaml", "plugin.yml", "*.plugin.yaml")
+    for plugins_root in _plugins_search_roots():
+        if not plugins_root.is_dir():
+            continue
+
+        manifest_paths: set[Path] = set()
+        for pattern in manifest_patterns:
+            for candidate in plugins_root.rglob(pattern):
+                if candidate.is_file():
+                    manifest_paths.add(candidate.resolve())
+
+        for manifest_path in sorted(manifest_paths, key=lambda path: path.as_posix()):
+            manifest = _load_yaml_mapping(manifest_path)
+            if not isinstance(manifest, dict):
+                continue
+            config_schema = manifest.get("config_schema")
+            if not isinstance(config_schema, dict):
+                continue
+            for alias in _plugin_manifest_aliases(
+                manifest_path=manifest_path,
+                manifest=manifest,
+            ):
+                schemas_by_alias.setdefault(alias, _clone_json_payload(config_schema))
+
+    for alias, schema_payload in _PLUGIN_CHAIN_CONFIG_SCHEMA_FALLBACKS_BY_ID.items():
+        schemas_by_alias.setdefault(alias, _clone_json_payload(schema_payload))
+
+    return schemas_by_alias
+
+
+def _plugin_chain_config_schemas() -> dict[str, dict[str, Any]]:
+    global _PLUGIN_CHAIN_CONFIG_SCHEMA_CACHE  # noqa: PLW0603
+
+    if _PLUGIN_CHAIN_CONFIG_SCHEMA_CACHE is None:
+        _PLUGIN_CHAIN_CONFIG_SCHEMA_CACHE = _collect_plugin_chain_config_schemas()
+    return _PLUGIN_CHAIN_CONFIG_SCHEMA_CACHE
+
+
+def _plugin_config_schema_for_id(plugin_id: str) -> dict[str, Any] | None:
+    schema_payload = _plugin_chain_config_schemas().get(plugin_id)
+    if not isinstance(schema_payload, dict):
+        return None
+    return _clone_json_payload(schema_payload)
+
+
+def _schema_types(schema: dict[str, Any]) -> tuple[str, ...]:
+    raw_type = schema.get("type")
+    if isinstance(raw_type, str) and raw_type.strip():
+        return (raw_type.strip(),)
+    if isinstance(raw_type, list):
+        normalized = sorted(
+            {
+                item.strip()
+                for item in raw_type
+                if isinstance(item, str) and item.strip()
+            }
+        )
+        return tuple(normalized)
+    return ()
+
+
+def _json_type_name(types: tuple[str, ...]) -> str:
+    names = {
+        "array": "an array",
+        "boolean": "a boolean",
+        "integer": "an integer",
+        "null": "null",
+        "number": "a number",
+        "object": "an object",
+        "string": "a string",
+    }
+    if not types:
+        return "a valid value"
+    if len(types) == 1:
+        return names.get(types[0], f"a {types[0]}")
+    rendered = ", ".join(sorted(names.get(item, item) for item in types))
+    return f"one of: {rendered}"
+
+
+def _matches_schema_type(value: Any, schema_type: str) -> bool:
+    if schema_type == "array":
+        return isinstance(value, list)
+    if schema_type == "boolean":
+        return isinstance(value, bool)
+    if schema_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if schema_type == "null":
+        return value is None
+    if schema_type == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if schema_type == "object":
+        return isinstance(value, dict)
+    if schema_type == "string":
+        return isinstance(value, str)
+    return True
+
+
+def _value_is_schema_number(value: Any) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+    )
+
+
+def _coerce_schema_bound(value: Any) -> float | None:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        candidate = float(value)
+        if math.isfinite(candidate):
+            return candidate
+    return None
+
+
+def _format_note_value(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=True, sort_keys=True)
+
+
+def _clamp_number(
+    *,
+    value: float,
+    minimum: float | None,
+    maximum: float | None,
+) -> tuple[float, str | None]:
+    clamped = value
+    note_kind: str | None = None
+    if minimum is not None and clamped < minimum:
+        clamped = minimum
+        note_kind = "minimum"
+    if maximum is not None and clamped > maximum:
+        clamped = maximum
+        note_kind = "maximum"
+    return clamped, note_kind
+
+
+def _normalize_plugin_stage_params(
+    *,
+    chain_label: str,
+    stage_index: int,
+    plugin_id: str,
+    params: dict[str, Any],
+    config_schema: dict[str, Any],
+    lenient_numeric_bounds: bool,
+) -> tuple[dict[str, Any], list[str], list[str]]:
+    stage_prefix = f"{chain_label}[{stage_index}]"
+    normalized_params: dict[str, Any] = {}
+    errors: list[str] = []
+    notes: list[str] = []
+
+    properties_payload = config_schema.get("properties")
+    properties = (
+        {
+            key: value
+            for key, value in properties_payload.items()
+            if isinstance(key, str) and isinstance(value, dict)
+        }
+        if isinstance(properties_payload, dict)
+        else {}
+    )
+    unknown_keys = sorted(
+        key
+        for key in params
+        if key not in properties
+    )
+    if unknown_keys:
+        joined = ", ".join(unknown_keys)
+        errors.append(f"{stage_prefix}.params has unknown key(s): {joined}.")
+
+    runtime_required = _PLUGIN_CHAIN_RUNTIME_REQUIRED_PARAMS.get(plugin_id, ())
+    for required_param in sorted(runtime_required):
+        if required_param not in params:
+            errors.append(f"{stage_prefix}.params.{required_param} is required.")
+
+    for param_name in sorted(params):
+        raw_value = params[param_name]
+        param_schema = properties.get(param_name)
+        if param_schema is None:
+            continue
+
+        param_path = f"{stage_prefix}.params.{param_name}"
+        expected_types = _schema_types(param_schema)
+        if expected_types and not any(
+            _matches_schema_type(raw_value, schema_type)
+            for schema_type in expected_types
+        ):
+            errors.append(f"{param_path} must be {_json_type_name(expected_types)}.")
+            continue
+
+        normalized_value = raw_value
+        minimum_value = _coerce_schema_bound(param_schema.get("minimum"))
+        maximum_value = _coerce_schema_bound(param_schema.get("maximum"))
+        numeric_type_expected = bool({"integer", "number"} & set(expected_types))
+
+        if numeric_type_expected and _value_is_schema_number(raw_value):
+            numeric_value = float(raw_value)
+            if lenient_numeric_bounds:
+                clamped_value, note_kind = _clamp_number(
+                    value=numeric_value,
+                    minimum=minimum_value,
+                    maximum=maximum_value,
+                )
+                if clamped_value != numeric_value:
+                    expects_integer_only = (
+                        "integer" in expected_types and "number" not in expected_types
+                    )
+                    if expects_integer_only:
+                        normalized_value = int(round(clamped_value))
+                    elif isinstance(raw_value, int) and float(clamped_value).is_integer():
+                        normalized_value = int(clamped_value)
+                    else:
+                        normalized_value = float(clamped_value)
+
+                    if note_kind == "minimum":
+                        bound_details = f"minimum={_format_note_value(minimum_value)}"
+                    elif note_kind == "maximum":
+                        bound_details = f"maximum={_format_note_value(maximum_value)}"
+                    else:
+                        bound_details = (
+                            "bounds="
+                            f"{_format_note_value(minimum_value)}.."
+                            f"{_format_note_value(maximum_value)}"
+                        )
+                    notes.append(
+                        (
+                            f"{param_path} clamped from {_format_note_value(raw_value)} "
+                            f"to {_format_note_value(normalized_value)} using {bound_details}."
+                        )
+                    )
+            else:
+                if minimum_value is not None and numeric_value < minimum_value:
+                    errors.append(
+                        f"{param_path} must be >= {_format_note_value(minimum_value)}.",
+                    )
+                    continue
+                if maximum_value is not None and numeric_value > maximum_value:
+                    errors.append(
+                        f"{param_path} must be <= {_format_note_value(maximum_value)}.",
+                    )
+                    continue
+
+        normalized_params[param_name] = normalized_value
+
+    return normalized_params, errors, notes
+
+
+def validate_and_normalize_plugin_chain(
+    raw_chain: Any,
+    *,
+    chain_label: str,
+    lenient_numeric_bounds: bool,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    if not isinstance(raw_chain, list) or not raw_chain:
+        raise ValueError(f"{chain_label} must be a non-empty list when provided.")
+
+    normalized_chain: list[dict[str, Any]] = []
+    ordered_errors: list[str] = []
+    ordered_notes: list[str] = []
+
+    for stage_index, raw_stage in enumerate(raw_chain, start=1):
+        stage_prefix = f"{chain_label}[{stage_index}]"
+        if not isinstance(raw_stage, dict):
+            ordered_errors.append(f"{stage_prefix} must be an object.")
+            continue
+
+        plugin_id = _coerce_str(raw_stage.get("plugin_id")).strip().lower()
+        if not plugin_id:
+            ordered_errors.append(
+                f"{stage_prefix}.plugin_id must be a non-empty string.",
+            )
+            continue
+
+        raw_params = raw_stage.get("params")
+        if raw_params is None:
+            params = {}
+        elif isinstance(raw_params, dict):
+            params = dict(raw_params)
+        else:
+            ordered_errors.append(
+                f"{stage_prefix}.params must be an object when provided.",
+            )
+            continue
+
+        config_schema = _plugin_config_schema_for_id(plugin_id)
+        if not isinstance(config_schema, dict):
+            ordered_errors.append(
+                (
+                    f"{stage_prefix}.plugin_id references an unsupported plugin: "
+                    f"{plugin_id}."
+                ),
+            )
+            continue
+
+        normalized_params, stage_errors, stage_notes = _normalize_plugin_stage_params(
+            chain_label=chain_label,
+            stage_index=stage_index,
+            plugin_id=plugin_id,
+            params=params,
+            config_schema=config_schema,
+            lenient_numeric_bounds=lenient_numeric_bounds,
+        )
+        if stage_errors:
+            ordered_errors.extend(stage_errors)
+            continue
+
+        normalized_stage: dict[str, Any] = {"plugin_id": plugin_id}
+        if "params" in raw_stage:
+            normalized_stage["params"] = normalized_params
+        normalized_chain.append(normalized_stage)
+        ordered_notes.extend(stage_notes)
+
+    if ordered_errors:
+        details = "; ".join(ordered_errors)
+        raise ValueError(f"{chain_label} validation failed: {details}")
+
+    return normalized_chain, ordered_notes
 
 
 class RenderRunRefusalError(ValueError):
@@ -113,7 +537,7 @@ def build_render_report_with_audio(
         scene_path=scene_path,
     )
     report_dir = report_out_path.resolve().parent
-    plugin_chain = _plugin_chain_from_request(request_payload)
+    plugin_chain, plugin_chain_notes = _plugin_chain_from_request(request_payload)
     plugin_chain_enabled = bool(plugin_chain)
     plugin_step_events: list[dict[str, Any]] = []
 
@@ -339,6 +763,8 @@ def build_render_report_with_audio(
     ]
     if plugin_chain_enabled:
         report_notes.append("macro_mix applied as linear blend.")
+    for note in plugin_chain_notes:
+        report_notes.append(f"plugin_chain_note: {note}")
     report_job["notes"] = report_notes
 
     execute_job_row: dict[str, Any] | None = None
@@ -419,36 +845,26 @@ def _coerce_float(value: Any) -> float | None:
     return None
 
 
-def _plugin_chain_from_request(request_payload: dict[str, Any]) -> list[dict[str, Any]]:
+def _plugin_chain_from_request(
+    request_payload: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[str]]:
     options = _coerce_dict(request_payload.get("options"))
     if "plugin_chain" not in options:
-        return []
+        return [], []
+
     raw_chain = options.get("plugin_chain")
-    if not isinstance(raw_chain, list) or not raw_chain:
+    try:
+        normalized_chain, notes = validate_and_normalize_plugin_chain(
+            raw_chain,
+            chain_label="options.plugin_chain",
+            lenient_numeric_bounds=True,
+        )
+    except ValueError as exc:
         raise RenderRunRefusalError(
             issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
-            message="options.plugin_chain must be a non-empty list when provided.",
-        )
-    normalized_chain: list[dict[str, Any]] = []
-    for stage_index, raw_stage in enumerate(raw_chain, start=1):
-        if not isinstance(raw_stage, dict):
-            raise RenderRunRefusalError(
-                issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
-                message=f"options.plugin_chain[{stage_index}] must be an object.",
-            )
-        plugin_id = _coerce_str(raw_stage.get("plugin_id")).strip().lower()
-        if not plugin_id:
-            raise RenderRunRefusalError(
-                issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
-                message=f"options.plugin_chain[{stage_index}].plugin_id is required.",
-            )
-        normalized_chain.append(
-            {
-                "plugin_id": plugin_id,
-                "params": _coerce_dict(raw_stage.get("params")),
-            }
-        )
-    return normalized_chain
+            message=str(exc),
+        ) from exc
+    return normalized_chain, notes
 
 
 def _render_wav_with_plugin_chain(

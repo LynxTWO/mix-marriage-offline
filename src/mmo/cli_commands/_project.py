@@ -1027,28 +1027,26 @@ def _normalize_write_render_request_plugin_chain(
     if not isinstance(parsed, list) or not parsed:
         raise ValueError("plugin_chain must be a non-empty list.")
 
-    normalized_chain: list[dict[str, Any]] = []
-    for stage_index, raw_stage in enumerate(parsed, start=1):
-        if not isinstance(raw_stage, dict):
-            raise ValueError(f"plugin_chain[{stage_index}] must be an object.")
+    return list(parsed)
 
-        plugin_id = raw_stage.get("plugin_id")
-        if not isinstance(plugin_id, str) or not plugin_id.strip():
-            raise ValueError(
-                f"plugin_chain[{stage_index}].plugin_id must be a non-empty string.",
-            )
 
-        stage_payload: dict[str, Any] = {"plugin_id": plugin_id.strip().lower()}
-        if "params" in raw_stage:
-            params = raw_stage.get("params")
-            if not isinstance(params, dict):
-                raise ValueError(
-                    f"plugin_chain[{stage_index}].params must be an object when provided.",
-                )
-            stage_payload["params"] = dict(params)
-        normalized_chain.append(stage_payload)
+def _validate_render_request_plugin_chain(
+    raw_chain: Any,
+    *,
+    chain_label: str,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    from mmo.core.render_run_audio import (  # noqa: WPS433
+        validate_and_normalize_plugin_chain,
+    )
 
-    return normalized_chain
+    try:
+        return validate_and_normalize_plugin_chain(
+            raw_chain,
+            chain_label=chain_label,
+            lenient_numeric_bounds=True,
+        )
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
 
 
 def _normalize_write_render_request_updates(
@@ -1155,7 +1153,9 @@ def _run_project_write_render_request(
 
     options_payload = request_payload.get("options")
     options = dict(options_payload) if isinstance(options_payload, dict) else {}
+    plugin_chain_before = options.get("plugin_chain")
     updated_fields: list[str] = []
+    plugin_chain_notes: list[str] = []
 
     if "dry_run" in normalized_updates:
         options["dry_run"] = normalized_updates["dry_run"]
@@ -1175,6 +1175,19 @@ def _run_project_write_render_request(
     if "plugin_chain" in normalized_updates:
         options["plugin_chain"] = normalized_updates["plugin_chain"]
         updated_fields.append("plugin_chain")
+
+    if "plugin_chain" in options:
+        try:
+            normalized_chain, plugin_chain_notes = _validate_render_request_plugin_chain(
+                options.get("plugin_chain"),
+                chain_label="plugin_chain",
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        options["plugin_chain"] = normalized_chain
+        if normalized_chain != plugin_chain_before and "plugin_chain" not in updated_fields:
+            updated_fields.append("plugin_chain")
 
     if updated_fields:
         request_payload["options"] = options
@@ -1206,10 +1219,13 @@ def _run_project_write_render_request(
         "target_ids",
         "target_layout_ids",
         "policies",
-        "plugin_chain",
     ):
         if key in normalized_updates:
             summary[key] = normalized_updates[key]
+    if "plugin_chain" in updated_fields and "plugin_chain" in options:
+        summary["plugin_chain"] = options["plugin_chain"]
+    if plugin_chain_notes:
+        summary["plugin_chain_notes"] = plugin_chain_notes
 
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0
