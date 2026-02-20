@@ -173,6 +173,31 @@ button:hover {
   gap: 0.6rem;
 }
 
+.audition-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.55rem;
+  align-items: end;
+  margin-bottom: 0.6rem;
+}
+
+.audition-audio {
+  width: 100%;
+  margin-bottom: 0.45rem;
+}
+
+.audition-sha {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: #f4f7fa;
+  border: 1px solid #dae3ea;
+  border-radius: 6px;
+  padding: 0.35rem 0.45rem;
+  min-height: 2.1rem;
+  overflow-wrap: anywhere;
+}
+
 .plugin-card {
   border: 1px solid var(--line);
   border-radius: 8px;

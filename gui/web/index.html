@@ -119,6 +119,33 @@
       </section>
 
       <section class="panel">
+        <h2>Audition (A/B)</h2>
+        <p class="subtle">
+          Streams by allowlisted reference from <code>renders/render_execute.json</code>.
+        </p>
+        <div class="audition-grid">
+          <label class="inline-field">
+            Job
+            <select id="audition-job-select"></select>
+          </label>
+          <label class="inline-field">
+            Input slot
+            <select id="audition-input-slot-select"></select>
+          </label>
+          <button id="audition-play-input-button" type="button">Play Input</button>
+          <code id="audition-input-sha" class="audition-sha">sha256: -</code>
+          <label class="inline-field">
+            Output slot
+            <select id="audition-output-slot-select"></select>
+          </label>
+          <button id="audition-play-output-button" type="button">Play Output</button>
+          <code id="audition-output-sha" class="audition-sha">sha256: -</code>
+        </div>
+        <audio id="audition-audio" controls preload="metadata" class="audition-audio"></audio>
+        <p id="audition-status" class="subtle">No audio selected.</p>
+      </section>
+
+      <section class="panel">
         <h2>Status</h2>
         <pre id="status-output" class="code-block"></pre>
       </section>

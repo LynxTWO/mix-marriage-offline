@@ -23,6 +23,15 @@ const renderExecuteOutput = document.getElementById("render-execute-output");
 const timelineContainer = document.getElementById("timeline-container");
 const timelineJobFilter = document.getElementById("timeline-job-filter");
 const timelineStageFilter = document.getElementById("timeline-stage-filter");
+const auditionJobSelect = document.getElementById("audition-job-select");
+const auditionInputSlotSelect = document.getElementById("audition-input-slot-select");
+const auditionOutputSlotSelect = document.getElementById("audition-output-slot-select");
+const auditionPlayInputButton = document.getElementById("audition-play-input-button");
+const auditionPlayOutputButton = document.getElementById("audition-play-output-button");
+const auditionInputSha = document.getElementById("audition-input-sha");
+const auditionOutputSha = document.getElementById("audition-output-sha");
+const auditionAudio = document.getElementById("audition-audio");
+const auditionStatus = document.getElementById("audition-status");
 
 const projectDirInput = document.getElementById("project-dir-input");
 const stemsRootInput = document.getElementById("stems-root-input");
@@ -51,6 +60,11 @@ const state = {
     report: null,
     timelineFilterJob: "",
     timelineFilterStage: "",
+  },
+  audition: {
+    inputSlot: 0,
+    jobId: "",
+    outputSlot: 0,
   },
   modifierState: {
     shift: false,
@@ -953,6 +967,168 @@ function _setSelectOptions(selectElement, options, selectedValue) {
   }
 }
 
+function _pathTail(pathValue) {
+  if (typeof pathValue !== "string" || !pathValue.trim()) {
+    return "(unknown)";
+  }
+  const normalized = pathValue.replace(/\\/g, "/");
+  const parts = normalized.split("/").filter((part) => part);
+  return parts[parts.length - 1] || normalized;
+}
+
+function _pointerRows(job, streamKind) {
+  if (!_isObject(job)) {
+    return [];
+  }
+  const pointers = streamKind === "input"
+    ? (Array.isArray(job.inputs) ? job.inputs : [])
+    : (Array.isArray(job.outputs) ? job.outputs : []);
+  return pointers.filter((pointer) => _isObject(pointer));
+}
+
+function _selectedPointerOrNull(job, streamKind, slot) {
+  const pointers = _pointerRows(job, streamKind);
+  if (!Number.isInteger(slot) || slot < 0 || slot >= pointers.length) {
+    return null;
+  }
+  return pointers[slot];
+}
+
+function _slotSelectValue(selectElement) {
+  const raw = typeof selectElement?.value === "string" ? selectElement.value.trim() : "";
+  if (!/^\d+$/.test(raw)) {
+    return 0;
+  }
+  return Number.parseInt(raw, 10);
+}
+
+function _setAuditionStatus(text) {
+  if (auditionStatus) {
+    auditionStatus.textContent = text;
+  }
+}
+
+function _renderAuditionPanel() {
+  if (
+    !auditionJobSelect
+    || !auditionInputSlotSelect
+    || !auditionOutputSlotSelect
+    || !auditionInputSha
+    || !auditionOutputSha
+    || !auditionPlayInputButton
+    || !auditionPlayOutputButton
+  ) {
+    return;
+  }
+
+  const jobs = Array.isArray(state.renderArtifacts.execute?.jobs)
+    ? state.renderArtifacts.execute.jobs.filter((job) => _isObject(job) && typeof job.job_id === "string" && job.job_id)
+    : [];
+  jobs.sort((left, right) => String(left.job_id).localeCompare(String(right.job_id)));
+
+  if (jobs.length === 0) {
+    _setSelectOptions(auditionJobSelect, [{ value: "", label: "No jobs" }], "");
+    _setSelectOptions(auditionInputSlotSelect, [{ value: "0", label: "(none)" }], "0");
+    _setSelectOptions(auditionOutputSlotSelect, [{ value: "0", label: "(none)" }], "0");
+    auditionJobSelect.disabled = true;
+    auditionInputSlotSelect.disabled = true;
+    auditionOutputSlotSelect.disabled = true;
+    auditionPlayInputButton.disabled = true;
+    auditionPlayOutputButton.disabled = true;
+    auditionInputSha.textContent = "sha256: -";
+    auditionOutputSha.textContent = "sha256: -";
+    _setAuditionStatus("No render_execute jobs available for audition.");
+    return;
+  }
+
+  const knownJobId = state.audition.jobId;
+  if (!knownJobId || !jobs.some((job) => job.job_id === knownJobId)) {
+    state.audition.jobId = String(jobs[0].job_id);
+  }
+  const selectedJob = jobs.find((job) => job.job_id === state.audition.jobId) || jobs[0];
+  state.audition.jobId = String(selectedJob.job_id);
+
+  _setSelectOptions(
+    auditionJobSelect,
+    jobs.map((job) => ({ value: String(job.job_id), label: String(job.job_id) })),
+    state.audition.jobId,
+  );
+  auditionJobSelect.disabled = false;
+
+  const inputPointers = _pointerRows(selectedJob, "input");
+  const outputPointers = _pointerRows(selectedJob, "output");
+  if (state.audition.inputSlot >= inputPointers.length) {
+    state.audition.inputSlot = 0;
+  }
+  if (state.audition.outputSlot >= outputPointers.length) {
+    state.audition.outputSlot = 0;
+  }
+
+  _setSelectOptions(
+    auditionInputSlotSelect,
+    inputPointers.length > 0
+      ? inputPointers.map((pointer, index) => ({
+        value: String(index),
+        label: `${index}: ${_pathTail(pointer.path)}`,
+      }))
+      : [{ value: "0", label: "(none)" }],
+    String(state.audition.inputSlot),
+  );
+  _setSelectOptions(
+    auditionOutputSlotSelect,
+    outputPointers.length > 0
+      ? outputPointers.map((pointer, index) => ({
+        value: String(index),
+        label: `${index}: ${_pathTail(pointer.path)}`,
+      }))
+      : [{ value: "0", label: "(none)" }],
+    String(state.audition.outputSlot),
+  );
+
+  auditionInputSlotSelect.disabled = inputPointers.length === 0;
+  auditionOutputSlotSelect.disabled = outputPointers.length === 0;
+  auditionPlayInputButton.disabled = inputPointers.length === 0;
+  auditionPlayOutputButton.disabled = outputPointers.length === 0;
+
+  const selectedInput = _selectedPointerOrNull(selectedJob, "input", state.audition.inputSlot);
+  const selectedOutput = _selectedPointerOrNull(selectedJob, "output", state.audition.outputSlot);
+  auditionInputSha.textContent = `sha256: ${selectedInput?.sha256 || "-"}`;
+  auditionOutputSha.textContent = `sha256: ${selectedOutput?.sha256 || "-"}`;
+  _setAuditionStatus(`Ready: ${state.audition.jobId}`);
+}
+
+function _auditionUrl(streamKind) {
+  const projectDir = normalizePath(projectDirInput?.value || "");
+  if (!projectDir) {
+    throw new Error("Project directory is required before auditioning.");
+  }
+  const slot = streamKind === "input" ? state.audition.inputSlot : state.audition.outputSlot;
+  const query = new URLSearchParams({
+    job_id: state.audition.jobId,
+    project_dir: projectDir,
+    slot: String(slot),
+    stream: streamKind,
+  });
+  return `/api/audio-stream?${query.toString()}`;
+}
+
+async function _playAudition(streamKind) {
+  if (!auditionAudio) {
+    return;
+  }
+  const label = streamKind === "input" ? "input" : "output";
+  const url = _auditionUrl(streamKind);
+  auditionAudio.src = url;
+  auditionAudio.load();
+  _setAuditionStatus(`Loading ${label} ${state.audition.jobId} slot ${streamKind === "input" ? state.audition.inputSlot : state.audition.outputSlot}...`);
+  try {
+    await auditionAudio.play();
+    _setAuditionStatus(`Playing ${label} ${state.audition.jobId}`);
+  } catch {
+    _setAuditionStatus(`Loaded ${label}; press play on the audio controls if autoplay was blocked.`);
+  }
+}
+
 function _renderTimelineEntries() {
   const entries = _annotatedEventLogEntries();
   const availableJobIds = new Set();
@@ -1180,6 +1356,7 @@ function renderRenderArtifactsViewer() {
   _renderDeterminismReceipt();
   _renderRefusalBlock();
   _renderExecutePointersBlock();
+  _renderAuditionPanel();
   _renderTimelineEntries();
 }
 
@@ -1925,6 +2102,53 @@ timelineStageFilter.addEventListener("change", () => {
   state.renderArtifacts.timelineFilterStage = timelineStageFilter.value;
   _renderTimelineEntries();
 });
+
+if (auditionJobSelect) {
+  auditionJobSelect.addEventListener("change", () => {
+    state.audition.jobId = auditionJobSelect.value;
+    state.audition.inputSlot = 0;
+    state.audition.outputSlot = 0;
+    _renderAuditionPanel();
+  });
+}
+
+if (auditionInputSlotSelect) {
+  auditionInputSlotSelect.addEventListener("change", () => {
+    state.audition.inputSlot = _slotSelectValue(auditionInputSlotSelect);
+    _renderAuditionPanel();
+  });
+}
+
+if (auditionOutputSlotSelect) {
+  auditionOutputSlotSelect.addEventListener("change", () => {
+    state.audition.outputSlot = _slotSelectValue(auditionOutputSlotSelect);
+    _renderAuditionPanel();
+  });
+}
+
+if (auditionPlayInputButton) {
+  auditionPlayInputButton.addEventListener("click", async () => {
+    try {
+      await _playAudition("input");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      _setAuditionStatus(message);
+      setStatus(message);
+    }
+  });
+}
+
+if (auditionPlayOutputButton) {
+  auditionPlayOutputButton.addEventListener("click", async () => {
+    try {
+      await _playAudition("output");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      _setAuditionStatus(message);
+      setStatus(message);
+    }
+  });
+}
 
 window.addEventListener("keydown", (event) => {
   _setModifierState(_modifierStateFromKeyboardEvent(event));

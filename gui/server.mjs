@@ -2,7 +2,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { promises as fs } from "node:fs";
+import { createReadStream, promises as fs } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { runMmoCli, runMmoCliJson } from "./lib/mmo_cli_runner.mjs";
@@ -20,6 +20,15 @@ const _MIME_TYPES = {
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".mjs": "text/javascript; charset=utf-8",
+};
+
+const _AUDIO_MIME_TYPES = {
+  ".aiff": "audio/aiff",
+  ".flac": "audio/flac",
+  ".m4a": "audio/mp4",
+  ".mp3": "audio/mpeg",
+  ".ogg": "audio/ogg",
+  ".wav": "audio/wav",
 };
 
 const _ALLOWED_RENDER_ARTIFACT_NAMES = new Set([
@@ -123,6 +132,115 @@ function _renderArtifactInfo(pathValue) {
   return {
     artifactName,
     normalizedPath: normalized,
+  };
+}
+
+function _audioMimeType(audioPath) {
+  const ext = path.extname(audioPath).toLowerCase();
+  return _AUDIO_MIME_TYPES[ext] || "application/octet-stream";
+}
+
+function _parseSlot(rawValue) {
+  const text = typeof rawValue === "string" ? rawValue.trim() : "";
+  if (!text) {
+    return 0;
+  }
+  if (!/^\d+$/.test(text)) {
+    return null;
+  }
+  return Number.parseInt(text, 10);
+}
+
+function _parseRangeHeader(rangeHeader, fileSize) {
+  if (!rangeHeader || typeof rangeHeader !== "string") {
+    return null;
+  }
+  const trimmed = rangeHeader.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const match = trimmed.match(/^bytes=(\d*)-(\d*)$/i);
+  if (!match) {
+    return { invalid: true };
+  }
+
+  const startText = match[1];
+  const endText = match[2];
+  if (!startText && !endText) {
+    return { invalid: true };
+  }
+
+  let start;
+  let end;
+  if (!startText) {
+    const suffixLength = Number.parseInt(endText, 10);
+    if (!Number.isFinite(suffixLength) || suffixLength <= 0) {
+      return { invalid: true };
+    }
+    const clampedLength = Math.min(suffixLength, fileSize);
+    start = Math.max(fileSize - clampedLength, 0);
+    end = fileSize - 1;
+  } else {
+    start = Number.parseInt(startText, 10);
+    if (!Number.isFinite(start) || start < 0) {
+      return { invalid: true };
+    }
+    if (!endText) {
+      end = fileSize - 1;
+    } else {
+      end = Number.parseInt(endText, 10);
+      if (!Number.isFinite(end) || end < 0) {
+        return { invalid: true };
+      }
+    }
+  }
+
+  if (fileSize <= 0 || start >= fileSize || end < start) {
+    return { invalid: true };
+  }
+  if (end >= fileSize) {
+    end = fileSize - 1;
+  }
+  return { start, end };
+}
+
+function _selectedAudioPointer(executePayload, jobId, streamKind, slot) {
+  const jobs = Array.isArray(executePayload?.jobs) ? executePayload.jobs : [];
+  const job = jobs.find(
+    (row) =>
+      row &&
+      typeof row === "object" &&
+      typeof row.job_id === "string" &&
+      row.job_id === jobId,
+  );
+  if (!job || typeof job !== "object") {
+    throw new Error(`Unknown job_id: ${jobId}`);
+  }
+
+  const pointers = streamKind === "input"
+    ? (Array.isArray(job.inputs) ? job.inputs : [])
+    : (Array.isArray(job.outputs) ? job.outputs : []);
+  if (slot < 0 || slot >= pointers.length) {
+    throw new Error(`Slot ${slot} not available for ${streamKind} on ${jobId}`);
+  }
+
+  const pointer = pointers[slot];
+  if (!pointer || typeof pointer !== "object") {
+    throw new Error(`Invalid file pointer for ${streamKind} slot ${slot}`);
+  }
+  const pathText = typeof pointer.path === "string" ? pointer.path.trim() : "";
+  if (!pathText) {
+    throw new Error(`Missing path for ${streamKind} slot ${slot}`);
+  }
+  const sha256 = typeof pointer.sha256 === "string" && pointer.sha256.trim()
+    ? pointer.sha256.trim()
+    : "";
+  return {
+    audioPath: path.resolve(pathText),
+    jobId,
+    sha256,
+    slot,
+    streamKind,
   };
 }
 
@@ -367,7 +485,142 @@ async function _handleRenderArtifactRead(response, body) {
   });
 }
 
+async function _handleAudioStreamRequest(request, response, requestUrl) {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    _sendText(response, 405, "Method not allowed.");
+    return;
+  }
+
+  const projectDirRaw = requestUrl.searchParams.get("project_dir");
+  const jobIdRaw = requestUrl.searchParams.get("job_id");
+  const streamRaw = requestUrl.searchParams.get("stream");
+  const slotRaw = requestUrl.searchParams.get("slot");
+
+  const projectDir = typeof projectDirRaw === "string" ? projectDirRaw.trim() : "";
+  const jobId = typeof jobIdRaw === "string" ? jobIdRaw.trim() : "";
+  const streamKind = typeof streamRaw === "string" ? streamRaw.trim().toLowerCase() : "";
+  const slot = _parseSlot(slotRaw);
+
+  if (!projectDir) {
+    _sendJson(response, 400, { error: "project_dir must be a non-empty string." });
+    return;
+  }
+  if (!jobId) {
+    _sendJson(response, 400, { error: "job_id must be a non-empty string." });
+    return;
+  }
+  if (streamKind !== "input" && streamKind !== "output") {
+    _sendJson(response, 400, { error: "stream must be either 'input' or 'output'." });
+    return;
+  }
+  if (!Number.isInteger(slot) || slot < 0) {
+    _sendJson(response, 400, { error: "slot must be a non-negative integer." });
+    return;
+  }
+
+  const executePath = path.resolve(projectDir, "renders", "render_execute.json");
+  let executePayload;
+  try {
+    executePayload = await _loadJsonObject(executePath);
+  } catch (error) {
+    _sendJson(response, 404, {
+      error: `Failed to read render_execute JSON: ${error instanceof Error ? error.message : String(error)}`,
+    });
+    return;
+  }
+  if (!executePayload) {
+    _sendJson(response, 404, { error: "render_execute JSON must be an object." });
+    return;
+  }
+
+  let selected;
+  try {
+    selected = _selectedAudioPointer(executePayload, jobId, streamKind, slot);
+  } catch (error) {
+    _sendJson(response, 404, { error: error instanceof Error ? error.message : String(error) });
+    return;
+  }
+
+  let fileStat;
+  try {
+    fileStat = await fs.stat(selected.audioPath);
+  } catch {
+    _sendJson(response, 404, { error: `Audio file does not exist: ${selected.audioPath}` });
+    return;
+  }
+  if (!fileStat.isFile()) {
+    _sendJson(response, 404, { error: `Audio file is not a regular file: ${selected.audioPath}` });
+    return;
+  }
+
+  const fileSize = fileStat.size;
+  const range = _parseRangeHeader(request.headers.range, fileSize);
+  if (range?.invalid) {
+    response.statusCode = 416;
+    response.setHeader("Accept-Ranges", "bytes");
+    response.setHeader("Content-Range", `bytes */${fileSize}`);
+    response.end();
+    return;
+  }
+
+  const baseHeaders = {
+    "Accept-Ranges": "bytes",
+    "Cache-Control": "no-store",
+    "Content-Type": _audioMimeType(selected.audioPath),
+    "X-MMO-Audio-SHA256": selected.sha256 || "",
+    "X-MMO-Job-ID": selected.jobId,
+    "X-MMO-Stream": selected.streamKind,
+    "X-MMO-Slot": String(selected.slot),
+  };
+  for (const [key, value] of Object.entries(baseHeaders)) {
+    response.setHeader(key, value);
+  }
+
+  if (range) {
+    const contentLength = range.end - range.start + 1;
+    response.statusCode = 206;
+    response.setHeader("Content-Length", String(contentLength));
+    response.setHeader("Content-Range", `bytes ${range.start}-${range.end}/${fileSize}`);
+    if (request.method === "HEAD") {
+      response.end();
+      return;
+    }
+    const readStream = createReadStream(selected.audioPath, { start: range.start, end: range.end });
+    readStream.on("error", () => {
+      if (!response.headersSent) {
+        _sendJson(response, 500, { error: "Failed to stream audio." });
+        return;
+      }
+      response.destroy();
+    });
+    readStream.pipe(response);
+    return;
+  }
+
+  response.statusCode = 200;
+  response.setHeader("Content-Length", String(fileSize));
+  if (request.method === "HEAD") {
+    response.end();
+    return;
+  }
+  const readStream = createReadStream(selected.audioPath);
+  readStream.on("error", () => {
+    if (!response.headersSent) {
+      _sendJson(response, 500, { error: "Failed to stream audio." });
+      return;
+    }
+    response.destroy();
+  });
+  readStream.pipe(response);
+}
+
 async function _handleApiRequest(request, response, pathname) {
+  if (pathname === "/api/audio-stream") {
+    const requestUrl = new URL(request.url || "/", "http://localhost");
+    await _handleAudioStreamRequest(request, response, requestUrl);
+    return true;
+  }
+
   if (request.method === "POST" && pathname === "/api/rpc") {
     let body;
     try {
