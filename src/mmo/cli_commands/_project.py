@@ -102,6 +102,7 @@ _PROJECT_SHOW_SCHEMA_BY_ARTIFACT["listen_pack.json"] = "listen_pack.schema.json"
 _PROJECT_RENDER_REQUEST_EDITABLE_FIELDS: frozenset[str] = frozenset(
     {
         "dry_run",
+        "max_theoretical_quality",
         "plugin_chain",
         "policies",
         "target_ids",
@@ -1071,6 +1072,11 @@ def _normalize_write_render_request_updates(
             raw_updates.get("dry_run"),
             field_name="dry_run",
         )
+    if "max_theoretical_quality" in raw_updates:
+        normalized["max_theoretical_quality"] = _parse_write_render_request_bool(
+            raw_updates.get("max_theoretical_quality"),
+            field_name="max_theoretical_quality",
+        )
     if "plugin_chain" in raw_updates:
         normalized["plugin_chain"] = _normalize_write_render_request_plugin_chain(
             raw_updates.get("plugin_chain"),
@@ -1160,6 +1166,9 @@ def _run_project_write_render_request(
     if "dry_run" in normalized_updates:
         options["dry_run"] = normalized_updates["dry_run"]
         updated_fields.append("dry_run")
+    if "max_theoretical_quality" in normalized_updates:
+        options["max_theoretical_quality"] = normalized_updates["max_theoretical_quality"]
+        updated_fields.append("max_theoretical_quality")
 
     if "target_ids" in normalized_updates:
         options["target_ids"] = normalized_updates["target_ids"]
@@ -1216,6 +1225,7 @@ def _run_project_write_render_request(
     }
     for key in (
         "dry_run",
+        "max_theoretical_quality",
         "target_ids",
         "target_layout_ids",
         "policies",

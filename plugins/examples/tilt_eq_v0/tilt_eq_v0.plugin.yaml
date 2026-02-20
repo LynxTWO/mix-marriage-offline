@@ -1,0 +1,85 @@
+plugin_id: "PLUGIN.RENDERER.EXAMPLE_TILT_EQ_V0"
+plugin_type: "renderer"
+name: "Example Tilt EQ v0"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Starter tilt EQ plugin pack with UI schema, hints, and layout metadata."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "plugins.renderers.safe_renderer:SafeRenderer"
+capabilities:
+  max_channels: 32
+  supported_contexts:
+    - "render"
+    - "auto_apply"
+  notes:
+    - "Starter plugin pack for tonal-shape GUI smoke coverage."
+ui_layout: "ui/layout.json"
+config_schema:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: "object"
+  additionalProperties: false
+  properties:
+    tilt_db:
+      type: "number"
+      minimum: -6
+      maximum: 6
+      default: 0
+      description: "Tilt amount in dB. Positive brightens highs and darkens lows."
+      x_mmo_ui:
+        widget: "knob"
+        units: "dB"
+        step: 0.5
+        fine_step: 0.1
+        modifier_key: "shift"
+        min: -6
+        max: 6
+        group: "tone"
+        order: 0
+        help: "Overall tonal tilt around pivot."
+    pivot_hz:
+      type: "number"
+      minimum: 200
+      maximum: 2000
+      default: 1000
+      description: "Pivot frequency for the tilt curve in Hz."
+      x_mmo_ui:
+        widget: "knob"
+        units: "Hz"
+        step: 25
+        fine_step: 5
+        modifier_key: "shift"
+        min: 200
+        max: 2000
+        group: "tone"
+        order: 1
+        help: "Center frequency where low/high shelves pivot."
+    macro_mix:
+      type: "number"
+      minimum: 0
+      maximum: 100
+      default: 100
+      description: "Dry/wet blend in percent."
+      x_mmo_ui:
+        widget: "knob"
+        units: "%"
+        step: 1
+        min: 0
+        max: 100
+        group: "main"
+        order: 2
+        help: "Linear blend between dry and processed signals."
+    bypass:
+      type: "boolean"
+      default: false
+      description: "Bypass all processing."
+      x_mmo_ui:
+        widget: "toggle"
+        group: "main"
+        order: 3
+        help: "True bypass."
+  required:
+    - "tilt_db"
+    - "pivot_hz"
+    - "macro_mix"
+    - "bypass"

@@ -2428,7 +2428,8 @@ def main(argv: list[str] | None = None) -> int:
         default=[],
         metavar="key=value",
         help=(
-            "Editable fields only: dry_run, target_ids, target_layout_ids, policies. "
+            "Editable fields only: dry_run, max_theoretical_quality, target_ids, "
+            "target_layout_ids, plugin_chain, policies. "
             "Repeat --set for multiple updates."
         ),
     )

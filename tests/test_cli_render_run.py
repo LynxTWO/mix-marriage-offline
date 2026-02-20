@@ -220,6 +220,60 @@ def _encode_flac(source_wav: Path, output_flac: Path, ffmpeg_cmd: list[str]) -> 
     )
 
 
+def _write_pcm16_two_tone_wav(
+    path: Path,
+    *,
+    channels: int,
+    sample_rate_hz: int = 48000,
+    duration_s: float = 1.0,
+    low_hz: float = 160.0,
+    high_hz: float = 6000.0,
+) -> None:
+    frames = max(1, int(sample_rate_hz * duration_s))
+    samples: list[int] = []
+    for frame_index in range(frames):
+        low_value = math.sin(2.0 * math.pi * low_hz * frame_index / sample_rate_hz)
+        high_value = math.sin(2.0 * math.pi * high_hz * frame_index / sample_rate_hz)
+        mixed = int(0.2 * 32767.0 * low_value + 0.2 * 32767.0 * high_value)
+        for _ in range(channels):
+            samples.append(mixed)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(channels)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate_hz)
+        handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+
+
+def _pcm16_band_energy(path: Path, *, band_low_hz: float, band_high_hz: float) -> float:
+    import numpy as np
+
+    with wave.open(str(path), "rb") as handle:
+        sample_width = handle.getsampwidth()
+        if sample_width != 2:
+            raise ValueError(f"Expected 16-bit WAV, got sample width {sample_width}")
+        channel_count = handle.getnchannels()
+        sample_rate_hz = handle.getframerate()
+        frame_count = handle.getnframes()
+        frames = handle.readframes(frame_count)
+    if not frames:
+        return 0.0
+    samples = np.frombuffer(frames, dtype="<i2").astype(np.float64) / 32768.0
+    if channel_count > 1:
+        mono = np.mean(samples.reshape(-1, channel_count), axis=1, dtype=np.float64)
+    else:
+        mono = samples
+    window = np.hanning(int(mono.shape[0])).astype(np.float64)
+    windowed = mono * window
+    spectrum = np.fft.rfft(windowed)
+    freqs_hz = np.fft.rfftfreq(int(mono.shape[0]), d=1.0 / float(sample_rate_hz))
+    mask = (freqs_hz >= float(band_low_hz)) & (freqs_hz < float(band_high_hz))
+    if not bool(np.any(mask)):
+        return 0.0
+    magnitudes = np.abs(spectrum[mask])
+    return float(np.sum(np.square(magnitudes), dtype=np.float64))
+
+
 class TestRenderRunHappyPath(unittest.TestCase):
     def test_produces_schema_valid_plan_and_report(self) -> None:
         plan_validator = _schema_validator("render_plan.schema.json")
@@ -421,6 +475,199 @@ class TestRenderRunAudioExecution(unittest.TestCase):
 
             self.assertEqual(wav_bytes_a, wav_bytes_b)
             self.assertEqual(event_bytes_a, event_bytes_b)
+
+    def test_plugin_chain_tilt_eq_v0_is_deterministic_across_runs(self) -> None:
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("numpy not available")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            source_path = stems_dir / "mix.wav"
+            _write_pcm16_wav(source_path, channels=2, duration_s=1.0)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                    "plugin_chain": [
+                        {
+                            "plugin_id": "tilt_eq_v0",
+                            "params": {
+                                "tilt_db": 4.0,
+                                "pivot_hz": 1000.0,
+                                "macro_mix": 100.0,
+                                "bypass": False,
+                            },
+                        }
+                    ],
+                },
+            }
+            event_log_out = temp_path / "render_events.jsonl"
+            exit_a, _, stderr_a, _, report_out_a = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--event-log-out", str(event_log_out),
+                ],
+            )
+            self.assertEqual(exit_a, 0, msg=stderr_a)
+
+            report_a = json.loads(report_out_a.read_text(encoding="utf-8"))
+            rendered_path_a = Path(report_a["jobs"][0]["output_files"][0]["file_path"])
+            wav_bytes_a = rendered_path_a.read_bytes()
+            event_bytes_a = event_log_out.read_bytes()
+
+            events = _read_jsonl(event_log_out)
+            stage_event = next(
+                (
+                    event
+                    for event in events
+                    if isinstance(event, dict)
+                    and isinstance(event.get("evidence"), dict)
+                    and "RENDER.RUN.PLUGIN.STAGE_APPLIED"
+                    in event.get("evidence", {}).get("codes", [])
+                    and "tilt_eq_v0" in event.get("evidence", {}).get("ids", [])
+                ),
+                None,
+            )
+            self.assertIsNotNone(stage_event)
+            metrics = {
+                str(item.get("name")): item.get("value")
+                for item in stage_event.get("evidence", {}).get("metrics", [])
+                if isinstance(item, dict)
+            }
+            self.assertAlmostEqual(float(metrics.get("tilt_db", -999.0)), 4.0, delta=1e-8)
+            self.assertAlmostEqual(float(metrics.get("pivot_hz", -999.0)), 1000.0, delta=1e-8)
+            self.assertAlmostEqual(float(metrics.get("macro_mix", -1.0)), 1.0, delta=1e-8)
+
+            exit_b, _, stderr_b, _, report_out_b = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--force",
+                    "--event-log-out", str(event_log_out),
+                    "--event-log-force",
+                ],
+            )
+            self.assertEqual(exit_b, 0, msg=stderr_b)
+
+            report_b = json.loads(report_out_b.read_text(encoding="utf-8"))
+            rendered_path_b = Path(report_b["jobs"][0]["output_files"][0]["file_path"])
+            wav_bytes_b = rendered_path_b.read_bytes()
+            event_bytes_b = event_log_out.read_bytes()
+
+            self.assertEqual(wav_bytes_a, wav_bytes_b)
+            self.assertEqual(event_bytes_a, event_bytes_b)
+
+    def test_plugin_chain_tilt_eq_v0_tilt_direction_changes_band_energy(self) -> None:
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("numpy not available")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            source_path = stems_dir / "mix.wav"
+            _write_pcm16_two_tone_wav(source_path, channels=2, duration_s=1.0)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+
+            def _render_tilt(tilt_db: float) -> Path:
+                request_payload = {
+                    "schema_version": "0.1.0",
+                    "target_layout_id": "LAYOUT.2_0",
+                    "scene_path": scene_posix,
+                    "options": {
+                        "dry_run": False,
+                        "plugin_chain": [
+                            {
+                                "plugin_id": "tilt_eq_v0",
+                                "params": {
+                                    "tilt_db": tilt_db,
+                                    "pivot_hz": 1000.0,
+                                    "macro_mix": 100.0,
+                                    "bypass": False,
+                                },
+                            }
+                        ],
+                    },
+                }
+                exit_code, _, stderr, _, report_out = _run_render_run(
+                    temp_path,
+                    request_payload=request_payload,
+                    extra_args=[
+                        "--force",
+                    ],
+                )
+                self.assertEqual(exit_code, 0, msg=stderr)
+                report = json.loads(report_out.read_text(encoding="utf-8"))
+                return Path(report["jobs"][0]["output_files"][0]["file_path"])
+
+            tilt_up_path = _render_tilt(6.0)
+            up_hf = _pcm16_band_energy(tilt_up_path, band_low_hz=4000.0, band_high_hz=12000.0)
+            up_lf = _pcm16_band_energy(tilt_up_path, band_low_hz=60.0, band_high_hz=400.0)
+
+            tilt_down_path = _render_tilt(-6.0)
+            down_hf = _pcm16_band_energy(tilt_down_path, band_low_hz=4000.0, band_high_hz=12000.0)
+            down_lf = _pcm16_band_energy(tilt_down_path, band_low_hz=60.0, band_high_hz=400.0)
+
+            self.assertGreater(up_hf, down_hf)
+            self.assertGreater(down_lf, up_lf)
+
+    def test_plugin_chain_precision_mode_note_reflects_quality_flag(self) -> None:
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("numpy not available")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            source_path = stems_dir / "mix.wav"
+            _write_pcm16_wav(source_path, channels=2, duration_s=1.0)
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+
+            def _run_with_precision(flag_value: bool) -> list[str]:
+                request_payload = {
+                    "schema_version": "0.1.0",
+                    "target_layout_id": "LAYOUT.2_0",
+                    "scene_path": scene_posix,
+                    "options": {
+                        "dry_run": False,
+                        "max_theoretical_quality": flag_value,
+                        "plugin_chain": [
+                            {
+                                "plugin_id": "gain_v0",
+                                "params": {
+                                    "gain_db": -3.0,
+                                },
+                            }
+                        ],
+                    },
+                }
+                exit_code, _, stderr, _, report_out = _run_render_run(
+                    temp_path,
+                    request_payload=request_payload,
+                    extra_args=["--force"],
+                )
+                self.assertEqual(exit_code, 0, msg=stderr)
+                report = json.loads(report_out.read_text(encoding="utf-8"))
+                notes = report["jobs"][0].get("notes", [])
+                self.assertIsInstance(notes, list)
+                return [str(item) for item in notes]
+
+            notes_float64 = _run_with_precision(True)
+            self.assertIn("plugin_chain_precision_mode: float64", notes_float64)
+
+            notes_float32 = _run_with_precision(False)
+            self.assertIn("plugin_chain_precision_mode: float32", notes_float32)
 
     def test_plugin_chain_gain_v0_honors_bypass_and_macro_mix_linear_blend(self) -> None:
         try:

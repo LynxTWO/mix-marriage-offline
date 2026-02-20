@@ -42,6 +42,7 @@ _BIT_DEPTHS = frozenset({16, 24, 32})
 _INTERMEDIATE_ROOT = ".mmo_tmp/render_run"
 _FLOAT_MAX = math.nextafter(1.0, 0.0)
 _GAIN_V0_PLUGIN_ID = "gain_v0"
+_TILT_EQ_V0_PLUGIN_ID = "tilt_eq_v0"
 
 ISSUE_RENDER_RUN_DOWNMIX_SCOPE_UNSUPPORTED = "ISSUE.RENDER.RUN.DOWNMIX_SCOPE_UNSUPPORTED"
 ISSUE_RENDER_RUN_SOURCE_STEMS_DIR_INVALID = "ISSUE.RENDER.RUN.SOURCE_STEMS_DIR_INVALID"
@@ -70,9 +71,21 @@ _PLUGIN_CHAIN_CONFIG_SCHEMA_FALLBACKS_BY_ID: dict[str, dict[str, Any]] = {
             "bypass": {"type": "boolean"},
         },
     },
+    _TILT_EQ_V0_PLUGIN_ID: {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "tilt_db": {"type": "number", "minimum": -6, "maximum": 6},
+            "pivot_hz": {"type": "number", "minimum": 200, "maximum": 2000},
+            "macro_mix": {"type": "number", "minimum": 0, "maximum": 100},
+            "bypass": {"type": "boolean"},
+        },
+    },
 }
 _PLUGIN_CHAIN_RUNTIME_REQUIRED_PARAMS: dict[str, tuple[str, ...]] = {
     _GAIN_V0_PLUGIN_ID: ("gain_db",),
+    _TILT_EQ_V0_PLUGIN_ID: ("tilt_db", "pivot_hz"),
 }
 _PLUGIN_CHAIN_CONFIG_SCHEMA_CACHE: dict[str, dict[str, Any]] | None = None
 
@@ -514,6 +527,20 @@ def build_render_report_with_audio(
     _validate_source_layout_or_raise(source_metadata)
 
     options = _coerce_dict(request_payload.get("options"))
+    requested_max_theoretical_quality = options.get("max_theoretical_quality")
+    max_theoretical_quality = _coerce_bool(requested_max_theoretical_quality)
+    if (
+        requested_max_theoretical_quality is not None
+        and max_theoretical_quality is None
+    ):
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+            message=(
+                "options.max_theoretical_quality must be a boolean "
+                "(true or false) when provided."
+            ),
+        )
+    max_theoretical_quality = bool(max_theoretical_quality)
     source_rate_hz = _coerce_int(source_metadata.get("sample_rate_hz")) or 0
     requested_rate_hz = _coerce_int(options.get("sample_rate_hz"))
     if requested_rate_hz is not None and requested_rate_hz != source_rate_hz:
@@ -604,6 +631,7 @@ def build_render_report_with_audio(
                 bit_depth=output_bit_depth,
                 plugin_chain=plugin_chain,
                 ffmpeg_cmd_for_decode=ffmpeg_cmd_for_decode,
+                max_theoretical_quality=max_theoretical_quality,
             )
         else:
             float_samples_iter: Iterator[list[float]]
@@ -763,6 +791,8 @@ def build_render_report_with_audio(
     ]
     if plugin_chain_enabled:
         report_notes.append("macro_mix applied as linear blend.")
+        precision_mode = "float64" if max_theoretical_quality else "float32"
+        report_notes.append(f"plugin_chain_precision_mode: {precision_mode}")
     for note in plugin_chain_notes:
         report_notes.append(f"plugin_chain_note: {note}")
     report_job["notes"] = report_notes
@@ -875,6 +905,7 @@ def _render_wav_with_plugin_chain(
     bit_depth: int,
     plugin_chain: list[dict[str, Any]],
     ffmpeg_cmd_for_decode: Sequence[str] | None,
+    max_theoretical_quality: bool,
 ) -> list[dict[str, Any]]:
     try:
         import numpy as np
@@ -893,9 +924,13 @@ def _render_wav_with_plugin_chain(
             message=f"Unsupported output bit depth: {bit_depth}",
         )
 
-    stereo_samples = _read_stereo_source_float32(
+    processing_dtype_name = "float64" if max_theoretical_quality else "float32"
+    processing_dtype = np.float64 if max_theoretical_quality else np.float32
+
+    stereo_samples = _read_stereo_source_samples(
         source_path,
         ffmpeg_cmd=ffmpeg_cmd_for_decode,
+        dtype=processing_dtype,
     )
     frame_count = int(stereo_samples.shape[0])
 
@@ -906,7 +941,10 @@ def _render_wav_with_plugin_chain(
             "kind": "action",
             "scope": "render",
             "what": "plugin chain source loaded",
-            "why": "Loaded stereo source into float32 buffer for deterministic plugin execution.",
+            "why": (
+                "Loaded stereo source into "
+                f"{processing_dtype_name} buffer for deterministic plugin execution."
+            ),
             "where": [source_posix],
             "confidence": None,
             "evidence": {
@@ -920,11 +958,279 @@ def _render_wav_with_plugin_chain(
         },
     ]
 
+    def _parse_bypass_for_stage(
+        *,
+        plugin_id: str,
+        params: dict[str, Any],
+    ) -> bool:
+        bypass_raw = params.get("bypass")
+        if bypass_raw is None:
+            return False
+        bypass_value = _coerce_bool(bypass_raw)
+        if bypass_value is None:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                message=f"{plugin_id} requires boolean params.bypass when provided.",
+            )
+        return bypass_value
+
+    def _parse_macro_mix_for_stage(
+        *,
+        plugin_id: str,
+        params: dict[str, Any],
+    ) -> tuple[float, float]:
+        raw_macro_mix = params.get("macro_mix")
+        if raw_macro_mix is None:
+            return 1.0, 1.0
+        macro_mix_input = _coerce_float(raw_macro_mix)
+        if macro_mix_input is None:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                message=(
+                    f"{plugin_id} requires numeric params.macro_mix "
+                    "in [0.0, 1.0] or [0.0, 100.0]."
+                ),
+            )
+        if 0.0 <= macro_mix_input <= 1.0:
+            return macro_mix_input, macro_mix_input
+        if 0.0 <= macro_mix_input <= 100.0:
+            return macro_mix_input / 100.0, macro_mix_input
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+            message=(
+                f"{plugin_id} requires params.macro_mix "
+                "in [0.0, 1.0] or [0.0, 100.0]."
+            ),
+        )
+
+    def _shelf_biquad_coefficients(
+        *,
+        sample_rate_hz: int,
+        pivot_hz: float,
+        gain_db: float,
+        high_shelf: bool,
+    ) -> tuple[float, float, float, float, float]:
+        amplitude = float(math.pow(10.0, gain_db / 40.0))
+        omega = (2.0 * math.pi * pivot_hz) / float(sample_rate_hz)
+        cosine = math.cos(omega)
+        sine = math.sin(omega)
+        alpha = (sine / 2.0) * math.sqrt(2.0)
+        beta = 2.0 * math.sqrt(amplitude) * alpha
+        if high_shelf:
+            b0 = amplitude * ((amplitude + 1.0) + ((amplitude - 1.0) * cosine) + beta)
+            b1 = -2.0 * amplitude * ((amplitude - 1.0) + ((amplitude + 1.0) * cosine))
+            b2 = amplitude * ((amplitude + 1.0) + ((amplitude - 1.0) * cosine) - beta)
+            a0 = (amplitude + 1.0) - ((amplitude - 1.0) * cosine) + beta
+            a1 = 2.0 * ((amplitude - 1.0) - ((amplitude + 1.0) * cosine))
+            a2 = (amplitude + 1.0) - ((amplitude - 1.0) * cosine) - beta
+        else:
+            b0 = amplitude * ((amplitude + 1.0) - ((amplitude - 1.0) * cosine) + beta)
+            b1 = 2.0 * amplitude * ((amplitude - 1.0) - ((amplitude + 1.0) * cosine))
+            b2 = amplitude * ((amplitude + 1.0) - ((amplitude - 1.0) * cosine) - beta)
+            a0 = (amplitude + 1.0) + ((amplitude - 1.0) * cosine) + beta
+            a1 = -2.0 * ((amplitude - 1.0) + ((amplitude + 1.0) * cosine))
+            a2 = (amplitude + 1.0) + ((amplitude - 1.0) * cosine) - beta
+        inv_a0 = 1.0 / a0
+        return (
+            b0 * inv_a0,
+            b1 * inv_a0,
+            b2 * inv_a0,
+            a1 * inv_a0,
+            a2 * inv_a0,
+        )
+
+    def _apply_biquad_mono_float64(
+        *,
+        signal: Any,
+        coefficients: tuple[float, float, float, float, float],
+    ) -> Any:
+        b0, b1, b2, a1, a2 = coefficients
+        rendered_signal = np.empty_like(signal, dtype=np.float64)
+        z1 = 0.0
+        z2 = 0.0
+        for sample_index in range(int(signal.shape[0])):
+            x0 = float(signal[sample_index])
+            y0 = (b0 * x0) + z1
+            z1 = (b1 * x0) - (a1 * y0) + z2
+            z2 = (b2 * x0) - (a2 * y0)
+            rendered_signal[sample_index] = y0
+        return rendered_signal
+
+    def _apply_tilt_eq_v0(
+        *,
+        signal: Any,
+        sample_rate_hz: int,
+        tilt_db: float,
+        pivot_hz: float,
+        output_dtype: Any,
+    ) -> Any:
+        nyquist_hz = max(1.0, float(sample_rate_hz) / 2.0)
+        bounded_pivot_hz = min(max(float(pivot_hz), 20.0), max(20.0, nyquist_hz - 1.0))
+        low_shelf_gain_db = -0.5 * float(tilt_db)
+        high_shelf_gain_db = 0.5 * float(tilt_db)
+        low_coefficients = _shelf_biquad_coefficients(
+            sample_rate_hz=sample_rate_hz,
+            pivot_hz=bounded_pivot_hz,
+            gain_db=low_shelf_gain_db,
+            high_shelf=False,
+        )
+        high_coefficients = _shelf_biquad_coefficients(
+            sample_rate_hz=sample_rate_hz,
+            pivot_hz=bounded_pivot_hz,
+            gain_db=high_shelf_gain_db,
+            high_shelf=True,
+        )
+        dry64 = signal.astype(np.float64, copy=False)
+        wet64 = np.empty_like(dry64, dtype=np.float64)
+        for channel_index in range(int(dry64.shape[1])):
+            low_passed = _apply_biquad_mono_float64(
+                signal=dry64[:, channel_index],
+                coefficients=low_coefficients,
+            )
+            wet64[:, channel_index] = _apply_biquad_mono_float64(
+                signal=low_passed,
+                coefficients=high_coefficients,
+            )
+        wet64 = np.clip(wet64, -1.0, 1.0)
+        return wet64.astype(output_dtype, copy=False)
+
     rendered = stereo_samples
     for stage_index, stage in enumerate(plugin_chain, start=1):
         plugin_id = _coerce_str(stage.get("plugin_id")).strip().lower()
         params = _coerce_dict(stage.get("params"))
-        if plugin_id != _GAIN_V0_PLUGIN_ID:
+
+        if plugin_id == _GAIN_V0_PLUGIN_ID:
+            gain_db = _coerce_float(params.get("gain_db"))
+            if gain_db is None:
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                    message=f"{_GAIN_V0_PLUGIN_ID} requires numeric params.gain_db.",
+                )
+            bypass = _parse_bypass_for_stage(plugin_id=plugin_id, params=params)
+            macro_mix, macro_mix_input = _parse_macro_mix_for_stage(
+                plugin_id=plugin_id,
+                params=params,
+            )
+            linear_gain = float(math.pow(10.0, gain_db / 20.0))
+            if bypass:
+                stage_what = "plugin stage bypassed"
+                stage_why = (
+                    "Bypass enabled; preserved dry stereo "
+                    f"{processing_dtype_name} buffer without gain "
+                    "or wet/dry mixing."
+                )
+            else:
+                stage_what = "plugin stage applied"
+                wet = np.multiply(
+                    rendered,
+                    processing_dtype(linear_gain),
+                    dtype=processing_dtype,
+                )
+                wet = np.clip(wet, -1.0, 1.0).astype(processing_dtype, copy=False)
+                if macro_mix <= 0.0:
+                    stage_why = "macro_mix=0 selected dry signal path (linear blend endpoint)."
+                elif macro_mix >= 1.0:
+                    rendered = wet
+                    stage_why = "macro_mix=1 selected fully wet signal path."
+                else:
+                    dry = rendered
+                    rendered = np.add(
+                        np.multiply(
+                            dry,
+                            processing_dtype(1.0 - macro_mix),
+                            dtype=processing_dtype,
+                        ),
+                        np.multiply(
+                            wet,
+                            processing_dtype(macro_mix),
+                            dtype=processing_dtype,
+                        ),
+                        dtype=processing_dtype,
+                    )
+                    rendered = np.clip(rendered, -1.0, 1.0).astype(
+                        processing_dtype,
+                        copy=False,
+                    )
+                    stage_why = (
+                        "Applied gain_v0 wet path and macro_mix as a linear dry/wet blend."
+                    )
+            stage_metrics = [
+                {"name": "stage_index", "value": stage_index},
+                {"name": "gain_db", "value": gain_db},
+                {"name": "macro_mix", "value": macro_mix},
+                {"name": "macro_mix_input", "value": macro_mix_input},
+                {"name": "bypass", "value": 1.0 if bypass else 0.0},
+            ]
+        elif plugin_id == _TILT_EQ_V0_PLUGIN_ID:
+            tilt_db = _coerce_float(params.get("tilt_db"))
+            if tilt_db is None:
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                    message=f"{_TILT_EQ_V0_PLUGIN_ID} requires numeric params.tilt_db.",
+                )
+            pivot_hz = _coerce_float(params.get("pivot_hz"))
+            if pivot_hz is None:
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                    message=f"{_TILT_EQ_V0_PLUGIN_ID} requires numeric params.pivot_hz.",
+                )
+            bypass = _parse_bypass_for_stage(plugin_id=plugin_id, params=params)
+            macro_mix, macro_mix_input = _parse_macro_mix_for_stage(
+                plugin_id=plugin_id,
+                params=params,
+            )
+            if bypass:
+                stage_what = "plugin stage bypassed"
+                stage_why = (
+                    "Bypass enabled; preserved dry stereo "
+                    f"{processing_dtype_name} buffer without tilt EQ "
+                    "or wet/dry mixing."
+                )
+            else:
+                stage_what = "plugin stage applied"
+                wet = _apply_tilt_eq_v0(
+                    signal=rendered,
+                    sample_rate_hz=sample_rate_hz,
+                    tilt_db=tilt_db,
+                    pivot_hz=pivot_hz,
+                    output_dtype=processing_dtype,
+                )
+                if macro_mix <= 0.0:
+                    stage_why = "macro_mix=0 selected dry signal path (linear blend endpoint)."
+                elif macro_mix >= 1.0:
+                    rendered = wet
+                    stage_why = "macro_mix=1 selected fully wet tilt_eq_v0 signal path."
+                else:
+                    dry = rendered
+                    rendered = np.add(
+                        np.multiply(
+                            dry,
+                            processing_dtype(1.0 - macro_mix),
+                            dtype=processing_dtype,
+                        ),
+                        np.multiply(
+                            wet,
+                            processing_dtype(macro_mix),
+                            dtype=processing_dtype,
+                        ),
+                        dtype=processing_dtype,
+                    )
+                    rendered = np.clip(rendered, -1.0, 1.0).astype(
+                        processing_dtype,
+                        copy=False,
+                    )
+                    stage_why = (
+                        "Applied tilt_eq_v0 wet path and macro_mix as a linear dry/wet blend."
+                    )
+            stage_metrics = [
+                {"name": "stage_index", "value": stage_index},
+                {"name": "tilt_db", "value": tilt_db},
+                {"name": "pivot_hz", "value": pivot_hz},
+                {"name": "macro_mix", "value": macro_mix},
+                {"name": "macro_mix_input", "value": macro_mix_input},
+                {"name": "bypass", "value": 1.0 if bypass else 0.0},
+            ]
+        else:
             raise RenderRunRefusalError(
                 issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
                 message=(
@@ -932,86 +1238,6 @@ def _render_wav_with_plugin_chain(
                     f"stage={stage_index}, plugin_id={plugin_id or '(missing)'}"
                 ),
             )
-        gain_db = _coerce_float(params.get("gain_db"))
-        if gain_db is None:
-            raise RenderRunRefusalError(
-                issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
-                message=f"{_GAIN_V0_PLUGIN_ID} requires numeric params.gain_db.",
-            )
-        bypass_raw = params.get("bypass")
-        bypass = False
-        if bypass_raw is not None:
-            bypass = _coerce_bool(bypass_raw)
-            if bypass is None:
-                raise RenderRunRefusalError(
-                    issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
-                    message=f"{_GAIN_V0_PLUGIN_ID} requires boolean params.bypass when provided.",
-                )
-        raw_macro_mix = params.get("macro_mix")
-        if raw_macro_mix is None:
-            macro_mix = 1.0
-            macro_mix_input = 1.0
-        else:
-            macro_mix_input = _coerce_float(raw_macro_mix)
-            if macro_mix_input is None:
-                raise RenderRunRefusalError(
-                    issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
-                    message=(
-                        f"{_GAIN_V0_PLUGIN_ID} requires numeric params.macro_mix "
-                        "in [0.0, 1.0] or [0.0, 100.0]."
-                    ),
-                )
-            if 0.0 <= macro_mix_input <= 1.0:
-                macro_mix = macro_mix_input
-            elif 0.0 <= macro_mix_input <= 100.0:
-                macro_mix = macro_mix_input / 100.0
-            else:
-                raise RenderRunRefusalError(
-                    issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
-                    message=(
-                        f"{_GAIN_V0_PLUGIN_ID} requires params.macro_mix "
-                        "in [0.0, 1.0] or [0.0, 100.0]."
-                    ),
-                )
-        linear_gain = float(math.pow(10.0, gain_db / 20.0))
-        if bypass:
-            stage_what = "plugin stage bypassed"
-            stage_why = (
-                "Bypass enabled; preserved dry stereo float32 buffer without gain "
-                "or wet/dry mixing."
-            )
-        else:
-            stage_what = "plugin stage applied"
-            wet = np.multiply(
-                rendered,
-                np.float32(linear_gain),
-                dtype=np.float32,
-            )
-            wet = np.clip(wet, -1.0, 1.0).astype(np.float32, copy=False)
-            if macro_mix <= 0.0:
-                stage_why = "macro_mix=0 selected dry signal path (linear blend endpoint)."
-            elif macro_mix >= 1.0:
-                rendered = wet
-                stage_why = "macro_mix=1 selected fully wet signal path."
-            else:
-                dry = rendered
-                rendered = np.add(
-                    np.multiply(
-                        dry,
-                        np.float32(1.0 - macro_mix),
-                        dtype=np.float32,
-                    ),
-                    np.multiply(
-                        wet,
-                        np.float32(macro_mix),
-                        dtype=np.float32,
-                    ),
-                    dtype=np.float32,
-                )
-                rendered = np.clip(rendered, -1.0, 1.0).astype(np.float32, copy=False)
-                stage_why = (
-                    "Applied gain_v0 wet path and macro_mix as a linear dry/wet blend."
-                )
         stage_token = f"plugin_chain.stage.{stage_index:03d}.{plugin_id}"
         step_events.append(
             {
@@ -1024,19 +1250,13 @@ def _render_wav_with_plugin_chain(
                 "evidence": {
                     "codes": ["RENDER.RUN.PLUGIN.STAGE_APPLIED"],
                     "ids": [plugin_id],
-                    "metrics": [
-                        {"name": "stage_index", "value": stage_index},
-                        {"name": "gain_db", "value": gain_db},
-                        {"name": "macro_mix", "value": macro_mix},
-                        {"name": "macro_mix_input", "value": macro_mix_input},
-                        {"name": "bypass", "value": 1.0 if bypass else 0.0},
-                    ],
+                    "metrics": stage_metrics,
                 },
             }
         )
 
-    _write_stereo_pcm_wav_from_float32(
-        float32_samples=rendered,
+    _write_stereo_pcm_wav_from_float_samples(
+        float_samples=rendered,
         output_path=output_path,
         sample_rate_hz=sample_rate_hz,
         bit_depth=bit_depth,
@@ -1046,7 +1266,10 @@ def _render_wav_with_plugin_chain(
             "kind": "action",
             "scope": "render",
             "what": "plugin chain output written",
-            "why": "Wrote deterministic PCM WAV from plugin-chain float32 output buffer.",
+            "why": (
+                "Wrote deterministic PCM WAV from plugin-chain "
+                f"{processing_dtype_name} output buffer."
+            ),
             "where": [output_posix],
             "confidence": None,
             "evidence": {
@@ -1063,12 +1286,23 @@ def _render_wav_with_plugin_chain(
     return step_events
 
 
-def _read_stereo_source_float32(
+def _read_stereo_source_samples(
     path: Path,
     *,
     ffmpeg_cmd: Sequence[str] | None,
+    dtype: Any,
 ) -> Any:
     import numpy as np
+
+    requested_dtype = np.dtype(dtype)
+    if requested_dtype not in {np.dtype(np.float32), np.dtype(np.float64)}:
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+            message=(
+                "Unsupported plugin-chain processing dtype: "
+                f"{requested_dtype.name}. Expected float32 or float64."
+            ),
+        )
 
     source_extension = path.suffix.lower()
     float_samples_iter: Iterator[list[float]]
@@ -1094,16 +1328,16 @@ def _read_stereo_source_float32(
             )
         if not float_samples:
             continue
-        chunk = np.asarray(float_samples, dtype=np.float32).reshape(-1, 2)
+        chunk = np.asarray(float_samples, dtype=requested_dtype).reshape(-1, 2)
         chunks.append(chunk)
     if not chunks:
-        return np.zeros((0, 2), dtype=np.float32)
-    return np.concatenate(chunks, axis=0).astype(np.float32, copy=False)
+        return np.zeros((0, 2), dtype=requested_dtype)
+    return np.concatenate(chunks, axis=0).astype(requested_dtype, copy=False)
 
 
-def _write_stereo_pcm_wav_from_float32(
+def _write_stereo_pcm_wav_from_float_samples(
     *,
-    float32_samples: Any,
+    float_samples: Any,
     output_path: Path,
     sample_rate_hz: int,
     bit_depth: int,
@@ -1116,14 +1350,16 @@ def _write_stereo_pcm_wav_from_float32(
             message=f"Unsupported output bit depth: {bit_depth}",
         )
 
-    samples = np.asarray(float32_samples, dtype=np.float32)
+    samples = np.asarray(float_samples, dtype=np.float64)
     if samples.ndim != 2 or samples.shape[1] != 2:
         raise RenderRunRefusalError(
             issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
-            message="Plugin-chain runner expects a stereo float32 sample matrix.",
+            message=(
+                "Plugin-chain runner expects a stereo float32/float64 sample matrix."
+            ),
         )
     interleaved = samples.reshape(-1)
-    pcm_bytes = _float32_to_pcm_bytes(interleaved, bit_depth)
+    pcm_bytes = _float_samples_to_pcm_bytes(interleaved, bit_depth)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(output_path), "wb") as handle:
@@ -1133,11 +1369,10 @@ def _write_stereo_pcm_wav_from_float32(
         handle.writeframes(pcm_bytes)
 
 
-def _float32_to_pcm_bytes(float_samples: Any, bit_depth: int) -> bytes:
+def _float_samples_to_pcm_bytes(float_samples: Any, bit_depth: int) -> bytes:
     import numpy as np
 
-    samples = np.asarray(float_samples, dtype=np.float32)
-    samples64 = np.asarray(samples, dtype=np.float64)
+    samples64 = np.asarray(float_samples, dtype=np.float64)
 
     if bit_depth == 16:
         scaled = np.rint(samples64 * float(2**15))

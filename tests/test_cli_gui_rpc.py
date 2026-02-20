@@ -194,8 +194,8 @@ class TestGuiRpcStableErrors(unittest.TestCase):
                         "code": "RPC.INVALID_PARAMS",
                         "message": (
                             "project.write_render_request param 'set' received unknown keys: "
-                            "scene_path. Allowed keys: dry_run, plugin_chain, policies, target_ids, "
-                            "target_layout_ids"
+                            "scene_path. Allowed keys: dry_run, max_theoretical_quality, "
+                            "plugin_chain, policies, target_ids, target_layout_ids"
                         ),
                     },
                     "id": "req-write-invalid",
@@ -523,6 +523,12 @@ class TestGuiRpcDiscover(unittest.TestCase):
         optional_keys = project_render_run_shape.get("optional_keys", [])
         self.assertIn("run_id", optional_keys)
 
+        project_write_render_request_shape = method_details["project.write_render_request"][
+            "result_shape"
+        ]
+        write_optional_keys = project_write_render_request_shape.get("optional_keys", [])
+        self.assertIn("max_theoretical_quality", write_optional_keys)
+
     def test_unknown_method_behavior_unchanged_after_rpc_discover(self) -> None:
         requests = [
             {
@@ -580,6 +586,7 @@ class TestGuiRpcDeterminism(unittest.TestCase):
                     "project_dir": str(self.project_dir),
                     "set": {
                         "dry_run": True,
+                        "max_theoretical_quality": False,
                         "target_ids": [
                             "TARGET.STEREO.2_0",
                             "TARGET.STEREO.2_0",
@@ -710,13 +717,21 @@ class TestGuiRpcDeterminism(unittest.TestCase):
         self.assertTrue(write_result["ok"])
         self.assertEqual(
             write_result["updated_fields"],
-            ["dry_run", "plugin_chain", "policies", "target_ids", "target_layout_ids"],
+            [
+                "dry_run",
+                "max_theoretical_quality",
+                "plugin_chain",
+                "policies",
+                "target_ids",
+                "target_layout_ids",
+            ],
         )
         request_payload = json.loads(
             (self.project_dir / "renders" / "render_request.json")
             .read_text(encoding="utf-8")
         )
         self.assertTrue(request_payload["options"]["dry_run"])
+        self.assertFalse(request_payload["options"]["max_theoretical_quality"])
         self.assertEqual(
             request_payload["options"]["plugin_chain"],
             [

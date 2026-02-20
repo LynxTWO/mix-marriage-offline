@@ -91,6 +91,8 @@ class TestProjectWriteRenderRequest(unittest.TestCase):
             "--set",
             "dry_run=false",
             "--set",
+            "max_theoretical_quality=true",
+            "--set",
             "target_ids=TARGET.SURROUND.5_1,TARGET.STEREO.2_0,TARGET.SURROUND.5_1",
             "--set",
             "target_layout_ids=LAYOUT.5_1,LAYOUT.2_0",
@@ -128,6 +130,7 @@ class TestProjectWriteRenderRequest(unittest.TestCase):
             ["TARGET.STEREO.2_0", "TARGET.SURROUND.5_1"],
         )
         self.assertFalse(payload["options"]["dry_run"])
+        self.assertTrue(payload["options"]["max_theoretical_quality"])
         self.assertEqual(
             payload["options"]["downmix_policy_id"],
             "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
@@ -149,7 +152,14 @@ class TestProjectWriteRenderRequest(unittest.TestCase):
         summary = json.loads(stdout_a)
         self.assertEqual(
             summary["updated_fields"],
-            ["dry_run", "plugin_chain", "policies", "target_ids", "target_layout_ids"],
+            [
+                "dry_run",
+                "max_theoretical_quality",
+                "plugin_chain",
+                "policies",
+                "target_ids",
+                "target_layout_ids",
+            ],
         )
 
     def test_refuses_unknown_set_key_with_stable_error(self) -> None:
@@ -168,7 +178,10 @@ class TestProjectWriteRenderRequest(unittest.TestCase):
         self.assertEqual(stderr_a, stderr_b)
         self.assertIn("Unknown editable field(s): scene_path.", stderr_a)
         self.assertIn(
-            "Allowed keys: dry_run, plugin_chain, policies, target_ids, target_layout_ids.",
+            (
+                "Allowed keys: dry_run, max_theoretical_quality, plugin_chain, "
+                "policies, target_ids, target_layout_ids."
+            ),
             stderr_a,
         )
 

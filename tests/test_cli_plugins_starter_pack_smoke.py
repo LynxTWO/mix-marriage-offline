@@ -10,6 +10,7 @@ from mmo.cli import main
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PLUGINS_DIR = REPO_ROOT / "plugins"
 EXAMPLE_PLUGIN_ID = "PLUGIN.RENDERER.EXAMPLE_GAIN_V0"
+EXAMPLE_TILT_PLUGIN_ID = "PLUGIN.RENDERER.EXAMPLE_TILT_EQ_V0"
 
 
 def _run_main(args: list[str]) -> tuple[int, str, str]:
@@ -50,6 +51,29 @@ class TestCliPluginsStarterPackSmoke(unittest.TestCase):
         self.assertIn('"/properties/bypass/x_mmo_ui"', stdout_a)
         self.assertIn('"/properties/gain_db/x_mmo_ui"', stdout_a)
         self.assertIn('"/properties/macro_mix/x_mmo_ui"', stdout_a)
+
+        tilt_command = [
+            "plugins",
+            "show",
+            EXAMPLE_TILT_PLUGIN_ID,
+            "--plugins",
+            str(PLUGINS_DIR),
+            "--include-ui-hints",
+            "--include-ui-layout-snapshot",
+        ]
+        tilt_exit_a, tilt_stdout_a, tilt_stderr_a = _run_main(tilt_command)
+        tilt_exit_b, tilt_stdout_b, tilt_stderr_b = _run_main(tilt_command)
+
+        self.assertEqual(tilt_exit_a, 0, msg=tilt_stderr_a)
+        self.assertEqual(tilt_exit_b, 0, msg=tilt_stderr_b)
+        self.assertEqual(tilt_stdout_a, tilt_stdout_b)
+        self.assertEqual(tilt_stderr_a, "")
+        self.assertEqual(tilt_stderr_b, "")
+        self.assertIn(f"plugin_id: {EXAMPLE_TILT_PLUGIN_ID}", tilt_stdout_a)
+        self.assertIn("ui_layout_snapshot.violations_count: 0", tilt_stdout_a)
+        self.assertIn("ui_hints.hint_count: 4", tilt_stdout_a)
+        self.assertIn('"/properties/tilt_db/x_mmo_ui"', tilt_stdout_a)
+        self.assertIn('"/properties/pivot_hz/x_mmo_ui"', tilt_stdout_a)
 
     def test_plugins_ui_lint_is_deterministic_and_example_has_no_issues(self) -> None:
         text_command = [
@@ -113,6 +137,41 @@ class TestCliPluginsStarterPackSmoke(unittest.TestCase):
         if isinstance(issue_counts, dict):
             self.assertEqual(issue_counts.get("error"), 0)
             self.assertEqual(issue_counts.get("warn"), 0)
+
+        tilt_row = next(
+            (
+                row
+                for row in plugins
+                if isinstance(row, dict) and row.get("plugin_id") == EXAMPLE_TILT_PLUGIN_ID
+            ),
+            None,
+        )
+        self.assertIsInstance(tilt_row, dict)
+        if not isinstance(tilt_row, dict):
+            return
+
+        tilt_schema = tilt_row.get("config_schema")
+        self.assertIsInstance(tilt_schema, dict)
+        if isinstance(tilt_schema, dict):
+            self.assertTrue(tilt_schema.get("present"))
+            self.assertEqual(tilt_schema.get("parameter_count"), 4)
+
+        tilt_layout = tilt_row.get("ui_layout")
+        self.assertIsInstance(tilt_layout, dict)
+        if isinstance(tilt_layout, dict):
+            self.assertTrue(tilt_layout.get("present"))
+            self.assertEqual(tilt_layout.get("snapshot_violations"), 0)
+
+        tilt_hints = tilt_row.get("ui_hints")
+        self.assertIsInstance(tilt_hints, dict)
+        if isinstance(tilt_hints, dict):
+            self.assertEqual(tilt_hints.get("hint_count"), 4)
+
+        tilt_issue_counts = tilt_row.get("issue_counts")
+        self.assertIsInstance(tilt_issue_counts, dict)
+        if isinstance(tilt_issue_counts, dict):
+            self.assertEqual(tilt_issue_counts.get("error"), 0)
+            self.assertEqual(tilt_issue_counts.get("warn"), 0)
 
 
 if __name__ == "__main__":

@@ -26,7 +26,7 @@ async function _pickPort() {
   return port;
 }
 
-async function _startGuiServer(port) {
+async function _startGuiServer(port, { env = {} } = {}) {
   const child = spawn(
     process.execPath,
     ["server.mjs"],
@@ -34,6 +34,7 @@ async function _startGuiServer(port) {
       cwd: path.resolve(process.cwd()),
       env: {
         ...process.env,
+        ...env,
         GUI_DEV_PORT: String(port),
       },
       stdio: ["ignore", "ignore", "ignore"],
@@ -105,15 +106,7 @@ async function _httpRequest({ port, pathname, headers = {} }) {
   });
 }
 
-async function _testAudioStreamAllowlistAndRange() {
-  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "mmo_gui_audio_stream_"));
-  const projectDir = path.join(tempRoot, "project");
-  const rendersDir = path.join(projectDir, "renders");
-  const audioPath = path.join(tempRoot, "audition.wav");
-  const audioBytes = Buffer.from("0123456789abcdefghijklmnopqrstuvwxyz");
-
-  await fs.mkdir(rendersDir, { recursive: true });
-  await fs.writeFile(audioPath, audioBytes);
+async function _writeRenderExecuteFixture(rendersDir, audioPath) {
   await fs.writeFile(
     path.join(rendersDir, "render_execute.json"),
     `${JSON.stringify(
@@ -136,6 +129,18 @@ async function _testAudioStreamAllowlistAndRange() {
       2,
     )}\n`,
   );
+}
+
+async function _testAudioStreamAllowlistAndRange() {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "mmo_gui_audio_stream_"));
+  const projectDir = path.join(tempRoot, "project");
+  const rendersDir = path.join(projectDir, "renders");
+  const audioPath = path.join(projectDir, "renders", "outputs", "audition.wav");
+  const audioBytes = Buffer.from("0123456789abcdefghijklmnopqrstuvwxyz");
+
+  await fs.mkdir(path.dirname(audioPath), { recursive: true });
+  await fs.writeFile(audioPath, audioBytes);
+  await _writeRenderExecuteFixture(rendersDir, audioPath);
 
   const port = await _pickPort();
   const server = await _startGuiServer(port);
@@ -173,6 +178,70 @@ async function _testAudioStreamAllowlistAndRange() {
   }
 }
 
+async function _testAudioStreamRejectsExternalPathByDefault() {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "mmo_gui_audio_stream_external_"));
+  const projectDir = path.join(tempRoot, "project");
+  const rendersDir = path.join(projectDir, "renders");
+  const externalAudioPath = path.join(tempRoot, "external", "audition.wav");
+  const audioBytes = Buffer.from("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+
+  await fs.mkdir(path.dirname(externalAudioPath), { recursive: true });
+  await fs.mkdir(rendersDir, { recursive: true });
+  await fs.writeFile(externalAudioPath, audioBytes);
+  await _writeRenderExecuteFixture(rendersDir, externalAudioPath);
+
+  const port = await _pickPort();
+  const server = await _startGuiServer(port);
+  try {
+    const response = await _httpRequest({
+      port,
+      pathname: `/api/audio-stream?project_dir=${encodeURIComponent(_toPosix(projectDir))}&job_id=JOB.001&stream=output&slot=0`,
+    });
+    assert.equal(response.statusCode, 403);
+    assert.match(
+      response.body.toString("utf8"),
+      /MMO_GUI_ALLOW_EXTERNAL_OUTPUT_PATHS=1/i,
+    );
+  } finally {
+    await _stopGuiServer(server);
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+}
+
+async function _testAudioStreamAllowsExternalPathWhenOptInEnabled() {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "mmo_gui_audio_stream_external_optin_"));
+  const projectDir = path.join(tempRoot, "project");
+  const rendersDir = path.join(projectDir, "renders");
+  const externalAudioPath = path.join(tempRoot, "external", "audition.wav");
+  const audioBytes = Buffer.from("0123456789");
+
+  await fs.mkdir(path.dirname(externalAudioPath), { recursive: true });
+  await fs.mkdir(rendersDir, { recursive: true });
+  await fs.writeFile(externalAudioPath, audioBytes);
+  await _writeRenderExecuteFixture(rendersDir, externalAudioPath);
+
+  const port = await _pickPort();
+  const server = await _startGuiServer(port, {
+    env: {
+      MMO_GUI_ALLOW_EXTERNAL_OUTPUT_PATHS: "1",
+    },
+  });
+  try {
+    const response = await _httpRequest({
+      port,
+      pathname: `/api/audio-stream?project_dir=${encodeURIComponent(_toPosix(projectDir))}&job_id=JOB.001&stream=output&slot=0`,
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.headers["x-mmo-audio-sha256"], "3".repeat(64));
+    assert.deepEqual(response.body, audioBytes);
+  } finally {
+    await _stopGuiServer(server);
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+}
+
 export async function run() {
   await _testAudioStreamAllowlistAndRange();
+  await _testAudioStreamRejectsExternalPathByDefault();
+  await _testAudioStreamAllowsExternalPathWhenOptInEnabled();
 }

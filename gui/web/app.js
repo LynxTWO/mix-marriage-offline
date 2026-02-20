@@ -46,6 +46,7 @@ const stemsRootInput = document.getElementById("stems-root-input");
 const packOutInput = document.getElementById("pack-out-input");
 const pluginsDirInput = document.getElementById("plugins-dir-input");
 const chainPluginSelect = document.getElementById("chain-plugin-select");
+const maxTheoreticalQualityToggle = document.getElementById("max-theoretical-quality-toggle");
 const fineModeIndicator = document.getElementById("fine-mode-indicator");
 
 const state = {
@@ -55,6 +56,7 @@ const state = {
   pluginChain: [],
   renderRequestIntent: {
     dry_run: null,
+    max_theoretical_quality: null,
     plugin_chain_length: 0,
     policies: {},
     render_request_path: "",
@@ -1537,9 +1539,17 @@ function _renderIntentPreview() {
   );
 }
 
+function _syncMaxTheoreticalQualityToggle() {
+  if (!maxTheoreticalQualityToggle) {
+    return;
+  }
+  maxTheoreticalQualityToggle.checked = state.renderRequestIntent.max_theoretical_quality === true;
+}
+
 function _resetRenderRequestIntent() {
   state.renderRequestIntent = {
     dry_run: null,
+    max_theoretical_quality: null,
     plugin_chain_length: 0,
     policies: {},
     render_request_path: "",
@@ -1547,6 +1557,7 @@ function _resetRenderRequestIntent() {
     target_layout_ids: [],
   };
   state.pluginChain = [];
+  _syncMaxTheoreticalQualityToggle();
   renderPluginChainEditor();
   _renderIntentPreview();
 }
@@ -1566,6 +1577,11 @@ function _hydrateRenderRequestIntent(renderRequestPath, renderRequestPayload) {
   state.pluginChain = _chainFromRpcPayload(options.plugin_chain);
   state.renderRequestIntent = {
     dry_run: typeof options.dry_run === "boolean" ? options.dry_run : null,
+    max_theoretical_quality: (
+      typeof options.max_theoretical_quality === "boolean"
+        ? options.max_theoretical_quality
+        : null
+    ),
     plugin_chain_length: state.pluginChain.length,
     policies,
     render_request_path: renderRequestPath,
@@ -1573,6 +1589,7 @@ function _hydrateRenderRequestIntent(renderRequestPath, renderRequestPayload) {
     target_layout_ids: _normalizeIdList(payload.target_layout_ids),
   };
 
+  _syncMaxTheoreticalQualityToggle();
   renderPluginChainEditor();
   _renderIntentPreview();
 }
@@ -1619,6 +1636,7 @@ function _pluginChainPayload() {
 
 function _renderChainPayloadPreview() {
   const chain = _pluginChainPayload();
+  const maxTheoreticalQuality = Boolean(maxTheoreticalQualityToggle?.checked);
   if (chain.length === 0) {
     chainOutput.textContent = "Plugin chain is empty.";
     _renderIntentPreview();
@@ -1628,6 +1646,7 @@ function _renderChainPayloadPreview() {
     {
       set: {
         dry_run: false,
+        max_theoretical_quality: maxTheoreticalQuality,
         plugin_chain: chain,
       },
     },
@@ -1987,6 +2006,7 @@ async function savePluginChain() {
     throw new Error("Project directory is required.");
   }
   const pluginChain = _pluginChainPayload();
+  const maxTheoreticalQuality = Boolean(maxTheoreticalQualityToggle?.checked);
   if (pluginChain.length === 0) {
     throw new Error("Plugin chain is empty. Add at least one stage before saving.");
   }
@@ -1996,6 +2016,7 @@ async function savePluginChain() {
     project_dir: projectDir,
     set: {
       dry_run: false,
+      max_theoretical_quality: maxTheoreticalQuality,
       plugin_chain: pluginChain,
     },
   });
@@ -2004,6 +2025,7 @@ async function savePluginChain() {
   state.renderRequestIntent = {
     ...state.renderRequestIntent,
     dry_run: false,
+    max_theoretical_quality: maxTheoreticalQuality,
     plugin_chain_length: state.pluginChain.length,
   };
   renderPluginChainEditor();
@@ -2287,6 +2309,13 @@ if (auditionPlayOutputButton) {
   });
 }
 
+if (maxTheoreticalQualityToggle) {
+  maxTheoreticalQualityToggle.addEventListener("change", () => {
+    state.renderRequestIntent.max_theoretical_quality = maxTheoreticalQualityToggle.checked;
+    _renderChainPayloadPreview();
+  });
+}
+
 window.addEventListener("keydown", (event) => {
   _setModifierState(_modifierStateFromKeyboardEvent(event));
 });
@@ -2314,6 +2343,7 @@ if (auditionLoudnessMatchToggle) {
 renderChainPluginSelect();
 renderPluginChainEditor();
 renderRenderArtifactsViewer();
+_syncMaxTheoreticalQualityToggle();
 _renderFineModeIndicator();
 _refreshFineSteps();
 setStatus("Ready. Start with rpc.discover.");

@@ -51,6 +51,7 @@ FULL_RENDER_REQUEST = {
         "sample_rate_hz": 48000,
         "bit_depth": 24,
         "dry_run": False,
+        "max_theoretical_quality": False,
         "plugin_chain": [
             {
                 "plugin_id": "gain_v0",
@@ -217,6 +218,12 @@ class TestRenderRequestSchema(unittest.TestCase):
                 }
             ]
         }
+        errors = list(self.validator.iter_errors(payload))
+        self.assertGreater(len(errors), 0)
+
+    def test_invalid_max_theoretical_quality_type_rejected(self) -> None:
+        payload = dict(MINIMAL_RENDER_REQUEST)
+        payload["options"] = {"max_theoretical_quality": "yes"}
         errors = list(self.validator.iter_errors(payload))
         self.assertGreater(len(errors), 0)
 

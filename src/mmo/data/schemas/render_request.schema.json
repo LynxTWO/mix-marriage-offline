@@ -78,6 +78,9 @@
         "dry_run": {
           "type": "boolean"
         },
+        "max_theoretical_quality": {
+          "type": "boolean"
+        },
         "plugin_chain": {
           "type": "array",
           "minItems": 1,

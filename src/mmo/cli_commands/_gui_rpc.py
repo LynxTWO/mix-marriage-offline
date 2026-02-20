@@ -42,6 +42,7 @@ _RPC_VERSION = "1"
 _PROJECT_WRITE_RENDER_REQUEST_ALLOWED_SET_KEYS: frozenset[str] = frozenset(
     {
         "dry_run",
+        "max_theoretical_quality",
         "plugin_chain",
         "policies",
         "target_ids",
@@ -256,6 +257,7 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
                     "project_dir": "C:/mmo/project",
                     "set": {
                         "dry_run": False,
+                        "max_theoretical_quality": True,
                         "target_ids": [
                             "TARGET.STEREO.2_0",
                             "TARGET.SURROUND.5_1",
@@ -287,6 +289,7 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
             ],
             "optional_keys": [
                 "dry_run",
+                "max_theoretical_quality",
                 "plugin_chain",
                 "policies",
                 "target_ids",

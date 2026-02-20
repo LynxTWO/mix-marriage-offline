@@ -11,6 +11,8 @@ import { RpcProcessClient } from "./lib/rpc_process_client.mjs";
 const _SERVER_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const _WEB_ROOT = path.join(_SERVER_ROOT, "web");
 const _PORT = Number.parseInt(process.env.GUI_DEV_PORT || "4175", 10);
+const _ALLOW_EXTERNAL_OUTPUT_PATHS = _envFlagEnabled(process.env.MMO_GUI_ALLOW_EXTERNAL_OUTPUT_PATHS);
+const _PROJECT_OUTPUT_ROOT_SEGMENTS = ["renders", "outputs"];
 
 const _rpcClient = new RpcProcessClient();
 
@@ -40,8 +42,29 @@ const _ALLOWED_RENDER_ARTIFACT_NAMES = new Set([
   "render_request.json",
 ]);
 
+function _envFlagEnabled(rawValue) {
+  if (typeof rawValue !== "string" || !rawValue.trim()) {
+    return false;
+  }
+  const normalized = rawValue.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
 function _pathToPosix(pathValue) {
   return pathValue.replace(/\\/g, "/");
+}
+
+async function _resolveRealPathOrAbsolute(pathValue) {
+  try {
+    return await fs.realpath(pathValue);
+  } catch {
+    return path.resolve(pathValue);
+  }
+}
+
+function _isPathInsideRoot(candidatePath, rootPath) {
+  const relative = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 function _sendJson(response, statusCode, payload) {
@@ -518,6 +541,11 @@ async function _handleAudioStreamRequest(request, response, requestUrl) {
     return;
   }
 
+  const resolvedProjectDir = await _resolveRealPathOrAbsolute(projectDir);
+  const resolvedProjectOutputRoot = await _resolveRealPathOrAbsolute(
+    path.resolve(resolvedProjectDir, ..._PROJECT_OUTPUT_ROOT_SEGMENTS),
+  );
+
   const executePath = path.resolve(projectDir, "renders", "render_execute.json");
   let executePayload;
   try {
@@ -540,6 +568,20 @@ async function _handleAudioStreamRequest(request, response, requestUrl) {
     _sendJson(response, 404, { error: error instanceof Error ? error.message : String(error) });
     return;
   }
+
+  const resolvedAudioPath = await _resolveRealPathOrAbsolute(selected.audioPath);
+  const insideProjectDir = _isPathInsideRoot(resolvedAudioPath, resolvedProjectDir);
+  const insideProjectOutputRoot = _isPathInsideRoot(resolvedAudioPath, resolvedProjectOutputRoot);
+  if (!_ALLOW_EXTERNAL_OUTPUT_PATHS && !insideProjectDir && !insideProjectOutputRoot) {
+    _sendJson(response, 403, {
+      error: (
+        "Audio stream path is outside allowed project roots. "
+        + "Set MMO_GUI_ALLOW_EXTERNAL_OUTPUT_PATHS=1 to opt in to external paths."
+      ),
+    });
+    return;
+  }
+  selected.audioPath = resolvedAudioPath;
 
   let fileStat;
   try {
