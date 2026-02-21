@@ -23,3 +23,13 @@ local_media/
 # Claude Code workspace files (local-only, not tracked)
 .claude/
 gui/node_modules/
+
+# Local temp/build artifacts (Windows + Linux)
+/.mmo_tmp/
+/mmo_tmp/
+/.tmp_pip/
+/pip-build-tracker-*/
+/pip-ephem-wheel-cache-*/
+/pip-install-*/
+/.venv_wsl/
+/build/

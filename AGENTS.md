@@ -42,3 +42,9 @@ All changes must remain install-safe and cross-platform:
 ## Pull Request Notes
 - Keep changes small and focused; avoid sweeping refactors.
 - Call out any ontology or schema changes explicitly and link related fixtures.
+
+## Living Docs Convention
+- `PROJECT_WHEN_COMPLETE.md` is the progress/status log and definition-of-done tracker; update checklist items as work lands.
+- `CHANGELOG.md` is release-facing change summary; keep `Unreleased` current for user-visible or contract-relevant changes.
+- `GEMINI.md` is AI/operator guidance; keep it aligned with current repo workflows and non-negotiables.
+- These files are intentionally tracked in git and should be updated alongside relevant code changes.
