@@ -308,7 +308,7 @@ class TestGuiRpcProjectRenderRun(unittest.TestCase):
         ) -> int:
             del repo_root, request_path, scene_path, routing_plan_path
             del force, event_log_force, preflight_force, execute_force
-            del qa_out_path, qa_force, qa_enforce
+            del qa_force, qa_enforce
             plan_out_path.parent.mkdir(parents=True, exist_ok=True)
             plan_out_path.write_text(
                 json.dumps(
@@ -380,6 +380,19 @@ class TestGuiRpcProjectRenderRun(unittest.TestCase):
                     ) + "\n",
                     encoding="utf-8",
                 )
+            if qa_out_path is not None:
+                qa_out_path.parent.mkdir(parents=True, exist_ok=True)
+                qa_out_path.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": "0.1.0",
+                            "run_id": "RUN.0123456789abcdef",
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    ),
+                    encoding="utf-8",
+                )
             return 0
 
         with patch(
@@ -410,6 +423,7 @@ class TestGuiRpcProjectRenderRun(unittest.TestCase):
                             "preflight_force": True,
                             "execute": True,
                             "execute_force": True,
+                            "qa_out": True,
                         },
                     },
                 ]
@@ -433,6 +447,7 @@ class TestGuiRpcProjectRenderRun(unittest.TestCase):
             (project_dir / "renders" / "event_log.jsonl").resolve().as_posix(),
             (project_dir / "renders" / "render_preflight.json").resolve().as_posix(),
             (project_dir / "renders" / "render_execute.json").resolve().as_posix(),
+            (project_dir / "renders" / "render_qa.json").resolve().as_posix(),
         ]
         self.assertEqual(result["paths_written"], expected_paths)
         for path_value in result["paths_written"]:
@@ -522,6 +537,7 @@ class TestGuiRpcDiscover(unittest.TestCase):
         self.assertIn("execute", project_render_run_optional)
         self.assertIn("execute_force", project_render_run_optional)
         self.assertIn("execute_out", project_render_run_optional)
+        self.assertIn("qa_out", project_render_run_optional)
 
         project_render_run_shape = method_details["project.render_run"]["result_shape"]
         optional_keys = project_render_run_shape.get("optional_keys", [])

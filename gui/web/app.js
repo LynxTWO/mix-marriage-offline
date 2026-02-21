@@ -11,7 +11,7 @@ const showProjectButton = document.getElementById("show-project-button");
 const buildGuiButton = document.getElementById("build-gui-button");
 const chainAddButton = document.getElementById("chain-add-button");
 const chainSaveButton = document.getElementById("chain-save-button");
-const runRenderButton = document.getElementById("run-render-button");
+const safeRunButton = document.getElementById("safe-run-button");
 
 const methodsList = document.getElementById("methods-list");
 const doctorOutput = document.getElementById("doctor-output");
@@ -23,6 +23,8 @@ const chainOutput = document.getElementById("chain-output");
 const intentOutput = document.getElementById("intent-output");
 const renderSummaryOutput = document.getElementById("render-summary-output");
 const determinismOutput = document.getElementById("determinism-output");
+const safeRunReceiptOutput = document.getElementById("safe-run-receipt-output");
+const copyReceiptButton = document.getElementById("copy-receipt-button");
 const renderRefusalOutput = document.getElementById("render-refusal-output");
 const renderExecuteOutput = document.getElementById("render-execute-output");
 const timelineContainer = document.getElementById("timeline-container");
@@ -67,6 +69,7 @@ const state = {
     eventLogEntries: [],
     execute: null,
     lastRefusal: null,
+    qa: null,
     report: null,
     timelineFilterJob: "",
     timelineFilterStage: "",
@@ -760,6 +763,7 @@ function _resetRenderArtifactsState() {
     eventLogEntries: [],
     execute: null,
     lastRefusal: null,
+    qa: null,
     report: null,
     timelineFilterJob: "",
     timelineFilterStage: "",
@@ -1472,6 +1476,232 @@ function _renderDeterminismReceipt() {
   );
 }
 
+function _nonEmptyString(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function _numberOrNull(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function _collectOutputSha256() {
+  const outputSha = new Set();
+
+  const executeJobs = Array.isArray(state.renderArtifacts.execute?.jobs)
+    ? state.renderArtifacts.execute.jobs
+    : [];
+  for (const job of executeJobs) {
+    if (!_isObject(job)) {
+      continue;
+    }
+    const outputs = Array.isArray(job.outputs) ? job.outputs : [];
+    for (const output of outputs) {
+      const shaValue = _isObject(output) ? _nonEmptyString(output.sha256) : null;
+      if (shaValue) {
+        outputSha.add(shaValue);
+      }
+    }
+  }
+
+  const qaJobs = Array.isArray(state.renderArtifacts.qa?.jobs)
+    ? state.renderArtifacts.qa.jobs
+    : [];
+  for (const job of qaJobs) {
+    if (!_isObject(job)) {
+      continue;
+    }
+    const outputs = Array.isArray(job.outputs) ? job.outputs : [];
+    for (const output of outputs) {
+      const shaValue = _isObject(output) ? _nonEmptyString(output.sha256) : null;
+      if (shaValue) {
+        outputSha.add(shaValue);
+      }
+    }
+  }
+
+  if (outputSha.size === 0) {
+    const reportJobs = Array.isArray(state.renderArtifacts.report?.jobs)
+      ? state.renderArtifacts.report.jobs
+      : [];
+    for (const job of reportJobs) {
+      if (!_isObject(job)) {
+        continue;
+      }
+      const outputs = Array.isArray(job.output_files) ? job.output_files : [];
+      for (const output of outputs) {
+        const shaValue = _isObject(output) ? _nonEmptyString(output.sha256) : null;
+        if (shaValue) {
+          outputSha.add(shaValue);
+        }
+      }
+    }
+  }
+
+  return Array.from(outputSha).sort();
+}
+
+function _safeRunMetersSummary(qaPayload) {
+  const meters = [];
+  const jobs = Array.isArray(qaPayload?.jobs) ? qaPayload.jobs : [];
+  for (const job of jobs) {
+    if (!_isObject(job)) {
+      continue;
+    }
+    const jobId = _nonEmptyString(job.job_id) || "";
+    const outputs = Array.isArray(job.outputs) ? job.outputs : [];
+    for (const output of outputs) {
+      if (!_isObject(output)) {
+        continue;
+      }
+      const metrics = _isObject(output.metrics) ? output.metrics : {};
+      meters.push({
+        correlation_lr: _numberOrNull(metrics.correlation_lr),
+        integrated_lufs: _numberOrNull(metrics.integrated_lufs),
+        job_id: jobId,
+        loudness_range_lu: _numberOrNull(metrics.loudness_range_lu),
+        output_path: _nonEmptyString(output.path) || "",
+        peak_dbfs: _numberOrNull(metrics.peak_dbfs),
+        rms_dbfs: _numberOrNull(metrics.rms_dbfs),
+        true_peak_dbtp: _numberOrNull(metrics.true_peak_dbtp),
+      });
+    }
+  }
+  meters.sort((left, right) => {
+    if (left.job_id !== right.job_id) {
+      return left.job_id.localeCompare(right.job_id);
+    }
+    return left.output_path.localeCompare(right.output_path);
+  });
+  return meters;
+}
+
+function _safeRunQaSummary(qaPayload) {
+  const issueCounts = { error: 0, warn: 0, info: 0 };
+  const issues = [];
+  const issueIds = new Set();
+  const jobsWithIssues = new Set();
+  const rows = Array.isArray(qaPayload?.issues) ? qaPayload.issues : [];
+
+  for (const row of rows) {
+    if (!_isObject(row)) {
+      continue;
+    }
+    const severity = _nonEmptyString(row.severity) || "info";
+    if (severity === "error" || severity === "warn" || severity === "info") {
+      issueCounts[severity] += 1;
+    }
+    const issueId = _nonEmptyString(row.issue_id) || "";
+    const jobId = _nonEmptyString(row.job_id) || "";
+    const issue = {
+      issue_id: issueId || null,
+      job_id: jobId || null,
+      metric: _nonEmptyString(row.metric) || null,
+      output_path: _nonEmptyString(row.output_path) || null,
+      severity,
+      threshold: _numberOrNull(row.threshold),
+      value: _numberOrNull(row.value),
+    };
+    issues.push(issue);
+    if (issueId) {
+      issueIds.add(issueId);
+    }
+    if (jobId) {
+      jobsWithIssues.add(jobId);
+    }
+  }
+
+  const severityRank = { error: 0, warn: 1, info: 2 };
+  issues.sort((left, right) => {
+    const leftRank = severityRank[left.severity] ?? 3;
+    const rightRank = severityRank[right.severity] ?? 3;
+    if (leftRank !== rightRank) {
+      return leftRank - rightRank;
+    }
+    const leftIssueId = left.issue_id || "";
+    const rightIssueId = right.issue_id || "";
+    if (leftIssueId !== rightIssueId) {
+      return leftIssueId.localeCompare(rightIssueId);
+    }
+    const leftJobId = left.job_id || "";
+    const rightJobId = right.job_id || "";
+    if (leftJobId !== rightJobId) {
+      return leftJobId.localeCompare(rightJobId);
+    }
+    const leftPath = left.output_path || "";
+    const rightPath = right.output_path || "";
+    if (leftPath !== rightPath) {
+      return leftPath.localeCompare(rightPath);
+    }
+    const leftMetric = left.metric || "";
+    const rightMetric = right.metric || "";
+    return leftMetric.localeCompare(rightMetric);
+  });
+
+  return {
+    issue_count_total: issues.length,
+    issue_counts: issueCounts,
+    issue_ids: Array.from(issueIds).sort(),
+    issues,
+    jobs_with_issues: Array.from(jobsWithIssues).sort(),
+  };
+}
+
+function _buildSafeRunReceiptPayload() {
+  const execute = _isObject(state.renderArtifacts.execute) ? state.renderArtifacts.execute : null;
+  const qa = _isObject(state.renderArtifacts.qa) ? state.renderArtifacts.qa : null;
+  const runId = _nonEmptyString(execute?.run_id) || _nonEmptyString(qa?.run_id);
+
+  return {
+    hashes: {
+      output_sha256: _collectOutputSha256(),
+      plan_sha256: _nonEmptyString(execute?.plan_sha256) || _nonEmptyString(qa?.plan_sha256),
+      report_sha256: _nonEmptyString(qa?.report_sha256),
+      request_sha256: _nonEmptyString(execute?.request_sha256) || _nonEmptyString(qa?.request_sha256),
+    },
+    meters: _safeRunMetersSummary(qa),
+    qa_summary: _safeRunQaSummary(qa),
+    run_id: runId,
+  };
+}
+
+function _renderSafeRunReceipt() {
+  if (!safeRunReceiptOutput) {
+    return;
+  }
+  safeRunReceiptOutput.textContent = JSON.stringify(_buildSafeRunReceiptPayload(), null, 2);
+}
+
+async function _copySafeRunReceipt() {
+  const receiptText = JSON.stringify(_buildSafeRunReceiptPayload(), null, 2);
+  if (
+    typeof navigator !== "undefined"
+    && navigator.clipboard
+    && typeof navigator.clipboard.writeText === "function"
+  ) {
+    await navigator.clipboard.writeText(receiptText);
+    return;
+  }
+
+  const fallbackInput = document.createElement("textarea");
+  fallbackInput.value = receiptText;
+  fallbackInput.setAttribute("readonly", "");
+  fallbackInput.style.opacity = "0";
+  fallbackInput.style.pointerEvents = "none";
+  fallbackInput.style.position = "fixed";
+  fallbackInput.style.top = "-1000px";
+  document.body.appendChild(fallbackInput);
+  fallbackInput.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(fallbackInput);
+  if (!copied) {
+    throw new Error("Clipboard write is unavailable in this browser context.");
+  }
+}
+
 function _renderRefusalBlock() {
   if (state.renderArtifacts.lastRefusal) {
     renderRefusalOutput.textContent = JSON.stringify(state.renderArtifacts.lastRefusal, null, 2);
@@ -1483,6 +1713,7 @@ function _renderRefusalBlock() {
 function renderRenderArtifactsViewer() {
   _renderRunSummaryBlock();
   _renderDeterminismReceipt();
+  _renderSafeRunReceipt();
   _renderRefusalBlock();
   _renderExecutePointersBlock();
   _renderAuditionPanel();
@@ -1493,10 +1724,12 @@ async function refreshRenderArtifactsFromProjectShow(projectShow) {
   const reportPath = _artifactPathFromProjectShow(projectShow, "renders/render_report.json");
   const executePath = _artifactPathFromProjectShow(projectShow, "renders/render_execute.json");
   const eventLogPath = _artifactPathFromProjectShow(projectShow, "renders/event_log.jsonl");
+  const qaPath = _artifactPathFromProjectShow(projectShow, "renders/render_qa.json");
 
   let reportPayload = null;
   let executePayload = null;
   let eventLogEntries = [];
+  let qaPayload = null;
 
   if (reportPath) {
     const reportArtifact = await loadRenderArtifact(reportPath);
@@ -1516,11 +1749,18 @@ async function refreshRenderArtifactsFromProjectShow(projectShow) {
       eventLogEntries = eventLogArtifact.artifact;
     }
   }
+  if (qaPath) {
+    const qaArtifact = await loadRenderArtifact(qaPath);
+    if (_isObject(qaArtifact.artifact)) {
+      qaPayload = qaArtifact.artifact;
+    }
+  }
 
   state.renderArtifacts = {
     ...state.renderArtifacts,
     eventLogEntries,
     execute: executePayload,
+    qa: qaPayload,
     report: reportPayload,
   };
   renderRenderArtifactsViewer();
@@ -2033,33 +2273,63 @@ async function savePluginChain() {
   setStatus("project.write_render_request completed.");
 }
 
-async function runProjectRender() {
+async function runSafeRun() {
   const projectDir = normalizePath(projectDirInput.value);
   if (!projectDir) {
     throw new Error("Project directory is required.");
   }
 
+  setStatus("Calling project.write_render_request (Safe Run preset)...");
+  const writeResult = await apiRpc("project.write_render_request", {
+    project_dir: projectDir,
+    set: {
+      dry_run: false,
+    },
+  });
+  state.renderRequestIntent = {
+    ...state.renderRequestIntent,
+    dry_run: false,
+  };
+  _renderIntentPreview();
+
   _clearRenderRefusal();
   renderRenderArtifactsViewer();
-  setStatus("Calling project.render_run...");
-  let result;
+  setStatus("Calling project.render_run (Safe Run preset)...");
+  let runResult;
   try {
-    result = await apiRpc("project.render_run", {
+    runResult = await apiRpc("project.render_run", {
       project_dir: projectDir,
       force: true,
       event_log: true,
       event_log_force: true,
+      preflight: true,
+      preflight_force: true,
       execute: true,
       execute_force: true,
+      qa_out: true,
     });
   } catch (error) {
     _recordRenderRefusal(error);
     renderRenderArtifactsViewer();
     throw error;
   }
-  projectOutput.textContent = JSON.stringify(result, null, 2);
-  setStatus("project.render_run completed. Refreshing project.show...");
+
+  state.audition.activeStream = "output";
+  state.audition.jobId = "";
+  state.audition.inputSlot = 0;
+  state.audition.outputSlot = 0;
+
+  projectOutput.textContent = JSON.stringify(
+    {
+      render_run: runResult,
+      write_render_request: writeResult,
+    },
+    null,
+    2,
+  );
+  setStatus("Safe Run completed. Refreshing project.show...");
   await refreshProjectShow();
+  setStatus("Safe Run completed. Receipt is ready.");
 }
 
 async function refreshDiscover() {
@@ -2234,13 +2504,26 @@ chainSaveButton.addEventListener("click", async () => {
   }
 });
 
-runRenderButton.addEventListener("click", async () => {
-  try {
-    await runProjectRender();
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : String(error));
-  }
-});
+if (safeRunButton) {
+  safeRunButton.addEventListener("click", async () => {
+    try {
+      await runSafeRun();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    }
+  });
+}
+
+if (copyReceiptButton) {
+  copyReceiptButton.addEventListener("click", async () => {
+    try {
+      await _copySafeRunReceipt();
+      setStatus("Safe Run receipt copied to clipboard.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    }
+  });
+}
 
 timelineJobFilter.addEventListener("change", () => {
   state.renderArtifacts.timelineFilterJob = timelineJobFilter.value;

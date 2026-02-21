@@ -133,6 +133,7 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
                 "force": "boolean",
                 "preflight": "boolean",
                 "preflight_force": "boolean",
+                "qa_out": "boolean",
             },
             "examples": [
                 {
@@ -148,6 +149,7 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
                     "project_dir": "C:/mmo/project",
                     "preflight": True,
                     "preflight_force": True,
+                    "qa_out": True,
                 },
                 {
                     "execute_out": "C:/mmo/project/renders/render_execute.json",
@@ -633,6 +635,7 @@ def _handle_project_render_run(params: dict[str, Any]) -> dict[str, Any]:
             "execute",
             "execute_out",
             "execute_force",
+            "qa_out",
         },
     )
     project_dir = _require_str_param(
@@ -688,6 +691,12 @@ def _handle_project_render_run(params: dict[str, Any]) -> dict[str, Any]:
         name="execute_force",
         default=False,
     )
+    qa_out = _optional_bool_param(
+        method="project.render_run",
+        params=params,
+        name="qa_out",
+        default=False,
+    )
     execute_out_path = Path(execute_out) if isinstance(execute_out, str) else None
     return _call_json_command(
         method="project.render_run",
@@ -701,6 +710,8 @@ def _handle_project_render_run(params: dict[str, Any]) -> dict[str, Any]:
             execute=execute,
             execute_out_path=execute_out_path,
             execute_force=execute_force,
+            qa=qa_out,
+            qa_force=qa_out,
         ),
     )
 

@@ -11,6 +11,26 @@ function _toPosix(value) {
   return value.replace(/\\/g, "/");
 }
 
+async function _mkdtempRooted(prefix) {
+  const roots = [
+    os.tmpdir(),
+    path.resolve(process.cwd(), ".mmo_tmp", "gui_tests"),
+  ];
+  let lastError = null;
+  for (const root of roots) {
+    try {
+      await fs.mkdir(root, { recursive: true });
+      return await fs.mkdtemp(path.join(root, prefix));
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError) {
+    throw lastError;
+  }
+  throw new Error("Failed to create temporary test directory.");
+}
+
 async function _pickPort() {
   const server = net.createServer();
   await new Promise((resolve, reject) => {
@@ -132,7 +152,7 @@ async function _writeRenderExecuteFixture(rendersDir, audioPath) {
 }
 
 async function _testAudioStreamAllowlistAndRange() {
-  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "mmo_gui_audio_stream_"));
+  const tempRoot = await _mkdtempRooted("mmo_gui_audio_stream_");
   const projectDir = path.join(tempRoot, "project");
   const rendersDir = path.join(projectDir, "renders");
   const audioPath = path.join(projectDir, "renders", "outputs", "audition.wav");
@@ -179,7 +199,7 @@ async function _testAudioStreamAllowlistAndRange() {
 }
 
 async function _testAudioStreamRejectsExternalPathByDefault() {
-  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "mmo_gui_audio_stream_external_"));
+  const tempRoot = await _mkdtempRooted("mmo_gui_audio_stream_external_");
   const projectDir = path.join(tempRoot, "project");
   const rendersDir = path.join(projectDir, "renders");
   const externalAudioPath = path.join(tempRoot, "external", "audition.wav");
@@ -209,7 +229,7 @@ async function _testAudioStreamRejectsExternalPathByDefault() {
 }
 
 async function _testAudioStreamAllowsExternalPathWhenOptInEnabled() {
-  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "mmo_gui_audio_stream_external_optin_"));
+  const tempRoot = await _mkdtempRooted("mmo_gui_audio_stream_external_optin_");
   const projectDir = path.join(tempRoot, "project");
   const rendersDir = path.join(projectDir, "renders");
   const externalAudioPath = path.join(tempRoot, "external", "audition.wav");

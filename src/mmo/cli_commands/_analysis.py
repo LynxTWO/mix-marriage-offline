@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -23,8 +24,23 @@ __all__ = [
 ]
 
 
+def _command_env() -> dict[str, str]:
+    env = dict(os.environ)
+    src_root = str(Path(__file__).resolve().parents[2])
+    raw_pythonpath = env.get("PYTHONPATH", "")
+    if not raw_pythonpath:
+        env["PYTHONPATH"] = src_root
+        return env
+
+    paths = raw_pythonpath.split(os.pathsep)
+    if src_root in paths:
+        return env
+    env["PYTHONPATH"] = os.pathsep.join([src_root, raw_pythonpath])
+    return env
+
+
 def _run_command(command: list[str]) -> int:
-    completed = subprocess.run(command, check=False)
+    completed = subprocess.run(command, check=False, env=_command_env())
     return completed.returncode
 
 

@@ -173,6 +173,13 @@ button:hover {
   gap: 0.6rem;
 }
 
+.receipt-card {
+  border: 1px solid #d5e2ea;
+  border-radius: 8px;
+  padding: 0.55rem;
+  background: #fbfdff;
+}
+
 .audition-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
