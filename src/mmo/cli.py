@@ -2485,6 +2485,29 @@ def main(argv: list[str] | None = None) -> int:
             "--execute-out is used."
         ),
     )
+    project_render_run_parser.add_argument(
+        "--qa",
+        action="store_true",
+        help="Also write renders/render_qa.json.",
+    )
+    project_render_run_parser.add_argument(
+        "--qa-out",
+        default=None,
+        help="Optional path to render_qa JSON (implies QA artifact).",
+    )
+    project_render_run_parser.add_argument(
+        "--qa-force",
+        action="store_true",
+        help="Overwrite existing render_qa output when --qa or --qa-out is used.",
+    )
+    project_render_run_parser.add_argument(
+        "--qa-enforce",
+        action="store_true",
+        help=(
+            "Return exit code 2 when render QA has severity=error issues "
+            "(requires --qa or --qa-out)."
+        ),
+    )
 
     gates_parser = subparsers.add_parser("gates", help="Gates policy registry tools.")
     gates_subparsers = gates_parser.add_subparsers(dest="gates_command", required=True)
@@ -3370,6 +3393,24 @@ def main(argv: list[str] | None = None) -> int:
         "--execute-force",
         action="store_true",
         help="Overwrite execute output file if it already exists.",
+    )
+    render_run_parser.add_argument(
+        "--qa-out",
+        default=None,
+        help=(
+            "Optional path to output render_qa JSON "
+            "(requires request options dry_run=false)."
+        ),
+    )
+    render_run_parser.add_argument(
+        "--qa-force",
+        action="store_true",
+        help="Overwrite QA output file if it already exists.",
+    )
+    render_run_parser.add_argument(
+        "--qa-enforce",
+        action="store_true",
+        help="Return exit code 2 when render QA contains any severity=error issue.",
     )
 
     timeline_parser = subparsers.add_parser("timeline", help="Timeline marker tools.")
@@ -4713,6 +4754,15 @@ def main(argv: list[str] | None = None) -> int:
                         else None
                     ),
                     execute_force=bool(getattr(args, "execute_force", False)),
+                    qa=bool(getattr(args, "qa", False)),
+                    qa_out_path=(
+                        Path(args.qa_out)
+                        if isinstance(getattr(args, "qa_out", None), str)
+                        and args.qa_out.strip()
+                        else None
+                    ),
+                    qa_force=bool(getattr(args, "qa_force", False)),
+                    qa_enforce=bool(getattr(args, "qa_enforce", False)),
                 )
             except (RuntimeError, ValueError) as exc:
                 print(str(exc), file=sys.stderr)
@@ -6487,6 +6537,13 @@ def main(argv: list[str] | None = None) -> int:
                     else None
                 ),
                 execute_force=bool(getattr(args, "execute_force", False)),
+                qa_out_path=(
+                    Path(args.qa_out)
+                    if getattr(args, "qa_out", None)
+                    else None
+                ),
+                qa_force=bool(getattr(args, "qa_force", False)),
+                qa_enforce=bool(getattr(args, "qa_enforce", False)),
             )
         except (RuntimeError, ValueError) as exc:
             print(str(exc), file=sys.stderr)

@@ -158,6 +158,108 @@ MINIMAL_RENDER_EXECUTE = {
     ],
 }
 
+MINIMAL_RENDER_QA = {
+    "schema_version": "0.1.0",
+    "run_id": "RUN.0123456789abcdef",
+    "request_sha256": "0" * 64,
+    "plan_sha256": "1" * 64,
+    "report_sha256": "2" * 64,
+    "plugin_chain_used": False,
+    "thresholds": {
+        "polarity_error_correlation_lte": -0.6,
+        "correlation_warn_lte": -0.2,
+        "plugin_delta_lufs_warn_abs": 2.0,
+        "plugin_delta_lufs_error_abs": 4.0,
+        "plugin_delta_crest_warn_abs": 3.0,
+        "plugin_delta_crest_error_abs": 6.0,
+    },
+    "jobs": [
+        {
+            "job_id": "JOB.001",
+            "input": {
+                "path": "stems/mix.wav",
+                "sha256": "3" * 64,
+                "format": "wav",
+                "channel_count": 2,
+                "sample_rate_hz": 48000,
+                "metrics": {
+                    "peak_dbfs": -1.0,
+                    "rms_dbfs": -10.0,
+                    "integrated_lufs": -12.0,
+                    "short_term_lufs_p10": -14.0,
+                    "short_term_lufs_p50": -12.0,
+                    "short_term_lufs_p90": -10.0,
+                    "loudness_range_lu": 4.0,
+                    "crest_factor_db": 9.0,
+                    "true_peak_dbtp": -0.5,
+                    "clip_sample_count": 0,
+                    "intersample_over_count": 0,
+                    "dc_offset": 0.0,
+                    "correlation_lr": 0.5,
+                    "mid_rms_dbfs": -11.0,
+                    "side_rms_dbfs": -20.0,
+                    "side_mid_ratio_db": -9.0,
+                    "mono_rms_dbfs": -11.0,
+                },
+                "spectral": {
+                    "centers_hz": [16.0, 20.0, 25.0],
+                    "levels_db": [-80.0, -78.0, -76.0],
+                    "tilt_db_per_oct": 1.0,
+                    "section_tilt_db_per_oct": {
+                        "sub_bass_low_end": 1.0,
+                        "low_midrange": 0.5,
+                        "midrange_high_mid": -0.2,
+                        "highs_treble": -0.6
+                    }
+                },
+                "polarity_risk": False,
+            },
+            "outputs": [
+                {
+                    "path": "renders/job_001/mix.wav",
+                    "sha256": "4" * 64,
+                    "format": "wav",
+                    "channel_count": 2,
+                    "sample_rate_hz": 48000,
+                    "metrics": {
+                        "peak_dbfs": -1.2,
+                        "rms_dbfs": -11.0,
+                        "integrated_lufs": -13.0,
+                        "short_term_lufs_p10": -14.5,
+                        "short_term_lufs_p50": -13.0,
+                        "short_term_lufs_p90": -11.0,
+                        "loudness_range_lu": 3.5,
+                        "crest_factor_db": 8.8,
+                        "true_peak_dbtp": -0.6,
+                        "clip_sample_count": 0,
+                        "intersample_over_count": 0,
+                        "dc_offset": 0.0,
+                        "correlation_lr": 0.4,
+                        "mid_rms_dbfs": -12.0,
+                        "side_rms_dbfs": -22.0,
+                        "side_mid_ratio_db": -10.0,
+                        "mono_rms_dbfs": -12.0,
+                    },
+                    "spectral": {
+                        "centers_hz": [16.0, 20.0, 25.0],
+                        "levels_db": [-81.0, -79.0, -77.0],
+                        "tilt_db_per_oct": 0.8,
+                        "section_tilt_db_per_oct": {
+                            "sub_bass_low_end": 0.8,
+                            "low_midrange": 0.3,
+                            "midrange_high_mid": -0.3,
+                            "highs_treble": -0.7
+                        }
+                    },
+                    "polarity_risk": False,
+                }
+            ],
+            "comparisons": [],
+        }
+    ],
+    "issues": [],
+}
+
 
 class TestRenderRequestSchema(unittest.TestCase):
     def setUp(self) -> None:
@@ -339,6 +441,55 @@ class TestRenderExecuteSchema(unittest.TestCase):
         self.assertEqual(errors, [])
 
 
+class TestRenderQASchema(unittest.TestCase):
+    def setUp(self) -> None:
+        self.validator = _validator("render_qa.schema.json")
+
+    def test_schema_is_valid_draft_2020_12(self) -> None:
+        schema_path = SCHEMAS_DIR / "render_qa.schema.json"
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        jsonschema.Draft202012Validator.check_schema(schema)
+
+    def test_minimal_render_qa_validates(self) -> None:
+        errors = list(self.validator.iter_errors(MINIMAL_RENDER_QA))
+        self.assertEqual(errors, [])
+
+    def test_missing_required_fields_rejected(self) -> None:
+        for field in (
+            "schema_version",
+            "run_id",
+            "request_sha256",
+            "plan_sha256",
+            "report_sha256",
+            "plugin_chain_used",
+            "thresholds",
+            "jobs",
+            "issues",
+        ):
+            with self.subTest(missing=field):
+                payload = dict(MINIMAL_RENDER_QA)
+                del payload[field]
+                errors = list(self.validator.iter_errors(payload))
+                self.assertGreater(len(errors), 0)
+
+    def test_invalid_issue_severity_rejected(self) -> None:
+        payload = json.loads(json.dumps(MINIMAL_RENDER_QA))
+        payload["issues"] = [
+            {
+                "issue_id": "ISSUE.RENDER.QA.TEST",
+                "severity": "fatal",
+                "message": "invalid severity",
+                "job_id": "JOB.001",
+                "output_path": "renders/job_001/mix.wav",
+                "metric": "correlation_lr",
+                "value": -1.0,
+                "threshold": -0.6,
+            }
+        ]
+        errors = list(self.validator.iter_errors(payload))
+        self.assertGreater(len(errors), 0)
+
+
 class TestRenderSchemasRegistered(unittest.TestCase):
     def test_render_request_in_schema_anchors(self) -> None:
         from importlib import import_module
@@ -353,6 +504,7 @@ class TestRenderSchemasRegistered(unittest.TestCase):
         self.assertIn("schemas/render_request.schema.json", text)
         self.assertIn("schemas/render_report.schema.json", text)
         self.assertIn("schemas/render_execute.schema.json", text)
+        self.assertIn("schemas/render_qa.schema.json", text)
 
 
 class TestLayoutsAndDownmixOntologyPresent(unittest.TestCase):

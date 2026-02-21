@@ -46,6 +46,7 @@ _VALIDATE_CHECKS: list[tuple[str, str | None, bool]] = [
     ("renders/render_execute.json", "render_execute.schema.json", False),
     ("renders/render_plan.json", "render_plan.schema.json", False),
     ("renders/render_preflight.json", "render_preflight.schema.json", False),
+    ("renders/render_qa.json", "render_qa.schema.json", False),
     ("renders/render_report.json", "render_report.schema.json", False),
     ("renders/render_request.json", "render_request.schema.json", False),
     ("report.json", "report.schema.json", False),
@@ -67,6 +68,7 @@ _PROJECT_BUNDLE_ALLOWLIST: tuple[str, ...] = (
     "renders/render_plan.json",
     "renders/render_execute.json",
     "renders/render_preflight.json",
+    "renders/render_qa.json",
     "renders/render_report.json",
     "renders/event_log.jsonl",
 )
@@ -1389,6 +1391,10 @@ def _run_project_render_run(
     execute: bool = False,
     execute_out_path: Path | None = None,
     execute_force: bool = False,
+    qa: bool = False,
+    qa_out_path: Path | None = None,
+    qa_force: bool = False,
+    qa_enforce: bool = False,
 ) -> int:
     """Run deterministic render-run using project-standard scaffold paths."""
     validate_exit = _validate_required_project_artifacts(project_dir)
@@ -1404,6 +1410,12 @@ def _run_project_render_run(
     if execute_force and not execute and execute_out_path is None:
         print("--execute-force requires --execute or --execute-out.", file=sys.stderr)
         return 1
+    if qa_force and not qa and qa_out_path is None:
+        print("--qa-force requires --qa or --qa-out.", file=sys.stderr)
+        return 1
+    if qa_enforce and not qa and qa_out_path is None:
+        print("--qa-enforce requires --qa or --qa-out.", file=sys.stderr)
+        return 1
 
     request_path = project_dir / "renders" / "render_request.json"
     scene_path = project_dir / "drafts" / "scene.draft.json"
@@ -1418,6 +1430,9 @@ def _run_project_render_run(
     resolved_execute_out_path: Path | None = execute_out_path
     if resolved_execute_out_path is None and execute:
         resolved_execute_out_path = project_dir / "renders" / "render_execute.json"
+    resolved_qa_out_path: Path | None = qa_out_path
+    if resolved_qa_out_path is None and qa:
+        resolved_qa_out_path = project_dir / "renders" / "render_qa.json"
 
     try:
         request_payload = _load_json_object(request_path, label="Render request")
@@ -1450,6 +1465,9 @@ def _run_project_render_run(
                 preflight_force=preflight_force,
                 execute_out_path=resolved_execute_out_path,
                 execute_force=execute_force,
+                qa_out_path=resolved_qa_out_path,
+                qa_force=qa_force,
+                qa_enforce=qa_enforce,
             )
     except (RuntimeError, ValueError) as exc:
         print(str(exc), file=sys.stderr)
@@ -1490,6 +1508,14 @@ def _run_project_render_run(
             raw_run_id = execute_payload.get("run_id")
             if isinstance(raw_run_id, str) and raw_run_id.strip():
                 run_id = raw_run_id.strip()
+    if resolved_qa_out_path is not None and resolved_qa_out_path.is_file():
+        paths_written.append(resolved_qa_out_path.resolve().as_posix())
+        if run_id is None:
+            qa_payload = _load_json_object_if_exists(resolved_qa_out_path)
+            if isinstance(qa_payload, dict):
+                raw_run_id = qa_payload.get("run_id")
+                if isinstance(raw_run_id, str) and raw_run_id.strip():
+                    run_id = raw_run_id.strip()
 
     summary: dict[str, Any] = {
         "job_count": job_count,

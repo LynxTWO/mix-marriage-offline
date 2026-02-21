@@ -39,6 +39,63 @@ def _write_tiny_wav(path: Path, *, channels: int = 1, rate: int = 8000) -> None:
         handle.writeframes(b"\x00\x00" * 8 * channels)
 
 
+def _write_anti_phase_wav(path: Path, *, rate: int = 48000, duration_s: float = 1.0) -> None:
+    import math
+    import struct
+
+    frames = max(1, int(rate * duration_s))
+    samples: list[int] = []
+    for frame_index in range(frames):
+        value = int(0.35 * 32767.0 * math.sin(2.0 * math.pi * 220.0 * frame_index / rate))
+        samples.extend([value, -value])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(2)
+        handle.setframerate(rate)
+        handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+
+
+def _write_stereo_tone_wav(path: Path, *, rate: int = 48000, duration_s: float = 1.0) -> None:
+    import math
+    import struct
+
+    frames = max(1, int(rate * duration_s))
+    samples: list[int] = []
+    for frame_index in range(frames):
+        value = int(0.35 * 32767.0 * math.sin(2.0 * math.pi * 220.0 * frame_index / rate))
+        samples.extend([value, value])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(2)
+        handle.setframerate(rate)
+        handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+
+
+def _prepare_single_stereo_source(project_dir: Path, *, anti_phase: bool = False) -> None:
+    scene_path = project_dir / "drafts" / "scene.draft.json"
+    stems_dir = project_dir / "stems"
+    if scene_path.is_file():
+        try:
+            scene_payload = json.loads(scene_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            scene_payload = {}
+        source_payload = scene_payload.get("source")
+        if isinstance(source_payload, dict):
+            stems_raw = source_payload.get("stems_dir")
+            if isinstance(stems_raw, str) and stems_raw.strip():
+                stems_dir = Path(stems_raw)
+    stems_dir.mkdir(parents=True, exist_ok=True)
+    for candidate in stems_dir.rglob("*.wav"):
+        candidate.unlink()
+    source_path = stems_dir / "mix.wav"
+    if anti_phase:
+        _write_anti_phase_wav(source_path)
+    else:
+        _write_stereo_tone_wav(source_path)
+
+
 def _init_project(base: Path) -> Path:
     stems_root = base / "stems_root"
     _write_tiny_wav(stems_root / "stems" / "kick.wav")
@@ -82,6 +139,10 @@ def _run_project_render_run(
     preflight: bool = False,
     preflight_force: bool = False,
     event_log_force: bool = False,
+    qa: bool = False,
+    qa_out: Path | None = None,
+    qa_force: bool = False,
+    qa_enforce: bool = False,
 ) -> tuple[int, str, str]:
     args = [
         "project", "render-run", str(project_dir),
@@ -96,6 +157,14 @@ def _run_project_render_run(
         args.append("--preflight-force")
     if event_log_force:
         args.append("--event-log-force")
+    if qa:
+        args.append("--qa")
+    if qa_out is not None:
+        args.extend(["--qa-out", str(qa_out)])
+    if qa_force:
+        args.append("--qa-force")
+    if qa_enforce:
+        args.append("--qa-enforce")
     return _run_main(args)
 
 
@@ -396,6 +465,94 @@ class TestProjectRenderRunPreflight(unittest.TestCase):
         self.assertTrue(preflight_path.is_file())
         self.assertFalse(report_path.exists())
         self.assertFalse(event_log_path.exists())
+
+
+class TestProjectRenderRunQA(unittest.TestCase):
+
+    def test_writes_render_qa_when_requested(self) -> None:
+        qa_validator = _schema_validator("render_qa.schema.json")
+        project_dir = _init_project(_SANDBOX / "qa_happy")
+        _project_render_init(project_dir, target_layout="LAYOUT.2_0")
+        _prepare_single_stereo_source(project_dir)
+        request_path = project_dir / "renders" / "render_request.json"
+        request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+        options = request_payload.get("options")
+        if not isinstance(options, dict):
+            options = {}
+        options["dry_run"] = False
+        request_payload["options"] = options
+        request_payload.pop("routing_plan_path", None)
+        request_path.write_text(
+            json.dumps(request_payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        qa_path = project_dir / "renders" / "render_qa.json"
+        exit_code, stdout, stderr = _run_project_render_run(project_dir, qa=True)
+        self.assertEqual(exit_code, 0, msg=stderr)
+        self.assertTrue(qa_path.is_file())
+
+        payload = json.loads(qa_path.read_text(encoding="utf-8"))
+        qa_validator.validate(payload)
+        summary = json.loads(stdout)
+        self.assertIn(qa_path.resolve().as_posix(), summary["paths_written"])
+
+    def test_qa_force_requires_qa_flag_or_qa_out(self) -> None:
+        project_dir = _init_project(_SANDBOX / "qa_force_requires")
+        _project_render_init(project_dir)
+
+        exit_code, _, stderr = _run_project_render_run(
+            project_dir,
+            qa_force=True,
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertIn("--qa-force requires --qa or --qa-out", stderr)
+
+    def test_qa_enforce_requires_qa_flag_or_qa_out(self) -> None:
+        project_dir = _init_project(_SANDBOX / "qa_enforce_requires")
+        _project_render_init(project_dir)
+
+        exit_code, _, stderr = _run_project_render_run(
+            project_dir,
+            qa_enforce=True,
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertIn("--qa-enforce requires --qa or --qa-out", stderr)
+
+    def test_qa_enforce_returns_exit_two_on_error_issue(self) -> None:
+        project_dir = _init_project(_SANDBOX / "qa_enforce_error")
+        _project_render_init(project_dir, target_layout="LAYOUT.2_0")
+        _prepare_single_stereo_source(project_dir, anti_phase=True)
+
+        request_path = project_dir / "renders" / "render_request.json"
+        request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+        options = request_payload.get("options")
+        if not isinstance(options, dict):
+            options = {}
+        options["dry_run"] = False
+        request_payload["options"] = options
+        request_payload.pop("routing_plan_path", None)
+        request_path.write_text(
+            json.dumps(request_payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        qa_path = project_dir / "renders" / "render_qa.json"
+        exit_code, _, stderr = _run_project_render_run(
+            project_dir,
+            qa=True,
+            qa_enforce=True,
+        )
+        self.assertEqual(exit_code, 2, msg=stderr)
+        self.assertTrue(qa_path.is_file())
+        payload = json.loads(qa_path.read_text(encoding="utf-8"))
+        issues = payload.get("issues", [])
+        error_ids = [
+            issue.get("issue_id")
+            for issue in issues
+            if isinstance(issue, dict) and issue.get("severity") == "error"
+        ]
+        self.assertIn("ISSUE.RENDER.QA.POLARITY_RISK", error_ids)
 
 
 class TestProjectRenderRunForwardSlashPaths(unittest.TestCase):

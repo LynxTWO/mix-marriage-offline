@@ -187,6 +187,29 @@ def _write_pcm16_wav(
         handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
 
 
+def _write_pcm16_anti_phase_stereo_wav(
+    path: Path,
+    *,
+    sample_rate_hz: int = 48000,
+    duration_s: float = 1.0,
+) -> None:
+    frames = max(1, int(sample_rate_hz * duration_s))
+    samples: list[int] = []
+    for frame_index in range(frames):
+        value = int(
+            0.35
+            * 32767.0
+            * math.sin(2.0 * math.pi * 330.0 * frame_index / sample_rate_hz)
+        )
+        samples.extend([value, -value])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate_hz)
+        handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+
+
 def _pcm16_abs_peak(path: Path) -> int:
     with wave.open(str(path), "rb") as handle:
         sample_width = handle.getsampwidth()
@@ -1057,6 +1080,148 @@ class TestRenderRunExecuteArtifact(unittest.TestCase):
             self.assertEqual(wav_bytes_a, wav_bytes_b)
             self.assertEqual(execute_a.read_bytes(), execute_b.read_bytes())
 
+
+class TestRenderRunQAArtifact(unittest.TestCase):
+    def test_writes_schema_valid_qa_artifact_and_event_step_when_requested(self) -> None:
+        qa_validator = _schema_validator("render_qa.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            _write_pcm16_wav(stems_dir / "mix.wav", channels=2, duration_s=1.0)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                },
+            }
+            qa_out = temp_path / "render_qa.json"
+            event_log_out = temp_path / "events.jsonl"
+            exit_code, _, stderr, _, _ = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--qa-out", str(qa_out),
+                    "--event-log-out", str(event_log_out),
+                ],
+            )
+
+            self.assertEqual(exit_code, 0, msg=stderr)
+            self.assertTrue(qa_out.is_file())
+            payload = json.loads(qa_out.read_text(encoding="utf-8"))
+            qa_validator.validate(payload)
+            self.assertIn("jobs", payload)
+            self.assertIn("issues", payload)
+
+            events = _read_jsonl(event_log_out)
+            events_by_what = {str(event.get("what", "")): event for event in events}
+            self.assertIn("render QA built", events_by_what)
+            qa_event = events_by_what["render QA built"]
+            self.assertEqual(qa_event.get("scope"), "qa")
+            self.assertIn("RENDER.RUN.QA_BUILT", qa_event.get("evidence", {}).get("codes", []))
+
+    def test_qa_out_overwrite_requires_qa_force(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            _write_pcm16_wav(stems_dir / "mix.wav", channels=2, duration_s=1.0)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {"dry_run": False},
+            }
+            qa_out = temp_path / "render_qa.json"
+
+            exit_first, _, stderr_first, _, _ = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--qa-out", str(qa_out),
+                ],
+            )
+            self.assertEqual(exit_first, 0, msg=stderr_first)
+
+            exit_refused, _, stderr_refused, _, _ = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--force",
+                    "--qa-out", str(qa_out),
+                ],
+            )
+            self.assertEqual(exit_refused, 1)
+            self.assertIn("--qa-force", stderr_refused)
+
+            exit_forced, _, stderr_forced, _, _ = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--force",
+                    "--qa-out", str(qa_out),
+                    "--qa-force",
+                ],
+            )
+            self.assertEqual(exit_forced, 0, msg=stderr_forced)
+
+    def test_qa_force_requires_qa_out(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            exit_code, _, stderr, _, _ = _run_render_run(
+                temp_path,
+                extra_args=["--qa-force"],
+            )
+            self.assertEqual(exit_code, 1)
+            self.assertIn("--qa-force requires --qa-out", stderr)
+
+    def test_qa_enforce_requires_qa_out(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            exit_code, _, stderr, _, _ = _run_render_run(
+                temp_path,
+                extra_args=["--qa-enforce"],
+            )
+            self.assertEqual(exit_code, 1)
+            self.assertIn("--qa-enforce requires --qa-out", stderr)
+
+    def test_qa_enforce_returns_exit_two_on_error_issue(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            _write_pcm16_anti_phase_stereo_wav(stems_dir / "mix.wav", duration_s=1.0)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {"dry_run": False},
+            }
+            qa_out = temp_path / "render_qa.json"
+            exit_code, _, stderr, _, _ = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--qa-out", str(qa_out),
+                    "--qa-enforce",
+                ],
+            )
+            self.assertEqual(exit_code, 2, msg=stderr)
+            self.assertTrue(qa_out.is_file())
+            payload = json.loads(qa_out.read_text(encoding="utf-8"))
+            issues = payload.get("issues", [])
+            error_ids = [
+                issue.get("issue_id")
+                for issue in issues
+                if isinstance(issue, dict) and issue.get("severity") == "error"
+            ]
+            self.assertIn("ISSUE.RENDER.QA.POLARITY_RISK", error_ids)
 
 class TestRenderRunDeterminism(unittest.TestCase):
     def test_byte_identical_plan_and_report_across_runs(self) -> None:

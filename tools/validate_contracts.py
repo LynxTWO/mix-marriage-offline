@@ -70,6 +70,7 @@ SCHEMA_ANCHORS: tuple[str, ...] = (
     "schemas/render_report.schema.json",
     "schemas/render_preflight.schema.json",
     "schemas/render_execute.schema.json",
+    "schemas/render_qa.schema.json",
     "schemas/ui_layout.schema.json",
     "schemas/ui_layout_snapshot.schema.json",
     "schemas/ui_hints.schema.json",

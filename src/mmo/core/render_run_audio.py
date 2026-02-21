@@ -518,8 +518,13 @@ def build_render_report_with_audio(
     scene_path: Path,
     report_out_path: Path,
     capture_execute_trace: bool = False,
-) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, Any]]]:
-    """Render stereo deliverables and return report payload plus execute job trace."""
+) -> tuple[
+    dict[str, Any],
+    dict[str, Any] | None,
+    list[dict[str, Any]],
+    dict[str, Any],
+]:
+    """Render stereo deliverables and return report/execute/plugin/qa trace payloads."""
     job = _single_stereo_job_or_raise(plan_payload)
     job_id = _coerce_str(job.get("job_id")).strip() or "JOB.001"
     source_path = _resolve_single_source_or_raise(scene_payload)
@@ -797,6 +802,19 @@ def build_render_report_with_audio(
         report_notes.append(f"plugin_chain_note: {note}")
     report_job["notes"] = report_notes
 
+    output_paths = _output_paths_from_rows(output_files)
+    if not output_paths:
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_ENCODE_FAILED,
+            message="No output paths were produced for render-run execution.",
+        )
+
+    qa_job_row: dict[str, Any] = {
+        "job_id": job_id,
+        "input_paths": [source_path.resolve()],
+        "output_paths": output_paths,
+    }
+
     execute_job_row: dict[str, Any] | None = None
     if capture_execute_trace:
         ffmpeg_cmd_for_trace = ffmpeg_cmd_for_encode or ffmpeg_cmd_for_decode
@@ -805,12 +823,6 @@ def build_render_report_with_audio(
                 issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
                 message="ffmpeg is required to capture deterministic execute traces.",
             )
-        output_paths = _output_paths_from_rows(output_files)
-        if not output_paths:
-            raise RenderRunRefusalError(
-                issue_id=ISSUE_RENDER_RUN_ENCODE_FAILED,
-                message="No output paths were produced for deterministic execute tracing.",
-            )
         execute_job_row = {
             "job_id": job_id,
             "input_paths": [source_path.resolve()],
@@ -818,7 +830,7 @@ def build_render_report_with_audio(
             "ffmpeg_version": resolve_ffmpeg_version(ffmpeg_cmd_for_trace),
             "ffmpeg_commands": ffmpeg_command_rows,
         }
-    return report_payload, execute_job_row, plugin_step_events
+    return report_payload, execute_job_row, plugin_step_events, qa_job_row
 
 
 def _coerce_str(value: Any) -> str:

@@ -322,6 +322,107 @@ class TestProjectValidateRenderArtifacts(unittest.TestCase):
                 }
             ],
         })
+        _write_json(renders_dir / "render_qa.json", {
+            "schema_version": "0.1.0",
+            "run_id": "RUN.0123456789abcdef",
+            "request_sha256": "0" * 64,
+            "plan_sha256": "1" * 64,
+            "report_sha256": "2" * 64,
+            "plugin_chain_used": False,
+            "thresholds": {
+                "polarity_error_correlation_lte": -0.6,
+                "correlation_warn_lte": -0.2,
+                "plugin_delta_lufs_warn_abs": 2.0,
+                "plugin_delta_lufs_error_abs": 4.0,
+                "plugin_delta_crest_warn_abs": 3.0,
+                "plugin_delta_crest_error_abs": 6.0,
+            },
+            "jobs": [
+                {
+                    "job_id": "JOB.001",
+                    "input": {
+                        "path": (renders_dir / "input.wav").resolve().as_posix(),
+                        "sha256": "3" * 64,
+                        "format": "wav",
+                        "channel_count": 2,
+                        "sample_rate_hz": 48000,
+                        "metrics": {
+                            "peak_dbfs": -1.0,
+                            "rms_dbfs": -10.0,
+                            "integrated_lufs": -12.0,
+                            "short_term_lufs_p10": -14.0,
+                            "short_term_lufs_p50": -12.0,
+                            "short_term_lufs_p90": -10.0,
+                            "loudness_range_lu": 4.0,
+                            "crest_factor_db": 9.0,
+                            "true_peak_dbtp": -0.5,
+                            "clip_sample_count": 0,
+                            "intersample_over_count": 0,
+                            "dc_offset": 0.0,
+                            "correlation_lr": 0.5,
+                            "mid_rms_dbfs": -11.0,
+                            "side_rms_dbfs": -20.0,
+                            "side_mid_ratio_db": -9.0,
+                            "mono_rms_dbfs": -11.0,
+                        },
+                        "spectral": {
+                            "centers_hz": [16.0, 20.0, 25.0],
+                            "levels_db": [-80.0, -78.0, -76.0],
+                            "tilt_db_per_oct": 1.0,
+                            "section_tilt_db_per_oct": {
+                                "sub_bass_low_end": 1.0,
+                                "low_midrange": 0.5,
+                                "midrange_high_mid": -0.2,
+                                "highs_treble": -0.6,
+                            },
+                        },
+                        "polarity_risk": False,
+                    },
+                    "outputs": [
+                        {
+                            "path": (renders_dir / "output.wav").resolve().as_posix(),
+                            "sha256": "4" * 64,
+                            "format": "wav",
+                            "channel_count": 2,
+                            "sample_rate_hz": 48000,
+                            "metrics": {
+                                "peak_dbfs": -1.2,
+                                "rms_dbfs": -11.0,
+                                "integrated_lufs": -13.0,
+                                "short_term_lufs_p10": -14.5,
+                                "short_term_lufs_p50": -13.0,
+                                "short_term_lufs_p90": -11.0,
+                                "loudness_range_lu": 3.5,
+                                "crest_factor_db": 8.8,
+                                "true_peak_dbtp": -0.6,
+                                "clip_sample_count": 0,
+                                "intersample_over_count": 0,
+                                "dc_offset": 0.0,
+                                "correlation_lr": 0.4,
+                                "mid_rms_dbfs": -12.0,
+                                "side_rms_dbfs": -22.0,
+                                "side_mid_ratio_db": -10.0,
+                                "mono_rms_dbfs": -12.0,
+                            },
+                            "spectral": {
+                                "centers_hz": [16.0, 20.0, 25.0],
+                                "levels_db": [-81.0, -79.0, -77.0],
+                                "tilt_db_per_oct": 0.8,
+                                "section_tilt_db_per_oct": {
+                                    "sub_bass_low_end": 0.8,
+                                    "low_midrange": 0.3,
+                                    "midrange_high_mid": -0.3,
+                                    "highs_treble": -0.7,
+                                },
+                            },
+                            "polarity_risk": False,
+                        }
+                    ],
+                    "comparisons": [],
+                }
+            ],
+            "issues": [],
+        })
         _write_valid_event_log(renders_dir / "event_log.jsonl")
 
     def test_render_artifacts_validated_as_valid(self) -> None:
@@ -335,7 +436,7 @@ class TestProjectValidateRenderArtifacts(unittest.TestCase):
             c for c in result["checks"]
             if c["file"].startswith("renders/")
         ]
-        self.assertEqual(len(render_checks), 6)
+        self.assertEqual(len(render_checks), 7)
         for check in render_checks:
             self.assertFalse(check["required"])
             self.assertEqual(

@@ -349,6 +349,65 @@ class TestProjectPackRenderArtifacts(unittest.TestCase):
                 }
             ],
         })
+        _write_json(renders_dir / "render_qa.json", {
+            "schema_version": "0.1.0",
+            "run_id": "RUN.0123456789abcdef",
+            "request_sha256": "0" * 64,
+            "plan_sha256": "1" * 64,
+            "report_sha256": "2" * 64,
+            "plugin_chain_used": False,
+            "thresholds": {
+                "polarity_error_correlation_lte": -0.6,
+                "correlation_warn_lte": -0.2,
+                "plugin_delta_lufs_warn_abs": 2.0,
+                "plugin_delta_lufs_error_abs": 4.0,
+                "plugin_delta_crest_warn_abs": 3.0,
+                "plugin_delta_crest_error_abs": 6.0,
+            },
+            "jobs": [
+                {
+                    "job_id": "JOB.001",
+                    "input": {
+                        "path": "stems/mix.wav",
+                        "sha256": "5" * 64,
+                        "format": "wav",
+                        "channel_count": 2,
+                        "sample_rate_hz": 48000,
+                        "metrics": {
+                            "peak_dbfs": -1.0,
+                            "rms_dbfs": -10.0,
+                            "integrated_lufs": -12.0,
+                            "crest_factor_db": 9.0,
+                            "clip_sample_count": 0,
+                            "dc_offset": 0.0,
+                            "correlation_lr": 0.5,
+                        },
+                        "polarity_risk": False,
+                    },
+                    "outputs": [
+                        {
+                            "path": "renders/mix.wav",
+                            "sha256": "6" * 64,
+                            "format": "wav",
+                            "channel_count": 2,
+                            "sample_rate_hz": 48000,
+                            "metrics": {
+                                "peak_dbfs": -1.2,
+                                "rms_dbfs": -11.0,
+                                "integrated_lufs": -13.0,
+                                "crest_factor_db": 8.8,
+                                "clip_sample_count": 0,
+                                "dc_offset": 0.0,
+                                "correlation_lr": 0.4,
+                            },
+                            "polarity_risk": False,
+                        }
+                    ],
+                    "comparisons": [],
+                }
+            ],
+            "issues": [],
+        })
         _write_tiny_wav(renders_dir / "mix.wav", channels=2)
         _write_valid_event_log(renders_dir / "event_log.jsonl")
         (renders_dir / "ignored.log").write_text("not allowlisted\n", encoding="utf-8")
@@ -370,6 +429,7 @@ class TestProjectPackRenderArtifacts(unittest.TestCase):
         self.assertIn("renders/render_plan.json", names)
         self.assertIn("renders/render_execute.json", names)
         self.assertIn("renders/render_preflight.json", names)
+        self.assertIn("renders/render_qa.json", names)
         self.assertIn("renders/render_report.json", names)
         self.assertNotIn("renders/mix.wav", names)
         self.assertNotIn("renders/ignored.log", names)
@@ -389,6 +449,7 @@ class TestProjectPackRenderArtifacts(unittest.TestCase):
         self.assertIn("renders/render_plan.json", manifest_paths)
         self.assertIn("renders/render_execute.json", manifest_paths)
         self.assertIn("renders/render_preflight.json", manifest_paths)
+        self.assertIn("renders/render_qa.json", manifest_paths)
         self.assertIn("renders/render_report.json", manifest_paths)
         self.assertNotIn("renders/mix.wav", manifest_paths)
         self.assertNotIn("renders/ignored.log", manifest_paths)

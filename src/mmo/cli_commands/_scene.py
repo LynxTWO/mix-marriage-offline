@@ -750,8 +750,15 @@ def _run_render_run_command(
     preflight_force: bool = False,
     execute_out_path: Path | None = None,
     execute_force: bool = False,
+    qa_out_path: Path | None = None,
+    qa_force: bool = False,
+    qa_enforce: bool = False,
 ) -> int:
     from mmo.core.render_execute import build_render_execute_payload  # noqa: WPS433
+    from mmo.core.render_qa import (  # noqa: WPS433
+        build_render_qa_payload,
+        render_qa_has_error_issues,
+    )
     from mmo.core.render_reporting import build_render_report_from_plan  # noqa: WPS433
     from mmo.core.render_run_audio import (  # noqa: WPS433
         build_render_report_with_audio,
@@ -763,6 +770,12 @@ def _run_render_run_command(
         return 1
     if execute_force and execute_out_path is None:
         print("--execute-force requires --execute-out.", file=sys.stderr)
+        return 1
+    if qa_force and qa_out_path is None:
+        print("--qa-force requires --qa-out.", file=sys.stderr)
+        return 1
+    if qa_enforce and qa_out_path is None:
+        print("--qa-enforce requires --qa-out.", file=sys.stderr)
         return 1
 
     # -- overwrite guard -------------------------------------------------------
@@ -819,6 +832,12 @@ def _run_render_run_command(
             file=sys.stderr,
         )
         return 1
+    if qa_out_path is not None and dry_run_enabled:
+        print(
+            "--qa-out requires request options dry_run=false.",
+            file=sys.stderr,
+        )
+        return 1
     if (
         execute_out_path is not None
         and execute_out_path.exists()
@@ -828,6 +847,19 @@ def _run_render_run_command(
             (
                 "File exists (use --execute-force to overwrite): "
                 f"{execute_out_path.as_posix()}"
+            ),
+            file=sys.stderr,
+        )
+        return 1
+    if (
+        qa_out_path is not None
+        and qa_out_path.exists()
+        and not qa_force
+    ):
+        print(
+            (
+                "File exists (use --qa-force to overwrite): "
+                f"{qa_out_path.as_posix()}"
             ),
             file=sys.stderr,
         )
@@ -917,7 +949,12 @@ def _run_render_run_command(
 
     # -- build report ----------------------------------------------------------
     execute_job_rows: list[dict[str, Any]] = []
+    qa_job_rows: list[dict[str, Any]] = []
+    qa_issue_error_count = 0
+    qa_issue_warn_count = 0
+    qa_enforce_failed = False
     plugin_step_events: list[dict[str, Any]] = []
+    plugin_chain_used = False
     report_status_note = "status=skipped"
     report_reason_note = "reason=dry_run"
     report_built_why = (
@@ -936,6 +973,7 @@ def _run_render_run_command(
             render_report_payload,
             execute_job_row,
             plugin_step_events,
+            qa_job_row,
         ) = build_render_report_with_audio(
             plan_payload=render_plan_payload,
             request_payload=request_payload,
@@ -946,6 +984,9 @@ def _run_render_run_command(
         )
         if isinstance(execute_job_row, dict):
             execute_job_rows.append(execute_job_row)
+        if isinstance(qa_job_row, dict):
+            qa_job_rows.append(qa_job_row)
+        plugin_chain_used = bool(plugin_step_events)
         report_status_note = "status=completed"
         report_reason_note = "reason=rendered"
         report_built_why = (
@@ -973,6 +1014,32 @@ def _run_render_run_command(
             payload_name="Render execute",
         )
         _write_json_file(execute_out_path, render_execute_payload)
+    if qa_out_path is not None:
+        render_qa_payload = build_render_qa_payload(
+            request_payload=request_payload,
+            plan_payload=render_plan_payload,
+            report_payload=render_report_payload,
+            job_rows=qa_job_rows,
+            plugin_chain_used=plugin_chain_used,
+        )
+        _validate_json_payload(
+            render_qa_payload,
+            schema_path=schemas_dir() / "render_qa.schema.json",
+            payload_name="Render QA",
+        )
+        _write_json_file(qa_out_path, render_qa_payload)
+
+        raw_issues = render_qa_payload.get("issues")
+        if isinstance(raw_issues, list):
+            for issue in raw_issues:
+                if not isinstance(issue, dict):
+                    continue
+                severity = _coerce_str(issue.get("severity")).strip()
+                if severity == "error":
+                    qa_issue_error_count += 1
+                elif severity == "warn":
+                    qa_issue_warn_count += 1
+        qa_enforce_failed = qa_enforce and render_qa_has_error_issues(render_qa_payload)
 
     # -- optional event log ----------------------------------------------------
     if event_log_out_path is not None:
@@ -1015,6 +1082,10 @@ def _run_render_run_command(
         plan_ids = _ordered_unique(plan_ids)
 
         completed_where = _ordered_unique([plan_out_posix, report_out_posix])
+        if qa_out_path is not None:
+            completed_where = _ordered_unique(
+                [*completed_where, qa_out_path.resolve().as_posix()]
+            )
 
         events: list[dict[str, Any]] = [
             {
@@ -1045,34 +1116,71 @@ def _run_render_run_command(
             },
         ]
         events.extend(plugin_step_events)
-        events.extend(
-            [
+        events.append(
+            {
+                "kind": "action",
+                "scope": "render",
+                "what": "render report built",
+                "why": report_built_why,
+                "where": [report_out_posix],
+                "confidence": None,
+                "evidence": {
+                    "codes": ["RENDER.RUN.REPORT_BUILT"],
+                    "paths": [report_out_posix],
+                    "notes": [report_status_note, report_reason_note],
+                },
+            }
+        )
+        if qa_out_path is not None:
+            qa_out_posix = qa_out_path.resolve().as_posix()
+            qa_notes = [
+                f"issues_error={qa_issue_error_count}",
+                f"issues_warn={qa_issue_warn_count}",
+                "enforce=true" if qa_enforce else "enforce=false",
+            ]
+            if qa_enforce_failed:
+                qa_notes.append("enforce_result=failed")
+            events.append(
                 {
                     "kind": "action",
-                    "scope": "render",
-                    "what": "render report built",
-                    "why": report_built_why,
-                    "where": [report_out_posix],
+                    "scope": "qa",
+                    "what": "render QA built",
+                    "why": (
+                        "Computed deterministic output QA metrics and gate issues "
+                        "for executed render outputs."
+                    ),
+                    "where": [qa_out_posix],
                     "confidence": None,
                     "evidence": {
-                        "codes": ["RENDER.RUN.REPORT_BUILT"],
-                        "paths": [report_out_posix],
-                        "notes": [report_status_note, report_reason_note],
+                        "codes": ["RENDER.RUN.QA_BUILT"],
+                        "paths": [qa_out_posix],
+                        "notes": qa_notes,
+                        "metrics": [
+                            {
+                                "name": "qa_issue_error_count",
+                                "value": float(qa_issue_error_count),
+                            },
+                            {
+                                "name": "qa_issue_warn_count",
+                                "value": float(qa_issue_warn_count),
+                            },
+                        ],
                     },
+                }
+            )
+        events.append(
+            {
+                "kind": "info",
+                "scope": "render",
+                "what": "render-run completed",
+                "why": completed_why,
+                "where": completed_where,
+                "confidence": None,
+                "evidence": {
+                    "codes": ["RENDER.RUN.COMPLETED"],
+                    "paths": completed_where,
                 },
-                {
-                    "kind": "info",
-                    "scope": "render",
-                    "what": "render-run completed",
-                    "why": completed_why,
-                    "where": completed_where,
-                    "confidence": None,
-                    "evidence": {
-                        "codes": ["RENDER.RUN.COMPLETED"],
-                        "paths": completed_where,
-                    },
-                },
-            ]
+            }
         )
 
         events_with_ids: list[dict[str, Any]] = []
@@ -1104,6 +1212,8 @@ def _run_render_run_command(
             sort_keys=True,
         )
     )
+    if qa_enforce_failed:
+        return 2
     return 0
 
 

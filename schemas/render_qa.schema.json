@@ -1,0 +1,462 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/render_qa.schema.json",
+  "title": "MMO Render QA",
+  "description": "Deterministic QA artifact for executed render-run jobs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "request_sha256",
+    "plan_sha256",
+    "report_sha256",
+    "plugin_chain_used",
+    "thresholds",
+    "jobs",
+    "issues"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "run_id": {
+      "$ref": "#/$defs/run_id"
+    },
+    "request_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "plan_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "report_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "plugin_chain_used": {
+      "type": "boolean"
+    },
+    "thresholds": {
+      "$ref": "#/$defs/thresholds"
+    },
+    "jobs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/job"
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/issue"
+      }
+    }
+  },
+  "$defs": {
+    "posix_path": {
+      "type": "string",
+      "pattern": "^[^\\\\]+$",
+      "minLength": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^RUN\\.[0-9a-f]{16}$"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^JOB\\.[0-9]{3}$"
+    },
+    "float_or_null": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "int_or_null": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "peak_dbfs",
+        "rms_dbfs",
+        "integrated_lufs",
+        "short_term_lufs_p10",
+        "short_term_lufs_p50",
+        "short_term_lufs_p90",
+        "loudness_range_lu",
+        "crest_factor_db",
+        "true_peak_dbtp",
+        "clip_sample_count",
+        "intersample_over_count",
+        "dc_offset",
+        "correlation_lr",
+        "mid_rms_dbfs",
+        "side_rms_dbfs",
+        "side_mid_ratio_db",
+        "mono_rms_dbfs"
+      ],
+      "properties": {
+        "peak_dbfs": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "rms_dbfs": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "integrated_lufs": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "short_term_lufs_p10": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "short_term_lufs_p50": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "short_term_lufs_p90": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "loudness_range_lu": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "crest_factor_db": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "true_peak_dbtp": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "clip_sample_count": {
+          "$ref": "#/$defs/int_or_null"
+        },
+        "intersample_over_count": {
+          "$ref": "#/$defs/int_or_null"
+        },
+        "dc_offset": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "correlation_lr": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "mid_rms_dbfs": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "side_rms_dbfs": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "side_mid_ratio_db": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "mono_rms_dbfs": {
+          "$ref": "#/$defs/float_or_null"
+        }
+      }
+    },
+    "spectral_section_tilt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sub_bass_low_end",
+        "low_midrange",
+        "midrange_high_mid",
+        "highs_treble"
+      ],
+      "properties": {
+        "sub_bass_low_end": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "low_midrange": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "midrange_high_mid": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "highs_treble": {
+          "$ref": "#/$defs/float_or_null"
+        }
+      }
+    },
+    "spectral": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "centers_hz",
+        "levels_db",
+        "tilt_db_per_oct",
+        "section_tilt_db_per_oct"
+      ],
+      "properties": {
+        "centers_hz": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "number"
+          }
+        },
+        "levels_db": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/float_or_null"
+          }
+        },
+        "tilt_db_per_oct": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "section_tilt_db_per_oct": {
+          "$ref": "#/$defs/spectral_section_tilt"
+        }
+      }
+    },
+    "file_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "format",
+        "channel_count",
+        "sample_rate_hz",
+        "metrics",
+        "spectral",
+        "polarity_risk"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/posix_path"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "format": {
+          "type": "string",
+          "minLength": 1
+        },
+        "channel_count": {
+          "$ref": "#/$defs/int_or_null"
+        },
+        "sample_rate_hz": {
+          "$ref": "#/$defs/int_or_null"
+        },
+        "metrics": {
+          "$ref": "#/$defs/metrics"
+        },
+        "spectral": {
+          "$ref": "#/$defs/spectral"
+        },
+        "polarity_risk": {
+          "type": "boolean"
+        }
+      }
+    },
+    "metrics_delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "peak_dbfs",
+        "rms_dbfs",
+        "integrated_lufs",
+        "crest_factor_db",
+        "true_peak_dbtp",
+        "loudness_range_lu",
+        "correlation_lr",
+        "side_mid_ratio_db",
+        "spectral_tilt_db_per_oct"
+      ],
+      "properties": {
+        "peak_dbfs": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "rms_dbfs": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "integrated_lufs": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "crest_factor_db": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "true_peak_dbtp": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "loudness_range_lu": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "correlation_lr": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "side_mid_ratio_db": {
+          "$ref": "#/$defs/float_or_null"
+        },
+        "spectral_tilt_db_per_oct": {
+          "$ref": "#/$defs/float_or_null"
+        }
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_path",
+        "output_path",
+        "metrics_delta"
+      ],
+      "properties": {
+        "input_path": {
+          "$ref": "#/$defs/posix_path"
+        },
+        "output_path": {
+          "$ref": "#/$defs/posix_path"
+        },
+        "metrics_delta": {
+          "$ref": "#/$defs/metrics_delta"
+        }
+      }
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "input",
+        "outputs",
+        "comparisons"
+      ],
+      "properties": {
+        "job_id": {
+          "$ref": "#/$defs/job_id"
+        },
+        "input": {
+          "$ref": "#/$defs/file_entry"
+        },
+        "outputs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/file_entry"
+          }
+        },
+        "comparisons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/comparison"
+          }
+        }
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "polarity_error_correlation_lte",
+        "correlation_warn_lte",
+        "plugin_delta_lufs_warn_abs",
+        "plugin_delta_lufs_error_abs",
+        "plugin_delta_crest_warn_abs",
+        "plugin_delta_crest_error_abs"
+      ],
+      "properties": {
+        "polarity_error_correlation_lte": {
+          "type": "number"
+        },
+        "correlation_warn_lte": {
+          "type": "number"
+        },
+        "plugin_delta_lufs_warn_abs": {
+          "type": "number"
+        },
+        "plugin_delta_lufs_error_abs": {
+          "type": "number"
+        },
+        "plugin_delta_crest_warn_abs": {
+          "type": "number"
+        },
+        "plugin_delta_crest_error_abs": {
+          "type": "number"
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "issue_id",
+        "severity",
+        "message",
+        "job_id",
+        "output_path",
+        "metric",
+        "value",
+        "threshold"
+      ],
+      "properties": {
+        "issue_id": {
+          "type": "string",
+          "pattern": "^ISSUE\\.RENDER\\.QA\\.[A-Z0-9_]+$"
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warn",
+            "info"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "job_id": {
+          "$ref": "#/$defs/job_id"
+        },
+        "output_path": {
+          "$ref": "#/$defs/posix_path"
+        },
+        "metric": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
