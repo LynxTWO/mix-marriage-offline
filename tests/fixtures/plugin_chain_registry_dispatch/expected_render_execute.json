@@ -1,0 +1,82 @@
+{
+  "jobs": [
+    {
+      "ffmpeg_commands": [
+        {
+          "args": [
+            "C:\\ffmpeg\\bin\\ffmpeg.EXE",
+            "-v",
+            "error",
+            "-nostdin",
+            "-y",
+            "-i",
+            "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
+            "-map_metadata",
+            "-1",
+            "-map_chapters",
+            "-1",
+            "-metadata",
+            "creation_time=",
+            "-metadata",
+            "encoder=",
+            "-fflags",
+            "+bitexact",
+            "-flags:a",
+            "+bitexact",
+            "-threads",
+            "1",
+            "-f",
+            "wav",
+            "-c:a",
+            "pcm_s16le",
+            "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav.tmp"
+          ],
+          "determinism_flags": [
+            "-map_metadata",
+            "-1",
+            "-map_chapters",
+            "-1",
+            "-metadata",
+            "creation_time=",
+            "-metadata",
+            "encoder=",
+            "-fflags",
+            "+bitexact",
+            "-flags:a",
+            "+bitexact",
+            "-threads",
+            "1"
+          ]
+        }
+      ],
+      "ffmpeg_version": "ffmpeg version 2025-08-25-git-1b62f9d3ae-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers",
+      "inputs": [
+        {
+          "meters": {
+            "integrated_lufs": null,
+            "peak_dbfs": -4.8843,
+            "rms_dbfs": -10.6835
+          },
+          "path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/stems/mix.wav",
+          "sha256": "eb1244056ae117eb4dcca03c0fea60a169a706dee9e66967a874ae41b7f517ae"
+        }
+      ],
+      "job_id": "JOB.001",
+      "outputs": [
+        {
+          "meters": {
+            "integrated_lufs": null,
+            "peak_dbfs": 0.0,
+            "rms_dbfs": -23.9905
+          },
+          "path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
+          "sha256": "fc4d1e0ed175aebacb78b5471c55c36a5b71e0270eec424ab0d9181af7d4e935"
+        }
+      ]
+    }
+  ],
+  "plan_sha256": "2fd6a571331efa73862d9aa9a760bfe602e5dfd26c5145837b00a537f4a8f1a2",
+  "request_sha256": "39eb2e1d608bbcea44da1323258263e3ef6e35a43c37e4375b9efd636cf674a5",
+  "run_id": "RUN.5493f3461da356ed",
+  "schema_version": "0.1.0"
+}

@@ -1,6 +1,7 @@
 import json
 import math
 import os
+import shutil
 import struct
 import subprocess
 import tempfile
@@ -8,6 +9,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 import wave
 
@@ -290,6 +292,124 @@ def _write_pcm16_two_tone_wav(
         handle.setsampwidth(2)
         handle.setframerate(sample_rate_hz)
         handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+
+
+def _write_pcm16_registry_baseline_wav(
+    path: Path,
+    *,
+    sample_rate_hz: int = 48000,
+    duration_s: float = 0.25,
+) -> None:
+    frames = max(1, int(sample_rate_hz * duration_s))
+    samples: list[int] = []
+    for frame_index in range(frames):
+        low = 0.35 * math.sin(2.0 * math.pi * 160.0 * frame_index / sample_rate_hz)
+        high = 0.22 * math.sin(2.0 * math.pi * 6000.0 * frame_index / sample_rate_hz)
+        value = int((low + high) * 32767.0)
+        samples.extend([value, value])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate_hz)
+        handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+
+
+def _normalize_strings_for_regression(value: Any, *, repo_root_posix: str) -> Any:
+    if isinstance(value, str):
+        normalized = value.replace(repo_root_posix, "__REPO_ROOT__")
+        if normalized.startswith("PLAN."):
+            return "__PLAN_ID__"
+        return normalized
+    if isinstance(value, list):
+        return [
+            _normalize_strings_for_regression(item, repo_root_posix=repo_root_posix)
+            for item in value
+        ]
+    if isinstance(value, dict):
+        return {
+            key: _normalize_strings_for_regression(item, repo_root_posix=repo_root_posix)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _canonical_json_bytes(payload: Any) -> bytes:
+    return (
+        json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+        + "\n"
+    ).encode("utf-8")
+
+
+def _canonical_event_log_bytes(payload_bytes: bytes, *, repo_root_posix: str) -> bytes:
+    rows: list[dict[str, Any]] = []
+    for line in payload_bytes.decode("utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if not isinstance(row, dict):
+            continue
+        row.pop("event_id", None)
+        rows.append(
+            _normalize_strings_for_regression(row, repo_root_posix=repo_root_posix),
+        )
+    rows.sort(
+        key=lambda row: json.dumps(
+            row,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ),
+    )
+    lines = [
+        json.dumps(row, ensure_ascii=True, separators=(",", ":"), sort_keys=True)
+        for row in rows
+    ]
+    return ("\n".join(lines) + "\n").encode("utf-8")
+
+
+def _normalize_execute_payload_for_regression(
+    payload: dict[str, Any],
+    *,
+    repo_root_posix: str,
+) -> dict[str, Any]:
+    normalized = _normalize_strings_for_regression(payload, repo_root_posix=repo_root_posix)
+    if not isinstance(normalized, dict):
+        return {}
+    for key in ("run_id", "plan_sha256", "request_sha256"):
+        if key in normalized:
+            normalized[key] = f"__{key.upper()}__"
+    jobs = normalized.get("jobs")
+    if isinstance(jobs, list):
+        for job in jobs:
+            if not isinstance(job, dict):
+                continue
+            if "ffmpeg_version" in job:
+                job["ffmpeg_version"] = "__FFMPEG_VERSION__"
+            commands = job.get("ffmpeg_commands")
+            if not isinstance(commands, list):
+                continue
+            for command in commands:
+                if not isinstance(command, dict):
+                    continue
+                args = command.get("args")
+                if isinstance(args, list) and args:
+                    args[0] = "__FFMPEG_BIN__"
+    return normalized
+
+
+def _normalize_qa_payload_for_regression(
+    payload: dict[str, Any],
+    *,
+    repo_root_posix: str,
+) -> dict[str, Any]:
+    normalized = _normalize_strings_for_regression(payload, repo_root_posix=repo_root_posix)
+    if not isinstance(normalized, dict):
+        return {}
+    for key in ("run_id", "plan_sha256", "request_sha256", "report_sha256"):
+        if key in normalized:
+            normalized[key] = f"__{key.upper()}__"
+    return normalized
 
 
 def _pcm16_band_energy(path: Path, *, band_low_hz: float, band_high_hz: float) -> float:
@@ -1323,6 +1443,238 @@ class TestRenderRunAudioExecution(unittest.TestCase):
                     for note in notes
                 )
             )
+
+    def test_plugin_chain_registry_dispatch_matches_captured_baseline_bytes(self) -> None:
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("numpy not available")
+        if resolve_ffmpeg_cmd() is None:
+            self.skipTest("ffmpeg not available")
+
+        fixture_dir = REPO_ROOT / "tests" / "fixtures" / "plugin_chain_registry_dispatch"
+        expected_wav = fixture_dir / "expected_output.wav"
+        expected_event_log = fixture_dir / "expected_event_log.jsonl"
+        expected_execute = fixture_dir / "expected_render_execute.json"
+        expected_qa = fixture_dir / "expected_render_qa.json"
+        for required in (expected_wav, expected_event_log, expected_execute, expected_qa):
+            self.assertTrue(required.is_file(), msg=f"Missing fixture file: {required}")
+
+        case_dir = REPO_ROOT / "sandbox_tmp" / "plugin_chain_registry_baseline"
+        shutil.rmtree(case_dir, ignore_errors=True)
+        case_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            stems_dir = case_dir / "stems"
+            source_path = stems_dir / "mix.wav"
+            _write_pcm16_registry_baseline_wav(source_path)
+
+            scene_path = case_dir / "scene.json"
+            request_path = case_dir / "render_request.json"
+            plan_out = case_dir / "render_plan.json"
+            report_out = case_dir / "render_report.json"
+            event_log_out = case_dir / "event_log.jsonl"
+            execute_out = case_dir / "render_execute.json"
+            qa_out = case_dir / "render_qa.json"
+
+            _write_json(
+                scene_path,
+                {
+                    "schema_version": "0.1.0",
+                    "scene_id": "SCENE.PLUGIN.REGISTRY.BASELINE",
+                    "source": {
+                        "stems_dir": stems_dir.resolve().as_posix(),
+                        "created_from": "analyze",
+                    },
+                    "objects": [],
+                    "beds": [
+                        {
+                            "bed_id": "BED.FIELD.001",
+                            "label": "Field",
+                            "kind": "field",
+                            "intent": {
+                                "diffuse": 0.5,
+                                "confidence": 0.0,
+                                "locks": [],
+                            },
+                            "notes": [],
+                        }
+                    ],
+                    "metadata": {},
+                },
+            )
+            _write_json(
+                request_path,
+                {
+                    "schema_version": "0.1.0",
+                    "target_layout_id": "LAYOUT.2_0",
+                    "scene_path": scene_path.resolve().as_posix(),
+                    "options": {
+                        "dry_run": False,
+                        "max_theoretical_quality": True,
+                        "plugin_chain": [
+                            {
+                                "plugin_id": "gain_v0",
+                                "params": {
+                                    "gain_db": -2.5,
+                                    "macro_mix": 100.0,
+                                },
+                            },
+                            {
+                                "plugin_id": "tilt_eq_v0",
+                                "params": {
+                                    "tilt_db": 2.0,
+                                    "pivot_hz": 1000.0,
+                                    "macro_mix": 100.0,
+                                    "bypass": False,
+                                },
+                            },
+                            {
+                                "plugin_id": "simple_compressor_v0",
+                                "params": {
+                                    "threshold_db": -24.0,
+                                    "ratio": 6.0,
+                                    "attack_ms": 3.0,
+                                    "release_ms": 120.0,
+                                    "makeup_db": 0.0,
+                                    "detector_mode": "rms",
+                                    "macro_mix": 100.0,
+                                    "bypass": False,
+                                },
+                            },
+                            {
+                                "plugin_id": "multiband_compressor_v0",
+                                "params": {
+                                    "threshold_db": -26.0,
+                                    "ratio": 5.0,
+                                    "attack_ms": 8.0,
+                                    "release_ms": 180.0,
+                                    "makeup_db": 0.0,
+                                    "lookahead_ms": 2.0,
+                                    "detector_mode": "rms",
+                                    "slope_sensitivity": 0.8,
+                                    "min_band_count": 3,
+                                    "max_band_count": 5,
+                                    "oversampling": 1,
+                                    "macro_mix": 100.0,
+                                    "bypass": False,
+                                },
+                            },
+                            {
+                                "plugin_id": "multiband_expander_v0",
+                                "params": {
+                                    "threshold_db": -26.0,
+                                    "ratio": 5.0,
+                                    "attack_ms": 8.0,
+                                    "release_ms": 180.0,
+                                    "makeup_db": 0.0,
+                                    "lookahead_ms": 2.0,
+                                    "detector_mode": "rms",
+                                    "slope_sensitivity": 0.8,
+                                    "min_band_count": 3,
+                                    "max_band_count": 5,
+                                    "oversampling": 1,
+                                    "macro_mix": 100.0,
+                                    "bypass": False,
+                                },
+                            },
+                            {
+                                "plugin_id": "multiband_dynamic_auto_v0",
+                                "params": {
+                                    "threshold_db": -26.0,
+                                    "ratio": 5.0,
+                                    "attack_ms": 8.0,
+                                    "release_ms": 180.0,
+                                    "makeup_db": 0.0,
+                                    "lookahead_ms": 2.0,
+                                    "detector_mode": "rms",
+                                    "slope_sensitivity": 0.8,
+                                    "min_band_count": 3,
+                                    "max_band_count": 5,
+                                    "oversampling": 1,
+                                    "macro_mix": 100.0,
+                                    "bypass": False,
+                                },
+                            },
+                        ],
+                    },
+                },
+            )
+
+            stderr_capture = StringIO()
+            stdout_capture = StringIO()
+            with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
+                exit_code = main(
+                    [
+                        "render-run",
+                        "--request",
+                        str(request_path),
+                        "--scene",
+                        str(scene_path),
+                        "--plan-out",
+                        str(plan_out),
+                        "--report-out",
+                        str(report_out),
+                        "--event-log-out",
+                        str(event_log_out),
+                        "--execute-out",
+                        str(execute_out),
+                        "--qa-out",
+                        str(qa_out),
+                    ],
+                )
+            self.assertEqual(exit_code, 0, msg=stderr_capture.getvalue())
+
+            report = json.loads(report_out.read_text(encoding="utf-8"))
+            rendered_path = Path(report["jobs"][0]["output_files"][0]["file_path"])
+            self.assertEqual(expected_wav.read_bytes(), rendered_path.read_bytes())
+
+            repo_root_posix = REPO_ROOT.resolve().as_posix()
+            self.assertEqual(
+                _canonical_event_log_bytes(
+                    expected_event_log.read_bytes(),
+                    repo_root_posix=repo_root_posix,
+                ),
+                _canonical_event_log_bytes(
+                    event_log_out.read_bytes(),
+                    repo_root_posix=repo_root_posix,
+                ),
+            )
+
+            expected_execute_payload = json.loads(expected_execute.read_text(encoding="utf-8"))
+            actual_execute_payload = json.loads(execute_out.read_text(encoding="utf-8"))
+            self.assertEqual(
+                _canonical_json_bytes(
+                    _normalize_execute_payload_for_regression(
+                        expected_execute_payload,
+                        repo_root_posix=repo_root_posix,
+                    ),
+                ),
+                _canonical_json_bytes(
+                    _normalize_execute_payload_for_regression(
+                        actual_execute_payload,
+                        repo_root_posix=repo_root_posix,
+                    ),
+                ),
+            )
+
+            expected_qa_payload = json.loads(expected_qa.read_text(encoding="utf-8"))
+            actual_qa_payload = json.loads(qa_out.read_text(encoding="utf-8"))
+            self.assertEqual(
+                _canonical_json_bytes(
+                    _normalize_qa_payload_for_regression(
+                        expected_qa_payload,
+                        repo_root_posix=repo_root_posix,
+                    ),
+                ),
+                _canonical_json_bytes(
+                    _normalize_qa_payload_for_regression(
+                        actual_qa_payload,
+                        repo_root_posix=repo_root_posix,
+                    ),
+                ),
+            )
+        finally:
+            shutil.rmtree(case_dir, ignore_errors=True)
 
     def test_refuses_multi_target_with_stable_issue_id(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

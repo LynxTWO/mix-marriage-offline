@@ -1,0 +1,899 @@
+{
+  "issues": [
+    {
+      "issue_id": "ISSUE.RENDER.QA.CLIPPING_DETECTED",
+      "job_id": "JOB.001",
+      "message": "Rendered output contains clipped samples.",
+      "metric": "clip_sample_count",
+      "output_path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
+      "severity": "error",
+      "threshold": 0,
+      "value": 50
+    },
+    {
+      "issue_id": "ISSUE.RENDER.QA.PLUGIN_DELTA_CREST_EXCESSIVE",
+      "job_id": "JOB.001",
+      "message": "Plugin-chain crest-factor delta exceeds configured error threshold.",
+      "metric": "delta.crest_factor_db",
+      "output_path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
+      "severity": "error",
+      "threshold": 6.0,
+      "value": 18.1913
+    },
+    {
+      "issue_id": "ISSUE.RENDER.QA.TRUE_PEAK_EXCESSIVE",
+      "job_id": "JOB.001",
+      "message": "Rendered output true-peak exceeds the configured error threshold.",
+      "metric": "true_peak_dbtp",
+      "output_path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
+      "severity": "error",
+      "threshold": -1.0,
+      "value": 0.9609
+    }
+  ],
+  "jobs": [
+    {
+      "comparisons": [
+        {
+          "input_path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/stems/mix.wav",
+          "metrics_delta": {
+            "correlation_lr": 0.0,
+            "crest_factor_db": 18.1913,
+            "integrated_lufs": null,
+            "loudness_range_lu": null,
+            "peak_dbfs": 4.8843,
+            "rms_dbfs": -13.307,
+            "side_mid_ratio_db": null,
+            "spectral_tilt_db_per_oct": 0.8641,
+            "true_peak_dbtp": 5.8527
+          },
+          "output_path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav"
+        }
+      ],
+      "input": {
+        "channel_count": 2,
+        "format": "wav",
+        "metrics": {
+          "clip_sample_count": 0,
+          "correlation_lr": 1.0,
+          "crest_factor_db": 5.7992,
+          "dc_offset": 0.0,
+          "integrated_lufs": null,
+          "intersample_over_count": 0,
+          "loudness_range_lu": null,
+          "mid_rms_dbfs": -10.6835,
+          "mono_rms_dbfs": -10.6835,
+          "peak_dbfs": -4.8843,
+          "rms_dbfs": -10.6835,
+          "short_term_lufs_p10": null,
+          "short_term_lufs_p50": null,
+          "short_term_lufs_p90": null,
+          "side_mid_ratio_db": null,
+          "side_rms_dbfs": null,
+          "true_peak_dbtp": -4.8918
+        },
+        "path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/stems/mix.wav",
+        "polarity_risk": false,
+        "sample_rate_hz": 48000,
+        "sha256": "eb1244056ae117eb4dcca03c0fea60a169a706dee9e66967a874ae41b7f517ae",
+        "spectral": {
+          "adjacent_band_slopes_db_per_oct": [
+            {
+              "high_hz": 20.0,
+              "low_hz": 16.0,
+              "slope_db_per_oct": null
+            },
+            {
+              "high_hz": 25.0,
+              "low_hz": 20.0,
+              "slope_db_per_oct": null
+            },
+            {
+              "high_hz": 31.5,
+              "low_hz": 25.0,
+              "slope_db_per_oct": 5.3985
+            },
+            {
+              "high_hz": 40.0,
+              "low_hz": 31.5,
+              "slope_db_per_oct": null
+            },
+            {
+              "high_hz": 50.0,
+              "low_hz": 40.0,
+              "slope_db_per_oct": null
+            },
+            {
+              "high_hz": 63.0,
+              "low_hz": 50.0,
+              "slope_db_per_oct": 13.6661
+            },
+            {
+              "high_hz": 80.0,
+              "low_hz": 63.0,
+              "slope_db_per_oct": 14.3184
+            },
+            {
+              "high_hz": 100.0,
+              "low_hz": 80.0,
+              "slope_db_per_oct": 23.6677
+            },
+            {
+              "high_hz": 125.0,
+              "low_hz": 100.0,
+              "slope_db_per_oct": 86.1441
+            },
+            {
+              "high_hz": 160.0,
+              "low_hz": 125.0,
+              "slope_db_per_oct": 60.9299
+            },
+            {
+              "high_hz": 200.0,
+              "low_hz": 160.0,
+              "slope_db_per_oct": -105.5208
+            },
+            {
+              "high_hz": 250.0,
+              "low_hz": 200.0,
+              "slope_db_per_oct": -79.7591
+            },
+            {
+              "high_hz": 315.0,
+              "low_hz": 250.0,
+              "slope_db_per_oct": -41.3375
+            },
+            {
+              "high_hz": 400.0,
+              "low_hz": 315.0,
+              "slope_db_per_oct": -36.8228
+            },
+            {
+              "high_hz": 500.0,
+              "low_hz": 400.0,
+              "slope_db_per_oct": -27.6857
+            },
+            {
+              "high_hz": 630.0,
+              "low_hz": 500.0,
+              "slope_db_per_oct": -26.2561
+            },
+            {
+              "high_hz": 800.0,
+              "low_hz": 630.0,
+              "slope_db_per_oct": -19.0554
+            },
+            {
+              "high_hz": 1000.0,
+              "low_hz": 800.0,
+              "slope_db_per_oct": -8.7874
+            },
+            {
+              "high_hz": 1250.0,
+              "low_hz": 1000.0,
+              "slope_db_per_oct": -4.5843
+            },
+            {
+              "high_hz": 1600.0,
+              "low_hz": 1250.0,
+              "slope_db_per_oct": -20.4314
+            },
+            {
+              "high_hz": 2000.0,
+              "low_hz": 1600.0,
+              "slope_db_per_oct": 18.8893
+            },
+            {
+              "high_hz": 2500.0,
+              "low_hz": 2000.0,
+              "slope_db_per_oct": 5.6258
+            },
+            {
+              "high_hz": 3150.0,
+              "low_hz": 2500.0,
+              "slope_db_per_oct": -10.5325
+            },
+            {
+              "high_hz": 4000.0,
+              "low_hz": 3150.0,
+              "slope_db_per_oct": 2.5812
+            },
+            {
+              "high_hz": 5000.0,
+              "low_hz": 4000.0,
+              "slope_db_per_oct": 5.3729
+            },
+            {
+              "high_hz": 6300.0,
+              "low_hz": 5000.0,
+              "slope_db_per_oct": 283.9297
+            },
+            {
+              "high_hz": 8000.0,
+              "low_hz": 6300.0,
+              "slope_db_per_oct": -278.7553
+            },
+            {
+              "high_hz": 10000.0,
+              "low_hz": 8000.0,
+              "slope_db_per_oct": -2.335
+            },
+            {
+              "high_hz": 12500.0,
+              "low_hz": 10000.0,
+              "slope_db_per_oct": 13.0706
+            },
+            {
+              "high_hz": 16000.0,
+              "low_hz": 12500.0,
+              "slope_db_per_oct": -10.3349
+            },
+            {
+              "high_hz": 20000.0,
+              "low_hz": 16000.0,
+              "slope_db_per_oct": 0.1093
+            }
+          ],
+          "centers_hz": [
+            16.0,
+            20.0,
+            25.0,
+            31.5,
+            40.0,
+            50.0,
+            63.0,
+            80.0,
+            100.0,
+            125.0,
+            160.0,
+            200.0,
+            250.0,
+            315.0,
+            400.0,
+            500.0,
+            630.0,
+            800.0,
+            1000.0,
+            1250.0,
+            1600.0,
+            2000.0,
+            2500.0,
+            3150.0,
+            4000.0,
+            5000.0,
+            6300.0,
+            8000.0,
+            10000.0,
+            12500.0,
+            16000.0,
+            20000.0
+          ],
+          "levels_db": [
+            -23.7693,
+            null,
+            -22.5825,
+            -20.7825,
+            null,
+            -18.499,
+            -13.9424,
+            -9.0076,
+            -1.3883,
+            26.3439,
+            48.0437,
+            14.0736,
+            -11.6031,
+            -25.386,
+            -38.0769,
+            -46.9897,
+            -55.7441,
+            -62.3115,
+            -65.1404,
+            -66.6162,
+            -73.8927,
+            -67.8117,
+            -66.0006,
+            -69.5124,
+            -68.6228,
+            -66.8931,
+            27.7758,
+            -68.2967,
+            -69.0484,
+            -64.8406,
+            -68.5213,
+            -68.4861
+          ],
+          "section_subband_slopes_db_per_oct": {
+            "highs_treble": [
+              {
+                "high_hz": 6300.0,
+                "low_hz": 5000.0,
+                "slope_db_per_oct": 283.9297
+              },
+              {
+                "high_hz": 8000.0,
+                "low_hz": 6300.0,
+                "slope_db_per_oct": -278.7553
+              },
+              {
+                "high_hz": 10000.0,
+                "low_hz": 8000.0,
+                "slope_db_per_oct": -2.335
+              },
+              {
+                "high_hz": 12500.0,
+                "low_hz": 10000.0,
+                "slope_db_per_oct": 13.0706
+              },
+              {
+                "high_hz": 16000.0,
+                "low_hz": 12500.0,
+                "slope_db_per_oct": -10.3349
+              },
+              {
+                "high_hz": 20000.0,
+                "low_hz": 16000.0,
+                "slope_db_per_oct": 0.1093
+              }
+            ],
+            "low_midrange": [
+              {
+                "high_hz": 250.0,
+                "low_hz": 200.0,
+                "slope_db_per_oct": -79.7591
+              },
+              {
+                "high_hz": 315.0,
+                "low_hz": 250.0,
+                "slope_db_per_oct": -41.3375
+              },
+              {
+                "high_hz": 400.0,
+                "low_hz": 315.0,
+                "slope_db_per_oct": -36.8228
+              },
+              {
+                "high_hz": 500.0,
+                "low_hz": 400.0,
+                "slope_db_per_oct": -27.6857
+              },
+              {
+                "high_hz": 630.0,
+                "low_hz": 500.0,
+                "slope_db_per_oct": -26.2561
+              },
+              {
+                "high_hz": 800.0,
+                "low_hz": 630.0,
+                "slope_db_per_oct": -19.0554
+              }
+            ],
+            "midrange_high_mid": [
+              {
+                "high_hz": 1250.0,
+                "low_hz": 1000.0,
+                "slope_db_per_oct": -4.5843
+              },
+              {
+                "high_hz": 1600.0,
+                "low_hz": 1250.0,
+                "slope_db_per_oct": -20.4314
+              },
+              {
+                "high_hz": 2000.0,
+                "low_hz": 1600.0,
+                "slope_db_per_oct": 18.8893
+              },
+              {
+                "high_hz": 2500.0,
+                "low_hz": 2000.0,
+                "slope_db_per_oct": 5.6258
+              },
+              {
+                "high_hz": 3150.0,
+                "low_hz": 2500.0,
+                "slope_db_per_oct": -10.5325
+              },
+              {
+                "high_hz": 4000.0,
+                "low_hz": 3150.0,
+                "slope_db_per_oct": 2.5812
+              }
+            ],
+            "sub_bass_low_end": [
+              {
+                "high_hz": 20.0,
+                "low_hz": 16.0,
+                "slope_db_per_oct": null
+              },
+              {
+                "high_hz": 25.0,
+                "low_hz": 20.0,
+                "slope_db_per_oct": null
+              },
+              {
+                "high_hz": 31.5,
+                "low_hz": 25.0,
+                "slope_db_per_oct": 5.3985
+              },
+              {
+                "high_hz": 40.0,
+                "low_hz": 31.5,
+                "slope_db_per_oct": null
+              },
+              {
+                "high_hz": 50.0,
+                "low_hz": 40.0,
+                "slope_db_per_oct": null
+              },
+              {
+                "high_hz": 63.0,
+                "low_hz": 50.0,
+                "slope_db_per_oct": 13.6661
+              },
+              {
+                "high_hz": 80.0,
+                "low_hz": 63.0,
+                "slope_db_per_oct": 14.3184
+              },
+              {
+                "high_hz": 100.0,
+                "low_hz": 80.0,
+                "slope_db_per_oct": 23.6677
+              },
+              {
+                "high_hz": 125.0,
+                "low_hz": 100.0,
+                "slope_db_per_oct": 86.1441
+              },
+              {
+                "high_hz": 160.0,
+                "low_hz": 125.0,
+                "slope_db_per_oct": 60.9299
+              }
+            ]
+          },
+          "section_tilt_db_per_oct": {
+            "highs_treble": -20.8385,
+            "low_midrange": -36.2843,
+            "midrange_high_mid": -0.9289,
+            "sub_bass_low_end": 18.6291
+          },
+          "tilt_db_per_oct": -7.2328
+        }
+      },
+      "job_id": "JOB.001",
+      "outputs": [
+        {
+          "channel_count": 2,
+          "format": "wav",
+          "metrics": {
+            "clip_sample_count": 50,
+            "correlation_lr": 1.0,
+            "crest_factor_db": 23.9905,
+            "dc_offset": -0.00396289,
+            "integrated_lufs": null,
+            "intersample_over_count": 0,
+            "loudness_range_lu": null,
+            "mid_rms_dbfs": -23.9905,
+            "mono_rms_dbfs": -23.9905,
+            "peak_dbfs": 0.0,
+            "rms_dbfs": -23.9905,
+            "short_term_lufs_p10": null,
+            "short_term_lufs_p50": null,
+            "short_term_lufs_p90": null,
+            "side_mid_ratio_db": null,
+            "side_rms_dbfs": null,
+            "true_peak_dbtp": 0.9609
+          },
+          "path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
+          "polarity_risk": false,
+          "sample_rate_hz": 48000,
+          "sha256": "fc4d1e0ed175aebacb78b5471c55c36a5b71e0270eec424ab0d9181af7d4e935",
+          "spectral": {
+            "adjacent_band_slopes_db_per_oct": [
+              {
+                "high_hz": 20.0,
+                "low_hz": 16.0,
+                "slope_db_per_oct": null
+              },
+              {
+                "high_hz": 25.0,
+                "low_hz": 20.0,
+                "slope_db_per_oct": null
+              },
+              {
+                "high_hz": 31.5,
+                "low_hz": 25.0,
+                "slope_db_per_oct": 6.0833
+              },
+              {
+                "high_hz": 40.0,
+                "low_hz": 31.5,
+                "slope_db_per_oct": null
+              },
+              {
+                "high_hz": 50.0,
+                "low_hz": 40.0,
+                "slope_db_per_oct": null
+              },
+              {
+                "high_hz": 63.0,
+                "low_hz": 50.0,
+                "slope_db_per_oct": 7.2961
+              },
+              {
+                "high_hz": 80.0,
+                "low_hz": 63.0,
+                "slope_db_per_oct": 10.164
+              },
+              {
+                "high_hz": 100.0,
+                "low_hz": 80.0,
+                "slope_db_per_oct": -0.4548
+              },
+              {
+                "high_hz": 125.0,
+                "low_hz": 100.0,
+                "slope_db_per_oct": 20.7289
+              },
+              {
+                "high_hz": 160.0,
+                "low_hz": 125.0,
+                "slope_db_per_oct": 16.6652
+              },
+              {
+                "high_hz": 200.0,
+                "low_hz": 160.0,
+                "slope_db_per_oct": -31.8804
+              },
+              {
+                "high_hz": 250.0,
+                "low_hz": 200.0,
+                "slope_db_per_oct": -12.6044
+              },
+              {
+                "high_hz": 315.0,
+                "low_hz": 250.0,
+                "slope_db_per_oct": -70.2173
+              },
+              {
+                "high_hz": 400.0,
+                "low_hz": 315.0,
+                "slope_db_per_oct": -24.2845
+              },
+              {
+                "high_hz": 500.0,
+                "low_hz": 400.0,
+                "slope_db_per_oct": -11.2836
+              },
+              {
+                "high_hz": 630.0,
+                "low_hz": 500.0,
+                "slope_db_per_oct": -11.2407
+              },
+              {
+                "high_hz": 800.0,
+                "low_hz": 630.0,
+                "slope_db_per_oct": -9.1029
+              },
+              {
+                "high_hz": 1000.0,
+                "low_hz": 800.0,
+                "slope_db_per_oct": -10.1445
+              },
+              {
+                "high_hz": 1250.0,
+                "low_hz": 1000.0,
+                "slope_db_per_oct": -10.4564
+              },
+              {
+                "high_hz": 1600.0,
+                "low_hz": 1250.0,
+                "slope_db_per_oct": -7.9038
+              },
+              {
+                "high_hz": 2000.0,
+                "low_hz": 1600.0,
+                "slope_db_per_oct": -3.5449
+              },
+              {
+                "high_hz": 2500.0,
+                "low_hz": 2000.0,
+                "slope_db_per_oct": -0.99
+              },
+              {
+                "high_hz": 3150.0,
+                "low_hz": 2500.0,
+                "slope_db_per_oct": -1.9228
+              },
+              {
+                "high_hz": 4000.0,
+                "low_hz": 3150.0,
+                "slope_db_per_oct": 3.3684
+              },
+              {
+                "high_hz": 5000.0,
+                "low_hz": 4000.0,
+                "slope_db_per_oct": 30.2369
+              },
+              {
+                "high_hz": 6300.0,
+                "low_hz": 5000.0,
+                "slope_db_per_oct": 146.9658
+              },
+              {
+                "high_hz": 8000.0,
+                "low_hz": 6300.0,
+                "slope_db_per_oct": -170.2095
+              },
+              {
+                "high_hz": 10000.0,
+                "low_hz": 8000.0,
+                "slope_db_per_oct": -2.3223
+              },
+              {
+                "high_hz": 12500.0,
+                "low_hz": 10000.0,
+                "slope_db_per_oct": -2.2576
+              },
+              {
+                "high_hz": 16000.0,
+                "low_hz": 12500.0,
+                "slope_db_per_oct": 3.4301
+              },
+              {
+                "high_hz": 20000.0,
+                "low_hz": 16000.0,
+                "slope_db_per_oct": -2.8336
+              }
+            ],
+            "centers_hz": [
+              16.0,
+              20.0,
+              25.0,
+              31.5,
+              40.0,
+              50.0,
+              63.0,
+              80.0,
+              100.0,
+              125.0,
+              160.0,
+              200.0,
+              250.0,
+              315.0,
+              400.0,
+              500.0,
+              630.0,
+              800.0,
+              1000.0,
+              1250.0,
+              1600.0,
+              2000.0,
+              2500.0,
+              3150.0,
+              4000.0,
+              5000.0,
+              6300.0,
+              8000.0,
+              10000.0,
+              12500.0,
+              16000.0,
+              20000.0
+            ],
+            "levels_db": [
+              -23.9905,
+              null,
+              -23.7955,
+              -21.7672,
+              null,
+              -19.7867,
+              -17.354,
+              -13.851,
+              -13.9974,
+              -7.3242,
+              -1.389,
+              -11.6522,
+              -15.7099,
+              -39.122,
+              -47.4916,
+              -51.1241,
+              -54.872,
+              -58.0093,
+              -61.2751,
+              -64.6413,
+              -67.4562,
+              -68.5974,
+              -68.9161,
+              -69.5572,
+              -68.3963,
+              -58.6622,
+              -9.6603,
+              -68.3227,
+              -69.0703,
+              -69.7971,
+              -68.5755,
+              -69.4877
+            ],
+            "section_subband_slopes_db_per_oct": {
+              "highs_treble": [
+                {
+                  "high_hz": 6300.0,
+                  "low_hz": 5000.0,
+                  "slope_db_per_oct": 146.9658
+                },
+                {
+                  "high_hz": 8000.0,
+                  "low_hz": 6300.0,
+                  "slope_db_per_oct": -170.2095
+                },
+                {
+                  "high_hz": 10000.0,
+                  "low_hz": 8000.0,
+                  "slope_db_per_oct": -2.3223
+                },
+                {
+                  "high_hz": 12500.0,
+                  "low_hz": 10000.0,
+                  "slope_db_per_oct": -2.2576
+                },
+                {
+                  "high_hz": 16000.0,
+                  "low_hz": 12500.0,
+                  "slope_db_per_oct": 3.4301
+                },
+                {
+                  "high_hz": 20000.0,
+                  "low_hz": 16000.0,
+                  "slope_db_per_oct": -2.8336
+                }
+              ],
+              "low_midrange": [
+                {
+                  "high_hz": 250.0,
+                  "low_hz": 200.0,
+                  "slope_db_per_oct": -12.6044
+                },
+                {
+                  "high_hz": 315.0,
+                  "low_hz": 250.0,
+                  "slope_db_per_oct": -70.2173
+                },
+                {
+                  "high_hz": 400.0,
+                  "low_hz": 315.0,
+                  "slope_db_per_oct": -24.2845
+                },
+                {
+                  "high_hz": 500.0,
+                  "low_hz": 400.0,
+                  "slope_db_per_oct": -11.2836
+                },
+                {
+                  "high_hz": 630.0,
+                  "low_hz": 500.0,
+                  "slope_db_per_oct": -11.2407
+                },
+                {
+                  "high_hz": 800.0,
+                  "low_hz": 630.0,
+                  "slope_db_per_oct": -9.1029
+                }
+              ],
+              "midrange_high_mid": [
+                {
+                  "high_hz": 1250.0,
+                  "low_hz": 1000.0,
+                  "slope_db_per_oct": -10.4564
+                },
+                {
+                  "high_hz": 1600.0,
+                  "low_hz": 1250.0,
+                  "slope_db_per_oct": -7.9038
+                },
+                {
+                  "high_hz": 2000.0,
+                  "low_hz": 1600.0,
+                  "slope_db_per_oct": -3.5449
+                },
+                {
+                  "high_hz": 2500.0,
+                  "low_hz": 2000.0,
+                  "slope_db_per_oct": -0.99
+                },
+                {
+                  "high_hz": 3150.0,
+                  "low_hz": 2500.0,
+                  "slope_db_per_oct": -1.9228
+                },
+                {
+                  "high_hz": 4000.0,
+                  "low_hz": 3150.0,
+                  "slope_db_per_oct": 3.3684
+                }
+              ],
+              "sub_bass_low_end": [
+                {
+                  "high_hz": 20.0,
+                  "low_hz": 16.0,
+                  "slope_db_per_oct": null
+                },
+                {
+                  "high_hz": 25.0,
+                  "low_hz": 20.0,
+                  "slope_db_per_oct": null
+                },
+                {
+                  "high_hz": 31.5,
+                  "low_hz": 25.0,
+                  "slope_db_per_oct": 6.0833
+                },
+                {
+                  "high_hz": 40.0,
+                  "low_hz": 31.5,
+                  "slope_db_per_oct": null
+                },
+                {
+                  "high_hz": 50.0,
+                  "low_hz": 40.0,
+                  "slope_db_per_oct": null
+                },
+                {
+                  "high_hz": 63.0,
+                  "low_hz": 50.0,
+                  "slope_db_per_oct": 7.2961
+                },
+                {
+                  "high_hz": 80.0,
+                  "low_hz": 63.0,
+                  "slope_db_per_oct": 10.164
+                },
+                {
+                  "high_hz": 100.0,
+                  "low_hz": 80.0,
+                  "slope_db_per_oct": -0.4548
+                },
+                {
+                  "high_hz": 125.0,
+                  "low_hz": 100.0,
+                  "slope_db_per_oct": 20.7289
+                },
+                {
+                  "high_hz": 160.0,
+                  "low_hz": 125.0,
+                  "slope_db_per_oct": 16.6652
+                }
+              ]
+            },
+            "section_tilt_db_per_oct": {
+              "highs_treble": -16.2889,
+              "low_midrange": -24.5692,
+              "midrange_high_mid": -3.5091,
+              "sub_bass_low_end": 6.3889
+            },
+            "tilt_db_per_oct": -6.3687
+          }
+        }
+      ]
+    }
+  ],
+  "plan_sha256": "2fd6a571331efa73862d9aa9a760bfe602e5dfd26c5145837b00a537f4a8f1a2",
+  "plugin_chain_used": true,
+  "report_sha256": "206c691d47bf8fb9190885063d871587f97d86dff58d7cc01a754116e922ad8e",
+  "request_sha256": "39eb2e1d608bbcea44da1323258263e3ef6e35a43c37e4375b9efd636cf674a5",
+  "run_id": "RUN.5493f3461da356ed",
+  "schema_version": "0.1.0",
+  "thresholds": {
+    "correlation_warn_lte": -0.2,
+    "lra_error_lu_gte": 24.0,
+    "lra_warn_lu_gte": 18.0,
+    "lra_warn_lu_lte": 1.5,
+    "plugin_delta_crest_error_abs": 6.0,
+    "plugin_delta_crest_warn_abs": 3.0,
+    "plugin_delta_lufs_error_abs": 4.0,
+    "plugin_delta_lufs_warn_abs": 2.0,
+    "polarity_error_correlation_lte": -0.6,
+    "true_peak_error_dbtp_gt": -1.0,
+    "true_peak_warn_dbtp_gt": -2.0
+  }
+}
