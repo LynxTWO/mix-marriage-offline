@@ -1357,6 +1357,24 @@ def main(argv: list[str] | None = None) -> int:
             "(pointer/hash/hint_count/hints)."
         ),
     )
+    plugins_self_test_parser = plugins_subparsers.add_parser(
+        "self-test",
+        help="Run a deterministic plugin-chain self-test and emit artifacts.",
+    )
+    plugins_self_test_parser.add_argument(
+        "plugin_id",
+        help="Plugin stage ID (for example: gain_v0, tilt_eq_v0).",
+    )
+    plugins_self_test_parser.add_argument(
+        "--out-dir",
+        required=True,
+        help="Output directory for input/output WAV and JSON artifacts.",
+    )
+    plugins_self_test_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing self-test output files in --out-dir.",
+    )
 
     presets_parser = subparsers.add_parser("presets", help="Run config preset tools.")
     presets_subparsers = presets_parser.add_subparsers(dest="presets_command", required=True)
@@ -5273,6 +5291,20 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(payload, indent=2, sort_keys=True))
             else:
                 print(_render_plugins_show_text(payload))
+            return 0
+
+        if args.plugins_command == "self-test":
+            try:
+                payload = _build_plugins_self_test_payload(
+                    plugin_id=args.plugin_id,
+                    out_dir=Path(args.out_dir),
+                    force=bool(args.force),
+                )
+            except (RuntimeError, ValueError, AttributeError, OSError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            print(json.dumps(payload, indent=2, sort_keys=True))
             return 0
 
         print("Unknown plugins command.", file=sys.stderr)

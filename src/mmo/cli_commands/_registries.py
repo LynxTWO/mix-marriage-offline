@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import struct
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -117,6 +120,7 @@ __all__ = [
     "_build_plugins_list_payload",
     "_build_plugins_ui_lint_payload",
     "_build_plugins_show_payload",
+    "_build_plugins_self_test_payload",
     "_render_plugins_list_text",
     "_render_plugins_ui_lint_text",
     "_render_plugins_show_text",
@@ -1313,6 +1317,401 @@ def _build_ui_examples_show_payload(
 
 
 # ── Plugins helpers ───────────────────────────────────────────────
+
+
+_PLUGINS_SELF_TEST_SAMPLE_RATE_HZ = 48000
+_PLUGINS_SELF_TEST_DURATION_SECONDS = 1.0
+_PLUGINS_SELF_TEST_BIT_DEPTH = 16
+_PLUGINS_SELF_TEST_JOB_ID = "JOB.001"
+_PLUGINS_SELF_TEST_FLOAT64_PLUGIN_IDS = {
+    "simple_compressor_v0",
+    "multiband_compressor_v0",
+    "multiband_expander_v0",
+    "multiband_dynamic_auto_v0",
+}
+
+
+def _plugins_self_test_output_paths(*, out_dir: Path) -> dict[str, Path]:
+    resolved_out_dir = out_dir.resolve()
+    return {
+        "input_wav": resolved_out_dir / "input.wav",
+        "output_wav": resolved_out_dir / "output.wav",
+        "event_log": resolved_out_dir / "event_log.jsonl",
+        "render_execute": resolved_out_dir / "render_execute.json",
+        "render_qa": resolved_out_dir / "render_qa.json",
+    }
+
+
+def _guard_plugins_self_test_overwrite(
+    *,
+    output_paths: dict[str, Path],
+    force: bool,
+) -> None:
+    existing_paths = sorted(
+        path.resolve().as_posix()
+        for path in output_paths.values()
+        if path.exists()
+    )
+    if existing_paths and not force:
+        raise ValueError(
+            "File exists (use --force to overwrite): " + ", ".join(existing_paths),
+        )
+
+
+def _write_plugins_self_test_input_wav(path: Path) -> None:
+    frame_count = int(_PLUGINS_SELF_TEST_SAMPLE_RATE_HZ * _PLUGINS_SELF_TEST_DURATION_SECONDS)
+    samples: list[int] = []
+    for frame_index in range(frame_count):
+        left = int(
+            0.35
+            * 32767.0
+            * math.sin(
+                2.0
+                * math.pi
+                * 330.0
+                * float(frame_index)
+                / float(_PLUGINS_SELF_TEST_SAMPLE_RATE_HZ)
+            )
+        )
+        right = int(
+            0.30
+            * 32767.0
+            * math.sin(
+                2.0
+                * math.pi
+                * 550.0
+                * float(frame_index)
+                / float(_PLUGINS_SELF_TEST_SAMPLE_RATE_HZ)
+            )
+        )
+        samples.extend([left, right])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(_PLUGINS_SELF_TEST_BIT_DEPTH // 8)
+        handle.setframerate(_PLUGINS_SELF_TEST_SAMPLE_RATE_HZ)
+        handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+
+
+def _plugin_self_test_default_params(*, plugin_id: str) -> dict[str, Any]:
+    from mmo.core.render_run_audio import _plugin_config_schema_for_id  # noqa: WPS433
+
+    config_schema = _plugin_config_schema_for_id(plugin_id)
+    if not isinstance(config_schema, dict):
+        raise ValueError(
+            (
+                "plugins self-test supports plugin IDs known to render-run. "
+                f"Unsupported plugin_id: {plugin_id}"
+            )
+        )
+
+    raw_properties = config_schema.get("properties")
+    properties = (
+        {
+            key: value
+            for key, value in raw_properties.items()
+            if isinstance(key, str) and isinstance(value, dict)
+        }
+        if isinstance(raw_properties, dict)
+        else {}
+    )
+    defaults: dict[str, Any] = {}
+    for key in sorted(properties):
+        property_schema = properties[key]
+        if "default" in property_schema:
+            defaults[key] = json.loads(
+                json.dumps(property_schema.get("default")),
+            )
+
+    raw_required = config_schema.get("required")
+    required = (
+        sorted(
+            key
+            for key in raw_required
+            if isinstance(key, str) and key in properties
+        )
+        if isinstance(raw_required, list)
+        else []
+    )
+    missing_required_defaults = [
+        key for key in required if key not in defaults
+    ]
+    if missing_required_defaults:
+        raise ValueError(
+            (
+                "plugins self-test requires config_schema defaults for all required "
+                "params. Missing defaults for "
+                f"{', '.join(missing_required_defaults)} (plugin_id={plugin_id})."
+            )
+        )
+    return defaults
+
+
+def _build_plugins_self_test_payload(
+    *,
+    plugin_id: str,
+    out_dir: Path,
+    force: bool,
+) -> dict[str, Any]:
+    from mmo.core.event_log import new_event_id, write_event_log  # noqa: WPS433
+    from mmo.core.render_execute import build_render_execute_payload  # noqa: WPS433
+    from mmo.core.render_qa import build_render_qa_payload  # noqa: WPS433
+    from mmo.core.render_run_audio import (  # noqa: WPS433
+        _render_wav_with_plugin_chain,
+        validate_and_normalize_plugin_chain,
+    )
+
+    normalized_plugin_id = _coerce_str(plugin_id).strip().lower()
+    if not normalized_plugin_id:
+        raise ValueError("plugin_id must be a non-empty string.")
+
+    output_paths = _plugins_self_test_output_paths(out_dir=out_dir)
+    _guard_plugins_self_test_overwrite(output_paths=output_paths, force=force)
+
+    input_wav_path = output_paths["input_wav"]
+    output_wav_path = output_paths["output_wav"]
+    event_log_path = output_paths["event_log"]
+    render_execute_path = output_paths["render_execute"]
+    render_qa_path = output_paths["render_qa"]
+
+    _write_plugins_self_test_input_wav(input_wav_path)
+
+    default_params = _plugin_self_test_default_params(plugin_id=normalized_plugin_id)
+    normalized_plugin_chain, plugin_chain_notes = validate_and_normalize_plugin_chain(
+        [
+            {
+                "plugin_id": normalized_plugin_id,
+                "params": default_params,
+            }
+        ],
+        chain_label="options.plugin_chain",
+        lenient_numeric_bounds=True,
+    )
+    plugin_stage_events = _render_wav_with_plugin_chain(
+        source_path=input_wav_path,
+        output_path=output_wav_path,
+        sample_rate_hz=_PLUGINS_SELF_TEST_SAMPLE_RATE_HZ,
+        bit_depth=_PLUGINS_SELF_TEST_BIT_DEPTH,
+        plugin_chain=normalized_plugin_chain,
+        ffmpeg_cmd_for_decode=None,
+        max_theoretical_quality=False,
+        force_float64_default=normalized_plugin_id in _PLUGINS_SELF_TEST_FLOAT64_PLUGIN_IDS,
+    )
+
+    input_wav_posix = input_wav_path.resolve().as_posix()
+    output_wav_posix = output_wav_path.resolve().as_posix()
+    event_log_posix = event_log_path.resolve().as_posix()
+    render_execute_posix = render_execute_path.resolve().as_posix()
+    render_qa_posix = render_qa_path.resolve().as_posix()
+
+    request_payload: dict[str, Any] = {
+        "schema_version": "0.1.0",
+        "target_layout_id": "LAYOUT.2_0",
+        "scene_path": input_wav_posix,
+        "options": {
+            "dry_run": False,
+            "sample_rate_hz": _PLUGINS_SELF_TEST_SAMPLE_RATE_HZ,
+            "bit_depth": _PLUGINS_SELF_TEST_BIT_DEPTH,
+            "plugin_chain": normalized_plugin_chain,
+        },
+    }
+    plan_payload: dict[str, Any] = {
+        "schema_version": "0.1.0",
+        "plan_id": (
+            "PLAN.PLUGINS.SELF_TEST."
+            + normalized_plugin_id.upper().replace("-", "_")
+        ),
+        "targets": ["TARGET.STEREO.2_0"],
+        "jobs": [{"job_id": _PLUGINS_SELF_TEST_JOB_ID}],
+    }
+    report_payload: dict[str, Any] = {
+        "schema_version": "0.1.0",
+        "status": "completed",
+        "reason": "rendered",
+        "jobs": [{"job_id": _PLUGINS_SELF_TEST_JOB_ID}],
+    }
+
+    execute_job_rows = [
+        {
+            "job_id": _PLUGINS_SELF_TEST_JOB_ID,
+            "input_paths": [input_wav_path.resolve()],
+            "output_paths": [output_wav_path.resolve()],
+            "ffmpeg_version": "plugins-self-test",
+            "ffmpeg_commands": [
+                {
+                    "args": [
+                        "mmo",
+                        "plugins",
+                        "self-test",
+                        normalized_plugin_id,
+                    ],
+                    "determinism_flags": [],
+                }
+            ],
+        }
+    ]
+    qa_job_rows = [
+        {
+            "job_id": _PLUGINS_SELF_TEST_JOB_ID,
+            "input_paths": [input_wav_path.resolve()],
+            "output_paths": [output_wav_path.resolve()],
+        }
+    ]
+
+    render_execute_payload = build_render_execute_payload(
+        request_payload=request_payload,
+        plan_payload=plan_payload,
+        job_rows=execute_job_rows,
+    )
+    _validate_json_payload(
+        render_execute_payload,
+        schema_path=schemas_dir() / "render_execute.schema.json",
+        payload_name="Render execute",
+    )
+    _write_json_file(render_execute_path, render_execute_payload)
+
+    render_qa_payload = build_render_qa_payload(
+        request_payload=request_payload,
+        plan_payload=plan_payload,
+        report_payload=report_payload,
+        job_rows=qa_job_rows,
+        plugin_chain_used=True,
+    )
+    _validate_json_payload(
+        render_qa_payload,
+        schema_path=schemas_dir() / "render_qa.schema.json",
+        payload_name="Render QA",
+    )
+    _write_json_file(render_qa_path, render_qa_payload)
+
+    qa_issue_error_count = 0
+    qa_issue_warn_count = 0
+    raw_issues = render_qa_payload.get("issues")
+    if isinstance(raw_issues, list):
+        for issue in raw_issues:
+            if not isinstance(issue, dict):
+                continue
+            severity = _coerce_str(issue.get("severity")).strip()
+            if severity == "error":
+                qa_issue_error_count += 1
+            elif severity == "warn":
+                qa_issue_warn_count += 1
+
+    events: list[dict[str, Any]] = [
+        {
+            "kind": "info",
+            "scope": "render",
+            "what": "plugins self-test started",
+            "why": "Built deterministic in-memory render request for plugin self-test.",
+            "where": [input_wav_posix],
+            "confidence": None,
+            "evidence": {
+                "codes": ["RENDER.RUN.STARTED"],
+                "ids": [normalized_plugin_id],
+                "paths": [input_wav_posix],
+            },
+        }
+    ]
+    events.extend(plugin_stage_events)
+    events.extend(
+        [
+            {
+                "kind": "action",
+                "scope": "render",
+                "what": "render execute built",
+                "why": (
+                    "Built deterministic render_execute payload for plugin self-test output."
+                ),
+                "where": [render_execute_posix],
+                "confidence": None,
+                "evidence": {
+                    "codes": ["RENDER.RUN.EXECUTE_BUILT"],
+                    "ids": [normalized_plugin_id],
+                    "paths": [render_execute_posix],
+                },
+            },
+            {
+                "kind": "action",
+                "scope": "qa",
+                "what": "render QA built",
+                "why": (
+                    "Computed deterministic render_qa metrics for plugin self-test output."
+                ),
+                "where": [render_qa_posix],
+                "confidence": None,
+                "evidence": {
+                    "codes": ["RENDER.RUN.QA_BUILT"],
+                    "ids": [normalized_plugin_id],
+                    "paths": [render_qa_posix],
+                    "metrics": [
+                        {
+                            "name": "qa_issue_error_count",
+                            "value": float(qa_issue_error_count),
+                        },
+                        {
+                            "name": "qa_issue_warn_count",
+                            "value": float(qa_issue_warn_count),
+                        },
+                    ],
+                    "notes": [
+                        f"issues_error={qa_issue_error_count}",
+                        f"issues_warn={qa_issue_warn_count}",
+                    ],
+                },
+            },
+            {
+                "kind": "info",
+                "scope": "render",
+                "what": "plugins self-test completed",
+                "why": (
+                    "Wrote deterministic plugin self-test artifacts and event log outputs."
+                ),
+                "where": [
+                    input_wav_posix,
+                    output_wav_posix,
+                    render_execute_posix,
+                    render_qa_posix,
+                    event_log_posix,
+                ],
+                "confidence": None,
+                "evidence": {
+                    "codes": ["RENDER.RUN.COMPLETED"],
+                    "ids": [normalized_plugin_id],
+                    "paths": [
+                        input_wav_posix,
+                        output_wav_posix,
+                        render_execute_posix,
+                        render_qa_posix,
+                        event_log_posix,
+                    ],
+                    "notes": [
+                        f"plugin_chain_note: {note}"
+                        for note in plugin_chain_notes
+                    ],
+                },
+            },
+        ]
+    )
+
+    events_with_ids: list[dict[str, Any]] = []
+    for event in events:
+        event_payload = dict(event)
+        event_payload["event_id"] = new_event_id(event_payload)
+        events_with_ids.append(event_payload)
+    write_event_log(events_with_ids, event_log_path, force=True)
+
+    return {
+        "plugin_id": normalized_plugin_id,
+        "out_dir": out_dir.resolve().as_posix(),
+        "plugin_chain": normalized_plugin_chain,
+        "outputs": {
+            "input_wav": input_wav_posix,
+            "output_wav": output_wav_posix,
+            "event_log": event_log_posix,
+            "render_execute": render_execute_posix,
+            "render_qa": render_qa_posix,
+        },
+    }
 
 
 def _build_plugins_list_payload(*, plugins_dir: Path) -> list[dict[str, Any]]:
