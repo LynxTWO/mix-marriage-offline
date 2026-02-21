@@ -1,0 +1,161 @@
+plugin_id: "PLUGIN.RENDERER.EXAMPLE_SIMPLE_COMPRESSOR_V0"
+plugin_type: "renderer"
+name: "Example Simple Compressor v0"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Starter feed-forward compressor plugin with no lookahead."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "plugins.renderers.safe_renderer:SafeRenderer"
+numeric_precision: "float64"
+capabilities:
+  max_channels: 32
+  supported_contexts:
+    - "render"
+    - "auto_apply"
+  notes:
+    - "Deterministic feed-forward compression with envelope follower."
+ui_layout: "ui/layout.json"
+config_schema:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: "object"
+  additionalProperties: false
+  properties:
+    threshold_db:
+      type: "number"
+      minimum: -60
+      maximum: 0
+      default: -18
+      description: "Threshold in dBFS where compression begins."
+      x_mmo_ui:
+        widget: "knob"
+        units: "dB"
+        step: 0.5
+        fine_step: 0.1
+        modifier_key: "shift"
+        min: -60
+        max: 0
+        group: "dynamics"
+        order: 0
+        help: "Lower values compress more of the signal."
+    ratio:
+      type: "number"
+      minimum: 1
+      maximum: 20
+      default: 4
+      description: "Compression ratio above threshold."
+      x_mmo_ui:
+        widget: "knob"
+        units: ":1"
+        step: 0.1
+        fine_step: 0.05
+        modifier_key: "shift"
+        min: 1
+        max: 20
+        group: "dynamics"
+        order: 1
+        help: "Higher values increase gain reduction above threshold."
+    attack_ms:
+      type: "number"
+      minimum: 0.1
+      maximum: 250
+      default: 20
+      description: "Attack time in milliseconds."
+      x_mmo_ui:
+        widget: "knob"
+        units: "ms"
+        step: 0.5
+        fine_step: 0.1
+        modifier_key: "shift"
+        min: 0.1
+        max: 250
+        group: "dynamics"
+        order: 2
+        help: "How quickly the compressor engages."
+    release_ms:
+      type: "number"
+      minimum: 5
+      maximum: 2000
+      default: 150
+      description: "Release time in milliseconds."
+      x_mmo_ui:
+        widget: "knob"
+        units: "ms"
+        step: 1
+        fine_step: 0.5
+        modifier_key: "shift"
+        min: 5
+        max: 2000
+        group: "dynamics"
+        order: 3
+        help: "How quickly compression recovers."
+    makeup_db:
+      type: "number"
+      minimum: -12
+      maximum: 24
+      default: 0
+      description: "Output makeup gain in dB."
+      x_mmo_ui:
+        widget: "knob"
+        units: "dB"
+        step: 0.5
+        fine_step: 0.1
+        modifier_key: "shift"
+        min: -12
+        max: 24
+        group: "output"
+        order: 4
+        help: "Adds or trims output level after compression."
+    detector_mode:
+      type: "string"
+      enum:
+        - "rms"
+        - "peak"
+        - "lufs_shortterm"
+      default: "rms"
+      description: "Detector mode for feed-forward level tracking."
+      x_mmo_ui:
+        widget: "selector"
+        group: "detector"
+        order: 5
+        options:
+          - value: "rms"
+            label: "RMS"
+          - value: "peak"
+            label: "Peak"
+          - value: "lufs_shortterm"
+            label: "LUFS Short-Term"
+        help: "RMS is the default for stable musical compression."
+    macro_mix:
+      type: "number"
+      minimum: 0
+      maximum: 100
+      default: 100
+      description: "Dry/wet blend in percent."
+      x_mmo_ui:
+        widget: "knob"
+        units: "%"
+        step: 1
+        min: 0
+        max: 100
+        group: "output"
+        order: 6
+        help: "Linear blend between dry and compressed signals."
+    bypass:
+      type: "boolean"
+      default: false
+      description: "Bypass all processing."
+      x_mmo_ui:
+        widget: "toggle"
+        group: "output"
+        order: 7
+        help: "True bypass."
+  required:
+    - "threshold_db"
+    - "ratio"
+    - "attack_ms"
+    - "release_ms"
+    - "makeup_db"
+    - "detector_mode"
+    - "macro_mix"
+    - "bypass"

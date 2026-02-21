@@ -825,6 +825,363 @@ class TestRenderRunAudioExecution(unittest.TestCase):
             self.assertGreater(mix05_peak, mix1_peak)
             self.assertLess(mix05_peak, source_peak)
 
+    def test_plugin_chain_simple_compressor_v0_is_deterministic_with_gr_evidence(self) -> None:
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("numpy not available")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            source_path = stems_dir / "mix.wav"
+            _write_pcm16_hot_stereo_wav(source_path, duration_s=1.0, frequency_hz=1000.0)
+            source_peak = _pcm16_abs_peak(source_path)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                    "plugin_chain": [
+                        {
+                            "plugin_id": "simple_compressor_v0",
+                            "params": {
+                                "threshold_db": -24.0,
+                                "ratio": 8.0,
+                                "attack_ms": 0.1,
+                                "release_ms": 150.0,
+                                "makeup_db": 0.0,
+                                "macro_mix": 100.0,
+                                "bypass": False,
+                            },
+                        }
+                    ],
+                },
+            }
+            event_log_out = temp_path / "render_events.jsonl"
+            exit_a, _, stderr_a, _, report_out_a = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=["--event-log-out", str(event_log_out)],
+            )
+            self.assertEqual(exit_a, 0, msg=stderr_a)
+
+            report_a = json.loads(report_out_a.read_text(encoding="utf-8"))
+            notes_a = report_a["jobs"][0].get("notes", [])
+            self.assertIn("plugin_chain_precision_mode: float64", notes_a)
+
+            rendered_path_a = Path(report_a["jobs"][0]["output_files"][0]["file_path"])
+            wav_bytes_a = rendered_path_a.read_bytes()
+            event_bytes_a = event_log_out.read_bytes()
+            rendered_peak_a = _pcm16_abs_peak(rendered_path_a)
+            self.assertLess(rendered_peak_a, source_peak)
+
+            events = _read_jsonl(event_log_out)
+            stage_event = next(
+                (
+                    event
+                    for event in events
+                    if isinstance(event, dict)
+                    and isinstance(event.get("evidence"), dict)
+                    and "RENDER.RUN.PLUGIN.STAGE_APPLIED"
+                    in event.get("evidence", {}).get("codes", [])
+                    and "simple_compressor_v0" in event.get("evidence", {}).get("ids", [])
+                ),
+                None,
+            )
+            self.assertIsNotNone(stage_event)
+            metrics: dict[str, object] = {
+                str(item.get("name")): item.get("value")
+                for item in stage_event.get("evidence", {}).get("metrics", [])
+                if isinstance(item, dict)
+            }
+            self.assertAlmostEqual(float(metrics.get("threshold_db", 1.0)), -24.0, delta=1e-8)
+            self.assertAlmostEqual(float(metrics.get("ratio", -1.0)), 8.0, delta=1e-8)
+            self.assertAlmostEqual(float(metrics.get("attack_ms", -1.0)), 0.1, delta=1e-8)
+            self.assertAlmostEqual(float(metrics.get("release_ms", -1.0)), 150.0, delta=1e-8)
+            self.assertAlmostEqual(float(metrics.get("makeup_db", -1.0)), 0.0, delta=1e-8)
+            self.assertAlmostEqual(float(metrics.get("macro_mix", -1.0)), 1.0, delta=1e-8)
+            self.assertGreater(float(metrics.get("gr_approx_db", 0.0)), 0.0)
+            evidence_notes = stage_event.get("evidence", {}).get("notes", [])
+            self.assertIsInstance(evidence_notes, list)
+            if isinstance(evidence_notes, list):
+                self.assertIn("detector_mode=rms", evidence_notes)
+
+            exit_b, _, stderr_b, _, report_out_b = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--force",
+                    "--event-log-out", str(event_log_out),
+                    "--event-log-force",
+                ],
+            )
+            self.assertEqual(exit_b, 0, msg=stderr_b)
+
+            report_b = json.loads(report_out_b.read_text(encoding="utf-8"))
+            rendered_path_b = Path(report_b["jobs"][0]["output_files"][0]["file_path"])
+            wav_bytes_b = rendered_path_b.read_bytes()
+            event_bytes_b = event_log_out.read_bytes()
+
+            self.assertEqual(wav_bytes_a, wav_bytes_b)
+            self.assertEqual(event_bytes_a, event_bytes_b)
+
+    def test_plugin_chain_simple_compressor_v0_invalid_detector_mode_refuses(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            _write_pcm16_wav(tp / "stems" / "mix.wav", channels=2)
+            scene_posix = (tp / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                    "plugin_chain": [
+                        {
+                            "plugin_id": "simple_compressor_v0",
+                            "params": {
+                                "threshold_db": -18.0,
+                                "ratio": 4.0,
+                                "attack_ms": 20.0,
+                                "release_ms": 150.0,
+                                "makeup_db": 3.0,
+                                "detector_mode": "banana",
+                            },
+                        }
+                    ],
+                },
+            }
+            rc_a, _, err_a, _, report_a = _run_render_run(tp, request_payload=request_payload)
+            rc_b, _, err_b, _, report_b = _run_render_run(
+                tp,
+                request_payload=request_payload,
+                extra_args=["--force"],
+            )
+
+            self.assertEqual(rc_a, 1)
+            self.assertEqual(rc_b, 1)
+            self.assertEqual(err_a, err_b)
+            self.assertFalse(report_a.exists())
+            self.assertFalse(report_b.exists())
+            self.assertIn("ISSUE.RENDER.RUN.PLUGIN_CHAIN_INVALID", err_a)
+            self.assertIn("simple_compressor_v0 requires params.detector_mode", err_a)
+            self.assertIn("lufs_shortterm", err_a)
+            self.assertIn("peak", err_a)
+            self.assertIn("rms", err_a)
+
+    def test_plugin_chain_multiband_compressor_v0_is_deterministic_with_gr_evidence(self) -> None:
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("numpy not available")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            source_path = stems_dir / "mix.wav"
+            _write_pcm16_two_tone_wav(source_path, channels=2, duration_s=1.0)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                    "plugin_chain": [
+                        {
+                            "plugin_id": "multiband_compressor_v0",
+                            "params": {
+                                "threshold_db": -28.0,
+                                "ratio": 6.0,
+                                "attack_ms": 5.0,
+                                "release_ms": 180.0,
+                                "makeup_db": 0.0,
+                                "lookahead_ms": 2.0,
+                                "detector_mode": "rms",
+                                "slope_sensitivity": 0.8,
+                                "min_band_count": 3,
+                                "max_band_count": 6,
+                                "oversampling": 1,
+                                "macro_mix": 100.0,
+                                "bypass": False,
+                            },
+                        }
+                    ],
+                },
+            }
+            event_log_out = temp_path / "render_events.jsonl"
+            exit_a, _, stderr_a, _, report_out_a = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=["--event-log-out", str(event_log_out)],
+            )
+            self.assertEqual(exit_a, 0, msg=stderr_a)
+
+            report_a = json.loads(report_out_a.read_text(encoding="utf-8"))
+            notes_a = report_a["jobs"][0].get("notes", [])
+            self.assertIn("plugin_chain_precision_mode: float64", notes_a)
+
+            rendered_path_a = Path(report_a["jobs"][0]["output_files"][0]["file_path"])
+            wav_bytes_a = rendered_path_a.read_bytes()
+            event_bytes_a = event_log_out.read_bytes()
+
+            events = _read_jsonl(event_log_out)
+            stage_event = next(
+                (
+                    event
+                    for event in events
+                    if isinstance(event, dict)
+                    and isinstance(event.get("evidence"), dict)
+                    and "RENDER.RUN.PLUGIN.STAGE_APPLIED"
+                    in event.get("evidence", {}).get("codes", [])
+                    and "multiband_compressor_v0" in event.get("evidence", {}).get("ids", [])
+                ),
+                None,
+            )
+            self.assertIsNotNone(stage_event)
+            metrics: dict[str, object] = {
+                str(item.get("name")): item.get("value")
+                for item in stage_event.get("evidence", {}).get("metrics", [])
+                if isinstance(item, dict)
+            }
+            self.assertAlmostEqual(float(metrics.get("threshold_db", 1.0)), -28.0, delta=1e-8)
+            self.assertAlmostEqual(float(metrics.get("ratio", -1.0)), 6.0, delta=1e-8)
+            self.assertAlmostEqual(float(metrics.get("lookahead_ms", -1.0)), 2.0, delta=1e-8)
+            self.assertGreaterEqual(float(metrics.get("band_count", 0.0)), 2.0)
+            self.assertGreater(float(metrics.get("gr_approx_db", 0.0)), 0.0)
+            evidence_notes = stage_event.get("evidence", {}).get("notes", [])
+            self.assertIsInstance(evidence_notes, list)
+            if isinstance(evidence_notes, list):
+                self.assertIn("detector_mode=rms", evidence_notes)
+                self.assertIn("operation_mode=compress", evidence_notes)
+
+            exit_b, _, stderr_b, _, report_out_b = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--force",
+                    "--event-log-out", str(event_log_out),
+                    "--event-log-force",
+                ],
+            )
+            self.assertEqual(exit_b, 0, msg=stderr_b)
+
+            report_b = json.loads(report_out_b.read_text(encoding="utf-8"))
+            rendered_path_b = Path(report_b["jobs"][0]["output_files"][0]["file_path"])
+            wav_bytes_b = rendered_path_b.read_bytes()
+            event_bytes_b = event_log_out.read_bytes()
+
+            self.assertEqual(wav_bytes_a, wav_bytes_b)
+            self.assertEqual(event_bytes_a, event_bytes_b)
+
+    def test_plugin_chain_multiband_compressor_v0_invalid_detector_mode_refuses(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            _write_pcm16_wav(tp / "stems" / "mix.wav", channels=2)
+            scene_posix = (tp / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                    "plugin_chain": [
+                        {
+                            "plugin_id": "multiband_compressor_v0",
+                            "params": {
+                                "threshold_db": -20.0,
+                                "ratio": 4.0,
+                                "attack_ms": 10.0,
+                                "release_ms": 180.0,
+                                "makeup_db": 0.0,
+                                "lookahead_ms": 1.0,
+                                "detector_mode": "banana",
+                                "slope_sensitivity": 0.7,
+                                "min_band_count": 3,
+                                "max_band_count": 6,
+                                "oversampling": 1,
+                                "macro_mix": 100.0,
+                                "bypass": False,
+                            },
+                        }
+                    ],
+                },
+            }
+            rc_a, _, err_a, _, report_a = _run_render_run(tp, request_payload=request_payload)
+            rc_b, _, err_b, _, report_b = _run_render_run(
+                tp,
+                request_payload=request_payload,
+                extra_args=["--force"],
+            )
+
+            self.assertEqual(rc_a, 1)
+            self.assertEqual(rc_b, 1)
+            self.assertEqual(err_a, err_b)
+            self.assertFalse(report_a.exists())
+            self.assertFalse(report_b.exists())
+            self.assertIn("ISSUE.RENDER.RUN.PLUGIN_CHAIN_INVALID", err_a)
+            self.assertIn("multiband_compressor_v0 requires params.detector_mode", err_a)
+            self.assertIn("lufs_shortterm", err_a)
+            self.assertIn("peak", err_a)
+            self.assertIn("rms", err_a)
+
+    def test_plugin_chain_multiband_compressor_v0_oversampling_requires_quality_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            _write_pcm16_wav(tp / "stems" / "mix.wav", channels=2)
+            scene_posix = (tp / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                    "plugin_chain": [
+                        {
+                            "plugin_id": "multiband_compressor_v0",
+                            "params": {
+                                "threshold_db": -20.0,
+                                "ratio": 4.0,
+                                "attack_ms": 10.0,
+                                "release_ms": 180.0,
+                                "makeup_db": 0.0,
+                                "lookahead_ms": 1.0,
+                                "detector_mode": "rms",
+                                "slope_sensitivity": 0.7,
+                                "min_band_count": 3,
+                                "max_band_count": 6,
+                                "oversampling": 2,
+                                "macro_mix": 100.0,
+                                "bypass": False,
+                            },
+                        }
+                    ],
+                },
+            }
+
+            rc, _, err, _, report = _run_render_run(tp, request_payload=request_payload)
+            self.assertEqual(rc, 1)
+            self.assertFalse(report.exists())
+            self.assertIn("ISSUE.RENDER.RUN.PLUGIN_CHAIN_INVALID", err)
+            self.assertIn(
+                "Multiband oversampling > 1 requires options.max_theoretical_quality=true.",
+                err,
+            )
+
+            request_payload["options"]["max_theoretical_quality"] = True
+            rc_ok, _, err_ok, _, report_ok = _run_render_run(
+                tp,
+                request_payload=request_payload,
+                extra_args=["--force"],
+            )
+            self.assertEqual(rc_ok, 0, msg=err_ok)
+            self.assertTrue(report_ok.exists())
+
     def test_plugin_chain_gain_v0_accepts_flac_source_and_is_deterministic(self) -> None:
         try:
             import numpy  # noqa: F401

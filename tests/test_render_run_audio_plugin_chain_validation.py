@@ -151,6 +151,214 @@ class TestPluginChainValidation(unittest.TestCase):
             notes[2],
         )
 
+    def test_simple_compressor_requires_core_params(self) -> None:
+        raw_chain = [
+            {
+                "plugin_id": "simple_compressor_v0",
+                "params": {
+                    "threshold_db": -18.0,
+                    "ratio": 4.0,
+                    "attack_ms": 20.0,
+                    "makeup_db": 3.0,
+                },
+            }
+        ]
+
+        with self.assertRaises(ValueError) as exc:
+            validate_and_normalize_plugin_chain(
+                raw_chain,
+                chain_label="plugin_chain",
+                lenient_numeric_bounds=True,
+            )
+
+        message = str(exc.exception)
+        self.assertIn("plugin_chain validation failed:", message)
+        self.assertIn("plugin_chain[1].params.release_ms is required.", message)
+
+    def test_simple_compressor_lenient_mode_clamps_numeric_params(self) -> None:
+        normalized, notes = validate_and_normalize_plugin_chain(
+            [
+                {
+                    "plugin_id": "simple_compressor_v0",
+                    "params": {
+                        "threshold_db": -99.0,
+                        "ratio": 30.0,
+                        "attack_ms": 0.001,
+                        "release_ms": 4000.0,
+                        "makeup_db": 40.0,
+                        "macro_mix": 200.0,
+                        "detector_mode": "peak",
+                        "bypass": False,
+                    },
+                }
+            ],
+            chain_label="plugin_chain",
+            lenient_numeric_bounds=True,
+        )
+
+        self.assertEqual(
+            normalized,
+            [
+                {
+                    "plugin_id": "simple_compressor_v0",
+                    "params": {
+                        "threshold_db": -60.0,
+                        "ratio": 20.0,
+                        "attack_ms": 0.1,
+                        "release_ms": 2000.0,
+                        "makeup_db": 24.0,
+                        "macro_mix": 100.0,
+                        "detector_mode": "peak",
+                        "bypass": False,
+                    },
+                }
+            ],
+        )
+        self.assertEqual(len(notes), 6)
+        self.assertIn(
+            "plugin_chain[1].params.attack_ms clamped from 0.001 to 0.1",
+            notes[0],
+        )
+        self.assertIn(
+            "plugin_chain[1].params.macro_mix clamped from 200.0 to 100.0",
+            notes[1],
+        )
+        self.assertIn(
+            "plugin_chain[1].params.makeup_db clamped from 40.0 to 24.0",
+            notes[2],
+        )
+        self.assertIn(
+            "plugin_chain[1].params.ratio clamped from 30.0 to 20.0",
+            notes[3],
+        )
+        self.assertIn(
+            "plugin_chain[1].params.release_ms clamped from 4000.0 to 2000.0",
+            notes[4],
+        )
+        self.assertIn(
+            "plugin_chain[1].params.threshold_db clamped from -99.0 to -60.0",
+            notes[5],
+        )
+
+    def test_multiband_compressor_requires_core_params(self) -> None:
+        raw_chain = [
+            {
+                "plugin_id": "multiband_compressor_v0",
+                "params": {
+                    "threshold_db": -24.0,
+                    "ratio": 3.0,
+                    "attack_ms": 10.0,
+                    "makeup_db": 0.0,
+                },
+            }
+        ]
+
+        with self.assertRaises(ValueError) as exc:
+            validate_and_normalize_plugin_chain(
+                raw_chain,
+                chain_label="plugin_chain",
+                lenient_numeric_bounds=True,
+            )
+
+        message = str(exc.exception)
+        self.assertIn("plugin_chain validation failed:", message)
+        self.assertIn("plugin_chain[1].params.release_ms is required.", message)
+
+    def test_multiband_auto_lenient_mode_clamps_numeric_params(self) -> None:
+        normalized, notes = validate_and_normalize_plugin_chain(
+            [
+                {
+                    "plugin_id": "multiband_dynamic_auto_v0",
+                    "params": {
+                        "threshold_db": -99.0,
+                        "ratio": 30.0,
+                        "attack_ms": 0.001,
+                        "release_ms": 4000.0,
+                        "makeup_db": 40.0,
+                        "lookahead_ms": 99.0,
+                        "detector_mode": "peak",
+                        "slope_sensitivity": 2.0,
+                        "min_band_count": 1,
+                        "max_band_count": 99,
+                        "oversampling": 8,
+                        "macro_mix": 200.0,
+                        "bypass": False,
+                    },
+                }
+            ],
+            chain_label="plugin_chain",
+            lenient_numeric_bounds=True,
+        )
+
+        self.assertEqual(
+            normalized,
+            [
+                {
+                    "plugin_id": "multiband_dynamic_auto_v0",
+                    "params": {
+                        "threshold_db": -60.0,
+                        "ratio": 20.0,
+                        "attack_ms": 0.1,
+                        "release_ms": 2000.0,
+                        "makeup_db": 24.0,
+                        "lookahead_ms": 20.0,
+                        "detector_mode": "peak",
+                        "slope_sensitivity": 1.0,
+                        "min_band_count": 2,
+                        "max_band_count": 8,
+                        "oversampling": 2,
+                        "macro_mix": 100.0,
+                        "bypass": False,
+                    },
+                }
+            ],
+        )
+        self.assertEqual(len(notes), 11)
+        self.assertIn(
+            "plugin_chain[1].params.attack_ms clamped from 0.001 to 0.1",
+            notes[0],
+        )
+        self.assertIn(
+            "plugin_chain[1].params.lookahead_ms clamped from 99.0 to 20.0",
+            notes[1],
+        )
+        self.assertIn(
+            "plugin_chain[1].params.macro_mix clamped from 200.0 to 100.0",
+            notes[2],
+        )
+        self.assertIn(
+            "plugin_chain[1].params.makeup_db clamped from 40.0 to 24.0",
+            notes[3],
+        )
+        self.assertIn(
+            "plugin_chain[1].params.max_band_count clamped from 99 to 8",
+            notes[4],
+        )
+        self.assertIn(
+            "plugin_chain[1].params.min_band_count clamped from 1 to 2",
+            notes[5],
+        )
+        self.assertIn(
+            "plugin_chain[1].params.oversampling clamped from 8 to 2",
+            notes[6],
+        )
+        self.assertIn(
+            "plugin_chain[1].params.ratio clamped from 30.0 to 20.0",
+            notes[7],
+        )
+        self.assertIn(
+            "plugin_chain[1].params.release_ms clamped from 4000.0 to 2000.0",
+            notes[8],
+        )
+        self.assertIn(
+            "plugin_chain[1].params.slope_sensitivity clamped from 2.0 to 1.0",
+            notes[9],
+        )
+        self.assertIn(
+            "plugin_chain[1].params.threshold_db clamped from -99.0 to -60.0",
+            notes[10],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,77 @@
+{
+  "schema_version": "0.1.0",
+  "layout_id": "LAYOUT.PLUGIN.RENDERER.EXAMPLE_SIMPLE_COMPRESSOR_V0",
+  "grid": {
+    "columns": 12,
+    "gap_px": 16,
+    "row_height_px": 56,
+    "margin_px": 24
+  },
+  "container": {
+    "section_gap_px": 16
+  },
+  "sections": [
+    {
+      "section_id": "main",
+      "label": "Simple Compressor Controls",
+      "widgets": [
+        {
+          "widget_id": "widget.main.threshold_db",
+          "label": "Threshold",
+          "param_ref": "PARAM.RENDERER.THRESHOLD_DB",
+          "col_span": 3,
+          "row_span": 1
+        },
+        {
+          "widget_id": "widget.main.ratio",
+          "label": "Ratio",
+          "param_ref": "PARAM.RENDERER.RATIO",
+          "col_span": 3,
+          "row_span": 1
+        },
+        {
+          "widget_id": "widget.main.attack_ms",
+          "label": "Attack",
+          "param_ref": "PARAM.RENDERER.ATTACK_MS",
+          "col_span": 3,
+          "row_span": 1
+        },
+        {
+          "widget_id": "widget.main.release_ms",
+          "label": "Release",
+          "param_ref": "PARAM.RENDERER.RELEASE_MS",
+          "col_span": 3,
+          "row_span": 1
+        },
+        {
+          "widget_id": "widget.main.makeup_db",
+          "label": "Makeup",
+          "param_ref": "PARAM.RENDERER.MAKEUP_DB",
+          "col_span": 3,
+          "row_span": 1
+        },
+        {
+          "widget_id": "widget.main.detector_mode",
+          "label": "Detector",
+          "param_ref": "PARAM.RENDERER.DETECTOR_MODE",
+          "col_span": 3,
+          "row_span": 1
+        },
+        {
+          "widget_id": "widget.main.macro_mix",
+          "label": "Macro",
+          "param_ref": "PARAM.RENDERER.MACRO_MIX",
+          "col_span": 3,
+          "row_span": 1
+        },
+        {
+          "widget_id": "widget.main.bypass",
+          "label": "Bypass",
+          "param_ref": "PARAM.RENDERER.BYPASS",
+          "col_span": 3,
+          "row_span": 1
+        }
+      ]
+    }
+  ]
+}

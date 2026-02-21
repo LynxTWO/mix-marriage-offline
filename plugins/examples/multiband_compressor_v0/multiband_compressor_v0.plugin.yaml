@@ -1,0 +1,246 @@
+plugin_id: "PLUGIN.RENDERER.EXAMPLE_MULTIBAND_COMPRESSOR_V0"
+plugin_type: "renderer"
+name: "Example Multiband Compressor v0"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Slope-driven multiband compressor with optional lookahead."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "plugins.renderers.safe_renderer:SafeRenderer"
+numeric_precision: "float64"
+capabilities:
+  max_channels: 2
+  supported_contexts:
+    - "render"
+    - "auto_apply"
+  notes:
+    - "Deterministic slope-driven multiband compression; stereo only."
+ui_layout: "ui/layout.json"
+config_schema:
+  $schema: "https://json-schema.org/draft/2020-12/schema"
+  type: "object"
+  additionalProperties: false
+  properties:
+    threshold_db:
+      type: "number"
+      minimum: -60
+      maximum: 0
+      default: -24
+      description: "Base threshold in dBFS."
+      x_mmo_ui:
+        widget: "knob"
+        units: "dB"
+        step: 0.5
+        fine_step: 0.1
+        modifier_key: "shift"
+        min: -60
+        max: 0
+        group: "dynamics"
+        order: 0
+        help: "Lower threshold increases gain reduction."
+    ratio:
+      type: "number"
+      minimum: 1
+      maximum: 20
+      default: 3
+      description: "Compression ratio above threshold."
+      x_mmo_ui:
+        widget: "knob"
+        units: ":1"
+        step: 0.1
+        fine_step: 0.05
+        modifier_key: "shift"
+        min: 1
+        max: 20
+        group: "dynamics"
+        order: 1
+        help: "Higher ratio applies stronger compression."
+    attack_ms:
+      type: "number"
+      minimum: 0.1
+      maximum: 250
+      default: 15
+      description: "Attack time in milliseconds."
+      x_mmo_ui:
+        widget: "knob"
+        units: "ms"
+        step: 0.5
+        fine_step: 0.1
+        modifier_key: "shift"
+        min: 0.1
+        max: 250
+        group: "dynamics"
+        order: 2
+        help: "How quickly band compression engages."
+    release_ms:
+      type: "number"
+      minimum: 5
+      maximum: 2000
+      default: 180
+      description: "Release time in milliseconds."
+      x_mmo_ui:
+        widget: "knob"
+        units: "ms"
+        step: 1
+        fine_step: 0.5
+        modifier_key: "shift"
+        min: 5
+        max: 2000
+        group: "dynamics"
+        order: 3
+        help: "How quickly gain reduction recovers."
+    makeup_db:
+      type: "number"
+      minimum: -12
+      maximum: 24
+      default: 0
+      description: "Global makeup gain in dB."
+      x_mmo_ui:
+        widget: "knob"
+        units: "dB"
+        step: 0.5
+        fine_step: 0.1
+        modifier_key: "shift"
+        min: -12
+        max: 24
+        group: "output"
+        order: 4
+        help: "Compensates output level after dynamics."
+    lookahead_ms:
+      type: "number"
+      minimum: 0
+      maximum: 20
+      default: 2
+      description: "Optional lookahead in milliseconds."
+      x_mmo_ui:
+        widget: "knob"
+        units: "ms"
+        step: 0.1
+        fine_step: 0.05
+        modifier_key: "shift"
+        min: 0
+        max: 20
+        group: "detector"
+        order: 5
+        help: "Pre-reads detector frames for earlier reaction."
+    detector_mode:
+      type: "string"
+      enum:
+        - "rms"
+        - "peak"
+        - "lufs_shortterm"
+      default: "rms"
+      description: "Detector flavor for per-band envelope tracking."
+      x_mmo_ui:
+        widget: "selector"
+        group: "detector"
+        order: 6
+        options:
+          - value: "rms"
+            label: "RMS"
+          - value: "peak"
+            label: "Peak"
+          - value: "lufs_shortterm"
+            label: "LUFS Short-Term"
+        help: "RMS is the default for transparent broadband behavior."
+    slope_sensitivity:
+      type: "number"
+      minimum: 0
+      maximum: 1
+      default: 0.7
+      description: "How strongly dB/oct slopes affect band mapping and per-band behavior."
+      x_mmo_ui:
+        widget: "knob"
+        units: "x"
+        step: 0.05
+        fine_step: 0.01
+        modifier_key: "shift"
+        min: 0
+        max: 1
+        group: "slope"
+        order: 7
+        help: "Higher values make slope-driven behavior more aggressive."
+    min_band_count:
+      type: "integer"
+      minimum: 2
+      maximum: 8
+      default: 3
+      description: "Minimum number of dynamic bands."
+      x_mmo_ui:
+        widget: "knob"
+        units: "bands"
+        step: 1
+        min: 2
+        max: 8
+        group: "slope"
+        order: 8
+        help: "Lower bound for slope-driven dynamic band count."
+    max_band_count:
+      type: "integer"
+      minimum: 2
+      maximum: 8
+      default: 6
+      description: "Maximum number of dynamic bands."
+      x_mmo_ui:
+        widget: "knob"
+        units: "bands"
+        step: 1
+        min: 2
+        max: 8
+        group: "slope"
+        order: 9
+        help: "Upper bound for slope-driven dynamic band count."
+    oversampling:
+      type: "integer"
+      minimum: 1
+      maximum: 2
+      default: 1
+      description: "Analysis oversampling factor (2x allowed only with max_theoretical_quality)."
+      x_mmo_ui:
+        widget: "selector"
+        group: "quality"
+        order: 10
+        options:
+          - value: 1
+            label: "1x"
+          - value: 2
+            label: "2x"
+        help: "Default is 1x for speed and compatibility."
+    macro_mix:
+      type: "number"
+      minimum: 0
+      maximum: 100
+      default: 100
+      description: "Dry/wet blend in percent."
+      x_mmo_ui:
+        widget: "knob"
+        units: "%"
+        step: 1
+        min: 0
+        max: 100
+        group: "output"
+        order: 11
+        help: "Linear blend between dry and multiband wet signals."
+    bypass:
+      type: "boolean"
+      default: false
+      description: "Bypass all processing."
+      x_mmo_ui:
+        widget: "toggle"
+        group: "output"
+        order: 12
+        help: "True bypass."
+  required:
+    - "threshold_db"
+    - "ratio"
+    - "attack_ms"
+    - "release_ms"
+    - "makeup_db"
+    - "lookahead_ms"
+    - "detector_mode"
+    - "slope_sensitivity"
+    - "min_band_count"
+    - "max_band_count"
+    - "oversampling"
+    - "macro_mix"
+    - "bypass"
