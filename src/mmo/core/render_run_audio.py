@@ -123,6 +123,9 @@ ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID = "ISSUE.RENDER.RUN.PLUGIN_CHAIN_INVALID"
 ISSUE_RENDER_RUN_PLUGIN_SOURCE_FORMAT_UNSUPPORTED = (
     "ISSUE.RENDER.RUN.PLUGIN_SOURCE_FORMAT_UNSUPPORTED"
 )
+ISSUE_RENDER_RUN_MIX_INPUT_SAMPLE_RATE_MISMATCH = (
+    "ISSUE.RENDER.RUN.MIX_INPUT_SAMPLE_RATE_MISMATCH"
+)
 
 _PLUGIN_CHAIN_CONFIG_SCHEMA_FALLBACKS_BY_ID: dict[str, dict[str, Any]] = {
     _GAIN_V0_PLUGIN_ID: {
@@ -753,11 +756,47 @@ def build_render_report_with_audio(
 ]:
     """Render stereo deliverables and return report/execute/plugin/qa trace payloads."""
     jobs = _stereo_jobs_or_raise(plan_payload)
-    source_path = _resolve_single_source_or_raise(scene_payload)
-    source_metadata = _read_source_metadata_or_raise(source_path)
-    _validate_source_layout_or_raise(source_metadata)
-
     options = _coerce_dict(request_payload.get("options"))
+    scene_anchor = _scene_anchor_root(
+        request_scene_path=_coerce_str(request_payload.get("scene_path")),
+        scene_path=scene_path,
+    )
+    report_dir = report_out_path.resolve().parent
+
+    mix_inputs = _mix_inputs_from_request(request_payload)
+    resolved_mix_inputs: list[dict[str, Any]] | None = None
+    mix_inputs_report_notes: list[str] = []
+    source_input_paths: list[Path] = []
+    source_bit_depth: int | None = None
+
+    if mix_inputs is None:
+        source_path = _resolve_single_source_or_raise(scene_payload)
+        source_metadata = _read_source_metadata_or_raise(source_path)
+        _validate_source_layout_or_raise(source_metadata)
+        source_rate_hz = _coerce_int(source_metadata.get("sample_rate_hz")) or 0
+        source_bit_depth = _coerce_int(source_metadata.get("bits_per_sample"))
+        source_input_paths = [source_path.resolve()]
+    else:
+        (
+            resolved_mix_inputs,
+            source_rate_hz,
+            source_bit_depth,
+        ) = _resolve_mix_inputs_with_metadata_or_raise(
+            mix_inputs=mix_inputs,
+            scene_anchor=scene_anchor,
+            report_dir=report_dir,
+        )
+        source_path = Path(resolved_mix_inputs[0]["path"])
+        source_input_paths = [
+            Path(mix_input["path"]).resolve()
+            for mix_input in resolved_mix_inputs
+            if isinstance(mix_input.get("path"), Path)
+        ]
+        mix_inputs_report_notes = _mix_inputs_report_notes(
+            mix_inputs=resolved_mix_inputs,
+            headroom_gain=_mix_inputs_headroom_gain(resolved_mix_inputs),
+        )
+
     requested_max_theoretical_quality = options.get("max_theoretical_quality")
     max_theoretical_quality = _coerce_bool(requested_max_theoretical_quality)
     if (
@@ -772,7 +811,6 @@ def build_render_report_with_audio(
             ),
         )
     max_theoretical_quality = bool(max_theoretical_quality)
-    source_rate_hz = _coerce_int(source_metadata.get("sample_rate_hz")) or 0
     requested_rate_hz = _coerce_int(options.get("sample_rate_hz"))
     if requested_rate_hz is not None and requested_rate_hz != source_rate_hz:
         raise RenderRunRefusalError(
@@ -785,13 +823,8 @@ def build_render_report_with_audio(
 
     output_bit_depth = _resolve_output_bit_depth(
         requested_bit_depth=_coerce_int(options.get("bit_depth")),
-        source_bit_depth=_coerce_int(source_metadata.get("bits_per_sample")),
+        source_bit_depth=source_bit_depth,
     )
-    scene_anchor = _scene_anchor_root(
-        request_scene_path=_coerce_str(request_payload.get("scene_path")),
-        scene_path=scene_path,
-    )
-    report_dir = report_out_path.resolve().parent
     plugin_chain, plugin_chain_notes = _plugin_chain_from_request(request_payload)
     plugin_chain_enabled = bool(plugin_chain)
     plugin_chain_force_float64 = any(
@@ -859,7 +892,12 @@ def build_render_report_with_audio(
         ffmpeg_cmd_for_decode: Sequence[str] | None = None
         ffmpeg_cmd_for_encode: Sequence[str] | None = None
         source_extension = source_path.suffix.lower()
-        needs_ffmpeg_decode = source_extension in _FFMPEG_EXTENSIONS
+        mix_inputs_active = isinstance(resolved_mix_inputs, list)
+        needs_ffmpeg_decode = (
+            any(bool(mix_input.get("needs_ffmpeg_decode")) for mix_input in resolved_mix_inputs)
+            if mix_inputs_active
+            else (source_extension in _FFMPEG_EXTENSIONS)
+        )
         needs_ffmpeg_encode = any(fmt != "wav" for fmt in output_formats)
         needs_ffmpeg_for_trace = keep_wav_output and capture_execute_trace
         if needs_ffmpeg_decode or needs_ffmpeg_encode or needs_ffmpeg_for_trace:
@@ -879,7 +917,49 @@ def build_render_report_with_audio(
         job_plugin_step_events: list[dict[str, Any]] = []
 
         try:
-            if plugin_chain_enabled:
+            if mix_inputs_active:
+                if resolved_mix_inputs is None:
+                    raise RenderRunRefusalError(
+                        issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+                        message="Internal mix_inputs normalization failed.",
+                    )
+                if capture_execute_trace:
+                    ffmpeg_command_rows.extend(
+                        _mix_inputs_decode_command_rows(
+                            mix_inputs=resolved_mix_inputs,
+                            ffmpeg_cmd_for_decode=ffmpeg_cmd_for_decode,
+                        )
+                    )
+                mixed_interleaved, _ = _mix_inputs_interleaved_samples_or_raise(
+                    mix_inputs=resolved_mix_inputs,
+                    ffmpeg_cmd_for_decode=ffmpeg_cmd_for_decode,
+                )
+                if plugin_chain_enabled:
+                    job_plugin_step_events = _render_wav_with_plugin_chain(
+                        source_path=source_path,
+                        output_path=wav_path,
+                        sample_rate_hz=source_rate_hz,
+                        bit_depth=output_bit_depth,
+                        plugin_chain=plugin_chain,
+                        ffmpeg_cmd_for_decode=ffmpeg_cmd_for_decode,
+                        max_theoretical_quality=max_theoretical_quality,
+                        force_float64_default=plugin_chain_force_float64,
+                        source_samples_interleaved=mixed_interleaved,
+                        source_evidence_paths=[
+                            input_path.resolve().as_posix()
+                            for input_path in source_input_paths
+                        ],
+                    )
+                else:
+                    _write_stereo_wav(
+                        float_samples_iter=_iter_interleaved_stereo_chunks(
+                            mixed_interleaved,
+                        ),
+                        output_path=wav_path,
+                        sample_rate_hz=source_rate_hz,
+                        bit_depth=output_bit_depth,
+                    )
+            elif plugin_chain_enabled:
                 if capture_execute_trace and source_extension in _FFMPEG_EXTENSIONS:
                     if ffmpeg_cmd_for_decode is None:
                         raise RenderRunRefusalError(
@@ -1068,12 +1148,16 @@ def build_render_report_with_audio(
         report_job["status"] = "completed"
         report_job["output_files"] = output_files
         target_layout_id = _coerce_str(job.get("target_layout_id")).strip() or _STEREO_LAYOUT_ID
-        report_notes = [
-            "reason: rendered",
-            f"source_file: {source_path.resolve().as_posix()}",
-            "source_layout_id: LAYOUT.2_0",
-            f"target_layout_id: {target_layout_id}",
-        ]
+        report_notes = ["reason: rendered"]
+        if mix_inputs_active:
+            report_notes.append(f"source_files: {len(source_input_paths)}")
+            report_notes.append("source_layout_id: LAYOUT.2_0")
+            report_notes.append(f"target_layout_id: {target_layout_id}")
+            report_notes.extend(mix_inputs_report_notes)
+        else:
+            report_notes.append(f"source_file: {source_path.resolve().as_posix()}")
+            report_notes.append("source_layout_id: LAYOUT.2_0")
+            report_notes.append(f"target_layout_id: {target_layout_id}")
         if plugin_chain_enabled:
             report_notes.append("macro_mix applied as linear blend.")
             precision_mode = (
@@ -1089,7 +1173,7 @@ def build_render_report_with_audio(
         qa_job_rows.append(
             {
                 "job_id": job_id,
-                "input_paths": [source_path.resolve()],
+                "input_paths": list(source_input_paths),
                 "output_paths": output_paths,
             }
         )
@@ -1103,7 +1187,7 @@ def build_render_report_with_audio(
             execute_job_rows.append(
                 {
                     "job_id": job_id,
-                    "input_paths": [source_path.resolve()],
+                    "input_paths": list(source_input_paths),
                     "output_paths": output_paths,
                     "ffmpeg_version": resolve_ffmpeg_version(ffmpeg_cmd_for_trace),
                     "ffmpeg_commands": ffmpeg_command_rows,
@@ -1168,6 +1252,398 @@ def _coerce_float(value: Any) -> float | None:
     return None
 
 
+def _mix_inputs_from_request(
+    request_payload: dict[str, Any],
+) -> list[dict[str, Any]] | None:
+    options = _coerce_dict(request_payload.get("options"))
+    if "mix_inputs" not in options:
+        return None
+
+    raw_mix_inputs = options.get("mix_inputs")
+    if not isinstance(raw_mix_inputs, list) or not raw_mix_inputs:
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+            message="options.mix_inputs must be a non-empty array when provided.",
+        )
+
+    normalized: list[dict[str, Any]] = []
+    allowed_keys = {"path", "gain_db", "pan", "mute", "role"}
+    for index, raw_input in enumerate(raw_mix_inputs, start=1):
+        if not isinstance(raw_input, dict):
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+                message=f"options.mix_inputs[{index}] must be an object.",
+            )
+
+        unknown_keys = sorted(set(raw_input.keys()) - allowed_keys)
+        if unknown_keys:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+                message=(
+                    f"options.mix_inputs[{index}] has unknown key(s): "
+                    f"{', '.join(unknown_keys)}."
+                ),
+            )
+
+        path_text = _coerce_str(raw_input.get("path")).strip()
+        if not path_text:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+                message=f"options.mix_inputs[{index}].path is required.",
+            )
+        if "\\" in path_text:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+                message=(
+                    f"options.mix_inputs[{index}].path must use forward slashes only. "
+                    f"path={path_text!r}"
+                ),
+            )
+
+        gain_db_raw = raw_input.get("gain_db", 0.0)
+        gain_db = _coerce_float(gain_db_raw)
+        if gain_db is None or not math.isfinite(gain_db):
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+                message=f"options.mix_inputs[{index}].gain_db must be a finite number.",
+            )
+
+        pan_raw = raw_input.get("pan", 0.0)
+        pan = _coerce_float(pan_raw)
+        if pan is None or not math.isfinite(pan):
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+                message=f"options.mix_inputs[{index}].pan must be a finite number.",
+            )
+        if pan < -1.0 or pan > 1.0:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+                message=(
+                    f"options.mix_inputs[{index}].pan must be in [-1.0, 1.0]. "
+                    f"pan={pan}"
+                ),
+            )
+
+        mute_raw = raw_input.get("mute", False)
+        if not isinstance(mute_raw, bool):
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+                message=f"options.mix_inputs[{index}].mute must be a boolean.",
+            )
+
+        role: str | None = None
+        if "role" in raw_input:
+            role = _coerce_str(raw_input.get("role")).strip()
+            if not role:
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+                    message=f"options.mix_inputs[{index}].role must be a non-empty string.",
+                )
+            invalid_chars = {
+                char for char in role if char not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._"
+            }
+            if invalid_chars:
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+                    message=(
+                        f"options.mix_inputs[{index}].role must match [A-Z0-9_.]+. "
+                        f"role={role!r}"
+                    ),
+                )
+
+        normalized.append(
+            {
+                "path": path_text,
+                "gain_db": gain_db,
+                "pan": pan,
+                "mute": mute_raw,
+                "role": role,
+            }
+        )
+
+    return normalized
+
+
+def _resolve_request_input_path(
+    *,
+    raw_path: str,
+    scene_anchor: Path | None,
+    report_dir: Path,
+    field_label: str,
+) -> Path:
+    normalized_raw = raw_path.strip()
+    if not normalized_raw:
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+            message=f"{field_label} is missing.",
+        )
+
+    normalized = normalized_raw.replace("\\", "/")
+    pure = PurePosixPath(normalized)
+    if _is_absolute_posix_path(normalized):
+        return Path(normalized)
+
+    relative_parts = [part for part in pure.parts if part not in {"", "."}]
+    relative_path = Path(*relative_parts) if relative_parts else Path("mix.wav")
+    if scene_anchor is not None:
+        return scene_anchor / relative_path
+    return report_dir / relative_path
+
+
+def _resolve_mix_inputs_with_metadata_or_raise(
+    *,
+    mix_inputs: list[dict[str, Any]],
+    scene_anchor: Path | None,
+    report_dir: Path,
+) -> tuple[list[dict[str, Any]], int, int | None]:
+    resolved_inputs: list[dict[str, Any]] = []
+    expected_rate_hz: int | None = None
+    expected_rate_path: str | None = None
+    preferred_bit_depth: int | None = None
+
+    for index, mix_input in enumerate(mix_inputs, start=1):
+        input_path = _resolve_request_input_path(
+            raw_path=_coerce_str(mix_input.get("path")),
+            scene_anchor=scene_anchor,
+            report_dir=report_dir,
+            field_label=f"options.mix_inputs[{index}].path",
+        )
+        if not input_path.exists() or not input_path.is_file():
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_SOURCE_MISSING,
+                message=(
+                    "options.mix_inputs entry points to a missing source file. "
+                    f"index={index}, path={input_path.resolve().as_posix()}"
+                ),
+            )
+
+        metadata = _read_source_metadata_or_raise(input_path)
+        _validate_source_layout_or_raise(metadata)
+        sample_rate_hz = _coerce_int(metadata.get("sample_rate_hz"))
+        if sample_rate_hz is None:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_DECODE_FAILED,
+                message=(
+                    "options.mix_inputs entry is missing sample_rate_hz metadata. "
+                    f"index={index}, path={input_path.resolve().as_posix()}"
+                ),
+            )
+
+        if expected_rate_hz is None:
+            expected_rate_hz = sample_rate_hz
+            expected_rate_path = input_path.resolve().as_posix()
+        elif sample_rate_hz != expected_rate_hz:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_MIX_INPUT_SAMPLE_RATE_MISMATCH,
+                message=(
+                    "options.mix_inputs sample rates must match exactly "
+                    "(resampling is not supported). "
+                    f"expected={expected_rate_hz} at {expected_rate_path}, "
+                    f"found={sample_rate_hz} at {input_path.resolve().as_posix()}"
+                ),
+            )
+
+        bit_depth = _coerce_int(metadata.get("bits_per_sample"))
+        if preferred_bit_depth is None and bit_depth in _BIT_DEPTHS:
+            preferred_bit_depth = bit_depth
+
+        resolved_input = dict(mix_input)
+        resolved_input["path"] = input_path
+        resolved_input["sample_rate_hz"] = sample_rate_hz
+        resolved_input["bits_per_sample"] = bit_depth
+        resolved_input["needs_ffmpeg_decode"] = (
+            input_path.suffix.lower() in _FFMPEG_EXTENSIONS
+        )
+        resolved_inputs.append(resolved_input)
+
+    if expected_rate_hz is None:
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+            message="options.mix_inputs must include at least one source entry.",
+        )
+    return resolved_inputs, expected_rate_hz, preferred_bit_depth
+
+
+def _mix_input_channel_gains(
+    *,
+    gain_db: float,
+    pan: float,
+    mute: bool,
+) -> tuple[float, float]:
+    if mute:
+        return 0.0, 0.0
+    linear_gain = math.pow(10.0, gain_db / 20.0)
+    pan_radians = (pan + 1.0) * (math.pi / 4.0)
+    return (
+        linear_gain * math.cos(pan_radians),
+        linear_gain * math.sin(pan_radians),
+    )
+
+
+def _mix_inputs_headroom_gain(mix_inputs: list[dict[str, Any]]) -> float:
+    left_sum = 0.0
+    right_sum = 0.0
+    for mix_input in mix_inputs:
+        left_gain, right_gain = _mix_input_channel_gains(
+            gain_db=float(mix_input.get("gain_db", 0.0)),
+            pan=float(mix_input.get("pan", 0.0)),
+            mute=bool(mix_input.get("mute", False)),
+        )
+        left_sum += abs(left_gain)
+        right_sum += abs(right_gain)
+    limiter = max(1.0, left_sum, right_sum)
+    return 1.0 / limiter
+
+
+def _read_stereo_source_interleaved_samples(
+    path: Path,
+    *,
+    ffmpeg_cmd: Sequence[str] | None,
+) -> list[float]:
+    extension = path.suffix.lower()
+    float_samples_iter: Iterator[list[float]]
+    if extension in _WAV_EXTENSIONS:
+        float_samples_iter = iter_wav_float64_samples(
+            path,
+            error_context="render-run mix_inputs decode",
+        )
+    elif extension in _FFMPEG_EXTENSIONS:
+        if ffmpeg_cmd is None:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
+                message="ffmpeg is required to decode non-WAV source audio.",
+            )
+        float_samples_iter = iter_ffmpeg_float64_samples(path, ffmpeg_cmd)
+    else:
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_SOURCE_FORMAT_UNSUPPORTED,
+            message=(
+                "Unsupported source extension for options.mix_inputs. "
+                f"path={path.resolve().as_posix()}"
+            ),
+        )
+
+    interleaved: list[float] = []
+    for chunk in float_samples_iter:
+        if len(chunk) % 2 != 0:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_DECODE_FAILED,
+                message="Decoded sample stream is not frame-aligned for stereo.",
+            )
+        if chunk:
+            interleaved.extend(chunk)
+    return interleaved
+
+
+def _mix_inputs_interleaved_samples_or_raise(
+    *,
+    mix_inputs: list[dict[str, Any]],
+    ffmpeg_cmd_for_decode: Sequence[str] | None,
+) -> tuple[list[float], float]:
+    mixed_interleaved: list[float] = []
+    for mix_input in mix_inputs:
+        input_path = mix_input.get("path")
+        if not isinstance(input_path, Path):
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+                message="Internal mix_inputs path normalization failed.",
+            )
+        source_interleaved = _read_stereo_source_interleaved_samples(
+            input_path,
+            ffmpeg_cmd=ffmpeg_cmd_for_decode,
+        )
+        if len(source_interleaved) > len(mixed_interleaved):
+            mixed_interleaved.extend([0.0] * (len(source_interleaved) - len(mixed_interleaved)))
+
+        left_gain, right_gain = _mix_input_channel_gains(
+            gain_db=float(mix_input.get("gain_db", 0.0)),
+            pan=float(mix_input.get("pan", 0.0)),
+            mute=bool(mix_input.get("mute", False)),
+        )
+        for offset in range(0, len(source_interleaved), 2):
+            mixed_interleaved[offset] += source_interleaved[offset] * left_gain
+            mixed_interleaved[offset + 1] += source_interleaved[offset + 1] * right_gain
+
+    headroom_gain = _mix_inputs_headroom_gain(mix_inputs)
+    if headroom_gain < 1.0:
+        for index, sample in enumerate(mixed_interleaved):
+            mixed_interleaved[index] = sample * headroom_gain
+    return mixed_interleaved, headroom_gain
+
+
+def _iter_interleaved_stereo_chunks(
+    float_samples: list[float],
+    *,
+    frames_per_chunk: int = 4096,
+) -> Iterator[list[float]]:
+    if frames_per_chunk <= 0:
+        raise ValueError("frames_per_chunk must be positive.")
+    chunk_size = frames_per_chunk * 2
+    for start in range(0, len(float_samples), chunk_size):
+        yield float_samples[start : start + chunk_size]
+
+
+def _mix_inputs_decode_command_rows(
+    *,
+    mix_inputs: list[dict[str, Any]],
+    ffmpeg_cmd_for_decode: Sequence[str] | None,
+) -> list[dict[str, Any]]:
+    command_rows: list[dict[str, Any]] = []
+    for mix_input in mix_inputs:
+        if not bool(mix_input.get("needs_ffmpeg_decode")):
+            continue
+        if ffmpeg_cmd_for_decode is None:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
+                message="ffmpeg is required to decode non-WAV source audio.",
+            )
+        input_path = mix_input.get("path")
+        if not isinstance(input_path, Path):
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+                message="Internal mix_inputs path normalization failed.",
+            )
+        command_rows.append(
+            {
+                "args": build_ffmpeg_decode_command(
+                    input_path,
+                    ffmpeg_cmd_for_decode,
+                ),
+                "determinism_flags": [],
+            }
+        )
+    return command_rows
+
+
+def _mix_inputs_report_notes(
+    *,
+    mix_inputs: list[dict[str, Any]],
+    headroom_gain: float,
+) -> list[str]:
+    notes: list[str] = [
+        "mix_inputs_headroom_policy: max-channel-sum limiter (1 / max(1, sum(abs(channel_gain))))",
+        f"mix_inputs_headroom_gain: {headroom_gain:.12f}",
+    ]
+    for index, mix_input in enumerate(mix_inputs, start=1):
+        input_path = mix_input.get("path")
+        if isinstance(input_path, Path):
+            path_text = input_path.resolve().as_posix()
+        else:
+            path_text = _coerce_str(mix_input.get("path")).strip()
+        gain_db = float(mix_input.get("gain_db", 0.0))
+        pan = float(mix_input.get("pan", 0.0))
+        mute = bool(mix_input.get("mute", False))
+        role = _coerce_str(mix_input.get("role")).strip()
+        note = (
+            f"mix_input[{index}]: path={path_text}, "
+            f"gain_db={gain_db:.6f}, pan={pan:.6f}, mute={str(mute).lower()}"
+        )
+        if role:
+            note = f"{note}, role={role}"
+        notes.append(note)
+    return notes
+
+
 def _plugin_chain_from_request(
     request_payload: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[str]]:
@@ -1200,6 +1676,8 @@ def _render_wav_with_plugin_chain(
     ffmpeg_cmd_for_decode: Sequence[str] | None,
     max_theoretical_quality: bool,
     force_float64_default: bool,
+    source_samples_interleaved: list[float] | None = None,
+    source_evidence_paths: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     try:
         import numpy as np
@@ -1222,14 +1700,33 @@ def _render_wav_with_plugin_chain(
     processing_dtype_name = "float64" if use_float64_processing else "float32"
     processing_dtype = np.float64 if use_float64_processing else np.float32
 
-    stereo_samples = _read_stereo_source_samples(
-        source_path,
-        ffmpeg_cmd=ffmpeg_cmd_for_decode,
-        dtype=processing_dtype,
-    )
+    source_where: list[str] = []
+    if source_samples_interleaved is None:
+        stereo_samples = _read_stereo_source_samples(
+            source_path,
+            ffmpeg_cmd=ffmpeg_cmd_for_decode,
+            dtype=processing_dtype,
+        )
+        source_where = [source_path.resolve().as_posix()]
+    else:
+        if len(source_samples_interleaved) % 2 != 0:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_DECODE_FAILED,
+                message="Decoded sample stream is not frame-aligned for stereo.",
+            )
+        stereo_samples = np.asarray(
+            source_samples_interleaved,
+            dtype=processing_dtype,
+        ).reshape(-1, 2)
+        source_where = [
+            _coerce_str(path).strip()
+            for path in (source_evidence_paths or [])
+            if _coerce_str(path).strip()
+        ]
+        if not source_where:
+            source_where = [source_path.resolve().as_posix()]
     frame_count = int(stereo_samples.shape[0])
 
-    source_posix = source_path.resolve().as_posix()
     output_posix = output_path.resolve().as_posix()
     step_events: list[dict[str, Any]] = [
         {
@@ -1240,11 +1737,11 @@ def _render_wav_with_plugin_chain(
                 "Loaded stereo source into "
                 f"{processing_dtype_name} buffer for deterministic plugin execution."
             ),
-            "where": [source_posix],
+            "where": source_where,
             "confidence": None,
             "evidence": {
                 "codes": ["RENDER.RUN.PLUGIN.SOURCE_LOADED"],
-                "paths": [source_posix],
+                "paths": source_where,
                 "metrics": [
                     {"name": "channel_count", "value": 2},
                     {"name": "frame_count", "value": frame_count},
@@ -1302,7 +1799,7 @@ def _render_wav_with_plugin_chain(
                 "scope": "render",
                 "what": evidence_collector.stage_what,
                 "why": evidence_collector.stage_why,
-                "where": [source_posix, stage_token],
+                "where": [*source_where, stage_token],
                 "confidence": None,
                 "evidence": stage_evidence,
             },

@@ -354,6 +354,38 @@ class TestRenderRequestSchema(unittest.TestCase):
         errors = list(self.validator.iter_errors(payload))
         self.assertGreater(len(errors), 0)
 
+    def test_mix_inputs_shape_validates(self) -> None:
+        payload = dict(MINIMAL_RENDER_REQUEST)
+        payload["options"] = {
+            "mix_inputs": [
+                {
+                    "path": "stems/vocal.wav",
+                    "gain_db": -3.0,
+                    "pan": -0.25,
+                    "mute": False,
+                    "role": "STEM.VOCAL",
+                },
+                {
+                    "path": "stems/music.wav",
+                },
+            ]
+        }
+        errors = list(self.validator.iter_errors(payload))
+        self.assertEqual(errors, [])
+
+    def test_mix_inputs_additional_properties_rejected(self) -> None:
+        payload = dict(MINIMAL_RENDER_REQUEST)
+        payload["options"] = {
+            "mix_inputs": [
+                {
+                    "path": "stems/vocal.wav",
+                    "junk": True,
+                },
+            ]
+        }
+        errors = list(self.validator.iter_errors(payload))
+        self.assertGreater(len(errors), 0)
+
     def test_invalid_max_theoretical_quality_type_rejected(self) -> None:
         payload = dict(MINIMAL_RENDER_REQUEST)
         payload["options"] = {"max_theoretical_quality": "yes"}

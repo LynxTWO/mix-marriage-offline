@@ -1751,6 +1751,138 @@ class TestRenderRunAudioExecution(unittest.TestCase):
             self.assertIn("mix_b.wav", stderr)
             self.assertFalse(report_out.exists())
 
+    def test_mix_inputs_renders_deterministically_and_preserves_ordering(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            fixtures_dir = temp_path / "fixtures"
+            first_path = fixtures_dir / "music_fixture.wav"
+            second_path = fixtures_dir / "vocal_fixture.wav"
+            _write_pcm16_two_tone_wav(
+                first_path,
+                channels=2,
+                sample_rate_hz=48000,
+                duration_s=0.05,
+            )
+            _write_pcm16_wav(
+                second_path,
+                channels=2,
+                sample_rate_hz=48000,
+                duration_s=0.05,
+            )
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                    "mix_inputs": [
+                        {
+                            "path": first_path.resolve().as_posix(),
+                            "gain_db": -2.5,
+                            "pan": -0.4,
+                            "mute": False,
+                            "role": "STEM.MUSIC",
+                        },
+                        {
+                            "path": second_path.resolve().as_posix(),
+                            "gain_db": 0.0,
+                            "pan": 0.2,
+                            "mute": False,
+                            "role": "STEM.VOCAL",
+                        },
+                    ],
+                },
+            }
+
+            exit_a, _, stderr_a, _, report_out_a = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+            )
+            self.assertEqual(exit_a, 0, msg=stderr_a)
+            report_bytes_a = report_out_a.read_bytes()
+            report_a = json.loads(report_out_a.read_text(encoding="utf-8"))
+            rendered_path_a = Path(report_a["jobs"][0]["output_files"][0]["file_path"])
+            wav_bytes_a = rendered_path_a.read_bytes()
+
+            notes_a = [str(note) for note in report_a["jobs"][0].get("notes", [])]
+            ordered_mix_notes = [
+                note for note in notes_a if note.startswith("mix_input[")
+            ]
+            self.assertEqual(len(ordered_mix_notes), 2)
+            self.assertIn(first_path.resolve().as_posix(), ordered_mix_notes[0])
+            self.assertIn(second_path.resolve().as_posix(), ordered_mix_notes[1])
+
+            exit_b, _, stderr_b, _, report_out_b = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=["--force"],
+            )
+            self.assertEqual(exit_b, 0, msg=stderr_b)
+            report_bytes_b = report_out_b.read_bytes()
+            report_b = json.loads(report_out_b.read_text(encoding="utf-8"))
+            rendered_path_b = Path(report_b["jobs"][0]["output_files"][0]["file_path"])
+            wav_bytes_b = rendered_path_b.read_bytes()
+
+            self.assertEqual(report_bytes_a, report_bytes_b)
+            self.assertEqual(wav_bytes_a, wav_bytes_b)
+
+    def test_mix_inputs_sample_rate_mismatch_refusal_is_stable(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            fixtures_dir = temp_path / "fixtures"
+            first_path = fixtures_dir / "first_48k.wav"
+            second_path = fixtures_dir / "second_44k1.wav"
+            _write_pcm16_wav(
+                first_path,
+                channels=2,
+                sample_rate_hz=48000,
+                duration_s=0.05,
+            )
+            _write_pcm16_wav(
+                second_path,
+                channels=2,
+                sample_rate_hz=44100,
+                duration_s=0.05,
+            )
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                    "mix_inputs": [
+                        {
+                            "path": first_path.resolve().as_posix(),
+                        },
+                        {
+                            "path": second_path.resolve().as_posix(),
+                        },
+                    ],
+                },
+            }
+
+            rc_a, _, err_a, _, report_a = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+            )
+            rc_b, _, err_b, _, report_b = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=["--force"],
+            )
+
+            self.assertEqual(rc_a, 1)
+            self.assertEqual(rc_b, 1)
+            self.assertEqual(err_a, err_b)
+            self.assertFalse(report_a.exists())
+            self.assertFalse(report_b.exists())
+            self.assertIn("ISSUE.RENDER.RUN.MIX_INPUT_SAMPLE_RATE_MISMATCH", err_a)
+            self.assertIn("resampling is not supported", err_a)
+
 
 class TestRenderRunExecuteArtifact(unittest.TestCase):
     def test_execute_artifact_and_wav_are_byte_identical_across_runs(self) -> None:
