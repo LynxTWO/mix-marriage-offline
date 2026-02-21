@@ -72,6 +72,11 @@ _SPECTRAL_SECTION_RANGES: dict[str, tuple[float, float]] = {
 _DEFAULT_THRESHOLDS: dict[str, float] = {
     "polarity_error_correlation_lte": -0.6,
     "correlation_warn_lte": -0.2,
+    "true_peak_warn_dbtp_gt": -2.0,
+    "true_peak_error_dbtp_gt": -1.0,
+    "lra_warn_lu_lte": 1.5,
+    "lra_warn_lu_gte": 18.0,
+    "lra_error_lu_gte": 24.0,
     "plugin_delta_lufs_warn_abs": 2.0,
     "plugin_delta_lufs_error_abs": 4.0,
     "plugin_delta_crest_warn_abs": 3.0,
@@ -979,6 +984,96 @@ def _build_qa_issues(
                         threshold=0,
                     )
                 )
+
+            true_peak_dbtp = _coerce_float(metrics.get("true_peak_dbtp"))
+            if true_peak_dbtp is not None:
+                if true_peak_dbtp > thresholds["true_peak_error_dbtp_gt"]:
+                    issues.append(
+                        _issue(
+                            issue_id="ISSUE.RENDER.QA.TRUE_PEAK_EXCESSIVE",
+                            severity="error",
+                            message=(
+                                "Rendered output true-peak exceeds the configured "
+                                "error threshold."
+                            ),
+                            job_id=job_id,
+                            output_path=output_path,
+                            metric="true_peak_dbtp",
+                            value=_round_or_none(true_peak_dbtp),
+                            threshold=_round_or_none(
+                                thresholds["true_peak_error_dbtp_gt"]
+                            ),
+                        )
+                    )
+                elif true_peak_dbtp > thresholds["true_peak_warn_dbtp_gt"]:
+                    issues.append(
+                        _issue(
+                            issue_id="ISSUE.RENDER.QA.TRUE_PEAK_HIGH",
+                            severity="warn",
+                            message=(
+                                "Rendered output true-peak exceeds the configured "
+                                "warning threshold."
+                            ),
+                            job_id=job_id,
+                            output_path=output_path,
+                            metric="true_peak_dbtp",
+                            value=_round_or_none(true_peak_dbtp),
+                            threshold=_round_or_none(
+                                thresholds["true_peak_warn_dbtp_gt"]
+                            ),
+                        )
+                    )
+
+            loudness_range_lu = _coerce_float(metrics.get("loudness_range_lu"))
+            if loudness_range_lu is not None:
+                if loudness_range_lu >= thresholds["lra_error_lu_gte"]:
+                    issues.append(
+                        _issue(
+                            issue_id="ISSUE.RENDER.QA.LRA_EXCESSIVE",
+                            severity="error",
+                            message=(
+                                "Rendered output loudness range exceeds the configured "
+                                "error threshold."
+                            ),
+                            job_id=job_id,
+                            output_path=output_path,
+                            metric="loudness_range_lu",
+                            value=_round_or_none(loudness_range_lu),
+                            threshold=_round_or_none(thresholds["lra_error_lu_gte"]),
+                        )
+                    )
+                elif loudness_range_lu >= thresholds["lra_warn_lu_gte"]:
+                    issues.append(
+                        _issue(
+                            issue_id="ISSUE.RENDER.QA.LRA_HIGH",
+                            severity="warn",
+                            message=(
+                                "Rendered output loudness range exceeds the configured "
+                                "warning threshold."
+                            ),
+                            job_id=job_id,
+                            output_path=output_path,
+                            metric="loudness_range_lu",
+                            value=_round_or_none(loudness_range_lu),
+                            threshold=_round_or_none(thresholds["lra_warn_lu_gte"]),
+                        )
+                    )
+                elif loudness_range_lu <= thresholds["lra_warn_lu_lte"]:
+                    issues.append(
+                        _issue(
+                            issue_id="ISSUE.RENDER.QA.LRA_LOW",
+                            severity="warn",
+                            message=(
+                                "Rendered output loudness range is below the configured "
+                                "warning threshold."
+                            ),
+                            job_id=job_id,
+                            output_path=output_path,
+                            metric="loudness_range_lu",
+                            value=_round_or_none(loudness_range_lu),
+                            threshold=_round_or_none(thresholds["lra_warn_lu_lte"]),
+                        )
+                    )
 
     if plugin_chain_used:
         for job in jobs:

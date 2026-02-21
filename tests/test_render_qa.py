@@ -35,13 +35,14 @@ def _write_stereo_pcm16_wav(
     *,
     sample_rate_hz: int = 48000,
     duration_s: float = 1.0,
+    frequency_hz: float = 220.0,
     left_scale: float = 0.35,
     right_scale: float = 0.35,
 ) -> None:
     frames = max(1, int(sample_rate_hz * duration_s))
     samples: list[int] = []
     for frame_index in range(frames):
-        base = math.sin(2.0 * math.pi * 220.0 * frame_index / sample_rate_hz)
+        base = math.sin(2.0 * math.pi * frequency_hz * frame_index / sample_rate_hz)
         left = int(max(-1.0, min(1.0, base * left_scale)) * 32767.0)
         right = int(max(-1.0, min(1.0, base * right_scale)) * 32767.0)
         samples.extend([left, right])
@@ -196,6 +197,82 @@ class TestRenderQABuilder(unittest.TestCase):
             if isinstance(issue, dict)
         ]
         self.assertIn("ISSUE.RENDER.QA.POLARITY_RISK", issue_ids)
+        self.assertTrue(render_qa_has_error_issues(payload))
+
+    def test_true_peak_excessive_produces_error_issue(self) -> None:
+        temp_root = (REPO_ROOT / "sandbox_tmp" / "test_render_qa").resolve()
+        temp_root.mkdir(parents=True, exist_ok=True)
+        temp_path = temp_root / "true_peak"
+        shutil.rmtree(temp_path, ignore_errors=True)
+        temp_path.mkdir(parents=True, exist_ok=True)
+        try:
+            input_path = temp_path / "input.wav"
+            output_path = temp_path / "output.wav"
+            _write_stereo_pcm16_wav(
+                input_path,
+                left_scale=0.35,
+                right_scale=0.35,
+                frequency_hz=220.0,
+            )
+            _write_stereo_pcm16_wav(
+                output_path,
+                left_scale=1.0,
+                right_scale=1.0,
+                frequency_hz=19000.0,
+            )
+
+            payload = build_render_qa_payload(
+                request_payload={
+                    "schema_version": "0.1.0",
+                    "target_layout_id": "LAYOUT.2_0",
+                    "scene_path": "scene.json",
+                    "options": {"dry_run": False},
+                },
+                plan_payload={
+                    "schema_version": "0.1.0",
+                    "plan_id": "PLAN.render.qa.00000003",
+                    "jobs": [{"job_id": "JOB.001"}],
+                    "targets": ["TARGET.STEREO.2_0"],
+                },
+                report_payload={
+                    "schema_version": "0.1.0",
+                    "request": {
+                        "target_layout_id": "LAYOUT.2_0",
+                        "scene_path": "scene.json",
+                    },
+                    "jobs": [
+                        {
+                            "job_id": "JOB.001",
+                            "status": "completed",
+                            "output_files": [
+                                {
+                                    "file_path": output_path.resolve().as_posix(),
+                                    "format": "wav",
+                                },
+                            ],
+                        }
+                    ],
+                    "policies_applied": {},
+                    "qa_gates": {"status": "not_run", "gates": []},
+                },
+                job_rows=[
+                    {
+                        "job_id": "JOB.001",
+                        "input_paths": [input_path],
+                        "output_paths": [output_path],
+                    }
+                ],
+                plugin_chain_used=False,
+            )
+        finally:
+            shutil.rmtree(temp_path, ignore_errors=True)
+
+        issue_ids = [
+            issue.get("issue_id")
+            for issue in payload.get("issues", [])
+            if isinstance(issue, dict) and issue.get("severity") == "error"
+        ]
+        self.assertIn("ISSUE.RENDER.QA.TRUE_PEAK_EXCESSIVE", issue_ids)
         self.assertTrue(render_qa_has_error_issues(payload))
 
 

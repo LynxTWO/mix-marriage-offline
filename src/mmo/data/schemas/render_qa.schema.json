@@ -364,6 +364,11 @@
       "required": [
         "polarity_error_correlation_lte",
         "correlation_warn_lte",
+        "true_peak_warn_dbtp_gt",
+        "true_peak_error_dbtp_gt",
+        "lra_warn_lu_lte",
+        "lra_warn_lu_gte",
+        "lra_error_lu_gte",
         "plugin_delta_lufs_warn_abs",
         "plugin_delta_lufs_error_abs",
         "plugin_delta_crest_warn_abs",
@@ -374,6 +379,21 @@
           "type": "number"
         },
         "correlation_warn_lte": {
+          "type": "number"
+        },
+        "true_peak_warn_dbtp_gt": {
+          "type": "number"
+        },
+        "true_peak_error_dbtp_gt": {
+          "type": "number"
+        },
+        "lra_warn_lu_lte": {
+          "type": "number"
+        },
+        "lra_warn_lu_gte": {
+          "type": "number"
+        },
+        "lra_error_lu_gte": {
           "type": "number"
         },
         "plugin_delta_lufs_warn_abs": {

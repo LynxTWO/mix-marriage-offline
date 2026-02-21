@@ -332,6 +332,11 @@ class TestProjectValidateRenderArtifacts(unittest.TestCase):
             "thresholds": {
                 "polarity_error_correlation_lte": -0.6,
                 "correlation_warn_lte": -0.2,
+                "true_peak_warn_dbtp_gt": -2.0,
+                "true_peak_error_dbtp_gt": -1.0,
+                "lra_warn_lu_lte": 1.5,
+                "lra_warn_lu_gte": 18.0,
+                "lra_error_lu_gte": 24.0,
                 "plugin_delta_lufs_warn_abs": 2.0,
                 "plugin_delta_lufs_error_abs": 4.0,
                 "plugin_delta_crest_warn_abs": 3.0,

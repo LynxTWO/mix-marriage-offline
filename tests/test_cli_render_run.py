@@ -210,6 +210,30 @@ def _write_pcm16_anti_phase_stereo_wav(
         handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
 
 
+def _write_pcm16_hot_stereo_wav(
+    path: Path,
+    *,
+    sample_rate_hz: int = 48000,
+    duration_s: float = 1.0,
+    frequency_hz: float = 19000.0,
+) -> None:
+    frames = max(1, int(sample_rate_hz * duration_s))
+    samples: list[int] = []
+    for frame_index in range(frames):
+        value = int(
+            1.0
+            * 32767.0
+            * math.sin(2.0 * math.pi * frequency_hz * frame_index / sample_rate_hz)
+        )
+        samples.extend([value, value])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate_hz)
+        handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+
+
 def _pcm16_abs_peak(path: Path) -> int:
     with wave.open(str(path), "rb") as handle:
         sample_width = handle.getsampwidth()
@@ -1222,6 +1246,39 @@ class TestRenderRunQAArtifact(unittest.TestCase):
                 if isinstance(issue, dict) and issue.get("severity") == "error"
             ]
             self.assertIn("ISSUE.RENDER.QA.POLARITY_RISK", error_ids)
+
+    def test_qa_enforce_returns_exit_two_on_true_peak_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            _write_pcm16_hot_stereo_wav(stems_dir / "mix.wav", duration_s=1.0)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {"dry_run": False},
+            }
+            qa_out = temp_path / "render_qa.json"
+            exit_code, _, stderr, _, _ = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--qa-out", str(qa_out),
+                    "--qa-enforce",
+                ],
+            )
+            self.assertEqual(exit_code, 2, msg=stderr)
+            self.assertTrue(qa_out.is_file())
+            payload = json.loads(qa_out.read_text(encoding="utf-8"))
+            issues = payload.get("issues", [])
+            error_ids = [
+                issue.get("issue_id")
+                for issue in issues
+                if isinstance(issue, dict) and issue.get("severity") == "error"
+            ]
+            self.assertIn("ISSUE.RENDER.QA.TRUE_PEAK_EXCESSIVE", error_ids)
 
 class TestRenderRunDeterminism(unittest.TestCase):
     def test_byte_identical_plan_and_report_across_runs(self) -> None:

@@ -73,7 +73,35 @@ def _write_stereo_tone_wav(path: Path, *, rate: int = 48000, duration_s: float =
         handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
 
 
-def _prepare_single_stereo_source(project_dir: Path, *, anti_phase: bool = False) -> None:
+def _write_hot_stereo_wav(
+    path: Path,
+    *,
+    rate: int = 48000,
+    duration_s: float = 1.0,
+    frequency_hz: float = 19000.0,
+) -> None:
+    import math
+    import struct
+
+    frames = max(1, int(rate * duration_s))
+    samples: list[int] = []
+    for frame_index in range(frames):
+        value = int(1.0 * 32767.0 * math.sin(2.0 * math.pi * frequency_hz * frame_index / rate))
+        samples.extend([value, value])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(2)
+        handle.setframerate(rate)
+        handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
+
+
+def _prepare_single_stereo_source(
+    project_dir: Path,
+    *,
+    anti_phase: bool = False,
+    hot: bool = False,
+) -> None:
     scene_path = project_dir / "drafts" / "scene.draft.json"
     stems_dir = project_dir / "stems"
     if scene_path.is_file():
@@ -92,6 +120,8 @@ def _prepare_single_stereo_source(project_dir: Path, *, anti_phase: bool = False
     source_path = stems_dir / "mix.wav"
     if anti_phase:
         _write_anti_phase_wav(source_path)
+    elif hot:
+        _write_hot_stereo_wav(source_path)
     else:
         _write_stereo_tone_wav(source_path)
 
@@ -553,6 +583,41 @@ class TestProjectRenderRunQA(unittest.TestCase):
             if isinstance(issue, dict) and issue.get("severity") == "error"
         ]
         self.assertIn("ISSUE.RENDER.QA.POLARITY_RISK", error_ids)
+
+    def test_qa_enforce_returns_exit_two_on_true_peak_error(self) -> None:
+        project_dir = _init_project(_SANDBOX / "qa_true_peak_error")
+        _project_render_init(project_dir, target_layout="LAYOUT.2_0")
+        _prepare_single_stereo_source(project_dir, hot=True)
+
+        request_path = project_dir / "renders" / "render_request.json"
+        request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+        options = request_payload.get("options")
+        if not isinstance(options, dict):
+            options = {}
+        options["dry_run"] = False
+        request_payload["options"] = options
+        request_payload.pop("routing_plan_path", None)
+        request_path.write_text(
+            json.dumps(request_payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        qa_path = project_dir / "renders" / "render_qa.json"
+        exit_code, _, stderr = _run_project_render_run(
+            project_dir,
+            qa=True,
+            qa_enforce=True,
+        )
+        self.assertEqual(exit_code, 2, msg=stderr)
+        self.assertTrue(qa_path.is_file())
+        payload = json.loads(qa_path.read_text(encoding="utf-8"))
+        issues = payload.get("issues", [])
+        error_ids = [
+            issue.get("issue_id")
+            for issue in issues
+            if isinstance(issue, dict) and issue.get("severity") == "error"
+        ]
+        self.assertIn("ISSUE.RENDER.QA.TRUE_PEAK_EXCESSIVE", error_ids)
 
 
 class TestProjectRenderRunForwardSlashPaths(unittest.TestCase):
