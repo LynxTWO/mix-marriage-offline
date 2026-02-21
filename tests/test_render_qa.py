@@ -131,6 +131,8 @@ class TestRenderQABuilder(unittest.TestCase):
         self.assertIn("short_term_lufs_p50", output_metrics)
         output_spectral = payload_a["jobs"][0]["outputs"][0]["spectral"]
         self.assertIn("section_tilt_db_per_oct", output_spectral)
+        self.assertIn("adjacent_band_slopes_db_per_oct", output_spectral)
+        self.assertIn("section_subband_slopes_db_per_oct", output_spectral)
         self.assertFalse(render_qa_has_error_issues(payload_a))
 
     def test_polarity_risk_produces_error_issue(self) -> None:

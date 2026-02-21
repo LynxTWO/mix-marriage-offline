@@ -190,6 +190,62 @@
         }
       }
     },
+    "spectral_band_slope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "low_hz",
+        "high_hz",
+        "slope_db_per_oct"
+      ],
+      "properties": {
+        "low_hz": {
+          "type": "number"
+        },
+        "high_hz": {
+          "type": "number"
+        },
+        "slope_db_per_oct": {
+          "$ref": "#/$defs/float_or_null"
+        }
+      }
+    },
+    "spectral_section_subband_slopes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sub_bass_low_end",
+        "low_midrange",
+        "midrange_high_mid",
+        "highs_treble"
+      ],
+      "properties": {
+        "sub_bass_low_end": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/spectral_band_slope"
+          }
+        },
+        "low_midrange": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/spectral_band_slope"
+          }
+        },
+        "midrange_high_mid": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/spectral_band_slope"
+          }
+        },
+        "highs_treble": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/spectral_band_slope"
+          }
+        }
+      }
+    },
     "spectral": {
       "type": "object",
       "additionalProperties": false,
@@ -197,7 +253,9 @@
         "centers_hz",
         "levels_db",
         "tilt_db_per_oct",
-        "section_tilt_db_per_oct"
+        "section_tilt_db_per_oct",
+        "adjacent_band_slopes_db_per_oct",
+        "section_subband_slopes_db_per_oct"
       ],
       "properties": {
         "centers_hz": {
@@ -219,6 +277,15 @@
         },
         "section_tilt_db_per_oct": {
           "$ref": "#/$defs/spectral_section_tilt"
+        },
+        "adjacent_band_slopes_db_per_oct": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/spectral_band_slope"
+          }
+        },
+        "section_subband_slopes_db_per_oct": {
+          "$ref": "#/$defs/spectral_section_subband_slopes"
         }
       }
     },

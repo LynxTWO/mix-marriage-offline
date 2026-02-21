@@ -214,6 +214,13 @@ def _empty_spectral() -> dict[str, Any]:
             "midrange_high_mid": None,
             "highs_treble": None,
         },
+        "adjacent_band_slopes_db_per_oct": [],
+        "section_subband_slopes_db_per_oct": {
+            "sub_bass_low_end": [],
+            "low_midrange": [],
+            "midrange_high_mid": [],
+            "highs_treble": [],
+        },
     }
 
 
@@ -481,6 +488,81 @@ def _spectral_tilt_slope(
     return covariance / variance
 
 
+def _band_pair_slope_db_per_oct(
+    *,
+    low_hz: float,
+    high_hz: float,
+    low_level_db: float | None,
+    high_level_db: float | None,
+) -> float | None:
+    if (
+        low_hz <= 0.0
+        or high_hz <= 0.0
+        or high_hz <= low_hz
+        or low_level_db is None
+        or high_level_db is None
+    ):
+        return None
+    if not math.isfinite(low_level_db) or not math.isfinite(high_level_db):
+        return None
+    octaves = math.log2(high_hz / low_hz)
+    if abs(octaves) <= _EPSILON:
+        return None
+    return round((high_level_db - low_level_db) / octaves, 4)
+
+
+def _adjacent_band_slopes(
+    *,
+    centers_hz: Sequence[float],
+    levels_db: Sequence[float | None],
+) -> list[dict[str, Any]]:
+    slopes: list[dict[str, Any]] = []
+    for index in range(len(centers_hz) - 1):
+        low_hz = float(centers_hz[index])
+        high_hz = float(centers_hz[index + 1])
+        slope = _band_pair_slope_db_per_oct(
+            low_hz=low_hz,
+            high_hz=high_hz,
+            low_level_db=levels_db[index],
+            high_level_db=levels_db[index + 1],
+        )
+        slopes.append(
+            {
+                "low_hz": low_hz,
+                "high_hz": high_hz,
+                "slope_db_per_oct": slope,
+            }
+        )
+    return slopes
+
+
+def _section_subband_slopes(
+    *,
+    centers_hz: Sequence[float],
+    levels_db: Sequence[float | None],
+) -> dict[str, list[dict[str, Any]]]:
+    all_slopes = _adjacent_band_slopes(centers_hz=centers_hz, levels_db=levels_db)
+    section_payload: dict[str, list[dict[str, Any]]] = {}
+    for section_id, (low_hz, high_hz) in _SPECTRAL_SECTION_RANGES.items():
+        section_rows: list[dict[str, Any]] = []
+        for row in all_slopes:
+            row_low_hz = _coerce_float(row.get("low_hz"))
+            row_high_hz = _coerce_float(row.get("high_hz"))
+            if row_low_hz is None or row_high_hz is None:
+                continue
+            if row_low_hz < low_hz or row_high_hz > high_hz:
+                continue
+            section_rows.append(
+                {
+                    "low_hz": row_low_hz,
+                    "high_hz": row_high_hz,
+                    "slope_db_per_oct": row.get("slope_db_per_oct"),
+                }
+            )
+        section_payload[section_id] = section_rows
+    return section_payload
+
+
 def _compute_spectral_metrics(frames: Any, *, sample_rate_hz: int, np_module: Any) -> dict[str, Any]:
     spectral = _empty_spectral()
     if frames.size == 0 or sample_rate_hz <= 0:
@@ -557,6 +639,14 @@ def _compute_spectral_metrics(frames: Any, *, sample_rate_hz: int, np_module: An
     spectral["levels_db"] = levels_db
     spectral["tilt_db_per_oct"] = _round_or_none(full_tilt)
     spectral["section_tilt_db_per_oct"] = section_tilts
+    spectral["adjacent_band_slopes_db_per_oct"] = _adjacent_band_slopes(
+        centers_hz=_SPECTRAL_BAND_CENTERS_HZ,
+        levels_db=levels_db,
+    )
+    spectral["section_subband_slopes_db_per_oct"] = _section_subband_slopes(
+        centers_hz=_SPECTRAL_BAND_CENTERS_HZ,
+        levels_db=levels_db,
+    )
     return spectral
 
 

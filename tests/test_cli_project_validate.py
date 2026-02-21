@@ -380,6 +380,19 @@ class TestProjectValidateRenderArtifacts(unittest.TestCase):
                                 "midrange_high_mid": -0.2,
                                 "highs_treble": -0.6,
                             },
+                            "adjacent_band_slopes_db_per_oct": [
+                                {"low_hz": 16.0, "high_hz": 20.0, "slope_db_per_oct": 6.4386},
+                                {"low_hz": 20.0, "high_hz": 25.0, "slope_db_per_oct": 6.4386},
+                            ],
+                            "section_subband_slopes_db_per_oct": {
+                                "sub_bass_low_end": [
+                                    {"low_hz": 16.0, "high_hz": 20.0, "slope_db_per_oct": 6.4386},
+                                    {"low_hz": 20.0, "high_hz": 25.0, "slope_db_per_oct": 6.4386},
+                                ],
+                                "low_midrange": [],
+                                "midrange_high_mid": [],
+                                "highs_treble": [],
+                            },
                         },
                         "polarity_risk": False,
                     },
@@ -418,6 +431,19 @@ class TestProjectValidateRenderArtifacts(unittest.TestCase):
                                     "low_midrange": 0.3,
                                     "midrange_high_mid": -0.3,
                                     "highs_treble": -0.7,
+                                },
+                                "adjacent_band_slopes_db_per_oct": [
+                                    {"low_hz": 16.0, "high_hz": 20.0, "slope_db_per_oct": 6.4386},
+                                    {"low_hz": 20.0, "high_hz": 25.0, "slope_db_per_oct": 6.4386},
+                                ],
+                                "section_subband_slopes_db_per_oct": {
+                                    "sub_bass_low_end": [
+                                        {"low_hz": 16.0, "high_hz": 20.0, "slope_db_per_oct": 6.4386},
+                                        {"low_hz": 20.0, "high_hz": 25.0, "slope_db_per_oct": 6.4386},
+                                    ],
+                                    "low_midrange": [],
+                                    "midrange_high_mid": [],
+                                    "highs_treble": [],
                                 },
                             },
                             "polarity_risk": False,
