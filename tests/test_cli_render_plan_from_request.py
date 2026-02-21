@@ -95,6 +95,18 @@ def _request_with_explicit_target_ids(scene_path: str) -> dict:
     }
 
 
+def _request_with_stereo_target_variants(scene_path: str) -> dict:
+    return {
+        "schema_version": "0.1.0",
+        "target_layout_ids": ["LAYOUT.2_0"],
+        "scene_path": scene_path,
+        "options": {
+            "target_ids": ["TARGET.STEREO.2_0_ALT", "TARGET.STEREO.2_0"],
+            "output_formats": ["wav"],
+        },
+    }
+
+
 def _routing_plan() -> dict:
     return {
         "schema_version": "0.1.0",
@@ -709,6 +721,42 @@ class TestRenderPlanFromRequestMultiTarget(unittest.TestCase):
             self.assertEqual(jobs[0]["resolved_target_id"], "TARGET.STEREO.2_0")
             self.assertEqual(jobs[1]["target_layout_id"], "LAYOUT.7_1")
             self.assertEqual(jobs[1]["resolved_target_id"], "TARGET.SURROUND.7_1")
+
+    def test_explicit_stereo_target_variants_emit_distinct_jobs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            stems_dir.mkdir()
+
+            scene_path = temp_path / "scene.json"
+            request_path = temp_path / "render_request.json"
+            out_path = temp_path / "render_plan.json"
+
+            scene_posix = scene_path.resolve().as_posix()
+            _write_json(scene_path, _minimal_scene(stems_dir.resolve().as_posix()))
+            _write_json(request_path, _request_with_stereo_target_variants(scene_posix))
+
+            exit_code = main([
+                "render-plan", "plan",
+                "--request", str(request_path),
+                "--scene", str(scene_path),
+                "--out", str(out_path),
+            ])
+            self.assertEqual(exit_code, 0)
+
+            payload = json.loads(out_path.read_text(encoding="utf-8"))
+            jobs = payload["jobs"]
+            self.assertEqual(len(jobs), 2)
+            self.assertEqual(jobs[0]["target_layout_id"], "LAYOUT.2_0")
+            self.assertEqual(jobs[1]["target_layout_id"], "LAYOUT.2_0")
+            self.assertEqual(jobs[0]["resolved_target_id"], "TARGET.STEREO.2_0")
+            self.assertEqual(jobs[1]["resolved_target_id"], "TARGET.STEREO.2_0_ALT")
+
+            output_paths = [
+                jobs[0]["outputs"][0]["path"],
+                jobs[1]["outputs"][0]["path"],
+            ]
+            self.assertEqual(len(set(output_paths)), 2)
 
 
 if __name__ == "__main__":

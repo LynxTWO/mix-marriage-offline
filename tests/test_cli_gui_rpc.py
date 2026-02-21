@@ -302,9 +302,13 @@ class TestGuiRpcProjectRenderRun(unittest.TestCase):
             preflight_force: bool = False,
             execute_out_path: Path | None = None,
             execute_force: bool = False,
+            qa_out_path: Path | None = None,
+            qa_force: bool = False,
+            qa_enforce: bool = False,
         ) -> int:
             del repo_root, request_path, scene_path, routing_plan_path
             del force, event_log_force, preflight_force, execute_force
+            del qa_out_path, qa_force, qa_enforce
             plan_out_path.parent.mkdir(parents=True, exist_ok=True)
             plan_out_path.write_text(
                 json.dumps(

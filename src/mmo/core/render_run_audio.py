@@ -520,13 +520,12 @@ def build_render_report_with_audio(
     capture_execute_trace: bool = False,
 ) -> tuple[
     dict[str, Any],
-    dict[str, Any] | None,
     list[dict[str, Any]],
-    dict[str, Any],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
 ]:
     """Render stereo deliverables and return report/execute/plugin/qa trace payloads."""
-    job = _single_stereo_job_or_raise(plan_payload)
-    job_id = _coerce_str(job.get("job_id")).strip() or "JOB.001"
+    jobs = _stereo_jobs_or_raise(plan_payload)
     source_path = _resolve_single_source_or_raise(scene_payload)
     source_metadata = _read_source_metadata_or_raise(source_path)
     _validate_source_layout_or_raise(source_metadata)
@@ -561,9 +560,6 @@ def build_render_report_with_audio(
         requested_bit_depth=_coerce_int(options.get("bit_depth")),
         source_bit_depth=_coerce_int(source_metadata.get("bits_per_sample")),
     )
-    output_formats = _job_output_formats_or_raise(job)
-
-    planned_outputs = _planned_outputs_by_format(job)
     scene_anchor = _scene_anchor_root(
         request_scene_path=_coerce_str(request_payload.get("scene_path")),
         scene_path=scene_path,
@@ -571,266 +567,308 @@ def build_render_report_with_audio(
     report_dir = report_out_path.resolve().parent
     plugin_chain, plugin_chain_notes = _plugin_chain_from_request(request_payload)
     plugin_chain_enabled = bool(plugin_chain)
-    plugin_step_events: list[dict[str, Any]] = []
-
-    wav_path: Path
-    keep_wav_output = "wav" in output_formats
-    wav_candidate = planned_outputs.get("wav")
-    if isinstance(wav_candidate, str) and wav_candidate:
-        wav_path = _resolve_output_path(
-            raw_path=wav_candidate,
-            scene_anchor=scene_anchor,
-            report_dir=report_dir,
-        )
-    elif keep_wav_output:
-        wav_path = _fallback_output_path(
-            report_dir=report_dir,
-            job_id=job_id,
-            output_format="wav",
-        )
-    else:
-        wav_path = _intermediate_wav_path(
-            report_dir=report_dir,
-            job_id=job_id,
-        )
-
-    ffmpeg_cmd_for_decode: Sequence[str] | None = None
-    ffmpeg_cmd_for_encode: Sequence[str] | None = None
-    source_extension = source_path.suffix.lower()
-    needs_ffmpeg_decode = source_extension in _FFMPEG_EXTENSIONS
-    needs_ffmpeg_encode = any(fmt != "wav" for fmt in output_formats)
-    needs_ffmpeg_for_trace = keep_wav_output and capture_execute_trace
-    if needs_ffmpeg_decode or needs_ffmpeg_encode or needs_ffmpeg_for_trace:
-        ffmpeg_cmd_for_decode = resolve_ffmpeg_cmd()
-        ffmpeg_cmd_for_encode = ffmpeg_cmd_for_decode
-        if ffmpeg_cmd_for_decode is None:
-            raise RenderRunRefusalError(
-                issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
-                message=(
-                    "ffmpeg is required for requested render-run operation "
-                    "(decode and/or encode lossless non-WAV audio, "
-                    "or deterministic execution tracing)."
-                ),
-            )
-
-    ffmpeg_command_rows: list[dict[str, Any]] = []
-
-    try:
-        if plugin_chain_enabled:
-            if capture_execute_trace and source_extension in _FFMPEG_EXTENSIONS:
-                if ffmpeg_cmd_for_decode is None:
-                    raise RenderRunRefusalError(
-                        issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
-                        message="ffmpeg is required to decode non-WAV source audio.",
-                    )
-                ffmpeg_command_rows.append(
-                    {
-                        "args": build_ffmpeg_decode_command(source_path, ffmpeg_cmd_for_decode),
-                        "determinism_flags": [],
-                    }
-                )
-            plugin_step_events = _render_wav_with_plugin_chain(
-                source_path=source_path,
-                output_path=wav_path,
-                sample_rate_hz=source_rate_hz,
-                bit_depth=output_bit_depth,
-                plugin_chain=plugin_chain,
-                ffmpeg_cmd_for_decode=ffmpeg_cmd_for_decode,
-                max_theoretical_quality=max_theoretical_quality,
-            )
-        else:
-            float_samples_iter: Iterator[list[float]]
-            if source_extension in _WAV_EXTENSIONS:
-                float_samples_iter = iter_wav_float64_samples(
-                    source_path,
-                    error_context="render-run stereo downmix",
-                )
-            else:
-                if ffmpeg_cmd_for_decode is None:
-                    raise RenderRunRefusalError(
-                        issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
-                        message="ffmpeg is required to decode non-WAV source audio.",
-                    )
-                if capture_execute_trace:
-                    ffmpeg_command_rows.append(
-                        {
-                            "args": build_ffmpeg_decode_command(source_path, ffmpeg_cmd_for_decode),
-                            "determinism_flags": [],
-                        }
-                    )
-                float_samples_iter = iter_ffmpeg_float64_samples(
-                    source_path,
-                    ffmpeg_cmd_for_decode,
-                )
-
-            _write_stereo_wav(
-                float_samples_iter=float_samples_iter,
-                output_path=wav_path,
-                sample_rate_hz=source_rate_hz,
-                bit_depth=output_bit_depth,
-            )
-    except RenderRunRefusalError:
-        raise
-    except ValueError as exc:
-        raise RenderRunRefusalError(
-            issue_id=ISSUE_RENDER_RUN_DECODE_FAILED,
-            message=f"Failed to decode and render source audio: {exc}",
-        ) from exc
-
-    output_files: list[dict[str, Any]] = []
-    try:
-        if keep_wav_output and capture_execute_trace:
-            if ffmpeg_cmd_for_encode is None:
-                raise RenderRunRefusalError(
-                    issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
-                    message=(
-                        "ffmpeg is required to normalize WAV output metadata "
-                        "for deterministic execution tracing."
-                    ),
-                )
-            _normalize_wav_for_determinism(
-                ffmpeg_cmd=ffmpeg_cmd_for_encode,
-                wav_path=wav_path,
-                bit_depth=output_bit_depth,
-                command_rows=ffmpeg_command_rows,
-            )
-
-        if keep_wav_output:
-            output_files.append(
-                _output_file_payload(
-                    output_path=wav_path,
-                    output_format="wav",
-                    sample_rate_hz=source_rate_hz,
-                    bit_depth=output_bit_depth,
-                )
-            )
-
-        for output_format in output_formats:
-            if output_format == "wav":
-                continue
-            target_path = _resolve_output_path(
-                raw_path=planned_outputs.get(output_format, ""),
-                scene_anchor=scene_anchor,
-                report_dir=report_dir,
-                fallback=_fallback_output_path(
-                    report_dir=report_dir,
-                    job_id=_coerce_str(job.get("job_id")).strip() or "JOB.001",
-                    output_format=output_format,
-                ),
-            )
-            try:
-                if ffmpeg_cmd_for_encode is None:
-                    raise RenderRunRefusalError(
-                        issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
-                        message="ffmpeg is required to encode non-WAV deliverables.",
-                    )
-                transcode_command_rows: list[list[str]] | None = []
-                if not capture_execute_trace:
-                    transcode_command_rows = None
-                transcode_wav_to_format(
-                    ffmpeg_cmd_for_encode,
-                    wav_path,
-                    target_path,
-                    output_format,
-                    command_recorder=transcode_command_rows,
-                )
-                if transcode_command_rows:
-                    ffmpeg_command_rows.append(
-                        {
-                            "args": transcode_command_rows[-1],
-                            "determinism_flags": list(
-                                ffmpeg_determinism_flags(for_wav=False)
-                            ),
-                        }
-                    )
-            except RenderRunRefusalError:
-                raise
-            except ValueError as exc:
-                raise RenderRunRefusalError(
-                    issue_id=ISSUE_RENDER_RUN_ENCODE_FAILED,
-                    message=f"Failed to encode {output_format} deliverable: {exc}",
-                ) from exc
-            output_files.append(
-                _output_file_payload(
-                    output_path=target_path,
-                    output_format=output_format,
-                    sample_rate_hz=source_rate_hz,
-                    bit_depth=output_bit_depth,
-                )
-            )
-    finally:
-        if not keep_wav_output:
-            try:
-                if wav_path.exists():
-                    wav_path.unlink()
-            except OSError:
-                # Keep deterministic behavior: refusal path should be from prior stable error.
-                pass
-
-    output_files.sort(key=lambda item: _output_sort_key(_coerce_str(item.get("format"))))
-
     report_payload = build_render_report_from_plan(
         plan_payload,
         status="completed",
         reason="rendered",
     )
     report_jobs = report_payload.get("jobs")
-    if not isinstance(report_jobs, list) or len(report_jobs) != 1:
+    if not isinstance(report_jobs, list):
         raise RenderRunRefusalError(
             issue_id=ISSUE_RENDER_RUN_DOWNMIX_SCOPE_UNSUPPORTED,
-            message="Expected exactly one report job for stereo render-run execution.",
+            message="Expected report jobs list for stereo render-run execution.",
         )
-    report_job = report_jobs[0]
-    if not isinstance(report_job, dict):
-        raise RenderRunRefusalError(
-            issue_id=ISSUE_RENDER_RUN_DOWNMIX_SCOPE_UNSUPPORTED,
-            message="Expected report job payload to be an object.",
-        )
-    report_job["status"] = "completed"
-    report_job["output_files"] = output_files
-    report_notes = [
-        "reason: rendered",
-        f"source_file: {source_path.resolve().as_posix()}",
-        "source_layout_id: LAYOUT.2_0",
-        "target_layout_id: LAYOUT.2_0",
-    ]
-    if plugin_chain_enabled:
-        report_notes.append("macro_mix applied as linear blend.")
-        precision_mode = "float64" if max_theoretical_quality else "float32"
-        report_notes.append(f"plugin_chain_precision_mode: {precision_mode}")
-    for note in plugin_chain_notes:
-        report_notes.append(f"plugin_chain_note: {note}")
-    report_job["notes"] = report_notes
+    report_jobs_by_id: dict[str, dict[str, Any]] = {}
+    for report_job in report_jobs:
+        if not isinstance(report_job, dict):
+            continue
+        report_job_id = _coerce_str(report_job.get("job_id")).strip()
+        if not report_job_id:
+            continue
+        report_jobs_by_id[report_job_id] = report_job
 
-    output_paths = _output_paths_from_rows(output_files)
-    if not output_paths:
-        raise RenderRunRefusalError(
-            issue_id=ISSUE_RENDER_RUN_ENCODE_FAILED,
-            message="No output paths were produced for render-run execution.",
-        )
+    execute_job_rows: list[dict[str, Any]] = []
+    qa_job_rows: list[dict[str, Any]] = []
+    plugin_step_events: list[dict[str, Any]] = []
+    seen_output_paths: set[str] = set()
 
-    qa_job_row: dict[str, Any] = {
-        "job_id": job_id,
-        "input_paths": [source_path.resolve()],
-        "output_paths": output_paths,
-    }
+    for job in jobs:
+        job_id = _coerce_str(job.get("job_id")).strip() or "JOB.001"
+        output_formats = _job_output_formats_or_raise(job)
+        planned_outputs = _planned_outputs_by_format(job)
 
-    execute_job_row: dict[str, Any] | None = None
-    if capture_execute_trace:
-        ffmpeg_cmd_for_trace = ffmpeg_cmd_for_encode or ffmpeg_cmd_for_decode
-        if ffmpeg_cmd_for_trace is None:
-            raise RenderRunRefusalError(
-                issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
-                message="ffmpeg is required to capture deterministic execute traces.",
+        wav_path: Path
+        keep_wav_output = "wav" in output_formats
+        wav_candidate = planned_outputs.get("wav")
+        if isinstance(wav_candidate, str) and wav_candidate:
+            wav_path = _resolve_output_path(
+                raw_path=wav_candidate,
+                scene_anchor=scene_anchor,
+                report_dir=report_dir,
             )
-        execute_job_row = {
-            "job_id": job_id,
-            "input_paths": [source_path.resolve()],
-            "output_paths": output_paths,
-            "ffmpeg_version": resolve_ffmpeg_version(ffmpeg_cmd_for_trace),
-            "ffmpeg_commands": ffmpeg_command_rows,
-        }
-    return report_payload, execute_job_row, plugin_step_events, qa_job_row
+        elif keep_wav_output:
+            wav_path = _fallback_output_path(
+                report_dir=report_dir,
+                job_id=job_id,
+                output_format="wav",
+            )
+        else:
+            wav_path = _intermediate_wav_path(
+                report_dir=report_dir,
+                job_id=job_id,
+            )
+
+        ffmpeg_cmd_for_decode: Sequence[str] | None = None
+        ffmpeg_cmd_for_encode: Sequence[str] | None = None
+        source_extension = source_path.suffix.lower()
+        needs_ffmpeg_decode = source_extension in _FFMPEG_EXTENSIONS
+        needs_ffmpeg_encode = any(fmt != "wav" for fmt in output_formats)
+        needs_ffmpeg_for_trace = keep_wav_output and capture_execute_trace
+        if needs_ffmpeg_decode or needs_ffmpeg_encode or needs_ffmpeg_for_trace:
+            ffmpeg_cmd_for_decode = resolve_ffmpeg_cmd()
+            ffmpeg_cmd_for_encode = ffmpeg_cmd_for_decode
+            if ffmpeg_cmd_for_decode is None:
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
+                    message=(
+                        "ffmpeg is required for requested render-run operation "
+                        "(decode and/or encode lossless non-WAV audio, "
+                        "or deterministic execution tracing)."
+                    ),
+                )
+
+        ffmpeg_command_rows: list[dict[str, Any]] = []
+        job_plugin_step_events: list[dict[str, Any]] = []
+
+        try:
+            if plugin_chain_enabled:
+                if capture_execute_trace and source_extension in _FFMPEG_EXTENSIONS:
+                    if ffmpeg_cmd_for_decode is None:
+                        raise RenderRunRefusalError(
+                            issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
+                            message="ffmpeg is required to decode non-WAV source audio.",
+                        )
+                    ffmpeg_command_rows.append(
+                        {
+                            "args": build_ffmpeg_decode_command(
+                                source_path,
+                                ffmpeg_cmd_for_decode,
+                            ),
+                            "determinism_flags": [],
+                        }
+                    )
+                job_plugin_step_events = _render_wav_with_plugin_chain(
+                    source_path=source_path,
+                    output_path=wav_path,
+                    sample_rate_hz=source_rate_hz,
+                    bit_depth=output_bit_depth,
+                    plugin_chain=plugin_chain,
+                    ffmpeg_cmd_for_decode=ffmpeg_cmd_for_decode,
+                    max_theoretical_quality=max_theoretical_quality,
+                )
+            else:
+                float_samples_iter: Iterator[list[float]]
+                if source_extension in _WAV_EXTENSIONS:
+                    float_samples_iter = iter_wav_float64_samples(
+                        source_path,
+                        error_context="render-run stereo downmix",
+                    )
+                else:
+                    if ffmpeg_cmd_for_decode is None:
+                        raise RenderRunRefusalError(
+                            issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
+                            message="ffmpeg is required to decode non-WAV source audio.",
+                        )
+                    if capture_execute_trace:
+                        ffmpeg_command_rows.append(
+                            {
+                                "args": build_ffmpeg_decode_command(
+                                    source_path,
+                                    ffmpeg_cmd_for_decode,
+                                ),
+                                "determinism_flags": [],
+                            }
+                        )
+                    float_samples_iter = iter_ffmpeg_float64_samples(
+                        source_path,
+                        ffmpeg_cmd_for_decode,
+                    )
+
+                _write_stereo_wav(
+                    float_samples_iter=float_samples_iter,
+                    output_path=wav_path,
+                    sample_rate_hz=source_rate_hz,
+                    bit_depth=output_bit_depth,
+                )
+        except RenderRunRefusalError:
+            raise
+        except ValueError as exc:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_DECODE_FAILED,
+                message=f"Failed to decode and render source audio: {exc}",
+            ) from exc
+
+        output_files: list[dict[str, Any]] = []
+        try:
+            if keep_wav_output and capture_execute_trace:
+                if ffmpeg_cmd_for_encode is None:
+                    raise RenderRunRefusalError(
+                        issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
+                        message=(
+                            "ffmpeg is required to normalize WAV output metadata "
+                            "for deterministic execution tracing."
+                        ),
+                    )
+                _normalize_wav_for_determinism(
+                    ffmpeg_cmd=ffmpeg_cmd_for_encode,
+                    wav_path=wav_path,
+                    bit_depth=output_bit_depth,
+                    command_rows=ffmpeg_command_rows,
+                )
+
+            if keep_wav_output:
+                output_files.append(
+                    _output_file_payload(
+                        output_path=wav_path,
+                        output_format="wav",
+                        sample_rate_hz=source_rate_hz,
+                        bit_depth=output_bit_depth,
+                    )
+                )
+
+            for output_format in output_formats:
+                if output_format == "wav":
+                    continue
+                target_path = _resolve_output_path(
+                    raw_path=planned_outputs.get(output_format, ""),
+                    scene_anchor=scene_anchor,
+                    report_dir=report_dir,
+                    fallback=_fallback_output_path(
+                        report_dir=report_dir,
+                        job_id=job_id,
+                        output_format=output_format,
+                    ),
+                )
+                try:
+                    if ffmpeg_cmd_for_encode is None:
+                        raise RenderRunRefusalError(
+                            issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
+                            message="ffmpeg is required to encode non-WAV deliverables.",
+                        )
+                    transcode_command_rows: list[list[str]] | None = []
+                    if not capture_execute_trace:
+                        transcode_command_rows = None
+                    transcode_wav_to_format(
+                        ffmpeg_cmd_for_encode,
+                        wav_path,
+                        target_path,
+                        output_format,
+                        command_recorder=transcode_command_rows,
+                    )
+                    if transcode_command_rows:
+                        ffmpeg_command_rows.append(
+                            {
+                                "args": transcode_command_rows[-1],
+                                "determinism_flags": list(
+                                    ffmpeg_determinism_flags(for_wav=False)
+                                ),
+                            }
+                        )
+                except RenderRunRefusalError:
+                    raise
+                except ValueError as exc:
+                    raise RenderRunRefusalError(
+                        issue_id=ISSUE_RENDER_RUN_ENCODE_FAILED,
+                        message=f"Failed to encode {output_format} deliverable: {exc}",
+                    ) from exc
+                output_files.append(
+                    _output_file_payload(
+                        output_path=target_path,
+                        output_format=output_format,
+                        sample_rate_hz=source_rate_hz,
+                        bit_depth=output_bit_depth,
+                    )
+                )
+        finally:
+            if not keep_wav_output:
+                try:
+                    if wav_path.exists():
+                        wav_path.unlink()
+                except OSError:
+                    # Keep deterministic behavior: refusal path should be from prior stable error.
+                    pass
+
+        output_files.sort(key=lambda item: _output_sort_key(_coerce_str(item.get("format"))))
+        output_paths = _output_paths_from_rows(output_files)
+        if not output_paths:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_ENCODE_FAILED,
+                message="No output paths were produced for render-run execution.",
+            )
+        for output_path in output_paths:
+            output_path_key = output_path.resolve().as_posix()
+            if output_path_key in seen_output_paths:
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_DOWNMIX_SCOPE_UNSUPPORTED,
+                    message=(
+                        "render-run requires distinct output paths across stereo jobs. "
+                        f"duplicate_output_path={output_path_key}"
+                    ),
+                )
+            seen_output_paths.add(output_path_key)
+
+        report_job = report_jobs_by_id.get(job_id)
+        if not isinstance(report_job, dict):
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_DOWNMIX_SCOPE_UNSUPPORTED,
+                message=(
+                    "Render report is missing a job entry for executed stereo job. "
+                    f"job_id={job_id}"
+                ),
+            )
+        report_job["status"] = "completed"
+        report_job["output_files"] = output_files
+        target_layout_id = _coerce_str(job.get("target_layout_id")).strip() or _STEREO_LAYOUT_ID
+        report_notes = [
+            "reason: rendered",
+            f"source_file: {source_path.resolve().as_posix()}",
+            "source_layout_id: LAYOUT.2_0",
+            f"target_layout_id: {target_layout_id}",
+        ]
+        if plugin_chain_enabled:
+            report_notes.append("macro_mix applied as linear blend.")
+            precision_mode = "float64" if max_theoretical_quality else "float32"
+            report_notes.append(f"plugin_chain_precision_mode: {precision_mode}")
+        for note in plugin_chain_notes:
+            report_notes.append(f"plugin_chain_note: {note}")
+        report_job["notes"] = report_notes
+
+        qa_job_rows.append(
+            {
+                "job_id": job_id,
+                "input_paths": [source_path.resolve()],
+                "output_paths": output_paths,
+            }
+        )
+        if capture_execute_trace:
+            ffmpeg_cmd_for_trace = ffmpeg_cmd_for_encode or ffmpeg_cmd_for_decode
+            if ffmpeg_cmd_for_trace is None:
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
+                    message="ffmpeg is required to capture deterministic execute traces.",
+                )
+            execute_job_rows.append(
+                {
+                    "job_id": job_id,
+                    "input_paths": [source_path.resolve()],
+                    "output_paths": output_paths,
+                    "ffmpeg_version": resolve_ffmpeg_version(ffmpeg_cmd_for_trace),
+                    "ffmpeg_commands": ffmpeg_command_rows,
+                }
+            )
+        plugin_step_events.extend(job_plugin_step_events)
+
+    return report_payload, execute_job_rows, plugin_step_events, qa_job_rows
 
 
 def _coerce_str(value: Any) -> str:
@@ -1409,73 +1447,78 @@ def _float_samples_to_pcm_bytes(float_samples: Any, bit_depth: int) -> bytes:
     )
 
 
-def _single_stereo_job_or_raise(plan_payload: dict[str, Any]) -> dict[str, Any]:
+def _stereo_jobs_or_raise(plan_payload: dict[str, Any]) -> list[dict[str, Any]]:
     jobs = plan_payload.get("jobs")
-    if not isinstance(jobs, list) or len(jobs) != 1:
+    if not isinstance(jobs, list) or not jobs:
         job_count = len(jobs) if isinstance(jobs, list) else 0
         raise RenderRunRefusalError(
             issue_id=ISSUE_RENDER_RUN_DOWNMIX_SCOPE_UNSUPPORTED,
             message=(
-                "PR52 render-run supports exactly one job "
-                "(single source stereo -> stereo target). "
+                "PR71 render-run requires at least one stereo job. "
                 f"job_count={job_count}"
             ),
         )
-    job = jobs[0]
-    if not isinstance(job, dict):
-        raise RenderRunRefusalError(
-            issue_id=ISSUE_RENDER_RUN_DOWNMIX_SCOPE_UNSUPPORTED,
-            message="PR52 render-run supports only object job entries.",
-        )
 
-    target_layout_id = _coerce_str(job.get("target_layout_id")).strip()
-    if target_layout_id != _STEREO_LAYOUT_ID:
-        raise RenderRunRefusalError(
-            issue_id=ISSUE_RENDER_RUN_DOWNMIX_SCOPE_UNSUPPORTED,
-            message=(
-                "PR52 render-run only supports stereo targets. "
-                f"target_layout_id={target_layout_id or '(missing)'}"
-            ),
-        )
-
-    routing_plan_path = _coerce_str(job.get("routing_plan_path")).strip()
-    if routing_plan_path:
-        raise RenderRunRefusalError(
-            issue_id=ISSUE_RENDER_RUN_DOWNMIX_SCOPE_UNSUPPORTED,
-            message=(
-                "PR52 render-run does not support routing_plan_path yet. "
-                f"routing_plan_path={routing_plan_path}"
-            ),
-        )
-
-    downmix_routes = job.get("downmix_routes")
-    if isinstance(downmix_routes, list) and downmix_routes:
-        first_route = downmix_routes[0]
-        if not isinstance(first_route, dict):
+    normalized_jobs: list[dict[str, Any]] = []
+    for index, job in enumerate(jobs, start=1):
+        if not isinstance(job, dict):
             raise RenderRunRefusalError(
                 issue_id=ISSUE_RENDER_RUN_DOWNMIX_SCOPE_UNSUPPORTED,
-                message="PR52 render-run requires object downmix_routes entries.",
+                message="PR71 render-run supports only object job entries.",
             )
-        route_from = _coerce_str(first_route.get("from_layout_id")).strip()
-        route_to = _coerce_str(first_route.get("to_layout_id")).strip()
-        route_kind = _coerce_str(first_route.get("kind")).strip()
-        if route_from != _STEREO_LAYOUT_ID or route_to != _STEREO_LAYOUT_ID:
+        job_id = _coerce_str(job.get("job_id")).strip() or f"JOB.{index:03d}"
+
+        target_layout_id = _coerce_str(job.get("target_layout_id")).strip()
+        if target_layout_id != _STEREO_LAYOUT_ID:
             raise RenderRunRefusalError(
                 issue_id=ISSUE_RENDER_RUN_DOWNMIX_SCOPE_UNSUPPORTED,
                 message=(
-                    "PR52 render-run supports only identity stereo routes. "
-                    f"route={route_from or '(missing)'}->{route_to or '(missing)'}"
+                    "PR71 render-run only supports stereo target variants. "
+                    f"job_id={job_id}, target_layout_id={target_layout_id or '(missing)'}"
                 ),
             )
-        if route_kind and route_kind != "direct":
+
+        routing_plan_path = _coerce_str(job.get("routing_plan_path")).strip()
+        if routing_plan_path:
             raise RenderRunRefusalError(
                 issue_id=ISSUE_RENDER_RUN_DOWNMIX_SCOPE_UNSUPPORTED,
                 message=(
-                    "PR52 render-run supports only direct stereo routes. "
-                    f"route_kind={route_kind}"
+                    "PR71 render-run does not support routing_plan_path yet. "
+                    f"job_id={job_id}, routing_plan_path={routing_plan_path}"
                 ),
             )
-    return job
+
+        downmix_routes = job.get("downmix_routes")
+        if isinstance(downmix_routes, list) and downmix_routes:
+            first_route = downmix_routes[0]
+            if not isinstance(first_route, dict):
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_DOWNMIX_SCOPE_UNSUPPORTED,
+                    message="PR71 render-run requires object downmix_routes entries.",
+                )
+            route_from = _coerce_str(first_route.get("from_layout_id")).strip()
+            route_to = _coerce_str(first_route.get("to_layout_id")).strip()
+            route_kind = _coerce_str(first_route.get("kind")).strip()
+            if route_from != _STEREO_LAYOUT_ID or route_to != _STEREO_LAYOUT_ID:
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_DOWNMIX_SCOPE_UNSUPPORTED,
+                    message=(
+                        "PR71 render-run supports only identity stereo routes. "
+                        f"job_id={job_id}, route={route_from or '(missing)'}->{route_to or '(missing)'}"
+                    ),
+                )
+            if route_kind and route_kind != "direct":
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_DOWNMIX_SCOPE_UNSUPPORTED,
+                    message=(
+                        "PR71 render-run supports only direct stereo routes. "
+                        f"job_id={job_id}, route_kind={route_kind}"
+                    ),
+                )
+        normalized_jobs.append(job)
+
+    normalized_jobs.sort(key=lambda item: _coerce_str(item.get("job_id")).strip())
+    return normalized_jobs
 
 
 def _resolve_single_source_or_raise(scene_payload: dict[str, Any]) -> Path:

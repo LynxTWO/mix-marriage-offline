@@ -7,6 +7,13 @@ targets:
     filename_template: "renders/stereo_2_0/mix.{container}"
     notes:
       - "Objective Core baseline target."
+  - target_id: "TARGET.STEREO.2_0_ALT"
+    layout_id: "LAYOUT.2_0"
+    container: "wav"
+    channel_order_layout_id: "LAYOUT.2_0"
+    filename_template: "renders/stereo_2_0_alt/mix.{container}"
+    notes:
+      - "Objective Core alternate stereo target variant."
   - target_id: "TARGET.SURROUND.5_1"
     layout_id: "LAYOUT.5_1"
     container: "flac"

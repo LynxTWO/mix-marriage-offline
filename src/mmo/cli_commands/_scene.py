@@ -971,9 +971,9 @@ def _run_render_run_command(
     else:
         (
             render_report_payload,
-            execute_job_row,
+            executed_job_rows,
             plugin_step_events,
-            qa_job_row,
+            executed_qa_job_rows,
         ) = build_render_report_with_audio(
             plan_payload=render_plan_payload,
             request_payload=request_payload,
@@ -982,17 +982,19 @@ def _run_render_run_command(
             report_out_path=report_out_path,
             capture_execute_trace=(execute_out_path is not None),
         )
-        if isinstance(execute_job_row, dict):
-            execute_job_rows.append(execute_job_row)
-        if isinstance(qa_job_row, dict):
-            qa_job_rows.append(qa_job_row)
+        for execute_job_row in executed_job_rows:
+            if isinstance(execute_job_row, dict):
+                execute_job_rows.append(execute_job_row)
+        for qa_job_row in executed_qa_job_rows:
+            if isinstance(qa_job_row, dict):
+                qa_job_rows.append(qa_job_row)
         plugin_chain_used = bool(plugin_step_events)
         report_status_note = "status=completed"
         report_reason_note = "reason=rendered"
         report_built_why = (
-            "Rendered deterministic stereo downmix deliverables for supported PR52 scope."
+            "Rendered deterministic stereo target-variant deliverables for supported PR71 scope."
         )
-        completed_why = "Completed render-run stereo downmix deliverable rendering."
+        completed_why = "Completed render-run stereo target-variant deliverable rendering."
 
     _validate_json_payload(
         render_report_payload,

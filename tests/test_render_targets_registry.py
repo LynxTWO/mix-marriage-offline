@@ -31,6 +31,21 @@ class TestRenderTargetsRegistry(unittest.TestCase):
         self.assertEqual(target_ids, sorted(target_ids))
         self.assertEqual(target_ids, ["TARGET.SURROUND.5_1"])
 
+    def test_find_stereo_target_variants_for_layout_is_sorted(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        registry = load_render_targets_registry(repo_root / "ontology" / "render_targets.yaml")
+
+        rows = registry.find_targets_for_layout("LAYOUT.2_0")
+        target_ids = [
+            row.get("target_id")
+            for row in rows
+            if isinstance(row, dict) and isinstance(row.get("target_id"), str)
+        ]
+        self.assertEqual(
+            target_ids,
+            ["TARGET.STEREO.2_0", "TARGET.STEREO.2_0_ALT"],
+        )
+
     def test_get_target_unknown_lists_known_ids_sorted(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         registry = load_render_targets_registry(repo_root / "ontology" / "render_targets.yaml")

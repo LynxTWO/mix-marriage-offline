@@ -1104,6 +1104,73 @@ class TestRenderRunExecuteArtifact(unittest.TestCase):
             self.assertEqual(wav_bytes_a, wav_bytes_b)
             self.assertEqual(execute_a.read_bytes(), execute_b.read_bytes())
 
+    def test_execute_artifact_includes_all_multi_target_stereo_variant_jobs(self) -> None:
+        if resolve_ffmpeg_cmd() is None:
+            self.skipTest("ffmpeg not available")
+
+        execute_validator = _schema_validator("render_execute.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            source_path = stems_dir / "mix.wav"
+            _write_pcm16_wav(source_path, channels=2, duration_s=1.0)
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_ids": ["LAYOUT.2_0"],
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                    "target_ids": [
+                        "TARGET.STEREO.2_0_ALT",
+                        "TARGET.STEREO.2_0",
+                    ],
+                },
+            }
+            execute_out = temp_path / "render_execute.json"
+            exit_code, _, stderr, plan_out, report_out = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=[
+                    "--execute-out", str(execute_out),
+                ],
+            )
+            self.assertEqual(exit_code, 0, msg=stderr)
+            self.assertTrue(execute_out.is_file())
+
+            plan_payload = json.loads(plan_out.read_text(encoding="utf-8"))
+            report_payload = json.loads(report_out.read_text(encoding="utf-8"))
+            execute_payload = json.loads(execute_out.read_text(encoding="utf-8"))
+            execute_validator.validate(execute_payload)
+
+            self.assertEqual(len(plan_payload["jobs"]), 2)
+            self.assertEqual(len(report_payload["jobs"]), 2)
+            self.assertEqual(len(execute_payload["jobs"]), 2)
+
+            report_output_paths = [
+                job["output_files"][0]["file_path"]
+                for job in report_payload["jobs"]
+                if isinstance(job, dict) and isinstance(job.get("output_files"), list) and job["output_files"]
+            ]
+            self.assertEqual(len(report_output_paths), 2)
+            self.assertEqual(len(set(report_output_paths)), 2)
+            for report_output_path in report_output_paths:
+                self.assertTrue(Path(report_output_path).is_file())
+
+            execute_output_paths: list[str] = []
+            for execute_job in execute_payload["jobs"]:
+                outputs = execute_job.get("outputs", [])
+                if not isinstance(outputs, list):
+                    continue
+                for output in outputs:
+                    if isinstance(output, dict):
+                        output_path = output.get("path")
+                        if isinstance(output_path, str):
+                            execute_output_paths.append(output_path)
+            self.assertEqual(sorted(report_output_paths), sorted(execute_output_paths))
+
 
 class TestRenderRunQAArtifact(unittest.TestCase):
     def test_writes_schema_valid_qa_artifact_and_event_step_when_requested(self) -> None:

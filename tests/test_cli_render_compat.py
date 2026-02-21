@@ -314,6 +314,118 @@ class TestRenderCompatCli(unittest.TestCase):
         self.assertEqual(exit_b, 0, msg=err_b)
         self.assertEqual(out_a.read_bytes(), out_b.read_bytes())
 
+    def test_target_id_variants_allow_more_jobs_than_target_layout_ids(self) -> None:
+        temp_path = _fresh_case_dir("target_id_variants_job_count")
+        request_path = temp_path / "render_request.json"
+        plan_path = temp_path / "render_plan.json"
+        report_path = temp_path / "render_report.json"
+
+        request_payload = {
+            "schema_version": "0.1.0",
+            "target_layout_ids": ["LAYOUT.2_0"],
+            "scene_path": "scenes/test/scene.json",
+            "options": {
+                "target_ids": [
+                    "TARGET.STEREO.2_0",
+                    "TARGET.STEREO.2_0_ALT",
+                ]
+            },
+        }
+        plan_payload = {
+            "schema_version": "0.1.0",
+            "plan_id": "PLAN.render.compat.stereo.variants.1234abcd",
+            "scene_path": "scenes/test/scene.json",
+            "targets": ["TARGET.STEREO.2_0", "TARGET.STEREO.2_0_ALT"],
+            "policies": {},
+            "jobs": [
+                {
+                    "job_id": "JOB.001",
+                    "target_id": "TARGET.STEREO.2_0",
+                    "resolved_target_id": "TARGET.STEREO.2_0",
+                    "target_layout_id": "LAYOUT.2_0",
+                    "output_formats": ["wav"],
+                    "contexts": ["render"],
+                    "notes": [],
+                },
+                {
+                    "job_id": "JOB.002",
+                    "target_id": "TARGET.STEREO.2_0_ALT",
+                    "resolved_target_id": "TARGET.STEREO.2_0_ALT",
+                    "target_layout_id": "LAYOUT.2_0",
+                    "output_formats": ["wav"],
+                    "contexts": ["render"],
+                    "notes": [],
+                },
+            ],
+            "request": {
+                "target_layout_ids": ["LAYOUT.2_0"],
+                "scene_path": "scenes/test/scene.json",
+                "options": {
+                    "target_ids": [
+                        "TARGET.STEREO.2_0",
+                        "TARGET.STEREO.2_0_ALT",
+                    ]
+                },
+            },
+            "resolved": {
+                "target_layout_id": "LAYOUT.2_0",
+                "channel_order": ["SPK.L", "SPK.R"],
+            },
+            "resolved_layouts": [
+                {
+                    "target_layout_id": "LAYOUT.2_0",
+                    "channel_order": ["SPK.L", "SPK.R"],
+                }
+            ],
+        }
+        report_payload = {
+            "schema_version": "0.1.0",
+            "request": {
+                "target_layout_ids": ["LAYOUT.2_0"],
+                "scene_path": "scenes/test/scene.json",
+            },
+            "jobs": [
+                {
+                    "job_id": "JOB.001",
+                    "status": "completed",
+                    "output_files": [],
+                    "notes": [
+                        "target_layout_id: LAYOUT.2_0",
+                        "resolved_target_id: TARGET.STEREO.2_0",
+                    ],
+                },
+                {
+                    "job_id": "JOB.002",
+                    "status": "completed",
+                    "output_files": [],
+                    "notes": [
+                        "target_layout_id: LAYOUT.2_0",
+                        "resolved_target_id: TARGET.STEREO.2_0_ALT",
+                    ],
+                },
+            ],
+            "policies_applied": {
+                "downmix_policy_id": None,
+                "gates_policy_id": None,
+                "matrix_id": None,
+            },
+            "qa_gates": {"status": "not_run", "gates": []},
+        }
+
+        _write_json(request_path, request_payload)
+        _write_json(plan_path, plan_payload)
+        _write_json(report_path, report_payload)
+
+        exit_code, stdout, stderr = _run_main([
+            "render-compat",
+            "--request", str(request_path),
+            "--plan", str(plan_path),
+            "--report", str(report_path),
+        ])
+        self.assertEqual(exit_code, 0, msg=stderr)
+        payload = json.loads(stdout)
+        self.assertEqual(payload, {"issues": []})
+
     def test_overwrite_refusal_without_force(self) -> None:
         temp_path = _fresh_case_dir("overwrite")
         request_path = temp_path / "render_request.json"

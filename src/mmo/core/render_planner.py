@@ -145,13 +145,28 @@ def _build_job_outputs(
     output_formats: list[str],
     target_layout_id: str,
     scene_path: str,
+    *,
+    filename_template: str | None = None,
 ) -> list[dict[str, str]]:
     scene_dir = str(PurePosixPath(_to_posix(scene_path)).parent)
     if scene_dir == ".":
         scene_dir = ""
 
-    layout_slug = target_layout_id.replace("LAYOUT.", "").lower()
+    normalized_template = _coerce_str(filename_template).strip()
     outputs: list[dict[str, str]] = []
+    if normalized_template:
+        template = _to_posix(normalized_template).lstrip("/")
+        for fmt in output_formats:
+            output_rel_path = template.replace("{container}", fmt)
+            if scene_dir:
+                path = f"{scene_dir}/{output_rel_path}"
+            else:
+                path = output_rel_path
+            outputs.append({"path": path, "format": fmt})
+        outputs.sort(key=lambda item: item["path"])
+        return outputs
+
+    layout_slug = target_layout_id.replace("LAYOUT.", "").lower()
     for fmt in output_formats:
         if scene_dir:
             path = f"{scene_dir}/renders/{layout_slug}/mix.{fmt}"
@@ -239,6 +254,50 @@ def _resolve_target_for_layout(
     if not candidate_ids:
         return None
     return candidate_ids[0]
+
+
+def _target_filename_template(
+    *,
+    target_id: str | None,
+    render_targets_registry: RenderTargetsRegistry | None,
+) -> str | None:
+    normalized_target_id = _coerce_str(target_id).strip()
+    if not normalized_target_id or render_targets_registry is None:
+        return None
+    try:
+        target = render_targets_registry.get_target(normalized_target_id)
+    except ValueError:
+        return None
+    template = _coerce_str(target.get("filename_template")).strip()
+    if not template:
+        return None
+    return template
+
+
+def _requested_target_specs(
+    *,
+    layout_ids: list[str],
+    requested_target_ids: list[str],
+    render_targets_registry: RenderTargetsRegistry,
+) -> list[tuple[str, str]]:
+    allowed_layout_ids = set(layout_ids)
+    specs: list[tuple[str, str]] = []
+    for target_id in requested_target_ids:
+        target = render_targets_registry.get_target(target_id)
+        layout_id = _coerce_str(target.get("layout_id")).strip()
+        if not layout_id:
+            continue
+        if layout_id not in allowed_layout_ids:
+            raise ValueError(
+                f"Requested target_id {target_id} resolved to unsupported layout_id: {layout_id}. "
+                f"Allowed layout_ids: {', '.join(layout_ids)}"
+            )
+        specs.append((target_id, layout_id))
+    if not specs:
+        raise ValueError(
+            "No requested target_ids resolved to allowed layout_ids."
+        )
+    return specs
 
 
 def _extract_layout_ids(request: dict[str, Any]) -> list[str]:
@@ -564,6 +623,7 @@ def build_render_plan(
         request=request,
         scene=scene,
         layout_ids=layout_ids,
+        requested_target_ids=requested_target_ids,
         scene_path=scene_path,
         output_formats=output_formats,
         downmix_policy_id=downmix_policy_id,
@@ -679,6 +739,7 @@ def _build_multi_target_plan(
     request: dict[str, Any],
     scene: dict[str, Any],
     layout_ids: list[str],
+    requested_target_ids: list[str],
     scene_path: str,
     output_formats: list[str],
     downmix_policy_id: str | None,
@@ -694,31 +755,58 @@ def _build_multi_target_plan(
     job_inputs = _build_job_inputs(scene, routing_plan)
     all_target_ids: list[str] = []
     jobs: list[dict[str, Any]] = []
-    resolved_layouts: list[dict[str, Any]] = []
+    resolved_layouts_by_id: dict[str, dict[str, Any]] = {}
 
-    for idx, layout_id in enumerate(layout_ids):
-        resolved_target_id = _resolve_target_for_layout(
-            layout_id=layout_id,
-            render_targets_registry=render_targets_registry,
-            requested_targets_by_layout=requested_targets_by_layout,
-        )
-        target_id = resolved_target_id or _synthetic_target_id_for_layout(layout_id)
+    target_specs: list[tuple[str, str, str | None]] = []
+    if requested_target_ids:
+        if render_targets_registry is None:
+            raise ValueError(
+                "request.options.target_ids was provided, but no render targets registry is available."
+            )
+        target_specs = [
+            (target_id, layout_id, target_id)
+            for target_id, layout_id in _requested_target_specs(
+                layout_ids=layout_ids,
+                requested_target_ids=requested_target_ids,
+                render_targets_registry=render_targets_registry,
+            )
+        ]
+    else:
+        for layout_id in layout_ids:
+            resolved_target_id = _resolve_target_for_layout(
+                layout_id=layout_id,
+                render_targets_registry=render_targets_registry,
+                requested_targets_by_layout=requested_targets_by_layout,
+            )
+            target_id = resolved_target_id or _synthetic_target_id_for_layout(layout_id)
+            target_specs.append((target_id, layout_id, resolved_target_id))
+
+    for idx, (target_id, layout_id, resolved_target_id) in enumerate(target_specs):
         all_target_ids.append(target_id)
 
         # Resolve layout metadata.
-        if isinstance(layouts, dict) and layouts:
-            resolved = _resolve_layout(layout_id, layouts)
-        else:
-            resolved = {
-                "target_layout_id": layout_id,
-                "channel_order": [f"SPK.CH{i}" for i in range(2)],
-            }
-        resolved["downmix_policy_id"] = downmix_policy_id
-        resolved["gates_policy_id"] = gates_policy_id
-        resolved_layouts.append(resolved)
+        if layout_id not in resolved_layouts_by_id:
+            if isinstance(layouts, dict) and layouts:
+                resolved = _resolve_layout(layout_id, layouts)
+            else:
+                resolved = {
+                    "target_layout_id": layout_id,
+                    "channel_order": [f"SPK.CH{i}" for i in range(2)],
+                }
+            resolved["downmix_policy_id"] = downmix_policy_id
+            resolved["gates_policy_id"] = gates_policy_id
+            resolved_layouts_by_id[layout_id] = resolved
 
         # Build job.
-        job_outputs = _build_job_outputs(output_formats, layout_id, scene_path)
+        job_outputs = _build_job_outputs(
+            output_formats,
+            layout_id,
+            scene_path,
+            filename_template=_target_filename_template(
+                target_id=target_id,
+                render_targets_registry=render_targets_registry,
+            ),
+        )
         notes = _build_job_notes(layout_id, routing_plan_path, downmix_policy_id)
 
         job: dict[str, Any] = {
@@ -738,7 +826,7 @@ def _build_multi_target_plan(
             "outputs": job_outputs,
             "notes": notes,
         }
-        if resolved_target_id is not None:
+        if resolved_target_id is not None and _coerce_str(resolved_target_id).strip():
             job["resolved_target_id"] = resolved_target_id
         if routing_plan_path:
             job["routing_plan_path"] = routing_plan_path
@@ -753,6 +841,10 @@ def _build_multi_target_plan(
 
     # Targets list sorted.
     all_target_ids = sorted(set(all_target_ids))
+    resolved_layouts = [
+        resolved_layouts_by_id[layout_id]
+        for layout_id in sorted(resolved_layouts_by_id.keys())
+    ]
 
     # Use first layout's resolved for backward-compat `resolved` field.
     first_resolved = resolved_layouts[0]

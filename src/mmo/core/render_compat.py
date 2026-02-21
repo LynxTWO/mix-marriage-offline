@@ -44,6 +44,24 @@ def _extract_target_layout_ids(payload: Any) -> list[str]:
     return []
 
 
+def _extract_target_ids(payload: Any) -> list[str]:
+    if not isinstance(payload, dict):
+        return []
+    options = payload.get("options")
+    if not isinstance(options, dict):
+        return []
+    target_ids = options.get("target_ids")
+    if not isinstance(target_ids, list):
+        return []
+    return sorted(
+        {
+            _normalize_id(target_id)
+            for target_id in target_ids
+            if _normalize_id(target_id)
+        }
+    )
+
+
 def _extract_job_rows(payload: Any) -> list[dict[str, Any]]:
     if not isinstance(payload, dict):
         return []
@@ -261,19 +279,26 @@ def validate_request_plan_compat(
         )
 
     if isinstance(request.get("target_layout_ids"), list):
-        request_target_count = len(request_target_layout_ids)
+        request_target_ids = _extract_target_ids(request)
+        expected_job_count = (
+            len(request_target_ids)
+            if request_target_ids
+            else len(request_target_layout_ids)
+        )
         plan_job_count = len(_extract_job_rows(plan))
-        if request_target_count != plan_job_count:
+        if expected_job_count != plan_job_count:
             issues.append(
                 _issue(
                     issue_id="ISSUE.RENDER.COMPAT.PLAN_JOB_COUNT_MISMATCH",
                     severity="error",
                     message=(
                         "Render plan jobs count must match render request target_layout_ids "
-                        "count for multi-target requests."
+                        "count for multi-target requests, or request.options.target_ids count "
+                        "when explicit target variants are provided."
                     ),
                     evidence={
-                        "request_target_layout_ids_count": request_target_count,
+                        "request_target_layout_ids_count": len(request_target_layout_ids),
+                        "request_target_ids_count": len(request_target_ids),
                         "plan_jobs_count": plan_job_count,
                     },
                 )
