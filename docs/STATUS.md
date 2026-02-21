@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-02-17
+Last updated: 2026-02-21
 
 This is the single-page milestone checklist for current delivery phases.
 
@@ -45,3 +45,8 @@ Definition of done:
 - [x] `CHANGELOG.md` follows Keep a Changelog style with dated entries.
 - [x] `docs/milestones.yaml` defines machine-readable milestone state.
 - [x] `tools/validate_milestones.py` is part of contract validation.
+
+## CI Test Notes
+- Default CI pytest jobs run with xdist.
+- CI keeps a serial pytest job to detect order dependencies.
+- Serial-only xdist tests: none currently.

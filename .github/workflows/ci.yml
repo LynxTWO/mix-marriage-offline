@@ -24,8 +24,8 @@ jobs:
       - name: Validate contracts
         run: python tools/validate_contracts.py
 
-      - name: Run tests
-        run: python -m pytest -q
+      - name: Run tests (xdist)
+        run: MMO_PYTEST_N=auto tools/run_pytest.sh -q
 
   windows:
     runs-on: windows-latest
@@ -46,8 +46,11 @@ jobs:
       - name: Validate contracts
         run: python tools/validate_contracts.py
 
-      - name: Run tests
-        run: python -m pytest -q
+      - name: Run tests (xdist)
+        shell: pwsh
+        env:
+          MMO_PYTEST_N: auto
+        run: .\tools\run_pytest.ps1 -q
 
   macos:
     runs-on: macos-latest
@@ -68,5 +71,21 @@ jobs:
       - name: Validate contracts
         run: python tools/validate_contracts.py
 
-      - name: Run tests
-        run: python -m pytest -q
+      - name: Run tests (xdist)
+        run: MMO_PYTEST_N=auto tools/run_pytest.sh -q
+
+  linux-serial:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          allow-prereleases: true
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && python -m pip install .[dev]
+
+      - name: Run tests (serial)
+        run: tools/run_pytest.sh -q

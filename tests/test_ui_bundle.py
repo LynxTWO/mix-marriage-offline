@@ -595,6 +595,7 @@ class TestUiBundle(unittest.TestCase):
                     target_ids,
                     [
                         "TARGET.STEREO.2_0",
+                        "TARGET.STEREO.2_0_ALT",
                         "TARGET.SURROUND.5_1",
                         "TARGET.SURROUND.7_1",
                     ],
@@ -757,6 +758,7 @@ class TestUiBundle(unittest.TestCase):
                     target_ids,
                     [
                         "TARGET.STEREO.2_0",
+                        "TARGET.STEREO.2_0_ALT",
                         "TARGET.SURROUND.5_1",
                         "TARGET.SURROUND.7_1",
                     ],
