@@ -5,7 +5,7 @@
       "job_id": "JOB.001",
       "message": "Rendered output contains clipped samples.",
       "metric": "clip_sample_count",
-      "output_path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
+      "output_path": "/home/daniel-boyd/venvs/Projects/mix-marriage-offline/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
       "severity": "error",
       "threshold": 0,
       "value": 50
@@ -15,7 +15,7 @@
       "job_id": "JOB.001",
       "message": "Plugin-chain crest-factor delta exceeds configured error threshold.",
       "metric": "delta.crest_factor_db",
-      "output_path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
+      "output_path": "/home/daniel-boyd/venvs/Projects/mix-marriage-offline/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
       "severity": "error",
       "threshold": 6.0,
       "value": 18.1913
@@ -25,7 +25,7 @@
       "job_id": "JOB.001",
       "message": "Rendered output true-peak exceeds the configured error threshold.",
       "metric": "true_peak_dbtp",
-      "output_path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
+      "output_path": "/home/daniel-boyd/venvs/Projects/mix-marriage-offline/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
       "severity": "error",
       "threshold": -1.0,
       "value": 0.9609
@@ -35,7 +35,7 @@
     {
       "comparisons": [
         {
-          "input_path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/stems/mix.wav",
+          "input_path": "/home/daniel-boyd/venvs/Projects/mix-marriage-offline/sandbox_tmp/plugin_chain_registry_baseline/stems/mix.wav",
           "metrics_delta": {
             "correlation_lr": 0.0,
             "crest_factor_db": 18.1913,
@@ -47,7 +47,7 @@
             "spectral_tilt_db_per_oct": 0.8641,
             "true_peak_dbtp": 5.8527
           },
-          "output_path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav"
+          "output_path": "/home/daniel-boyd/venvs/Projects/mix-marriage-offline/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav"
         }
       ],
       "input": {
@@ -72,7 +72,7 @@
           "side_rms_dbfs": null,
           "true_peak_dbtp": -4.8918
         },
-        "path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/stems/mix.wav",
+        "path": "/home/daniel-boyd/venvs/Projects/mix-marriage-offline/sandbox_tmp/plugin_chain_registry_baseline/stems/mix.wav",
         "polarity_risk": false,
         "sample_rate_hz": 48000,
         "sha256": "eb1244056ae117eb4dcca03c0fea60a169a706dee9e66967a874ae41b7f517ae",
@@ -485,7 +485,7 @@
             "side_rms_dbfs": null,
             "true_peak_dbtp": 0.9609
           },
-          "path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
+          "path": "/home/daniel-boyd/venvs/Projects/mix-marriage-offline/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
           "polarity_risk": false,
           "sample_rate_hz": 48000,
           "sha256": "fc4d1e0ed175aebacb78b5471c55c36a5b71e0270eec424ab0d9181af7d4e935",
@@ -877,11 +877,11 @@
       ]
     }
   ],
-  "plan_sha256": "2fd6a571331efa73862d9aa9a760bfe602e5dfd26c5145837b00a537f4a8f1a2",
+  "plan_sha256": "d7ada4195f49f80404161e152bfa92558a8482eabee38b6f5c0c72ad1641ac4c",
   "plugin_chain_used": true,
-  "report_sha256": "206c691d47bf8fb9190885063d871587f97d86dff58d7cc01a754116e922ad8e",
-  "request_sha256": "39eb2e1d608bbcea44da1323258263e3ef6e35a43c37e4375b9efd636cf674a5",
-  "run_id": "RUN.5493f3461da356ed",
+  "report_sha256": "bd14949feecdbe1d5f21b147279433e67e12cdb0050f5fe30348b37ccb38829e",
+  "request_sha256": "6a8d1689d303261cffc73c68b6a590776fa45f9d22857fd160bae9bb5373f236",
+  "run_id": "RUN.1bec25f079a70861",
   "schema_version": "0.1.0",
   "thresholds": {
     "correlation_warn_lte": -0.2,

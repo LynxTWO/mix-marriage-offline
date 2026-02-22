@@ -33,3 +33,4 @@ gui/node_modules/
 /pip-install-*/
 /.venv_wsl/
 /build/
+.venv/

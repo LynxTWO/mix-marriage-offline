@@ -4,13 +4,13 @@
       "ffmpeg_commands": [
         {
           "args": [
-            "C:\\ffmpeg\\bin\\ffmpeg.EXE",
+            "/usr/bin/ffmpeg",
             "-v",
             "error",
             "-nostdin",
             "-y",
             "-i",
-            "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
+            "/home/daniel-boyd/venvs/Projects/mix-marriage-offline/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
             "-map_metadata",
             "-1",
             "-map_chapters",
@@ -29,7 +29,7 @@
             "wav",
             "-c:a",
             "pcm_s16le",
-            "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav.tmp"
+            "/home/daniel-boyd/venvs/Projects/mix-marriage-offline/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav.tmp"
           ],
           "determinism_flags": [
             "-map_metadata",
@@ -49,7 +49,7 @@
           ]
         }
       ],
-      "ffmpeg_version": "ffmpeg version 2025-08-25-git-1b62f9d3ae-full_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers",
+      "ffmpeg_version": "ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers",
       "inputs": [
         {
           "meters": {
@@ -57,7 +57,7 @@
             "peak_dbfs": -4.8843,
             "rms_dbfs": -10.6835
           },
-          "path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/stems/mix.wav",
+          "path": "/home/daniel-boyd/venvs/Projects/mix-marriage-offline/sandbox_tmp/plugin_chain_registry_baseline/stems/mix.wav",
           "sha256": "eb1244056ae117eb4dcca03c0fea60a169a706dee9e66967a874ae41b7f517ae"
         }
       ],
@@ -69,14 +69,14 @@
             "peak_dbfs": 0.0,
             "rms_dbfs": -23.9905
           },
-          "path": "__REPO_ROOT__/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
+          "path": "/home/daniel-boyd/venvs/Projects/mix-marriage-offline/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
           "sha256": "fc4d1e0ed175aebacb78b5471c55c36a5b71e0270eec424ab0d9181af7d4e935"
         }
       ]
     }
   ],
-  "plan_sha256": "2fd6a571331efa73862d9aa9a760bfe602e5dfd26c5145837b00a537f4a8f1a2",
-  "request_sha256": "39eb2e1d608bbcea44da1323258263e3ef6e35a43c37e4375b9efd636cf674a5",
-  "run_id": "RUN.5493f3461da356ed",
+  "plan_sha256": "d7ada4195f49f80404161e152bfa92558a8482eabee38b6f5c0c72ad1641ac4c",
+  "request_sha256": "6a8d1689d303261cffc73c68b6a590776fa45f9d22857fd160bae9bb5373f236",
+  "run_id": "RUN.1bec25f079a70861",
   "schema_version": "0.1.0"
 }
