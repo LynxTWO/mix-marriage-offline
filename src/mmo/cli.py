@@ -170,7 +170,23 @@ def main(argv: list[str] | None = None) -> int:
 
     scan_parser = subparsers.add_parser("scan", help="Scan stems and write a report JSON.")
     scan_parser.add_argument("stems_dir", help="Path to a directory of audio stems.")
-    scan_parser.add_argument("--out", required=True, help="Path to output report JSON.")
+    scan_parser.add_argument("--out", required=False, default=None, help="Path to output report JSON.")
+    scan_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Treat lossy/unsupported formats as high-severity issues.",
+    )
+    scan_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        dest="dry_run",
+        help="Run the scan but do not write the output file; print the summary to stdout.",
+    )
+    scan_parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="Print a human-readable summary of the scan to stdout.",
+    )
     scan_parser.add_argument(
         "--meters",
         choices=["basic", "truth"],
@@ -3655,12 +3671,16 @@ def main(argv: list[str] | None = None) -> int:
     ontology = ontology_dir()
 
     if args.command == "scan":
+        out_path = Path(args.out) if args.out else None
         return _run_scan(
             tools_dir,
             Path(args.stems_dir),
-            Path(args.out),
+            out_path,
             args.meters,
             args.peak,
+            strict=args.strict,
+            dry_run=args.dry_run,
+            summary=args.summary,
         )
     if args.command == "stems":
         if args.stems_command == "scan":

@@ -47,9 +47,13 @@ def _run_command(command: list[str]) -> int:
 def _run_scan(
     tools_dir: Path,
     stems_dir: Path,
-    out_path: Path,
+    out_path: "Path | None",
     meters: str | None,
     include_peak: bool,
+    *,
+    strict: bool = False,
+    dry_run: bool = False,
+    summary: bool = False,
 ) -> int:
     del tools_dir
     command = [
@@ -57,13 +61,19 @@ def _run_scan(
         "-m",
         "mmo.tools.scan_session",
         str(stems_dir),
-        "--out",
-        str(out_path),
     ]
+    if out_path is not None and not dry_run:
+        command.extend(["--out", str(out_path)])
     if meters:
         command.extend(["--meters", meters])
     if include_peak:
         command.append("--peak")
+    if strict:
+        command.append("--strict")
+    if dry_run:
+        command.append("--dry-run")
+    if summary:
+        command.append("--summary")
     return _run_command(command)
 
 

@@ -21,6 +21,12 @@ except ImportError:  # pragma: no cover - environment issue
     jsonschema = None
 
 from mmo import __version__ as engine_version  # noqa: E402
+from mmo.core.lfe_audit import (  # noqa: E402
+    audit_lfe_channel,
+    build_lfe_audit_issues,
+    detect_lfe_channel_indices,
+    _extract_channel,
+)
 from mmo.core.preset_recommendations import derive_preset_recommendations  # noqa: E402
 from mmo.core.session import build_session_from_stems_dir  # noqa: E402
 from mmo.core.validators import validate_session  # noqa: E402
@@ -796,6 +802,358 @@ def _add_optional_dep_issue(
     )
 
 
+def _collect_stem_samples(
+    stem: Dict[str, Any],
+    stems_dir: Path,
+    ffmpeg_cmd: Optional[str],
+) -> Optional[List[float]]:
+    """Load all interleaved float64 samples for a stem (WAV or ffmpeg path)."""
+    file_path = stem.get("file_path")
+    if not isinstance(file_path, str) or not file_path:
+        return None
+    stem_path = Path(file_path)
+    if not stem_path.is_absolute():
+        stem_path = stems_dir / stem_path
+    format_id = detect_format_from_path(stem_path)
+    samples: List[float] = []
+    if format_id == "wav":
+        try:
+            for chunk in iter_wav_float64_samples(stem_path, error_context="lfe audit"):
+                samples.extend(chunk)
+        except ValueError:
+            return None
+        return samples
+    elif format_id in {"flac", "wavpack", "aiff"}:
+        if ffmpeg_cmd is None:
+            return None
+        try:
+            for chunk in iter_ffmpeg_float64_samples(stem_path, ffmpeg_cmd):
+                samples.extend(chunk)
+        except ValueError:
+            return None
+        return samples
+    return None
+
+
+def _add_lfe_audit_issues(
+    session: Dict[str, Any],
+    stems_dir: Path,
+    issues: List[Dict[str, Any]],
+    *,
+    strict: bool = False,
+) -> bool:
+    """Run LFE content audit for all stems that have LFE channels.
+
+    Requires numpy (returns True if numpy is missing).
+    Uses ffprobe channel_layout / WAV mask to detect LFE indices.
+    Adds ISSUE.LFE.* issues to the shared issues list.
+    """
+    try:
+        import numpy  # noqa: F401
+    except ImportError:
+        return True
+
+    ffmpeg_cmd: Optional[str] = None
+    missing_ffmpeg = False
+    stems = session.get("stems", [])
+
+    for stem in stems:
+        if not isinstance(stem, dict):
+            continue
+        stem_id = stem.get("stem_id", "")
+        channels = stem.get("channel_count")
+        if channels is None:
+            channels = stem.get("channels")
+        if not isinstance(channels, int) or channels <= 0:
+            continue
+        sample_rate_hz = stem.get("sample_rate_hz")
+        if not isinstance(sample_rate_hz, (int, float)) or sample_rate_hz <= 0:
+            continue
+
+        lfe_indices = detect_lfe_channel_indices(
+            channels,
+            channel_layout=stem.get("channel_layout"),
+            wav_channel_mask=stem.get("wav_channel_mask"),
+        )
+        if not lfe_indices:
+            continue
+
+        # Need ffmpeg for non-WAV
+        file_path = stem.get("file_path", "")
+        stem_path = Path(file_path) if file_path else None
+        if stem_path and not stem_path.is_absolute():
+            stem_path = stems_dir / stem_path
+        format_id = detect_format_from_path(stem_path) if stem_path else None
+        if format_id in {"flac", "wavpack", "aiff"} and ffmpeg_cmd is None:
+            ffmpeg_cmd = resolve_ffmpeg_cmd()
+            if ffmpeg_cmd is None:
+                missing_ffmpeg = True
+
+        all_samples = _collect_stem_samples(stem, stems_dir, ffmpeg_cmd)
+        if all_samples is None:
+            continue
+
+        # Build mains samples = all non-LFE channels mixed together
+        lfe_set = set(lfe_indices)
+        mains_channels = [i for i in range(channels) if i not in lfe_set]
+        mains_samples: List[float] = []
+        if mains_channels:
+            # Mix all mains channels to mono
+            for ch_idx in mains_channels:
+                ch_mono = _extract_channel(all_samples, channels, ch_idx)
+                if not mains_samples:
+                    mains_samples = list(ch_mono)
+                else:
+                    for j, s in enumerate(ch_mono):
+                        if j < len(mains_samples):
+                            mains_samples[j] += s
+
+        for lfe_idx in lfe_indices:
+            lfe_mono = _extract_channel(all_samples, channels, lfe_idx)
+            if not lfe_mono:
+                continue
+
+            audit_result = audit_lfe_channel(
+                lfe_mono,
+                mains_samples if mains_samples else None,
+                int(sample_rate_hz),
+            )
+
+            # Store LFE measurements on the stem
+            _upsert_lfe_measurements(stem, lfe_idx, audit_result)
+
+            # Build issues
+            stem_issues = build_lfe_audit_issues(
+                stem_id, lfe_idx, audit_result, strict=strict
+            )
+            issues.extend(stem_issues)
+
+    return missing_ffmpeg
+
+
+def _upsert_lfe_measurements(
+    stem: Dict[str, Any], channel_index: int, audit_result: Dict[str, Any]
+) -> None:
+    """Store LFE audit metrics as stem measurements."""
+    import math  # noqa: WPS433
+
+    def _safe(v: Optional[float]) -> Optional[float]:
+        if v is None:
+            return None
+        return round(v, 3) if math.isfinite(v) else None
+
+    pairs = [
+        ("EVID.LFE.BAND_ENERGY_DB", audit_result.get("inband_energy_db"), "UNIT.DB"),
+        ("EVID.LFE.OUT_OF_BAND_DB", audit_result.get("out_of_band_energy_db"), "UNIT.DB"),
+        ("EVID.LFE.INFRASONIC_DB", audit_result.get("infrasonic_energy_db"), "UNIT.DB"),
+        ("EVID.LFE.CREST_FACTOR_DB", audit_result.get("crest_factor_db"), "UNIT.DB"),
+        ("EVID.LFE.PEAK_DBFS", audit_result.get("peak_dbfs"), "UNIT.DBFS"),
+    ]
+    for evidence_id, value, unit_id in pairs:
+        safe_val = _safe(value)
+        if safe_val is not None:
+            upsert_measurement(stem, evidence_id=evidence_id, value=safe_val, unit_id=unit_id)
+
+    ratio = audit_result.get("lfe_to_mains_ratio_db")
+    if ratio is not None:
+        safe_ratio = _safe(ratio)
+        if safe_ratio is not None:
+            upsert_measurement(
+                stem,
+                evidence_id="EVID.LFE.MAINS_RATIO_DB",
+                value=safe_ratio,
+                unit_id="UNIT.DB",
+            )
+
+
+def _load_role_keywords() -> set:
+    """Load all role inference keywords from roles.yaml (ontology).
+
+    Falls back to empty set on any error.
+    """
+    try:
+        import yaml as _yaml  # noqa: WPS433
+    except ImportError:
+        return set()
+
+    try:
+        roles_path = ontology_dir() / "roles.yaml"
+        with roles_path.open("r", encoding="utf-8") as fh:
+            data = _yaml.safe_load(fh)
+    except Exception:  # noqa: BLE001
+        return set()
+
+    roles = data.get("roles", {}) if isinstance(data, dict) else {}
+    known_keywords: set = set()
+    for role_id, role_data in roles.items():
+        if role_id == "_meta" or not isinstance(role_data, dict):
+            continue
+        inference = role_data.get("inference", {})
+        for kw in inference.get("keywords", []):
+            if isinstance(kw, str) and kw:
+                # Tokenise multi-word keywords (e.g. "bass drum") into individual words
+                for token in kw.lower().split():
+                    known_keywords.add(token)
+                known_keywords.add(kw.lower())
+    return known_keywords
+
+
+def _validate_role_names(
+    session: Dict[str, Any],
+    issues: List[Dict[str, Any]],
+) -> None:
+    """Check stem filenames against role naming conventions.
+
+    Emits ISSUE.VALIDATION.UNKNOWN_ROLE for stems whose names
+    do not match any known role keyword (from roles.yaml inference.keywords).
+    """
+    known_keywords = _load_role_keywords()
+    if not known_keywords:
+        return
+
+    import re  # noqa: WPS433
+    _token_re = re.compile(r"[\s_.\-\[\]\(\)\{\}]+")
+
+    stems = session.get("stems", [])
+    for stem in stems:
+        if not isinstance(stem, dict):
+            continue
+        stem_id = stem.get("stem_id", "")
+        file_path = stem.get("file_path", "")
+        name = Path(file_path).stem if file_path else stem_id
+        tokens = {t.lower() for t in _token_re.split(name) if t}
+        # Strip leading track numbers (e.g. "01_kick" → tokens {"01", "kick"})
+        if tokens & known_keywords:
+            continue  # At least one recognizable role token
+
+        issues.append(
+            {
+                "issue_id": "ISSUE.VALIDATION.UNKNOWN_ROLE",
+                "severity": 20,
+                "confidence": 0.7,
+                "target": {"scope": "stem", "stem_id": stem_id},
+                "evidence": [
+                    {
+                        "evidence_id": "EVID.FILE.PATH",
+                        "value": file_path or stem_id,
+                    },
+                    {
+                        "evidence_id": "EVID.FILE.NAME",
+                        "value": name,
+                    },
+                ],
+                "message": (
+                    f"Stem '{name}' does not match any known role naming convention. "
+                    "Role inference will fall back to ROLE.OTHER.UNKNOWN. "
+                    "Rename using recognizable role keywords (e.g. kick, snare, bass, "
+                    "guitar, strings, vox) to improve routing recommendations."
+                ),
+            }
+        )
+
+
+def _render_scan_summary(report: Dict[str, Any]) -> str:
+    """Render a human-readable text summary of a scan report."""
+    lines: List[str] = []
+    session = report.get("session", {})
+    stems = session.get("stems", [])
+    issues = report.get("issues", [])
+    stems_dir = session.get("stems_dir", "")
+
+    lines.append("=== MMO Stem Scan Report ===")
+    lines.append(f"Folder : {stems_dir}")
+    lines.append(f"Stems  : {len(stems)}")
+    lines.append(f"Issues : {len(issues)}")
+    lines.append("")
+
+    if stems:
+        lines.append("STEMS:")
+        for stem in stems:
+            if not isinstance(stem, dict):
+                continue
+            name = Path(stem.get("file_path", stem.get("stem_id", "?"))).name
+            ch = stem.get("channel_count", stem.get("channels", "?"))
+            sr = stem.get("sample_rate_hz", "?")
+            bd = stem.get("bits_per_sample") or stem.get("bit_depth") or "?"
+            dur = stem.get("duration_s")
+            dur_str = f"{dur:.1f}s" if isinstance(dur, (int, float)) else "?"
+            layout = stem.get("channel_layout", "")
+            layout_str = f" [{layout}]" if layout else ""
+            lines.append(f"  {name}  ({ch}ch, {sr} Hz, {bd}-bit, {dur_str}){layout_str}")
+        lines.append("")
+
+    if issues:
+        lines.append("ISSUES:")
+        severity_label = {
+            (90, 100): "ERROR",
+            (70, 89): "WARN",
+            (50, 69): "WARN",
+            (30, 49): "INFO",
+            (0, 29): "INFO",
+        }
+
+        def _sev_label(sev: int) -> str:
+            for (lo, hi), label in severity_label.items():
+                if lo <= sev <= hi:
+                    return label
+            return "INFO"
+
+        for issue in issues:
+            if not isinstance(issue, dict):
+                continue
+            sev = issue.get("severity", 0)
+            label = _sev_label(sev)
+            issue_id = issue.get("issue_id", "ISSUE.?")
+            message = issue.get("message", "")
+            target = issue.get("target", {})
+            where = ""
+            if isinstance(target, dict):
+                stem_id = target.get("stem_id")
+                ch_idx = target.get("channel_index")
+                if stem_id:
+                    where = f" [{stem_id}]"
+                if ch_idx is not None:
+                    where += f"[ch{ch_idx}]"
+            lines.append(f"  [{label:5s} {sev:3d}]{where} {issue_id}")
+            if message:
+                # Wrap long messages at 80 chars
+                wrapped = message[:120] + ("..." if len(message) > 120 else "")
+                lines.append(f"           {wrapped}")
+        lines.append("")
+
+    # LFE audit summary
+    lfe_issues = [
+        i for i in issues
+        if isinstance(i, dict) and str(i.get("issue_id", "")).startswith("ISSUE.LFE.")
+    ]
+    if lfe_issues:
+        lines.append(f"LFE AUDIT: {len(lfe_issues)} issue(s) found.")
+    else:
+        # Check if any LFE channels were detected
+        lfe_stems = []
+        for stem in stems:
+            if not isinstance(stem, dict):
+                continue
+            ch = stem.get("channel_count", 0)
+            measurements = stem.get("measurements", [])
+            lfe_m_ids = {
+                m.get("evidence_id")
+                for m in measurements
+                if isinstance(m, dict)
+            }
+            if any(mid and mid.startswith("EVID.LFE.") for mid in lfe_m_ids):
+                lfe_stems.append(stem.get("file_path", stem.get("stem_id", "")))
+        if lfe_stems:
+            lines.append(f"LFE AUDIT: {len(lfe_stems)} LFE stem(s) audited — no issues.")
+        elif any(
+            isinstance(s, dict) and (s.get("channel_count") or 0) > 2
+            for s in stems
+        ):
+            lines.append("LFE AUDIT: No LFE channels detected in surround stems.")
+
+    return "\n".join(lines)
+
+
 def build_report(
     stems_dir: Path,
     generated_at: str,
@@ -820,6 +1178,10 @@ def build_report(
     if meters == "basic":
         missing_ffmpeg = _add_basic_meter_measurements(session, stems_dir)
     issues = validate_session(session, strict=strict)
+
+    # Role naming convention validation (lightweight keyword check)
+    _validate_role_names(session, issues)
+
     if meters == "truth":
         try:
             import numpy  # noqa: F401
@@ -851,6 +1213,17 @@ def build_report(
             missing_ffmpeg = mix_missing_ffmpeg or missing_ffmpeg
         else:
             mix_complexity = _default_mix_complexity_payload()
+
+    # LFE content audit — always attempt when numpy is available
+    lfe_missing_numpy = _add_lfe_audit_issues(session, stems_dir, issues, strict=strict)
+    if lfe_missing_numpy and numpy_available is not True:
+        # Only surface numpy issue once
+        _add_optional_dep_issue(
+            issues,
+            dep_name="numpy",
+            hint="Install: pip install .[truth]",
+        )
+
     if missing_ffmpeg:
         _add_optional_dep_issue(
             issues,
@@ -890,6 +1263,17 @@ def main() -> int:
             help="Treat lossy/unsupported formats as high-severity issues.",
         )
         parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            dest="dry_run",
+            help="Run the scan but do not write the output file; print the summary to stdout.",
+        )
+        parser.add_argument(
+            "--summary",
+            action="store_true",
+            help="Print a human-readable summary of the scan to stdout.",
+        )
+        parser.add_argument(
             "--peak",
             action="store_true",
             help="Compute WAV sample peak meter readings for stems.",
@@ -926,12 +1310,22 @@ def main() -> int:
         if args.schema:
             _validate_schema(Path(args.schema), report)
 
+        # --dry-run: print summary only, do not write file
+        if args.dry_run:
+            print(_render_scan_summary(report))
+            return 0
+
+        # --summary: print human-readable summary to stdout
+        if args.summary:
+            print(_render_scan_summary(report))
+
         output = json.dumps(report, indent=2)
         if args.out:
             out_path = Path(args.out)
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(output + "\n", encoding="utf-8")
-        else:
+        elif not args.summary:
+            # Default: print JSON to stdout (unless --summary already printed it)
             print(output)
 
         return 0

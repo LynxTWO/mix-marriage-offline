@@ -378,6 +378,53 @@ evidence:
       - "freq_range_hz"
 
   # -------------------------
+  # LFE Channel Evidence (DoD 4.4.2)
+  # -------------------------
+  EVID.LFE.CHANNEL_INDEX:
+    label: "LFE channel index"
+    description: "0-based index of the LFE channel within the interleaved stem."
+    value_type: "integer"
+    unit_id: "UNIT.NONE"
+    constraints:
+      min: 0
+
+  EVID.LFE.BAND_ENERGY_DB:
+    label: "LFE in-band energy"
+    description: "Mean energy of the LFE channel in the configured band (default 20–120 Hz), in dB."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+
+  EVID.LFE.OUT_OF_BAND_DB:
+    label: "LFE out-of-band energy"
+    description: "Mean energy of the LFE channel above the configured band-limit cutoff (default 120 Hz), in dB."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+
+  EVID.LFE.INFRASONIC_DB:
+    label: "LFE infrasonic energy"
+    description: "Mean energy of the LFE channel below the configured low-pass floor (default 20 Hz), in dB."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+
+  EVID.LFE.CREST_FACTOR_DB:
+    label: "LFE crest factor"
+    description: "Crest factor (peak/RMS) of the LFE channel in dB."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+
+  EVID.LFE.PEAK_DBFS:
+    label: "LFE peak level"
+    description: "Sample peak of the LFE channel in dBFS."
+    value_type: "number"
+    unit_id: "UNIT.DBFS"
+
+  EVID.LFE.MAINS_RATIO_DB:
+    label: "LFE-to-mains low-band ratio"
+    description: "Difference in dB between LFE in-band energy and mains low-band energy."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+
+  # -------------------------
   # Mix Complexity Evidence
   # -------------------------
   EVID.MIX.DENSITY_MEAN:
