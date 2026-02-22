@@ -1597,6 +1597,28 @@ def main(argv: list[str] | None = None) -> int:
         help="Output format for recommended targets.",
     )
 
+    ontology_parser = subparsers.add_parser(
+        "ontology",
+        help="Ontology integrity tools.",
+    )
+    ontology_subparsers = ontology_parser.add_subparsers(
+        dest="ontology_command",
+        required=True,
+    )
+    ontology_validate_parser = ontology_subparsers.add_parser(
+        "validate",
+        help=(
+            "Load all ontology YAML files and report schema compliance. "
+            "Checks required fields, ID-prefix conventions, and file presence."
+        ),
+    )
+    ontology_validate_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for validation results.",
+    )
+
     roles_parser = subparsers.add_parser("roles", help="Role registry tools.")
     roles_subparsers = roles_parser.add_subparsers(dest="roles_command", required=True)
     roles_list_parser = roles_subparsers.add_parser("list", help="List role IDs.")
@@ -5601,6 +5623,40 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         print("Unknown targets command.", file=sys.stderr)
         return 2
+
+    if args.command == "ontology":
+        from mmo.core.ontology_validator import validate_ontology  # noqa: WPS433
+
+        if args.ontology_command == "validate":
+            result = validate_ontology(ontology)
+            if args.format == "json":
+                print(json.dumps(result, indent=2, sort_keys=True))
+            else:
+                ok_label = "OK" if result.get("ok") else "FAIL"
+                print(
+                    f"ontology validate: {ok_label}"
+                    f" | version={result.get('ontology_version', '')}"
+                    f" | categories={result.get('categories_checked', 0)}"
+                    f" | entries={result.get('entries_checked', 0)}"
+                    f" | errors={result.get('error_count', 0)}"
+                    f" | warnings={result.get('warn_count', 0)}"
+                )
+                for iss in result.get("issues", []):
+                    severity = iss.get("severity", "")
+                    category = iss.get("category", "")
+                    file_label = iss.get("file", "")
+                    entry_id = iss.get("entry_id") or "-"
+                    message = iss.get("message", "")
+                    print(
+                        f"  [{severity.upper()}] {category} / {file_label}"
+                        f" ({entry_id}): {message}"
+                    )
+            if not result.get("ok"):
+                return 1
+            return 0
+        print(f"Unknown ontology command: {args.ontology_command}", file=sys.stderr)
+        return 2
+
     if args.command == "roles":
         roles_path = ontology /"roles.yaml"
         if args.roles_command == "list":

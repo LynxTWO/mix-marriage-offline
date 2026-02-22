@@ -275,3 +275,52 @@ gates:
       auto_apply: "reject"
       render: "reject"
     violation_reason_id: "REASON.OVERSAMPLE_UNSUPPORTED"
+
+  # -------------------------
+  # LFE safety gates
+  # -------------------------
+  GATE.LFE_TRUEPEAK_CEILING:
+    label: "LFE true-peak ceiling"
+    description: >
+      Prevent the LFE channel true peak from exceeding a tighter ceiling than the
+      mains channels.  Consumer systems typically apply a +10 dB LFE boost, so the
+      channel must have at least 10 dB of headroom relative to the 0 dBFS clip point.
+    kind: "safety"
+    default_enabled: true
+    applies_to_actions: ["ACTION.LFE.GAIN", "ACTION.SURROUND.CHANNEL_GAIN"]
+    config:
+      max_true_peak_dbtp:
+        value: -3.0
+        unit_id: "UNIT.DBTP"
+        hard_max: 0.0
+        recommended_range: { min: -6.0, max: -1.0 }
+        notes: "Consumer +10 dB boost means real ceiling is this value + 10 dB."
+    enforcement:
+      suggest: "allow"
+      auto_apply: "reject"
+      render: "reject"
+    violation_reason_id: "REASON.CLIP_RISK"
+
+  GATE.LFE_OOB_LEVEL_FLOOR:
+    label: "LFE out-of-band energy floor"
+    description: >
+      Reject auto-apply or render for LFE-affecting actions when out-of-band LFE
+      content exceeds a warn threshold, requiring user approval before any corrective
+      filter is applied.  Ensures musician intent is preserved.
+    kind: "metric_limit"
+    default_enabled: true
+    applies_to_actions: ["ACTION.LFE.LOW_PASS", "ACTION.LFE.HIGH_PASS"]
+    config:
+      # Energy ratio (out-of-band vs in-band) that triggers the gate.
+      oob_energy_ratio_warn: { value: 0.05, unit_id: "UNIT.RATIO" }
+      oob_energy_ratio_fail: { value: 0.20, unit_id: "UNIT.RATIO" }
+    enforcement:
+      warn:
+        suggest: "allow"
+        auto_apply: "suggest_only"
+        render: "allow"
+      fail:
+        suggest: "allow"
+        auto_apply: "reject"
+        render: "reject"
+    violation_reason_id: "REASON.APPROVAL_REQUIRED"

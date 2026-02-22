@@ -14,16 +14,20 @@ Priority for temporary directory:
   1. ``MMO_TEMP_DIR`` env var.
   2. ``<os_temp>/mmo_tmp/<pid>``.
   3. ``<repo_root>/.mmo_tmp/<pid>`` when running from a checkout.
+
+Convenience loaders (``load_ontology_yaml``, ``load_schema_json``) resolve the
+resource via the priority chain above and always read with UTF-8 encoding.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 # -- internal helpers --------------------------------------------------------
 
@@ -229,3 +233,53 @@ def default_temp_dir() -> Path:
 def temp_dir() -> Path:
     """Alias for :func:`default_temp_dir`."""
     return default_temp_dir()
+
+
+# -- convenience loaders -----------------------------------------------------
+
+
+def load_ontology_yaml(filename: str) -> Any:
+    """Load and parse a YAML file from the ontology directory.
+
+    ``filename`` may include sub-directories, e.g. ``"policies/gates.yaml"``.
+    The file is located via the established priority chain (env override,
+    packaged wheel data, repo-checkout fallback) and read as UTF-8.
+
+    Raises ``RuntimeError`` if the ontology directory cannot be resolved.
+    Raises ``FileNotFoundError`` if the file does not exist within the directory.
+    Raises ``ImportError`` if PyYAML is not installed.
+    """
+    try:
+        import yaml  # type: ignore[import]
+    except ImportError as exc:
+        raise ImportError(
+            "PyYAML is required to load ontology YAML files.  "
+            "Install it with: pip install PyYAML"
+        ) from exc
+
+    path = ontology_dir() / filename
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Ontology file not found: {path}"
+        )
+    with path.open("r", encoding="utf-8") as fh:
+        return yaml.safe_load(fh)
+
+
+def load_schema_json(filename: str) -> Any:
+    """Load and parse a JSON schema file from the schemas directory.
+
+    ``filename`` may include sub-directories, e.g. ``"report.schema.json"``.
+    The file is located via the established priority chain (env override,
+    packaged wheel data, repo-checkout fallback) and read as UTF-8.
+
+    Raises ``RuntimeError`` if the schemas directory cannot be resolved.
+    Raises ``FileNotFoundError`` if the file does not exist within the directory.
+    """
+    path = schemas_dir() / filename
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Schema file not found: {path}"
+        )
+    with path.open("r", encoding="utf-8") as fh:
+        return json.load(fh)

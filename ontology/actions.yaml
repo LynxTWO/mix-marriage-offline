@@ -505,6 +505,65 @@ actions:
     gates: ["GATE.OVERSAMPLE_SUPPORTED"]
 
   # -------------------------
+  # LFE (channel-specific filter/level corrections)
+  # -------------------------
+  ACTION.LFE.HIGH_PASS:
+    label: "LFE high-pass filter"
+    description: >
+      Apply a high-pass filter to the LFE channel to remove infrasonic rumble
+      below the LFE floor (default 20 Hz).  Removes inaudible content that wastes
+      headroom without affecting the audible low-frequency intent.
+    required_params: ["PARAM.EQ.FREQ_HZ", "PARAM.EQ.SLOPE_DB_PER_OCT"]
+    optional_params: ["PARAM.SURROUND.SPEAKER_ID", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "medium"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["channel", "full"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.MAX_EQ_BANDS"]
+    notes:
+      - "Explain removal in musician language before applying (e.g., 'removing sub-20 Hz rumble')."
+      - "Re-run downmix/mono checks after applying; back off if translation gates degrade."
+      - "Never silently apply to user-supplied explicit LFE stems."
+
+  ACTION.LFE.LOW_PASS:
+    label: "LFE low-pass filter"
+    description: >
+      Apply a low-pass filter to the LFE channel to remove out-of-band energy
+      above the LFE band-limit cutoff (default 120 Hz).  Prevents high-frequency
+      bleed from reaching the subwoofer path.
+    required_params: ["PARAM.EQ.FREQ_HZ", "PARAM.EQ.SLOPE_DB_PER_OCT"]
+    optional_params: ["PARAM.SURROUND.SPEAKER_ID", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "medium"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["channel", "full"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.MAX_EQ_BANDS"]
+    notes:
+      - "Explain removal in musician language before applying (e.g., 'band-limiting LFE to 120 Hz')."
+      - "Re-run downmix/mono checks after applying; back off if translation gates degrade."
+      - "Never silently apply to user-supplied explicit LFE stems."
+
+  ACTION.LFE.GAIN:
+    label: "LFE gain trim"
+    description: >
+      Apply a gain change to the LFE channel only, used to correct excessive
+      LFE level, insufficient headroom, or an imbalanced LFE-to-mains ratio.
+    required_params: ["PARAM.GAIN.DB"]
+    optional_params: ["PARAM.SURROUND.SPEAKER_ID", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "medium"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["channel", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.MAX_GAIN_DB", "GATE.NO_CLIP", "GATE.LFE_TRUEPEAK_CEILING"]
+    notes:
+      - "Positive gain raises LFE; negative gain trims it."
+      - "Check that post-gain true-peak stays within LFE ceiling (GATE.LFE_TRUEPEAK_CEILING)."
+      - "Consider +10 dB LFE playback boost on consumer systems when setting target level."
+
+  # -------------------------
   # Target / Normalization (optional mastering-ish)
   # -------------------------
   ACTION.MASTER.NORMALIZE_LOUDNESS:

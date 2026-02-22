@@ -959,3 +959,201 @@ issues:
       - "EVID.DOWNMIX.QA.REF_PATH"
       - "EVID.DOWNMIX.QA.SRC_PATH"
       - "EVID.FILE.PATH"
+
+  # -------------------------
+  # LFE audit (per-channel content analysis)
+  # -------------------------
+  ISSUE.LFE.OUT_OF_BAND_HIGH:
+    label: "LFE out-of-band energy high"
+    description: >
+      Significant energy is present above the LFE band-limit cutoff (default 120 Hz).
+      This content will fold into the mains on reproduction systems and may be heard
+      as an unexpected high-frequency artifact from the subwoofer path.
+    issue_type: "surround"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_freq_range_hz: { low_hz: 120, high_hz: 20000 }
+    typical_evidence_ids:
+      - "EVID.SURROUND.SPEAKER_ID"
+      - "EVID.SPECTRAL.BAND_ENERGY_RATIO"
+      - "EVID.SPECTRAL.BAND_ENERGY_DB"
+      - "EVID.METER.HEADROOM_DB"
+    suggested_actions:
+      - "ACTION.LFE.LOW_PASS"
+    notes:
+      - "Corrective filter (LPF) must be approved before render; explain in musician language."
+      - "Re-run downmix/mono checks after any LFE filter is applied."
+      - "If user supplied explicit LFE stems: never silently fix; recommend options only."
+
+  ISSUE.LFE.INFRASONIC_RUMBLE:
+    label: "LFE infrasonic rumble"
+    description: >
+      Significant energy is present below the LFE infrasonic floor (default 20 Hz).
+      This is typically inaudible on most reproduction systems and wastes headroom.
+    issue_type: "surround"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_freq_range_hz: { low_hz: 0, high_hz: 20 }
+    typical_evidence_ids:
+      - "EVID.SURROUND.SPEAKER_ID"
+      - "EVID.SPECTRAL.BAND_ENERGY_RATIO"
+      - "EVID.SPECTRAL.BAND_ENERGY_DB"
+    suggested_actions:
+      - "ACTION.LFE.HIGH_PASS"
+    notes:
+      - "Corrective filter (HPF) must be approved before render; explain in musician language."
+      - "If user supplied explicit LFE stems: never silently fix; recommend options only."
+
+  ISSUE.LFE.HEADROOM_LOW:
+    label: "LFE headroom low"
+    description: >
+      The LFE channel has insufficient headroom, leaving little room for peaks or level
+      correction without clipping on reproduction systems with +10 dB LFE boost.
+    issue_type: "surround"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.SURROUND.SPEAKER_ID"
+      - "EVID.METER.HEADROOM_DB"
+      - "EVID.METER.PEAK_DBFS"
+      - "EVID.METER.TRUEPEAK_DBTP"
+    suggested_actions:
+      - "ACTION.LFE.GAIN"
+    notes:
+      - "LFE channels on most consumer systems receive +10 dB playback boost."
+      - "Consider a tighter true-peak ceiling for LFE than for the mains."
+
+  ISSUE.LFE.TRUEPEAK_OVER_CEILING:
+    label: "LFE true peak over ceiling"
+    description: >
+      LFE channel true peak exceeds the configured LFE ceiling.
+      On systems with a +10 dB LFE boost, this is likely to clip.
+    issue_type: "safety"
+    default_scope: "stem"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.SURROUND.SPEAKER_ID"
+      - "EVID.METER.TRUEPEAK_DBTP"
+      - "EVID.DETECTOR.THRESHOLD_DBTP"
+    suggested_actions:
+      - "ACTION.LFE.GAIN"
+      - "ACTION.DYN.LIMITER"
+    notes:
+      - "Gate GATE.LFE_TRUEPEAK_CEILING applies; auto-apply is typically rejected."
+
+  ISSUE.LFE.BAND_LEVEL_HIGH:
+    label: "LFE band-limited level high"
+    description: >
+      The LFE channel band-limited level (default 20-120 Hz) is higher than the
+      profile-driven guidance threshold, suggesting LFE may dominate the low end.
+    issue_type: "surround"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_freq_range_hz: { low_hz: 20, high_hz: 120 }
+    typical_evidence_ids:
+      - "EVID.SURROUND.SPEAKER_ID"
+      - "EVID.SPECTRAL.BAND_ENERGY_DB"
+      - "EVID.METER.LUFS_I"
+    suggested_actions:
+      - "ACTION.LFE.GAIN"
+    notes:
+      - "Evidence should include the relevant energy ratio vs mains low band."
+
+  ISSUE.LFE.BAND_LEVEL_LOW:
+    label: "LFE band-limited level low"
+    description: >
+      The LFE channel band-limited level (default 20-120 Hz) is lower than expected,
+      suggesting the LFE may be underused or effectively empty.
+    issue_type: "surround"
+    default_scope: "stem"
+    default_severity_label: "info"
+    typical_freq_range_hz: { low_hz: 20, high_hz: 120 }
+    typical_evidence_ids:
+      - "EVID.SURROUND.SPEAKER_ID"
+      - "EVID.SPECTRAL.BAND_ENERGY_DB"
+    suggested_actions: []
+    notes:
+      - "Inform-only unless the profile sets a minimum LFE activity gate."
+      - "An empty or near-empty LFE may be intentional (dialogue-only mix)."
+
+  ISSUE.LFE.MAINS_RATIO_EXCESS:
+    label: "LFE-to-mains low-band ratio excessive"
+    description: >
+      The ratio of LFE band energy to the combined mains low-band energy exceeds
+      the profile-driven threshold, indicating the LFE is carrying an unusually
+      large share of low-frequency content.
+    issue_type: "surround"
+    default_scope: "bus"
+    default_severity_label: "warn"
+    typical_freq_range_hz: { low_hz: 20, high_hz: 120 }
+    typical_evidence_ids:
+      - "EVID.SURROUND.SPEAKER_ID"
+      - "EVID.SPECTRAL.BAND_ENERGY_RATIO"
+      - "EVID.SPECTRAL.BAND_ENERGY_DB"
+      - "EVID.SURROUND.LAYOUT_ID"
+    suggested_actions:
+      - "ACTION.LFE.GAIN"
+      - "ACTION.SURROUND.GROUP_GAIN"
+    notes:
+      - "Evidence should include both LFE energy and mains low-band energy values."
+      - "Detectors should attach the measured ratio and the profile threshold."
+
+  # -------------------------
+  # Gain staging (level calibration)
+  # -------------------------
+  ISSUE.GAINSTAGING.STEM_TOO_HOT:
+    label: "Stem gain staging too hot"
+    description: >
+      Stem integrated loudness is significantly higher than the gain-staging target,
+      leaving insufficient headroom for bus processing and summing.
+    issue_type: "safety"
+    default_scope: "stem"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.METER.LUFS_I"
+      - "EVID.METER.PEAK_DBFS"
+      - "EVID.METER.HEADROOM_DB"
+      - "EVID.DETECTOR.THRESHOLD_LUFS"
+    suggested_actions:
+      - "ACTION.UTILITY.GAIN"
+      - "ACTION.UTILITY.TRIM"
+    notes:
+      - "Hot stems cause early bus headroom exhaustion before bus limiting is engaged."
+      - "Detectors should include the measured LUFS_I and the target/threshold."
+
+  ISSUE.GAINSTAGING.STEM_TOO_QUIET:
+    label: "Stem gain staging too quiet"
+    description: >
+      Stem integrated loudness is significantly lower than the gain-staging target,
+      increasing the relative contribution of the noise floor and limiting dynamic range.
+    issue_type: "dynamics"
+    default_scope: "stem"
+    default_severity_label: "info"
+    typical_evidence_ids:
+      - "EVID.METER.LUFS_I"
+      - "EVID.METER.RMS_DBFS"
+      - "EVID.DETECTOR.THRESHOLD_LUFS"
+    suggested_actions:
+      - "ACTION.UTILITY.GAIN"
+      - "ACTION.UTILITY.TRIM"
+    notes:
+      - "Detectors should be conservative; very quiet stems may be intentional (sparse arrangements)."
+
+  ISSUE.GAINSTAGING.BUS_HEADROOM_LOW:
+    label: "Bus headroom low for summing"
+    description: >
+      Bus headroom is insufficient for safely summing the assigned stems,
+      risking clipping or over-limiting when all stems play together.
+    issue_type: "safety"
+    default_scope: "bus"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.METER.HEADROOM_DB"
+      - "EVID.METER.PEAK_DBFS"
+      - "EVID.METER.LUFS_I"
+    suggested_actions:
+      - "ACTION.UTILITY.GAIN"
+      - "ACTION.DYN.LIMITER"
+    notes:
+      - "Detectors should show the estimated worst-case sum level vs the ceiling."
+      - "Prefer gain trims on individual stems before bus limiting."
