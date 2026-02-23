@@ -393,6 +393,215 @@ def build_graph(
     }
 
 
+def build_graph_from_files(
+    files: list[pathlib.Path],
+    root: pathlib.Path,
+    repo_root: pathlib.Path,
+    budgets: Optional[Budgets] = None,
+    tracer: Optional[Tracer] = None,
+    use_id_allowlist: bool = True,
+) -> dict:
+    """Build a dependency graph for an explicit set of files.
+
+    Unlike :func:`build_graph`, this function does **not** walk the repository
+    tree.  It processes the provided *files* list directly, applying the same
+    three-phase edge extraction (Python imports, schema ``$ref``, and MMO
+    canonical ID references) but only within the given file set.
+
+    This is the core engine used by the seed-first diff build path so that
+    only the files identified by :func:`~diff_seed_first.expand_seed_first_bfs`
+    are scanned rather than the entire repository.
+
+    Args:
+        files: Explicit list of absolute file paths to scan.  The list should
+               be pre-sorted for fully deterministic output; this function also
+               sorts internally to guard against caller ordering.
+        root: Used for computing POSIX-relative node IDs (typically the same
+              as *repo_root*).
+        repo_root: Used for import resolution and ontology discovery.
+        budgets: Budget enforcer.  A fresh default :class:`Budgets` is created
+                 if not provided.
+        tracer: Trace sink.  A no-op :class:`Tracer` is used if not provided.
+        use_id_allowlist: When ``True`` (default), build an ontology allowlist
+                          and restrict ``id_ref`` edges to known canonical IDs.
+
+    Returns:
+        Same dict structure as :func:`build_graph`:
+        ``{"nodes": [...], "edges": [...], "warnings": [...]}``.
+    """
+    if budgets is None:
+        budgets = Budgets()
+    if tracer is None:
+        tracer = Tracer()
+
+    nodes: dict[str, dict] = {}
+    edge_list: list[dict] = []
+    seen_edges: set[tuple[str, str, str, str]] = set()
+    warnings: list[str] = []
+
+    def add_node(node_id: str, kind: str = "file") -> None:
+        if node_id not in nodes:
+            nodes[node_id] = _node(node_id, kind)
+
+    def add_edge(
+        kind: str, src: str, dst: str, evidence: str, source_file: str
+    ) -> None:
+        key = (kind, src, dst, evidence)
+        if key not in seen_edges:
+            seen_edges.add(key)
+            edge_list.append(_edge(kind, src, dst, evidence, source_file))
+            add_node(src)
+            add_node(dst)
+
+    # Sort the input file list for determinism.
+    sorted_files = sorted(files, key=lambda p: p.as_posix())
+
+    tracer.emit(
+        "graph_build_from_files_start",
+        file_count=len(sorted_files),
+        repo_root=str(repo_root),
+        root=str(root),
+    )
+
+    # -----------------------------------------------------------------------
+    # Phase 1: Python import edges + py_import_file resolved edges
+    # -----------------------------------------------------------------------
+    if not budgets.is_exceeded:
+        for py_path in sorted_files:
+            if py_path.suffix != ".py":
+                continue
+            if _should_skip(py_path, root):
+                continue
+            try:
+                rel = py_path.relative_to(root).as_posix()
+            except ValueError:
+                continue
+            add_node(rel)
+            if budgets.is_exceeded:
+                break
+            try:
+                import_edges = parse_py_imports(py_path, root, budgets, tracer)
+            except BudgetExceededError as exc:
+                warnings.append(f"Budget exceeded parsing imports in {rel}: {exc}")
+                break
+            for ie in import_edges:
+                add_edge("py_import", ie.src, ie.dst, ie.evidence, rel)
+                resolved = resolve_module_to_path(ie.dst, repo_root)
+                if resolved is not None:
+                    try:
+                        resolved_rel = (
+                            (repo_root / resolved)
+                            .relative_to(root)
+                            .as_posix()
+                        )
+                    except ValueError:
+                        resolved_rel = resolved
+                    add_edge(
+                        "py_import_file",
+                        ie.src,
+                        resolved_rel,
+                        ie.dst,
+                        rel,
+                    )
+
+    # -----------------------------------------------------------------------
+    # Phase 2: JSON schema $ref edges
+    # -----------------------------------------------------------------------
+    if not budgets.is_exceeded:
+        for schema_path in sorted_files:
+            if schema_path.suffix != ".json":
+                continue
+            if _should_skip(schema_path, root):
+                continue
+            is_schema = (
+                "schemas" in schema_path.parts
+                or schema_path.name.endswith(".schema.json")
+            )
+            if not is_schema:
+                continue
+            try:
+                rel = schema_path.relative_to(root).as_posix()
+            except ValueError:
+                continue
+            add_node(rel)
+            if budgets.is_exceeded:
+                break
+            try:
+                ref_edges = scan_schema_refs(schema_path, root, budgets, tracer)
+            except BudgetExceededError as exc:
+                warnings.append(f"Budget exceeded scanning schema refs in {rel}: {exc}")
+                break
+            for re_ in ref_edges:
+                add_edge("schema_ref", re_.src, re_.dst, re_.evidence, rel)
+
+    # -----------------------------------------------------------------------
+    # Phase 3: MMO canonical ID references
+    # -----------------------------------------------------------------------
+    if not budgets.is_exceeded:
+        id_allowlist: Optional[frozenset[str]] = None
+        if use_id_allowlist:
+            ont_root = repo_root / "ontology"
+            raw_allowlist = build_id_allowlist(ont_root, budgets, tracer)
+            if raw_allowlist:
+                id_allowlist = raw_allowlist
+                tracer.emit("id_allowlist_active", count=len(id_allowlist))
+            else:
+                warnings.append(
+                    "id_ref allowlist is empty — falling back to full regex mode"
+                )
+                tracer.emit("id_allowlist_fallback", reason="empty_allowlist")
+
+        _ID_REF_EXTS = frozenset({".py", ".yaml", ".yml", ".json", ".md"})
+        id_files = sorted(
+            [
+                f for f in sorted_files
+                if f.suffix in _ID_REF_EXTS and not _should_skip(f, root)
+            ],
+            key=lambda p: p.as_posix(),
+        )
+
+        for id_path in id_files:
+            if budgets.is_exceeded:
+                break
+            try:
+                rel = id_path.relative_to(root).as_posix()
+            except ValueError:
+                continue
+            add_node(rel)
+            try:
+                id_edges = scan_id_refs(
+                    id_path, root, budgets, tracer, allowlist=id_allowlist
+                )
+            except BudgetExceededError as exc:
+                warnings.append(f"Budget exceeded scanning id_refs in {rel}: {exc}")
+                break
+            for ide in id_edges:
+                add_edge("id_ref", ide.src, ide.dst, ide.evidence, rel)
+
+    # -----------------------------------------------------------------------
+    # Deterministic sort and finalise
+    # -----------------------------------------------------------------------
+    sorted_nodes = sorted(nodes.values(), key=lambda n: (n["kind"], n["id"]))
+    sorted_edges = sorted(
+        edge_list,
+        key=lambda e: (e["kind"], e["src"], e["dst"], e["evidence"]),
+    )
+
+    budgets.set_graph_nodes(len(sorted_nodes))
+    tracer.emit(
+        "graph_build_from_files_done",
+        edges=len(sorted_edges),
+        nodes=len(sorted_nodes),
+        warnings=len(warnings),
+    )
+
+    return {
+        "edges": sorted_edges,
+        "nodes": sorted_nodes,
+        "warnings": warnings,
+    }
+
+
 def save_graph(graph: dict, path: pathlib.Path) -> None:
     """Write *graph* to *path* as deterministic JSON (sorted keys, 2-space indent).
 

@@ -148,11 +148,25 @@ def _build_file_summary(graph: dict) -> dict:
     return dict(sorted(summary.items()))
 
 
+def _is_path_skipped(rel_path: str, skip_paths: frozenset) -> bool:
+    """Return True if *rel_path* is under any of the *skip_paths* prefixes.
+
+    Matching is by path-prefix: ``"docs"`` matches ``"docs/foo.md"`` and the
+    exact path ``"docs"`` itself.  Partial-directory matches are excluded —
+    ``"doc"`` does NOT match ``"docs/foo.md"``.
+    """
+    for sp in skip_paths:
+        if rel_path == sp or rel_path.startswith(sp + "/"):
+            return True
+    return False
+
+
 def _build_id_occurrences(
     graph: dict,
     root: pathlib.Path,
     budgets: Budgets,
     tracer: Tracer,
+    skip_paths: frozenset = frozenset(),
 ) -> tuple[dict, list[str]]:
     """Build ``id -> [{path, line, col_start, evidence}]`` by reading source files.
 
@@ -165,6 +179,10 @@ def _build_id_occurrences(
             Typically the same as the repo root.
         budgets: Budget enforcer (charges file reads for each source file).
         tracer: Trace sink.
+        skip_paths: Frozenset of POSIX path prefixes to skip.  Files whose
+            relative path starts with any prefix are excluded from occurrence
+            scanning (graph edges are unaffected).  Useful for skipping
+            ``docs/`` which is expensive and rarely needed for code navigation.
 
     Returns:
         Tuple of ``(occurrences_dict, warnings)``.  If the budget is exceeded
@@ -183,6 +201,9 @@ def _build_id_occurrences(
     warnings: list[str] = []
 
     for rel_path in sorted(file_to_ids.keys()):
+        if skip_paths and _is_path_skipped(rel_path, skip_paths):
+            tracer.emit("index_id_occ_skipped", path=rel_path, reason="skip_path")
+            continue
         if budgets.is_exceeded:
             warnings.append(
                 f"id_to_occurrences scan stopped early (budgets exceeded) "
@@ -249,6 +270,7 @@ def build_index(
     git_sha: str,
     git_available: bool,
     graph_sha256: str,
+    skip_paths: frozenset = frozenset(),
 ) -> dict:
     """Build the hot-path index from a pre-built graph.
 
@@ -273,6 +295,9 @@ def build_index(
         git_available: Whether git was reachable.
         graph_sha256: SHA-256 of the saved graph artifact file; links the index
             to its source graph.
+        skip_paths: Frozenset of POSIX path prefixes to exclude from
+            ``id_to_occurrences`` scanning.  Graph edges are unaffected.
+            Passed through to :func:`_build_id_occurrences`.
 
     Returns:
         Index dict ready to serialise with :func:`save_index`.
@@ -286,7 +311,7 @@ def build_index(
     # id_to_occurrences requires file reads — budget aware
     try:
         id_to_occurrences, occ_warnings = _build_id_occurrences(
-            graph, repo_root, budgets, tracer
+            graph, repo_root, budgets, tracer, skip_paths=skip_paths
         )
     except BudgetExceededError as exc:
         # Unexpected hard stop (shouldn't normally reach here because

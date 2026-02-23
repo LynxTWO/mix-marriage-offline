@@ -40,6 +40,51 @@ PR B — hot-path index:
     TestAgentIndex.test_schema_to_refs_has_refs
     TestAgentIndex.test_no_index_flag_skips_writing
     TestAgentIndex.test_low_budget_warns_on_occurrences
+
+Part 1 — seed-first diff build:
+    TestSeedFirstDiffBuild.test_bfs_returns_seeds_as_files
+    TestSeedFirstDiffBuild.test_bfs_expands_py_imports
+    TestSeedFirstDiffBuild.test_bfs_respects_max_frontier
+    TestSeedFirstDiffBuild.test_bfs_respects_max_steps
+    TestSeedFirstDiffBuild.test_bfs_deterministic
+    TestSeedFirstDiffBuild.test_bfs_parent_map_populated
+    TestSeedFirstDiffBuild.test_bfs_missing_seed_skipped
+    TestSeedFirstDiffBuild.test_build_graph_from_files_basic
+    TestSeedFirstDiffBuild.test_build_graph_from_files_py_import_edge
+    TestSeedFirstDiffBuild.test_build_graph_from_files_deterministic
+    TestSeedFirstDiffBuild.test_diff_seed_first_flag_accepted_by_cli
+
+Part 2 — explain mode:
+    TestExplainMode.test_shortest_path_linear
+    TestExplainMode.test_shortest_path_no_path_returns_none
+    TestExplainMode.test_shortest_path_same_node_returns_empty
+    TestExplainMode.test_shortest_path_tie_breaking_deterministic
+    TestExplainMode.test_shortest_path_undirected
+    TestExplainMode.test_run_explain_basic
+    TestExplainMode.test_run_explain_target_not_in_graph
+    TestExplainMode.test_run_explain_from_seed
+    TestExplainMode.test_run_explain_no_path
+    TestExplainMode.test_run_explain_scope_no_meta
+    TestExplainMode.test_run_explain_scope_with_parent_map
+    TestExplainMode.test_cli_explain_mode
+    TestExplainMode.test_cli_explain_scope_mode
+
+PR C — budget profiles and index skip:
+    TestProfileAndIndexSkip.test_profile_code_raises_budget_defaults
+    TestProfileAndIndexSkip.test_profile_code_does_not_override_explicit_flags
+    TestProfileAndIndexSkip.test_profile_code_sets_default_skip_paths
+    TestProfileAndIndexSkip.test_profile_code_does_not_override_explicit_skip_paths
+    TestProfileAndIndexSkip.test_no_profile_leaves_defaults_unchanged
+    TestProfileAndIndexSkip.test_is_path_skipped_exact_match
+    TestProfileAndIndexSkip.test_is_path_skipped_prefix_match
+    TestProfileAndIndexSkip.test_is_path_skipped_partial_prefix_no_match
+    TestProfileAndIndexSkip.test_is_path_skipped_unrelated_path
+    TestProfileAndIndexSkip.test_is_path_skipped_empty_skip_set
+    TestProfileAndIndexSkip.test_build_id_occurrences_skips_docs_files
+    TestProfileAndIndexSkip.test_build_id_occurrences_no_skip_includes_all
+    TestProfileAndIndexSkip.test_cli_profile_code_flag_accepted
+    TestProfileAndIndexSkip.test_cli_index_skip_path_flag_accepted
+    TestProfileAndIndexSkip.test_cli_profile_code_raises_budget_vs_default
 """
 
 from __future__ import annotations
@@ -67,7 +112,14 @@ from tools.agent.contract_stamp import (  # noqa: E402
     validate_contract_stamp,
     write_contract_stamp,
 )
-from tools.agent.graph_build import build_graph, save_graph, top_connected_nodes  # noqa: E402
+from tools.agent.diff_seed_first import expand_seed_first_bfs  # noqa: E402
+from tools.agent.explain import find_shortest_path, run_explain, run_explain_scope  # noqa: E402
+from tools.agent.graph_build import (  # noqa: E402
+    build_graph,
+    build_graph_from_files,
+    save_graph,
+    top_connected_nodes,
+)
 from tools.agent.index_build import build_index, save_index  # noqa: E402
 from tools.agent.repo_ops import (  # noqa: E402
     build_id_allowlist,
@@ -1619,3 +1671,932 @@ class TestAgentIndex:
         assert fs["a.py"]["id_refs_count"] == 1
         assert fs["a.py"]["schema_refs_count"] == 0
         assert fs["b.json"]["schema_refs_count"] == 1
+
+
+# ===========================================================================
+# Part 1: Seed-first diff build
+# ===========================================================================
+
+class TestSeedFirstDiffBuild:
+    """Tests for tools/agent/diff_seed_first.py and build_graph_from_files."""
+
+    # -----------------------------------------------------------------------
+    # Helpers
+    # -----------------------------------------------------------------------
+
+    @staticmethod
+    def _make_mini_repo(root: pathlib.Path) -> None:
+        """Create a tiny synthetic repo with Python files for BFS testing.
+
+        Structure::
+
+            root/
+              a.py       imports b (from mypkg import b)
+              mypkg/
+                __init__.py
+                b.py     imports c (from mypkg import c)
+                c.py     (leaf)
+                d.py     (unreachable from a)
+        """
+        (root / "a.py").write_text(
+            "from mypkg import b\n", encoding="utf-8"
+        )
+        pkg = root / "mypkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("", encoding="utf-8")
+        (pkg / "b.py").write_text(
+            "from mypkg import c\n", encoding="utf-8"
+        )
+        (pkg / "c.py").write_text("x = 1\n", encoding="utf-8")
+        (pkg / "d.py").write_text("y = 2\n", encoding="utf-8")
+
+    @staticmethod
+    def _budgets(
+        max_file_reads: int = 200,
+        max_total_lines: int = 50_000,
+    ) -> Budgets:
+        return Budgets(
+            BudgetConfig(
+                max_steps=500,
+                max_file_reads=max_file_reads,
+                max_total_lines=max_total_lines,
+                max_grep_hits=5000,
+                max_graph_nodes_summary=5000,
+            )
+        )
+
+    # -----------------------------------------------------------------------
+    # expand_seed_first_bfs unit tests
+    # -----------------------------------------------------------------------
+
+    def test_bfs_returns_seeds_as_files(self, tmp_path: pathlib.Path) -> None:
+        """Seeds that exist on disk appear in the result file list."""
+        self._make_mini_repo(tmp_path)
+        file_list, _ = expand_seed_first_bfs(
+            seeds=["a.py"],
+            repo_root=tmp_path,
+            max_frontier=50,
+            max_steps=1,
+            budgets=self._budgets(),
+            tracer=Tracer(),
+        )
+        posix_rels = [f.relative_to(tmp_path).as_posix() for f in file_list]
+        assert "a.py" in posix_rels, f"seed a.py must be in file_list: {posix_rels}"
+
+    def test_bfs_expands_py_imports(self, tmp_path: pathlib.Path) -> None:
+        """BFS follows Python import edges to reach b.py from a.py."""
+        self._make_mini_repo(tmp_path)
+        file_list, _ = expand_seed_first_bfs(
+            seeds=["a.py"],
+            repo_root=tmp_path,
+            max_frontier=50,
+            max_steps=3,
+            budgets=self._budgets(),
+            tracer=Tracer(),
+        )
+        posix_rels = {f.relative_to(tmp_path).as_posix() for f in file_list}
+        assert "a.py" in posix_rels
+        # a.py imports mypkg → mypkg/__init__.py or mypkg/b.py should be reachable
+        assert any("mypkg" in r for r in posix_rels), (
+            f"Expected mypkg files to be reachable. Got: {sorted(posix_rels)}"
+        )
+
+    def test_bfs_respects_max_frontier(self, tmp_path: pathlib.Path) -> None:
+        """BFS stops adding files when max_frontier is reached."""
+        self._make_mini_repo(tmp_path)
+        file_list, _ = expand_seed_first_bfs(
+            seeds=["a.py"],
+            repo_root=tmp_path,
+            max_frontier=2,     # only 2 files allowed
+            max_steps=10,
+            budgets=self._budgets(),
+            tracer=Tracer(),
+        )
+        assert len(file_list) <= 2, (
+            f"Expected at most 2 files (max_frontier=2). Got: {len(file_list)}"
+        )
+
+    def test_bfs_respects_max_steps(self, tmp_path: pathlib.Path) -> None:
+        """BFS stops expanding at max_steps depth."""
+        self._make_mini_repo(tmp_path)
+        # With max_steps=1: only a.py + its direct import (mypkg/__init__ or b)
+        # With max_steps=0: only seeds
+        file_list_0, _ = expand_seed_first_bfs(
+            seeds=["a.py"],
+            repo_root=tmp_path,
+            max_frontier=50,
+            max_steps=0,
+            budgets=self._budgets(),
+            tracer=Tracer(),
+        )
+        file_list_3, _ = expand_seed_first_bfs(
+            seeds=["a.py"],
+            repo_root=tmp_path,
+            max_frontier=50,
+            max_steps=3,
+            budgets=self._budgets(),
+            tracer=Tracer(),
+        )
+        # More steps → more or equal files
+        assert len(file_list_3) >= len(file_list_0), (
+            "More BFS steps should include at least as many files"
+        )
+
+    def test_bfs_deterministic(self, tmp_path: pathlib.Path) -> None:
+        """Two identical calls produce identical file_list and parent_map."""
+        self._make_mini_repo(tmp_path)
+        fl1, pm1 = expand_seed_first_bfs(
+            seeds=["a.py"],
+            repo_root=tmp_path,
+            max_frontier=50,
+            max_steps=3,
+            budgets=self._budgets(),
+            tracer=Tracer(),
+        )
+        fl2, pm2 = expand_seed_first_bfs(
+            seeds=["a.py"],
+            repo_root=tmp_path,
+            max_frontier=50,
+            max_steps=3,
+            budgets=self._budgets(),
+            tracer=Tracer(),
+        )
+        rels1 = sorted(f.relative_to(tmp_path).as_posix() for f in fl1)
+        rels2 = sorted(f.relative_to(tmp_path).as_posix() for f in fl2)
+        assert rels1 == rels2, "File list must be deterministic"
+        assert pm1 == pm2, "Parent map must be deterministic"
+
+    def test_bfs_parent_map_populated(self, tmp_path: pathlib.Path) -> None:
+        """Non-seed files in the result have a parent_map entry."""
+        self._make_mini_repo(tmp_path)
+        _, parent_map = expand_seed_first_bfs(
+            seeds=["a.py"],
+            repo_root=tmp_path,
+            max_frontier=50,
+            max_steps=3,
+            budgets=self._budgets(),
+            tracer=Tracer(),
+        )
+        # Seeds should NOT be in parent_map (they are roots)
+        assert "a.py" not in parent_map, "Seeds must not have parent_map entries"
+        # Non-seed files should have complete entries
+        for child, info in parent_map.items():
+            assert "parent" in info, f"Missing 'parent' in parent_map[{child}]"
+            assert "edge_kind" in info, f"Missing 'edge_kind' in parent_map[{child}]"
+            assert "evidence" in info, f"Missing 'evidence' in parent_map[{child}]"
+
+    def test_bfs_missing_seed_skipped(self, tmp_path: pathlib.Path) -> None:
+        """Seeds that do not exist on disk are silently skipped."""
+        self._make_mini_repo(tmp_path)
+        file_list, _ = expand_seed_first_bfs(
+            seeds=["does_not_exist.py", "a.py"],
+            repo_root=tmp_path,
+            max_frontier=50,
+            max_steps=1,
+            budgets=self._budgets(),
+            tracer=Tracer(),
+        )
+        posix_rels = {f.relative_to(tmp_path).as_posix() for f in file_list}
+        assert "a.py" in posix_rels
+        assert "does_not_exist.py" not in posix_rels
+
+    # -----------------------------------------------------------------------
+    # build_graph_from_files unit/integration tests
+    # -----------------------------------------------------------------------
+
+    def test_build_graph_from_files_basic(self, tmp_path: pathlib.Path) -> None:
+        """build_graph_from_files returns nodes/edges/warnings dict."""
+        self._make_mini_repo(tmp_path)
+        files = [tmp_path / "a.py", tmp_path / "mypkg" / "b.py"]
+        graph = build_graph_from_files(
+            files=files,
+            root=tmp_path,
+            repo_root=tmp_path,
+            budgets=self._budgets(),
+            tracer=Tracer(),
+        )
+        assert "nodes" in graph
+        assert "edges" in graph
+        assert "warnings" in graph
+        node_ids = {n["id"] for n in graph["nodes"]}
+        assert "a.py" in node_ids, f"Expected a.py in nodes. Got: {sorted(node_ids)}"
+
+    def test_build_graph_from_files_py_import_edge(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """build_graph_from_files emits py_import_file edges for resolvable imports."""
+        self._make_mini_repo(tmp_path)
+        files = [
+            tmp_path / "a.py",
+            tmp_path / "mypkg" / "__init__.py",
+            tmp_path / "mypkg" / "b.py",
+            tmp_path / "mypkg" / "c.py",
+        ]
+        graph = build_graph_from_files(
+            files=files,
+            root=tmp_path,
+            repo_root=tmp_path,
+            budgets=self._budgets(),
+            tracer=Tracer(),
+        )
+        pif_edges = [e for e in graph["edges"] if e["kind"] == "py_import_file"]
+        assert pif_edges, (
+            "Expected at least one py_import_file edge. "
+            f"Edge kinds: {[e['kind'] for e in graph['edges']]}"
+        )
+        srcs = {e["src"] for e in pif_edges}
+        assert "a.py" in srcs, f"Expected a.py as src. Srcs: {srcs}"
+
+    def test_build_graph_from_files_deterministic(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Two calls with identical file list produce identical JSON."""
+        self._make_mini_repo(tmp_path)
+        files = sorted(tmp_path.rglob("*.py"))
+        cfg = BudgetConfig(
+            max_steps=500,
+            max_file_reads=200,
+            max_total_lines=50_000,
+        )
+        g1 = build_graph_from_files(
+            files=files, root=tmp_path, repo_root=tmp_path, budgets=Budgets(cfg)
+        )
+        g2 = build_graph_from_files(
+            files=files, root=tmp_path, repo_root=tmp_path, budgets=Budgets(cfg)
+        )
+        j1 = json.dumps({"edges": g1["edges"], "nodes": g1["nodes"]}, sort_keys=True)
+        j2 = json.dumps({"edges": g2["edges"], "nodes": g2["nodes"]}, sort_keys=True)
+        assert j1 == j2, "build_graph_from_files must be deterministic"
+
+    def test_diff_seed_first_flag_accepted_by_cli(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """--diff-seed-first flag is accepted by the CLI without error.
+
+        This test does NOT require git; it verifies that the flag is parsed and
+        that when no seeds are found the harness gracefully falls back to the
+        normal build path.
+        """
+        # Create a minimal repo structure so graph-only can complete.
+        (tmp_path / "dummy.py").write_text("import os\n", encoding="utf-8")
+        out_dir = tmp_path / "out"
+        # --diff-seed-first without --diff should be a no-op (flag only matters
+        # when combined with --diff).  Run without --diff to test flag parsing.
+        rc = harness_main([
+            "graph-only",
+            "--root", str(tmp_path),
+            "--out", str(out_dir),
+            "--diff-seed-first",
+            "--diff-max-frontier", "50",
+            "--diff-max-steps", "3",
+            "--no-contract-stamp",
+            "--no-index",
+            "--max-file-reads", "50",
+            "--max-total-lines", "10000",
+            "--max-steps", "50",
+        ])
+        assert rc in (0, 1), f"Expected 0 or 1, got {rc}"
+
+
+# ===========================================================================
+# Part 2: Explain mode
+# ===========================================================================
+
+class TestExplainMode:
+    """Tests for tools/agent/explain.py and the explain/explain-scope CLI modes."""
+
+    # -----------------------------------------------------------------------
+    # Minimal graph fixtures
+    # -----------------------------------------------------------------------
+
+    @staticmethod
+    def _linear_graph() -> dict:
+        """a→b→c linear chain."""
+        return {
+            "edges": [
+                {
+                    "dst": "b.py",
+                    "evidence": "mypkg.b",
+                    "kind": "py_import_file",
+                    "source_file": "a.py",
+                    "src": "a.py",
+                },
+                {
+                    "dst": "c.py",
+                    "evidence": "mypkg.c",
+                    "kind": "py_import_file",
+                    "source_file": "b.py",
+                    "src": "b.py",
+                },
+            ],
+            "nodes": [
+                {"id": "a.py", "kind": "file"},
+                {"id": "b.py", "kind": "file"},
+                {"id": "c.py", "kind": "file"},
+            ],
+            "warnings": [],
+        }
+
+    @staticmethod
+    def _diamond_graph() -> dict:
+        """Diamond: a→b, a→c, b→d, c→d (two shortest paths to d)."""
+        return {
+            "edges": [
+                {
+                    "dst": "b.py",
+                    "evidence": "mypkg.b",
+                    "kind": "py_import_file",
+                    "source_file": "a.py",
+                    "src": "a.py",
+                },
+                {
+                    "dst": "c.py",
+                    "evidence": "mypkg.c",
+                    "kind": "py_import_file",
+                    "source_file": "a.py",
+                    "src": "a.py",
+                },
+                {
+                    "dst": "d.py",
+                    "evidence": "mypkg.d",
+                    "kind": "py_import_file",
+                    "source_file": "b.py",
+                    "src": "b.py",
+                },
+                {
+                    "dst": "d.py",
+                    "evidence": "mypkg.d",
+                    "kind": "schema_ref",
+                    "source_file": "c.py",
+                    "src": "c.py",
+                },
+            ],
+            "nodes": [
+                {"id": "a.py", "kind": "file"},
+                {"id": "b.py", "kind": "file"},
+                {"id": "c.py", "kind": "file"},
+                {"id": "d.py", "kind": "file"},
+            ],
+            "warnings": [],
+        }
+
+    # -----------------------------------------------------------------------
+    # find_shortest_path unit tests
+    # -----------------------------------------------------------------------
+
+    def test_shortest_path_linear(self) -> None:
+        """find_shortest_path returns 2-hop path in a→b→c chain."""
+        graph = self._linear_graph()
+        path = find_shortest_path(graph, "a.py", "c.py", directed=True)
+        assert path is not None, "Expected a path"
+        assert len(path) == 2, f"Expected 2-hop path, got {len(path)}"
+        assert path[0]["src"] == "a.py" and path[0]["dst"] == "b.py"
+        assert path[1]["src"] == "b.py" and path[1]["dst"] == "c.py"
+
+    def test_shortest_path_no_path_returns_none(self) -> None:
+        """find_shortest_path returns None when target is unreachable."""
+        graph = self._linear_graph()
+        result = find_shortest_path(graph, "c.py", "a.py", directed=True)
+        assert result is None, "Expected None for unreachable node in directed graph"
+
+    def test_shortest_path_same_node_returns_empty(self) -> None:
+        """find_shortest_path returns [] when from == to."""
+        graph = self._linear_graph()
+        result = find_shortest_path(graph, "a.py", "a.py")
+        assert result == [], f"Expected [], got {result}"
+
+    def test_shortest_path_tie_breaking_deterministic(self) -> None:
+        """Tie-breaking is deterministic: lex-min (kind, src, dst, evidence) wins."""
+        graph = self._diamond_graph()
+        # Both paths a→b→d and a→c→d have length 2.
+        # Tie-break: compare edge sequences lex.
+        # Path via b: [("py_import_file","a.py","b.py","mypkg.b"),
+        #               ("py_import_file","b.py","d.py","mypkg.d")]
+        # Path via c: [("py_import_file","a.py","c.py","mypkg.c"),
+        #               ("schema_ref","c.py","d.py","mypkg.d")]
+        # Lex comparison at hop 0:
+        #   ("py_import_file","a.py","b.py","mypkg.b") vs
+        #   ("py_import_file","a.py","c.py","mypkg.c")
+        # "b.py" < "c.py" → via-b path wins.
+        path1 = find_shortest_path(graph, "a.py", "d.py", directed=True)
+        path2 = find_shortest_path(graph, "a.py", "d.py", directed=True)
+        assert path1 == path2, "Tie-breaking must be deterministic"
+        assert path1 is not None
+        assert len(path1) == 2
+        assert path1[0]["dst"] == "b.py", (
+            f"Expected path via b.py (lex-min), got via {path1[0]['dst']}"
+        )
+
+    def test_shortest_path_undirected(self) -> None:
+        """Undirected mode can traverse edges in reverse direction."""
+        graph = self._linear_graph()
+        # In directed mode c→a is unreachable; in undirected it is reachable.
+        directed_result = find_shortest_path(graph, "c.py", "a.py", directed=True)
+        undirected_result = find_shortest_path(graph, "c.py", "a.py", directed=False)
+        assert directed_result is None
+        assert undirected_result is not None
+        assert len(undirected_result) == 2
+
+    # -----------------------------------------------------------------------
+    # run_explain unit tests (captures stdout)
+    # -----------------------------------------------------------------------
+
+    def test_run_explain_basic(self, capsys: pytest.CaptureFixture) -> None:
+        """run_explain prints target, from, hops for a known linear graph."""
+        graph = self._linear_graph()
+        graph["meta"] = {"seeds": ["a.py"]}
+        rc = run_explain(
+            graph=graph,
+            target="c.py",
+            from_seed=None,
+            max_hops=10,
+            directed=True,
+        )
+        out = capsys.readouterr().out
+        assert rc == 0, f"Expected rc=0, got {rc}"
+        assert "target" in out
+        assert "c.py" in out
+        assert "hops" in out
+
+    def test_run_explain_target_not_in_graph(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """run_explain returns 1 when target is not in graph."""
+        graph = self._linear_graph()
+        rc = run_explain(
+            graph=graph,
+            target="nonexistent.py",
+            from_seed=None,
+            max_hops=10,
+            directed=True,
+        )
+        assert rc == 1
+
+    def test_run_explain_from_seed(self, capsys: pytest.CaptureFixture) -> None:
+        """run_explain uses explicit --from-seed when provided."""
+        graph = self._linear_graph()
+        rc = run_explain(
+            graph=graph,
+            target="c.py",
+            from_seed="a.py",
+            max_hops=10,
+            directed=True,
+        )
+        out = capsys.readouterr().out
+        assert rc == 0
+        assert "a.py" in out  # from line
+        assert "c.py" in out  # target line
+
+    def test_run_explain_no_path(self, capsys: pytest.CaptureFixture) -> None:
+        """run_explain returns 1 and prints error when no path exists."""
+        graph = self._linear_graph()
+        rc = run_explain(
+            graph=graph,
+            target="a.py",
+            from_seed="c.py",
+            max_hops=10,
+            directed=True,
+        )
+        assert rc == 1
+
+    # -----------------------------------------------------------------------
+    # run_explain_scope unit tests
+    # -----------------------------------------------------------------------
+
+    def test_run_explain_scope_no_meta(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """run_explain_scope prints info message when graph has no meta."""
+        graph: dict = {
+            "edges": [],
+            "nodes": [{"id": "a.py", "kind": "file"}],
+            "warnings": [],
+        }
+        rc = run_explain_scope(graph=graph)
+        out = capsys.readouterr().out
+        assert rc == 0
+        assert "INFO" in out
+
+    def test_run_explain_scope_with_parent_map(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """run_explain_scope prints seeds and non-seed first-hop justifications."""
+        graph: dict = {
+            "edges": [],
+            "nodes": [
+                {"id": "a.py", "kind": "file"},
+                {"id": "b.py", "kind": "file"},
+            ],
+            "warnings": [],
+            "meta": {
+                "seed_first": True,
+                "seeds": ["a.py"],
+                "parent_map": {
+                    "b.py": {
+                        "edge_kind": "py_import_file",
+                        "evidence": "mypkg.b",
+                        "parent": "a.py",
+                    }
+                },
+            },
+        }
+        rc = run_explain_scope(graph=graph)
+        out = capsys.readouterr().out
+        assert rc == 0
+        assert "a.py" in out  # seed printed
+        assert "b.py" in out  # non-seed printed
+        assert "py_import_file" in out  # edge kind shown
+
+    def test_run_explain_scope_deterministic_ordering(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """run_explain_scope output is the same on two calls."""
+        graph: dict = {
+            "edges": [],
+            "nodes": [],
+            "warnings": [],
+            "meta": {
+                "seed_first": True,
+                "seeds": ["z.py", "a.py"],  # deliberately unsorted
+                "parent_map": {
+                    "c.py": {"edge_kind": "py_import_file", "evidence": "x", "parent": "a.py"},
+                    "b.py": {"edge_kind": "py_import_file", "evidence": "y", "parent": "a.py"},
+                },
+            },
+        }
+        run_explain_scope(graph=graph)
+        out1 = capsys.readouterr().out
+        run_explain_scope(graph=graph)
+        out2 = capsys.readouterr().out
+        assert out1 == out2, "explain-scope output must be deterministic"
+
+    # -----------------------------------------------------------------------
+    # CLI integration tests for explain and explain-scope
+    # -----------------------------------------------------------------------
+
+    def test_cli_explain_mode(self, tmp_path: pathlib.Path) -> None:
+        """explain mode loads graph and returns 0 for a reachable target."""
+        graph_path = tmp_path / "agent_graph.json"
+        graph = self._linear_graph()
+        graph["meta"] = {"seeds": ["a.py"]}
+        save_graph(graph, graph_path)
+
+        out_dir = tmp_path / "out"
+        rc = harness_main([
+            "explain",
+            "--root", str(tmp_path),
+            "--out", str(out_dir),
+            "--graph", str(graph_path),
+            "--target", "c.py",
+            "--no-contract-stamp",
+            "--no-index",
+        ])
+        assert rc == 0, f"Expected rc=0 for reachable target, got {rc}"
+
+    def test_cli_explain_target_missing_returns_1(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """explain mode returns 1 when --target is absent."""
+        graph_path = tmp_path / "agent_graph.json"
+        save_graph(self._linear_graph(), graph_path)
+        out_dir = tmp_path / "out"
+        rc = harness_main([
+            "explain",
+            "--root", str(tmp_path),
+            "--out", str(out_dir),
+            "--graph", str(graph_path),
+            # no --target
+            "--no-contract-stamp",
+            "--no-index",
+        ])
+        assert rc == 1, f"Expected rc=1 when --target absent, got {rc}"
+
+    def test_cli_explain_scope_mode(self, tmp_path: pathlib.Path) -> None:
+        """explain-scope mode loads graph and returns 0."""
+        graph_path = tmp_path / "agent_graph.json"
+        graph = self._linear_graph()
+        graph["meta"] = {
+            "seed_first": True,
+            "seeds": ["a.py"],
+            "parent_map": {
+                "b.py": {"edge_kind": "py_import_file", "evidence": "mypkg.b", "parent": "a.py"}
+            },
+        }
+        save_graph(graph, graph_path)
+        out_dir = tmp_path / "out"
+        rc = harness_main([
+            "explain-scope",
+            "--root", str(tmp_path),
+            "--out", str(out_dir),
+            "--graph", str(graph_path),
+            "--no-contract-stamp",
+            "--no-index",
+        ])
+        assert rc == 0, f"Expected rc=0, got {rc}"
+
+    def test_cli_explain_no_graph_returns_1(self, tmp_path: pathlib.Path) -> None:
+        """explain mode returns 1 when no graph artifact exists."""
+        out_dir = tmp_path / "out"
+        rc = harness_main([
+            "explain",
+            "--root", str(tmp_path),
+            "--out", str(out_dir),
+            "--target", "a.py",
+            "--no-contract-stamp",
+            "--no-index",
+        ])
+        assert rc == 1, f"Expected rc=1 when graph missing, got {rc}"
+
+
+# ===========================================================================
+# Budget profiles and --index-skip-path (PR C)
+# ===========================================================================
+
+class TestProfileAndIndexSkip:
+    """Tests for --profile code and --index-skip-path features."""
+
+    # -----------------------------------------------------------------------
+    # Unit: _apply_profile
+    # -----------------------------------------------------------------------
+
+    def test_profile_code_raises_budget_defaults(self) -> None:
+        """--profile code raises max_file_reads and max_total_lines from defaults."""
+        from tools.agent.run import _apply_profile, _BUDGET_DEFAULTS, _PROFILE_CODE_BUDGETS
+        import argparse
+
+        args = argparse.Namespace(
+            profile="code",
+            max_file_reads=_BUDGET_DEFAULTS["max_file_reads"],
+            max_total_lines=_BUDGET_DEFAULTS["max_total_lines"],
+            max_steps=_BUDGET_DEFAULTS["max_steps"],
+            max_grep_hits=_BUDGET_DEFAULTS["max_grep_hits"],
+            max_graph_nodes_summary=_BUDGET_DEFAULTS["max_graph_nodes_summary"],
+            index_skip_path=[],
+        )
+        _apply_profile(args)
+
+        assert args.max_file_reads == _PROFILE_CODE_BUDGETS["max_file_reads"]
+        assert args.max_total_lines == _PROFILE_CODE_BUDGETS["max_total_lines"]
+        # Unchanged budgets stay at default
+        assert args.max_steps == _BUDGET_DEFAULTS["max_steps"]
+
+    def test_profile_code_does_not_override_explicit_flags(self) -> None:
+        """Explicit CLI budget values must not be overridden by --profile code."""
+        from tools.agent.run import _apply_profile, _BUDGET_DEFAULTS
+
+        import argparse
+        args = argparse.Namespace(
+            profile="code",
+            max_file_reads=120,          # explicit — must not change
+            max_total_lines=_BUDGET_DEFAULTS["max_total_lines"],
+            max_steps=_BUDGET_DEFAULTS["max_steps"],
+            max_grep_hits=_BUDGET_DEFAULTS["max_grep_hits"],
+            max_graph_nodes_summary=_BUDGET_DEFAULTS["max_graph_nodes_summary"],
+            index_skip_path=[],
+        )
+        _apply_profile(args)
+
+        assert args.max_file_reads == 120, (
+            "Explicit --max-file-reads must not be overridden by profile"
+        )
+
+    def test_profile_code_sets_default_skip_paths(self) -> None:
+        """--profile code sets index_skip_path to ['docs'] when not already set."""
+        from tools.agent.run import _apply_profile, _BUDGET_DEFAULTS, _PROFILE_CODE_SKIP_PATHS
+
+        import argparse
+        args = argparse.Namespace(
+            profile="code",
+            max_file_reads=_BUDGET_DEFAULTS["max_file_reads"],
+            max_total_lines=_BUDGET_DEFAULTS["max_total_lines"],
+            max_steps=_BUDGET_DEFAULTS["max_steps"],
+            max_grep_hits=_BUDGET_DEFAULTS["max_grep_hits"],
+            max_graph_nodes_summary=_BUDGET_DEFAULTS["max_graph_nodes_summary"],
+            index_skip_path=[],
+        )
+        _apply_profile(args)
+
+        assert args.index_skip_path == _PROFILE_CODE_SKIP_PATHS
+
+    def test_profile_code_does_not_override_explicit_skip_paths(self) -> None:
+        """Explicit --index-skip-path values are not overridden by --profile code."""
+        from tools.agent.run import _apply_profile, _BUDGET_DEFAULTS
+
+        import argparse
+        args = argparse.Namespace(
+            profile="code",
+            max_file_reads=_BUDGET_DEFAULTS["max_file_reads"],
+            max_total_lines=_BUDGET_DEFAULTS["max_total_lines"],
+            max_steps=_BUDGET_DEFAULTS["max_steps"],
+            max_grep_hits=_BUDGET_DEFAULTS["max_grep_hits"],
+            max_graph_nodes_summary=_BUDGET_DEFAULTS["max_graph_nodes_summary"],
+            index_skip_path=["tools"],  # explicit — must not change
+        )
+        _apply_profile(args)
+
+        assert args.index_skip_path == ["tools"], (
+            "Explicit --index-skip-path must not be overridden by profile"
+        )
+
+    def test_no_profile_leaves_defaults_unchanged(self) -> None:
+        """With profile=None, _apply_profile must not mutate anything."""
+        from tools.agent.run import _apply_profile, _BUDGET_DEFAULTS
+
+        import argparse
+        args = argparse.Namespace(
+            profile=None,
+            max_file_reads=_BUDGET_DEFAULTS["max_file_reads"],
+            max_total_lines=_BUDGET_DEFAULTS["max_total_lines"],
+            max_steps=_BUDGET_DEFAULTS["max_steps"],
+            max_grep_hits=_BUDGET_DEFAULTS["max_grep_hits"],
+            max_graph_nodes_summary=_BUDGET_DEFAULTS["max_graph_nodes_summary"],
+            index_skip_path=[],
+        )
+        _apply_profile(args)
+
+        assert args.max_file_reads == _BUDGET_DEFAULTS["max_file_reads"]
+        assert args.max_total_lines == _BUDGET_DEFAULTS["max_total_lines"]
+        assert args.index_skip_path == []
+
+    # -----------------------------------------------------------------------
+    # Unit: _is_path_skipped
+    # -----------------------------------------------------------------------
+
+    def test_is_path_skipped_exact_match(self) -> None:
+        """Exact path match returns True."""
+        from tools.agent.index_build import _is_path_skipped
+        assert _is_path_skipped("docs", frozenset({"docs"}))
+
+    def test_is_path_skipped_prefix_match(self) -> None:
+        """Path under a skipped prefix returns True."""
+        from tools.agent.index_build import _is_path_skipped
+        assert _is_path_skipped("docs/agent_repl_harness.md", frozenset({"docs"}))
+
+    def test_is_path_skipped_partial_prefix_no_match(self) -> None:
+        """Partial directory name must NOT match (e.g. 'doc' should not match 'docs/')."""
+        from tools.agent.index_build import _is_path_skipped
+        assert not _is_path_skipped("docs/foo.md", frozenset({"doc"}))
+
+    def test_is_path_skipped_unrelated_path(self) -> None:
+        """Unrelated path returns False."""
+        from tools.agent.index_build import _is_path_skipped
+        assert not _is_path_skipped("src/mmo/cli.py", frozenset({"docs"}))
+
+    def test_is_path_skipped_empty_skip_set(self) -> None:
+        """Empty skip set: nothing is skipped."""
+        from tools.agent.index_build import _is_path_skipped
+        assert not _is_path_skipped("docs/foo.md", frozenset())
+
+    # -----------------------------------------------------------------------
+    # Unit: _build_id_occurrences with skip_paths
+    # -----------------------------------------------------------------------
+
+    def test_build_id_occurrences_skips_docs_files(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Files under a skipped prefix are excluded from id_to_occurrences."""
+        from tools.agent.index_build import _build_id_occurrences
+
+        # Create a real file so the scanner could read it if not skipped
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        doc_file = docs_dir / "guide.md"
+        doc_file.write_text("ACTION.EQ.BELL_CUT is mentioned here.\n", encoding="utf-8")
+
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        src_file = src_dir / "module.py"
+        src_file.write_text('action = "ACTION.EQ.BELL_CUT"\n', encoding="utf-8")
+
+        graph: dict = {
+            "edges": [
+                {
+                    "kind": "id_ref",
+                    "src": "docs/guide.md",
+                    "dst": "ACTION.EQ.BELL_CUT",
+                    "evidence": "docs/guide.md",
+                    "source_file": "docs/guide.md",
+                },
+                {
+                    "kind": "id_ref",
+                    "src": "src/module.py",
+                    "dst": "ACTION.EQ.BELL_CUT",
+                    "evidence": "src/module.py",
+                    "source_file": "src/module.py",
+                },
+            ],
+            "nodes": [],
+            "warnings": [],
+        }
+
+        result, warnings = _build_id_occurrences(
+            graph=graph,
+            root=tmp_path,
+            budgets=_budgets(),
+            tracer=Tracer(),
+            skip_paths=frozenset({"docs"}),
+        )
+
+        # All occurrences of ACTION.EQ.BELL_CUT must come from src/, not docs/
+        for id_key, occs in result.items():
+            for occ in occs:
+                assert not occ["path"].startswith("docs/"), (
+                    f"docs/ file must be skipped. Found occurrence: {occ}"
+                )
+
+    def test_build_id_occurrences_no_skip_includes_all(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """With empty skip_paths all files are scanned."""
+        from tools.agent.index_build import _build_id_occurrences
+
+        docs_dir = tmp_path / "docs"
+        docs_dir.mkdir()
+        doc_file = docs_dir / "guide.md"
+        doc_file.write_text("ACTION.EQ.BELL_CUT mentioned.\n", encoding="utf-8")
+
+        graph: dict = {
+            "edges": [
+                {
+                    "kind": "id_ref",
+                    "src": "docs/guide.md",
+                    "dst": "ACTION.EQ.BELL_CUT",
+                    "evidence": "docs/guide.md",
+                    "source_file": "docs/guide.md",
+                },
+            ],
+            "nodes": [],
+            "warnings": [],
+        }
+
+        result, _ = _build_id_occurrences(
+            graph=graph,
+            root=tmp_path,
+            budgets=_budgets(),
+            tracer=Tracer(),
+            skip_paths=frozenset(),
+        )
+
+        # docs/guide.md must appear in occurrences when skip_paths is empty
+        all_paths = {occ["path"] for occs in result.values() for occ in occs}
+        assert any(p.startswith("docs/") for p in all_paths), (
+            f"Expected docs/ occurrence when skip_paths is empty. Paths: {all_paths}"
+        )
+
+    # -----------------------------------------------------------------------
+    # Integration: CLI flags --profile and --index-skip-path
+    # -----------------------------------------------------------------------
+
+    def test_cli_profile_code_flag_accepted(self, tmp_path: pathlib.Path) -> None:
+        """--profile code is accepted by the CLI and completes without error."""
+        rc = harness_main([
+            "graph-only",
+            "--root", str(_SCHEMAS_DIR),
+            "--out", str(tmp_path / "out"),
+            "--profile", "code",
+            "--no-contract-stamp",
+            "--no-index",
+            "--max-steps", "100",
+        ])
+        assert rc in (0, 1), f"Expected 0 or 1, got {rc}"
+
+    def test_cli_index_skip_path_flag_accepted(self, tmp_path: pathlib.Path) -> None:
+        """--index-skip-path flag is accepted and excludes the path from occurrences."""
+        index_path = tmp_path / "index.json"
+        out_dir = tmp_path / "out"
+        rc = harness_main([
+            "graph-only",
+            "--root", str(_ONTOLOGY_DIR),
+            "--out", str(out_dir),
+            "--index-path", str(index_path),
+            "--index-skip-path", "docs",
+            "--no-contract-stamp",
+            "--max-file-reads", "200",
+            "--max-total-lines", "200000",
+            "--max-steps", "200",
+        ])
+        assert rc in (0, 1), f"Expected 0 or 1, got {rc}"
+        # If index was written, verify no docs/ paths in id_to_occurrences
+        if index_path.exists():
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            for id_key, occs in index.get("id_to_occurrences", {}).items():
+                for occ in occs:
+                    assert not occ["path"].startswith("docs/"), (
+                        f"docs/ path found in id_to_occurrences despite --index-skip-path docs: "
+                        f"{occ}"
+                    )
+
+    def test_cli_profile_code_raises_budget_vs_default(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """--profile code produces a config with higher budget than the default."""
+        from tools.agent.run import _parse_args, _apply_profile
+        from tools.agent.budgets import BudgetConfig
+
+        # Simulate what main() does
+        args_default = _parse_args(["graph-only", "--root", "."])
+        args_code = _parse_args(["graph-only", "--root", ".", "--profile", "code"])
+        _apply_profile(args_code)
+
+        assert args_code.max_file_reads > args_default.max_file_reads
+        assert args_code.max_total_lines > args_default.max_total_lines

@@ -21,6 +21,15 @@ patch
     edits.  A future agent extension may provide a ``--patch-file`` flag to
     apply a pre-approved, minimal diff.
 
+explain
+    Load an existing graph artifact and print the shortest edge-path from a
+    seed (or ``--from-seed``) to the ``--target`` node.  Read-only.
+
+explain-scope
+    Load an existing graph artifact and print seeds + first-hop justification
+    for every non-seed node recorded in ``graph.meta.parent_map`` (populated
+    by a seed-first build).  Read-only.
+
 Usage (from repo root)::
 
     python -m tools.agent.run graph-only
@@ -34,6 +43,18 @@ Scoping (Upgrade 3)::
     python -m tools.agent.run graph-only --scope src/mmo/core --scope ontology
     python -m tools.agent.run graph-only --diff
     python -m tools.agent.run graph-only --diff --diff-cap 30
+
+Seed-first diff build::
+
+    python -m tools.agent.run graph-only --diff --diff-seed-first
+    python -m tools.agent.run graph-only --diff --diff-seed-first --diff-max-frontier 100
+    python -m tools.agent.run graph-only --diff --diff-seed-first --diff-max-steps 4
+
+Explain mode::
+
+    python -m tools.agent.run explain --target src/mmo/cli.py
+    python -m tools.agent.run explain --target schemas/render_request.schema.json --undirected
+    python -m tools.agent.run explain-scope
 
 Budget overrides (CLI flags)::
 
@@ -52,6 +73,19 @@ Hot-path index (PR B)::
 
     --no-index                 Disable writing the index
     --index-path PATH          Override the default index path
+
+Budget profiles::
+
+    --profile code             Set code-navigation defaults:
+                                 max_total_lines = 20000
+                                 max_file_reads  = 80
+                               And skip docs/ from id_to_occurrences by default.
+                               Explicit budget flags override profile values.
+
+Index skip paths (docs-only by default under --profile code)::
+
+    --index-skip-path docs     Skip docs/ prefix in id_to_occurrences scanning.
+                               Graph edges are still complete.  Repeatable.
 """
 
 from __future__ import annotations
@@ -76,7 +110,14 @@ if __package__:
         validate_contract_stamp,
         write_contract_stamp,
     )
-    from .graph_build import build_graph, save_graph, top_connected_nodes
+    from .diff_seed_first import expand_seed_first_bfs
+    from .explain import run_explain, run_explain_scope
+    from .graph_build import (
+        build_graph,
+        build_graph_from_files,
+        save_graph,
+        top_connected_nodes,
+    )
     from .index_build import build_index, save_index
     from .scoping import (
         expand_diff_scope,
@@ -98,7 +139,14 @@ else:
         validate_contract_stamp,
         write_contract_stamp,
     )
-    from tools.agent.graph_build import build_graph, save_graph, top_connected_nodes
+    from tools.agent.diff_seed_first import expand_seed_first_bfs
+    from tools.agent.explain import run_explain, run_explain_scope
+    from tools.agent.graph_build import (
+        build_graph,
+        build_graph_from_files,
+        save_graph,
+        top_connected_nodes,
+    )
     from tools.agent.index_build import build_index, save_index
     from tools.agent.scoping import (
         expand_diff_scope,
@@ -107,6 +155,44 @@ else:
         resolve_scope_paths,
     )
     from tools.agent.trace import Tracer
+
+
+# ---------------------------------------------------------------------------
+# Budget profile helpers
+# ---------------------------------------------------------------------------
+
+# Built-in defaults mirror the argparse defaults below.  Used by
+# _apply_profile to detect "the user did not override this flag".
+_BUDGET_DEFAULTS: dict[str, int] = {
+    "max_file_reads": 60,
+    "max_graph_nodes_summary": 200,
+    "max_grep_hits": 300,
+    "max_steps": 40,
+    "max_total_lines": 4000,
+}
+
+_PROFILE_CODE_BUDGETS: dict[str, int] = {
+    "max_file_reads": 80,
+    "max_total_lines": 20_000,
+}
+
+_PROFILE_CODE_SKIP_PATHS: list[str] = ["docs"]
+
+
+def _apply_profile(args: argparse.Namespace) -> None:
+    """Apply named profile defaults to *args*.
+
+    Profile values are applied only when the corresponding CLI flag still holds
+    its built-in default value — i.e. the user has NOT explicitly overridden it.
+    This lets ``--profile code --max-file-reads 120`` give 120, not 80.
+    """
+    if args.profile != "code":
+        return
+    for key, profile_val in _PROFILE_CODE_BUDGETS.items():
+        if getattr(args, key) == _BUDGET_DEFAULTS[key]:
+            setattr(args, key, profile_val)
+    if not args.index_skip_path:
+        args.index_skip_path = list(_PROFILE_CODE_SKIP_PATHS)
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +208,7 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "mode",
-        choices=["graph-only", "plan", "patch"],
+        choices=["graph-only", "plan", "patch", "explain", "explain-scope"],
         help="Harness mode.",
     )
     parser.add_argument(
@@ -142,8 +228,21 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         type=pathlib.Path,
         default=None,
         help=(
-            "Existing graph artifact path (patch mode only; defaults to "
+            "Existing graph artifact path (patch/explain modes; defaults to "
             "<out>/agent_graph.json)."
+        ),
+    )
+
+    # Budget profile
+    parser.add_argument(
+        "--profile",
+        choices=["code"],
+        default=None,
+        help=(
+            "Named budget + index profile.  "
+            "'code' sets max_total_lines=20000, max_file_reads=80 and "
+            "skips docs/ in id_to_occurrences by default.  "
+            "Explicit budget flags override profile values."
         ),
     )
 
@@ -189,6 +288,37 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         type=int,
         default=50,
         help="Maximum nodes to include in diff expansion (default: 50).",
+    )
+
+    # Seed-first diff build
+    parser.add_argument(
+        "--diff-seed-first",
+        action="store_true",
+        default=False,
+        help=(
+            "When --diff is active, build the graph starting from changed "
+            "files (seeds) and crawling outward in BFS steps instead of "
+            "scanning the full repo first.  Faster for large repos.  "
+            "Default: OFF (existing behaviour preserved)."
+        ),
+    )
+    parser.add_argument(
+        "--diff-max-frontier",
+        type=int,
+        default=250,
+        help=(
+            "Seed-first: cap on total files examined during BFS expansion "
+            "(default: 250).  Only used when --diff-seed-first is active."
+        ),
+    )
+    parser.add_argument(
+        "--diff-max-steps",
+        type=int,
+        default=6,
+        help=(
+            "Seed-first: maximum BFS depth during expansion "
+            "(default: 6).  Only used when --diff-seed-first is active."
+        ),
     )
 
     # Upgrade 2: id allowlist
@@ -238,6 +368,52 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
             "<root>/.mmo_agent/agent_index.json"
         ),
     )
+    parser.add_argument(
+        "--index-skip-path",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help=(
+            "Skip PATH prefix in id_to_occurrences scanning during index "
+            "build.  Graph edges are unaffected.  Repeatable.  "
+            "Default when --profile code: docs/ is skipped."
+        ),
+    )
+
+    # Explain mode flags
+    parser.add_argument(
+        "--target",
+        default=None,
+        metavar="NODE",
+        help=(
+            "Explain mode: target node id to explain (e.g. a file path or "
+            "canonical ID)."
+        ),
+    )
+    parser.add_argument(
+        "--from-seed",
+        default=None,
+        metavar="NODE",
+        help=(
+            "Explain mode: explicit starting node.  Defaults to seeds from "
+            "graph.meta.seeds when not provided."
+        ),
+    )
+    parser.add_argument(
+        "--max-hops",
+        type=int,
+        default=10,
+        help="Explain mode: maximum path length to report (default: 10).",
+    )
+    parser.add_argument(
+        "--undirected",
+        action="store_true",
+        default=False,
+        help=(
+            "Explain mode: allow reverse edge traversal when searching for "
+            "a path."
+        ),
+    )
 
     return parser.parse_args(argv)
 
@@ -281,7 +457,13 @@ def _print_summary(
     n_sc  = sum(1 for e in edges if e["kind"] == "schema_ref")
     n_id  = sum(1 for e in edges if e["kind"] == "id_ref")
 
+    meta = graph.get("meta", {})
+    seed_first = meta.get("seed_first", False)
+
     print("=== Agent Graph Summary ===")
+    if seed_first:
+        print(f"Build mode       : seed-first diff")
+        print(f"Seeds            : {len(meta.get('seeds', []))}")
     print(f"Nodes            : {len(nodes)}")
     print(f"Edges total      : {len(edges)}")
     print(f"  py_import      : {n_py}")
@@ -319,6 +501,9 @@ def _apply_diff_filter(
 ) -> Optional[dict]:
     """Get changed files, expand neighbours, filter graph.
 
+    Injects ``graph["meta"]["seeds"]`` into the filtered graph so that
+    explain mode can discover the seed set without re-running git.
+
     Returns the filtered graph, or None on failure (after printing an error).
     """
     try:
@@ -341,6 +526,13 @@ def _apply_diff_filter(
 
     scope = expand_diff_scope(seed_files, graph, cap=diff_cap)
     filtered = filter_graph_to_scope(graph, scope)
+
+    # Record seeds in meta for explain mode.
+    filtered["meta"] = {
+        "seed_first": False,
+        "seeds": sorted(seed_files),
+    }
+
     save_graph(filtered, out_dir / "agent_graph.json")
 
     tracer.emit(
@@ -472,12 +664,99 @@ def _write_artifacts(
                 git_sha=sha,
                 git_available=git_available,
                 graph_sha256=graph_sha256,
+                skip_paths=frozenset(args.index_skip_path),
             )
             save_index(index_path, index)
             tracer.emit("index_written", path=str(index_path))
         except OSError as exc:
             print(f"[WARNING] Could not write index: {exc}", file=sys.stderr)
             tracer.emit("index_error", error=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Seed-first build helper
+# ---------------------------------------------------------------------------
+
+def _build_seed_first(
+    args: argparse.Namespace,
+    config: BudgetConfig,
+    budgets: Budgets,
+    tracer: Tracer,
+) -> Optional[dict]:
+    """Run the seed-first diff build.
+
+    Returns the graph dict (with meta injected and saved), or ``None`` on
+    failure (after printing an error).
+    """
+    root = args.root.resolve()
+
+    try:
+        seed_files = get_git_changed_files(root)
+    except RuntimeError as exc:
+        print(f"[ERROR] --diff requires git: {exc}", file=sys.stderr)
+        tracer.emit("diff_mode_error", error=str(exc))
+        return None
+
+    tracer.emit(
+        "diff_seed_first_seeds",
+        seed_count=len(seed_files),
+        seeds=sorted(seed_files)[:20],
+    )
+
+    if not seed_files:
+        print(
+            "[INFO] --diff-seed-first: no changed files vs HEAD; "
+            "falling back to full build."
+        )
+        tracer.emit("diff_seed_first_fallback", reason="no_seeds")
+        return None  # signal caller to use normal path
+
+    try:
+        file_list, parent_map = expand_seed_first_bfs(
+            seeds=seed_files,
+            repo_root=root,
+            max_frontier=args.diff_max_frontier,
+            max_steps=args.diff_max_steps,
+            budgets=budgets,
+            tracer=tracer,
+        )
+    except BudgetExceededError as exc:
+        print(
+            f"[STOPPED] Budget exceeded during seed-first BFS: {exc}",
+            file=sys.stderr,
+        )
+        tracer.emit("halted", reason=str(exc))
+        return None
+
+    try:
+        graph = build_graph_from_files(
+            files=file_list,
+            root=root,
+            repo_root=root,
+            budgets=budgets,
+            tracer=tracer,
+            use_id_allowlist=not args.no_id_allowlist,
+        )
+    except BudgetExceededError as exc:
+        print(
+            f"[STOPPED] Budget exceeded during seed-first graph build: {exc}",
+            file=sys.stderr,
+        )
+        tracer.emit("halted", reason=str(exc))
+        return None
+
+    # Inject seed-first metadata.
+    graph["meta"] = {
+        "diff_max_frontier": args.diff_max_frontier,
+        "diff_max_steps": args.diff_max_steps,
+        "file_count": len(file_list),
+        "parent_map": {k: v for k, v in sorted(parent_map.items())},
+        "seed_first": True,
+        "seeds": sorted(seed_files),
+    }
+
+    save_graph(graph, args.out / "agent_graph.json")
+    return graph
 
 
 # ---------------------------------------------------------------------------
@@ -498,6 +777,28 @@ def _mode_graph_only(
         scope_paths=[str(p) for p in scope_paths],
     )
 
+    # ------------------------------------------------------------------
+    # Seed-first path
+    # ------------------------------------------------------------------
+    if args.diff and args.diff_seed_first:
+        graph = _build_seed_first(args, config, budgets, tracer)
+        if graph is not None:
+            _print_summary(graph, budgets, args.out)
+            _write_artifacts(args, config, budgets, tracer, graph)
+            return 1 if budgets.is_exceeded else 0
+        # graph=None means "no seeds found" or git error; fall through to
+        # normal build for the "no seeds" case (error already printed for
+        # the git-unavailable case and we return 1).
+        try:
+            seed_files = get_git_changed_files(args.root.resolve())
+        except RuntimeError:
+            return 1  # error already emitted in _build_seed_first
+        if seed_files:
+            return 1  # had seeds but build failed
+
+    # ------------------------------------------------------------------
+    # Normal path (full scan or post-build diff filter)
+    # ------------------------------------------------------------------
     try:
         graph = _build_and_save(
             args.root,
@@ -537,6 +838,26 @@ def _mode_plan(
         scope_paths=[str(p) for p in scope_paths],
     )
 
+    # ------------------------------------------------------------------
+    # Seed-first path
+    # ------------------------------------------------------------------
+    if args.diff and args.diff_seed_first:
+        graph = _build_seed_first(args, config, budgets, tracer)
+        if graph is not None:
+            _print_summary(graph, budgets, args.out)
+            _emit_plan(graph, args)
+            _write_artifacts(args, config, budgets, tracer, graph)
+            return 1 if budgets.is_exceeded else 0
+        try:
+            seed_files = get_git_changed_files(args.root.resolve())
+        except RuntimeError:
+            return 1
+        if seed_files:
+            return 1
+
+    # ------------------------------------------------------------------
+    # Normal path
+    # ------------------------------------------------------------------
     try:
         graph = _build_and_save(
             args.root,
@@ -557,7 +878,13 @@ def _mode_plan(
             return 1
 
     _print_summary(graph, budgets, args.out)
+    _emit_plan(graph, args)
+    _write_artifacts(args, config, budgets, tracer, graph)
+    return 1 if budgets.is_exceeded else 0
 
+
+def _emit_plan(graph: dict, args: argparse.Namespace) -> None:
+    """Write agent_plan.json to args.out."""
     top = top_connected_nodes(graph, n=10)
     plan: dict = {
         "mode": "plan",
@@ -574,8 +901,6 @@ def _mode_plan(
         encoding="utf-8",
     )
     print(f"\nPlan written to : {plan_path}")
-    _write_artifacts(args, config, budgets, tracer, graph)
-    return 1 if budgets.is_exceeded else 0
 
 
 def _mode_patch(
@@ -687,6 +1012,78 @@ def _mode_patch(
     return 0
 
 
+def _mode_explain(
+    args: argparse.Namespace,
+    config: BudgetConfig,
+    budgets: Budgets,
+    tracer: Tracer,
+) -> int:
+    """Load existing graph and print shortest path to --target."""
+    if not args.target:
+        print("[ERROR] --target is required for explain mode.", file=sys.stderr)
+        return 1
+
+    graph_path = args.graph or (args.out / "agent_graph.json")
+    if not graph_path.exists():
+        print(
+            f"[ERROR] No graph artifact at {graph_path}.\n"
+            f"        Run 'graph-only' or 'plan' mode first.",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        graph = json.loads(graph_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"[ERROR] Cannot load graph: {exc}", file=sys.stderr)
+        return 1
+
+    tracer.emit(
+        "explain_start",
+        from_seed=args.from_seed,
+        target=args.target,
+        undirected=args.undirected,
+    )
+
+    rc = run_explain(
+        graph=graph,
+        target=args.target,
+        from_seed=args.from_seed,
+        max_hops=args.max_hops,
+        directed=not args.undirected,
+    )
+    tracer.emit("explain_done", rc=rc)
+    return rc
+
+
+def _mode_explain_scope(
+    args: argparse.Namespace,
+    config: BudgetConfig,
+    budgets: Budgets,
+    tracer: Tracer,
+) -> int:
+    """Load existing graph and print parent-map scope justifications."""
+    graph_path = args.graph or (args.out / "agent_graph.json")
+    if not graph_path.exists():
+        print(
+            f"[ERROR] No graph artifact at {graph_path}.\n"
+            f"        Run 'graph-only' or 'plan' mode first.",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        graph = json.loads(graph_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"[ERROR] Cannot load graph: {exc}", file=sys.stderr)
+        return 1
+
+    tracer.emit("explain_scope_start")
+    rc = run_explain_scope(graph=graph)
+    tracer.emit("explain_scope_done", rc=rc)
+    return rc
+
+
 # ---------------------------------------------------------------------------
 # Entrypoint
 # ---------------------------------------------------------------------------
@@ -705,6 +1102,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         * ``3`` — refused (patch mode: contract stamp validation failed)
     """
     args = _parse_args(argv)
+    _apply_profile(args)
 
     config = BudgetConfig(
         max_file_reads=args.max_file_reads,
@@ -724,6 +1122,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         "graph-only": _mode_graph_only,
         "plan": _mode_plan,
         "patch": _mode_patch,
+        "explain": _mode_explain,
+        "explain-scope": _mode_explain_scope,
     }
     rc = dispatch[args.mode](args, config, budgets, tracer)
 

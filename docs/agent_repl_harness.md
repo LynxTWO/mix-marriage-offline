@@ -31,11 +31,13 @@ Locate → Graph → Plan → Patch (optional, guarded)
 | `budgets.py`         | Hard budget caps; raises `BudgetExceededError` on overflow. |
 | `trace.py`           | Structured NDJSON trace log for every operation. |
 | `repo_ops.py`        | Safe primitives: `list_files`, `read_slice`, `grep`, `parse_py_imports`, `resolve_module_to_path`, `scan_schema_refs`, `scan_id_refs`, `build_id_allowlist`. |
-| `graph_build.py`     | Orchestrates a full graph build; writes deterministic JSON. |
+| `graph_build.py`     | Orchestrates a full graph build; writes deterministic JSON.  Also exposes `build_graph_from_files()` for the seed-first path. |
 | `scoping.py`         | Scope presets, diff BFS expansion, graph filtering. |
+| `diff_seed_first.py` | Seed-first BFS expansion: cheap AST + schema-ref crawl from changed files. |
+| `explain.py`         | Edge-path explanations: shortest path + scope justifications. |
 | `contract_stamp.py`  | Contract stamp: commit-bound provenance for graph artifacts (PR A). |
 | `index_build.py`     | Hot-path index: fast-lookup artifact derived from graph (PR B). |
-| `run.py`             | CLI entrypoint (modes: `graph-only`, `plan`, `patch`). |
+| `run.py`             | CLI entrypoint (modes: `graph-only`, `plan`, `patch`, `explain`, `explain-scope`). |
 
 ---
 
@@ -117,6 +119,7 @@ Exit codes:
 - `0` — success
 - `1` — budget cap hit or other error
 - `2` — refused (patch mode without a valid graph artifact)
+- `3` — refused (patch mode: contract stamp validation failed)
 
 ---
 
@@ -186,6 +189,57 @@ If git is unavailable, `--diff` exits with code `1` and a clear error message.
 **Testability:** the BFS function `expand_diff_scope(seeds, graph, cap)` in
 `scoping.py` is importable and unit-testable without running git.
 
+### Seed-first diff build (`--diff-seed-first`) *(Part 1)*
+
+The standard `--diff` path builds the **full** (or scoped) graph first and
+then filters it down.  For large repositories this is wasteful when only a
+handful of files changed.
+
+`--diff-seed-first` inverts the order: it starts from the changed files and
+crawls outward using **cheap discovery passes** — no full-repo walk needed.
+
+```bash
+# Enable seed-first strategy
+python -m tools.agent.run graph-only --diff --diff-seed-first
+
+# Control BFS depth and frontier size
+python -m tools.agent.run graph-only --diff --diff-seed-first \
+    --diff-max-frontier 100 \
+    --diff-max-steps 4
+```
+
+**How it works:**
+
+1. Get seeds via `git diff --name-only HEAD` (same as standard `--diff`).
+2. `expand_seed_first_bfs()` (in `diff_seed_first.py`) crawls outward:
+   - **Step 0:** seeds only.
+   - **Each step:** for every file in the current frontier —
+     - `.py` files: parse AST imports and resolve to repo files
+       (`py_import_file` edges).
+     - Schema JSON files (`schemas/**` or `*.schema.json`): follow cross-file
+       `$ref` edges (`schema_ref` edges).
+     - ID edges are **not** followed during expansion (too expensive).
+   - Candidates are stable-sorted; frontier growth is capped by
+     `--diff-max-frontier`.
+   - BFS stops when the frontier is empty or `--diff-max-steps` is reached.
+3. `build_graph_from_files()` runs the full 3-phase edge extraction (py
+   imports, schema refs, id refs) but only over the resulting scoped file set.
+4. The graph is saved with a `meta` section (see below).
+
+**CLI flags:**
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--diff-seed-first` | off | Enable seed-first strategy (requires `--diff`). |
+| `--diff-max-frontier` | 250 | Cap on total files in expanded set (inclusive of seeds). |
+| `--diff-max-steps` | 6 | Maximum BFS depth. |
+
+**Fallback:** if seeds are empty (nothing changed vs HEAD), the harness
+automatically falls back to the normal full-scan path.
+
+**Back-compat:** `--diff-seed-first` is **OFF by default** — existing
+`--diff` behaviour is unchanged unless you explicitly opt in.
+
 ### ID allowlist mode (`--no-id-allowlist`) *(Upgrade 2)*
 
 By default the harness builds an allowlist of canonical IDs from `ontology/`
@@ -205,6 +259,97 @@ Fallback rules:
 - If `ontology/` does not exist under the repo root, the allowlist is empty
   and the harness automatically falls back to regex mode (no error).
 - A warning is printed and traced when fallback occurs.
+
+---
+
+## Explain mode *(Part 2)*
+
+The `explain` and `explain-scope` modes answer the question **"why is this
+file here?"** by reading an already-built graph artifact — no repo re-scan.
+
+### `explain` — shortest edge path to a target
+
+```bash
+# Print the shortest path from any seed to a target node
+python -m tools.agent.run explain --target src/mmo/cli.py
+
+# Specify the starting node explicitly
+python -m tools.agent.run explain \
+    --target schemas/render_request.schema.json \
+    --from-seed src/mmo/cli.py
+
+# Allow reverse traversal (undirected mode)
+python -m tools.agent.run explain \
+    --target src/mmo/core/render_plan.py \
+    --undirected
+
+# Point to a specific graph artifact
+python -m tools.agent.run explain \
+    --graph sandbox_tmp/agent_graph.json \
+    --target src/mmo/core/render_plan.py
+
+# Limit path length reported
+python -m tools.agent.run explain --target src/mmo/cli.py --max-hops 5
+```
+
+**Output:**
+
+```
+target     : src/mmo/cli.py
+from       : src/mmo/core/render_plan.py
+hops       : 2
+
+  [0] py_import_file: src/mmo/core/render_plan.py -> src/mmo/cli.py | evidence: mmo.cli
+  [1] py_import_file: src/mmo/cli.py -> src/mmo/cli.py | evidence: ...
+```
+
+**Tie-breaking:** when multiple shortest paths exist, the path whose edge
+sequence is lexicographically smallest by `(kind, src, dst, evidence)` is
+chosen — fully deterministic.
+
+**CLI flags for `explain`:**
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--target NODE` | (required) | Target node id (file path or canonical ID). |
+| `--from-seed NODE` | auto | Explicit start node.  Defaults to seeds from `graph.meta.seeds`. |
+| `--max-hops N` | 10 | Maximum path length to report. |
+| `--undirected` | off | Allow reverse edge traversal. |
+| `--graph PATH` | `<out>/agent_graph.json` | Graph artifact to load. |
+
+### `explain-scope` — first-hop justification list
+
+Prints every non-seed file that was pulled into the graph during seed-first
+expansion, with the edge that first brought it in.
+
+```bash
+# After a seed-first build:
+python -m tools.agent.run graph-only --diff --diff-seed-first
+python -m tools.agent.run explain-scope
+
+# Point to a specific graph
+python -m tools.agent.run explain-scope --graph sandbox_tmp/agent_graph.json
+```
+
+**Output:**
+
+```
+seeds (2):
+  src/mmo/cli.py
+  src/mmo/core/render_plan.py
+
+non-seed nodes (3 of 7 shown):
+  src/mmo/core/__init__.py
+    via py_import_file: src/mmo/cli.py | evidence: mmo.core
+  src/mmo/core/roles.py
+    via py_import_file: src/mmo/core/render_plan.py | evidence: mmo.core.roles
+  schemas/render_request.schema.json
+    via schema_ref: src/mmo/core/render_plan.py | evidence: ./render_request.schema.json
+```
+
+`explain-scope` requires a seed-first build (`--diff --diff-seed-first`) to
+have been run; it reads `graph.meta.parent_map`.  If the graph has no seed
+metadata an informational message is printed and the command exits `0`.
 
 ---
 
@@ -263,6 +408,36 @@ All lists are deterministically sorted:
 - Edges by `(kind, src, dst, evidence)`.
 
 No timestamps are written; the artifact is byte-identical for identical repo state.
+
+**Optional `meta` section** (present when `--diff` or `--diff --diff-seed-first` is active):
+
+```json
+{
+  "meta": {
+    "diff_max_frontier": 250,
+    "diff_max_steps": 6,
+    "file_count": 12,
+    "parent_map": {
+      "src/mmo/core/render_plan.py": {
+        "edge_kind": "py_import_file",
+        "evidence": "mmo.core.render_plan",
+        "parent": "src/mmo/cli.py"
+      }
+    },
+    "seed_first": true,
+    "seeds": ["src/mmo/cli.py"]
+  }
+}
+```
+
+| `meta` field | Present when | Meaning |
+|---|---|---|
+| `seed_first` | `--diff` (any) | `true` if seed-first build, `false` if standard diff filter. |
+| `seeds` | `--diff` (any) | Sorted list of git-changed file paths. |
+| `diff_max_frontier` | `--diff-seed-first` | Cap used during BFS. |
+| `diff_max_steps` | `--diff-seed-first` | Depth limit used during BFS. |
+| `file_count` | `--diff-seed-first` | Number of files in the scoped set. |
+| `parent_map` | `--diff-seed-first` | `{child: {parent, edge_kind, evidence}}` first-hop justifications. |
 
 ### `agent_trace.ndjson`
 
@@ -543,6 +718,129 @@ python -m tools.agent.run graph-only --index-path /tmp/my_index.json
 
 # Disable index writing
 python -m tools.agent.run graph-only --no-index
+```
+
+---
+
+### `run.py` modes (updated)
+
+| Mode | Graph built | Artifacts written | Read-only? |
+|------|-------------|-------------------|------------|
+| `graph-only` | Yes | `agent_graph.json`, `agent_trace.ndjson`, stamp, index | Yes |
+| `plan` | Yes | `agent_graph.json`, `agent_plan.json`, `agent_trace.ndjson`, stamp, index | Yes |
+| `patch` | No (reads existing) | `agent_trace.ndjson` | Stub only |
+| `explain` | No (reads existing) | `agent_trace.ndjson` | Yes |
+| `explain-scope` | No (reads existing) | `agent_trace.ndjson` | Yes |
+
+---
+
+## Budget profiles and index tuning
+
+### `--profile code` — code-navigation defaults
+
+For daily code-focused work, the `--profile code` flag raises budget limits
+and focuses the expensive `id_to_occurrences` scan where it matters most:
+
+```bash
+# Generous budgets, docs/ skipped in id_to_occurrences
+python -m tools.agent.run graph-only --profile code
+
+# Profile + diff-seed-first is the recommended daily recipe (see below)
+python -m tools.agent.run graph-only --diff --diff-seed-first --profile code
+```
+
+**What `--profile code` changes:**
+
+| Setting | Default | Under `--profile code` |
+|---------|---------|----------------------|
+| `max_file_reads` | 60 | **80** |
+| `max_total_lines` | 4000 | **20 000** |
+| `--index-skip-path` | (none) | **docs** |
+
+Explicit budget flags always override profile values:
+
+```bash
+# Profile sets 80 but --max-file-reads 120 takes effect:
+python -m tools.agent.run graph-only --profile code --max-file-reads 120
+```
+
+### `--index-skip-path` — focus id_to_occurrences on code
+
+The `id_to_occurrences` section of the index requires reading every file that
+contains a canonical ID reference.  Documentation files tend to have many ID
+mentions but are rarely the target of code navigation.
+
+`--index-skip-path PATH` (repeatable) excludes files under `PATH` from
+`id_to_occurrences` **only** — all graph edges (including those from docs)
+remain in the graph.
+
+```bash
+# Skip docs/ in id occurrence scanning (also set by --profile code)
+python -m tools.agent.run graph-only --index-skip-path docs
+
+# Skip multiple directories
+python -m tools.agent.run graph-only \
+    --index-skip-path docs \
+    --index-skip-path tools/agent
+
+# Override profile's default skip (empty = scan everything)
+python -m tools.agent.run graph-only --profile code --index-skip-path ""
+```
+
+> **When to override:** pass `--index-skip-path ""` (empty string, equivalent
+> to no skip) if you need full `id_to_occurrences` coverage — for example,
+> when investigating where a canonical ID is used in documentation.
+
+---
+
+## Daily recipes
+
+### Which mode for which task?
+
+| Task | Recommended command |
+|------|---------------------|
+| Review today's changes | `--diff --diff-seed-first --profile code` |
+| Inspect a subsystem | `--preset core` (or `schemas`, `ontology`, `cli`) |
+| Full repo navigation | `--profile code` (no diff, no preset) |
+| Explain why a file is in scope | `explain-scope` after a seed-first build |
+| Justify a specific path | `explain --target <file>` |
+
+### Diff runs: use seed-first (not preset)
+
+`--preset` and `--scope` constrain which files are *scanned* from the start.
+In a seed-first diff run, seeds come from `git diff` — the preset does not
+affect which seeds are chosen, only which non-seed files are eligible for
+expansion.  For diff-focused work, **omit `--preset`** and let seed-first BFS
+discover the relevant scope automatically:
+
+```bash
+# Good: seed-first discovers scope from git diff
+python -m tools.agent.run graph-only --diff --diff-seed-first --profile code
+
+# Use preset for non-diff, subsystem-focused runs
+python -m tools.agent.run graph-only --preset core
+```
+
+### After a seed-first build, use explain to justify expansions
+
+```bash
+# Step 1: build
+python -m tools.agent.run graph-only --diff --diff-seed-first --profile code
+
+# Step 2: see what was pulled in and why
+python -m tools.agent.run explain-scope
+
+# Step 3: trace the path to a specific file
+python -m tools.agent.run explain --target src/mmo/core/render_plan.py
+```
+
+### Raising budgets when the full repo is needed
+
+```bash
+# Scan everything, high budget
+python -m tools.agent.run graph-only \
+    --max-file-reads 500 \
+    --max-total-lines 200000
 ```
 
 ---
