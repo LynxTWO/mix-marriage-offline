@@ -1,14 +1,21 @@
 """Dependency graph builder for the agent REPL harness.
 
-Builds a file-level dependency graph across a repository by extracting three
+Builds a file-level dependency graph across a repository by extracting four
 edge kinds:
 
-* ``py_import``   — Python AST import edges.
-* ``schema_ref``  — JSON schema ``$ref`` edges.
-* ``id_ref``      — MMO canonical ID references in any text file.
+* ``py_import``      — Python AST import edges (dotted module name as dst).
+* ``py_import_file`` — Resolved file-path variant of ``py_import`` edges.
+* ``schema_ref``     — JSON schema ``$ref`` edges.
+* ``id_ref``         — MMO canonical ID references in any text file.
 
 All output is deterministically ordered (nodes by ``(kind, id)``, edges by
 ``(kind, src, dst, evidence)``).  No timestamps are included in the artifact.
+
+Scoping
+-------
+The *scope_paths* parameter (list of absolute paths) restricts which files are
+processed.  Only files that are descendants of at least one scope path are
+scanned.  If *scope_paths* is empty the entire *root* tree is scanned.
 
 Typical usage::
 
@@ -28,8 +35,10 @@ from typing import Optional
 
 from .budgets import Budgets, BudgetConfig, BudgetExceededError
 from .repo_ops import (
+    build_id_allowlist,
     list_files,
     parse_py_imports,
+    resolve_module_to_path,
     scan_id_refs,
     scan_schema_refs,
 )
@@ -93,6 +102,40 @@ def _should_skip(path: pathlib.Path, root: pathlib.Path) -> bool:
     return bool(frozenset(parts) & _SKIP_DIRS)
 
 
+def _in_scope(path: pathlib.Path, scope_paths: list[pathlib.Path]) -> bool:
+    """Return True if *path* is under any of *scope_paths*, or if scope is empty.
+
+    Supports both directory-prefix matching (path is a descendant of a scope dir)
+    and exact file matching (path equals a scope path directly).
+    """
+    if not scope_paths:
+        return True
+    for sp in scope_paths:
+        try:
+            path.relative_to(sp)
+            return True
+        except ValueError:
+            pass
+        if path == sp:
+            return True
+    return False
+
+
+def _find_repo_root(start: pathlib.Path) -> pathlib.Path:
+    """Walk up from *start* to find the git repo root (directory containing ``.git``).
+
+    Returns *start* itself if no git root is found (graceful fallback).
+    """
+    current = start.resolve()
+    while True:
+        if (current / ".git").exists():
+            return current
+        parent = current.parent
+        if parent == current:
+            return start  # filesystem root reached
+        current = parent
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -101,11 +144,14 @@ def build_graph(
     root: pathlib.Path,
     budgets: Optional[Budgets] = None,
     tracer: Optional[Tracer] = None,
+    repo_root: Optional[pathlib.Path] = None,
+    use_id_allowlist: bool = True,
+    scope_paths: Optional[list[pathlib.Path]] = None,
 ) -> dict:
     """Build a file-level dependency graph for the repository at *root*.
 
     The function walks *root* recursively, skipping directories in
-    ``_SKIP_DIRS``, and extracts three edge kinds for each file.  Budget caps
+    ``_SKIP_DIRS``, and extracts four edge kinds for each file.  Budget caps
     are enforced throughout; on first violation the current phase is aborted
     gracefully, a warning is recorded, and the function proceeds to the next
     phase (or returns early if the budget is already exceeded).
@@ -116,6 +162,15 @@ def build_graph(
         budgets: Budget enforcer.  A fresh default :class:`Budgets` is created
                  if not provided.
         tracer: Trace sink.  A no-op :class:`Tracer` is used if not provided.
+        repo_root: Root used for ``py_import_file`` resolution and ontology
+                   discovery.  Auto-detected via ``.git`` walk if not provided.
+        use_id_allowlist: When ``True`` (default), build an ontology allowlist
+                          and restrict ``id_ref`` edges to known canonical IDs.
+                          Falls back to full regex mode if the allowlist is empty
+                          (e.g. ontology dir not found).
+        scope_paths: Optional list of **absolute** paths.  When non-empty, only
+                     files under these paths are scanned (used by ``--scope``
+                     and ``--preset`` CLI flags).
 
     Returns:
         A dict with three stable keys:
@@ -135,6 +190,11 @@ def build_graph(
         budgets = Budgets()
     if tracer is None:
         tracer = Tracer()  # no-op (path=None)
+    if scope_paths is None:
+        scope_paths = []
+
+    # Auto-detect repo root for import resolution and ontology discovery
+    effective_repo_root = repo_root if repo_root is not None else _find_repo_root(root)
 
     nodes: dict[str, dict] = {}      # id -> node dict
     edge_list: list[dict] = []
@@ -155,10 +215,10 @@ def build_graph(
             add_node(src)
             add_node(dst)
 
-    tracer.emit("graph_build_start", root=str(root))
+    tracer.emit("graph_build_start", repo_root=str(effective_repo_root), root=str(root))
 
     # -----------------------------------------------------------------------
-    # Phase 1: Python import edges
+    # Phase 1: Python import edges + py_import_file resolved edges
     # -----------------------------------------------------------------------
     if not budgets.is_exceeded:
         try:
@@ -169,6 +229,8 @@ def build_graph(
 
         for py_path in py_files:
             if _should_skip(py_path, root):
+                continue
+            if not _in_scope(py_path, scope_paths):
                 continue
             try:
                 rel = py_path.relative_to(root).as_posix()
@@ -183,6 +245,30 @@ def build_graph(
             for ie in import_edges:
                 add_edge("py_import", ie.src, ie.dst, ie.evidence, rel)
 
+                # Upgrade 1: also emit a py_import_file edge when we can
+                # resolve the dotted module to an actual file in the repo.
+                resolved = resolve_module_to_path(ie.dst, effective_repo_root)
+                if resolved is not None:
+                    # Express the resolved path relative to the scan root
+                    try:
+                        resolved_rel = (
+                            (effective_repo_root / resolved)
+                            .relative_to(root)
+                            .as_posix()
+                        )
+                    except ValueError:
+                        # Resolved file exists but lies outside scan root;
+                        # use the repo-root-relative path instead so the node
+                        # is still useful.
+                        resolved_rel = resolved
+                    add_edge(
+                        "py_import_file",
+                        ie.src,
+                        resolved_rel,
+                        ie.dst,   # evidence = original dotted module name
+                        rel,
+                    )
+
     # -----------------------------------------------------------------------
     # Phase 2: JSON schema $ref edges
     # -----------------------------------------------------------------------
@@ -195,6 +281,8 @@ def build_graph(
 
         for schema_path in json_files:
             if _should_skip(schema_path, root):
+                continue
+            if not _in_scope(schema_path, scope_paths):
                 continue
             try:
                 rel = schema_path.relative_to(root).as_posix()
@@ -220,6 +308,24 @@ def build_graph(
     # Phase 3: MMO canonical ID references
     # -----------------------------------------------------------------------
     if not budgets.is_exceeded:
+        # Upgrade 2: build ontology allowlist for id_ref filtering
+        id_allowlist: Optional[frozenset[str]] = None
+        if use_id_allowlist:
+            ont_root = effective_repo_root / "ontology"
+            raw_allowlist = build_id_allowlist(ont_root, budgets, tracer)
+            if raw_allowlist:
+                id_allowlist = raw_allowlist
+                tracer.emit(
+                    "id_allowlist_active",
+                    count=len(id_allowlist),
+                )
+            else:
+                # Empty allowlist = ontology not found or empty; fall back to regex
+                warnings.append(
+                    "id_ref allowlist is empty — falling back to full regex mode"
+                )
+                tracer.emit("id_allowlist_fallback", reason="empty_allowlist")
+
         # Collect candidate files from all relevant globs, deduplicated.
         seen_paths: set[str] = set()
         id_files: list[pathlib.Path] = []
@@ -237,8 +343,9 @@ def build_graph(
             for p in found:
                 posix = p.as_posix()
                 if posix not in seen_paths and not _should_skip(p, root):
-                    seen_paths.add(posix)
-                    id_files.append(p)
+                    if _in_scope(p, scope_paths):
+                        seen_paths.add(posix)
+                        id_files.append(p)
 
         # Sort once for deterministic processing order
         id_files.sort(key=lambda p: p.as_posix())
@@ -252,7 +359,9 @@ def build_graph(
                 continue
             add_node(rel)
             try:
-                id_edges = scan_id_refs(id_path, root, budgets, tracer)
+                id_edges = scan_id_refs(
+                    id_path, root, budgets, tracer, allowlist=id_allowlist
+                )
             except BudgetExceededError as exc:
                 warnings.append(f"Budget exceeded scanning id_refs in {rel}: {exc}")
                 break

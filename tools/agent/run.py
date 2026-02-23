@@ -28,6 +28,13 @@ Usage (from repo root)::
     python -m tools.agent.run patch --graph sandbox_tmp/agent_graph.json
     python -m tools.agent.run graph-only --max-file-reads 120
 
+Scoping (Upgrade 3)::
+
+    python -m tools.agent.run graph-only --preset schemas
+    python -m tools.agent.run graph-only --scope src/mmo/core --scope ontology
+    python -m tools.agent.run graph-only --diff
+    python -m tools.agent.run graph-only --diff --diff-cap 30
+
 Budget overrides (CLI flags)::
 
     --max-steps N              (default 40)
@@ -50,6 +57,12 @@ from typing import Optional
 if __package__:
     from .budgets import Budgets, BudgetConfig, BudgetExceededError
     from .graph_build import build_graph, save_graph, top_connected_nodes
+    from .scoping import (
+        expand_diff_scope,
+        filter_graph_to_scope,
+        get_git_changed_files,
+        resolve_scope_paths,
+    )
     from .trace import Tracer
 else:
     _here = pathlib.Path(__file__).resolve().parent.parent.parent
@@ -57,6 +70,12 @@ else:
         sys.path.insert(0, str(_here))
     from tools.agent.budgets import Budgets, BudgetConfig, BudgetExceededError
     from tools.agent.graph_build import build_graph, save_graph, top_connected_nodes
+    from tools.agent.scoping import (
+        expand_diff_scope,
+        filter_graph_to_scope,
+        get_git_changed_files,
+        resolve_scope_paths,
+    )
     from tools.agent.trace import Tracer
 
 
@@ -97,12 +116,62 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
             "<out>/agent_graph.json)."
         ),
     )
+
     # Budget overrides
     parser.add_argument("--max-steps", type=int, default=40)
     parser.add_argument("--max-file-reads", type=int, default=60)
     parser.add_argument("--max-total-lines", type=int, default=4000)
     parser.add_argument("--max-grep-hits", type=int, default=300)
     parser.add_argument("--max-graph-nodes-summary", type=int, default=200)
+
+    # Upgrade 3: scoping
+    parser.add_argument(
+        "--scope",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help=(
+            "Restrict scanning to files under PATH (relative to --root). "
+            "Repeatable."
+        ),
+    )
+    parser.add_argument(
+        "--preset",
+        choices=["core", "schemas", "ontology", "cli"],
+        default=None,
+        help=(
+            "Named scope preset. "
+            "core=src/mmo/core, schemas=schemas, ontology=ontology, "
+            "cli=src/mmo/cli.py+src/mmo/cli_commands."
+        ),
+    )
+    parser.add_argument(
+        "--diff",
+        action="store_true",
+        default=False,
+        help=(
+            "Diff-focused mode: restrict graph to files changed vs HEAD "
+            "plus their graph neighbours. Requires git."
+        ),
+    )
+    parser.add_argument(
+        "--diff-cap",
+        type=int,
+        default=50,
+        help="Maximum nodes to include in diff expansion (default: 50).",
+    )
+
+    # Upgrade 2: id allowlist
+    parser.add_argument(
+        "--no-id-allowlist",
+        action="store_true",
+        default=False,
+        help=(
+            "Disable ontology allowlist for id_ref edges; use full regex "
+            "mode instead (more noise, no ontology dependency)."
+        ),
+    )
+
     return parser.parse_args(argv)
 
 
@@ -115,9 +184,17 @@ def _build_and_save(
     out_dir: pathlib.Path,
     budgets: Budgets,
     tracer: Tracer,
+    scope_paths: Optional[list[pathlib.Path]] = None,
+    use_id_allowlist: bool = True,
 ) -> dict:
     """Run graph build and persist the artifact.  Returns the graph dict."""
-    graph = build_graph(root=root, budgets=budgets, tracer=tracer)
+    graph = build_graph(
+        root=root,
+        budgets=budgets,
+        tracer=tracer,
+        scope_paths=scope_paths,
+        use_id_allowlist=use_id_allowlist,
+    )
     save_graph(graph, out_dir / "agent_graph.json")
     return graph
 
@@ -132,16 +209,18 @@ def _print_summary(
     edges = graph["edges"]
     warnings = graph.get("warnings", [])
 
-    n_py = sum(1 for e in edges if e["kind"] == "py_import")
-    n_sc = sum(1 for e in edges if e["kind"] == "schema_ref")
-    n_id = sum(1 for e in edges if e["kind"] == "id_ref")
+    n_py  = sum(1 for e in edges if e["kind"] == "py_import")
+    n_pif = sum(1 for e in edges if e["kind"] == "py_import_file")
+    n_sc  = sum(1 for e in edges if e["kind"] == "schema_ref")
+    n_id  = sum(1 for e in edges if e["kind"] == "id_ref")
 
     print("=== Agent Graph Summary ===")
-    print(f"Nodes        : {len(nodes)}")
-    print(f"Edges total  : {len(edges)}")
-    print(f"  py_import  : {n_py}")
-    print(f"  schema_ref : {n_sc}")
-    print(f"  id_ref     : {n_id}")
+    print(f"Nodes            : {len(nodes)}")
+    print(f"Edges total      : {len(edges)}")
+    print(f"  py_import      : {n_py}")
+    print(f"  py_import_file : {n_pif}")
+    print(f"  schema_ref     : {n_sc}")
+    print(f"  id_ref         : {n_id}")
 
     top = top_connected_nodes(graph, n=20)
     if top:
@@ -164,6 +243,47 @@ def _print_summary(
     print(f"Artifacts    : {out_dir}/")
 
 
+def _apply_diff_filter(
+    graph: dict,
+    root: pathlib.Path,
+    diff_cap: int,
+    out_dir: pathlib.Path,
+    tracer: Tracer,
+) -> Optional[dict]:
+    """Get changed files, expand neighbours, filter graph.
+
+    Returns the filtered graph, or None on failure (after printing an error).
+    """
+    try:
+        seed_files = get_git_changed_files(root)
+    except RuntimeError as exc:
+        print(f"[ERROR] --diff requires git: {exc}", file=sys.stderr)
+        tracer.emit("diff_mode_error", error=str(exc))
+        return None
+
+    tracer.emit(
+        "diff_mode_seeds",
+        cap=diff_cap,
+        seed_count=len(seed_files),
+        seeds=seed_files[:20],  # trace at most 20 for readability
+    )
+
+    if not seed_files:
+        print("[INFO] --diff: no changed files vs HEAD; returning full graph.")
+        return graph
+
+    scope = expand_diff_scope(seed_files, graph, cap=diff_cap)
+    filtered = filter_graph_to_scope(graph, scope)
+    save_graph(filtered, out_dir / "agent_graph.json")
+
+    tracer.emit(
+        "diff_mode_done",
+        included=len(scope),
+        original_nodes=len(graph["nodes"]),
+    )
+    return filtered
+
+
 # ---------------------------------------------------------------------------
 # Mode implementations
 # ---------------------------------------------------------------------------
@@ -174,13 +294,33 @@ def _mode_graph_only(
     tracer: Tracer,
 ) -> int:
     """Build graph and print summary.  Exit 0 on success, 1 on budget stop."""
+    scope_paths = resolve_scope_paths(args.root, args.scope, args.preset)
+    tracer.emit(
+        "scope_resolved",
+        preset=args.preset,
+        scope_paths=[str(p) for p in scope_paths],
+    )
+
     try:
-        graph = _build_and_save(args.root, args.out, budgets, tracer)
+        graph = _build_and_save(
+            args.root,
+            args.out,
+            budgets,
+            tracer,
+            scope_paths=scope_paths,
+            use_id_allowlist=not args.no_id_allowlist,
+        )
     except BudgetExceededError as exc:
         print(f"[STOPPED] Budget exceeded before graph could be built: {exc}",
               file=sys.stderr)
         tracer.emit("halted", reason=str(exc))
         return 1
+
+    if args.diff:
+        graph = _apply_diff_filter(graph, args.root, args.diff_cap, args.out, tracer)
+        if graph is None:
+            return 1
+
     _print_summary(graph, budgets, args.out)
     return 1 if budgets.is_exceeded else 0
 
@@ -191,12 +331,31 @@ def _mode_plan(
     tracer: Tracer,
 ) -> int:
     """Build graph + emit a JSON plan.  Exit 0 on success, 1 on budget stop."""
+    scope_paths = resolve_scope_paths(args.root, args.scope, args.preset)
+    tracer.emit(
+        "scope_resolved",
+        preset=args.preset,
+        scope_paths=[str(p) for p in scope_paths],
+    )
+
     try:
-        graph = _build_and_save(args.root, args.out, budgets, tracer)
+        graph = _build_and_save(
+            args.root,
+            args.out,
+            budgets,
+            tracer,
+            scope_paths=scope_paths,
+            use_id_allowlist=not args.no_id_allowlist,
+        )
     except BudgetExceededError as exc:
         print(f"[STOPPED] Budget exceeded: {exc}", file=sys.stderr)
         tracer.emit("halted", reason=str(exc))
         return 1
+
+    if args.diff:
+        graph = _apply_diff_filter(graph, args.root, args.diff_cap, args.out, tracer)
+        if graph is None:
+            return 1
 
     _print_summary(graph, budgets, args.out)
 

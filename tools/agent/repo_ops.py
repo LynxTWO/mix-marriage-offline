@@ -7,12 +7,14 @@ uniformly across all primitives.
 All returned collections are sorted for determinism.
 
 Public API:
-    list_files        Glob files under root, sorted by POSIX path.
-    read_slice        Read a line range from a file (budget-tracked).
-    grep              Regex search; uses ripgrep if available, Python fallback.
-    parse_py_imports  AST-based import extraction from .py files.
-    scan_schema_refs  Extract $ref edges from JSON schema files.
-    scan_id_refs      Detect MMO canonical ID references in any text file.
+    list_files             Glob files under root, sorted by POSIX path.
+    read_slice             Read a line range from a file (budget-tracked).
+    grep                   Regex search; uses ripgrep if available, Python fallback.
+    parse_py_imports       AST-based import extraction from .py files.
+    resolve_module_to_path Map a dotted module name to a repo-relative file path.
+    scan_schema_refs       Extract $ref edges from JSON schema files.
+    scan_id_refs           Detect MMO canonical ID references in any text file.
+    build_id_allowlist     Build an allowlist of real IDs from ontology YAML files.
 """
 
 from __future__ import annotations
@@ -48,6 +50,26 @@ _ID_PATTERNS: list[re.Pattern[str]] = [
         r"\b(action|issue|lock|layout|param|unit|evidence|feature|role|gate|downmix)_\w+"
     ),
 ]
+
+# For allowlist building: match a canonical ID as a complete string
+_CANONICAL_ID_EXACT_RE = re.compile(
+    r"^("
+    + "|".join(_CANONICAL_PREFIXES)
+    + r")\.[A-Z0-9][A-Z0-9_.]*$"
+)
+
+# For allowlist building: find canonical IDs anywhere in text
+_CANONICAL_ID_RE = re.compile(
+    r"\b(" + "|".join(_CANONICAL_PREFIXES) + r")\.[A-Z0-9][A-Z0-9_.]*"
+)
+
+# ---------------------------------------------------------------------------
+# Upgrade 1: import-to-file resolution
+# ---------------------------------------------------------------------------
+
+# Relative directories under repo root where Python packages may live.
+# Tried in order; first match wins (after priority).
+_IMPORT_PREFIX_DIRS: tuple[str, ...] = ("", "src")
 
 
 # ---------------------------------------------------------------------------
@@ -101,6 +123,20 @@ class IdRefEdge(NamedTuple):
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def _collect_ids_from_yaml_obj(obj: object, ids: set[str]) -> None:
+    """Recursively collect canonical MMO ID strings from a YAML-parsed object."""
+    if isinstance(obj, dict):
+        for key, val in obj.items():
+            if isinstance(key, str) and _CANONICAL_ID_EXACT_RE.match(key):
+                ids.add(key)
+            _collect_ids_from_yaml_obj(val, ids)
+    elif isinstance(obj, (list, tuple)):
+        for item in obj:
+            _collect_ids_from_yaml_obj(item, ids)
+    elif isinstance(obj, str) and _CANONICAL_ID_EXACT_RE.match(obj):
+        ids.add(obj)
+
 
 def _read_file_text(
     path: pathlib.Path,
@@ -311,6 +347,141 @@ def parse_py_imports(
     return sorted(edges)
 
 
+def resolve_module_to_path(module: str, root: pathlib.Path) -> Optional[str]:
+    """Resolve a dotted module name to a repo-relative POSIX file path under *root*.
+
+    Searches for the module file under *root* using these prefix directories:
+    ``""`` (root itself) and ``"src"`` (src-layout).
+
+    Resolution priority (lowest wins):
+        0. Direct ``.py`` file — e.g. ``src/mmo/core/listen_pack.py``
+        1. Package ``__init__.py`` — e.g. ``src/mmo/core/__init__.py``
+
+    Within the same priority tier, shortest POSIX path wins; ties broken
+    lexicographically for determinism.  Only filesystem existence checks are
+    performed — **no file reads, no budget charges**.
+
+    Args:
+        module: Dotted module name (e.g. ``"mmo.core.listen_pack"``).
+        root: Repo root directory to search within.
+
+    Returns:
+        POSIX-relative path from *root*, or ``None`` if no file found under
+        *root* (i.e. the module is a third-party or stdlib package).
+    """
+    if not module:
+        return None
+    parts = module.split(".")
+    candidates: list[tuple[int, int, str]] = []  # (priority, path_len, posix)
+
+    for prefix in _IMPORT_PREFIX_DIRS:
+        base = root / prefix if prefix else root
+
+        # Priority 0: direct .py file  (e.g. mmo/core/listen_pack.py)
+        if len(parts) == 1:
+            py_file = base / (parts[0] + ".py")
+        else:
+            py_file = base.joinpath(*parts[:-1], parts[-1] + ".py")
+        if py_file.is_file():
+            try:
+                posix = py_file.relative_to(root).as_posix()
+                candidates.append((0, len(posix), posix))
+            except ValueError:
+                pass
+
+        # Priority 1: package __init__.py  (e.g. mmo/core/__init__.py)
+        init_file = base.joinpath(*parts, "__init__.py")
+        if init_file.is_file():
+            try:
+                posix = init_file.relative_to(root).as_posix()
+                candidates.append((1, len(posix), posix))
+            except ValueError:
+                pass
+
+    if not candidates:
+        return None
+    candidates.sort()
+    return candidates[0][2]
+
+
+def build_id_allowlist(
+    ontology_root: pathlib.Path,
+    budgets: Budgets,
+    tracer: Tracer,
+) -> frozenset[str]:
+    """Build a frozenset of canonical MMO IDs from YAML files under *ontology_root*.
+
+    Parsing strategy:
+
+    * Uses :mod:`yaml` (PyYAML) for structural parsing when available.
+    * Falls back to a regex scan of each file on parse failure or
+      ``ImportError``.
+    * If *ontology_root* does not exist, returns an empty frozenset immediately
+      (callers should then fall back to regex mode for ``scan_id_refs``).
+
+    Budget charges: one file read per YAML file scanned.  Stops early if the
+    budget is exceeded; warns via the tracer.
+
+    Args:
+        ontology_root: Directory containing ``.yaml`` / ``.yml`` files.
+        budgets: Budget tracker.
+        tracer: Trace sink.
+
+    Returns:
+        Frozenset of canonical ID strings.  An empty frozenset means the
+        allowlist could not be built — callers should fall back to regex mode.
+    """
+    if not ontology_root.is_dir():
+        tracer.emit(
+            "id_allowlist_skip",
+            path=str(ontology_root),
+            reason="no_ontology_dir",
+        )
+        return frozenset()
+
+    ids: set[str] = set()
+    parse_ok = True
+
+    yaml_files: list[pathlib.Path] = sorted(
+        list(ontology_root.rglob("*.yaml")) + list(ontology_root.rglob("*.yml")),
+        key=lambda p: p.as_posix(),
+    )
+
+    for yaml_path in yaml_files:
+        if budgets.is_exceeded:
+            break
+        try:
+            text = _read_file_text(yaml_path, budgets, tracer)
+        except BudgetExceededError:
+            break
+        if not text:
+            continue
+
+        try:
+            import yaml as _yaml  # noqa: PLC0415
+
+            try:
+                data = _yaml.safe_load(text)
+                _collect_ids_from_yaml_obj(data, ids)
+            except Exception:
+                parse_ok = False
+                # Fallback: regex scan of raw text
+                for m in _CANONICAL_ID_RE.finditer(text):
+                    ids.add(m.group(0))
+        except ImportError:
+            parse_ok = False
+            for m in _CANONICAL_ID_RE.finditer(text):
+                ids.add(m.group(0))
+
+    tracer.emit(
+        "id_allowlist_built",
+        count=len(ids),
+        parse_ok=parse_ok,
+        path=str(ontology_root),
+    )
+    return frozenset(ids)
+
+
 def scan_schema_refs(
     path: pathlib.Path,
     root: pathlib.Path,
@@ -367,6 +538,7 @@ def scan_id_refs(
     root: pathlib.Path,
     budgets: Budgets,
     tracer: Tracer,
+    allowlist: Optional[frozenset[str]] = None,
 ) -> list[IdRefEdge]:
     """Scan *path* for MMO canonical ID references.
 
@@ -380,6 +552,9 @@ def scan_id_refs(
         root: Repo root for computing the POSIX-relative ``src`` field.
         budgets: Budget tracker (charges one file read).
         tracer: Trace sink.
+        allowlist: When provided and non-empty, only emit edges for IDs that
+            are present in the allowlist.  ``None`` or an empty frozenset uses
+            full regex mode (backward-compatible default).
 
     Returns:
         Sorted, deduplicated list of :class:`IdRefEdge` namedtuples.
@@ -392,12 +567,16 @@ def scan_id_refs(
     except ValueError:
         rel = str(path)
 
+    use_allowlist = bool(allowlist)
     seen: set[tuple[str, str]] = set()
     edges: list[IdRefEdge] = []
 
     for pat in _ID_PATTERNS:
         for m in pat.finditer(text):
             matched_id = m.group(0)
+            # Allowlist filter: skip IDs not in the allowlist when enabled
+            if use_allowlist and matched_id not in allowlist:  # type: ignore[operator]
+                continue
             key = (rel, matched_id)
             if key in seen:
                 continue
