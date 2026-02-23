@@ -1,0 +1,33 @@
+{
+  "mode": "basic",
+  "stems": [
+    {
+      "stem_id": "STEM.BASS",
+      "lufs_i": -14.0,
+      "true_peak_dbtp": -3.0,
+      "crest_db": 7.5,
+      "correlation": 0.92
+    },
+    {
+      "stem_id": "STEM.DRUMS",
+      "lufs_i": -18.0,
+      "true_peak_dbtp": -6.0,
+      "crest_db": 20.0,
+      "correlation": 0.40
+    },
+    {
+      "stem_id": "STEM.VOCALS",
+      "lufs_i": -20.0,
+      "true_peak_dbtp": -8.0,
+      "crest_db": 13.5,
+      "correlation": null
+    }
+  ],
+  "session": {
+    "stem_count": 3,
+    "lufs_i_min": -20.0,
+    "lufs_i_max": -14.0,
+    "lufs_i_range_db": 6.0,
+    "true_peak_max_dbtp": -3.0
+  }
+}

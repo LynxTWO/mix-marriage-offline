@@ -26,6 +26,7 @@
       "type": "array",
       "items": { "$ref": "#/$defs/bed_entry" }
     },
+    "routing_intent": { "$ref": "#/$defs/routing_intent" },
     "metadata": { "$ref": "#/$defs/metadata" }
   },
   "$defs": {
@@ -195,6 +196,22 @@
           "items": { "$ref": "#/$defs/scene_object_meter" }
         },
         "session": { "$ref": "#/$defs/scene_session_meter" }
+      }
+    },
+    "routing_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["suggested_layout_class", "confidence"],
+      "properties": {
+        "suggested_layout_class": {
+          "type": "string",
+          "enum": ["stereo", "surround", "immersive", "unknown"]
+        },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
       }
     }
   }

@@ -451,4 +451,107 @@ features:
     unit_id: "UNIT.NONE"
     value_type: "boolean"
     scopes: ["session"]
+
+  # -------------------------
+  # Scene Object Inference (advisory, from metering + coherence)
+  # -------------------------
+  FEATURE.OBJECT.AZIMUTH_DEG:
+    label: "Object azimuth"
+    description: "Advisory azimuth estimate for a stem object (degrees, 0=center, negative=left, positive=right)."
+    unit_id: "UNIT.DEG"
+    value_type: "number"
+    scopes: ["stem"]
+    constraints:
+      min: -180
+      max: 180
+    notes:
+      - "Inferred from stereo coherence; advisory only for stereo stems."
+      - "Not inferred without explicit evidence (e.g., mid-side imbalance)."
+
+  FEATURE.OBJECT.WIDTH:
+    label: "Object width"
+    description: "Advisory width estimate for a stem object (0=mono/narrow, 1=full-width)."
+    unit_id: "UNIT.RATIO"
+    value_type: "number"
+    scopes: ["stem"]
+    constraints:
+      min: 0
+      max: 1
+    notes:
+      - "Inferred from stereo correlation coefficient; advisory only for stereo stems."
+      - "High correlation (>0.85) yields narrow estimate; low correlation (<0.5) yields wide estimate."
+
+  FEATURE.OBJECT.DEPTH:
+    label: "Object depth"
+    description: "Advisory depth estimate for a stem object (0=close/dry/direct, 1=distant/diffuse)."
+    unit_id: "UNIT.RATIO"
+    value_type: "number"
+    scopes: ["stem"]
+    constraints:
+      min: 0
+      max: 1
+    notes:
+      - "Inferred from crest factor as a directness proxy."
+      - "High crest (>18 dB) → forward; low crest (<8 dB) → diffuse/distant."
+
+  FEATURE.OBJECT.CONFIDENCE:
+    label: "Object inference confidence"
+    description: "Confidence score for object placement inference (0=none, 1=high)."
+    unit_id: "UNIT.RATIO"
+    value_type: "number"
+    scopes: ["stem"]
+    constraints:
+      min: 0
+      max: 1
+    notes:
+      - "Values below 0.3 suppress hint emission (confidence gate)."
+      - "Stereo-stem advisory inferences are capped at 0.35."
+
+  # -------------------------
+  # Scene Bed / Field
+  # -------------------------
+  FEATURE.BED.DIFFUSE:
+    label: "Bed diffuse"
+    description: "Advisory diffuse estimate for a bed/field entry (0=focused, 1=fully diffuse)."
+    unit_id: "UNIT.RATIO"
+    value_type: "number"
+    scopes: ["bus", "session"]
+    constraints:
+      min: 0
+      max: 1
+    notes:
+      - "Used as a hint for renderer diffuse distribution policy."
+
+  FEATURE.BED.CHANNEL_COUNT:
+    label: "Bed channel count"
+    description: "Number of channels in the bed/field entry."
+    unit_id: "UNIT.COUNT"
+    value_type: "integer"
+    scopes: ["bus", "session"]
+
+  # -------------------------
+  # Depth Proxy (directness / distance — objective only)
+  # -------------------------
+  FEATURE.DEPTH_PROXY.CREST_FACTOR_DB:
+    label: "Depth proxy: crest factor"
+    description: "Crest factor used as a directness/depth proxy (high crest = dry/close source)."
+    unit_id: "UNIT.DB"
+    value_type: "number"
+    scopes: ["stem", "bus"]
+    notes:
+      - "High crest (>18 dB) suggests transient/dry/close source → low depth."
+      - "Low crest (<8 dB) suggests dense/reverberant/distant source → high depth."
+      - "This is an objective measurement; depth assignment is advisory and gated by confidence."
+
+  FEATURE.DEPTH_PROXY.ENERGY_RATIO:
+    label: "Depth proxy: HF/LF energy ratio"
+    description: "Ratio of high-frequency to low-frequency energy, used as a depth/distance proxy."
+    unit_id: "UNIT.RATIO"
+    value_type: "number"
+    scopes: ["stem", "bus"]
+    constraints:
+      min: 0
+    notes:
+      - "Higher ratios suggest brighter/closer sources; lower ratios suggest distant/reverberant sources."
+      - "Band edges are detector-defined; this feature captures the computed ratio only."
     dimensions: ["profile_id"]

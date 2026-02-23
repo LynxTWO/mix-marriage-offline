@@ -1,0 +1,23 @@
+{
+  "stems_dir": "__REPLACED_BY_TEST__",
+  "stems": [
+    {
+      "stem_id": "STEM.BASS",
+      "file_path": "stems/bass.wav",
+      "channel_count": 2,
+      "label": "Bass"
+    },
+    {
+      "stem_id": "STEM.DRUMS",
+      "file_path": "stems/drums.wav",
+      "channel_count": 2,
+      "label": "Drums"
+    },
+    {
+      "stem_id": "STEM.VOCALS",
+      "file_path": "stems/vocals.wav",
+      "channel_count": 1,
+      "label": "Vocals"
+    }
+  ]
+}

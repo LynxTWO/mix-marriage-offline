@@ -1,0 +1,17 @@
+{
+  "stems_dir": "__REPLACED_BY_TEST__",
+  "stems": [
+    {
+      "stem_id": "STEM.KICK",
+      "file_path": "stems/kick.wav",
+      "channel_count": 1,
+      "label": "Kick"
+    },
+    {
+      "stem_id": "STEM.SNARE",
+      "file_path": "stems/snare.wav",
+      "channel_count": 1,
+      "label": "Snare"
+    }
+  ]
+}

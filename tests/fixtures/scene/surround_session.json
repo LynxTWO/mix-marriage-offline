@@ -1,0 +1,17 @@
+{
+  "stems_dir": "__REPLACED_BY_TEST__",
+  "stems": [
+    {
+      "stem_id": "STEM.MUSIC_51",
+      "file_path": "stems/music_51.wav",
+      "channel_count": 6,
+      "label": "Music 5.1"
+    },
+    {
+      "stem_id": "STEM.FX_STEREO",
+      "file_path": "stems/fx_stereo.wav",
+      "channel_count": 2,
+      "label": "FX Stereo"
+    }
+  ]
+}
