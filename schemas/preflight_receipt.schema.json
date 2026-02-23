@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/preflight_receipt.schema.json",
+  "title": "MMO Preflight Receipt",
+  "description": "Receipt produced by evaluate_preflight() before any render (DoD 4.4.3 + 4.6). Operates on session/scene metadata only — no audio decoding required.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "gates_evaluated",
+    "downmix_checks",
+    "phase_report",
+    "confidence_summary",
+    "final_decision"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "target_layout_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_layout_id": {
+      "type": ["string", "null"]
+    },
+    "gates_evaluated": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/gate_result" }
+    },
+    "downmix_checks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/downmix_check" }
+    },
+    "phase_report": {
+      "$ref": "#/$defs/phase_report"
+    },
+    "confidence_summary": {
+      "$ref": "#/$defs/confidence_summary"
+    },
+    "final_decision": {
+      "type": "string",
+      "enum": ["pass", "warn", "block"]
+    }
+  },
+  "$defs": {
+    "gate_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "outcome", "severity"],
+      "properties": {
+        "gate_id": {
+          "type": "string",
+          "pattern": "^GATE\\.[A-Z0-9_.]+$"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["pass", "warn", "block", "skipped"]
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["info", "warn", "error"]
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "downmix_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["matrix_id", "source_layout_id", "target_layout_id", "risk_level"],
+      "properties": {
+        "matrix_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_layout_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_layout_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "risk_level": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "lfe_folded": {
+          "type": "boolean"
+        },
+        "lfe_boost_db": {
+          "type": "number"
+        },
+        "predicted_lufs_delta": {
+          "type": "number"
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "phase_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["correlation_risk", "polarity_risk"],
+      "properties": {
+        "correlation_risk": {
+          "type": "string",
+          "enum": ["none", "low", "medium", "high"]
+        },
+        "polarity_risk": {
+          "type": "string",
+          "enum": ["none", "low", "medium", "high"]
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "confidence_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["overall_confidence", "confidence_level"],
+      "properties": {
+        "overall_confidence": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "confidence_level": {
+          "type": "string",
+          "enum": ["high", "medium", "low", "very_low"]
+        },
+        "stem_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "low_confidence_stems": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

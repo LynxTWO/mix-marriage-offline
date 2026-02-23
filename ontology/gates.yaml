@@ -1,0 +1,84 @@
+# ontology/gates.yaml
+# Canonical preflight gate definitions for MMO render safety policy engine.
+# These gates run *before* any render to enforce render contracts (DoD 4.4.3 + 4.6).
+# They operate on session/scene metadata only — no audio decoding required.
+#
+# Gate IDs follow the GATE.* namespace.
+# Each gate declares: kind, description, default_enabled, fallback_policy, thresholds.
+#
+# fallback_policy: what to do when a gate cannot be evaluated (skipped/warn/block).
+
+_meta:
+  schema_version: "1.0.0"
+  description: "Preflight gate definitions for render safety — DoD 4.4.3 + 4.6."
+  gates:
+    - GATE.LAYOUT_NEGOTIATION
+    - GATE.DOWNMIX_SIMILARITY
+    - GATE.CORRELATION_RISK
+    - GATE.PHASE_RISK
+    - GATE.CONFIDENCE_LOW
+
+gates:
+  GATE.LAYOUT_NEGOTIATION:
+    kind: layout_negotiation
+    description: >
+      Verify that a registered downmix matrix exists for the requested
+      source-layout → target-layout conversion. Blocks render when no path is
+      available; warns when only a composed (multi-step) path is found.
+    default_enabled: true
+    fallback_policy: block
+    thresholds:
+      require_direct_matrix: false
+      warn_on_composed_path: true
+
+  GATE.DOWNMIX_SIMILARITY:
+    kind: similarity_check
+    description: >
+      Predict fold-similarity risk from matrix coefficients alone (no audio
+      decoding). Analyses LFE fold gain and per-output RMS gain change.
+      Warns or blocks when predicted loudness delta or LFE boost exceeds
+      thresholds.
+    default_enabled: true
+    fallback_policy: warn
+    thresholds:
+      lfe_boost_warn_db: 3.0
+      lfe_boost_error_db: 6.0
+      predicted_lufs_delta_warn_abs: 2.0
+      predicted_lufs_delta_error_abs: 4.0
+
+  GATE.CORRELATION_RISK:
+    kind: correlation_check
+    description: >
+      Assess cross-channel correlation risk from scene metadata (e.g. known
+      polarity-inverted stems, negative stereo correlation reported by
+      analysis). Warns when correlation is borderline negative; blocks when
+      strongly negative (likely phase-cancellation artefact).
+    default_enabled: true
+    fallback_policy: warn
+    thresholds:
+      correlation_warn_lte: -0.2
+      correlation_error_lte: -0.6
+
+  GATE.PHASE_RISK:
+    kind: phase_check
+    description: >
+      Flag polarity / phase-inversion risk from scene metadata flags.
+      A scene with stems marked polarity_inverted or a negative correlation
+      reading from a prior analysis pass will trigger this gate.
+    default_enabled: true
+    fallback_policy: warn
+    thresholds:
+      polarity_warn_lte: -0.2
+      polarity_error_lte: -0.6
+
+  GATE.CONFIDENCE_LOW:
+    kind: confidence_check
+    description: >
+      Block or warn when the scene's overall automated-inference confidence is
+      too low to proceed safely. A very-low-confidence scene may have
+      incorrect stem roles or unsafe gain recommendations.
+    default_enabled: true
+    fallback_policy: warn
+    thresholds:
+      warn_below: 0.5
+      error_below: 0.2

@@ -713,6 +713,7 @@ def _run_safe_render_command(
         run_renderers,
         run_resolvers,
     )
+    from mmo.core.preflight import evaluate_preflight, preflight_receipt_blocks  # noqa: WPS433
     from mmo.core.render_qa import build_safe_render_qa  # noqa: WPS433
 
     # -- overwrite guards -------------------------------------------------------
@@ -735,6 +736,31 @@ def _run_safe_render_command(
         report["run_config"] = normalized_run_config
         if routing_layout_ids_from_run_config(normalized_run_config) is not None:
             apply_routing_plan_to_report(report, normalized_run_config)
+
+    # -- stage 1a: preflight safety gates (no audio; fail-fast) ---------------
+    preflight_receipt = evaluate_preflight(
+        session={"profile_id": profile_id},
+        scene=report,
+        target_layout=target,
+        options={},
+    )
+    _preflight_decision = preflight_receipt.get("final_decision", "pass")
+    print(
+        f"safe-render: preflight={_preflight_decision}"
+        f" target={target}",
+        file=sys.stderr,
+    )
+    if not dry_run and preflight_receipt_blocks(preflight_receipt):
+        blocked_gates = [
+            g["gate_id"]
+            for g in preflight_receipt.get("gates_evaluated", [])
+            if g.get("outcome") == "block"
+        ]
+        print(
+            f"safe-render: preflight BLOCKED by gates: {', '.join(blocked_gates)}",
+            file=sys.stderr,
+        )
+        return 1
 
     # -- load plugins ----------------------------------------------------------
     plugins = load_plugins(plugins_dir)
