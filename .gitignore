@@ -22,6 +22,9 @@ local_media/
 *.corpus.stats.json
 # Claude Code workspace files (local-only, not tracked)
 .claude/
+
+# Agent harness artifacts (contract stamp, hot-path index)
+/.mmo_agent/
 gui/node_modules/
 
 # Local temp/build artifacts (Windows + Linux)

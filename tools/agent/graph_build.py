@@ -61,6 +61,7 @@ _SKIP_DIRS: frozenset[str] = frozenset({
     "venv",
     "corpus",
     "private",
+    ".mmo_agent",
     ".mmo_cache",
     ".mmo_tmp",
 })

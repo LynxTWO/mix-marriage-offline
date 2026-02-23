@@ -42,11 +42,23 @@ Budget overrides (CLI flags)::
     --max-total-lines N        (default 4000)
     --max-grep-hits N          (default 300)
     --max-graph-nodes-summary N (default 200)
+
+Contract stamp (PR A)::
+
+    --no-contract-stamp        Disable writing/validating the stamp
+    --contract-stamp-path PATH Override the default stamp path
+
+Hot-path index (PR B)::
+
+    --no-index                 Disable writing the index
+    --index-path PATH          Override the default index path
 """
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
+import hashlib
 import json
 import pathlib
 import sys
@@ -56,7 +68,16 @@ from typing import Optional
 # ``python tools/agent/run.py`` (absolute fallback).
 if __package__:
     from .budgets import Budgets, BudgetConfig, BudgetExceededError
+    from .contract_stamp import (
+        ContractStamp,
+        get_git_head_sha,
+        make_contract_stamp,
+        read_contract_stamp,
+        validate_contract_stamp,
+        write_contract_stamp,
+    )
     from .graph_build import build_graph, save_graph, top_connected_nodes
+    from .index_build import build_index, save_index
     from .scoping import (
         expand_diff_scope,
         filter_graph_to_scope,
@@ -69,7 +90,16 @@ else:
     if str(_here) not in sys.path:
         sys.path.insert(0, str(_here))
     from tools.agent.budgets import Budgets, BudgetConfig, BudgetExceededError
+    from tools.agent.contract_stamp import (
+        ContractStamp,
+        get_git_head_sha,
+        make_contract_stamp,
+        read_contract_stamp,
+        validate_contract_stamp,
+        write_contract_stamp,
+    )
     from tools.agent.graph_build import build_graph, save_graph, top_connected_nodes
+    from tools.agent.index_build import build_index, save_index
     from tools.agent.scoping import (
         expand_diff_scope,
         filter_graph_to_scope,
@@ -169,6 +199,43 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         help=(
             "Disable ontology allowlist for id_ref edges; use full regex "
             "mode instead (more noise, no ontology dependency)."
+        ),
+    )
+
+    # PR A: contract stamp
+    parser.add_argument(
+        "--no-contract-stamp",
+        action="store_true",
+        default=False,
+        help=(
+            "Disable writing (graph-only/plan) and validating (patch) the "
+            "contract stamp artifact."
+        ),
+    )
+    parser.add_argument(
+        "--contract-stamp-path",
+        type=pathlib.Path,
+        default=None,
+        help=(
+            "Override the contract stamp path.  Default: "
+            "<root>/.mmo_agent/graph_contract.json"
+        ),
+    )
+
+    # PR B: hot-path index
+    parser.add_argument(
+        "--no-index",
+        action="store_true",
+        default=False,
+        help="Disable writing the hot-path index artifact.",
+    )
+    parser.add_argument(
+        "--index-path",
+        type=pathlib.Path,
+        default=None,
+        help=(
+            "Override the hot-path index path.  Default: "
+            "<root>/.mmo_agent/agent_index.json"
         ),
     )
 
@@ -284,12 +351,142 @@ def _apply_diff_filter(
     return filtered
 
 
+def _find_git_root(start: pathlib.Path) -> pathlib.Path:
+    """Walk up from *start* to find the git repo root (``.git`` dir).
+
+    Returns *start* resolved if no git root is found (graceful fallback).
+    """
+    current = start.resolve()
+    while True:
+        if (current / ".git").exists():
+            return current
+        parent = current.parent
+        if parent == current:
+            return start.resolve()  # filesystem root reached
+        current = parent
+
+
+def _stamp_path_default(root: pathlib.Path) -> pathlib.Path:
+    """Return the default contract stamp path anchored to the git repo root.
+
+    Always uses the git repo root (not just ``args.root``) so that scoped
+    runs (e.g. ``--root ontology/``) do not create artifacts inside
+    subdirectories of the repository.
+    """
+    return _find_git_root(root) / ".mmo_agent" / "graph_contract.json"
+
+
+def _index_path_default(root: pathlib.Path) -> pathlib.Path:
+    """Return the default hot-path index path anchored to the git repo root."""
+    return _find_git_root(root) / ".mmo_agent" / "agent_index.json"
+
+
+def _resolve_stamp_path(args: argparse.Namespace) -> pathlib.Path:
+    if args.contract_stamp_path is not None:
+        return args.contract_stamp_path.resolve()
+    return _stamp_path_default(args.root)
+
+
+def _resolve_index_path(args: argparse.Namespace) -> pathlib.Path:
+    if args.index_path is not None:
+        return args.index_path.resolve()
+    return _index_path_default(args.root)
+
+
+def _write_artifacts(
+    args: argparse.Namespace,
+    config: BudgetConfig,
+    budgets: Budgets,
+    tracer: Tracer,
+    graph: dict,
+) -> None:
+    """Write contract stamp and hot-path index after a successful graph build.
+
+    Both writes are best-effort: failures are reported but do not abort the run.
+
+    Args:
+        args: Parsed CLI arguments.
+        config: The BudgetConfig used for this run.
+        budgets: The Budgets instance (used for index building).
+        tracer: Trace sink.
+        graph: The final graph dict (after any diff filtering).
+    """
+    root = args.root.resolve()
+    graph_path = args.out / "agent_graph.json"
+    trace_path = args.out / "agent_trace.ndjson"
+
+    # Compute git info once (shared by stamp and index)
+    sha = get_git_head_sha(root)
+    git_available = sha != "unknown"
+
+    # Compute graph SHA-256 (used by both stamp and index)
+    if graph_path.exists():
+        _h = hashlib.sha256()
+        _h.update(graph_path.read_bytes())
+        graph_sha256 = _h.hexdigest()
+    else:
+        graph_sha256 = ""
+
+    # -----------------------------------------------------------------------
+    # PR A: Contract stamp
+    # -----------------------------------------------------------------------
+    if not args.no_contract_stamp:
+        scope_dict = {
+            "diff": args.diff,
+            "diff_cap": args.diff_cap,
+            "id_allowlist": not args.no_id_allowlist,
+            "preset": args.preset,
+            "scope_paths": sorted(args.scope),
+        }
+        budgets_dict = dataclasses.asdict(config)
+        stamp = make_contract_stamp(
+            repo_root=root,
+            git_sha=sha,
+            git_available=git_available,
+            graph_path=graph_path.resolve(),
+            trace_path=trace_path.resolve(),
+            graph=graph,
+            run_mode=args.mode,
+            scope=scope_dict,
+            budgets_config=budgets_dict,
+        )
+        stamp_path = _resolve_stamp_path(args)
+        try:
+            write_contract_stamp(stamp_path, stamp)
+            tracer.emit("contract_stamp_written", path=str(stamp_path))
+        except OSError as exc:
+            print(f"[WARNING] Could not write contract stamp: {exc}", file=sys.stderr)
+            tracer.emit("contract_stamp_error", error=str(exc))
+
+    # -----------------------------------------------------------------------
+    # PR B: Hot-path index
+    # -----------------------------------------------------------------------
+    if not args.no_index:
+        index_path = _resolve_index_path(args)
+        try:
+            index = build_index(
+                graph=graph,
+                repo_root=root,
+                budgets=budgets,
+                tracer=tracer,
+                git_sha=sha,
+                git_available=git_available,
+                graph_sha256=graph_sha256,
+            )
+            save_index(index_path, index)
+            tracer.emit("index_written", path=str(index_path))
+        except OSError as exc:
+            print(f"[WARNING] Could not write index: {exc}", file=sys.stderr)
+            tracer.emit("index_error", error=str(exc))
+
+
 # ---------------------------------------------------------------------------
 # Mode implementations
 # ---------------------------------------------------------------------------
 
 def _mode_graph_only(
     args: argparse.Namespace,
+    config: BudgetConfig,
     budgets: Budgets,
     tracer: Tracer,
 ) -> int:
@@ -322,11 +519,13 @@ def _mode_graph_only(
             return 1
 
     _print_summary(graph, budgets, args.out)
+    _write_artifacts(args, config, budgets, tracer, graph)
     return 1 if budgets.is_exceeded else 0
 
 
 def _mode_plan(
     args: argparse.Namespace,
+    config: BudgetConfig,
     budgets: Budgets,
     tracer: Tracer,
 ) -> int:
@@ -375,26 +574,74 @@ def _mode_plan(
         encoding="utf-8",
     )
     print(f"\nPlan written to : {plan_path}")
+    _write_artifacts(args, config, budgets, tracer, graph)
     return 1 if budgets.is_exceeded else 0
 
 
 def _mode_patch(
     args: argparse.Namespace,
+    config: BudgetConfig,
     budgets: Budgets,
     tracer: Tracer,
 ) -> int:
     """Guarded patch stub.
 
     Contract:
-    * Refuses to proceed if no valid graph artifact exists.
+    * If a contract stamp exists (and --no-contract-stamp is not set), validates
+      it against the current repo state; exits with code 3 if invalid.
+    * Refuses to proceed if no valid graph artifact exists (exit 2).
     * Does NOT autonomously edit files.
-    * Returns exit code 2 on refusal, 0 on stub success.
+    * Returns exit code 3 on invalid stamp, 2 on refusal, 0 on stub success.
 
     This mode is scaffolding for a future agent extension that will accept a
     ``--patch-file`` argument or explicit edit instructions.
     """
     graph_path = args.graph or (args.out / "agent_graph.json")
 
+    # -----------------------------------------------------------------------
+    # PR A: Validate contract stamp before doing anything
+    # -----------------------------------------------------------------------
+    if not args.no_contract_stamp:
+        stamp_path = _resolve_stamp_path(args)
+        if stamp_path.exists():
+            try:
+                stamp = read_contract_stamp(stamp_path)
+                errors = validate_contract_stamp(
+                    stamp, args.root.resolve(), graph_path
+                )
+                if errors:
+                    print(
+                        "[REFUSED] Contract stamp validation failed "
+                        f"({len(errors)} error(s)):",
+                        file=sys.stderr,
+                    )
+                    for err in errors:
+                        print(f"  - {err}", file=sys.stderr)
+                    print(
+                        f"  Stamp   : {stamp_path}\n"
+                        f"  Fix     : re-run 'graph-only' or 'plan' mode to "
+                        "refresh the stamp, or pass --no-contract-stamp to skip.",
+                        file=sys.stderr,
+                    )
+                    tracer.emit(
+                        "patch_refused",
+                        errors=errors,
+                        reason="invalid_contract_stamp",
+                        stamp_path=str(stamp_path),
+                    )
+                    return 3
+                tracer.emit("contract_stamp_valid", stamp_path=str(stamp_path))
+            except (OSError, json.JSONDecodeError, TypeError) as exc:
+                print(
+                    f"[WARNING] Could not read contract stamp ({exc}); "
+                    "proceeding without stamp validation.",
+                    file=sys.stderr,
+                )
+                tracer.emit("contract_stamp_read_error", error=str(exc))
+
+    # -----------------------------------------------------------------------
+    # Original patch guard: graph artifact must exist and be well-formed
+    # -----------------------------------------------------------------------
     if not graph_path.exists():
         print(
             f"[REFUSED] Patch mode requires a graph artifact.\n"
@@ -451,7 +698,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         argv: Argument list (defaults to ``sys.argv[1:]``).
 
     Returns:
-        Unix exit code: 0 = success, 1 = budget exceeded / error, 2 = refused.
+        Unix exit code:
+        * ``0`` — success
+        * ``1`` — budget exceeded / error
+        * ``2`` — refused (patch mode: no valid graph artifact)
+        * ``3`` — refused (patch mode: contract stamp validation failed)
     """
     args = _parse_args(argv)
 
@@ -474,7 +725,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         "plan": _mode_plan,
         "patch": _mode_patch,
     }
-    rc = dispatch[args.mode](args, budgets, tracer)
+    rc = dispatch[args.mode](args, config, budgets, tracer)
 
     tracer.emit(
         "run_end",

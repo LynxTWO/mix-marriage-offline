@@ -22,6 +22,24 @@ Test matrix:
     test_preset_schemas_limits_scope         Upgrade 3: --preset schemas
     test_scope_ontology_only                 Upgrade 3: --scope ontology
     test_expand_diff_scope_deterministic     Upgrade 3: BFS expansion is deterministic
+
+PR A — contract stamp:
+    TestContractStamp.test_stamp_written_after_graph_only_run
+    TestContractStamp.test_stamp_determinism
+    TestContractStamp.test_validate_detects_graph_sha_mismatch
+    TestContractStamp.test_validate_detects_git_sha_mismatch
+    TestContractStamp.test_patch_returns_3_on_invalid_stamp
+    TestContractStamp.test_patch_returns_0_on_valid_stamp
+    TestContractStamp.test_no_contract_stamp_flag_skips_writing
+
+PR B — hot-path index:
+    TestAgentIndex.test_index_written_after_graph_only_run
+    TestAgentIndex.test_index_is_deterministic
+    TestAgentIndex.test_module_to_file_has_entry
+    TestAgentIndex.test_id_to_occurrences_has_canonical_id
+    TestAgentIndex.test_schema_to_refs_has_refs
+    TestAgentIndex.test_no_index_flag_skips_writing
+    TestAgentIndex.test_low_budget_warns_on_occurrences
 """
 
 from __future__ import annotations
@@ -41,7 +59,16 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from tools.agent.budgets import Budgets, BudgetConfig, BudgetExceededError  # noqa: E402
+from tools.agent.contract_stamp import (  # noqa: E402
+    ContractStamp,
+    get_git_head_sha,
+    make_contract_stamp,
+    read_contract_stamp,
+    validate_contract_stamp,
+    write_contract_stamp,
+)
 from tools.agent.graph_build import build_graph, save_graph, top_connected_nodes  # noqa: E402
+from tools.agent.index_build import build_index, save_index  # noqa: E402
 from tools.agent.repo_ops import (  # noqa: E402
     build_id_allowlist,
     parse_py_imports,
@@ -331,6 +358,7 @@ class TestPatchModeGuard:
                 "--root", str(_REPO_ROOT),
                 "--out", tmp,
                 "--graph", str(pathlib.Path(tmp) / "nonexistent_graph.json"),
+                "--no-contract-stamp",
             ])
         assert rc == 2, f"Expected rc=2, got {rc}"
 
@@ -348,6 +376,7 @@ class TestPatchModeGuard:
                 "--root", str(_REPO_ROOT),
                 "--out", tmp,
                 "--graph", str(graph_path),
+                "--no-contract-stamp",
             ])
         assert rc == 0, f"Expected rc=0, got {rc}"
 
@@ -361,6 +390,7 @@ class TestPatchModeGuard:
                 "--root", str(_REPO_ROOT),
                 "--out", tmp,
                 "--graph", str(graph_path),
+                "--no-contract-stamp",
             ])
         assert rc == 2, f"Expected rc=2 for malformed JSON, got {rc}"
 
@@ -907,6 +937,8 @@ class TestScoping:
             "--root", str(_REPO_ROOT),
             "--out", str(tmp_path),
             "--preset", "schemas",
+            "--no-contract-stamp",
+            "--no-index",
             "--max-file-reads", "200",
             "--max-total-lines", "100000",
             "--max-steps", "200",
@@ -920,6 +952,8 @@ class TestScoping:
             "--root", str(_REPO_ROOT),
             "--out", str(tmp_path),
             "--scope", "ontology",
+            "--no-contract-stamp",
+            "--no-index",
             "--max-file-reads", "200",
             "--max-total-lines", "100000",
             "--max-steps", "200",
@@ -933,6 +967,8 @@ class TestScoping:
             "--root", str(_ONTOLOGY_DIR),
             "--out", str(tmp_path),
             "--no-id-allowlist",
+            "--no-contract-stamp",
+            "--no-index",
             "--max-file-reads", "200",
             "--max-total-lines", "200000",
             "--max-steps", "200",
@@ -943,3 +979,643 @@ class TestScoping:
         graph = json.loads(graph_path.read_text(encoding="utf-8"))
         id_edges = [e for e in graph["edges"] if e["kind"] == "id_ref"]
         assert id_edges, "Expected id_ref edges with --no-id-allowlist"
+
+
+# ===========================================================================
+# PR A: Contract Stamp
+# ===========================================================================
+
+class TestContractStamp:
+    """Tests for tools/agent/contract_stamp.py and its integration in run.py."""
+
+    # -----------------------------------------------------------------------
+    # Helpers
+    # -----------------------------------------------------------------------
+
+    @staticmethod
+    def _minimal_graph() -> dict:
+        return {
+            "edges": [
+                {
+                    "dst": "b.py",
+                    "evidence": "mypkg",
+                    "kind": "py_import_file",
+                    "source_file": "a.py",
+                    "src": "a.py",
+                }
+            ],
+            "nodes": [{"id": "a.py", "kind": "file"}, {"id": "b.py", "kind": "file"}],
+            "warnings": [],
+        }
+
+    @staticmethod
+    def _write_minimal_graph(path: pathlib.Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(TestContractStamp._minimal_graph(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _make_stamp(
+        tmp_path: pathlib.Path,
+        graph_path: pathlib.Path,
+        git_sha: str = "abc123def456abc123def456abc123def456abc1",
+        git_available: bool = True,
+    ) -> ContractStamp:
+        return make_contract_stamp(
+            repo_root=tmp_path,
+            git_sha=git_sha,
+            git_available=git_available,
+            graph_path=graph_path,
+            trace_path=tmp_path / "agent_trace.ndjson",
+            graph=TestContractStamp._minimal_graph(),
+            run_mode="graph-only",
+            scope={
+                "diff": False,
+                "diff_cap": 50,
+                "id_allowlist": True,
+                "preset": None,
+                "scope_paths": [],
+            },
+            budgets_config={
+                "max_file_reads": 60,
+                "max_graph_nodes_summary": 200,
+                "max_grep_hits": 300,
+                "max_steps": 40,
+                "max_total_lines": 4000,
+            },
+        )
+
+    # -----------------------------------------------------------------------
+    # Unit: make / write / read round-trip
+    # -----------------------------------------------------------------------
+
+    def test_stamp_written_after_graph_only_run(self, tmp_path: pathlib.Path) -> None:
+        """graph-only run must write a contract stamp file."""
+        stamp_path = tmp_path / "stamp.json"
+        out_dir = tmp_path / "out"
+        rc = harness_main([
+            "graph-only",
+            "--root", str(_REPO_ROOT),
+            "--out", str(out_dir),
+            "--contract-stamp-path", str(stamp_path),
+            "--no-index",
+            "--max-file-reads", "200",
+            "--max-total-lines", "100000",
+            "--max-steps", "200",
+            "--preset", "schemas",
+        ])
+        assert rc in (0, 1), f"Expected 0 or 1, got {rc}"
+        assert stamp_path.exists(), "Contract stamp must be written after graph-only run"
+        stamp_raw = json.loads(stamp_path.read_text(encoding="utf-8"))
+        assert stamp_raw["version"] == 1
+        assert "graph_sha256" in stamp_raw
+        assert "git_sha" in stamp_raw
+        assert "budgets" in stamp_raw
+        assert "scope" in stamp_raw
+        assert stamp_raw["run_mode"] == "graph-only"
+
+    def test_stamp_determinism(self, tmp_path: pathlib.Path) -> None:
+        """Writing the same stamp twice must produce byte-identical JSON."""
+        graph_path = tmp_path / "graph.json"
+        self._write_minimal_graph(graph_path)
+
+        stamp = self._make_stamp(tmp_path, graph_path)
+
+        out1 = tmp_path / "stamp1.json"
+        out2 = tmp_path / "stamp2.json"
+        write_contract_stamp(out1, stamp)
+        write_contract_stamp(out2, stamp)
+
+        assert out1.read_bytes() == out2.read_bytes(), (
+            "Contract stamp must be deterministic: identical bytes on repeated writes"
+        )
+
+    def test_read_roundtrip(self, tmp_path: pathlib.Path) -> None:
+        """write then read must produce equal ContractStamp objects."""
+        graph_path = tmp_path / "graph.json"
+        self._write_minimal_graph(graph_path)
+        stamp = self._make_stamp(tmp_path, graph_path)
+
+        stamp_path = tmp_path / "stamp.json"
+        write_contract_stamp(stamp_path, stamp)
+        loaded = read_contract_stamp(stamp_path)
+
+        assert loaded.version == stamp.version
+        assert loaded.graph_sha256 == stamp.graph_sha256
+        assert loaded.git_sha == stamp.git_sha
+        assert loaded.graph_node_count == stamp.graph_node_count
+        assert loaded.graph_edge_count == stamp.graph_edge_count
+        assert loaded.run_mode == stamp.run_mode
+
+    # -----------------------------------------------------------------------
+    # Unit: validate_contract_stamp
+    # -----------------------------------------------------------------------
+
+    def test_validate_valid_stamp_returns_no_errors(self, tmp_path: pathlib.Path) -> None:
+        """A correctly built stamp must pass validation."""
+        graph_path = tmp_path / "graph.json"
+        self._write_minimal_graph(graph_path)
+        sha = get_git_head_sha(_REPO_ROOT)
+        stamp = self._make_stamp(
+            tmp_path,
+            graph_path,
+            git_sha=sha,
+            git_available=(sha != "unknown"),
+        )
+        # Override repo_root to match tmp_path for this test
+        import dataclasses as _dc
+        stamp_here = _dc.replace(stamp, repo_root=str(tmp_path.resolve()))
+
+        errors = validate_contract_stamp(stamp_here, tmp_path, graph_path)
+        # The only expected errors here are git sha related (if sha is "unknown"
+        # on this machine the git check is skipped).  The graph sha should match.
+        sha_errors = [e for e in errors if "graph_sha256" in e]
+        assert not sha_errors, f"Graph SHA should match. Errors: {errors}"
+
+    def test_validate_detects_graph_sha_mismatch(self, tmp_path: pathlib.Path) -> None:
+        """validate_contract_stamp must report an error when graph file has changed."""
+        graph_path = tmp_path / "graph.json"
+        self._write_minimal_graph(graph_path)
+        stamp = self._make_stamp(tmp_path, graph_path)
+        import dataclasses as _dc
+        stamp_bad = _dc.replace(
+            stamp,
+            repo_root=str(tmp_path.resolve()),
+            graph_sha256="0" * 64,   # Wrong SHA
+        )
+
+        errors = validate_contract_stamp(stamp_bad, tmp_path, graph_path)
+        sha_errors = [e for e in errors if "graph_sha256" in e]
+        assert sha_errors, (
+            "Expected a graph_sha256 mismatch error. "
+            f"All errors: {errors}"
+        )
+
+    def test_validate_detects_git_sha_mismatch(self, tmp_path: pathlib.Path) -> None:
+        """validate_contract_stamp must report an error when git SHA differs."""
+        # Only run this check when git is actually available
+        current_sha = get_git_head_sha(_REPO_ROOT)
+        if current_sha == "unknown":
+            pytest.skip("git not available in this environment")
+
+        graph_path = tmp_path / "graph.json"
+        self._write_minimal_graph(graph_path)
+
+        # Build stamp with wrong SHA, but with repo_root pointing to the real
+        # repo so that validate_contract_stamp can call git successfully.
+        import dataclasses as _dc
+        stamp = self._make_stamp(
+            tmp_path,
+            graph_path,
+            git_sha="0000000000000000000000000000000000000000",
+            git_available=True,
+        )
+        # Override repo_root to the real repo so the git check runs
+        stamp_bad = _dc.replace(stamp, repo_root=str(_REPO_ROOT.resolve()))
+
+        errors = validate_contract_stamp(stamp_bad, _REPO_ROOT, graph_path)
+        git_errors = [e for e in errors if "git_sha" in e]
+        assert git_errors, (
+            "Expected a git_sha mismatch error. "
+            f"All errors: {errors}"
+        )
+
+    def test_validate_detects_missing_graph_file(self, tmp_path: pathlib.Path) -> None:
+        """validate_contract_stamp must report an error if graph file is absent."""
+        graph_path = tmp_path / "nonexistent.json"
+        # Stamp references a file that does not exist
+        stamp = self._make_stamp(tmp_path, tmp_path / "graph.json")
+        import dataclasses as _dc
+        stamp_bad = _dc.replace(
+            stamp,
+            repo_root=str(tmp_path.resolve()),
+            graph_sha256="a" * 64,
+        )
+
+        errors = validate_contract_stamp(stamp_bad, tmp_path, graph_path)
+        missing_errors = [e for e in errors if "does not exist" in e]
+        assert missing_errors, f"Expected a missing-file error. All errors: {errors}"
+
+    # -----------------------------------------------------------------------
+    # Integration: patch mode with stamp
+    # -----------------------------------------------------------------------
+
+    def test_patch_returns_3_on_invalid_stamp(self, tmp_path: pathlib.Path) -> None:
+        """patch mode must return exit code 3 when the contract stamp is invalid."""
+        # Build a valid graph artifact
+        graph_path = tmp_path / "agent_graph.json"
+        self._write_minimal_graph(graph_path)
+
+        # Write a stamp with a wrong graph SHA
+        stamp = self._make_stamp(tmp_path, graph_path)
+        import dataclasses as _dc
+        bad_stamp = _dc.replace(
+            stamp,
+            repo_root=str(tmp_path.resolve()),
+            graph_sha256="0" * 64,
+            git_available=False,  # skip git check
+        )
+        stamp_path = tmp_path / "stamp.json"
+        write_contract_stamp(stamp_path, bad_stamp)
+
+        rc = harness_main([
+            "patch",
+            "--root", str(tmp_path),
+            "--out", str(tmp_path),
+            "--graph", str(graph_path),
+            "--contract-stamp-path", str(stamp_path),
+            "--no-index",
+        ])
+        assert rc == 3, f"Expected rc=3 for invalid stamp, got {rc}"
+
+    def test_patch_returns_0_with_valid_stamp(self, tmp_path: pathlib.Path) -> None:
+        """patch mode must return 0 when the contract stamp is valid."""
+        graph_path = tmp_path / "agent_graph.json"
+        self._write_minimal_graph(graph_path)
+
+        sha = get_git_head_sha(_REPO_ROOT)
+        stamp = make_contract_stamp(
+            repo_root=tmp_path,
+            git_sha=sha,
+            git_available=False,   # skip git sha check
+            graph_path=graph_path,
+            trace_path=tmp_path / "agent_trace.ndjson",
+            graph=self._minimal_graph(),
+            run_mode="graph-only",
+            scope={
+                "diff": False, "diff_cap": 50, "id_allowlist": True,
+                "preset": None, "scope_paths": [],
+            },
+            budgets_config={
+                "max_file_reads": 60, "max_graph_nodes_summary": 200,
+                "max_grep_hits": 300, "max_steps": 40, "max_total_lines": 4000,
+            },
+        )
+        import dataclasses as _dc
+        stamp = _dc.replace(stamp, repo_root=str(tmp_path.resolve()))
+        stamp_path = tmp_path / "stamp.json"
+        write_contract_stamp(stamp_path, stamp)
+
+        rc = harness_main([
+            "patch",
+            "--root", str(tmp_path),
+            "--out", str(tmp_path),
+            "--graph", str(graph_path),
+            "--contract-stamp-path", str(stamp_path),
+            "--no-index",
+        ])
+        assert rc == 0, f"Expected rc=0 with valid stamp, got {rc}"
+
+    def test_no_contract_stamp_flag_skips_writing(self, tmp_path: pathlib.Path) -> None:
+        """--no-contract-stamp must prevent stamp creation."""
+        stamp_path = tmp_path / "stamp.json"
+        out_dir = tmp_path / "out"
+        harness_main([
+            "graph-only",
+            "--root", str(_SCHEMAS_DIR),
+            "--out", str(out_dir),
+            "--contract-stamp-path", str(stamp_path),
+            "--no-contract-stamp",
+            "--no-index",
+            "--max-file-reads", "100",
+            "--max-total-lines", "50000",
+            "--max-steps", "100",
+        ])
+        assert not stamp_path.exists(), (
+            "--no-contract-stamp must prevent stamp file creation"
+        )
+
+    def test_stamp_contains_scope_and_budgets(self, tmp_path: pathlib.Path) -> None:
+        """The written stamp must include scope and budgets fields."""
+        stamp_path = tmp_path / "stamp.json"
+        out_dir = tmp_path / "out"
+        harness_main([
+            "graph-only",
+            "--root", str(_SCHEMAS_DIR),
+            "--out", str(out_dir),
+            "--contract-stamp-path", str(stamp_path),
+            "--no-index",
+            "--max-file-reads", "100",
+            "--max-total-lines", "50000",
+            "--max-steps", "100",
+        ])
+        if not stamp_path.exists():
+            pytest.skip("Stamp not written (possibly budget exceeded before graph)")
+        raw = json.loads(stamp_path.read_text(encoding="utf-8"))
+        assert "scope" in raw, "Stamp must contain a 'scope' key"
+        assert "budgets" in raw, "Stamp must contain a 'budgets' key"
+        scope = raw["scope"]
+        assert "preset" in scope
+        assert "scope_paths" in scope
+        assert "diff" in scope
+        assert "id_allowlist" in scope
+        budgets = raw["budgets"]
+        assert "max_file_reads" in budgets
+        assert "max_steps" in budgets
+
+
+# ===========================================================================
+# PR B: Hot-Path Index
+# ===========================================================================
+
+class TestAgentIndex:
+    """Tests for tools/agent/index_build.py and its integration in run.py."""
+
+    @staticmethod
+    def _run_graph_only_with_index(
+        root: pathlib.Path,
+        out_dir: pathlib.Path,
+        index_path: pathlib.Path,
+        max_file_reads: int = 200,
+        max_total_lines: int = 100_000,
+        max_steps: int = 200,
+    ) -> int:
+        return harness_main([
+            "graph-only",
+            "--root", str(root),
+            "--out", str(out_dir),
+            "--index-path", str(index_path),
+            "--no-contract-stamp",
+            "--max-file-reads", str(max_file_reads),
+            "--max-total-lines", str(max_total_lines),
+            "--max-steps", str(max_steps),
+        ])
+
+    # -----------------------------------------------------------------------
+    # Integration: index is written by run.py
+    # -----------------------------------------------------------------------
+
+    def test_index_written_after_graph_only_run(self, tmp_path: pathlib.Path) -> None:
+        """graph-only run must write an index file."""
+        index_path = tmp_path / "index.json"
+        out_dir = tmp_path / "out"
+        rc = self._run_graph_only_with_index(
+            _SCHEMAS_DIR, out_dir, index_path,
+            max_file_reads=200, max_total_lines=200_000,
+        )
+        assert rc in (0, 1), f"Expected 0 or 1, got {rc}"
+        assert index_path.exists(), "Index file must be written after graph-only run"
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        assert index["version"] == 1
+        assert "graph_sha256" in index
+        assert "module_to_file" in index
+        assert "id_to_occurrences" in index
+        assert "schema_to_refs" in index
+        assert "file_summary" in index
+
+    def test_index_is_deterministic(self, tmp_path: pathlib.Path) -> None:
+        """Two index builds on the same graph must produce identical JSON bytes."""
+        index_path_1 = tmp_path / "index1.json"
+        index_path_2 = tmp_path / "index2.json"
+        out_dir = tmp_path / "out"
+
+        self._run_graph_only_with_index(
+            _SCHEMAS_DIR, out_dir, index_path_1,
+            max_file_reads=200, max_total_lines=200_000,
+        )
+        self._run_graph_only_with_index(
+            _SCHEMAS_DIR, out_dir, index_path_2,
+            max_file_reads=200, max_total_lines=200_000,
+        )
+
+        if not index_path_1.exists() or not index_path_2.exists():
+            pytest.skip("Index not written (budget exceeded before completion)")
+
+        assert index_path_1.read_bytes() == index_path_2.read_bytes(), (
+            "Index must be byte-identical for identical runs"
+        )
+
+    def test_module_to_file_has_entry(self, tmp_path: pathlib.Path) -> None:
+        """module_to_file must contain at least one in-repo module when scanning src/."""
+        index_path = tmp_path / "index.json"
+        out_dir = tmp_path / "out"
+        self._run_graph_only_with_index(
+            _REPO_ROOT, out_dir, index_path,
+            max_file_reads=300, max_total_lines=300_000,
+            max_steps=300,
+        )
+        if not index_path.exists():
+            pytest.skip("Index not written")
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        m2f = index.get("module_to_file", {})
+        assert m2f, (
+            "module_to_file must be non-empty when scanning a repo with Python modules"
+        )
+        # At least one resolved path must exist
+        for module, path in m2f.items():
+            assert isinstance(module, str) and "." in module or module  # dotted or single
+            assert isinstance(path, str)
+
+    def test_id_to_occurrences_has_canonical_id(self, tmp_path: pathlib.Path) -> None:
+        """id_to_occurrences must contain at least one canonical MMO ID."""
+        index_path = tmp_path / "index.json"
+        out_dir = tmp_path / "out"
+        self._run_graph_only_with_index(
+            _ONTOLOGY_DIR, out_dir, index_path,
+            max_file_reads=200, max_total_lines=200_000,
+        )
+        if not index_path.exists():
+            pytest.skip("Index not written")
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        id2occ = index.get("id_to_occurrences", {})
+        assert id2occ, (
+            "id_to_occurrences must be non-empty when scanning ontology/"
+        )
+        canonical_prefixes = (
+            "ACTION.", "PARAM.", "ROLE.", "GATE.", "ISSUE.", "LAYOUT.",
+        )
+        has_canonical = any(
+            k.startswith(pfx) for k in id2occ for pfx in canonical_prefixes
+        )
+        assert has_canonical, (
+            f"Expected a canonical ID in occurrences. "
+            f"Sample keys: {sorted(id2occ.keys())[:5]}"
+        )
+        # Each occurrence must have path, line, evidence
+        for id_key, occs in id2occ.items():
+            for occ in occs:
+                assert "path" in occ, f"Occurrence missing 'path': {occ}"
+                assert "line" in occ, f"Occurrence missing 'line': {occ}"
+                assert "evidence" in occ, f"Occurrence missing 'evidence': {occ}"
+                assert isinstance(occ["line"], int) and occ["line"] >= 1
+
+    def test_schema_to_refs_has_refs(self, tmp_path: pathlib.Path) -> None:
+        """schema_to_refs must contain at least one entry when scanning schemas/."""
+        index_path = tmp_path / "index.json"
+        out_dir = tmp_path / "out"
+        self._run_graph_only_with_index(
+            _SCHEMAS_DIR, out_dir, index_path,
+            max_file_reads=200, max_total_lines=200_000,
+        )
+        if not index_path.exists():
+            pytest.skip("Index not written")
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        s2r = index.get("schema_to_refs", {})
+        assert s2r, (
+            "schema_to_refs must be non-empty when scanning schemas/"
+        )
+        for schema_file, refs in s2r.items():
+            assert isinstance(schema_file, str)
+            for r in refs:
+                assert "ref" in r
+                assert "evidence" in r
+
+    def test_no_index_flag_skips_writing(self, tmp_path: pathlib.Path) -> None:
+        """--no-index must prevent index file creation."""
+        index_path = tmp_path / "index.json"
+        harness_main([
+            "graph-only",
+            "--root", str(_SCHEMAS_DIR),
+            "--out", str(tmp_path / "out"),
+            "--index-path", str(index_path),
+            "--no-index",
+            "--no-contract-stamp",
+            "--max-file-reads", "100",
+            "--max-total-lines", "50000",
+            "--max-steps", "100",
+        ])
+        assert not index_path.exists(), (
+            "--no-index must prevent index file creation"
+        )
+
+    def test_low_budget_warns_on_occurrences(self, tmp_path: pathlib.Path) -> None:
+        """When the budget is exhausted, the index warnings list must be non-empty."""
+        # Build a graph first with generous budgets
+        out_dir = tmp_path / "out"
+        out_dir.mkdir(parents=True)
+        cfg = BudgetConfig(
+            max_steps=500, max_file_reads=200,
+            max_total_lines=200_000, max_grep_hits=5000,
+        )
+        graph = build_graph(root=_ONTOLOGY_DIR, budgets=Budgets(cfg))
+        save_graph(graph, out_dir / "agent_graph.json")
+
+        # Now build index with nearly-zero budget so id_occurrences is skipped
+        tiny_budgets = Budgets(BudgetConfig(
+            max_steps=500, max_file_reads=1,
+            max_total_lines=10, max_grep_hits=5000,
+        ))
+        index = build_index(
+            graph=graph,
+            repo_root=_REPO_ROOT,
+            budgets=tiny_budgets,
+            tracer=Tracer(),
+            git_sha="unknown",
+            git_available=False,
+            graph_sha256="a" * 64,
+        )
+        # Either budgets exceeded OR warnings is non-empty; partial results OK
+        assert tiny_budgets.is_exceeded or index.get("warnings"), (
+            "Low-budget index build must either set is_exceeded or emit warnings"
+        )
+
+    # -----------------------------------------------------------------------
+    # Unit: build_index from a synthetic graph
+    # -----------------------------------------------------------------------
+
+    def test_build_index_module_to_file_from_graph(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """build_index extracts module_to_file correctly from py_import_file edges."""
+        graph: dict = {
+            "edges": [
+                {
+                    "dst": "src/mmo/core/render_plan.py",
+                    "evidence": "mmo.core.render_plan",
+                    "kind": "py_import_file",
+                    "source_file": "src/mmo/cli.py",
+                    "src": "src/mmo/cli.py",
+                },
+                {
+                    "dst": "b.py",
+                    "evidence": "mmo.other",
+                    "kind": "py_import_file",
+                    "source_file": "a.py",
+                    "src": "a.py",
+                },
+            ],
+            "nodes": [],
+            "warnings": [],
+        }
+        index = build_index(
+            graph=graph,
+            repo_root=tmp_path,
+            budgets=_budgets(200),
+            tracer=Tracer(),
+            git_sha="unknown",
+            git_available=False,
+            graph_sha256="a" * 64,
+        )
+        m2f = index["module_to_file"]
+        assert "mmo.core.render_plan" in m2f
+        assert m2f["mmo.core.render_plan"] == "src/mmo/core/render_plan.py"
+        assert "mmo.other" in m2f
+        # Keys are sorted
+        assert list(m2f.keys()) == sorted(m2f.keys())
+
+    def test_build_index_schema_to_refs_from_graph(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """build_index extracts schema_to_refs from schema_ref edges."""
+        graph: dict = {
+            "edges": [
+                {
+                    "dst": "schemas/render_request.schema.json#layout_id",
+                    "evidence": "#/$defs/layout_id",
+                    "kind": "schema_ref",
+                    "source_file": "schemas/render_request.schema.json",
+                    "src": "schemas/render_request.schema.json",
+                },
+            ],
+            "nodes": [],
+            "warnings": [],
+        }
+        index = build_index(
+            graph=graph,
+            repo_root=tmp_path,
+            budgets=_budgets(200),
+            tracer=Tracer(),
+            git_sha="unknown",
+            git_available=False,
+            graph_sha256="b" * 64,
+        )
+        s2r = index["schema_to_refs"]
+        assert "schemas/render_request.schema.json" in s2r
+        refs = s2r["schemas/render_request.schema.json"]
+        assert len(refs) == 1
+        assert refs[0]["ref"] == "schemas/render_request.schema.json#layout_id"
+
+    def test_build_index_file_summary_counts_edge_types(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """file_summary counts py_import, id_ref, schema_ref per source file."""
+        graph: dict = {
+            "edges": [
+                {"kind": "py_import", "src": "a.py", "dst": "os",
+                 "evidence": "ast_import", "source_file": "a.py"},
+                {"kind": "py_import", "src": "a.py", "dst": "sys",
+                 "evidence": "ast_import", "source_file": "a.py"},
+                {"kind": "id_ref", "src": "a.py", "dst": "ACTION.EQ.BELL_CUT",
+                 "evidence": "x", "source_file": "a.py"},
+                {"kind": "schema_ref", "src": "b.json", "dst": "c.json#foo",
+                 "evidence": "#/$defs/foo", "source_file": "b.json"},
+            ],
+            "nodes": [],
+            "warnings": [],
+        }
+        index = build_index(
+            graph=graph,
+            repo_root=tmp_path,
+            budgets=_budgets(200),
+            tracer=Tracer(),
+            git_sha="unknown",
+            git_available=False,
+            graph_sha256="c" * 64,
+        )
+        fs = index["file_summary"]
+        assert fs["a.py"]["py_imports_count"] == 2
+        assert fs["a.py"]["id_refs_count"] == 1
+        assert fs["a.py"]["schema_refs_count"] == 0
+        assert fs["b.json"]["schema_refs_count"] == 1

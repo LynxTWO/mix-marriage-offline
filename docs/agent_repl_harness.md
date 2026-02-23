@@ -26,14 +26,16 @@ Locate → Graph → Plan → Patch (optional, guarded)
 
 ## Modules
 
-| Module           | Role |
-|------------------|------|
-| `budgets.py`     | Hard budget caps; raises `BudgetExceededError` on overflow. |
-| `trace.py`       | Structured NDJSON trace log for every operation. |
-| `repo_ops.py`    | Safe primitives: `list_files`, `read_slice`, `grep`, `parse_py_imports`, `resolve_module_to_path`, `scan_schema_refs`, `scan_id_refs`, `build_id_allowlist`. |
-| `graph_build.py` | Orchestrates a full graph build; writes deterministic JSON. |
-| `scoping.py`     | Scope presets, diff BFS expansion, graph filtering. |
-| `run.py`         | CLI entrypoint (modes: `graph-only`, `plan`, `patch`). |
+| Module               | Role |
+|----------------------|------|
+| `budgets.py`         | Hard budget caps; raises `BudgetExceededError` on overflow. |
+| `trace.py`           | Structured NDJSON trace log for every operation. |
+| `repo_ops.py`        | Safe primitives: `list_files`, `read_slice`, `grep`, `parse_py_imports`, `resolve_module_to_path`, `scan_schema_refs`, `scan_id_refs`, `build_id_allowlist`. |
+| `graph_build.py`     | Orchestrates a full graph build; writes deterministic JSON. |
+| `scoping.py`         | Scope presets, diff BFS expansion, graph filtering. |
+| `contract_stamp.py`  | Contract stamp: commit-bound provenance for graph artifacts (PR A). |
+| `index_build.py`     | Hot-path index: fast-lookup artifact derived from graph (PR B). |
+| `run.py`             | CLI entrypoint (modes: `graph-only`, `plan`, `patch`). |
 
 ---
 
@@ -353,6 +355,195 @@ patch mode
 artifact and documents the enforcement boundary, but does not edit files.
 Future extensions may add `--patch-file <unified-diff>` to apply pre-approved,
 minimal diffs — always with a valid graph as a prerequisite.
+
+---
+
+## Contract stamp (PR A)
+
+The **contract stamp** is a small JSON artifact that binds a graph build to its
+git commit and scope.  It prevents an agent from accidentally using a stale
+graph (built at a different commit or with different settings) when entering
+`patch` mode.
+
+### Default location
+
+```
+<repo-root>/.mmo_agent/graph_contract.json
+```
+
+This directory is excluded from git (`.gitignore`) and from the graph scanner
+(`_SKIP_DIRS`).
+
+### What it contains
+
+```json
+{
+  "budgets": { "max_file_reads": 60, "max_steps": 40, ... },
+  "git_available": true,
+  "git_sha": "abc123…",
+  "graph_edge_count": 612,
+  "graph_node_count": 87,
+  "graph_path": "sandbox_tmp/agent_graph.json",
+  "graph_sha256": "e3b0c4…",
+  "repo_root": "/abs/path/to/repo",
+  "run_mode": "graph-only",
+  "scope": {
+    "diff": false,
+    "diff_cap": 50,
+    "id_allowlist": true,
+    "preset": null,
+    "scope_paths": []
+  },
+  "trace_path": "sandbox_tmp/agent_trace.ndjson",
+  "version": 1
+}
+```
+
+No timestamps are included — the stamp is deterministic for identical inputs.
+
+### How it prevents drift
+
+When `patch` mode is entered:
+
+1. The harness reads `.mmo_agent/graph_contract.json` (or the path specified
+   by `--contract-stamp-path`).
+2. It verifies:
+   - `repo_root` matches the current resolved path.
+   - `git_sha` matches `git rev-parse HEAD` (when git was available at stamp
+     write time).
+   - The saved graph file exists and its SHA-256 matches `graph_sha256`.
+3. If **any** check fails, `patch` is refused with **exit code 3** and a clear
+   error message.
+4. If the stamp file does not exist, the check is skipped (backwards compatible
+   with pre-stamp runs).
+
+### CLI options
+
+```bash
+# Default behaviour: stamp is written after graph-only/plan and validated in patch
+python -m tools.agent.run graph-only
+
+# Override stamp path
+python -m tools.agent.run graph-only --contract-stamp-path /tmp/my_stamp.json
+
+# Disable stamp writing/validation entirely
+python -m tools.agent.run graph-only --no-contract-stamp
+python -m tools.agent.run patch --no-contract-stamp
+```
+
+### Exit codes (updated)
+
+| Code | Meaning |
+|------|---------|
+| `0`  | Success |
+| `1`  | Budget cap hit or other error |
+| `2`  | Refused: no valid graph artifact |
+| `3`  | Refused: contract stamp validation failed |
+
+---
+
+## Hot-path index (PR B)
+
+The **hot-path index** (`agent_index.json`) is a second deterministic artifact
+derived from the graph.  It pre-computes fast-lookup tables that let an agent
+jump directly to evidence — the file, line number, and surrounding snippet —
+without issuing additional grep passes.
+
+### Default location
+
+```
+<repo-root>/.mmo_agent/agent_index.json
+```
+
+Same ignored directory as the contract stamp.
+
+### What it contains
+
+```json
+{
+  "file_summary": {
+    "src/mmo/cli.py": {
+      "id_refs_count": 3,
+      "py_imports_count": 12,
+      "schema_refs_count": 0
+    }
+  },
+  "git_available": true,
+  "git_sha": "abc123…",
+  "graph_sha256": "e3b0c4…",
+  "id_to_occurrences": {
+    "ACTION.EQ.BELL_CUT": [
+      {
+        "col_start": 5,
+        "evidence": "  action_id: ACTION.EQ.BELL_CUT",
+        "line": 42,
+        "path": "ontology/actions.yaml"
+      }
+    ]
+  },
+  "module_to_file": {
+    "mmo.core.render_plan": "src/mmo/core/render_plan.py"
+  },
+  "repo_root": "/abs/path/to/repo",
+  "schema_to_refs": {
+    "schemas/render_request.schema.json": [
+      { "evidence": "#/$defs/layout_id", "ref": "schemas/render_request.schema.json#layout_id" }
+    ]
+  },
+  "version": 1,
+  "warnings": []
+}
+```
+
+### How to use it
+
+- **Jump to a canonical ID**: look up `id_to_occurrences["ACTION.EQ.BELL_CUT"]`
+  to get the exact file + line.
+- **Find where a module is defined**: look up `module_to_file["mmo.core.render_plan"]`
+  for the resolved file path.
+- **Explore schema references**: `schema_to_refs["schemas/render_request.schema.json"]`
+  lists every `$ref` in that schema.
+- **Hotspot analysis**: `file_summary` shows which files have the most imports
+  or ID references — useful for prioritising review.
+
+### Relationship between graph, index, and contract stamp
+
+```
+graph-only / plan run
+  ├── saves  agent_graph.json       (primary: nodes, edges, warnings)
+  ├── writes .mmo_agent/graph_contract.json  (contract stamp)
+  └── writes .mmo_agent/agent_index.json     (fast-lookup index)
+                                    ↑
+              index.graph_sha256 == stamp.graph_sha256
+              (both reference the same saved graph)
+
+patch run
+  └── validates contract stamp against current HEAD + graph sha256
+```
+
+All three artifacts are deterministic (no timestamps) and are regenerated on
+every `graph-only` or `plan` run.  The stamp and index are excluded from git.
+
+### Performance
+
+Most index sections (module_to_file, schema_to_refs, file_summary) are
+derived directly from the already-built graph edges — **no extra file reads**.
+Only `id_to_occurrences` requires reading files to find per-line positions.
+Those reads are budget-charged; if the budget is exhausted, a partial index is
+returned with a warning in `index.warnings`.
+
+### CLI options
+
+```bash
+# Default: index is written after every graph-only or plan run
+python -m tools.agent.run graph-only
+
+# Override index path
+python -m tools.agent.run graph-only --index-path /tmp/my_index.json
+
+# Disable index writing
+python -m tools.agent.run graph-only --no-index
+```
 
 ---
 
