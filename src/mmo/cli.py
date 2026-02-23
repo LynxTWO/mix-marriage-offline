@@ -866,6 +866,90 @@ def main(argv: list[str] | None = None) -> int:
         help="downmix.target_layout_id override in run_config.",
     )
 
+    safe_render_parser = subparsers.add_parser(
+        "safe-render",
+        help=(
+            "Full plugin-chain render: detect → resolve → gate → render. "
+            "Bounded authority: low-risk auto-applied, high-risk require --approve. "
+            "Produces safe-run receipt + optional QA report with spectral slopes."
+        ),
+    )
+    safe_render_parser.add_argument(
+        "--report",
+        required=True,
+        help="Path to report JSON (from mmo analyze or equivalent).",
+    )
+    safe_render_parser.add_argument(
+        "--plugins",
+        default="plugins",
+        help="Path to plugins directory (default: plugins).",
+    )
+    safe_render_parser.add_argument(
+        "--target",
+        default="stereo",
+        help="Render target label, e.g. 'stereo' (default: stereo).",
+    )
+    safe_render_parser.add_argument(
+        "--out-dir",
+        default=None,
+        help="Output directory for rendered audio files (required for full render).",
+    )
+    safe_render_parser.add_argument(
+        "--out-manifest",
+        default=None,
+        help="Optional path to output render manifest JSON.",
+    )
+    safe_render_parser.add_argument(
+        "--receipt-out",
+        default=None,
+        help="Path to write safe-run receipt JSON.",
+    )
+    safe_render_parser.add_argument(
+        "--qa-out",
+        default=None,
+        help="Path to write render QA report JSON (with spectral slope metrics).",
+    )
+    safe_render_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        dest="dry_run",
+        help="Plan only: show what would be rendered without writing audio.",
+    )
+    safe_render_parser.add_argument(
+        "--approve",
+        default=None,
+        help=(
+            "Override authority for blocked recommendations. "
+            "Use 'all' to approve everything, 'none' to approve nothing, "
+            "or a comma-separated list of recommendation_id / issue_id values."
+        ),
+    )
+    safe_render_parser.add_argument(
+        "--profile",
+        default="PROFILE.ASSIST",
+        help="Authority profile ID for render gating (default: PROFILE.ASSIST).",
+    )
+    safe_render_parser.add_argument(
+        "--output-formats",
+        default=None,
+        help="Comma-separated lossless output formats (wav,flac,wv,aiff,alac).",
+    )
+    safe_render_parser.add_argument(
+        "--config",
+        default=None,
+        help="Optional path to a run config JSON file.",
+    )
+    safe_render_parser.add_argument(
+        "--preset",
+        default=None,
+        help="Optional preset ID from presets/index.json.",
+    )
+    safe_render_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing output files.",
+    )
+
     apply_parser = subparsers.add_parser(
         "apply",
         help="Run renderer plugins for auto-apply eligible recommendations.",
@@ -5080,6 +5164,66 @@ def main(argv: list[str] | None = None) -> int:
                 command_label="render",
                 output_formats=output_formats,
                 run_config=merged_run_config,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+    if args.command == "safe-render":
+        safe_render_overrides: dict[str, Any] = {}
+        if _flag_present(raw_argv, "--output-formats"):
+            try:
+                safe_render_formats = _parse_output_formats_csv(args.output_formats)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            _set_nested(
+                ["render", "output_formats"],
+                safe_render_overrides,
+                safe_render_formats,
+            )
+        try:
+            merged_run_config = _load_and_merge_run_config(
+                args.config,
+                safe_render_overrides,
+                preset_id=args.preset,
+                presets_dir=presets_dir,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        safe_render_formats = _config_nested_output_formats(
+            merged_run_config,
+            "render",
+            ["wav"],
+        )
+        try:
+            return _run_safe_render_command(
+                repo_root=None,
+                report_path=Path(args.report),
+                plugins_dir=Path(args.plugins),
+                out_dir=Path(args.out_dir) if getattr(args, "out_dir", None) else None,
+                out_manifest_path=(
+                    Path(args.out_manifest)
+                    if getattr(args, "out_manifest", None)
+                    else None
+                ),
+                receipt_out_path=(
+                    Path(args.receipt_out)
+                    if getattr(args, "receipt_out", None)
+                    else None
+                ),
+                qa_out_path=(
+                    Path(args.qa_out)
+                    if getattr(args, "qa_out", None)
+                    else None
+                ),
+                profile_id=getattr(args, "profile", "PROFILE.ASSIST"),
+                target=getattr(args, "target", "stereo"),
+                dry_run=bool(getattr(args, "dry_run", False)),
+                approve=getattr(args, "approve", None),
+                output_formats=safe_render_formats,
+                run_config=merged_run_config,
+                force=bool(getattr(args, "force", False)),
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)

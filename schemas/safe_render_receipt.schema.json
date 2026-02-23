@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/safe_render_receipt.schema.json",
+  "title": "MMO Safe-Render Receipt",
+  "description": "Safe-run receipt produced by mmo render --target with plugin-chain execution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt_id",
+    "context",
+    "status",
+    "dry_run",
+    "profile_id",
+    "recommendations_summary",
+    "renderer_manifests",
+    "qa_issues",
+    "notes"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "receipt_id": { "type": "string", "minLength": 1 },
+    "context": { "type": "string", "const": "safe_render" },
+    "status": { "type": "string", "enum": ["dry_run_only", "completed", "blocked"] },
+    "dry_run": { "type": "boolean" },
+    "target": { "type": "string" },
+    "profile_id": { "type": "string", "minLength": 1 },
+    "approved_by": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "recommendations_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "auto_eligible", "approved_by_user", "blocked"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "auto_eligible": { "type": "integer", "minimum": 0 },
+        "approved_by_user": { "type": "integer", "minimum": 0 },
+        "blocked": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "blocked_recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["recommendation_id", "risk"],
+        "properties": {
+          "recommendation_id": { "type": "string", "minLength": 1 },
+          "issue_id": { "type": "string" },
+          "action_id": { "type": "string" },
+          "risk": { "type": "string", "enum": ["low", "medium", "high"] },
+          "requires_approval": { "type": "boolean" },
+          "gate_summary": { "type": "string" }
+        }
+      }
+    },
+    "renderer_manifests": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "qa_issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["issue_id", "severity"],
+        "properties": {
+          "issue_id": { "type": "string", "minLength": 1 },
+          "severity": { "type": "string", "enum": ["error", "warn", "info"] },
+          "message": { "type": "string" },
+          "output_path": { "type": "string" },
+          "metric": { "type": "string" },
+          "value": {},
+          "threshold": {}
+        }
+      }
+    },
+    "spectral_summary": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

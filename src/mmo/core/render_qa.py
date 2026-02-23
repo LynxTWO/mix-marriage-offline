@@ -16,6 +16,7 @@ from mmo.dsp.meters import compute_basic_stats_from_float64, iter_wav_float64_sa
 
 __all__ = [
     "build_render_qa_payload",
+    "build_safe_render_qa",
     "render_qa_has_error_issues",
 ]
 
@@ -1375,3 +1376,192 @@ def render_qa_has_error_issues(payload: dict[str, Any]) -> bool:
         and _coerce_str(issue.get("severity")).strip() == "error"
         for issue in raw_issues
     )
+
+
+# ---------------------------------------------------------------------------
+# Safe-render QA: per-file spectral + basic metric analysis
+# ---------------------------------------------------------------------------
+
+_SAFE_RENDER_QA_THRESHOLDS: dict[str, float] = {
+    "polarity_error_correlation_lte": -0.6,
+    "correlation_warn_lte": -0.2,
+    "true_peak_warn_dbtp_gt": -2.0,
+    "true_peak_error_dbtp_gt": -1.0,
+    "clip_count_error_gt": 0,
+}
+
+
+def _safe_render_qa_issues(
+    *,
+    output_path: str,
+    metrics: dict[str, Any],
+    thresholds: dict[str, float],
+) -> list[dict[str, Any]]:
+    """Return QA issues for a single rendered output file."""
+    issues: list[dict[str, Any]] = []
+    correlation_lr = _coerce_float(metrics.get("correlation_lr"))
+    if correlation_lr is not None:
+        if correlation_lr <= thresholds["polarity_error_correlation_lte"]:
+            issues.append(
+                {
+                    "issue_id": "ISSUE.RENDER.QA.POLARITY_RISK",
+                    "severity": "error",
+                    "message": (
+                        "Rendered output has strong anti-phase stereo correlation."
+                        " Possible polarity inversion."
+                    ),
+                    "output_path": output_path,
+                    "metric": "correlation_lr",
+                    "value": _round_or_none(correlation_lr),
+                    "threshold": _round_or_none(
+                        thresholds["polarity_error_correlation_lte"]
+                    ),
+                }
+            )
+        elif correlation_lr <= thresholds["correlation_warn_lte"]:
+            issues.append(
+                {
+                    "issue_id": "ISSUE.RENDER.QA.CORRELATION_LOW",
+                    "severity": "warn",
+                    "message": "Rendered output stereo correlation is low.",
+                    "output_path": output_path,
+                    "metric": "correlation_lr",
+                    "value": _round_or_none(correlation_lr),
+                    "threshold": _round_or_none(thresholds["correlation_warn_lte"]),
+                }
+            )
+
+    clip_count = _coerce_int(metrics.get("clip_sample_count"))
+    if clip_count is not None and clip_count > thresholds["clip_count_error_gt"]:
+        issues.append(
+            {
+                "issue_id": "ISSUE.RENDER.QA.CLIPPING",
+                "severity": "error",
+                "message": "Rendered output has clipped samples.",
+                "output_path": output_path,
+                "metric": "clip_sample_count",
+                "value": clip_count,
+                "threshold": int(thresholds["clip_count_error_gt"]),
+            }
+        )
+
+    true_peak_dbtp = _coerce_float(metrics.get("true_peak_dbtp"))
+    if true_peak_dbtp is not None:
+        if true_peak_dbtp > thresholds["true_peak_error_dbtp_gt"]:
+            issues.append(
+                {
+                    "issue_id": "ISSUE.RENDER.QA.TRUE_PEAK_EXCESSIVE",
+                    "severity": "error",
+                    "message": "Rendered output true-peak exceeds the error threshold.",
+                    "output_path": output_path,
+                    "metric": "true_peak_dbtp",
+                    "value": _round_or_none(true_peak_dbtp),
+                    "threshold": _round_or_none(
+                        thresholds["true_peak_error_dbtp_gt"]
+                    ),
+                }
+            )
+        elif true_peak_dbtp > thresholds["true_peak_warn_dbtp_gt"]:
+            issues.append(
+                {
+                    "issue_id": "ISSUE.RENDER.QA.TRUE_PEAK_HIGH",
+                    "severity": "warn",
+                    "message": (
+                        "Rendered output true-peak exceeds the warning threshold."
+                    ),
+                    "output_path": output_path,
+                    "metric": "true_peak_dbtp",
+                    "value": _round_or_none(true_peak_dbtp),
+                    "threshold": _round_or_none(
+                        thresholds["true_peak_warn_dbtp_gt"]
+                    ),
+                }
+            )
+    return issues
+
+
+def build_safe_render_qa(
+    *,
+    output_entries: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build a QA report for plugin-chain renderer outputs.
+
+    Each entry in ``output_entries`` must have:
+      - ``path``: absolute or relative path to the rendered WAV file
+      - ``channels``: int channel count
+      - ``sample_rate_hz``: int
+      - ``sha256``: str (already computed by renderer)
+
+    Returns a dict with keys ``outputs`` (per-file metrics + spectral) and
+    ``issues`` (QA findings).  Spectral slopes are included when numpy is
+    available; gracefully omitted otherwise.
+    """
+    np_module = _optional_numpy()
+    ffmpeg_cmd = resolve_ffmpeg_cmd()
+    thresholds = dict(_SAFE_RENDER_QA_THRESHOLDS)
+    outputs: list[dict[str, Any]] = []
+    all_issues: list[dict[str, Any]] = []
+
+    for entry in output_entries:
+        file_path_str = _coerce_str(entry.get("path")).strip()
+        channels_raw = entry.get("channels")
+        sample_rate_raw = entry.get("sample_rate_hz")
+        sha256_val = _coerce_str(entry.get("sha256")).strip()
+
+        channels = (
+            int(channels_raw)
+            if isinstance(channels_raw, (int, float)) and int(channels_raw) > 0
+            else 0
+        )
+        sample_rate_hz = (
+            int(sample_rate_raw)
+            if isinstance(sample_rate_raw, (int, float)) and int(sample_rate_raw) > 0
+            else 0
+        )
+
+        file_metrics: dict[str, Any] = _empty_metrics()
+        file_spectral: dict[str, Any] = _empty_spectral()
+
+        if file_path_str and channels > 0 and sample_rate_hz > 0 and np_module is not None:
+            try:
+                file_path = Path(file_path_str)
+                frames = _decode_frames_float64(
+                    path=file_path,
+                    channels=channels,
+                    ffmpeg_cmd=ffmpeg_cmd,
+                    np_module=np_module,
+                )
+                file_metrics, file_spectral = _metrics_from_numpy_frames(
+                    frames=frames,
+                    sample_rate_hz=sample_rate_hz,
+                    channels=channels,
+                    channel_mask=None,
+                    channel_layout=None,
+                    np_module=np_module,
+                )
+            except (ValueError, OSError, RuntimeError):
+                pass
+
+        output_row: dict[str, Any] = {
+            "path": file_path_str,
+            "sha256": sha256_val,
+            "channels": channels,
+            "sample_rate_hz": sample_rate_hz,
+            "metrics": file_metrics,
+            "spectral": file_spectral,
+        }
+        outputs.append(output_row)
+
+        file_issues = _safe_render_qa_issues(
+            output_path=file_path_str,
+            metrics=file_metrics,
+            thresholds=thresholds,
+        )
+        all_issues.extend(file_issues)
+
+    return {
+        "schema_version": "0.1.0",
+        "outputs": outputs,
+        "issues": all_issues,
+        "thresholds": thresholds,
+    }

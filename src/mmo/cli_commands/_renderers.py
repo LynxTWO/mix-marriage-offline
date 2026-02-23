@@ -35,6 +35,7 @@ __all__ = [
     "_run_render_command",
     "_run_downmix_render",
     "_run_apply_command",
+    "_run_safe_render_command",
     "_write_routing_plan_artifact",
     "_run_bundle",
     "_build_validated_listen_pack",
@@ -541,4 +542,413 @@ def _run_deliverables_index_command(
         return int(exc.code) if isinstance(exc.code, int) else 1
 
     _write_json_file(out_path, payload)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Safe-render: full plugin-chain (detect → resolve → gate → render) with
+# bounded authority and safe-run receipt.
+# ---------------------------------------------------------------------------
+
+
+def _parse_approve_arg(approve_arg: str | None) -> set[str] | str | None:
+    """Parse the --approve argument into a usable form.
+
+    Returns:
+      ``"all"``        – approve every blocked rec.
+      ``"none"``       – approve nothing (gate decisions are final).
+      A ``set[str]``   – set of recommendation_id / issue_id values to approve.
+      ``None``         – no --approve flag given; same as "none".
+    """
+    if approve_arg is None:
+        return None
+    stripped = approve_arg.strip().lower()
+    if stripped in ("all", "none", ""):
+        return stripped
+    return {part.strip() for part in approve_arg.split(",") if part.strip()}
+
+
+def _apply_approve_overrides(
+    recs: list[dict[str, Any]],
+    approve: set[str] | str | None,
+) -> int:
+    """Mutate eligible_render=True for recs covered by the approval.
+
+    Returns the count of recs that were approved this way.
+    """
+    if approve is None or approve == "none":
+        return 0
+    count = 0
+    for rec in recs:
+        if rec.get("eligible_render") is True:
+            continue  # already eligible
+        if approve == "all":
+            rec["eligible_render"] = True
+            count += 1
+        elif isinstance(approve, set):
+            rec_id = _coerce_str(rec.get("recommendation_id"))
+            issue_id = _coerce_str(rec.get("issue_id"))
+            if rec_id in approve or issue_id in approve:
+                rec["eligible_render"] = True
+                count += 1
+    return count
+
+
+def _build_receipt_id(report_id: str, target: str) -> str:
+    import hashlib  # noqa: WPS433
+    digest = hashlib.sha256(
+        f"{report_id}:{target}".encode("utf-8")
+    ).hexdigest()
+    return f"RECEIPT.SAFE_RENDER.{digest[:16].upper()}"
+
+
+def _collect_output_entries_from_manifests(
+    manifests: list[dict[str, Any]],
+    out_dir: Path | None,
+) -> list[dict[str, Any]]:
+    """Collect rendered output files info for QA analysis."""
+    entries: list[dict[str, Any]] = []
+    for manifest in manifests:
+        if not isinstance(manifest, dict):
+            continue
+        outputs = manifest.get("outputs")
+        if not isinstance(outputs, list):
+            continue
+        for output in outputs:
+            if not isinstance(output, dict):
+                continue
+            file_path_str = _coerce_str(output.get("file_path"))
+            sha256_val = _coerce_str(output.get("sha256"))
+            channels_raw = output.get("channel_count")
+            sample_rate_raw = output.get("sample_rate_hz")
+            channels = (
+                int(channels_raw)
+                if isinstance(channels_raw, int) and channels_raw > 0
+                else 0
+            )
+            sample_rate_hz = (
+                int(sample_rate_raw)
+                if isinstance(sample_rate_raw, int) and sample_rate_raw > 0
+                else 0
+            )
+            if not file_path_str or not sha256_val:
+                continue
+            abs_path = file_path_str
+            if out_dir is not None:
+                resolved = out_dir / file_path_str
+                if resolved.exists():
+                    abs_path = resolved.as_posix()
+            entries.append(
+                {
+                    "path": abs_path,
+                    "sha256": sha256_val,
+                    "channels": channels,
+                    "sample_rate_hz": sample_rate_hz,
+                }
+            )
+    return entries
+
+
+def _build_blocked_rec_summaries(recs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    blocked = [
+        rec for rec in recs
+        if rec.get("eligible_render") is not True
+        and rec.get("requires_approval") is True
+    ]
+    summaries: list[dict[str, Any]] = []
+    for rec in blocked:
+        gate_results = rec.get("gate_results")
+        gate_summary = ""
+        if isinstance(gate_results, list):
+            for gr in gate_results:
+                if isinstance(gr, dict) and gr.get("eligible") is False:
+                    reason = _coerce_str(gr.get("reason"))
+                    if reason:
+                        gate_summary = reason
+                        break
+        summaries.append(
+            {
+                "recommendation_id": _coerce_str(rec.get("recommendation_id")),
+                "issue_id": _coerce_str(rec.get("issue_id")),
+                "action_id": _coerce_str(rec.get("action_id")),
+                "risk": _coerce_str(rec.get("risk")),
+                "requires_approval": bool(rec.get("requires_approval")),
+                "gate_summary": gate_summary,
+            }
+        )
+    return summaries
+
+
+def _run_safe_render_command(
+    *,
+    repo_root: Path,
+    report_path: Path,
+    plugins_dir: Path,
+    out_dir: Path | None,
+    out_manifest_path: Path | None,
+    receipt_out_path: Path | None,
+    qa_out_path: Path | None,
+    profile_id: str,
+    target: str,
+    dry_run: bool,
+    approve: str | None,
+    output_formats: list[str] | None = None,
+    run_config: dict[str, Any] | None = None,
+    force: bool = False,
+) -> int:
+    """Run the full plugin-chain render: detect → resolve → gate → render.
+
+    Bounded authority:
+    - Low-risk (requires_approval=False, risk=low): auto-applied.
+    - Medium/high (requires_approval=True): blocked unless covered by --approve.
+
+    Produces a safe-run receipt JSON and optionally a QA report with spectral
+    slope metrics.
+    """
+    from mmo.core.gates import apply_gates_to_report  # noqa: WPS433
+    from mmo.core.pipeline import (  # noqa: WPS433
+        build_deliverables_for_renderer_manifests,
+        load_plugins,
+        run_detectors,
+        run_renderers,
+        run_resolvers,
+    )
+    from mmo.core.render_qa import build_safe_render_qa  # noqa: WPS433
+
+    # -- overwrite guards -------------------------------------------------------
+    for out_path, label in (
+        (receipt_out_path, "receipt-out"),
+        (out_manifest_path, "out-manifest"),
+        (qa_out_path, "qa-out"),
+    ):
+        if out_path is not None and out_path.exists() and not force:
+            print(
+                f"File exists (use --force to overwrite): {out_path.as_posix()}",
+                file=sys.stderr,
+            )
+            return 1
+
+    # -- load inputs -----------------------------------------------------------
+    report = _load_report(report_path)
+    if run_config is not None:
+        normalized_run_config = normalize_run_config(run_config)
+        report["run_config"] = normalized_run_config
+        if routing_layout_ids_from_run_config(normalized_run_config) is not None:
+            apply_routing_plan_to_report(report, normalized_run_config)
+
+    # -- load plugins ----------------------------------------------------------
+    plugins = load_plugins(plugins_dir)
+    detector_ids = [p.plugin_id for p in plugins if p.plugin_type == "detector"]
+    resolver_ids = [p.plugin_id for p in plugins if p.plugin_type == "resolver"]
+    renderer_ids = [p.plugin_id for p in plugins if p.plugin_type == "renderer"]
+    print(
+        f"safe-render: target={target}"
+        f" detectors={len(detector_ids)}"
+        f" resolvers={len(resolver_ids)}"
+        f" renderers={len(renderer_ids)}",
+        file=sys.stderr,
+    )
+
+    # -- stage 2: analysis / metering pass (detectors, no audio mutation) ------
+    run_detectors(report, plugins)
+
+    # -- stage 3: scene inference / resolve pass (advisory) -------------------
+    run_resolvers(report, plugins)
+
+    # -- stage 4: bounded authority gate --------------------------------------
+    apply_gates_to_report(
+        report,
+        policy_path=ontology_dir() / "policies" / "gates.yaml",
+        profile_id=profile_id,
+        profiles_path=ontology_dir() / "policies" / "authority_profiles.yaml",
+    )
+
+    recommendations = report.get("recommendations")
+    recs: list[dict[str, Any]] = []
+    if isinstance(recommendations, list):
+        recs = [rec for rec in recommendations if isinstance(rec, dict)]
+
+    # -- apply --approve overrides --------------------------------------------
+    parsed_approve = _parse_approve_arg(approve)
+    approved_by_user_count = _apply_approve_overrides(recs, parsed_approve)
+
+    auto_eligible = [
+        rec for rec in recs
+        if rec.get("eligible_render") is True
+        and not (rec.get("requires_approval") and rec.get("_approved_by_user"))
+    ]
+    eligible = [rec for rec in recs if rec.get("eligible_render") is True]
+    blocked_summaries = _build_blocked_rec_summaries(recs)
+    blocked_count = len(blocked_summaries)
+
+    print(
+        f"safe-render:"
+        f" total_recommendations={len(recs)}"
+        f" eligible={len(eligible)}"
+        f" approved_by_user={approved_by_user_count}"
+        f" blocked={blocked_count}",
+        file=sys.stderr,
+    )
+
+    approve_list: list[str] = (
+        [approve] if isinstance(approve, str) and approve
+        else sorted(parsed_approve) if isinstance(parsed_approve, set)
+        else []
+    )
+    receipt_id = _build_receipt_id(
+        _coerce_str(report.get("report_id")), target
+    )
+
+    # -- dry-run: write receipt only, no audio --------------------------------
+    if dry_run:
+        status = "blocked" if blocked_count > 0 and len(eligible) == 0 else "dry_run_only"
+        receipt: dict[str, Any] = {
+            "schema_version": "0.1.0",
+            "receipt_id": receipt_id,
+            "context": "safe_render",
+            "status": status,
+            "dry_run": True,
+            "target": target,
+            "profile_id": profile_id,
+            "approved_by": approve_list,
+            "recommendations_summary": {
+                "total": len(recs),
+                "auto_eligible": len(eligible) - approved_by_user_count,
+                "approved_by_user": approved_by_user_count,
+                "blocked": blocked_count,
+            },
+            "blocked_recommendations": blocked_summaries,
+            "renderer_manifests": [],
+            "qa_issues": [],
+            "notes": [
+                f"dry_run=true: no audio was written",
+                f"target={target}",
+                f"profile_id={profile_id}",
+            ],
+        }
+        if receipt_out_path is not None:
+            receipt_out_path.parent.mkdir(parents=True, exist_ok=True)
+            _write_json_file(receipt_out_path, receipt)
+        if out_manifest_path is not None:
+            # Write an empty dry-run manifest
+            dry_manifest = {
+                "schema_version": "0.1.0",
+                "report_id": _coerce_str(report.get("report_id")),
+                "renderer_manifests": [],
+            }
+            _validate_render_manifest(
+                dry_manifest,
+                schemas_dir() / "render_manifest.schema.json",
+            )
+            out_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            out_manifest_path.write_text(
+                json.dumps(dry_manifest, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+        print(
+            f"safe-render: dry-run complete"
+            f" (would apply {len(eligible)} recs, {blocked_count} blocked)",
+            file=sys.stderr,
+        )
+        return 0
+
+    # -- stage 5: render pass (plugin renderers write audio) ------------------
+    if out_dir is None:
+        print(
+            "safe-render: --out-dir is required for full render (not --dry-run).",
+            file=sys.stderr,
+        )
+        return 1
+
+    manifests = run_renderers(
+        report,
+        plugins,
+        output_dir=out_dir,
+        output_formats=output_formats,
+    )
+    deliverables = build_deliverables_for_renderer_manifests(manifests)
+    render_manifest = {
+        "schema_version": "0.1.0",
+        "report_id": _coerce_str(report.get("report_id")),
+        "renderer_manifests": manifests,
+    }
+    if deliverables:
+        render_manifest["deliverables"] = deliverables
+    _validate_render_manifest(
+        render_manifest,
+        schemas_dir() / "render_manifest.schema.json",
+    )
+    if out_manifest_path is not None:
+        out_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        out_manifest_path.write_text(
+            json.dumps(render_manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+    # -- stage 6: post-render QA pass (spectral slopes + gates) ---------------
+    qa_payload: dict[str, Any] = {}
+    qa_issues: list[dict[str, Any]] = []
+    if qa_out_path is not None or receipt_out_path is not None:
+        output_entries = _collect_output_entries_from_manifests(manifests, out_dir)
+        if output_entries:
+            qa_payload = build_safe_render_qa(output_entries=output_entries)
+            qa_issues = qa_payload.get("issues") or []
+        else:
+            qa_payload = {
+                "schema_version": "0.1.0",
+                "outputs": [],
+                "issues": [],
+                "thresholds": {},
+            }
+
+    if qa_out_path is not None:
+        qa_out_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json_file(qa_out_path, qa_payload)
+
+    # -- stage 7: export pass (write safe-run receipt) ------------------------
+    status = "completed"
+    receipt = {
+        "schema_version": "0.1.0",
+        "receipt_id": receipt_id,
+        "context": "safe_render",
+        "status": status,
+        "dry_run": False,
+        "target": target,
+        "profile_id": profile_id,
+        "approved_by": approve_list,
+        "recommendations_summary": {
+            "total": len(recs),
+            "auto_eligible": max(0, len(eligible) - approved_by_user_count),
+            "approved_by_user": approved_by_user_count,
+            "blocked": blocked_count,
+        },
+        "blocked_recommendations": blocked_summaries,
+        "renderer_manifests": manifests,
+        "qa_issues": qa_issues,
+        "notes": [
+            f"target={target}",
+            f"profile_id={profile_id}",
+            f"renderers={','.join(renderer_ids) if renderer_ids else '<none>'}",
+        ],
+    }
+    if receipt_out_path is not None:
+        receipt_out_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json_file(receipt_out_path, receipt)
+
+    output_count = sum(
+        len(m.get("outputs", []))
+        for m in manifests
+        if isinstance(m, dict)
+    )
+    qa_error_count = sum(
+        1 for iss in qa_issues
+        if isinstance(iss, dict) and _coerce_str(iss.get("severity")) == "error"
+    )
+    print(
+        f"safe-render: completed"
+        f" outputs={output_count}"
+        f" qa_errors={qa_error_count}"
+        f" qa_warns={len(qa_issues) - qa_error_count}",
+        file=sys.stderr,
+    )
     return 0
