@@ -319,6 +319,21 @@ _PLUGIN_CHAIN_RUNTIME_REQUIRED_PARAMS: dict[str, tuple[str, ...]] = {
 }
 _PLUGIN_CHAIN_CONFIG_SCHEMA_CACHE: dict[str, dict[str, Any]] | None = None
 
+# Plugin IDs whose detector_mode param is validated statically (before numpy).
+_DETECTOR_MODE_PLUGIN_IDS: frozenset[str] = frozenset({
+    _SIMPLE_COMPRESSOR_V0_PLUGIN_ID,
+    _MULTIBAND_COMPRESSOR_V0_PLUGIN_ID,
+    _MULTIBAND_EXPANDER_V0_PLUGIN_ID,
+    _MULTIBAND_DYNAMIC_AUTO_V0_PLUGIN_ID,
+})
+
+# Plugin IDs that require max_theoretical_quality=True when oversampling > 1.
+_OVERSAMPLING_QUALITY_PLUGIN_IDS: frozenset[str] = frozenset({
+    _MULTIBAND_COMPRESSOR_V0_PLUGIN_ID,
+    _MULTIBAND_EXPANDER_V0_PLUGIN_ID,
+    _MULTIBAND_DYNAMIC_AUTO_V0_PLUGIN_ID,
+})
+
 
 def _clone_json_payload(payload: Any) -> Any:
     return json.loads(json.dumps(payload))
@@ -1666,6 +1681,45 @@ def _plugin_chain_from_request(
     return normalized_chain, notes
 
 
+def _prevalidate_plugin_chain_static(
+    plugin_chain: list[dict[str, Any]],
+    max_theoretical_quality: bool,
+) -> None:
+    """Validate plugin params that don't require numpy (runs before numpy guard).
+
+    Checks detector_mode enum values and oversampling/quality coupling so that
+    those errors are reported with their specific messages rather than the generic
+    numpy-unavailable message.
+    """
+    from mmo.dsp.plugins._multiband_common import parse_detector_mode  # noqa: WPS433
+    from mmo.dsp.plugins.base import PluginValidationError  # noqa: WPS433
+
+    for stage in plugin_chain:
+        plugin_id = _coerce_str(stage.get("plugin_id")).strip().lower()
+        params = _coerce_dict(stage.get("params"))
+
+        if plugin_id in _DETECTOR_MODE_PLUGIN_IDS:
+            try:
+                parse_detector_mode(plugin_id=plugin_id, params=params)
+            except PluginValidationError as exc:
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                    message=str(exc),
+                ) from exc
+
+        if plugin_id in _OVERSAMPLING_QUALITY_PLUGIN_IDS:
+            oversampling_raw = params.get("oversampling", 1)
+            oversampling = oversampling_raw if isinstance(oversampling_raw, int) else 1
+            if oversampling > 1 and not max_theoretical_quality:
+                raise RenderRunRefusalError(
+                    issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                    message=(
+                        "Multiband oversampling > 1 requires "
+                        "options.max_theoretical_quality=true."
+                    ),
+                )
+
+
 def _render_wav_with_plugin_chain(
     *,
     source_path: Path,
@@ -1679,6 +1733,7 @@ def _render_wav_with_plugin_chain(
     source_samples_interleaved: list[float] | None = None,
     source_evidence_paths: list[str] | None = None,
 ) -> list[dict[str, Any]]:
+    _prevalidate_plugin_chain_static(plugin_chain, max_theoretical_quality)
     try:
         import numpy as np
     except ImportError as exc:  # pragma: no cover - env-dependent

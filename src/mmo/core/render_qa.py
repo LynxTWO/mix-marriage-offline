@@ -733,6 +733,10 @@ def _metrics_from_numpy_frames(
             frames,
             np_module,
         )
+    else:
+        # Conservative proxy: sample peak is a lower bound on true peak.
+        # Ensures TRUE_PEAK_EXCESSIVE can be emitted when meters_truth is unavailable.
+        metrics["true_peak_dbtp"] = metrics.get("peak_dbfs")
 
     spectral = _compute_spectral_metrics(
         frames,
@@ -766,6 +770,9 @@ def _metrics_without_numpy(
     metrics["crest_factor_db"] = _round_or_none(crest_db)
     metrics["clip_sample_count"] = int(clip_count)
     metrics["dc_offset"] = _round_or_none(dc_offset, digits=8)
+    # Conservative proxy: sample peak is a lower bound on true peak.
+    # Ensures TRUE_PEAK_EXCESSIVE can be emitted when numpy/meters_truth are unavailable.
+    metrics["true_peak_dbtp"] = metrics["peak_dbfs"]
 
     if channels >= _STEREO_CHANNELS:
         try:

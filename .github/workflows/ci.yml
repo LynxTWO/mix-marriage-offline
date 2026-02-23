@@ -19,7 +19,7 @@ jobs:
           allow-prereleases: true
 
       - name: Install dependencies
-        run: python -m pip install --upgrade pip && python -m pip install .[dev]
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,truth,pdf]"
 
       - name: Validate contracts
         run: python tools/validate_contracts.py
@@ -41,7 +41,7 @@ jobs:
           allow-prereleases: true
 
       - name: Install dependencies
-        run: python -m pip install --upgrade pip && python -m pip install .[dev]
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,truth,pdf]"
 
       - name: Validate contracts
         run: python tools/validate_contracts.py
@@ -66,7 +66,7 @@ jobs:
           allow-prereleases: true
 
       - name: Install dependencies
-        run: python -m pip install --upgrade pip && python -m pip install .[dev]
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,truth,pdf]"
 
       - name: Validate contracts
         run: python tools/validate_contracts.py
@@ -85,7 +85,7 @@ jobs:
           allow-prereleases: true
 
       - name: Install dependencies
-        run: python -m pip install --upgrade pip && python -m pip install .[dev]
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,truth,pdf]"
 
       - name: Run tests (serial)
         run: tools/run_pytest.sh -q
