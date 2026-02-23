@@ -966,6 +966,106 @@ def _upsert_lfe_measurements(
             )
 
 
+def _build_metering_summary(session: Dict[str, Any], mode: str) -> Dict[str, Any]:
+    """Build a flat metering summary from per-stem measurements.
+
+    Extracts LUFS_I, TRUEPEAK_DBTP, CREST_FACTOR_DB, and phase correlation
+    from each stem's measurements list and computes session-level aggregates.
+    Deterministic: sorted by stem_id, finite-only aggregation.
+    """
+    stems = session.get("stems", [])
+    stems_summary: List[Dict[str, Any]] = []
+
+    for stem in stems:
+        if not isinstance(stem, dict):
+            continue
+        stem_id = stem.get("stem_id", "")
+        measurements = stem.get("measurements", [])
+        m: Dict[str, Any] = {}
+        for meas in measurements:
+            if isinstance(meas, dict) and "evidence_id" in meas and "value" in meas:
+                m[meas["evidence_id"]] = meas["value"]
+
+        entry: Dict[str, Any] = {"stem_id": stem_id}
+        lufs_i = m.get("EVID.METER.LUFS_I")
+        if lufs_i is not None and isinstance(lufs_i, (int, float)) and math.isfinite(lufs_i):
+            entry["lufs_i"] = round(float(lufs_i), 2)
+        else:
+            entry["lufs_i"] = None
+        tp = m.get("EVID.METER.TRUEPEAK_DBTP")
+        if tp is not None and isinstance(tp, (int, float)) and math.isfinite(tp):
+            entry["true_peak_dbtp"] = round(float(tp), 2)
+        else:
+            entry["true_peak_dbtp"] = None
+        crest = m.get("EVID.METER.CREST_FACTOR_DB")
+        if crest is not None and isinstance(crest, (int, float)) and math.isfinite(crest):
+            entry["crest_db"] = round(float(crest), 2)
+        else:
+            entry["crest_db"] = None
+        corr = m.get("EVID.IMAGE.CORRELATION")
+        if corr is not None and isinstance(corr, (int, float)) and math.isfinite(corr):
+            entry["correlation"] = round(float(corr), 6)
+        else:
+            entry["correlation"] = None
+
+        stems_summary.append(entry)
+
+    stems_summary.sort(key=lambda s: s.get("stem_id", ""))
+
+    lufs_vals = [s["lufs_i"] for s in stems_summary if s.get("lufs_i") is not None]
+    tp_vals = [s["true_peak_dbtp"] for s in stems_summary if s.get("true_peak_dbtp") is not None]
+
+    session_stats: Dict[str, Any] = {"stem_count": len(stems)}
+    if lufs_vals:
+        session_stats["lufs_i_min"] = round(min(lufs_vals), 2)
+        session_stats["lufs_i_max"] = round(max(lufs_vals), 2)
+        session_stats["lufs_i_range_db"] = round(max(lufs_vals) - min(lufs_vals), 2)
+    else:
+        session_stats["lufs_i_min"] = None
+        session_stats["lufs_i_max"] = None
+        session_stats["lufs_i_range_db"] = None
+    if tp_vals:
+        session_stats["true_peak_max_dbtp"] = round(max(tp_vals), 2)
+    else:
+        session_stats["true_peak_max_dbtp"] = None
+
+    buses = session.get("buses", [])
+    buses_summary: List[Dict[str, Any]] = []
+    for bus in buses:
+        if not isinstance(bus, dict):
+            continue
+        bus_id = bus.get("bus_id", "")
+        member_ids = bus.get("member_stem_ids", [])
+        bus_entry: Dict[str, Any] = {"bus_id": bus_id, "member_stem_ids": list(member_ids)}
+        bus_lufs = m_lufs = None
+        bus_tp = m_tp = None
+        bus_crest = m_crest = None
+        bus_lufs_list = []
+        bus_tp_list = []
+        bus_crest_list = []
+        for s in stems_summary:
+            if s.get("stem_id") in member_ids:
+                if s.get("lufs_i") is not None:
+                    bus_lufs_list.append(s["lufs_i"])
+                if s.get("true_peak_dbtp") is not None:
+                    bus_tp_list.append(s["true_peak_dbtp"])
+                if s.get("crest_db") is not None:
+                    bus_crest_list.append(s["crest_db"])
+        bus_entry["lufs_i"] = round(sum(bus_lufs_list) / len(bus_lufs_list), 2) if bus_lufs_list else None
+        bus_entry["true_peak_dbtp"] = round(max(bus_tp_list), 2) if bus_tp_list else None
+        bus_entry["crest_db"] = round(sum(bus_crest_list) / len(bus_crest_list), 2) if bus_crest_list else None
+        buses_summary.append(bus_entry)
+
+    result: Dict[str, Any] = {
+        "mode": mode,
+        "stems": stems_summary,
+        "session": session_stats,
+    }
+    if buses_summary:
+        result["buses"] = buses_summary
+    return result
+
+
 def _load_role_keywords() -> set:
     """Load all role inference keywords from roles.yaml (ontology).
 
@@ -1175,7 +1275,17 @@ def build_report(
     missing_ffmpeg = False
     mix_complexity: Dict[str, Any] | None = None
     numpy_available: bool | None = None
-    if meters == "basic":
+    metering_summary: Dict[str, Any] | None = None
+
+    # Detect numpy availability early (shared by truth meters, mix complexity, LFE audit)
+    try:
+        import numpy  # noqa: F401
+        numpy_available = True
+    except ImportError:
+        numpy_available = False
+
+    # truth mode subsumes basic: run both so crest/RMS/peak are always present
+    if meters in {"basic", "truth"}:
         missing_ffmpeg = _add_basic_meter_measurements(session, stems_dir)
     issues = validate_session(session, strict=strict)
 
@@ -1183,46 +1293,39 @@ def build_report(
     _validate_role_names(session, issues)
 
     if meters == "truth":
-        try:
-            import numpy  # noqa: F401
-        except ImportError:
-            numpy_available = False
+        if not numpy_available:
             _add_optional_dep_issue(
                 issues,
                 dep_name="numpy",
                 hint="Install: pip install .[truth]",
             )
         else:
-            numpy_available = True
             missing_ffmpeg = _add_truth_meter_measurements(session, stems_dir) or missing_ffmpeg
     if meters in {"basic", "truth"}:
-        if numpy_available is None:
-            try:
-                import numpy  # noqa: F401
-            except ImportError:
-                numpy_available = False
-                _add_optional_dep_issue(
-                    issues,
-                    dep_name="numpy",
-                    hint="Install: pip install .[truth]",
-                )
-            else:
-                numpy_available = True
         if numpy_available:
             mix_complexity, mix_missing_ffmpeg = _build_mix_complexity(session, stems_dir)
             missing_ffmpeg = mix_missing_ffmpeg or missing_ffmpeg
         else:
             mix_complexity = _default_mix_complexity_payload()
+            _add_optional_dep_issue(
+                issues,
+                dep_name="numpy",
+                hint="Install: pip install .[truth]",
+            )
 
     # LFE content audit — always attempt when numpy is available
     lfe_missing_numpy = _add_lfe_audit_issues(session, stems_dir, issues, strict=strict)
-    if lfe_missing_numpy and numpy_available is not True:
+    if lfe_missing_numpy and not numpy_available:
         # Only surface numpy issue once
         _add_optional_dep_issue(
             issues,
             dep_name="numpy",
             hint="Install: pip install .[truth]",
         )
+
+    # Build metering summary when meters were run
+    if meters in {"basic", "truth"}:
+        metering_summary = _build_metering_summary(session, mode=meters)
 
     if missing_ffmpeg:
         _add_optional_dep_issue(
@@ -1250,6 +1353,8 @@ def build_report(
             report,
             presets_dir(),
         )
+    if metering_summary is not None:
+        report["metering"] = metering_summary
     return report
 
 

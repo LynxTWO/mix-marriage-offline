@@ -67,7 +67,8 @@
       "type": "array",
       "maxItems": 5,
       "items": { "$ref": "#/$defs/preset_recommendation" }
-    }
+    },
+    "metering": { "$ref": "#/$defs/metering_summary" }
   },
   "$defs": {
     "session": {
@@ -538,6 +539,61 @@
           "type": "array",
           "items": { "type": "string" }
         }
+      }
+    },
+    "stem_meter_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stem_id"],
+      "properties": {
+        "stem_id": { "type": "string", "minLength": 1 },
+        "lufs_i": { "type": ["number", "null"] },
+        "true_peak_dbtp": { "type": ["number", "null"] },
+        "crest_db": { "type": ["number", "null"] },
+        "correlation": { "type": ["number", "null"] }
+      }
+    },
+    "bus_meter_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bus_id", "member_stem_ids"],
+      "properties": {
+        "bus_id": { "type": "string", "minLength": 1 },
+        "member_stem_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "lufs_i": { "type": ["number", "null"] },
+        "true_peak_dbtp": { "type": ["number", "null"] },
+        "crest_db": { "type": ["number", "null"] }
+      }
+    },
+    "session_meter_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stem_count": { "type": "integer", "minimum": 0 },
+        "lufs_i_min": { "type": ["number", "null"] },
+        "lufs_i_max": { "type": ["number", "null"] },
+        "lufs_i_range_db": { "type": ["number", "null"] },
+        "true_peak_max_dbtp": { "type": ["number", "null"] }
+      }
+    },
+    "metering_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "stems", "session"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["truth", "basic", "none"] },
+        "stems": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stem_meter_summary" }
+        },
+        "buses": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/bus_meter_summary" }
+        },
+        "session": { "$ref": "#/$defs/session_meter_summary" }
       }
     }
   }

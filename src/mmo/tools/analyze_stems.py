@@ -148,8 +148,11 @@ def main() -> int:
     parser.add_argument(
         "--meters",
         choices=["basic", "truth"],
-        default="basic",
-        help="Enable additional meter packs (basic or truth).",
+        default="truth",
+        help=(
+            "Meter pack to use (default: truth = BS.1770 LUFS + true-peak; "
+            "basic = RMS/crest/peak only; requires numpy for truth)."
+        ),
     )
     parser.add_argument(
         "--peak",

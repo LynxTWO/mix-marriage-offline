@@ -156,7 +156,45 @@
       "properties": {
         "profile_id": { "type": "string", "minLength": 1 },
         "preset_id": { "type": "string", "minLength": 1 },
-        "vibe": { "$ref": "#/$defs/vibe_snapshot" }
+        "vibe": { "$ref": "#/$defs/vibe_snapshot" },
+        "metering": { "$ref": "#/$defs/scene_metering" }
+      }
+    },
+    "scene_object_meter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["object_id", "stem_id"],
+      "properties": {
+        "object_id": { "type": "string", "minLength": 1 },
+        "stem_id": { "type": "string", "minLength": 1 },
+        "lufs_i": { "type": ["number", "null"] },
+        "true_peak_dbtp": { "type": ["number", "null"] },
+        "crest_db": { "type": ["number", "null"] },
+        "correlation": { "type": ["number", "null"] }
+      }
+    },
+    "scene_session_meter": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stem_count": { "type": "integer", "minimum": 0 },
+        "lufs_i_min": { "type": ["number", "null"] },
+        "lufs_i_max": { "type": ["number", "null"] },
+        "lufs_i_range_db": { "type": ["number", "null"] },
+        "true_peak_max_dbtp": { "type": ["number", "null"] }
+      }
+    },
+    "scene_metering": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["truth", "basic", "none"] },
+        "objects": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/scene_object_meter" }
+        },
+        "session": { "$ref": "#/$defs/scene_session_meter" }
       }
     }
   }
