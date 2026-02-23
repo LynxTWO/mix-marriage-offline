@@ -1,5 +1,14 @@
 schema_version: "0.1.0"
+# Operational speaker positions for metering and routing.
+# Convention: azimuth_deg 0=front, negative=left, positive=right (engineering/ITU standard).
+# ch indices correspond to canonical channel_order in layouts.yaml.
 layouts:
+  LAYOUT.1_0:
+    channels:
+      - ch: 0
+        name: "M"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
   LAYOUT.2_0:
     channels:
       - ch: 0
@@ -9,6 +18,114 @@ layouts:
       - ch: 1
         name: "R"
         azimuth_deg: 30.0
+        elevation_deg: 0.0
+  LAYOUT.2_1:
+    channels:
+      - ch: 0
+        name: "L"
+        azimuth_deg: -30.0
+        elevation_deg: 0.0
+      - ch: 1
+        name: "R"
+        azimuth_deg: 30.0
+        elevation_deg: 0.0
+      - ch: 2
+        name: "LFE"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+  LAYOUT.3_0:
+    channels:
+      - ch: 0
+        name: "L"
+        azimuth_deg: -30.0
+        elevation_deg: 0.0
+      - ch: 1
+        name: "R"
+        azimuth_deg: 30.0
+        elevation_deg: 0.0
+      - ch: 2
+        name: "C"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+  LAYOUT.4_0:
+    channels:
+      - ch: 0
+        name: "L"
+        azimuth_deg: -30.0
+        elevation_deg: 0.0
+      - ch: 1
+        name: "R"
+        azimuth_deg: 30.0
+        elevation_deg: 0.0
+      - ch: 2
+        name: "LS"
+        azimuth_deg: -110.0
+        elevation_deg: 0.0
+      - ch: 3
+        name: "RS"
+        azimuth_deg: 110.0
+        elevation_deg: 0.0
+  LAYOUT.4_0_WIDE:
+    channels:
+      - ch: 0
+        name: "L"
+        azimuth_deg: -30.0
+        elevation_deg: 0.0
+      - ch: 1
+        name: "R"
+        azimuth_deg: 30.0
+        elevation_deg: 0.0
+      - ch: 2
+        name: "LW"
+        azimuth_deg: -60.0
+        elevation_deg: 0.0
+      - ch: 3
+        name: "RW"
+        azimuth_deg: 60.0
+        elevation_deg: 0.0
+  LAYOUT.4_1:
+    channels:
+      - ch: 0
+        name: "L"
+        azimuth_deg: -30.0
+        elevation_deg: 0.0
+      - ch: 1
+        name: "R"
+        azimuth_deg: 30.0
+        elevation_deg: 0.0
+      - ch: 2
+        name: "LFE"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+      - ch: 3
+        name: "LS"
+        azimuth_deg: -110.0
+        elevation_deg: 0.0
+      - ch: 4
+        name: "RS"
+        azimuth_deg: 110.0
+        elevation_deg: 0.0
+  LAYOUT.5_0:
+    channels:
+      - ch: 0
+        name: "L"
+        azimuth_deg: -30.0
+        elevation_deg: 0.0
+      - ch: 1
+        name: "R"
+        azimuth_deg: 30.0
+        elevation_deg: 0.0
+      - ch: 2
+        name: "C"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+      - ch: 3
+        name: "LS"
+        azimuth_deg: -110.0
+        elevation_deg: 0.0
+      - ch: 4
+        name: "RS"
+        azimuth_deg: 110.0
         elevation_deg: 0.0
   LAYOUT.5_1:
     channels:
@@ -35,6 +152,112 @@ layouts:
       - ch: 5
         name: "RS"
         azimuth_deg: 110.0
+        elevation_deg: 0.0
+  LAYOUT.5_1_2:
+    channels:
+      - ch: 0
+        name: "L"
+        azimuth_deg: -30.0
+        elevation_deg: 0.0
+      - ch: 1
+        name: "R"
+        azimuth_deg: 30.0
+        elevation_deg: 0.0
+      - ch: 2
+        name: "C"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+      - ch: 3
+        name: "LFE"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+      - ch: 4
+        name: "LS"
+        azimuth_deg: -110.0
+        elevation_deg: 0.0
+      - ch: 5
+        name: "RS"
+        azimuth_deg: 110.0
+        elevation_deg: 0.0
+      - ch: 6
+        name: "TFL"
+        azimuth_deg: -30.0
+        elevation_deg: 45.0
+      - ch: 7
+        name: "TFR"
+        azimuth_deg: 30.0
+        elevation_deg: 45.0
+  LAYOUT.5_1_4:
+    channels:
+      - ch: 0
+        name: "L"
+        azimuth_deg: -30.0
+        elevation_deg: 0.0
+      - ch: 1
+        name: "R"
+        azimuth_deg: 30.0
+        elevation_deg: 0.0
+      - ch: 2
+        name: "C"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+      - ch: 3
+        name: "LFE"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+      - ch: 4
+        name: "LS"
+        azimuth_deg: -110.0
+        elevation_deg: 0.0
+      - ch: 5
+        name: "RS"
+        azimuth_deg: 110.0
+        elevation_deg: 0.0
+      - ch: 6
+        name: "TFL"
+        azimuth_deg: -30.0
+        elevation_deg: 45.0
+      - ch: 7
+        name: "TFR"
+        azimuth_deg: 30.0
+        elevation_deg: 45.0
+      - ch: 8
+        name: "TRL"
+        azimuth_deg: -150.0
+        elevation_deg: 45.0
+      - ch: 9
+        name: "TRR"
+        azimuth_deg: 150.0
+        elevation_deg: 45.0
+  LAYOUT.7_0:
+    channels:
+      - ch: 0
+        name: "L"
+        azimuth_deg: -30.0
+        elevation_deg: 0.0
+      - ch: 1
+        name: "R"
+        azimuth_deg: 30.0
+        elevation_deg: 0.0
+      - ch: 2
+        name: "C"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+      - ch: 3
+        name: "LS"
+        azimuth_deg: -110.0
+        elevation_deg: 0.0
+      - ch: 4
+        name: "RS"
+        azimuth_deg: 110.0
+        elevation_deg: 0.0
+      - ch: 5
+        name: "LRS"
+        azimuth_deg: -150.0
+        elevation_deg: 0.0
+      - ch: 6
+        name: "RRS"
+        azimuth_deg: 150.0
         elevation_deg: 0.0
   LAYOUT.7_1:
     channels:
@@ -70,3 +293,95 @@ layouts:
         name: "RRS"
         azimuth_deg: 150.0
         elevation_deg: 0.0
+  LAYOUT.7_1_2:
+    channels:
+      - ch: 0
+        name: "L"
+        azimuth_deg: -30.0
+        elevation_deg: 0.0
+      - ch: 1
+        name: "R"
+        azimuth_deg: 30.0
+        elevation_deg: 0.0
+      - ch: 2
+        name: "C"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+      - ch: 3
+        name: "LFE"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+      - ch: 4
+        name: "LS"
+        azimuth_deg: -90.0
+        elevation_deg: 0.0
+      - ch: 5
+        name: "RS"
+        azimuth_deg: 90.0
+        elevation_deg: 0.0
+      - ch: 6
+        name: "LRS"
+        azimuth_deg: -150.0
+        elevation_deg: 0.0
+      - ch: 7
+        name: "RRS"
+        azimuth_deg: 150.0
+        elevation_deg: 0.0
+      - ch: 8
+        name: "TFL"
+        azimuth_deg: -30.0
+        elevation_deg: 45.0
+      - ch: 9
+        name: "TFR"
+        azimuth_deg: 30.0
+        elevation_deg: 45.0
+  LAYOUT.7_1_4:
+    channels:
+      - ch: 0
+        name: "L"
+        azimuth_deg: -30.0
+        elevation_deg: 0.0
+      - ch: 1
+        name: "R"
+        azimuth_deg: 30.0
+        elevation_deg: 0.0
+      - ch: 2
+        name: "C"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+      - ch: 3
+        name: "LFE"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+      - ch: 4
+        name: "LS"
+        azimuth_deg: -90.0
+        elevation_deg: 0.0
+      - ch: 5
+        name: "RS"
+        azimuth_deg: 90.0
+        elevation_deg: 0.0
+      - ch: 6
+        name: "LRS"
+        azimuth_deg: -150.0
+        elevation_deg: 0.0
+      - ch: 7
+        name: "RRS"
+        azimuth_deg: 150.0
+        elevation_deg: 0.0
+      - ch: 8
+        name: "TFL"
+        azimuth_deg: -30.0
+        elevation_deg: 45.0
+      - ch: 9
+        name: "TFR"
+        azimuth_deg: 30.0
+        elevation_deg: 45.0
+      - ch: 10
+        name: "TRL"
+        azimuth_deg: -150.0
+        elevation_deg: 45.0
+      - ch: 11
+        name: "TRR"
+        azimuth_deg: 150.0
+        elevation_deg: 45.0

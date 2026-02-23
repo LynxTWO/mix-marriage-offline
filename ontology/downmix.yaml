@@ -1,0 +1,364 @@
+# Canonical Downmix Contract
+# Defines the explicit downmix matrix contract, LFE routing rules, and similarity policy for MMO.
+# This is the top-level "what MMO promises" document; the policy packs under
+# ontology/policies/downmix_policies/ contain the implementation matrices.
+#
+# IMPORTANT: ".2" layouts are NOT assumed to carry dual-LFE program content.
+# Dual-LFE is supported as a first-class layout when declared (LFE1/LFE2),
+# but the second LFE is never automatically assumed to contain independent program content.
+
+downmix:
+  _meta:
+    spec_version: "1.0.0"
+    id_prefix: "DMX."
+    created_utc: "2026-02-23T00:00:00Z"
+    conventions:
+      - "Coefficients are linear gain values (not dB). 0.7071 = -3 dB, 0.5 = -6 dB, 0.3162 = -10 dB."
+      - "source_speakers and target_speakers reference SPK.* IDs from ontology/speakers.yaml."
+      - "All matrix rows are ordered by the canonical channel_order in layouts.yaml."
+      - "LFE channels are always excluded from program loudness (ITU-R BS.1770, weight=0.0)."
+      - "Matrices are deterministic: same inputs produce identical floating-point outputs."
+    notes:
+      - "This file documents the canonical contract. Runtime resolution uses ontology/policies/downmix.yaml."
+      - "See ontology/policies/downmix_policies/ for the authoritative coefficient sets."
+
+  # -------------------------
+  # LFE Routing Policy
+  # -------------------------
+  lfe_routing:
+    bs1770_lfe_weight: 0.0
+    excluded_from_program_loudness: true
+    default_treatment_in_downmix: "drop"
+    drop_justification: >
+      Consumer stereo and mono playback systems have no dedicated LFE reproduction path.
+      Dropping LFE avoids bass-heavy artifacts and phase issues in fold-downs.
+    fold_at_minus_10db_available: true
+    fold_description: >
+      When fold_at_minus_10db_available is true, an alternate matrix applies a -10 dB
+      low-pass-filtered LFE contribution (default 120 Hz cutoff, 24 dB/oct).
+      This is opt-in; it is never the default.
+    dual_lfe_policy:
+      x_2_is_dual_program: false
+      note: >
+        .2 suffix (e.g. 5.2, 7.2.4) indicates two LFE channels in the layout descriptor.
+        MMO does not assume these carry separate dual-program content unless explicitly declared.
+        Each LFE channel is reported independently (level, headroom, band energy, true-peak).
+        Fold-down of dual-LFE layouts routes LFE1 and LFE2 using the declared lfe_downmix_routing
+        in the target conversion entry. Default: both dropped to stereo/mono targets.
+
+  # -------------------------
+  # Similarity QA Policy
+  # -------------------------
+  similarity_policy:
+    required_minimum_target: "LAYOUT.2_0"
+    description: >
+      Every render must pass a downmix similarity gate to at least stereo (LAYOUT.2_0).
+      Additional gates are optional but strongly recommended for 5.1 and 7.1 targets.
+    metrics:
+      - id: "normalized_correlation"
+        threshold_min: 0.5
+        description: >
+          Normalized cross-correlation between the rendered downmix and the reference.
+          Values below 0.5 indicate significant phase or balance issues.
+      - id: "energy_ratio_db"
+        threshold_max: 6.0
+        description: >
+          Maximum energy difference (dB RMS) between the downmix and the fold-down reference.
+          Values above 6 dB indicate significant loudness deviation.
+    fallback_strategy:
+      description: >
+        When a similarity gate fails, the following actions are attempted in order.
+        Each action re-runs the render and re-checks all gates before proceeding to the next.
+      steps:
+        - id: "reduce_surround_aggressiveness"
+          description: "Reduce surround send levels by up to -3 dB increments."
+        - id: "reduce_decorrelation"
+          description: "Reduce or remove decorrelation processing from surround channels."
+        - id: "collapse_wideners"
+          description: "Reduce or bypass mid/side wideners on bus outputs."
+        - id: "move_energy_forward"
+          description: "Increase front L/R contribution relative to surrounds."
+    failure_policy: "report_and_halt"
+    failure_description: >
+      If all fallback steps are exhausted and gates still fail, the render is halted.
+      The failure report must include: failing metrics, threshold values, steps attempted,
+      and a human-readable explanation.
+
+  # -------------------------
+  # Canonical Conversion Map
+  # -------------------------
+  # This table documents what conversions MMO supports. Authoritative coefficients
+  # are in the referenced policy packs. matrix_id values reference entries in those packs.
+  supported_conversions:
+
+    - id: "DMX.CONV.5_1_TO_2_0"
+      source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.2_0"
+      policy_pack: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      default_matrix_id: "DMX.STD.5_1_TO_2_0.LO_RO_LFE_DROP"
+      lfe_treatment: "drop"
+      notes:
+        - "Default Lo/Ro fold-down. LFE dropped."
+        - "Alternate: DMX.STD.5_1_TO_2_0.LO_RO_LFE_MIX folds LFE at -10 dB with 120 Hz LPF."
+
+    - id: "DMX.CONV.5_1_TO_1_0"
+      source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.1_0"
+      policy_pack: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      default_matrix_id: "DMX.STD.5_1_TO_1_0.MONO_FROM_LO_RO"
+      lfe_treatment: "drop"
+      notes:
+        - "Mono fold from Lo/Ro at 0.5 each. LFE dropped."
+
+    - id: "DMX.CONV.7_1_TO_5_1"
+      source_layout_id: "LAYOUT.7_1"
+      target_layout_id: "LAYOUT.5_1"
+      policy_pack: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      default_matrix_id: "DMX.STD.7_1_TO_5_1.BED_FOLD"
+      lfe_treatment: "passthrough"
+      notes:
+        - "Rear surrounds (LRS/RRS) fold into side surrounds (LS/RS) at -3 dB."
+        - "LFE passed through unchanged."
+
+    - id: "DMX.CONV.7_1_TO_2_0"
+      source_layout_id: "LAYOUT.7_1"
+      target_layout_id: "LAYOUT.2_0"
+      policy_pack: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      default_matrix_id: "DMX.STD.7_1_TO_2_0.LO_RO_COMPOSED"
+      lfe_treatment: "drop"
+      notes:
+        - "Equivalent to 7.1->5.1 then 5.1->2.0 using -3 dB coefficients."
+        - "Rear at -6 dB (0.5) relative to front."
+
+    - id: "DMX.CONV.7_1_TO_1_0"
+      source_layout_id: "LAYOUT.7_1"
+      target_layout_id: "LAYOUT.1_0"
+      policy_pack: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      default_matrix_id: "DMX.STD.7_1_TO_1_0.MONO_FROM_LO_RO"
+      lfe_treatment: "drop"
+      notes:
+        - "Mono fold from composed Lo/Ro. LFE dropped."
+
+    - id: "DMX.CONV.5_1_2_TO_5_1"
+      source_layout_id: "LAYOUT.5_1_2"
+      target_layout_id: "LAYOUT.5_1"
+      policy_pack: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+      default_matrix_id: "DMX.IMM.5_1_2_TO_5_1.HEIGHT_TO_BED"
+      lfe_treatment: "passthrough"
+      notes:
+        - "Top Front heights fold to front L/R at -6 dB."
+
+    - id: "DMX.CONV.5_1_2_TO_2_0"
+      source_layout_id: "LAYOUT.5_1_2"
+      target_layout_id: "LAYOUT.2_0"
+      policy_pack: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+      default_matrix_id: "DMX.IMM.5_1_2_TO_2_0.COMPOSED"
+      lfe_treatment: "drop"
+
+    - id: "DMX.CONV.5_1_4_TO_5_1"
+      source_layout_id: "LAYOUT.5_1_4"
+      target_layout_id: "LAYOUT.5_1"
+      policy_pack: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+      default_matrix_id: "DMX.IMM.5_1_4_TO_5_1.HEIGHT_TO_BED"
+      lfe_treatment: "passthrough"
+      notes:
+        - "Top Front to front -6 dB; Top Rear to side surrounds -6 dB."
+
+    - id: "DMX.CONV.5_1_4_TO_2_0"
+      source_layout_id: "LAYOUT.5_1_4"
+      target_layout_id: "LAYOUT.2_0"
+      policy_pack: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+      default_matrix_id: "DMX.IMM.5_1_4_TO_2_0.COMPOSED"
+      lfe_treatment: "drop"
+
+    - id: "DMX.CONV.7_1_2_TO_7_1"
+      source_layout_id: "LAYOUT.7_1_2"
+      target_layout_id: "LAYOUT.7_1"
+      policy_pack: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+      default_matrix_id: "DMX.IMM.7_1_2_TO_7_1.HEIGHT_TO_BED"
+      lfe_treatment: "passthrough"
+
+    - id: "DMX.CONV.7_1_4_TO_7_1"
+      source_layout_id: "LAYOUT.7_1_4"
+      target_layout_id: "LAYOUT.7_1"
+      policy_pack: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+      default_matrix_id: "DMX.IMM.7_1_4_TO_7_1.HEIGHT_TO_BED"
+      lfe_treatment: "passthrough"
+      notes:
+        - "Top Front to front -6 dB; Top Rear to rear surrounds -6 dB."
+
+    - id: "DMX.CONV.7_1_4_TO_5_1"
+      source_layout_id: "LAYOUT.7_1_4"
+      target_layout_id: "LAYOUT.5_1"
+      policy_pack: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+      default_matrix_id: "DMX.IMM.7_1_4_TO_5_1.COMPOSED"
+      lfe_treatment: "passthrough"
+      notes:
+        - "Heights and rears folded together into 5.1 bed."
+
+    - id: "DMX.CONV.7_1_4_TO_2_0"
+      source_layout_id: "LAYOUT.7_1_4"
+      target_layout_id: "LAYOUT.2_0"
+      policy_pack: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+      default_matrix_id: "DMX.IMM.7_1_4_TO_2_0.COMPOSED"
+      lfe_treatment: "drop"
+
+    - id: "DMX.CONV.7_1_4_TO_1_0"
+      source_layout_id: "LAYOUT.7_1_4"
+      target_layout_id: "LAYOUT.1_0"
+      policy_pack: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+      default_matrix_id: "DMX.IMM.7_1_4_TO_1_0.MONO_FROM_COMPOSED"
+      lfe_treatment: "drop"
+
+    - id: "DMX.CONV.3_0_TO_2_0"
+      source_layout_id: "LAYOUT.3_0"
+      target_layout_id: "LAYOUT.2_0"
+      policy_pack: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      default_matrix_id: "DMX.STD.3_0_TO_2_0.LO_RO"
+      lfe_treatment: "n/a"
+
+    - id: "DMX.CONV.4_0_TO_2_0"
+      source_layout_id: "LAYOUT.4_0"
+      target_layout_id: "LAYOUT.2_0"
+      policy_pack: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      default_matrix_id: "DMX.STD.4_0_TO_2_0.QUAD"
+      lfe_treatment: "n/a"
+
+    - id: "DMX.CONV.5_0_TO_2_0"
+      source_layout_id: "LAYOUT.5_0"
+      target_layout_id: "LAYOUT.2_0"
+      policy_pack: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      default_matrix_id: "DMX.STD.5_0_TO_2_0.LO_RO"
+      lfe_treatment: "n/a"
+
+  # -------------------------
+  # Explicit Coefficient Tables (canonical reference, version-locked)
+  # -------------------------
+  # These are the same values implemented in the policy pack files.
+  # They are duplicated here for traceability and auditing purposes.
+  # matrix_version: "1.0.0" applies to all entries below.
+  matrix_version: "1.0.0"
+  matrices:
+
+    DMX.STD.5_1_TO_2_0.LO_RO_LFE_DROP:
+      source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.2_0"
+      lfe_treatment: "drop"
+      coefficients:
+        SPK.L: {SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071}
+        SPK.R: {SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071}
+
+    DMX.STD.5_1_TO_2_0.LO_RO_LFE_MIX:
+      source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.2_0"
+      lfe_treatment: "fold_at_minus_10db"
+      source_pre_filters:
+        SPK.LFE: [{type: "lowpass", freq_hz: 120, slope_db_per_oct: 24}]
+      coefficients:
+        SPK.L: {SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071, SPK.LFE: 0.3162}
+        SPK.R: {SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071, SPK.LFE: 0.3162}
+
+    DMX.STD.5_1_TO_1_0.MONO_FROM_LO_RO:
+      source_layout_id: "LAYOUT.5_1"
+      target_layout_id: "LAYOUT.1_0"
+      lfe_treatment: "drop"
+      coefficients:
+        SPK.M: {SPK.L: 0.5, SPK.R: 0.5, SPK.C: 0.7071, SPK.LS: 0.3536, SPK.RS: 0.3536}
+
+    DMX.STD.7_1_TO_5_1.BED_FOLD:
+      source_layout_id: "LAYOUT.7_1"
+      target_layout_id: "LAYOUT.5_1"
+      lfe_treatment: "passthrough"
+      coefficients:
+        SPK.L:   {SPK.L: 1.0}
+        SPK.R:   {SPK.R: 1.0}
+        SPK.C:   {SPK.C: 1.0}
+        SPK.LFE: {SPK.LFE: 1.0}
+        SPK.LS:  {SPK.LS: 1.0, SPK.LRS: 0.7071}
+        SPK.RS:  {SPK.RS: 1.0, SPK.RRS: 0.7071}
+
+    DMX.STD.7_1_TO_2_0.LO_RO_COMPOSED:
+      source_layout_id: "LAYOUT.7_1"
+      target_layout_id: "LAYOUT.2_0"
+      lfe_treatment: "drop"
+      coefficients:
+        SPK.L: {SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071, SPK.LRS: 0.5}
+        SPK.R: {SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071, SPK.RRS: 0.5}
+
+    DMX.STD.7_1_TO_1_0.MONO_FROM_LO_RO:
+      source_layout_id: "LAYOUT.7_1"
+      target_layout_id: "LAYOUT.1_0"
+      lfe_treatment: "drop"
+      coefficients:
+        SPK.M:
+          SPK.L: 0.5
+          SPK.R: 0.5
+          SPK.C: 0.7071
+          SPK.LS: 0.3536
+          SPK.RS: 0.3536
+          SPK.LRS: 0.25
+          SPK.RRS: 0.25
+
+    DMX.IMM.7_1_4_TO_7_1.HEIGHT_TO_BED:
+      source_layout_id: "LAYOUT.7_1_4"
+      target_layout_id: "LAYOUT.7_1"
+      lfe_treatment: "passthrough"
+      coefficients:
+        SPK.L:   {SPK.L: 1.0, SPK.TFL: 0.5}
+        SPK.R:   {SPK.R: 1.0, SPK.TFR: 0.5}
+        SPK.C:   {SPK.C: 1.0}
+        SPK.LFE: {SPK.LFE: 1.0}
+        SPK.LS:  {SPK.LS: 1.0}
+        SPK.RS:  {SPK.RS: 1.0}
+        SPK.LRS: {SPK.LRS: 1.0, SPK.TRL: 0.5}
+        SPK.RRS: {SPK.RRS: 1.0, SPK.TRR: 0.5}
+
+    DMX.IMM.7_1_4_TO_5_1.COMPOSED:
+      source_layout_id: "LAYOUT.7_1_4"
+      target_layout_id: "LAYOUT.5_1"
+      lfe_treatment: "passthrough"
+      coefficients:
+        SPK.L:   {SPK.L: 1.0, SPK.TFL: 0.5}
+        SPK.R:   {SPK.R: 1.0, SPK.TFR: 0.5}
+        SPK.C:   {SPK.C: 1.0}
+        SPK.LFE: {SPK.LFE: 1.0}
+        SPK.LS:  {SPK.LS: 1.0, SPK.LRS: 0.7071, SPK.TRL: 0.3536}
+        SPK.RS:  {SPK.RS: 1.0, SPK.RRS: 0.7071, SPK.TRR: 0.3536}
+
+    DMX.IMM.7_1_4_TO_2_0.COMPOSED:
+      source_layout_id: "LAYOUT.7_1_4"
+      target_layout_id: "LAYOUT.2_0"
+      lfe_treatment: "drop"
+      coefficients:
+        SPK.L:
+          SPK.L: 1.0
+          SPK.C: 0.7071
+          SPK.LS: 0.7071
+          SPK.LRS: 0.5
+          SPK.TFL: 0.5
+          SPK.TRL: 0.25
+        SPK.R:
+          SPK.R: 1.0
+          SPK.C: 0.7071
+          SPK.RS: 0.7071
+          SPK.RRS: 0.5
+          SPK.TFR: 0.5
+          SPK.TRR: 0.25
+
+    DMX.IMM.7_1_4_TO_1_0.MONO_FROM_COMPOSED:
+      source_layout_id: "LAYOUT.7_1_4"
+      target_layout_id: "LAYOUT.1_0"
+      lfe_treatment: "drop"
+      coefficients:
+        SPK.M:
+          SPK.L: 0.5
+          SPK.R: 0.5
+          SPK.C: 0.7071
+          SPK.LS: 0.3536
+          SPK.RS: 0.3536
+          SPK.LRS: 0.25
+          SPK.RRS: 0.25
+          SPK.TFL: 0.25
+          SPK.TFR: 0.25
+          SPK.TRL: 0.125
+          SPK.TRR: 0.125

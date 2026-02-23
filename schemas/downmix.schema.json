@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/downmix.schema.json",
+  "title": "MMO Canonical Downmix Contract",
+  "description": "Validates ontology/downmix.yaml: versioned downmix matrices, LFE routing rules, and similarity policy.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["downmix"],
+  "properties": {
+    "downmix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["_meta", "lfe_routing", "similarity_policy", "supported_conversions", "matrix_version", "matrices"],
+      "properties": {
+        "_meta": { "$ref": "#/$defs/downmix_meta" },
+        "lfe_routing": { "$ref": "#/$defs/lfe_routing" },
+        "similarity_policy": { "$ref": "#/$defs/similarity_policy" },
+        "supported_conversions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/conversion_entry" }
+        },
+        "matrix_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "matrices": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": { "$ref": "#/$defs/matrix_entry" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "downmix_meta": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["spec_version"],
+      "properties": {
+        "spec_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "id_prefix": { "type": "string" },
+        "created_utc": { "type": "string" },
+        "conventions": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "lfe_routing": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["bs1770_lfe_weight", "excluded_from_program_loudness", "default_treatment_in_downmix"],
+      "properties": {
+        "bs1770_lfe_weight": { "type": "number", "minimum": 0, "maximum": 1 },
+        "excluded_from_program_loudness": { "type": "boolean" },
+        "default_treatment_in_downmix": {
+          "type": "string",
+          "enum": ["drop", "fold_at_minus_10db", "passthrough"]
+        },
+        "drop_justification": { "type": "string" },
+        "fold_at_minus_10db_available": { "type": "boolean" },
+        "fold_description": { "type": "string" },
+        "dual_lfe_policy": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["x_2_is_dual_program"],
+          "properties": {
+            "x_2_is_dual_program": { "type": "boolean" },
+            "note": { "type": "string" }
+          }
+        }
+      }
+    },
+    "similarity_policy": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["required_minimum_target", "metrics", "failure_policy"],
+      "properties": {
+        "required_minimum_target": { "type": "string" },
+        "description": { "type": "string" },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": ["id", "description"],
+            "properties": {
+              "id": { "type": "string" },
+              "threshold_min": { "type": "number" },
+              "threshold_max": { "type": "number" },
+              "description": { "type": "string" }
+            }
+          }
+        },
+        "fallback_strategy": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "description": { "type": "string" },
+            "steps": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "required": ["id", "description"],
+                "properties": {
+                  "id": { "type": "string" },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "failure_policy": { "type": "string" },
+        "failure_description": { "type": "string" }
+      }
+    },
+    "conversion_entry": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "source_layout_id", "target_layout_id", "policy_pack", "default_matrix_id", "lfe_treatment"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^DMX\\.CONV\\." },
+        "source_layout_id": { "type": "string", "pattern": "^LAYOUT\\." },
+        "target_layout_id": { "type": "string", "pattern": "^LAYOUT\\." },
+        "policy_pack": { "type": "string" },
+        "default_matrix_id": { "type": "string" },
+        "lfe_treatment": {
+          "type": "string",
+          "enum": ["drop", "fold_at_minus_10db", "passthrough", "n/a"]
+        },
+        "notes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "matrix_entry": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["source_layout_id", "target_layout_id", "lfe_treatment", "coefficients"],
+      "properties": {
+        "source_layout_id": { "type": "string", "pattern": "^LAYOUT\\." },
+        "target_layout_id": { "type": "string", "pattern": "^LAYOUT\\." },
+        "lfe_treatment": {
+          "type": "string",
+          "enum": ["drop", "fold_at_minus_10db", "passthrough", "n/a"]
+        },
+        "source_pre_filters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["type", "freq_hz"],
+              "properties": {
+                "type": { "type": "string" },
+                "freq_hz": { "type": "number" },
+                "slope_db_per_oct": { "type": "number" }
+              }
+            }
+          }
+        },
+        "coefficients": {
+          "type": "object",
+          "description": "target_speaker_id -> {source_speaker_id: gain}",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": { "type": "number" }
+          }
+        }
+      }
+    }
+  }
+}
