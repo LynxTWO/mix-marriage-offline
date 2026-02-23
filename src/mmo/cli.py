@@ -783,6 +783,48 @@ def main(argv: list[str] | None = None) -> int:
         help="Truncate PDF cell values to this length.",
     )
 
+    report_parser = subparsers.add_parser(
+        "report",
+        help=(
+            "Validate and export a report: emit JSON, PDF, and/or issue-centric recall sheet."
+        ),
+    )
+    report_parser.add_argument("--report", required=True, help="Path to input report JSON.")
+    report_parser.add_argument(
+        "--json",
+        dest="out_json",
+        default=None,
+        help="Output path for validated report JSON. Omit to skip.",
+    )
+    report_parser.add_argument(
+        "--pdf",
+        dest="out_pdf",
+        default=None,
+        help="Output path for report PDF (requires reportlab).",
+    )
+    report_parser.add_argument(
+        "--recall",
+        dest="out_recall",
+        default=None,
+        help="Output path for issue-centric recall sheet CSV.",
+    )
+    report_parser.add_argument(
+        "--no-measurements",
+        action="store_true",
+        help="Omit Measurements section from PDF output.",
+    )
+    report_parser.add_argument(
+        "--no-gates",
+        action="store_true",
+        help="Omit gate fields from PDF output.",
+    )
+    report_parser.add_argument(
+        "--truncate-values",
+        type=int,
+        default=200,
+        help="Truncate PDF cell values to this length.",
+    )
+
     compare_parser = subparsers.add_parser(
         "compare",
         help="Compare two reports (or report folders) and summarize what changed.",
@@ -5062,6 +5104,44 @@ def main(argv: list[str] | None = None) -> int:
             no_gates=args.no_gates,
             truncate_values=truncate_values,
         )
+    if args.command == "report":
+        try:
+            report_payload = _load_report(Path(args.report))
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        try:
+            _validate_json_payload(
+                report_payload,
+                schema_path=schemas / "report.schema.json",
+                payload_name="Report",
+            )
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
+        if args.out_json:
+            _write_json_file(Path(args.out_json), report_payload)
+        if args.out_recall:
+            from mmo.exporters.recall_sheet import export_recall_sheet  # noqa: WPS433
+
+            export_recall_sheet(report_payload, Path(args.out_recall))
+        if args.out_pdf:
+            from mmo.exporters.pdf_report import export_report_pdf  # noqa: WPS433
+
+            try:
+                export_report_pdf(
+                    report_payload,
+                    Path(args.out_pdf),
+                    include_measurements=not args.no_measurements,
+                    include_gates=not args.no_gates,
+                    truncate_values=args.truncate_values,
+                )
+            except RuntimeError:
+                print(
+                    "PDF export requires reportlab. Install extras: pip install .[pdf]",
+                    file=sys.stderr,
+                )
+                return 2
+        return 0
     if args.command == "compare":
         try:
             report_a, report_path_a = load_report_from_path_or_dir(Path(args.a))

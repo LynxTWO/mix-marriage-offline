@@ -8,6 +8,7 @@ from mmo.exporters.csv_recall import export_recall_csv
 from mmo.exporters.pdf_report import export_report_pdf
 from mmo.exporters import pdf_report
 from mmo.exporters.pdf_utils import render_maybe_json
+from mmo.exporters.recall_sheet import export_recall_sheet
 
 try:
     import reportlab  # noqa: F401
@@ -329,6 +330,158 @@ class TestExporters(unittest.TestCase):
             "- Translation risk is elevated. Fix clipping/lossy files and check mono.",
             lines,
         )
+
+
+class TestRecallSheet(unittest.TestCase):
+    def _minimal_report(self) -> dict:
+        return {
+            "issues": [
+                {
+                    "issue_id": "ISSUE.HIGH",
+                    "severity": 80,
+                    "confidence": 0.9,
+                    "message": "High severity issue",
+                    "target": {"scope": "stem", "stem_id": "kick"},
+                    "evidence": [
+                        {"evidence_id": "EVID.METER.SAMPLE_PEAK_DBFS", "value": -0.1}
+                    ],
+                },
+                {
+                    "issue_id": "ISSUE.LOW",
+                    "severity": 20,
+                    "confidence": 0.5,
+                    "message": "Low severity issue",
+                    "evidence": [
+                        {"evidence_id": "EVID.FILE.FORMAT", "value": "mp3"}
+                    ],
+                },
+            ],
+            "recommendations": [
+                {
+                    "recommendation_id": "REC.001",
+                    "issue_id": "ISSUE.HIGH",
+                    "action_id": "ACTION.UTILITY.GAIN",
+                    "risk": "low",
+                    "requires_approval": False,
+                    "params": [],
+                },
+                {
+                    "recommendation_id": "REC.002",
+                    "issue_id": "ISSUE.HIGH",
+                    "action_id": "ACTION.EQ.PEAK",
+                    "risk": "medium",
+                    "requires_approval": False,
+                    "params": [],
+                },
+            ],
+        }
+
+    def test_header_columns(self) -> None:
+        report = self._minimal_report()
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out)
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        self.assertEqual(
+            rows[0],
+            [
+                "rank",
+                "issue_id",
+                "severity",
+                "confidence",
+                "message",
+                "target_scope",
+                "target_id",
+                "evidence_summary",
+                "action_ids",
+            ],
+        )
+
+    def test_ranked_by_severity_descending(self) -> None:
+        report = self._minimal_report()
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out)
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        # Row 1 = rank 1 = ISSUE.HIGH (severity 80)
+        self.assertEqual(rows[1][0], "1")
+        self.assertEqual(rows[1][1], "ISSUE.HIGH")
+        self.assertEqual(rows[1][2], "80")
+        # Row 2 = rank 2 = ISSUE.LOW (severity 20)
+        self.assertEqual(rows[2][0], "2")
+        self.assertEqual(rows[2][1], "ISSUE.LOW")
+
+    def test_action_ids_joined_sorted(self) -> None:
+        report = self._minimal_report()
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out)
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        # ISSUE.HIGH has two recommendations → action_ids pipe-joined, sorted
+        action_ids_cell = rows[1][-1]
+        self.assertIn("ACTION.EQ.PEAK", action_ids_cell)
+        self.assertIn("ACTION.UTILITY.GAIN", action_ids_cell)
+        self.assertIn("|", action_ids_cell)
+        # ISSUE.LOW has no recommendations → empty action_ids
+        self.assertEqual(rows[2][-1], "")
+
+    def test_evidence_summary_format(self) -> None:
+        report = self._minimal_report()
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out)
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        evidence_col = rows[1][-2]  # evidence_summary is second-to-last column
+        self.assertIn("EVID.METER.SAMPLE_PEAK_DBFS", evidence_col)
+
+    def test_target_scope_and_id(self) -> None:
+        report = self._minimal_report()
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out)
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        self.assertEqual(rows[1][5], "stem")
+        self.assertEqual(rows[1][6], "kick")
+        # ISSUE.LOW has no target
+        self.assertEqual(rows[2][5], "")
+        self.assertEqual(rows[2][6], "")
+
+    def test_empty_issues_emits_header_only(self) -> None:
+        report = {"issues": [], "recommendations": []}
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out)
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], "rank")
+
+    def test_determinism_on_tie(self) -> None:
+        """Issues with identical severity/confidence sort alphabetically by issue_id."""
+        report = {
+            "issues": [
+                {
+                    "issue_id": "ISSUE.Z",
+                    "severity": 50,
+                    "confidence": 0.7,
+                    "message": "",
+                    "evidence": [{"evidence_id": "EVID.FILE.FORMAT", "value": "wav"}],
+                },
+                {
+                    "issue_id": "ISSUE.A",
+                    "severity": 50,
+                    "confidence": 0.7,
+                    "message": "",
+                    "evidence": [{"evidence_id": "EVID.FILE.FORMAT", "value": "wav"}],
+                },
+            ],
+            "recommendations": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out)
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        self.assertEqual(rows[1][1], "ISSUE.A")
+        self.assertEqual(rows[2][1], "ISSUE.Z")
 
 
 if __name__ == "__main__":
