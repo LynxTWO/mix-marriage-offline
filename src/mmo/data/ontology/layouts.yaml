@@ -11,8 +11,11 @@ layouts:
     id_prefix: "LAYOUT."
     channel_index_base: 0
     ordering_standards:
-      - "SMPTE"   # common in WAV/DAW exports: L R C LFE Ls Rs (etc.)
-      - "FILM"    # common in some containers: L C R Ls Rs LFE (etc.)
+      - "SMPTE"      # WAV/FLAC/WavPack/FFmpeg/Atmos bed: L R C LFE Ls Rs (etc.)
+      - "FILM"       # Pro Tools / cinema dub stage: L C R Ls Rs LFE (etc.)
+      - "LOGIC_PRO"  # Logic Pro / DTS: L R Ls Rs C LFE (5.1); L R Lrs Rrs Ls Rs C LFE (7.1)
+      - "VST3"       # Steinberg Cubase/Nuendo 7.1+: rears (Lrs Rrs) before sides (Lss Rss)
+      - "AAF"        # AAF/OMF/XML interchange: channel order read from embedded metadata
     conventions:
       - "channel_order is the canonical order MMO will use internally when it must impose one."
       - "ordering_variants are accepted for inference/import; core should normalize to canonical."
@@ -247,6 +250,9 @@ layouts:
       SMPTE: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS"]
       FILM: ["SPK.L", "SPK.C", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LFE"]
       AAC: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS"]
+      # Logic Pro / DTS native: surrounds before centre, LFE last.
+      # Very common in Apple-ecosystem workflows — do NOT assume SMPTE if no mask.
+      LOGIC_PRO: ["SPK.L", "SPK.R", "SPK.LS", "SPK.RS", "SPK.C", "SPK.LFE"]
     channel_groups:
       front: ["SPK.L", "SPK.R"]
       center: ["SPK.C"]
@@ -318,6 +324,11 @@ layouts:
     ordering_variants:
       SMPTE: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
       FILM: ["SPK.L", "SPK.C", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS", "SPK.LFE"]
+      # Logic Pro / DTS: rear surrounds precede sides; centre and LFE at end.
+      LOGIC_PRO: ["SPK.L", "SPK.R", "SPK.LRS", "SPK.RRS", "SPK.LS", "SPK.RS", "SPK.C", "SPK.LFE"]
+      # Steinberg VST3: rears (Lrs Rrs) at slots 5-6, sides (Lss Rss) at slots 7-8.
+      # Opposite of SMPTE — mixing these up inverts front/back panning in VST3 plugins.
+      VST3: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LRS", "SPK.RRS", "SPK.LS", "SPK.RS"]
     channel_groups:
       front: ["SPK.L", "SPK.R"]
       center: ["SPK.C"]
@@ -363,6 +374,9 @@ layouts:
       - "SPK.RS"   # 5
       - "SPK.TFL"  # 6
       - "SPK.TFR"  # 7
+    ordering_variants:
+      SMPTE: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.TFL", "SPK.TFR"]
+      FILM:  ["SPK.L", "SPK.C", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LFE", "SPK.TFL", "SPK.TFR"]
     channel_groups:
       front: ["SPK.L", "SPK.R"]
       center: ["SPK.C"]
@@ -408,6 +422,9 @@ layouts:
       - "SPK.TFR"
       - "SPK.TRL"
       - "SPK.TRR"
+    ordering_variants:
+      SMPTE: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"]
+      FILM:  ["SPK.L", "SPK.C", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LFE", "SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"]
     channel_groups:
       front: ["SPK.L", "SPK.R"]
       center: ["SPK.C"]
@@ -455,6 +472,9 @@ layouts:
       - "SPK.RRS"
       - "SPK.TFL"
       - "SPK.TFR"
+    ordering_variants:
+      SMPTE: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS", "SPK.TFL", "SPK.TFR"]
+      FILM:  ["SPK.L", "SPK.C", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS", "SPK.LFE", "SPK.TFL", "SPK.TFR"]
     channel_groups:
       front: ["SPK.L", "SPK.R"]
       center: ["SPK.C"]
@@ -508,6 +528,9 @@ layouts:
     ordering_variants:
       SMPTE: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS", "SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"]
       FILM: ["SPK.L", "SPK.C", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS", "SPK.LFE", "SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"]
+      # Steinberg VST3: rears (Lrs Rrs) at slots 5-6, sides (Lss Rss) at 7-8.
+      # Heights are same as SMPTE; only bed surrounds differ from SMPTE.
+      VST3: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LRS", "SPK.RRS", "SPK.LS", "SPK.RS", "SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"]
     channel_groups:
       front: ["SPK.L", "SPK.R"]
       center: ["SPK.C"]
@@ -568,3 +591,186 @@ layouts:
       excluded_from_program_loudness: true
       default_downmix_treatment: "n/a"
     aliases: ["4.0_wide", "4_0_wide", "stereo+wides"]
+
+  # -------------------------
+  # Cinema: SDDS 7.1 (8-channel screen, extra front L/R-of-center)
+  # -------------------------
+  LAYOUT.SDDS_7_1:
+    label: "SDDS 7.1"
+    description: >
+      Sony Dynamic Digital Sound 8-channel screen: Left, Left-Center, Center,
+      Right-Center, Right, Left Surround, Right Surround, LFE.
+      Does NOT have rear surrounds (Lrs/Rrs); instead uses extra front-center
+      speakers (FLC/FRC) at approximately ±22.5°.
+      Import this as SDDS_7_1 and remap to SMPTE 7.1 at the DAW boundary;
+      FLC/FRC have no direct equivalent in 7.1 SMPTE so they fold to L/R.
+    family: "surround"
+    channel_count: 8
+    ordering_standard: "SMPTE"
+    channel_order:
+      - "SPK.L"    # 0 — Left
+      - "SPK.FLC"  # 1 — Left Center (SDDS screen channel, ~22.5°)
+      - "SPK.C"    # 2 — Center (dialogue)
+      - "SPK.FRC"  # 3 — Right Center (~-22.5°)
+      - "SPK.R"    # 4 — Right
+      - "SPK.LS"   # 5 — Left Surround
+      - "SPK.RS"   # 6 — Right Surround
+      - "SPK.LFE"  # 7 — LFE
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      center: ["SPK.C", "SPK.FLC", "SPK.FRC"]
+      lfe: ["SPK.LFE"]
+      surround: ["SPK.LS", "SPK.RS"]
+      bed: ["SPK.L", "SPK.FLC", "SPK.C", "SPK.FRC", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LFE"]
+    bed_speakers: ["SPK.L", "SPK.FLC", "SPK.C", "SPK.FRC", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LFE"]
+    height_speakers: []
+    has_lfe: true
+    speaker_positions:
+      - {spk_id: "SPK.L",   azimuth_deg: 30,   elevation_deg: 0}
+      - {spk_id: "SPK.FLC", azimuth_deg: 22,   elevation_deg: 0}
+      - {spk_id: "SPK.C",   azimuth_deg: 0,    elevation_deg: 0}
+      - {spk_id: "SPK.FRC", azimuth_deg: -22,  elevation_deg: 0}
+      - {spk_id: "SPK.R",   azimuth_deg: -30,  elevation_deg: 0}
+      - {spk_id: "SPK.LS",  azimuth_deg: 110,  elevation_deg: 0}
+      - {spk_id: "SPK.RS",  azimuth_deg: -110, elevation_deg: 0}
+      - {spk_id: "SPK.LFE", azimuth_deg: 0,    elevation_deg: 0}
+    lfe_policy:
+      has_lfe: true
+      lfe_channels: ["SPK.LFE"]
+      excluded_from_program_loudness: true
+      default_downmix_treatment: "drop"
+    aliases: ["sdds_7_1", "SDDS71", "sdds71"]
+
+  # -------------------------
+  # Future / placeholder: 7.1.6
+  # Not yet ratified as a final standard; channel order based on
+  # Dolby Atmos production guidelines drafts and common DAW practice.
+  # Heights: TFL TFR TBL TBR + two top-center channels TFC TBC.
+  # Extra height channels zero gracefully on any target that lacks them.
+  # -------------------------
+  LAYOUT.7_1_6:
+    label: "Immersive (7.1.6) — Placeholder"
+    description: >
+      7.1 bed plus 6 height channels: TFL TFR TBL TBR TFC TBC.
+      Channel order is provisional (not yet finalised by SMPTE/ITU-R).
+      Extra height slots are zeroed gracefully on any render target that
+      does not declare them.  Do NOT use this layout for delivery without
+      first verifying the target specification.
+    family: "immersive"
+    channel_count: 14
+    ordering_standard: "SMPTE"
+    channel_order:
+      - "SPK.L"    # 0
+      - "SPK.R"    # 1
+      - "SPK.C"    # 2
+      - "SPK.LFE"  # 3
+      - "SPK.LS"   # 4
+      - "SPK.RS"   # 5
+      - "SPK.LRS"  # 6
+      - "SPK.RRS"  # 7
+      - "SPK.TFL"  # 8
+      - "SPK.TFR"  # 9
+      - "SPK.TRL"  # 10
+      - "SPK.TRR"  # 11
+      - "SPK.TFC"  # 12 — Top Front Center (placeholder SPK ID)
+      - "SPK.TBC"  # 13 — Top Back Center  (placeholder SPK ID)
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      center: ["SPK.C"]
+      lfe: ["SPK.LFE"]
+      surround: ["SPK.LS", "SPK.RS"]
+      rear: ["SPK.LRS", "SPK.RRS"]
+      height: ["SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR", "SPK.TFC", "SPK.TBC"]
+      bed: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    height_speakers: ["SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR", "SPK.TFC", "SPK.TBC"]
+    has_lfe: true
+    speaker_positions:
+      - {spk_id: "SPK.L",   azimuth_deg: 30,   elevation_deg: 0}
+      - {spk_id: "SPK.R",   azimuth_deg: -30,  elevation_deg: 0}
+      - {spk_id: "SPK.C",   azimuth_deg: 0,    elevation_deg: 0}
+      - {spk_id: "SPK.LFE", azimuth_deg: 0,    elevation_deg: 0}
+      - {spk_id: "SPK.LS",  azimuth_deg: 110,  elevation_deg: 0}
+      - {spk_id: "SPK.RS",  azimuth_deg: -110, elevation_deg: 0}
+      - {spk_id: "SPK.LRS", azimuth_deg: 150,  elevation_deg: 0}
+      - {spk_id: "SPK.RRS", azimuth_deg: -150, elevation_deg: 0}
+      - {spk_id: "SPK.TFL", azimuth_deg: 30,   elevation_deg: 45}
+      - {spk_id: "SPK.TFR", azimuth_deg: -30,  elevation_deg: 45}
+      - {spk_id: "SPK.TRL", azimuth_deg: 150,  elevation_deg: 45}
+      - {spk_id: "SPK.TRR", azimuth_deg: -150, elevation_deg: 45}
+      - {spk_id: "SPK.TFC", azimuth_deg: 0,    elevation_deg: 45}
+      - {spk_id: "SPK.TBC", azimuth_deg: 180,  elevation_deg: 45}
+    lfe_policy:
+      has_lfe: true
+      lfe_channels: ["SPK.LFE"]
+      excluded_from_program_loudness: true
+      default_downmix_treatment: "drop"
+    recommended_downmix_targets: ["LAYOUT.7_1_4", "LAYOUT.7_1", "LAYOUT.5_1", "LAYOUT.2_0"]
+    aliases: ["7.1.6", "7_1_6", "immersive716"]
+
+  # -------------------------
+  # Future / placeholder: 9.1.6
+  # 9.1 bed (7.1 + Left Wide + Right Wide) + 6 heights.
+  # No ratified standard as of 2025; treat as provisional.
+  # -------------------------
+  LAYOUT.9_1_6:
+    label: "Immersive (9.1.6) — Placeholder"
+    description: >
+      9.1 bed (7.1 + Left Wide LW + Right Wide RW) plus 6 height channels.
+      Channel order is provisional.  LW/RW are at approximately ±60°.
+      Extra channels zero gracefully on any render target that lacks them.
+    family: "immersive"
+    channel_count: 16
+    ordering_standard: "SMPTE"
+    channel_order:
+      - "SPK.L"    # 0
+      - "SPK.R"    # 1
+      - "SPK.C"    # 2
+      - "SPK.LFE"  # 3
+      - "SPK.LS"   # 4
+      - "SPK.RS"   # 5
+      - "SPK.LRS"  # 6
+      - "SPK.RRS"  # 7
+      - "SPK.LW"   # 8 — Left Wide (~60°)
+      - "SPK.RW"   # 9 — Right Wide (~-60°)
+      - "SPK.TFL"  # 10
+      - "SPK.TFR"  # 11
+      - "SPK.TRL"  # 12
+      - "SPK.TRR"  # 13
+      - "SPK.TFC"  # 14
+      - "SPK.TBC"  # 15
+    channel_groups:
+      front: ["SPK.L", "SPK.R", "SPK.LW", "SPK.RW"]
+      center: ["SPK.C"]
+      lfe: ["SPK.LFE"]
+      surround: ["SPK.LS", "SPK.RS"]
+      rear: ["SPK.LRS", "SPK.RRS"]
+      height: ["SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR", "SPK.TFC", "SPK.TBC"]
+      bed: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS", "SPK.LW", "SPK.RW"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS", "SPK.LW", "SPK.RW"]
+    height_speakers: ["SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR", "SPK.TFC", "SPK.TBC"]
+    has_lfe: true
+    speaker_positions:
+      - {spk_id: "SPK.L",   azimuth_deg: 30,   elevation_deg: 0}
+      - {spk_id: "SPK.R",   azimuth_deg: -30,  elevation_deg: 0}
+      - {spk_id: "SPK.C",   azimuth_deg: 0,    elevation_deg: 0}
+      - {spk_id: "SPK.LFE", azimuth_deg: 0,    elevation_deg: 0}
+      - {spk_id: "SPK.LS",  azimuth_deg: 110,  elevation_deg: 0}
+      - {spk_id: "SPK.RS",  azimuth_deg: -110, elevation_deg: 0}
+      - {spk_id: "SPK.LRS", azimuth_deg: 150,  elevation_deg: 0}
+      - {spk_id: "SPK.RRS", azimuth_deg: -150, elevation_deg: 0}
+      - {spk_id: "SPK.LW",  azimuth_deg: 60,   elevation_deg: 0}
+      - {spk_id: "SPK.RW",  azimuth_deg: -60,  elevation_deg: 0}
+      - {spk_id: "SPK.TFL", azimuth_deg: 30,   elevation_deg: 45}
+      - {spk_id: "SPK.TFR", azimuth_deg: -30,  elevation_deg: 45}
+      - {spk_id: "SPK.TRL", azimuth_deg: 150,  elevation_deg: 45}
+      - {spk_id: "SPK.TRR", azimuth_deg: -150, elevation_deg: 45}
+      - {spk_id: "SPK.TFC", azimuth_deg: 0,    elevation_deg: 45}
+      - {spk_id: "SPK.TBC", azimuth_deg: 180,  elevation_deg: 45}
+    lfe_policy:
+      has_lfe: true
+      lfe_channels: ["SPK.LFE"]
+      excluded_from_program_loudness: true
+      default_downmix_treatment: "drop"
+    recommended_downmix_targets: ["LAYOUT.7_1_6", "LAYOUT.7_1_4", "LAYOUT.7_1", "LAYOUT.5_1", "LAYOUT.2_0"]
+    aliases: ["9.1.6", "9_1_6", "immersive916"]

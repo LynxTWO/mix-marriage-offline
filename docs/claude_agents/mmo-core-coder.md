@@ -21,13 +21,42 @@ You are the MMO core coder agent. Implement Python changes in src/mmo/ with dete
 
 All code that touches channel routing, ordering, or audio output must respect the dual-standard requirement:
 - **Default is always SMPTE/ITU-R** (WAV/FLAC/FFmpeg order). Never hard-code Film order as a default.
-- **Never assume a fixed channel index.** Use `get_channel_order(layout_id, standard)` from
-  `mmo.core.layout_negotiation` and look up channels by `SPK.*` ID.
+- **Never assume a fixed channel index.** Use `SpeakerLayout.index_of(SpeakerPosition.FC)` from
+  `mmo.core.speaker_layout` for semantic channel lookup, or use `get_channel_order(layout_id, standard)`
+  from `mmo.core.layout_negotiation` and look up channels by `SPK.*` ID.
 - Render contracts must carry `layout_standard` (see `mmo.core.render_contract`).
 - Explainability: every log/receipt that touches layout must include `"using SMPTE order ..."` or
   `"Film order requested"`.
 - Plugin manifests that use channel position must declare `supported_standards` and `preferred_standard`
   per `ontology/plugin_semantics.yaml`.
+
+## Speaker layout module (`mmo.core.speaker_layout`)
+
+This is the canonical source for layout-aware DSP routing:
+- `SpeakerPosition` — str-enum mapping human names (FL, FC, LFE, TBL …) to `SPK.*` ontology IDs.
+- `LayoutStandard` — SMPTE (default/canonical), FILM, LOGIC_PRO, VST3, AAF.
+  LOGIC_PRO and VST3 are **import-side** standards (remap to SMPTE internally).
+- `SpeakerLayout` frozen dataclass — carries layout_id + standard + channel_order tuple.
+  Use `.index_of(pos)`, `.lfe_slots`, `.height_slots` instead of hard-coded indices.
+- Preset constants: `SMPTE_5_1`, `FILM_7_1_4`, `LOGIC_PRO_7_1`, `VST3_7_1_4`, etc.
+- `remap_channels_fill(data, from_layout, to_layout)` — zero-fills missing channels
+  (unlike `reorder_channels()` in `layout_negotiation` which drops missing channels).
+  Use `remap_channels_fill` at plugin I/O and file format boundaries.
+
+## Multichannel plugin interface
+
+Every layout-aware plugin must implement `MultichannelPlugin` protocol from
+`mmo.dsp.plugins.base` and receive a `LayoutContext` argument.  Plugins must:
+1. Use `layout_ctx.index_of(SpeakerPosition.FC)` — never hard-code slot indices.
+2. Apply LFE-only processing via `layout_ctx.lfe_slots`.
+3. Apply height processing via `layout_ctx.height_slots`.
+4. Pass through unknown channels transparently.
+
+## WAVEFORMATEXTENSIBLE height mask bits
+
+`src/mmo/dsp/channel_layout.py` contains the full mask bit table including
+0x1000 (TFL), 0x4000 (TFR), 0x8000 (TBL), 0x20000 (TBR) for 7.1.4 decoding.
+`_WAV_MASK_LABEL_TO_SPK_ID` bridges from short labels (TBL) to ontology IDs (SPK.TRL).
 
 ## After implementation
 

@@ -27,12 +27,33 @@ You are the MMO contracts guardian agent. Keep schemas strict, contracts passing
 
 All schema changes must respect the dual-standard requirement:
 - `schemas/plugin.schema.json` `capabilities` block must include `supported_standards` and
-  `preferred_standard` fields with `enum: ["SMPTE", "FILM"]`.
+  `preferred_standard` fields with `enum: ["SMPTE", "FILM", "LOGIC_PRO", "VST3", "AAF"]`.
 - `schemas/render_report.schema.json` `render_job` block must include `layout_standard` field.
 - `schemas/run_config.schema.json` `render` block must include `layout_standard` field.
-- `schemas/layouts.schema.json` must permit `ordering_variants` with `SMPTE` and `FILM` keys.
+- `schemas/layouts.schema.json` must permit `ordering_variants` with any string key
+  (currently used: SMPTE, FILM, LOGIC_PRO, VST3, AAF, AAC).
 - Any new schema that carries channel output must include a `layout_standard` field.
-- SMPTE is always the default; FILM is optional. Do not reverse this.
+- SMPTE is always the default and canonical internal standard; FILM is the primary
+  alternative output standard.  LOGIC_PRO and VST3 are import-side standards that
+  MMO remaps to SMPTE internally.  Do not use LOGIC_PRO or VST3 as an output default.
+
+## Channel layout height bits
+
+`src/mmo/dsp/channel_layout.py` `_CHANNEL_MASK_BITS` must include all WAVEFORMATEXTENSIBLE
+height bits (0x800–0x20000: TC, TFL, TFC, TFR, TBL, TBC, TBR).  If you add new
+immersive layouts, verify these bits are present and `_WAV_MASK_LABEL_TO_SPK_ID`
+maps each short label to the correct `SPK.*` ontology ID.
+
+## SpeakerLayout module
+
+`mmo.core.speaker_layout` is the canonical module for:
+- `SpeakerPosition` enum (values = `SPK.*` ontology IDs)
+- `LayoutStandard` enum (SMPTE, FILM, LOGIC_PRO, VST3, AAF)
+- `SpeakerLayout` frozen dataclass + preset constants
+- `remap_channels_fill()` — zero-fill remapping for plugin I/O boundaries
+
+If you add a new layout to `ontology/layouts.yaml`, add a matching preset
+constant to `speaker_layout.py` and register it in `_PRESET_TABLE`.
 
 ## Failure modes to watch
 

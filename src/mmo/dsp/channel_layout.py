@@ -2,19 +2,34 @@ from __future__ import annotations
 
 from typing import Dict, List, Tuple
 
-# Keep these tables identical to the ones previously in meters_truth.py
+# WAVEFORMATEXTENSIBLE channel mask bit assignments (dwChannelMask field).
+# Each tuple is (bit_mask, short_label).
+# Bit order follows the Microsoft specification exactly; do NOT reorder.
+# Labels map to canonical SPK.* IDs via _WAV_MASK_LABEL_TO_SPK_ID below.
+#
+# Height-channel bits (0x800–0x20000) were added to support 7.1.2, 5.1.4,
+# 7.1.4 and future immersive formats.  Without them, positions_from_wav_mask()
+# would silently truncate height channels in any file that carries them.
 _CHANNEL_MASK_BITS: tuple[tuple[int, str], ...] = (
-    (0x00000001, "FL"),
-    (0x00000002, "FR"),
-    (0x00000004, "FC"),
-    (0x00000008, "LFE"),
-    (0x00000010, "BL"),
-    (0x00000020, "BR"),
-    (0x00000040, "FLC"),
-    (0x00000080, "FRC"),
-    (0x00000100, "BC"),
-    (0x00000200, "SL"),
-    (0x00000400, "SR"),
+    (0x00000001, "FL"),   # Front Left
+    (0x00000002, "FR"),   # Front Right
+    (0x00000004, "FC"),   # Front Center
+    (0x00000008, "LFE"),  # Low Frequency Effects
+    (0x00000010, "BL"),   # Back Left  (rear surround in 5.1/7.1)
+    (0x00000020, "BR"),   # Back Right
+    (0x00000040, "FLC"),  # Front Left of Center  (SDDS screen channel)
+    (0x00000080, "FRC"),  # Front Right of Center
+    (0x00000100, "BC"),   # Back Center
+    (0x00000200, "SL"),   # Side Left   (side surround in 7.1)
+    (0x00000400, "SR"),   # Side Right
+    # Height channels — added for 5.1.2 / 5.1.4 / 7.1.2 / 7.1.4 / future:
+    (0x00000800, "TC"),   # Top Center
+    (0x00001000, "TFL"),  # Top Front Left
+    (0x00002000, "TFC"),  # Top Front Center
+    (0x00004000, "TFR"),  # Top Front Right
+    (0x00008000, "TBL"),  # Top Back Left   (a.k.a. Top Rear Left  / TRL)
+    (0x00010000, "TBC"),  # Top Back Center
+    (0x00020000, "TBR"),  # Top Back Right  (a.k.a. Top Rear Right / TRR)
 )
 
 _FFMPEG_LAYOUT_TOKENS: Dict[str, str] = {
@@ -29,6 +44,38 @@ _FFMPEG_LAYOUT_TOKENS: Dict[str, str] = {
     "flc": "FLC",
     "frc": "FRC",
     "bc": "BC",
+    # Height channel tokens (as reported by FFmpeg for immersive layouts):
+    "tc": "TC",
+    "tfl": "TFL",
+    "tfc": "TFC",
+    "tfr": "TFR",
+    "tbl": "TBL",
+    "tbc": "TBC",
+    "tbr": "TBR",
+}
+
+# Map from WAVEFORMATEXTENSIBLE / FFmpeg short label → canonical SPK.* ID.
+# Bridges the short-label namespace used in this module to the ontology IDs
+# used in layouts.yaml and mmo.core.speaker_layout.SpeakerPosition.
+_WAV_MASK_LABEL_TO_SPK_ID: Dict[str, str] = {
+    "FL":  "SPK.L",
+    "FR":  "SPK.R",
+    "FC":  "SPK.C",
+    "LFE": "SPK.LFE",
+    "BL":  "SPK.LRS",  # Back Left  = Rear Surround Left
+    "BR":  "SPK.RRS",  # Back Right = Rear Surround Right
+    "FLC": "SPK.FLC",
+    "FRC": "SPK.FRC",
+    "BC":  "SPK.BC",
+    "SL":  "SPK.LS",   # Side Left
+    "SR":  "SPK.RS",   # Side Right
+    "TC":  "SPK.TC",
+    "TFL": "SPK.TFL",
+    "TFC": "SPK.TFC",
+    "TFR": "SPK.TFR",
+    "TBL": "SPK.TRL",  # Top Back Left  = Top Rear Left  (same speaker, two names)
+    "TBC": "SPK.TBC",
+    "TBR": "SPK.TRR",  # Top Back Right = Top Rear Right
 }
 
 # Expand carefully. Keep existing keys and behavior stable.

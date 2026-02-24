@@ -1,10 +1,36 @@
-"""Base types and shared helpers for plugin-chain DSP modules."""
+"""Base types and shared helpers for plugin-chain DSP modules.
+
+Why every plugin must carry a SpeakerLayout
+--------------------------------------------
+Two channel-ordering worlds collide in daily studio work:
+
+  SMPTE / ITU-R (WAV, FLAC, WavPack, Atmos bed inputs):
+    5.1 → L R C LFE Ls Rs      (LFE at slot 3)
+
+  Film / Cinema / Pro Tools (dub stage, theatrical):
+    5.1 → L C R Ls Rs LFE      (LFE at slot 5)
+
+A DSP plugin that blindly assumes "channel 3 is always center" will apply
+the wrong curve to dialogue in Film order and wrong EQ to the LFE in SMPTE
+order.  The ``MultichannelPlugin`` protocol below enforces layout awareness at
+the API level: every plugin receives a ``LayoutContext`` that carries the
+``SpeakerLayout`` for the current buffer.  Plugins must use
+``layout_ctx.index_of(SpeakerPosition.FC)`` to find the centre channel rather
+than hard-coding a slot number.
+
+See also: ``mmo.core.speaker_layout`` for the canonical ``SpeakerPosition``
+enum, preset ``SpeakerLayout`` constants, and the ``remap_channels_fill()``
+utility.
+"""
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from mmo.core.speaker_layout import SpeakerLayout, SpeakerPosition
 
 
 class PluginValidationError(ValueError):
@@ -58,6 +84,121 @@ class StereoPlugin(Protocol):
         ctx: PluginContext,
     ) -> Any:
         """Process stereo buffer and populate ``ctx.evidence_collector``."""
+
+
+# ---------------------------------------------------------------------------
+# Layout-aware multichannel plugin types
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class LayoutContext:
+    """Speaker-layout context passed to every multichannel-aware plugin.
+
+    Carries the fully resolved ``SpeakerLayout`` for the current buffer so
+    that plugins can route audio to the correct physical speakers by semantic
+    name rather than raw slot index.
+
+    Usage in a plugin
+    -----------------
+    ::
+
+        from mmo.core.speaker_layout import SpeakerPosition
+
+        def process_multichannel(self, buf, sample_rate, params, ctx, layout_ctx):
+            lfe_slot = layout_ctx.index_of(SpeakerPosition.LFE)
+            if lfe_slot is not None:
+                # Apply low-pass only to the LFE channel
+                buf[lfe_slot] = low_pass(buf[lfe_slot], cutoff_hz=120)
+            height_slots = layout_ctx.layout.height_slots
+            for slot in height_slots:
+                # Apply air-band only to height channels
+                buf[slot] = air_band_boost(buf[slot])
+    """
+
+    # Import deferred to avoid circular dependency at module load time.
+    # Callers can import SpeakerLayout from mmo.core.speaker_layout directly.
+    layout: Any  # SpeakerLayout — typed as Any here to avoid the circular import
+
+    def index_of(self, position: Any) -> int | None:
+        """Return the 0-based slot index of ``position``, or ``None`` if absent."""
+        return self.layout.index_of(position)
+
+    @property
+    def lfe_slots(self) -> list[int]:
+        """Return sorted list of LFE PCM slot indices."""
+        return self.layout.lfe_slots
+
+    @property
+    def height_slots(self) -> list[int]:
+        """Return sorted list of height-channel PCM slot indices."""
+        return self.layout.height_slots
+
+    @property
+    def num_channels(self) -> int:
+        """Number of channels in the associated layout."""
+        return self.layout.num_channels
+
+
+@runtime_checkable
+class MultichannelPlugin(Protocol):
+    """Interface for layout-aware multichannel DSP processors.
+
+    Every plugin that operates on multichannel audio (EQ, compressor, reverb,
+    panner, meter, etc.) MUST implement this protocol so that the processing
+    chain can pass the correct ``LayoutContext`` at each stage.
+
+    Contract
+    --------
+    1. **Never hard-code channel indices.**
+       Use ``layout_ctx.index_of(SpeakerPosition.FC)`` to find the centre
+       channel, ``layout_ctx.lfe_slots`` for the LFE, etc.
+
+    2. **Handle unknown layouts gracefully.**
+       If the plugin receives a layout it does not recognise, it must route
+       the extra channels transparently (pass through or silence), never crash.
+
+    3. **LFE is sovereign.**
+       Apply low-frequency processing (sub-bass, redirected bass) only to
+       LFE slots.  Never promote LFE content into program channels.
+
+    4. **Heights are optional.**
+       If the plugin does not process height channels, it must pass them
+       through unchanged.  Silencing heights is only acceptable when the
+       plugin explicitly declares ``bed_only: true`` in its manifest.
+
+    5. **Emit evidence.**
+       Every plugin must populate ``ctx.evidence_collector`` with what/why/
+       metrics for deterministic explain-ability.
+    """
+
+    plugin_id: str
+
+    def process_multichannel(
+        self,
+        buf_f32_or_f64: Any,
+        sample_rate: int,
+        params: dict[str, Any],
+        ctx: PluginContext,
+        layout_ctx: LayoutContext,
+    ) -> Any:
+        """Process a multichannel audio buffer with full layout awareness.
+
+        Parameters
+        ----------
+        buf_f32_or_f64:
+            NumPy array, shape ``(channels, samples)``.  Channel count must
+            match ``layout_ctx.num_channels``.
+        sample_rate:
+            Audio sample rate in Hz.
+        params:
+            Plugin-specific parameter dictionary.
+        ctx:
+            Execution context (precision mode, evidence collector, stage index).
+        layout_ctx:
+            Speaker-layout context.  Use ``layout_ctx.index_of(position)`` to
+            look up a speaker by semantic name; never assume fixed slot indices.
+        """
 
 
 def coerce_bool(value: Any) -> bool | None:
