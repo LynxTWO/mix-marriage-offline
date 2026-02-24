@@ -936,14 +936,18 @@ def main(argv: list[str] | None = None) -> int:
         help="downmix.target_layout_id override in run_config.",
     )
 
-    safe_render_parser = subparsers.add_parser(
-        "safe-render",
-        help=(
-            "Full plugin-chain render: detect → resolve → gate → render. "
-            "Bounded authority: low-risk auto-applied, high-risk require --approve. "
-            "Produces safe-run receipt + optional QA report with spectral slopes."
-        ),
-    )
+    try:
+        safe_render_parser = subparsers.add_parser(
+            "safe-render",
+            help=(
+                "Full plugin-chain render: detect -> resolve -> gate -> render. "
+                "Bounded authority: low-risk auto-applied, high-risk require --approve. "
+                "Produces safe-run receipt + optional QA report with spectral slopes."
+            ),
+        )
+    except Exception as e:
+        print(f"DEBUG CLI PARSER safe-render: {e}")
+        raise
     safe_render_parser.add_argument(
         "--report",
         required=True,
@@ -1980,57 +1984,61 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional cache directory (default: <repo_root>/.mmo_cache).",
     )
 
-    profile_parser = subparsers.add_parser(
-        "profile",
-        help="User style/safety profile tools (DoD 4.7).",
-    )
-    profile_subparsers = profile_parser.add_subparsers(
-        dest="profile_command",
-        required=True,
-    )
-    profile_list_parser = profile_subparsers.add_parser(
-        "list",
-        help="List user style/safety profiles.",
-    )
-    profile_list_parser.add_argument(
-        "--format",
-        choices=["json", "text"],
-        default="text",
-        help="Output format for profile list.",
-    )
-    profile_show_parser = profile_subparsers.add_parser(
-        "show",
-        help="Show one user style/safety profile.",
-    )
-    profile_show_parser.add_argument(
-        "profile_id",
-        help="Profile ID (e.g., PROFILE.USER.CONSERVATIVE).",
-    )
-    profile_show_parser.add_argument(
-        "--format",
-        choices=["json", "text"],
-        default="text",
-        help="Output format for profile details.",
-    )
-    profile_apply_parser = profile_subparsers.add_parser(
-        "apply",
-        help="Apply a profile to a scene and emit updated preflight options.",
-    )
-    profile_apply_parser.add_argument(
-        "profile_id",
-        help="Profile ID to apply (e.g., PROFILE.USER.BROADCAST).",
-    )
-    profile_apply_parser.add_argument(
-        "--scene",
-        default=None,
-        help="Optional path to a scene/report JSON to validate against the profile.",
-    )
-    profile_apply_parser.add_argument(
-        "--format",
-        choices=["json", "text"],
-        default="json",
-        help="Output format for apply result.",
-    )
+    try:
+        profile_parser = subparsers.add_parser(
+            "profile",
+            help="User style/safety profile tools (DoD 4.7).",
+        )
+        profile_subparsers = profile_parser.add_subparsers(
+            dest="profile_command",
+            required=True,
+        )
+        profile_list_parser = profile_subparsers.add_parser(
+            "list",
+            help="List user style/safety profiles.",
+        )
+        profile_list_parser.add_argument(
+            "--format",
+            choices=["json", "text"],
+            default="text",
+            help="Output format for profile list.",
+        )
+        profile_show_parser = profile_subparsers.add_parser(
+            "show",
+            help="Show one user style/safety profile.",
+        )
+        profile_show_parser.add_argument(
+            "profile_id",
+            help="Profile ID (e.g., PROFILE.USER.CONSERVATIVE).",
+        )
+        profile_show_parser.add_argument(
+            "--format",
+            choices=["json", "text"],
+            default="text",
+            help="Output format for profile details.",
+        )
+        profile_apply_parser = profile_subparsers.add_parser(
+            "apply",
+            help="Apply a profile to a scene and emit updated preflight options.",
+        )
+        profile_apply_parser.add_argument(
+            "profile_id",
+            help="Profile ID to apply (e.g., PROFILE.USER.BROADCAST).",
+        )
+        profile_apply_parser.add_argument(
+            "--scene",
+            default=None,
+            help="Optional path to a scene/report JSON to validate against the profile.",
+        )
+        profile_apply_parser.add_argument(
+            "--format",
+            choices=["json", "text"],
+            default="json",
+            help="Output format for apply result.",
+        )
+    except Exception as e:
+        print(f"DEBUG CLI PARSER profile: {e}")
+        raise
 
     locks_parser = subparsers.add_parser("locks", help="Scene lock registry tools.")
     locks_subparsers = locks_parser.add_subparsers(dest="locks_command", required=True)
@@ -3506,25 +3514,29 @@ def main(argv: list[str] | None = None) -> int:
         help="Overwrite output file if it already exists.",
     )
 
-    render_preflight_parser = subparsers.add_parser(
-        "render-preflight",
-        help="Run deterministic preflight checks against render_plan job inputs.",
-    )
-    render_preflight_parser.add_argument(
-        "--plan",
-        required=True,
-        help="Path to render_plan JSON.",
-    )
-    render_preflight_parser.add_argument(
-        "--out",
-        required=True,
-        help="Path to output render_preflight JSON.",
-    )
-    render_preflight_parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Overwrite output file if it already exists.",
-    )
+    try:
+        render_preflight_parser = subparsers.add_parser(
+            "render-preflight",
+            help="Run deterministic preflight checks against render_plan job inputs.",
+        )
+        render_preflight_parser.add_argument(
+            "--plan",
+            required=True,
+            help="Path to render_plan JSON.",
+        )
+        render_preflight_parser.add_argument(
+            "--out",
+            required=True,
+            help="Path to output render_preflight JSON.",
+        )
+        render_preflight_parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Overwrite output file if it already exists.",
+        )
+    except Exception as e:
+        print(f"DEBUG CLI PARSER render-preflight: {e}")
+        raise
 
     ui_layout_snapshot_parser = subparsers.add_parser(
         "ui-layout-snapshot",
@@ -3610,94 +3622,98 @@ def main(argv: list[str] | None = None) -> int:
         help="Overwrite output file if it already exists.",
     )
 
-    render_run_parser = subparsers.add_parser(
-        "render-run",
-        help=(
-            "Build a render plan from a render_request + scene, "
-            "then execute render-run (or dry-run) and write a render report."
-        ),
-    )
-    render_run_parser.add_argument(
-        "--request",
-        required=True,
-        help="Path to render_request JSON.",
-    )
-    render_run_parser.add_argument(
-        "--scene",
-        required=True,
-        help="Path to scene JSON.",
-    )
-    render_run_parser.add_argument(
-        "--routing-plan",
-        default=None,
-        help="Optional path to routing_plan JSON.",
-    )
-    render_run_parser.add_argument(
-        "--plan-out",
-        required=True,
-        help="Path to output render_plan JSON.",
-    )
-    render_run_parser.add_argument(
-        "--report-out",
-        required=True,
-        help="Path to output render_report JSON.",
-    )
-    render_run_parser.add_argument(
-        "--preflight-out",
-        default=None,
-        help="Optional path to output render_preflight JSON.",
-    )
-    render_run_parser.add_argument(
-        "--preflight-force",
-        action="store_true",
-        help="Overwrite preflight output file if it already exists.",
-    )
-    render_run_parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Overwrite output files if they already exist.",
-    )
-    render_run_parser.add_argument(
-        "--event-log-out",
-        default=None,
-        help="Optional path to output event log JSONL.",
-    )
-    render_run_parser.add_argument(
-        "--event-log-force",
-        action="store_true",
-        help="Overwrite event log output file if it already exists.",
-    )
-    render_run_parser.add_argument(
-        "--execute-out",
-        default=None,
-        help=(
-            "Optional path to output render_execute JSON "
-            "(requires request options dry_run=false)."
-        ),
-    )
-    render_run_parser.add_argument(
-        "--execute-force",
-        action="store_true",
-        help="Overwrite execute output file if it already exists.",
-    )
-    render_run_parser.add_argument(
-        "--qa-out",
-        default=None,
-        help=(
-            "Optional path to output render_qa JSON "
-            "(requires request options dry_run=false)."
-        ),
-    )
-    render_run_parser.add_argument(
-        "--qa-force",
-        action="store_true",
-        help="Overwrite QA output file if it already exists.",
-    )
-    render_run_parser.add_argument(
-        "--qa-enforce",
-        action="store_true",
-        help="Return exit code 2 when render QA contains any severity=error issue.",
-    )
+    try:
+        render_run_parser = subparsers.add_parser(
+            "render-run",
+            help=(
+                "Build a render plan from a render_request + scene, "
+                "then execute render-run (or dry-run) and write a render report."
+            ),
+        )
+        render_run_parser.add_argument(
+            "--request",
+            required=True,
+            help="Path to render_request JSON.",
+        )
+        render_run_parser.add_argument(
+            "--scene",
+            required=True,
+            help="Path to scene JSON.",
+        )
+        render_run_parser.add_argument(
+            "--routing-plan",
+            default=None,
+            help="Optional path to routing_plan JSON.",
+        )
+        render_run_parser.add_argument(
+            "--plan-out",
+            required=True,
+            help="Path to output render_plan JSON.",
+        )
+        render_run_parser.add_argument(
+            "--report-out",
+            required=True,
+            help="Path to output render_report JSON.",
+        )
+        render_run_parser.add_argument(
+            "--preflight-out",
+            default=None,
+            help="Optional path to output render_preflight JSON.",
+        )
+        render_run_parser.add_argument(
+            "--preflight-force",
+            action="store_true",
+            help="Overwrite preflight output file if it already exists.",
+        )
+        render_run_parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Overwrite output files if they already exist.",
+        )
+        render_run_parser.add_argument(
+            "--event-log-out",
+            default=None,
+            help="Optional path to output event log JSONL.",
+        )
+        render_run_parser.add_argument(
+            "--event-log-force",
+            action="store_true",
+            help="Overwrite event log output file if it already exists.",
+        )
+        render_run_parser.add_argument(
+            "--execute-out",
+            default=None,
+            help=(
+                "Optional path to output render_execute JSON "
+                "(requires request options dry_run=false)."
+            ),
+        )
+        render_run_parser.add_argument(
+            "--execute-force",
+            action="store_true",
+            help="Overwrite execute output file if it already exists.",
+        )
+        render_run_parser.add_argument(
+            "--qa-out",
+            default=None,
+            help=(
+                "Optional path to output render_qa JSON "
+                "(requires request options dry_run=false)."
+            ),
+        )
+        render_run_parser.add_argument(
+            "--qa-force",
+            action="store_true",
+            help="Overwrite QA output file if it already exists.",
+        )
+        render_run_parser.add_argument(
+            "--qa-enforce",
+            action="store_true",
+            help="Return exit code 2 when render QA contains any severity=error issue.",
+        )
+    except Exception as e:
+        print(f"DEBUG CLI PARSER render-run: {e}")
+        raise
 
     timeline_parser = subparsers.add_parser("timeline", help="Timeline marker tools.")
     timeline_subparsers = timeline_parser.add_subparsers(
@@ -7745,7 +7761,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(summary, indent=2, sort_keys=True))
             else:
                 if getattr(args, "dry_run", False):
-                    print("Dry run — no file written.")
+                    print("Dry run - no file written.")
                 else:
                     print(f"Merged lexicon written to: {out_path.as_posix()}")
                 print(f"Roles with new keywords: {result['roles_added_count']}")
