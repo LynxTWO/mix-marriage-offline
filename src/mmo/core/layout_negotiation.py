@@ -17,6 +17,24 @@ Exported public API
 - ``get_channel_count()`` — channel count for a layout.
 - ``has_lfe()`` — whether a layout has an LFE channel.
 - ``get_lfe_channels()`` — list of LFE channel SPK IDs in a layout.
+
+Dual channel-ordering standard support
+---------------------------------------
+- ``get_channel_order()`` — return channel order for a specific standard
+  (``"SMPTE"`` default, ``"FILM"``, etc.) using ``ordering_variants``.
+- ``list_supported_standards()`` — list ordering standards for a layout.
+- ``reorder_channels()`` — reorder channel data between two orderings.
+
+Channel ordering standards
+--------------------------
+- **SMPTE / ITU-R** (default): the ordering baked into WAV, FLAC, WavPack,
+  FFmpeg, and most DAW exports.  Example 5.1: L R C LFE Ls Rs.
+- **Film / Cinema / Pro Tools**: the ordering used in pro mixing rooms.
+  Example 5.1: L C R Ls Rs LFE.
+
+The canonical ``channel_order`` in ``layouts.yaml`` is always SMPTE/ITU-R.
+The ``ordering_variants`` block records alternative orderings for the same
+physical speaker set.  All MMO file I/O defaults to SMPTE order.
 """
 
 from __future__ import annotations
@@ -225,6 +243,168 @@ def get_layout_channel_order(
     if not isinstance(order, list):
         return None
     return [ch for ch in order if isinstance(ch, str)]
+
+
+# ---------------------------------------------------------------------------
+# Dual channel-ordering standard API
+# ---------------------------------------------------------------------------
+
+#: Default channel ordering standard for all MMO file I/O.
+DEFAULT_CHANNEL_STANDARD: str = "SMPTE"
+
+
+def get_channel_order(
+    layout_id: str,
+    standard: str = DEFAULT_CHANNEL_STANDARD,
+    path: Optional[Path] = None,
+) -> Optional[List[str]]:
+    """Return the channel order for a layout under the requested ordering standard.
+
+    Looks up ``ordering_variants[standard]`` in the layout entry first; falls
+    back to the canonical ``channel_order`` (always SMPTE/ITU-R) when the
+    requested standard is not explicitly defined.
+
+    Parameters
+    ----------
+    layout_id:
+        Canonical ``LAYOUT.*`` ID.
+    standard:
+        Channel ordering standard to use.  ``"SMPTE"`` (the default) is the
+        ordering used for WAV, FLAC, WavPack, and FFmpeg output.  ``"FILM"``
+        is the ordering used in pro mixing rooms and most cinema dubbing
+        stages.
+    path:
+        Optional override path to ``layouts.yaml``.
+
+    Returns
+    -------
+    list[str] | None:
+        Ordered list of ``SPK.*`` channel IDs, or ``None`` if the layout is
+        not found.
+
+    Examples
+    --------
+    >>> get_channel_order("LAYOUT.5_1", "SMPTE")
+    ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS"]
+    >>> get_channel_order("LAYOUT.5_1", "FILM")
+    ["SPK.L", "SPK.C", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LFE"]
+    """
+    entry = get_layout_info(layout_id, path)
+    if entry is None:
+        return None
+
+    # Prefer the explicitly-declared ordering_variants entry.
+    variants = entry.get("ordering_variants")
+    if isinstance(variants, dict):
+        variant = variants.get(str(standard))
+        if isinstance(variant, list) and variant:
+            return [ch for ch in variant if isinstance(ch, str)]
+
+    # Fall back to the canonical channel_order (SMPTE default).
+    canonical = entry.get("channel_order")
+    if isinstance(canonical, list):
+        return [ch for ch in canonical if isinstance(ch, str)]
+    return None
+
+
+def list_supported_standards(
+    layout_id: str,
+    path: Optional[Path] = None,
+) -> List[str]:
+    """Return a sorted list of ordering standards available for a layout.
+
+    Always includes at least the canonical ``ordering_standard`` value from
+    the layout entry (``"SMPTE"`` for most layouts).  Additional standards
+    are read from the ``ordering_variants`` block.
+
+    Returns an empty list when the layout is not found.
+
+    Parameters
+    ----------
+    layout_id:
+        Canonical ``LAYOUT.*`` ID.
+    path:
+        Optional override path to ``layouts.yaml``.
+    """
+    entry = get_layout_info(layout_id, path)
+    if entry is None:
+        return []
+    standards: set[str] = set()
+    canonical_std = entry.get("ordering_standard")
+    if isinstance(canonical_std, str) and canonical_std:
+        standards.add(canonical_std)
+    else:
+        standards.add(DEFAULT_CHANNEL_STANDARD)
+    variants = entry.get("ordering_variants")
+    if isinstance(variants, dict):
+        standards.update(k for k in variants if isinstance(k, str) and k)
+    return sorted(standards)
+
+
+def reorder_channels(
+    data: Any,
+    from_order: List[str],
+    to_order: List[str],
+) -> Any:
+    """Reorder channel data from one channel ordering to another.
+
+    Works on any indexed sequence: ``list``, ``tuple``, and NumPy arrays
+    (when NumPy is available).  Only channels present in both ``from_order``
+    and ``to_order`` are included in the output; channels that appear in
+    ``to_order`` but are absent from ``from_order`` are silently dropped.
+
+    Parameters
+    ----------
+    data:
+        Sequence of per-channel elements whose length matches
+        ``len(from_order)``.  For example: a list of audio frames
+        (one frame per channel), a list of gain values, or a 2-D NumPy
+        array with shape ``(channels, samples)``.
+    from_order:
+        Source ``SPK.*`` channel-ID ordering (must match ``len(data)``).
+    to_order:
+        Target ``SPK.*`` channel-ID ordering.
+
+    Returns
+    -------
+    Reordered sequence of the same type as ``data`` (list or NumPy array).
+
+    Raises
+    ------
+    ValueError:
+        If ``len(data)`` does not equal ``len(from_order)``.
+
+    Examples
+    --------
+    Reorder 5.1 SMPTE → Film:
+
+    >>> smpte = ["L", "R", "C", "LFE", "Ls", "Rs"]   # from_order
+    >>> film  = ["L", "C", "R", "Ls", "Rs", "LFE"]   # to_order
+    >>> reorder_channels([0, 1, 2, 3, 4, 5], smpte, film)
+    [0, 2, 1, 4, 5, 3]
+    """
+    if len(data) != len(from_order):
+        raise ValueError(
+            f"reorder_channels: data length {len(data)} does not match "
+            f"from_order length {len(from_order)}."
+        )
+    index_map: Dict[str, int] = {ch: i for i, ch in enumerate(from_order)}
+    indices: List[int] = [
+        index_map[ch] for ch in to_order if ch in index_map
+    ]
+    # NumPy fast-path (no hard dependency).
+    try:
+        import numpy as _np  # noqa: PLC0415
+
+        if isinstance(data, _np.ndarray):
+            return data[indices]
+    except ImportError:
+        pass
+    # Generic sequence path.
+    result = [data[i] for i in indices]
+    if isinstance(data, tuple):
+        return tuple(result)
+    return result
 
 
 # ---------------------------------------------------------------------------

@@ -7,9 +7,22 @@ policies, and output format settings.
 It is the bridge between the scene's source layout and the canonical ontology
 definitions for layouts (``ontology/layouts.yaml``) and downmix paths.
 
+Dual channel-ordering standard support
+---------------------------------------
+Every contract records which channel-ordering standard was requested via the
+``layout_standard`` field (default ``"SMPTE"``).  The ``channel_order`` list
+in the contract reflects that standard's ordering, sourced from the layout's
+``ordering_variants`` block where available.
+
+- **SMPTE / ITU-R** (default): WAV, FLAC, WavPack, FFmpeg, broadcast order.
+  Example 5.1: L R C LFE Ls Rs.
+- **Film / Cinema / Pro Tools**: pro mixing room order.
+  Example 5.1: L C R Ls Rs LFE.
+
 Exported public API
 -------------------
 - ``RENDER_CONTRACT_SCHEMA_VERSION`` — version tag.
+- ``DEFAULT_LAYOUT_STANDARD`` — default channel ordering standard ("SMPTE").
 - ``build_render_contract()`` — build a deterministic per-target contract.
 - ``contracts_to_render_targets()`` — convert contracts to a render_targets
   payload suitable for :func:`mmo.core.render_plan.build_render_plan`.
@@ -20,7 +33,11 @@ from __future__ import annotations
 from typing import Any
 
 from mmo.core.downmix import layout_negotiation_available
+from mmo.core.layout_negotiation import get_channel_order as _get_channel_order
 from mmo.resources import ontology_dir
+
+#: Default channel ordering standard for MMO file I/O.
+DEFAULT_LAYOUT_STANDARD: str = "SMPTE"
 
 RENDER_CONTRACT_SCHEMA_VERSION = "0.1.0"
 
@@ -84,6 +101,7 @@ def build_render_contract(
     output_formats: list[str] | None = None,
     sample_rate_hz: int = 48000,
     bit_depth: int = 24,
+    layout_standard: str = DEFAULT_LAYOUT_STANDARD,
 ) -> dict[str, Any]:
     """Build a deterministic render contract for a single render target.
 
@@ -108,6 +126,11 @@ def build_render_contract(
         Target sample rate in Hz; defaults to 48 000.
     bit_depth:
         Target bit depth; defaults to 24.
+    layout_standard:
+        Channel ordering standard for the output: ``"SMPTE"`` (default,
+        matches WAV/FLAC/FFmpeg byte order) or ``"FILM"`` (pro mixing room
+        order).  The ``channel_order`` in the returned contract reflects this
+        standard when an ``ordering_variants`` entry is available.
 
     Returns
     -------
@@ -127,8 +150,17 @@ def build_render_contract(
     if not target_layout_id:
         raise ValueError("target_layout_id must be a non-empty string.")
 
+    clean_standard = str(layout_standard).strip().upper() if layout_standard else DEFAULT_LAYOUT_STANDARD
+    if not clean_standard:
+        clean_standard = DEFAULT_LAYOUT_STANDARD
+
     layout_entry = _get_layout_entry(target_layout_id)
-    channel_order: list[str] = list(layout_entry.get("channel_order") or [])
+
+    # Resolve channel_order for the requested standard.
+    ordered = _get_channel_order(target_layout_id, clean_standard)
+    channel_order: list[str] = ordered if ordered else list(
+        layout_entry.get("channel_order") or []
+    )
     channel_count: int = int(
         layout_entry.get("channel_count") or len(channel_order)
     )
@@ -172,6 +204,7 @@ def build_render_contract(
         "channel_order": channel_order,
         "family": family,
         "has_lfe": has_lfe,
+        "layout_standard": clean_standard,
         "output_formats": normalized_formats,
         "sample_rate_hz": int(sample_rate_hz),
         "bit_depth": int(bit_depth),

@@ -505,6 +505,9 @@ layouts:
       - "SPK.TFR"
       - "SPK.TRL"
       - "SPK.TRR"
+    ordering_variants:
+      SMPTE: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS", "SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"]
+      FILM: ["SPK.L", "SPK.C", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS", "SPK.LFE", "SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"]
     channel_groups:
       front: ["SPK.L", "SPK.R"]
       center: ["SPK.C"]

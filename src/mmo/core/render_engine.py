@@ -31,6 +31,7 @@ import concurrent.futures
 from typing import Any
 
 from mmo.core.downmix import predict_fold_similarity, resolve_preflight_matrix
+from mmo.core.layout_negotiation import DEFAULT_CHANNEL_STANDARD
 from mmo.core.render_contract import contracts_to_render_targets
 from mmo.core.render_plan import build_render_plan
 
@@ -55,6 +56,7 @@ def _normalize_options(options: dict[str, Any] | None) -> dict[str, Any]:
     """Return a normalised engine-options dict with safe defaults."""
     if not isinstance(options, dict):
         options = {}
+    raw_standard = _coerce_str(options.get("layout_standard", "")).strip().upper()
     return {
         "dry_run": bool(options.get("dry_run", False)),
         "max_workers": max(1, int(options.get("max_workers", _DEFAULT_MAX_WORKERS))),
@@ -70,6 +72,7 @@ def _normalize_options(options: dict[str, Any] | None) -> dict[str, Any]:
         "downmix_policy_id": (
             _coerce_str(options.get("downmix_policy_id", "")).strip() or None
         ),
+        "layout_standard": raw_standard or DEFAULT_CHANNEL_STANDARD,
     }
 
 
@@ -220,6 +223,15 @@ def _execute_job(
 
     output_files: list[dict[str, Any]] = []
     notes: list[str] = list(contract.get("notes") or [])
+
+    # Explainability: record which channel ordering standard was used.
+    contract_standard = _coerce_str(contract.get("layout_standard")).strip()
+    engine_standard = _coerce_str(options.get("layout_standard")).strip() or DEFAULT_CHANNEL_STANDARD
+    active_standard = contract_standard or engine_standard
+    if active_standard and active_standard != DEFAULT_CHANNEL_STANDARD:
+        notes.append(f"using {active_standard} channel order (Film/Cinema ordering requested).")
+    else:
+        notes.append(f"using {active_standard or DEFAULT_CHANNEL_STANDARD} channel order (SMPTE/ITU-R default).")
 
     if dry_run:
         status = "skipped"
