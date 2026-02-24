@@ -204,8 +204,11 @@ class TestSceneBuilderHeightNotes(unittest.TestCase):
 
     def _build_scene(self, channel_count: int, stem_id: str = "STEM.001") -> dict:
         from mmo.core.scene_builder import build_scene_from_session
+        # Use tempfile.gettempdir() for a cross-platform absolute path (supports
+        # full immersive layouts + real DAW round-tripping on Linux/macOS/Windows).
+        stems_dir = str(Path(tempfile.gettempdir()) / "mmo_test_stems")
         session = {
-            "stems_dir": "/tmp/test_stems",
+            "stems_dir": stems_dir,
             "stems": [
                 {"stem_id": stem_id, "channel_count": channel_count, "label": "test"},
             ],
