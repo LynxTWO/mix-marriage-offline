@@ -9,101 +9,11 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-from mmo.core.cache_keys import cache_key, hash_lockfile, hash_run_config
-from mmo.core.cache_store import (
-    report_has_time_cap_stop_condition,
-    report_schema_is_valid,
-    rewrite_report_stems_dir,
-    save_cached_report,
-    try_load_cached_report,
-)
-from mmo.core.compare import (
-    build_compare_report,
-    default_label_for_compare_input,
-    load_report_from_path_or_dir,
-)
-from mmo.core.deliverables_index import (
-    build_deliverables_index_single,
-    build_deliverables_index_variants,
-)
-from mmo.core.presets import (
-    list_preset_packs,
-    list_presets,
-    load_preset_pack,
-    load_preset_run_config,
-)
-from mmo.core.render_plan import build_render_plan
-from mmo.core.render_plan_bridge import render_plan_to_variant_plan
-from mmo.core.render_targets import (
-    get_render_target,
-    list_render_targets,
-    resolve_render_target_id,
-)
-from mmo.core.role_lexicon import (
-    load_role_lexicon,
-    merge_suggestions_into_lexicon,
-    render_role_lexicon_yaml,
-)
-from mmo.core.roles import list_roles, load_roles, resolve_role
-from mmo.core.stems_classifier import classify_stems, classify_stems_with_evidence
-from mmo.core.stems_audition import render_audition_pack
-from mmo.core.stems_draft import build_draft_routing_plan, build_draft_scene
-from mmo.core.translation_profiles import (
-    get_translation_profile,
-    list_translation_profiles,
-    load_translation_profiles,
-)
-from mmo.core.translation_summary import build_translation_summary
-from mmo.core.translation_checks import run_translation_checks
-from mmo.core.translation_audition import render_translation_auditions
-from mmo.core.translation_reference import (
-    TranslationReferenceResolutionError,
-    resolve_translation_reference_audio,
-)
-from mmo.core.target_recommendations import recommend_render_targets
-from mmo.core.scene_templates import (
-    apply_scene_templates,
-    get_scene_template,
-    list_scene_templates,
-    preview_scene_templates,
-)
-from mmo.core.scene_locks import get_scene_lock, list_scene_locks
-from mmo.core.intent_params import load_intent_params, validate_scene_intent
-from mmo.core.stems_index import build_stems_index, resolve_stem_sets
-from mmo.core.stems_overrides import apply_overrides, load_stems_overrides
-from mmo.core.scene_editor import (
-    INTENT_PARAM_KEY_TO_ID,
-    add_lock as edit_scene_add_lock,
-    remove_lock as edit_scene_remove_lock,
-    set_intent as edit_scene_set_intent,
-)
-from mmo.core.listen_pack import build_listen_pack, index_stems_auditions
-from mmo.core.project_file import (
-    load_project,
-    new_project,
-    update_project_last_run,
-    write_project,
-)
-from mmo.core.event_log import new_event_id, validate_event_log_jsonl, write_event_log
-from mmo.core.env_doctor import build_env_doctor_report, render_env_doctor_text
-from mmo.core.gui_state import default_gui_state, validate_gui_state
-from mmo.core.routing import (
-    apply_routing_plan_to_report,
-    build_routing_plan,
-    render_routing_plan,
-    routing_layout_ids_from_run_config,
-)
-from mmo.core.run_config import (
-    RUN_CONFIG_SCHEMA_VERSION,
-    diff_run_config,
-    load_run_config,
-    merge_run_config,
-    normalize_run_config,
-)
-from mmo.core.timeline import load_timeline
-from mmo.core.variants import build_variant_plan, run_variant_plan
-from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS
-from mmo.ui.tui import choose_from_list, multi_toggle, render_header, yes_no
+# ── Transcode constants (stdlib-only dep, always safe) ──────────────────────
+try:
+    from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS
+except Exception:  # pragma: no cover - should never fail (stdlib only)
+    LOSSLESS_OUTPUT_FORMATS = ("wav", "flac", "wv", "aiff", "alac")  # type: ignore[assignment]
 
 try:
     import jsonschema
@@ -145,18 +55,120 @@ _DEFAULT_RENDER_MANY_TRANSLATION_PROFILE_IDS: tuple[str, ...] = (
 )
 _DEFAULT_RENDER_MANY_TRANSLATION_AUDITION_SEGMENT_S = 30.0
 
+# ── Heavy mmo imports — deferred so `--help` never raises on import failure ─
+# All names are populated on success; _MMO_IMPORT_ERROR is set on failure.
+# Command handlers check _MMO_IMPORT_ERROR after parse_args so that
+# `python -m mmo --help` always exits 0 regardless of the environment.
+_MMO_IMPORT_ERROR: Exception | None = None
+try:
+    from mmo.core.cache_keys import cache_key, hash_lockfile, hash_run_config
+    from mmo.core.cache_store import (
+        report_has_time_cap_stop_condition,
+        report_schema_is_valid,
+        rewrite_report_stems_dir,
+        save_cached_report,
+        try_load_cached_report,
+    )
+    from mmo.core.compare import (
+        build_compare_report,
+        default_label_for_compare_input,
+        load_report_from_path_or_dir,
+    )
+    from mmo.core.deliverables_index import (
+        build_deliverables_index_single,
+        build_deliverables_index_variants,
+    )
+    from mmo.core.presets import (
+        list_preset_packs,
+        list_presets,
+        load_preset_pack,
+        load_preset_run_config,
+    )
+    from mmo.core.render_plan import build_render_plan
+    from mmo.core.render_plan_bridge import render_plan_to_variant_plan
+    from mmo.core.render_targets import (
+        get_render_target,
+        list_render_targets,
+        resolve_render_target_id,
+    )
+    from mmo.core.role_lexicon import (
+        load_role_lexicon,
+        merge_suggestions_into_lexicon,
+        render_role_lexicon_yaml,
+    )
+    from mmo.core.roles import list_roles, load_roles, resolve_role
+    from mmo.core.stems_classifier import classify_stems, classify_stems_with_evidence
+    from mmo.core.stems_audition import render_audition_pack
+    from mmo.core.stems_draft import build_draft_routing_plan, build_draft_scene
+    from mmo.core.translation_profiles import (
+        get_translation_profile,
+        list_translation_profiles,
+        load_translation_profiles,
+    )
+    from mmo.core.translation_summary import build_translation_summary
+    from mmo.core.translation_checks import run_translation_checks
+    from mmo.core.translation_audition import render_translation_auditions
+    from mmo.core.translation_reference import (
+        TranslationReferenceResolutionError,
+        resolve_translation_reference_audio,
+    )
+    from mmo.core.target_recommendations import recommend_render_targets
+    from mmo.core.scene_templates import (
+        apply_scene_templates,
+        get_scene_template,
+        list_scene_templates,
+        preview_scene_templates,
+    )
+    from mmo.core.scene_locks import get_scene_lock, list_scene_locks
+    from mmo.core.intent_params import load_intent_params, validate_scene_intent
+    from mmo.core.stems_index import build_stems_index, resolve_stem_sets
+    from mmo.core.stems_overrides import apply_overrides, load_stems_overrides
+    from mmo.core.scene_editor import (
+        INTENT_PARAM_KEY_TO_ID,
+        add_lock as edit_scene_add_lock,
+        remove_lock as edit_scene_remove_lock,
+        set_intent as edit_scene_set_intent,
+    )
+    from mmo.core.listen_pack import build_listen_pack, index_stems_auditions
+    from mmo.core.project_file import (
+        load_project,
+        new_project,
+        update_project_last_run,
+        write_project,
+    )
+    from mmo.core.event_log import new_event_id, validate_event_log_jsonl, write_event_log
+    from mmo.core.env_doctor import build_env_doctor_report, render_env_doctor_text
+    from mmo.core.gui_state import default_gui_state, validate_gui_state
+    from mmo.core.routing import (
+        apply_routing_plan_to_report,
+        build_routing_plan,
+        render_routing_plan,
+        routing_layout_ids_from_run_config,
+    )
+    from mmo.core.run_config import (
+        RUN_CONFIG_SCHEMA_VERSION,
+        diff_run_config,
+        load_run_config,
+        merge_run_config,
+        normalize_run_config,
+    )
+    from mmo.core.timeline import load_timeline
+    from mmo.core.variants import build_variant_plan, run_variant_plan
+    from mmo.ui.tui import choose_from_list, multi_toggle, render_header, yes_no
 
-# ── Subcommand handlers (extracted to cli_commands/) ──
-from mmo.cli_commands._helpers import *  # noqa: F401,F403
-from mmo.cli_commands._analysis import *  # noqa: F401,F403
-from mmo.cli_commands._renderers import *  # noqa: F401,F403
-from mmo.cli_commands._stems import *  # noqa: F401,F403
-from mmo.cli_commands._scene import *  # noqa: F401,F403
-from mmo.cli_commands._registries import *  # noqa: F401,F403
-from mmo.cli_commands._workflows import *  # noqa: F401,F403
-from mmo.cli_commands._project import *  # noqa: F401,F403
-from mmo.cli_commands._gui_rpc import *  # noqa: F401,F403
-from mmo.cli_commands._utilities import *  # noqa: F401,F403
+    # ── Subcommand handlers (extracted to cli_commands/) ──
+    from mmo.cli_commands._helpers import *  # noqa: F401,F403
+    from mmo.cli_commands._analysis import *  # noqa: F401,F403
+    from mmo.cli_commands._renderers import *  # noqa: F401,F403
+    from mmo.cli_commands._stems import *  # noqa: F401,F403
+    from mmo.cli_commands._scene import *  # noqa: F401,F403
+    from mmo.cli_commands._registries import *  # noqa: F401,F403
+    from mmo.cli_commands._workflows import *  # noqa: F401,F403
+    from mmo.cli_commands._project import *  # noqa: F401,F403
+    from mmo.cli_commands._gui_rpc import *  # noqa: F401,F403
+    from mmo.cli_commands._utilities import *  # noqa: F401,F403
+except Exception as _exc:  # pragma: no cover - import guard for --help safety
+    _MMO_IMPORT_ERROR = _exc
 
 
 def _normalize_cli_path_arg(path_text: str) -> str:
@@ -3858,6 +3870,16 @@ def main(argv: list[str] | None = None) -> int:
     if len(raw_argv) >= 2 and raw_argv[0] == "ui" and raw_argv[1] == "hints":
         raw_argv = ["ui-hints", *raw_argv[2:]]
     args = parser.parse_args(raw_argv)
+    if _MMO_IMPORT_ERROR is not None:
+        print(
+            f"MMO failed to load required modules: {_MMO_IMPORT_ERROR}",
+            file=sys.stderr,
+        )
+        print(
+            "Try: pip install 'mix-marriage-offline[dev,truth,pdf]'",
+            file=sys.stderr,
+        )
+        return 1
     from mmo.resources import (
         _repo_checkout_root,
         ontology_dir,
@@ -7709,5 +7731,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 # Backward-compatible re-exports for tests that import private symbols directly.
-from mmo.cli_commands._helpers import _parse_output_formats_csv  # noqa: F811,F401
-from mmo.cli_commands._workflows import _run_ui_workflow  # noqa: F811,F401
+if _MMO_IMPORT_ERROR is None:  # pragma: no branch - only skip if import guard fired
+    from mmo.cli_commands._helpers import _parse_output_formats_csv  # noqa: F811,F401
+    from mmo.cli_commands._workflows import _run_ui_workflow  # noqa: F811,F401
