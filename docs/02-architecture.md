@@ -39,6 +39,8 @@ MMO is intentionally DAW-agnostic. The bridge back into any DAW is the **recall 
 - Stems may be mono, stereo, or multichannel (layout-aware).
 - Channel layout is either inferred (from filename or container metadata) or assigned by the user.
 - MMO can run layout-specific checks and downmix translation checks.
+- Immersive beds (5.1.2, 5.1.4, 7.1.2, 7.1.4) are supported with conservative height-to-bed fold-down policies.
+  Height channels (TFL, TFR, TRL, TRR at 45° elevation) fold at -6 dB per `POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0`.
 
 ---
 
@@ -265,4 +267,5 @@ This makes results comparable across machines and over time.
 8) Translation profiles
 9) Optional safe rendering
 10) Surround foundation (layouts + downmix QA)
+11) Immersive render targets and height support (5.1.2, 5.1.4, 7.1.2, 7.1.4 beds)
 

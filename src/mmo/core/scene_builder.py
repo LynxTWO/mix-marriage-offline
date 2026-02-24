@@ -22,6 +22,10 @@ _LOCK_HASH_PREFIX_LEN = 12
 _CONFIDENCE_GATE = 0.3          # below this, don't emit inferred hints
 _ADVISORY_STEREO_CONF_CAP = 0.35  # max confidence for stereo-stem advisory inference
 
+# Height bed channel counts (advisory; channel count alone cannot disambiguate all layouts)
+_IMMERSIVE_714_CHANNELS = 12   # 7.1.4: 8-ch bed + 4 height speakers
+_IMMERSIVE_10CH_CHANNELS = 10  # 5.1.4 or 7.1.2: 6/8-ch bed + 4/2 height speakers (ambiguous)
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -116,10 +120,15 @@ def _infer_routing_intent(stems: list[dict[str, Any]]) -> dict[str, Any]:
         default=0,
     )
     if max_channels > 6:
+        routing_notes = ["multichannel_stem_gt6ch"]
+        if max_channels == _IMMERSIVE_714_CHANNELS:
+            routing_notes.append("height_bed_714_candidate")
+        elif max_channels == _IMMERSIVE_10CH_CHANNELS:
+            routing_notes.append("height_bed_10ch_candidate")
         return {
             "suggested_layout_class": "immersive",
             "confidence": 0.8,
-            "notes": ["multichannel_stem_gt6ch"],
+            "notes": routing_notes,
         }
     if max_channels > 2:
         return {
@@ -184,6 +193,10 @@ def _build_object_intent(
         notes.append("advisory_stereo_stem")
     if is_multichannel:
         notes.append("multichannel_as_object")
+        if channel_count == _IMMERSIVE_714_CHANNELS:
+            notes.append("height_bed_714_candidate")
+        elif channel_count == _IMMERSIVE_10CH_CHANNELS:
+            notes.append("height_bed_10ch_candidate")
 
     return intent, notes
 

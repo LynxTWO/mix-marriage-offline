@@ -166,6 +166,59 @@ If your DAW exports split mono only, keep the grouping obvious:
 - `ROLE.MUSIC.PAD__ch01.wav`
 - and document the channel order used.
 
+## Immersive / height exports (7.1.4 beds)
+
+For Dolby Atmos-style bed exports (5.1.2, 5.1.4, 7.1.2, 7.1.4), additional rules apply.
+
+### Supported immersive layouts
+
+| Layout | Channels | Height speakers | Render target |
+|--------|----------|-----------------|---------------|
+| 5.1.2  | 8        | TFL, TFR (front top) | `TARGET.IMMERSIVE.5_1_2` |
+| 5.1.4  | 10       | TFL, TFR, TRL, TRR | `TARGET.IMMERSIVE.5_1_4` |
+| 7.1.2  | 10       | TFL, TFR (front top) | `TARGET.IMMERSIVE.7_1_2` |
+| 7.1.4  | 12       | TFL, TFR, TRL, TRR | `TARGET.IMMERSIVE.7_1_4` |
+
+### Channel ordering (SMPTE)
+
+MMO uses SMPTE ordering for all immersive beds:
+- 7.1.4: L, R, C, LFE, Ls, Rs, Lrs, Rrs, TFL, TFR, TRL, TRR
+
+Export your DAW project using SMPTE channel order. Verify by checking the
+first four channels of any 7.1.4 stem are L, R, C, LFE.
+
+### Height channel rules
+
+Height channels (TFL, TFR, TRL, TRR) at elevation 45°:
+- Must be included in the interleaved stem, not as separate files.
+- Export at the same level as bed channels — do not pre-attenuate heights.
+- MMO applies -6 dB height-to-bed fold for downstream downmix (per `POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0`).
+
+### Height "air" guidance
+
+Height channels carry the spatial air layer (overhead ambience, ceiling reflections, objects above).
+
+Recommended practices:
+- Keep height content below -12 dBFS RMS to avoid overwhelming the bed.
+- Treat heights conservatively: MMO is advisory, not prescriptive.
+- If you intend silence in heights, still export them (as silence) to maintain channel count consistency.
+
+### Downmix paths for immersive
+
+MMO can validate fold-down translation for:
+- 7.1.4 → 5.1 via `DMX.IMM.7_1_4_TO_5_1.COMPOSED`
+- 7.1.4 → 2.0 via `DMX.IMM.7_1_4_TO_2_0.COMPOSED`
+- 5.1.4 → 5.1 via `DMX.IMM.5_1_4_TO_5_1.HEIGHT_TO_BED`
+
+Run downmix QA for a 7.1.4 source:
+```
+PYTHONPATH=src python -m mmo downmix qa \
+  --src /path/to/714_src.wav \
+  --ref /path/to/stereo_ref.wav \
+  --source-layout LAYOUT.7_1_4 \
+  --target-layout LAYOUT.2_0
+```
+
 ## Headroom and safety
 Leave room for analysis and translation checks.
 

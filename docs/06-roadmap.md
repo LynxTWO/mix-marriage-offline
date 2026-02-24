@@ -122,6 +122,21 @@ Deliverables:
 - Render manifest schema coverage
 - Render fixtures
 
+### v0.8 Immersive render targets and height support
+Goal: full immersive bed pipeline — 7.1.4 render targets, height detection, downmix QA.
+
+Definition of done:
+- Render targets registered for all four immersive layouts (5.1.2, 5.1.4, 7.1.2, 7.1.4).
+- Scene builder detects height bed candidates from channel count and emits advisory notes.
+- Downmix QA covers 7.1.4 → 5.1 and 7.1.4 → 2.0 composed fold-down paths.
+- Export guide documents immersive channel ordering and height air guidance.
+
+Deliverables:
+- `ontology/render_targets.yaml` — four `TARGET.IMMERSIVE.*` entries
+- `src/mmo/core/scene_builder.py` — `height_bed_714_candidate`, `height_bed_10ch_candidate` notes
+- `docs/07-export-guides.md` — immersive height section with table, CLI example
+- Tests: `test_immersive_render_targets.py` (registry + scene builder + downmix QA smoke)
+
 ### v1.0 Stable core
 Goal: freeze the core contracts so the ecosystem can grow safely.
 

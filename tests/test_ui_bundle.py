@@ -594,6 +594,10 @@ class TestUiBundle(unittest.TestCase):
                 self.assertEqual(
                     target_ids,
                     [
+                        "TARGET.IMMERSIVE.5_1_2",
+                        "TARGET.IMMERSIVE.5_1_4",
+                        "TARGET.IMMERSIVE.7_1_2",
+                        "TARGET.IMMERSIVE.7_1_4",
                         "TARGET.STEREO.2_0",
                         "TARGET.STEREO.2_0_ALT",
                         "TARGET.SURROUND.5_1",
@@ -757,6 +761,10 @@ class TestUiBundle(unittest.TestCase):
                 self.assertEqual(
                     target_ids,
                     [
+                        "TARGET.IMMERSIVE.5_1_2",
+                        "TARGET.IMMERSIVE.5_1_4",
+                        "TARGET.IMMERSIVE.7_1_2",
+                        "TARGET.IMMERSIVE.7_1_4",
                         "TARGET.STEREO.2_0",
                         "TARGET.STEREO.2_0_ALT",
                         "TARGET.SURROUND.5_1",
