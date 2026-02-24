@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 
 def _target_scope(issue: Dict[str, Any]) -> str:
@@ -79,14 +79,79 @@ def _sorted_issues(issues: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
     )
 
 
+def _extract_scene_id(scene: Optional[Dict[str, Any]]) -> str:
+    if not isinstance(scene, dict):
+        return ""
+    return str(scene.get("scene_id", ""))
+
+
+def _extract_scene_object_count(scene: Optional[Dict[str, Any]]) -> str:
+    if not isinstance(scene, dict):
+        return ""
+    objects = scene.get("objects")
+    if not isinstance(objects, list):
+        return "0"
+    return str(len(objects))
+
+
+def _extract_target_layout_ids(request: Optional[Dict[str, Any]]) -> str:
+    """Return pipe-joined target layout IDs from a render_request payload."""
+    if not isinstance(request, dict):
+        return ""
+    # Multi-layout variant
+    multi = request.get("target_layout_ids")
+    if isinstance(multi, list) and multi:
+        return "|".join(sorted(str(lid) for lid in multi if isinstance(lid, str)))
+    # Single-layout variant
+    single = request.get("target_layout_id")
+    if isinstance(single, str) and single.strip():
+        return single.strip()
+    return ""
+
+
+def _extract_profile_id(
+    profile_id: Optional[str],
+    report: Dict[str, Any],
+) -> str:
+    if isinstance(profile_id, str) and profile_id.strip():
+        return profile_id.strip()
+    # Fallback: read from report
+    raw = report.get("profile_id")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return ""
+
+
+def _extract_preflight_status(preflight: Optional[Dict[str, Any]]) -> str:
+    """Return 'pass', 'fail', or 'missing' from a render_preflight payload."""
+    if not isinstance(preflight, dict):
+        return "missing"
+    issues = preflight.get("issues")
+    if not isinstance(issues, list):
+        return "pass"
+    for item in issues:
+        if isinstance(item, dict) and str(item.get("severity", "")).strip() == "error":
+            return "fail"
+    return "pass"
+
+
 def export_recall_sheet(
     report: Dict[str, Any],
     out_path: Path,
+    *,
+    scene: Optional[Dict[str, Any]] = None,
+    preflight: Optional[Dict[str, Any]] = None,
+    profile_id: Optional[str] = None,
+    request: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Write an issue-centric recall sheet CSV to *out_path*.
 
-    Columns: rank, issue_id, severity, confidence, message,
-             target_scope, target_id, evidence_summary, action_ids
+    Base columns: rank, issue_id, severity, confidence, message,
+                  target_scope, target_id, evidence_summary, action_ids
+    Context columns (always emitted; empty when context not provided):
+                  scene_id, scene_object_count, target_layout_ids,
+                  profile_id, preflight_status
+
     Rows sorted by severity DESC, confidence DESC, issue_id ASC.
     """
     issues = report.get("issues", [])
@@ -98,6 +163,13 @@ def export_recall_sheet(
 
     issue_action_map = _build_issue_action_map(recommendations)
     sorted_issues = _sorted_issues(issues)
+
+    # Derive context values once — repeated on every row.
+    ctx_scene_id = _extract_scene_id(scene)
+    ctx_object_count = _extract_scene_object_count(scene)
+    ctx_layout_ids = _extract_target_layout_ids(request)
+    ctx_profile_id = _extract_profile_id(profile_id, report)
+    ctx_preflight_status = _extract_preflight_status(preflight)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -114,6 +186,11 @@ def export_recall_sheet(
                 "target_id",
                 "evidence_summary",
                 "action_ids",
+                "scene_id",
+                "scene_object_count",
+                "target_layout_ids",
+                "profile_id",
+                "preflight_status",
             ]
         )
         for rank, issue in enumerate(sorted_issues, start=1):
@@ -130,5 +207,10 @@ def export_recall_sheet(
                     _target_id(issue),
                     _evidence_summary(issue),
                     action_ids,
+                    ctx_scene_id,
+                    ctx_object_count,
+                    ctx_layout_ids,
+                    ctx_profile_id,
+                    ctx_preflight_status,
                 ]
             )

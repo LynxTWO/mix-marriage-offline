@@ -1395,6 +1395,8 @@ def _run_project_render_run(
     qa_out_path: Path | None = None,
     qa_force: bool = False,
     qa_enforce: bool = False,
+    recall_sheet: bool = False,
+    recall_sheet_force: bool = False,
 ) -> int:
     """Run deterministic render-run using project-standard scaffold paths."""
     validate_exit = _validate_required_project_artifacts(project_dir)
@@ -1416,6 +1418,9 @@ def _run_project_render_run(
     if qa_enforce and not qa and qa_out_path is None:
         print("--qa-enforce requires --qa or --qa-out.", file=sys.stderr)
         return 1
+    if recall_sheet_force and not recall_sheet:
+        print("--recall-sheet-force requires --recall-sheet.", file=sys.stderr)
+        return 1
 
     request_path = project_dir / "renders" / "render_request.json"
     scene_path = project_dir / "drafts" / "scene.draft.json"
@@ -1433,6 +1438,18 @@ def _run_project_render_run(
     resolved_qa_out_path: Path | None = qa_out_path
     if resolved_qa_out_path is None and qa:
         resolved_qa_out_path = project_dir / "renders" / "render_qa.json"
+    recall_sheet_out_path: Path | None = None
+    if recall_sheet:
+        recall_sheet_out_path = project_dir / "renders" / "recall_sheet.csv"
+
+    # Guard overwrite for recall sheet independently.
+    if recall_sheet_out_path is not None and recall_sheet_out_path.exists() and not recall_sheet_force:
+        print(
+            f"File exists (use --recall-sheet-force to overwrite): "
+            f"{recall_sheet_out_path.as_posix()}",
+            file=sys.stderr,
+        )
+        return 1
 
     try:
         request_payload = _load_json_object(request_path, label="Render request")
@@ -1516,6 +1533,33 @@ def _run_project_render_run(
                 raw_run_id = qa_payload.get("run_id")
                 if isinstance(raw_run_id, str) and raw_run_id.strip():
                     run_id = raw_run_id.strip()
+
+    if recall_sheet_out_path is not None:
+        from mmo.exporters.recall_sheet import export_recall_sheet  # noqa: WPS433
+
+        # Load analysis report (report.json) for profile_id and issues/recommendations.
+        report_json_path = project_dir / "report.json"
+        report_payload = _load_json_object_if_exists(report_json_path) or {}
+
+        # Load scene draft for scene context.
+        scene_payload = _load_json_object_if_exists(scene_path)
+
+        # Load request payload for target_layout_ids.
+        request_payload_for_recall = _load_json_object_if_exists(request_path)
+
+        # Load preflight if it was produced this run.
+        preflight_payload: dict[str, Any] | None = None
+        if preflight_out_path is not None and preflight_out_path.is_file():
+            preflight_payload = _load_json_object_if_exists(preflight_out_path)
+
+        export_recall_sheet(
+            report_payload,
+            recall_sheet_out_path,
+            scene=scene_payload,
+            preflight=preflight_payload,
+            request=request_payload_for_recall,
+        )
+        paths_written.append(recall_sheet_out_path.resolve().as_posix())
 
     summary: dict[str, Any] = {
         "job_count": job_count,

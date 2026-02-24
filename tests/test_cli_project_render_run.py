@@ -638,5 +638,151 @@ class TestProjectRenderRunForwardSlashPaths(unittest.TestCase):
             self.assertNotIn("\\", path_value)
 
 
+class TestProjectRenderRunRecallSheet(unittest.TestCase):
+
+    def test_recall_sheet_written_when_requested(self) -> None:
+        project_dir = _init_project(_SANDBOX / "recall_sheet_happy")
+        _project_render_init(project_dir)
+
+        recall_path = project_dir / "renders" / "recall_sheet.csv"
+        exit_code, stdout, stderr = _run_main([
+            "project", "render-run", str(project_dir),
+            "--recall-sheet",
+        ])
+        self.assertEqual(exit_code, 0, msg=stderr)
+        self.assertTrue(recall_path.is_file(), "recall_sheet.csv was not created")
+
+        # Path must appear in paths_written
+        summary = json.loads(stdout)
+        self.assertIn(recall_path.resolve().as_posix(), summary["paths_written"])
+
+    def test_recall_sheet_has_expected_columns(self) -> None:
+        import csv as _csv
+        project_dir = _init_project(_SANDBOX / "recall_sheet_cols")
+        _project_render_init(project_dir)
+
+        recall_path = project_dir / "renders" / "recall_sheet.csv"
+        exit_code, _, stderr = _run_main([
+            "project", "render-run", str(project_dir),
+            "--recall-sheet",
+        ])
+        self.assertEqual(exit_code, 0, msg=stderr)
+
+        rows = list(_csv.reader(recall_path.read_text(encoding="utf-8").splitlines()))
+        self.assertGreater(len(rows), 0)
+        header = rows[0]
+        for col in (
+            "rank", "issue_id", "severity", "confidence", "message",
+            "target_scope", "target_id", "evidence_summary", "action_ids",
+            "scene_id", "scene_object_count", "target_layout_ids",
+            "profile_id", "preflight_status",
+        ):
+            self.assertIn(col, header, msg=f"Column '{col}' missing from recall_sheet.csv header")
+
+    def test_recall_sheet_paths_use_forward_slashes(self) -> None:
+        project_dir = _init_project(_SANDBOX / "recall_sheet_slashes")
+        _project_render_init(project_dir)
+
+        exit_code, stdout, stderr = _run_main([
+            "project", "render-run", str(project_dir),
+            "--recall-sheet",
+        ])
+        self.assertEqual(exit_code, 0, msg=stderr)
+        self.assertNotIn("\\", stdout)
+
+    def test_recall_sheet_overwrite_requires_recall_sheet_force(self) -> None:
+        project_dir = _init_project(_SANDBOX / "recall_sheet_overwrite")
+        _project_render_init(project_dir)
+        recall_path = project_dir / "renders" / "recall_sheet.csv"
+
+        # First write
+        exit_first, _, stderr_first = _run_main([
+            "project", "render-run", str(project_dir),
+            "--recall-sheet",
+        ])
+        self.assertEqual(exit_first, 0, msg=stderr_first)
+        bytes_first = recall_path.read_bytes()
+
+        # Second without force → refused
+        exit_refused, _, stderr_refused = _run_main([
+            "project", "render-run", str(project_dir),
+            "--force",
+            "--recall-sheet",
+        ])
+        self.assertEqual(exit_refused, 1)
+        self.assertIn("--recall-sheet-force", stderr_refused)
+        self.assertEqual(bytes_first, recall_path.read_bytes())
+
+        # Third with force + recall-sheet-force → allowed
+        exit_ok, _, stderr_ok = _run_main([
+            "project", "render-run", str(project_dir),
+            "--force",
+            "--recall-sheet",
+            "--recall-sheet-force",
+        ])
+        self.assertEqual(exit_ok, 0, msg=stderr_ok)
+        self.assertTrue(recall_path.is_file())
+
+    def test_recall_sheet_force_requires_recall_sheet_flag(self) -> None:
+        project_dir = _init_project(_SANDBOX / "recall_sheet_force_requires")
+        _project_render_init(project_dir)
+
+        exit_code, _, stderr = _run_main([
+            "project", "render-run", str(project_dir),
+            "--recall-sheet-force",
+        ])
+        self.assertEqual(exit_code, 1)
+        self.assertIn("--recall-sheet-force requires --recall-sheet", stderr)
+
+    def test_recall_sheet_deterministic(self) -> None:
+        project_dir = _init_project(_SANDBOX / "recall_sheet_det")
+        _project_render_init(project_dir)
+        recall_path = project_dir / "renders" / "recall_sheet.csv"
+
+        exit_a, _, stderr_a = _run_main([
+            "project", "render-run", str(project_dir),
+            "--recall-sheet",
+        ])
+        self.assertEqual(exit_a, 0, msg=stderr_a)
+        bytes_a = recall_path.read_bytes()
+
+        exit_b, _, stderr_b = _run_main([
+            "project", "render-run", str(project_dir),
+            "--force",
+            "--recall-sheet",
+            "--recall-sheet-force",
+        ])
+        self.assertEqual(exit_b, 0, msg=stderr_b)
+        bytes_b = recall_path.read_bytes()
+
+        self.assertEqual(bytes_a, bytes_b)
+
+    def test_recall_sheet_scene_id_populated(self) -> None:
+        import csv as _csv
+        project_dir = _init_project(_SANDBOX / "recall_sheet_scene_id")
+        _project_render_init(project_dir)
+
+        recall_path = project_dir / "renders" / "recall_sheet.csv"
+        scene_path = project_dir / "drafts" / "scene.draft.json"
+        scene = json.loads(scene_path.read_text(encoding="utf-8"))
+        expected_scene_id = scene.get("scene_id", "")
+
+        exit_code, _, stderr = _run_main([
+            "project", "render-run", str(project_dir),
+            "--recall-sheet",
+        ])
+        self.assertEqual(exit_code, 0, msg=stderr)
+
+        rows = list(_csv.reader(recall_path.read_text(encoding="utf-8").splitlines()))
+        header = rows[0]
+        if len(rows) < 2:
+            # No issues → only header row, check header column exists
+            self.assertIn("scene_id", header)
+            return
+        scene_id_col = header.index("scene_id")
+        data_row = rows[1]
+        self.assertEqual(data_row[scene_id_col], expected_scene_id)
+
+
 if __name__ == "__main__":
     unittest.main()

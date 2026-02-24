@@ -129,10 +129,12 @@ class TestCliReport(unittest.TestCase):
             _write_report(report_path, _MINIMAL_REPORT)
             main(["report", "--report", str(report_path), "--recall", str(recall_path)])
             rows = list(csv.reader(recall_path.read_text(encoding="utf-8").splitlines()))
-        # ISSUE.CLIP.TRUE_PEAK has one recommendation
-        self.assertIn("ACTION.UTILITY.GAIN", rows[1][-1])
+        # ISSUE.CLIP.TRUE_PEAK has one recommendation — action_ids is col 8
+        header = rows[0]
+        action_ids_col = header.index("action_ids")
+        self.assertIn("ACTION.UTILITY.GAIN", rows[1][action_ids_col])
         # ISSUE.FORMAT.LOSSY has no recommendations
-        self.assertEqual(rows[2][-1], "")
+        self.assertEqual(rows[2][action_ids_col], "")
 
     def test_report_recall_evidence_in_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -141,8 +143,10 @@ class TestCliReport(unittest.TestCase):
             _write_report(report_path, _MINIMAL_REPORT)
             main(["report", "--report", str(report_path), "--recall", str(recall_path)])
             rows = list(csv.reader(recall_path.read_text(encoding="utf-8").splitlines()))
-        # evidence_summary column (second-to-last) contains the evidence_id
-        self.assertIn("EVID.METER.TRUE_PEAK_DBTP", rows[1][-2])
+        # evidence_summary column contains the evidence_id
+        header = rows[0]
+        evidence_col = header.index("evidence_summary")
+        self.assertIn("EVID.METER.TRUE_PEAK_DBTP", rows[1][evidence_col])
 
     def test_report_invalid_json_returns_error(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

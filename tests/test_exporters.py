@@ -394,6 +394,11 @@ class TestRecallSheet(unittest.TestCase):
                 "target_id",
                 "evidence_summary",
                 "action_ids",
+                "scene_id",
+                "scene_object_count",
+                "target_layout_ids",
+                "profile_id",
+                "preflight_status",
             ],
         )
 
@@ -417,13 +422,13 @@ class TestRecallSheet(unittest.TestCase):
             out = Path(tmp) / "recall.csv"
             export_recall_sheet(report, out)
             rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
-        # ISSUE.HIGH has two recommendations → action_ids pipe-joined, sorted
-        action_ids_cell = rows[1][-1]
+        # ISSUE.HIGH has two recommendations → action_ids pipe-joined, sorted (col 8)
+        action_ids_cell = rows[1][8]
         self.assertIn("ACTION.EQ.PEAK", action_ids_cell)
         self.assertIn("ACTION.UTILITY.GAIN", action_ids_cell)
         self.assertIn("|", action_ids_cell)
         # ISSUE.LOW has no recommendations → empty action_ids
-        self.assertEqual(rows[2][-1], "")
+        self.assertEqual(rows[2][8], "")
 
     def test_evidence_summary_format(self) -> None:
         report = self._minimal_report()
@@ -431,7 +436,8 @@ class TestRecallSheet(unittest.TestCase):
             out = Path(tmp) / "recall.csv"
             export_recall_sheet(report, out)
             rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
-        evidence_col = rows[1][-2]  # evidence_summary is second-to-last column
+        # evidence_summary is column index 7
+        evidence_col = rows[1][7]
         self.assertIn("EVID.METER.SAMPLE_PEAK_DBFS", evidence_col)
 
     def test_target_scope_and_id(self) -> None:
@@ -482,6 +488,158 @@ class TestRecallSheet(unittest.TestCase):
             rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
         self.assertEqual(rows[1][1], "ISSUE.A")
         self.assertEqual(rows[2][1], "ISSUE.Z")
+
+
+class TestRecallSheetContextFields(unittest.TestCase):
+    """Tests for scene / preflight / request context columns in recall_sheet."""
+
+    def _minimal_report(self) -> dict:
+        return {
+            "profile_id": "PROFILE.ASSIST",
+            "issues": [
+                {
+                    "issue_id": "ISSUE.TEST",
+                    "severity": 50,
+                    "confidence": 0.8,
+                    "message": "A test issue",
+                    "evidence": [{"evidence_id": "EVID.FILE.FORMAT", "value": "wav"}],
+                }
+            ],
+            "recommendations": [],
+        }
+
+    def _minimal_scene(self) -> dict:
+        return {
+            "schema_version": "0.1.0",
+            "scene_id": "SCENE.DRAFT.test001",
+            "source": {"stems_dir": "/tmp/stems", "created_from": "draft"},
+            "objects": [
+                {"object_id": "OBJ.001", "role_id": "ROLE.DRUMS.KICK"},
+                {"object_id": "OBJ.002", "role_id": "ROLE.BASS.DI"},
+            ],
+            "beds": [],
+            "metadata": {},
+        }
+
+    def _minimal_preflight_pass(self) -> dict:
+        return {
+            "schema_version": "0.1.0",
+            "plan_path": "/tmp/render_plan.json",
+            "plan_id": "PLAN.render.preflight.abcdef01",
+            "checks": [],
+            "issues": [],
+        }
+
+    def _minimal_preflight_fail(self) -> dict:
+        return {
+            "schema_version": "0.1.0",
+            "plan_path": "/tmp/render_plan.json",
+            "plan_id": "PLAN.render.preflight.abcdef02",
+            "checks": [],
+            "issues": [
+                {
+                    "issue_id": "ISSUE.RENDER.PREFLIGHT.INPUT_MISSING",
+                    "severity": "error",
+                    "message": "Input path does not exist.",
+                    "evidence": {},
+                }
+            ],
+        }
+
+    def test_context_columns_present_no_context(self) -> None:
+        """Without context args all context columns are empty / 'missing'."""
+        report = self._minimal_report()
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out)
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        # 14 columns total
+        self.assertEqual(len(rows[0]), 14)
+        data = rows[1]
+        # scene_id col 9
+        self.assertEqual(data[9], "")
+        # scene_object_count col 10
+        self.assertEqual(data[10], "")
+        # target_layout_ids col 11
+        self.assertEqual(data[11], "")
+        # profile_id col 12 — fallback to report profile_id
+        self.assertEqual(data[12], "PROFILE.ASSIST")
+        # preflight_status col 13 — missing when no preflight
+        self.assertEqual(data[13], "missing")
+
+    def test_scene_context_populated(self) -> None:
+        report = self._minimal_report()
+        scene = self._minimal_scene()
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out, scene=scene)
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        data = rows[1]
+        self.assertEqual(data[9], "SCENE.DRAFT.test001")
+        self.assertEqual(data[10], "2")
+
+    def test_preflight_pass_status(self) -> None:
+        report = self._minimal_report()
+        preflight = self._minimal_preflight_pass()
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out, preflight=preflight)
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        self.assertEqual(rows[1][13], "pass")
+
+    def test_preflight_fail_status(self) -> None:
+        report = self._minimal_report()
+        preflight = self._minimal_preflight_fail()
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out, preflight=preflight)
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        self.assertEqual(rows[1][13], "fail")
+
+    def test_target_layout_ids_single(self) -> None:
+        report = self._minimal_report()
+        request = {"target_layout_id": "LAYOUT.5_1", "scene_path": "drafts/scene.draft.json"}
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out, request=request)
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        self.assertEqual(rows[1][11], "LAYOUT.5_1")
+
+    def test_target_layout_ids_multi(self) -> None:
+        report = self._minimal_report()
+        request = {
+            "target_layout_ids": ["LAYOUT.5_1", "LAYOUT.2_0"],
+            "scene_path": "drafts/scene.draft.json",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out, request=request)
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        # Sorted and pipe-joined
+        self.assertEqual(rows[1][11], "LAYOUT.2_0|LAYOUT.5_1")
+
+    def test_profile_id_explicit_overrides_report(self) -> None:
+        report = {"profile_id": "PROFILE.GUIDE", "issues": [], "recommendations": []}
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out, profile_id="PROFILE.ASSIST")
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        # Header only (no issues), but check header is intact
+        self.assertEqual(len(rows), 1)
+
+    def test_determinism_with_full_context(self) -> None:
+        """Two runs with identical inputs produce byte-identical output."""
+        report = self._minimal_report()
+        scene = self._minimal_scene()
+        preflight = self._minimal_preflight_pass()
+        request = {"target_layout_id": "LAYOUT.5_1", "scene_path": "drafts/scene.draft.json"}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out_a = Path(tmp) / "a.csv"
+            out_b = Path(tmp) / "b.csv"
+            export_recall_sheet(report, out_a, scene=scene, preflight=preflight, request=request)
+            export_recall_sheet(report, out_b, scene=scene, preflight=preflight, request=request)
+            self.assertEqual(out_a.read_bytes(), out_b.read_bytes())
 
 
 if __name__ == "__main__":

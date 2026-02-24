@@ -2802,6 +2802,16 @@ def main(argv: list[str] | None = None) -> int:
             "(requires --qa or --qa-out)."
         ),
     )
+    project_render_run_parser.add_argument(
+        "--recall-sheet",
+        action="store_true",
+        help="Also write renders/recall_sheet.csv with scene/preflight/profile context.",
+    )
+    project_render_run_parser.add_argument(
+        "--recall-sheet-force",
+        action="store_true",
+        help="Overwrite existing renders/recall_sheet.csv (requires --recall-sheet).",
+    )
 
     gates_parser = subparsers.add_parser("gates", help="Gates policy registry tools.")
     gates_subparsers = gates_parser.add_subparsers(dest="gates_command", required=True)
@@ -5079,6 +5089,8 @@ def main(argv: list[str] | None = None) -> int:
                     ),
                     qa_force=bool(getattr(args, "qa_force", False)),
                     qa_enforce=bool(getattr(args, "qa_enforce", False)),
+                    recall_sheet=bool(getattr(args, "recall_sheet", False)),
+                    recall_sheet_force=bool(getattr(args, "recall_sheet_force", False)),
                 )
             except (RuntimeError, ValueError) as exc:
                 print(str(exc), file=sys.stderr)
