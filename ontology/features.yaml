@@ -555,3 +555,43 @@ features:
       - "Higher ratios suggest brighter/closer sources; lower ratios suggest distant/reverberant sources."
       - "Band edges are detector-defined; this feature captures the computed ratio only."
     dimensions: ["profile_id"]
+
+  # -------------------------
+  # Spatial / Subjective Polish (produced by subjective plugin pack)
+  # -------------------------
+  FEATURE.SPATIAL.HEIGHT_AIR_BAND_ENERGY_DB:
+    label: "Height air-band energy"
+    description: "Energy level in the air band (>= shelf_hz) of height channels after height_air_v0 processing."
+    unit_id: "UNIT.DB"
+    value_type: "number"
+    scopes: ["stem", "bus"]
+    dimensions: ["channel_ref", "time_window"]
+    notes:
+      - "Measured post height_air_v0 render to confirm shelf boost landed as intended."
+      - "Only populated when height channels are present in the layout."
+
+  FEATURE.SPATIAL.STEREO_WIDTH_MS_RATIO:
+    label: "Stereo width M/S ratio"
+    description: "Ratio of side (S) energy to mid (M) energy on FL/FR after stereo_widener_v0 processing."
+    unit_id: "UNIT.RATIO"
+    value_type: "number"
+    scopes: ["stem", "bus"]
+    dimensions: ["time_window"]
+    constraints:
+      min: 0
+    notes:
+      - "Measured on FL/FR pair. Higher values indicate wider stereo image."
+      - "Ratio of 0 indicates pure mono; 1.0 is a typical stereo source."
+
+  FEATURE.SPATIAL.EARLY_REFLECTION_DENSITY:
+    label: "Early reflection density"
+    description: "Energy density estimate in the early-reflection window (0–30 ms) of surround/height channels."
+    unit_id: "UNIT.RATIO"
+    value_type: "number"
+    scopes: ["stem", "bus"]
+    dimensions: ["channel_ref", "time_window"]
+    constraints:
+      min: 0
+    notes:
+      - "Measured on surround and height channels after early_reflections_v0 processing."
+      - "Higher values indicate denser pre-delay content in the early temporal window."

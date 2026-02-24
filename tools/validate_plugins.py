@@ -274,6 +274,13 @@ def _validate_capabilities(
 ) -> None:
     allowed_capability_fields = {
         "max_channels",
+        "channel_mode",
+        "link_groups",
+        "latency",
+        "deterministic_seed_policy",
+        "bed_only",
+        "supported_standards",
+        "preferred_standard",
         "supported_layout_ids",
         "supported_contexts",
         "scene",
