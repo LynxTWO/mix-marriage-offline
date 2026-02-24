@@ -1047,6 +1047,17 @@ def main(argv: list[str] | None = None) -> int:
             "(default: stereo,5.1,7.1.4)."
         ),
     )
+    safe_render_parser.add_argument(
+        "--layout-standard",
+        default="SMPTE",
+        dest="layout_standard",
+        choices=["SMPTE", "FILM"],
+        help=(
+            "Channel ordering standard for render output: "
+            "SMPTE (default, WAV/FLAC/FFmpeg/broadcast order) or "
+            "FILM (pro mixing room / Pro Tools / cinema order)."
+        ),
+    )
 
     apply_parser = subparsers.add_parser(
         "apply",
@@ -5403,6 +5414,17 @@ def main(argv: list[str] | None = None) -> int:
                 safe_render_overrides,
                 safe_render_formats,
             )
+        _safe_render_layout_standard = (
+            str(getattr(args, "layout_standard", "SMPTE")).strip().upper() or "SMPTE"
+        )
+        if _safe_render_layout_standard not in ("SMPTE", "FILM"):
+            _safe_render_layout_standard = "SMPTE"
+        if _flag_present(raw_argv, "--layout-standard"):
+            _set_nested(
+                ["render", "layout_standard"],
+                safe_render_overrides,
+                _safe_render_layout_standard,
+            )
         try:
             merged_run_config = _load_and_merge_run_config(
                 args.config,
@@ -5466,6 +5488,7 @@ def main(argv: list[str] | None = None) -> int:
                     ontology / "profiles.yaml",
                 ),
                 render_many_targets=_render_many_targets,
+                layout_standard=_safe_render_layout_standard,
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)

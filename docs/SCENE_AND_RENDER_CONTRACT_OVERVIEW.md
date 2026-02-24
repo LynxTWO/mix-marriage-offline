@@ -39,6 +39,59 @@ A render target must define:
 
 Render contracts must rely on canonical ontology layout definitions to avoid channel-order drift.
 
+## B.1) Dual channel-ordering standard support
+
+MMO supports two channel-ordering standards for all surround and immersive layouts.
+Every render contract records which standard was requested.
+
+### SMPTE / ITU-R (default)
+
+The ordering baked into WAV, FLAC, WavPack, FFmpeg, and most DAW exports.
+This is the MMO default for all file I/O.
+
+- 5.1: **L R C LFE Ls Rs** (LFE at index 3)
+- 7.1.4: L R C LFE Ls Rs Lrs Rrs TFL TFR TRL TRR
+
+### Film / Cinema / Pro Tools
+
+The ordering used in most professional mixing rooms and cinema dubbing stages.
+
+- 5.1: **L C R Ls Rs LFE** (LFE at last position)
+- 7.1.4: L C R Ls Rs Lrs Rrs LFE TFL TFR TRL TRR
+
+### How to request Film ordering
+
+CLI:
+```
+mmo safe-render --report report.json --layout-standard FILM ...
+```
+
+Python (render contract):
+```python
+from mmo.core.render_contract import build_render_contract
+contract = build_render_contract("TARGET.SURROUND.5_1", "LAYOUT.5_1", layout_standard="FILM")
+```
+
+Python (channel query and reorder):
+```python
+from mmo.core.layout_negotiation import get_channel_order, reorder_channels
+film_order = get_channel_order("LAYOUT.5_1", "FILM")
+smpte_order = get_channel_order("LAYOUT.5_1", "SMPTE")
+film_data = reorder_channels(smpte_data, smpte_order, film_order)
+```
+
+### Explainability
+
+Every render job note and receipt includes the active standard:
+`"using SMPTE channel order (SMPTE/ITU-R default)"` or
+`"using FILM channel order (Film/Cinema/Pro Tools)"`.
+
+### run_config override
+
+```json
+{ "schema_version": "0.1.0", "render": { "layout_standard": "FILM" } }
+```
+
 ## C) QA and gates expectations
 
 Renderers must:

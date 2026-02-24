@@ -23,6 +23,17 @@ You are the MMO contracts guardian agent. Keep schemas strict, contracts passing
 - Test files that use `_schema_validator()` — ensure they cover the changed schema.
 - Cross-references: if a schema `$ref`s another, both must be consistent.
 
+## Dual channel-ordering standard (non-negotiable)
+
+All schema changes must respect the dual-standard requirement:
+- `schemas/plugin.schema.json` `capabilities` block must include `supported_standards` and
+  `preferred_standard` fields with `enum: ["SMPTE", "FILM"]`.
+- `schemas/render_report.schema.json` `render_job` block must include `layout_standard` field.
+- `schemas/run_config.schema.json` `render` block must include `layout_standard` field.
+- `schemas/layouts.schema.json` must permit `ordering_variants` with `SMPTE` and `FILM` keys.
+- Any new schema that carries channel output must include a `layout_standard` field.
+- SMPTE is always the default; FILM is optional. Do not reverse this.
+
 ## Failure modes to watch
 
 Windows paths, encoding/UTF-8, schema `$id` mismatches, missing `$ref` targets, enum drift between schema and code constants.

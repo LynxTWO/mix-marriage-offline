@@ -20,7 +20,13 @@ Example starter pack:
 - `plugin_id` matches schema pattern for the plugin type
   (for renderer: `PLUGIN.RENDERER.*`).
 - `entrypoint` imports successfully.
-- `capabilities` uses supported fields (`max_channels`, `supported_contexts`, `scene`, `notes`).
+- `capabilities` uses supported fields (`max_channels`, `channel_mode`, `link_groups`,
+  `latency`, `deterministic_seed_policy`, `bed_only`, `supported_standards`,
+  `preferred_standard`, `supported_layout_ids`, `supported_contexts`, `scene`, `notes`).
+- If `channel_mode` is `linked_group` or `true_multichannel`, declare `supported_standards`
+  (at minimum `["SMPTE"]`). Omit if the plugin is truly channel-position-agnostic.
+- Never hard-code channel indices. Use `ProcessContext.channel_order` (list of `SPK.*` IDs)
+  to locate channels dynamically — safe for both SMPTE and Film ordering.
 - `ui_layout` is a relative path inside the plugin directory.
 - `config_schema` is a JSON Schema object (Draft 2020-12 compatible).
 

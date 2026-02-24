@@ -179,13 +179,36 @@ For Dolby Atmos-style bed exports (5.1.2, 5.1.4, 7.1.2, 7.1.4), additional rules
 | 7.1.2  | 10       | TFL, TFR (front top) | `TARGET.IMMERSIVE.7_1_2` |
 | 7.1.4  | 12       | TFL, TFR, TRL, TRR | `TARGET.IMMERSIVE.7_1_4` |
 
-### Channel ordering (SMPTE)
+### Channel ordering standards
 
-MMO uses SMPTE ordering for all immersive beds:
-- 7.1.4: L, R, C, LFE, Ls, Rs, Lrs, Rrs, TFL, TFR, TRL, TRR
+MMO supports two channel-ordering standards. The default for all file I/O is **SMPTE**.
 
-Export your DAW project using SMPTE channel order. Verify by checking the
-first four channels of any 7.1.4 stem are L, R, C, LFE.
+**SMPTE / ITU-R (default)**
+
+The ordering used in WAV, FLAC, WavPack, FFmpeg, and most DAW exports:
+
+| Layout | SMPTE order |
+|--------|-------------|
+| 5.1    | L R C LFE Ls Rs |
+| 7.1    | L R C LFE Ls Rs Lrs Rrs |
+| 7.1.4  | L R C LFE Ls Rs Lrs Rrs TFL TFR TRL TRR |
+
+Verify 7.1.4 SMPTE: the first four channels must be L, R, C, LFE.
+
+**Film / Cinema / Pro Tools**
+
+The ordering used in most professional mixing rooms and cinema dubbing stages:
+
+| Layout | Film order |
+|--------|------------|
+| 5.1    | L C R Ls Rs LFE |
+| 7.1    | L C R Ls Rs Lrs Rrs LFE |
+| 7.1.4  | L C R Ls Rs Lrs Rrs LFE TFL TFR TRL TRR |
+
+If your project uses Film ordering, pass `--layout-standard FILM` to `mmo safe-render`
+so MMO generates the correct `channel_order` in the render contract and receipt.
+
+Export your DAW project using SMPTE channel order for best compatibility with MMO defaults.
 
 ### Height channel rules
 

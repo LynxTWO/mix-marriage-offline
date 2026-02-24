@@ -571,6 +571,7 @@ def _run_render_many_targets(
     run_config: dict[str, Any] | None = None,
     force: bool = False,
     user_profile: dict[str, Any] | None = None,
+    layout_standard: str = "SMPTE",
 ) -> int:
     """Run safe-render for multiple targets in parallel (mix-once, render-many).
 
@@ -618,6 +619,7 @@ def _run_render_many_targets(
             force=force,
             user_profile=user_profile,
             render_many_targets=None,  # do not recurse
+            layout_standard=layout_standard,
         )
         return tgt, rc
 
@@ -797,6 +799,7 @@ def _run_safe_render_command(
     force: bool = False,
     user_profile: dict[str, Any] | None = None,
     render_many_targets: list[str] | None = None,
+    layout_standard: str = "SMPTE",
 ) -> int:
     """Run the full plugin-chain render: detect → resolve → gate → render.
 
@@ -839,6 +842,7 @@ def _run_safe_render_command(
             run_config=run_config,
             force=force,
             user_profile=user_profile,
+            layout_standard=layout_standard,
         )
 
     # -- overwrite guards -------------------------------------------------------
@@ -974,6 +978,7 @@ def _run_safe_render_command(
                     f"blocked_gates={', '.join(blocked_gates)}",
                     f"target={target}",
                     f"profile_id={profile_id}",
+                    f"layout_standard={layout_standard} (channel ordering: {'SMPTE/ITU-R default' if layout_standard == 'SMPTE' else 'Film/Cinema/Pro Tools'})",
                 ],
             }
             receipt_out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1068,6 +1073,7 @@ def _run_safe_render_command(
                 f"dry_run=true: no audio was written",
                 f"target={target}",
                 f"profile_id={profile_id}",
+                f"layout_standard={layout_standard} (channel ordering: {'SMPTE/ITU-R default' if layout_standard == 'SMPTE' else 'Film/Cinema/Pro Tools'})",
             ],
         }
         if receipt_out_path is not None:
@@ -1173,6 +1179,7 @@ def _run_safe_render_command(
             f"target={target}",
             f"profile_id={profile_id}",
             f"renderers={','.join(renderer_ids) if renderer_ids else '<none>'}",
+            f"layout_standard={layout_standard} (channel ordering: {'SMPTE/ITU-R default' if layout_standard == 'SMPTE' else 'Film/Cinema/Pro Tools'})",
         ],
     }
     if receipt_out_path is not None:

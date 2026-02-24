@@ -66,6 +66,22 @@ The project is “complete enough” when all items below are true.
 - [ ] Downmix QA: renders pass similarity gates to stereo (and optional additional downmix targets).
 - [ ] “Do no harm” defaults exist and are used when confidence is low.
 
+#### 4.4.5 Dual SMPTE/Film channel-ordering standard support
+- [x] `ontology/layouts.yaml` has explicit `ordering_variants` for SMPTE and FILM for all surround and immersive layouts (5.0, 5.1, 7.0, 7.1, 7.1.4, etc.).
+- [x] `layout_negotiation.get_channel_order(layout_id, standard)` returns the correct order for SMPTE (default) and FILM.
+- [x] `layout_negotiation.reorder_channels(data, from_order, to_order)` works on list, tuple, and NumPy arrays.
+- [x] `render_contract.build_render_contract()` accepts `layout_standard` (default SMPTE) and records it in the contract.
+- [x] `render_engine.render_scene_to_targets()` reads `layout_standard` from options and emits explainability notes.
+- [x] `safe-render` CLI accepts `--layout-standard SMPTE|FILM` (default SMPTE).
+- [x] `render-many` threads `layout_standard` through all per-target runs.
+- [x] All render receipts and job notes include `”using SMPTE order ...”` or `”Film order requested”`.
+- [x] Regression fixtures in `tests/test_dual_layout_ordering.py` pin exact orderings for 5.1 and 7.1.4 SMPTE and FILM.
+- [x] `schemas/run_config.schema.json` `render.layout_standard` field present with enum `[“SMPTE”, “FILM”]`.
+- [x] `schemas/render_report.schema.json` `render_job.layout_standard` field present.
+- [x] `schemas/plugin.schema.json` `capabilities.supported_standards` and `capabilities.preferred_standard` fields present.
+- [ ] Every downmix matrix and QA gate is order-aware (uses channel IDs, not fixed indices).
+- [ ] Plugin channel routing uses `ProcessContext.channel_order` (list of `SPK.*` IDs) instead of hard-coded indices.
+
 #### 4.4.1 Loudness and layout mapping (meter contract)
 - [ ] Program loudness uses ITU-R BS.1770-style weighting with explicit, tested channel mapping.
 - [ ] LFE is excluded from program loudness (weight 0.0) and is always reported separately.
@@ -106,6 +122,8 @@ The project is “complete enough” when all items below are true.
 - [ ] LFE policy is explicit: treated as a creative send plus bass management rules.
 - [ ] Multi-LFE layouts (example: 5.2, 7.2.4) are supported as first-class layouts when declared, with canonical naming/order (LFE1, LFE2, …).
 - [ ] “.2” is not assumed as dual-LFE program content unless explicitly required by target spec.
+- [x] All render targets support both SMPTE (default) and Film channel ordering; the active standard is recorded in every render contract and receipt.
+- [ ] Regression tests verify correct WAV channel ordering for both standards on 5.1 and 7.1.4 (golden fixtures).
 
 
 ### 4.7 Fixtures and CI prevent regressions

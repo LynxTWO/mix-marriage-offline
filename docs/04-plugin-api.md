@@ -244,7 +244,52 @@ If an ontology ID is deprecated:
 
 ---
 
-## 11) What’s next
+## 11) Channel ordering standards for plugins
+
+MMO supports two channel-ordering standards: **SMPTE** (default) and **Film**.
+
+### Why this matters
+
+Plugins that use channel position (surround panning, spatial processing, linked groups) must
+know the active channel order so they route audio to the correct speaker.  A plugin that
+assumes index 3 is always LFE will misroute audio when Film ordering is active (where LFE
+is at the last index).
+
+### Plugin manifest fields
+
+```yaml
+capabilities:
+  supported_standards: ["SMPTE", "FILM"]   # omit = both supported
+  preferred_standard: "SMPTE"              # omit = SMPTE
+```
+
+Defined in `ontology/plugin_semantics.yaml` (section `channel_ordering_standards`).
+Schema: `schemas/plugin.schema.json` (`capabilities.supported_standards`, `capabilities.preferred_standard`).
+
+### Rules for plugin authors
+
+- **`per_channel` plugins** that never reference speaker position: no declaration needed.
+  The host treats them as standard-agnostic.
+- **`linked_group` or `true_multichannel` plugins**: must declare `supported_standards`.
+  Use `link_groups` (`front`, `surrounds`, `heights`, `all`) instead of hard-coded indices.
+- **Never assume a fixed channel index.** Use the channel IDs from `ProcessContext.channel_order`
+  (a list of `SPK.*` IDs in active-standard order) to locate channels dynamically.
+- Plugins that only support one standard should declare it and set `preferred_standard` so the
+  host can reorder or bypass as needed.
+
+### ProcessContext.channel_order
+
+The host passes the active channel order to the plugin via `ProcessContext.channel_order`
+(a `list[str]` of `SPK.*` IDs).  Use it like this:
+
+```python
+lfe_idx = context.channel_order.index("SPK.LFE")
+ls_idx  = context.channel_order.index("SPK.LS")
+```
+
+This is safe regardless of whether the active standard is SMPTE or Film.
+
+## 12) What’s next
 After this doc:
 - implement `schemas/plugin.schema.json`
 - implement the plugin registry/loader (`src/mmo/plugins/host.py`)

@@ -65,6 +65,11 @@
           "type": "string",
           "enum": ["completed", "skipped", "failed"]
         },
+        "layout_standard": {
+          "type": "string",
+          "enum": ["SMPTE", "FILM"],
+          "description": "Channel ordering standard used for this job's output. SMPTE (default) matches WAV/FLAC/FFmpeg byte order; FILM matches pro mixing room / Pro Tools / cinema order."
+        },
         "output_files": {
           "type": "array",
           "items": { "$ref": "#/$defs/output_file" }

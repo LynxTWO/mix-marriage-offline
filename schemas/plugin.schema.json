@@ -120,6 +120,20 @@
           "type": "boolean",
           "description": "If true, plugin operates only on bed audio; cannot be applied to objects."
         },
+        "supported_standards": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["SMPTE", "FILM"]
+          },
+          "uniqueItems": true,
+          "description": "Channel ordering standards the plugin supports. Omit to imply both SMPTE and FILM are supported."
+        },
+        "preferred_standard": {
+          "type": "string",
+          "enum": ["SMPTE", "FILM"],
+          "description": "Preferred channel ordering standard. Defaults to 'SMPTE' when omitted."
+        },
         "supported_layout_ids": {
           "type": "array",
           "items": { "type": "string" },

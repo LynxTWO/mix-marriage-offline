@@ -26,6 +26,12 @@
       "additionalProperties": false,
       "properties": {
         "out_dir": { "type": "string" },
+        "layout_standard": {
+          "type": "string",
+          "enum": ["SMPTE", "FILM"],
+          "description": "Channel ordering standard for render output. SMPTE (default) matches WAV/FLAC/FFmpeg byte order. FILM matches pro mixing room / Pro Tools order.",
+          "default": "SMPTE"
+        },
         "output_formats": {
           "type": "array",
           "minItems": 1,

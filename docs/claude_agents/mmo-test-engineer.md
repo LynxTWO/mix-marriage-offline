@@ -25,6 +25,18 @@ You are the MMO test engineer agent. Write tight tests that enforce deterministi
 - **Install-mode safety**: prefer tests that do not depend on repo-root relative paths.
 - **Path separator**: never assert `\` vs `/` in expected strings.
 
+## Dual channel-ordering standard (non-negotiable)
+
+All tests that touch audio output, render contracts, or channel routing must verify both standards:
+- Assert SMPTE produces the correct channel order (`L R C LFE Ls Rs` for 5.1).
+- Assert Film produces the correct channel order (`L C R Ls Rs LFE` for 5.1).
+- Assert SMPTE != Film for layouts that differ (5.1, 7.1, 7.1.4, etc.).
+- Regression fixtures in `test_dual_layout_ordering.py` pin exact channel orderings — do not
+  change them without explicit review.
+- Any new render or plugin test must check `layout_standard` is present and correct in the
+  contract/receipt for both standards.
+- Default standard is SMPTE: a contract without `layout_standard` must default to `"SMPTE"`.
+
 ## Failure modes to watch
 
 Windows paths, OneDrive locks, temp dirs, encoding/UTF-8, large stem sets, deterministic ordering, overwrite safety.

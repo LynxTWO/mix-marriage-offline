@@ -96,6 +96,37 @@ deterministic_seed_policy:
         (non-reproducible) when a seed is not provided. Unseeded runs must be
         disclosed in the render report.
 
+channel_ordering_standards:
+  description: >
+    Which channel ordering standards the plugin supports and prefers.
+    Plugins that declare channel_mode: linked_group or true_multichannel
+    should declare supported_standards so the host can verify the plugin
+    is compatible with the active layout standard before invoking it.
+    Plugins that operate per_channel and make no use of channel position
+    may omit these fields (the host treats them as standard-agnostic).
+  fields:
+    supported_standards:
+      description: >
+        List of channel ordering standards the plugin can handle correctly.
+        Valid values: "SMPTE" (WAV/FLAC/FFmpeg/broadcast order) and
+        "FILM" (pro mixing room / Pro Tools / cinema order).
+        When omitted the host assumes the plugin supports both SMPTE and FILM.
+        At minimum, SMPTE must be supported.
+      type: array[string]
+      allowed_values: ["SMPTE", "FILM"]
+    preferred_standard:
+      description: >
+        The channel ordering standard the plugin prefers to receive.
+        When omitted the host defaults to "SMPTE".
+        The host uses this to decide whether to reorder channels before
+        invoking the plugin. Reordering is only performed when the active
+        layout standard differs from preferred_standard AND the plugin
+        declares requires_speaker_positions: true or channel_mode is not
+        per_channel.
+      type: string
+      allowed_values: ["SMPTE", "FILM"]
+      default: "SMPTE"
+
 bed_only:
   description: >
     Whether the plugin operates exclusively on bed audio (non-object stems).
