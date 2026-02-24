@@ -12,11 +12,13 @@ Exported public API
 - ``resolve_preflight_matrix()`` — resolve a downmix matrix for preflight use.
 - ``predict_fold_similarity()`` — score fold risk from matrix coefficients.
 - ``layout_negotiation_available()`` — check whether a conversion path exists.
+- ``measure_downmix_similarity()`` — measure actual similarity from rendered audio.
 """
 
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from mmo.dsp.downmix import (
@@ -257,3 +259,174 @@ def predict_fold_similarity(
         "predicted_lufs_delta": predicted_lufs_delta,
         "notes": notes,
     }
+
+
+def measure_downmix_similarity(
+    rendered_file: Path,
+    target_layout: str,
+    *,
+    true_peak_warn_dbtp: float = -3.0,
+    true_peak_error_dbtp: float = -1.0,
+    lufs_delta_warn_abs: float = 3.0,
+    lufs_delta_error_abs: float = 6.0,
+    correlation_warn_lte: float = -0.2,
+    correlation_error_lte: float = -0.6,
+    reference_lufs: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Measure actual downmix similarity from a rendered audio file.
+
+    Uses three complementary measurements:
+
+    - **Spectral (LUFS integrated)**: BS.1770-style gated loudness of the
+      rendered output.  When *reference_lufs* is supplied the delta against
+      the reference is classified for risk.
+    - **Cross-channel correlation**: Pearson L-R correlation for stereo output
+      (2-channel files only).  Strong negative correlation indicates
+      phase-cancellation risk.
+    - **True-peak**: 4× oversampled true-peak per ITU-R BS.1770-4.
+      ``true_peak_delta_db`` is the headroom below 0 dBTP ceiling
+      (positive = headroom; negative would exceed ceiling).
+
+    Parameters
+    ----------
+    rendered_file:
+        Path to a WAV file produced by the downmix render step.
+    target_layout:
+        Canonical target layout ID (e.g. ``"LAYOUT.2_0"``), used for labelling.
+    true_peak_warn_dbtp:
+        True-peak threshold (dBTP) that triggers *medium* risk when exceeded.
+    true_peak_error_dbtp:
+        True-peak threshold (dBTP) that triggers *high* risk when exceeded.
+    lufs_delta_warn_abs:
+        Absolute LUFS delta (dB) that triggers *medium* risk.  Only evaluated
+        when *reference_lufs* is supplied.
+    lufs_delta_error_abs:
+        Absolute LUFS delta (dB) that triggers *high* risk.
+    correlation_warn_lte:
+        Stereo correlation value at or below which *medium* risk is triggered.
+    correlation_error_lte:
+        Stereo correlation value at or below which *high* risk is triggered.
+    reference_lufs:
+        Optional reference loudness (LUFS) to compare against.  When given,
+        ``lufs_delta_db`` is computed and classified.
+
+    Returns
+    -------
+    dict
+        Keys: ``gate_id``, ``target_layout_id``, ``channels``,
+        ``lufs_integrated``, ``true_peak_dbtp``, ``true_peak_delta_db``,
+        ``stereo_correlation``, ``lufs_delta_db`` (optional),
+        ``risk_level``, ``notes``, ``measured``.
+
+    Raises
+    ------
+    ValueError
+        If the WAV file cannot be read or has an unsupported format.
+    """
+    # Lazy imports to avoid adding numpy/dsp deps to module-load time.
+    from mmo.dsp.io import read_wav_metadata
+    from mmo.dsp.meters_truth import (
+        compute_lufs_integrated_wav,
+        compute_true_peak_dbtp_wav,
+    )
+    from mmo.dsp.stereo import compute_stereo_correlation_wav
+
+    rendered_file = Path(rendered_file)
+    metadata = read_wav_metadata(rendered_file)
+    channels = int(metadata["channels"])
+
+    notes: List[str] = []
+
+    # --- Spectral: integrated LUFS -------------------------------------------
+    lufs_raw = compute_lufs_integrated_wav(rendered_file)
+    lufs_integrated: Optional[float] = (
+        None if math.isinf(lufs_raw) else round(lufs_raw, 3)
+    )
+
+    # --- True-peak (dBTP) ----------------------------------------------------
+    tp_raw = compute_true_peak_dbtp_wav(rendered_file)
+    true_peak_dbtp: Optional[float] = (
+        None if math.isinf(tp_raw) else round(tp_raw, 3)
+    )
+    # Headroom below 0 dBTP ceiling (positive = safe distance from clipping)
+    true_peak_delta_db: Optional[float] = (
+        None if true_peak_dbtp is None else round(0.0 - true_peak_dbtp, 3)
+    )
+
+    # --- Cross-channel correlation (stereo only) -----------------------------
+    stereo_correlation: Optional[float] = None
+    if channels == 2:
+        corr_raw = compute_stereo_correlation_wav(rendered_file)
+        stereo_correlation = round(corr_raw, 6)
+
+    # --- LUFS delta (only when reference supplied) ---------------------------
+    lufs_delta_db: Optional[float] = None
+    if reference_lufs is not None and lufs_integrated is not None:
+        lufs_delta_db = round(lufs_integrated - float(reference_lufs), 3)
+
+    # --- Risk classification -------------------------------------------------
+    risk_level = "low"
+
+    # True-peak risk
+    if true_peak_dbtp is not None:
+        if true_peak_dbtp > true_peak_error_dbtp:
+            risk_level = "high"
+            notes.append(
+                f"True-peak {true_peak_dbtp:+.1f} dBTP exceeds error threshold "
+                f"({true_peak_error_dbtp:+.1f} dBTP)"
+            )
+        elif true_peak_dbtp > true_peak_warn_dbtp:
+            if risk_level == "low":
+                risk_level = "medium"
+            notes.append(
+                f"True-peak {true_peak_dbtp:+.1f} dBTP exceeds warn threshold "
+                f"({true_peak_warn_dbtp:+.1f} dBTP)"
+            )
+
+    # Stereo correlation risk
+    if stereo_correlation is not None:
+        if stereo_correlation <= correlation_error_lte:
+            risk_level = "high"
+            notes.append(
+                f"Stereo correlation {stereo_correlation:.3f} ≤ error threshold "
+                f"({correlation_error_lte:.1f})"
+            )
+        elif stereo_correlation <= correlation_warn_lte:
+            if risk_level == "low":
+                risk_level = "medium"
+            notes.append(
+                f"Stereo correlation {stereo_correlation:.3f} ≤ warn threshold "
+                f"({correlation_warn_lte:.1f})"
+            )
+
+    # LUFS delta risk (only when reference provided)
+    if lufs_delta_db is not None:
+        if abs(lufs_delta_db) >= lufs_delta_error_abs:
+            risk_level = "high"
+            notes.append(
+                f"LUFS delta {lufs_delta_db:+.1f} dB ≥ error threshold "
+                f"(±{lufs_delta_error_abs:.1f} dB)"
+            )
+        elif abs(lufs_delta_db) >= lufs_delta_warn_abs:
+            if risk_level == "low":
+                risk_level = "medium"
+            notes.append(
+                f"LUFS delta {lufs_delta_db:+.1f} dB ≥ warn threshold "
+                f"(±{lufs_delta_warn_abs:.1f} dB)"
+            )
+
+    result: Dict[str, Any] = {
+        "gate_id": "GATE.DOWNMIX_SIMILARITY_MEASURED",
+        "target_layout_id": target_layout,
+        "channels": channels,
+        "lufs_integrated": lufs_integrated,
+        "true_peak_dbtp": true_peak_dbtp,
+        "true_peak_delta_db": true_peak_delta_db,
+        "stereo_correlation": stereo_correlation,
+        "risk_level": risk_level,
+        "notes": notes,
+        "measured": True,
+    }
+    if lufs_delta_db is not None:
+        result["lufs_delta_db"] = lufs_delta_db
+    return result

@@ -14,6 +14,7 @@ _meta:
   gates:
     - GATE.LAYOUT_NEGOTIATION
     - GATE.DOWNMIX_SIMILARITY
+    - GATE.DOWNMIX_SIMILARITY_MEASURED
     - GATE.CORRELATION_RISK
     - GATE.PHASE_RISK
     - GATE.CONFIDENCE_LOW
@@ -45,6 +46,24 @@ gates:
       lfe_boost_error_db: 6.0
       predicted_lufs_delta_warn_abs: 2.0
       predicted_lufs_delta_error_abs: 4.0
+
+  GATE.DOWNMIX_SIMILARITY_MEASURED:
+    kind: similarity_measured
+    description: >
+      Measure actual downmix similarity from a rendered audio file using
+      spectral analysis (BS.1770 integrated LUFS), cross-channel Pearson
+      correlation, and 4× oversampled true-peak. Complements the
+      matrix-coefficient-only GATE.DOWNMIX_SIMILARITY check. Only evaluated
+      when a rendered audio file is provided to the preflight engine.
+    default_enabled: true
+    fallback_policy: warn
+    thresholds:
+      true_peak_warn_dbtp: -3.0
+      true_peak_error_dbtp: -1.0
+      lufs_delta_warn_abs: 3.0
+      lufs_delta_error_abs: 6.0
+      correlation_warn_lte: -0.2
+      correlation_error_lte: -0.6
 
   GATE.CORRELATION_RISK:
     kind: correlation_check

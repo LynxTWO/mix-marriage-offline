@@ -21,10 +21,12 @@ Public API
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from mmo.core.downmix import (
     layout_negotiation_available,
+    measure_downmix_similarity,
     predict_fold_similarity,
     resolve_preflight_matrix,
 )
@@ -554,6 +556,95 @@ def _eval_confidence_low(
     )
 
 
+def _eval_downmix_similarity_measured(
+    rendered_file: Path,
+    target_layout_id: str,
+    options: Dict[str, Any],
+) -> tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+    """Evaluate GATE.DOWNMIX_SIMILARITY_MEASURED from a rendered audio file.
+
+    Returns ``(gate_result, measured_check | None)``.
+    """
+    gate_id = "GATE.DOWNMIX_SIMILARITY_MEASURED"
+
+    true_peak_warn: float = float(options.get("true_peak_warn_dbtp", -3.0))
+    true_peak_error: float = float(options.get("true_peak_error_dbtp", -1.0))
+    lufs_delta_warn: float = float(options.get("lufs_delta_warn_abs", 3.0))
+    lufs_delta_error: float = float(options.get("lufs_delta_error_abs", 6.0))
+    corr_warn: float = float(options.get("correlation_warn_lte", -0.2))
+    corr_error: float = float(options.get("correlation_error_lte", -0.6))
+    reference_lufs: Optional[float] = (
+        float(options["reference_lufs"])
+        if options.get("reference_lufs") is not None
+        else None
+    )
+
+    try:
+        check = measure_downmix_similarity(
+            rendered_file,
+            target_layout_id,
+            true_peak_warn_dbtp=true_peak_warn,
+            true_peak_error_dbtp=true_peak_error,
+            lufs_delta_warn_abs=lufs_delta_warn,
+            lufs_delta_error_abs=lufs_delta_error,
+            correlation_warn_lte=corr_warn,
+            correlation_error_lte=corr_error,
+            reference_lufs=reference_lufs,
+        )
+    except (ValueError, OSError) as exc:
+        gate = _gate_result(
+            gate_id,
+            "skipped",
+            "info",
+            f"Measured similarity check skipped: {exc}",
+            {"reason": "measurement_failed"},
+        )
+        return gate, None
+
+    risk_level = check["risk_level"]
+    notes: List[str] = list(check.get("notes") or [])
+    detail_summary: Dict[str, Any] = {
+        "risk_level": risk_level,
+        "true_peak_dbtp": check.get("true_peak_dbtp"),
+        "stereo_correlation": check.get("stereo_correlation"),
+    }
+
+    if risk_level == "high":
+        gate = _gate_result(
+            gate_id,
+            "block",
+            "error",
+            (
+                f"High measured similarity risk: {'; '.join(notes)}"
+                if notes
+                else "High measured similarity risk."
+            ),
+            detail_summary,
+        )
+    elif risk_level == "medium":
+        gate = _gate_result(
+            gate_id,
+            "warn",
+            "warn",
+            (
+                f"Medium measured similarity risk: {'; '.join(notes)}"
+                if notes
+                else "Medium measured similarity risk."
+            ),
+            detail_summary,
+        )
+    else:
+        gate = _gate_result(
+            gate_id,
+            "pass",
+            "info",
+            f"Measured similarity risk: {risk_level}.",
+            {"risk_level": risk_level},
+        )
+
+    return gate, check
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -565,6 +656,7 @@ def evaluate_preflight(
     options: Dict[str, Any],
     *,
     user_profile: Optional[Dict[str, Any]] = None,
+    rendered_file: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Run all render-safety gates and return a deterministic preflight receipt.
 
@@ -606,6 +698,11 @@ def evaluate_preflight(
         ``mmo.core.profiles.get_profile``).  When provided, the profile's
         ``gate_overrides`` are merged into ``options`` before gate evaluation.
         Profile values take precedence over keys already in ``options``.
+    rendered_file:
+        Optional path to a rendered WAV file.  When provided,
+        ``GATE.DOWNMIX_SIMILARITY_MEASURED`` is evaluated using real audio
+        measurements (LUFS, true-peak, stereo correlation).  If ``None`` the
+        gate is omitted from the receipt entirely.
 
     Returns
     -------
@@ -634,12 +731,13 @@ def evaluate_preflight(
     # --- Gate evaluations (deterministic order) ---
     gates_evaluated: List[Dict[str, Any]] = []
     downmix_checks: List[Dict[str, Any]] = []
+    measured_similarity_checks: List[Dict[str, Any]] = []
 
     # 1. Layout negotiation
     layout_gate = _eval_layout_negotiation(source_layout_id, target_layout_id, options)
     gates_evaluated.append(layout_gate)
 
-    # 2. Downmix similarity
+    # 2. Downmix similarity (matrix-coefficient prediction)
     similarity_gate, downmix_check = _eval_downmix_similarity(
         source_layout_id, target_layout_id, options
     )
@@ -647,15 +745,24 @@ def evaluate_preflight(
     if downmix_check is not None:
         downmix_checks.append(downmix_check)
 
-    # 3. Correlation risk
+    # 3. Measured similarity (real audio, only when rendered_file is provided)
+    if rendered_file is not None:
+        measured_gate, measured_check = _eval_downmix_similarity_measured(
+            Path(rendered_file), target_layout_id, options
+        )
+        gates_evaluated.append(measured_gate)
+        if measured_check is not None:
+            measured_similarity_checks.append(measured_check)
+
+    # 4. Correlation risk
     corr_gate = _eval_correlation_risk(phase_report, options)
     gates_evaluated.append(corr_gate)
 
-    # 4. Phase risk
+    # 5. Phase risk
     phase_gate = _eval_phase_risk(phase_report, options)
     gates_evaluated.append(phase_gate)
 
-    # 5. Confidence
+    # 6. Confidence
     conf_gate = _eval_confidence_low(confidence_summary, options)
     gates_evaluated.append(conf_gate)
 
@@ -674,6 +781,7 @@ def evaluate_preflight(
         "source_layout_id": source_layout_id,
         "gates_evaluated": gates_evaluated,
         "downmix_checks": downmix_checks,
+        "measured_similarity_checks": measured_similarity_checks,
         "phase_report": phase_report,
         "confidence_summary": confidence_summary,
         "final_decision": final_decision,

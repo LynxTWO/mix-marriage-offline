@@ -41,6 +41,14 @@
     "final_decision": {
       "type": "string",
       "enum": ["pass", "warn", "block"]
+    },
+    "user_profile_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "measured_similarity_checks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/measured_downmix_check" }
     }
   },
   "$defs": {
@@ -146,6 +154,52 @@
         "low_confidence_stems": {
           "type": "array",
           "items": { "type": "string" }
+        }
+      }
+    },
+    "measured_downmix_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "target_layout_id", "risk_level", "measured"],
+      "properties": {
+        "gate_id": {
+          "type": "string",
+          "pattern": "^GATE\\.[A-Z0-9_.]+$"
+        },
+        "target_layout_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "channels": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "lufs_integrated": {
+          "type": ["number", "null"]
+        },
+        "true_peak_dbtp": {
+          "type": ["number", "null"]
+        },
+        "true_peak_delta_db": {
+          "type": ["number", "null"]
+        },
+        "stereo_correlation": {
+          "type": ["number", "null"]
+        },
+        "lufs_delta_db": {
+          "type": ["number", "null"]
+        },
+        "risk_level": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "measured": {
+          "type": "boolean",
+          "const": true
         }
       }
     }
