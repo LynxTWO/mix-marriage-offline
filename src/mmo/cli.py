@@ -1025,6 +1025,24 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Overwrite existing output files.",
     )
+    safe_render_parser.add_argument(
+        "--render-many",
+        action="store_true",
+        dest="render_many",
+        help=(
+            "Render to multiple targets in one pass (mix-once, render-many). "
+            "Default targets: stereo, 5.1, 7.1.4. Use --render-many-targets to override."
+        ),
+    )
+    safe_render_parser.add_argument(
+        "--render-many-targets",
+        default=None,
+        dest="render_many_targets",
+        help=(
+            "Comma-separated target IDs for --render-many "
+            "(default: stereo,5.1,7.1.4)."
+        ),
+    )
 
     apply_parser = subparsers.add_parser(
         "apply",
@@ -5372,6 +5390,21 @@ def main(argv: list[str] | None = None) -> int:
             "render",
             ["wav"],
         )
+        _render_many_flag = bool(getattr(args, "render_many", False))
+        _render_many_targets_raw = getattr(args, "render_many_targets", None)
+        _render_many_targets: list[str] | None = None
+        if _render_many_flag:
+            if _render_many_targets_raw:
+                _render_many_targets = [
+                    t.strip()
+                    for t in _render_many_targets_raw.split(",")
+                    if t.strip()
+                ]
+            else:
+                from mmo.cli_commands._renderers import (  # noqa: WPS433
+                    _RENDER_MANY_DEFAULT_TARGETS,
+                )
+                _render_many_targets = list(_RENDER_MANY_DEFAULT_TARGETS)
         try:
             return _run_safe_render_command(
                 repo_root=None,
@@ -5404,6 +5437,7 @@ def main(argv: list[str] | None = None) -> int:
                     getattr(args, "user_profile_id", None),
                     ontology / "profiles.yaml",
                 ),
+                render_many_targets=_render_many_targets,
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)

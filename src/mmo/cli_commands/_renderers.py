@@ -36,6 +36,8 @@ __all__ = [
     "_run_downmix_render",
     "_run_apply_command",
     "_run_safe_render_command",
+    "_run_render_many_targets",
+    "_RENDER_MANY_DEFAULT_TARGETS",
     "_write_routing_plan_artifact",
     "_run_bundle",
     "_build_validated_listen_pack",
@@ -550,6 +552,104 @@ def _run_deliverables_index_command(
 # bounded authority and safe-run receipt.
 # ---------------------------------------------------------------------------
 
+_RENDER_MANY_DEFAULT_TARGETS: list[str] = ["stereo", "5.1", "7.1.4"]
+
+
+def _run_render_many_targets(
+    *,
+    render_many_targets: list[str],
+    repo_root: Path,
+    report_path: Path,
+    plugins_dir: Path,
+    out_dir: Path | None,
+    receipt_out_path: Path | None,
+    qa_out_path: Path | None,
+    profile_id: str,
+    dry_run: bool,
+    approve: str | None,
+    output_formats: list[str] | None = None,
+    run_config: dict[str, Any] | None = None,
+    force: bool = False,
+    user_profile: dict[str, Any] | None = None,
+) -> int:
+    """Run safe-render for multiple targets in parallel (mix-once, render-many).
+
+    Each target gets its own sub-directory under ``out_dir`` and per-target
+    receipt / manifest files.  Returns 0 only when every target succeeds.
+    """
+    import concurrent.futures  # noqa: WPS433
+
+    targets = render_many_targets if render_many_targets else _RENDER_MANY_DEFAULT_TARGETS
+    print(
+        f"safe-render/render-many: targets={','.join(targets)}",
+        file=sys.stderr,
+    )
+
+    def _run_one(tgt: str) -> tuple[str, int]:
+        tgt_slug = tgt.replace(".", "_").replace(" ", "_")
+        tgt_out_dir = (out_dir / tgt_slug) if out_dir is not None else None
+        tgt_manifest = (
+            tgt_out_dir / "render_manifest.json" if tgt_out_dir is not None else None
+        )
+        tgt_receipt = (
+            receipt_out_path.parent / f"receipt.{tgt_slug}.json"
+            if receipt_out_path is not None
+            else None
+        )
+        tgt_qa = (
+            qa_out_path.parent / f"qa.{tgt_slug}.json"
+            if qa_out_path is not None
+            else None
+        )
+        rc = _run_safe_render_command(
+            repo_root=repo_root,
+            report_path=report_path,
+            plugins_dir=plugins_dir,
+            out_dir=tgt_out_dir,
+            out_manifest_path=tgt_manifest,
+            receipt_out_path=tgt_receipt,
+            qa_out_path=tgt_qa,
+            profile_id=profile_id,
+            target=tgt,
+            dry_run=dry_run,
+            approve=approve,
+            output_formats=output_formats,
+            run_config=run_config,
+            force=force,
+            user_profile=user_profile,
+            render_many_targets=None,  # do not recurse
+        )
+        return tgt, rc
+
+    results: list[tuple[str, int]] = []
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=len(targets), thread_name_prefix="render_many"
+    ) as pool:
+        futures = {pool.submit(_run_one, tgt): tgt for tgt in sorted(targets)}
+        for fut in concurrent.futures.as_completed(futures):
+            try:
+                results.append(fut.result())
+            except Exception as exc:  # noqa: BLE001
+                tgt = futures[fut]
+                print(
+                    f"safe-render/render-many: target={tgt} raised {exc}",
+                    file=sys.stderr,
+                )
+                results.append((tgt, 1))
+
+    # Stable output order
+    results.sort(key=lambda r: r[0])
+    failed = [tgt for tgt, rc in results if rc != 0]
+    succeeded = [tgt for tgt, rc in results if rc == 0]
+    print(
+        f"safe-render/render-many: completed"
+        f" succeeded={len(succeeded)}"
+        f" failed={len(failed)}"
+        f"{' failed_targets=' + ','.join(failed) if failed else ''}",
+        file=sys.stderr,
+    )
+    return 0 if not failed else 1
+
 
 def _parse_approve_arg(approve_arg: str | None) -> set[str] | str | None:
     """Parse the --approve argument into a usable form.
@@ -696,6 +796,7 @@ def _run_safe_render_command(
     run_config: dict[str, Any] | None = None,
     force: bool = False,
     user_profile: dict[str, Any] | None = None,
+    render_many_targets: list[str] | None = None,
 ) -> int:
     """Run the full plugin-chain render: detect → resolve → gate → render.
 
@@ -705,6 +806,9 @@ def _run_safe_render_command(
 
     Produces a safe-run receipt JSON and optionally a QA report with spectral
     slope metrics.
+
+    When ``render_many_targets`` is provided, runs one full render pass per
+    target (stereo + 5.1 + 7.1.4 by default) using parallel jobs.
     """
     from mmo.core.gates import apply_gates_to_report  # noqa: WPS433
     from mmo.core.pipeline import (  # noqa: WPS433
@@ -716,6 +820,26 @@ def _run_safe_render_command(
     )
     from mmo.core.preflight import evaluate_preflight, preflight_receipt_blocks  # noqa: WPS433
     from mmo.core.render_qa import build_safe_render_qa  # noqa: WPS433
+    from mmo.core.scene_builder import build_scene_from_session  # noqa: WPS433
+
+    # -- render-many: delegate to multi-target helper --------------------------
+    if render_many_targets:
+        return _run_render_many_targets(
+            render_many_targets=render_many_targets,
+            repo_root=repo_root,
+            report_path=report_path,
+            plugins_dir=plugins_dir,
+            out_dir=out_dir,
+            receipt_out_path=receipt_out_path,
+            qa_out_path=qa_out_path,
+            profile_id=profile_id,
+            dry_run=dry_run,
+            approve=approve,
+            output_formats=output_formats,
+            run_config=run_config,
+            force=force,
+            user_profile=user_profile,
+        )
 
     # -- overwrite guards -------------------------------------------------------
     for out_path, label in (
@@ -738,10 +862,71 @@ def _run_safe_render_command(
         if routing_layout_ids_from_run_config(normalized_run_config) is not None:
             apply_routing_plan_to_report(report, normalized_run_config)
 
+    # -- stage 1: build scene from validated session (mix-once, render-many) --
+    session_payload = report.get("session")
+    session_for_preflight: dict[str, Any] = {"profile_id": profile_id}
+    if isinstance(session_payload, dict):
+        # Carry source_layout_id into preflight session context
+        src_layout = session_payload.get("source_layout_id")
+        if not src_layout:
+            rc = report.get("run_config")
+            if isinstance(rc, dict):
+                src_layout = rc.get("source_layout_id")
+        if isinstance(src_layout, str) and src_layout.strip():
+            session_for_preflight["source_layout_id"] = src_layout.strip()
+        try:
+            preflight_scene = build_scene_from_session(session_payload)
+        except (ValueError, KeyError, TypeError):
+            preflight_scene = report  # safe fallback when session is incomplete
+        else:
+            # Augment scene with analysis data from report so preflight gates
+            # have full context: recommendations confidence, qa_issues, and any
+            # metadata the analysis pass produced (e.g. correlation, polarity).
+            report_recs = report.get("recommendations")
+            if isinstance(report_recs, list) and report_recs:
+                preflight_scene["recommendations"] = report_recs
+            report_qa = report.get("qa_issues")
+            if isinstance(report_qa, list) and report_qa:
+                preflight_scene["qa_issues"] = report_qa
+            # Merge report metadata (correlation, polarity_inverted) into scene.
+            report_meta = report.get("metadata")
+            if isinstance(report_meta, dict):
+                scene_meta = preflight_scene.setdefault("metadata", {})
+                for key in ("correlation", "polarity_inverted"):
+                    val = report_meta.get(key)
+                    if val is not None and key not in scene_meta:
+                        scene_meta[key] = val
+            # Compute effective confidence for preflight from report recommendations.
+            # If no confidence values exist in the report, default to 1.0 so that
+            # a scene built without metering data preserves the existing
+            # "no data → assume full confidence" semantics.
+            scene_meta = preflight_scene.setdefault("metadata", {})
+            if "confidence" not in scene_meta:
+                recs_for_conf = report.get("recommendations")
+                rec_scores = [
+                    float(r["confidence"])
+                    for r in (recs_for_conf if isinstance(recs_for_conf, list) else [])
+                    if isinstance(r, dict)
+                    and isinstance(r.get("confidence"), (int, float))
+                ]
+                report_meta_conf = (
+                    report_meta.get("confidence")
+                    if isinstance(report_meta, dict) else None
+                )
+                if isinstance(report_meta_conf, (int, float)):
+                    scene_meta["confidence"] = float(report_meta_conf)
+                elif rec_scores:
+                    scene_meta["confidence"] = sum(rec_scores) / len(rec_scores)
+                else:
+                    # No confidence data → assume full confidence (backward compat)
+                    scene_meta["confidence"] = 1.0
+    else:
+        preflight_scene = report
+
     # -- stage 1a: preflight safety gates (no audio; fail-fast) ---------------
     preflight_receipt = evaluate_preflight(
-        session={"profile_id": profile_id},
-        scene=report,
+        session=session_for_preflight,
+        scene=preflight_scene,
         target_layout=target,
         options={},
         user_profile=user_profile,
@@ -762,6 +947,37 @@ def _run_safe_render_command(
             f"safe-render: preflight BLOCKED by gates: {', '.join(blocked_gates)}",
             file=sys.stderr,
         )
+        if receipt_out_path is not None:
+            block_receipt_id = _build_receipt_id(
+                _coerce_str(report.get("report_id")), target
+            )
+            blocked_receipt: dict[str, Any] = {
+                "schema_version": "0.1.0",
+                "receipt_id": block_receipt_id,
+                "context": "safe_render",
+                "status": "blocked",
+                "dry_run": False,
+                "target": target,
+                "profile_id": profile_id,
+                "approved_by": [],
+                "recommendations_summary": {
+                    "total": 0,
+                    "auto_eligible": 0,
+                    "approved_by_user": 0,
+                    "blocked": 0,
+                },
+                "blocked_recommendations": [],
+                "renderer_manifests": [],
+                "qa_issues": [],
+                "notes": [
+                    f"preflight_blocked=true",
+                    f"blocked_gates={', '.join(blocked_gates)}",
+                    f"target={target}",
+                    f"profile_id={profile_id}",
+                ],
+            }
+            receipt_out_path.parent.mkdir(parents=True, exist_ok=True)
+            _write_json_file(receipt_out_path, blocked_receipt)
         return 1
 
     # -- load plugins ----------------------------------------------------------
