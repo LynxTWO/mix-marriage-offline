@@ -1,0 +1,117 @@
+# ontology/plugin_semantics.yaml
+# Canonical definitions for plugin semantics fields per DoD 4.9.3 / 4.4.4.
+# Referenced by: src/mmo/core/plugin_registry.py, schemas/plugin.schema.json
+
+version: "0.1.0"
+
+channel_mode:
+  description: >
+    How the plugin processes audio channels. Declared in the manifest so the
+    host can gate the plugin to a safe channel group or bypass it with a
+    diagnostic when the channel layout does not match.
+  values:
+    per_channel:
+      id: "per_channel"
+      description: >
+        Plugin processes each channel independently. Safe for any channel count.
+        No cross-channel state is shared between channels.
+    linked_group:
+      id: "linked_group"
+      description: >
+        Plugin processes a declared group of channels as a unit (e.g., front L/R
+        stereo pair, surround pair). The active group must be declared in
+        link_groups.
+    true_multichannel:
+      id: "true_multichannel"
+      description: >
+        Plugin requires simultaneous access to all channels; used for spatial or
+        cross-channel processing. Host must route the full channel set to the
+        plugin or bypass it entirely.
+
+link_groups:
+  description: >
+    Named channel groups for linked_group channel_mode. A plugin may declare
+    one or more groups it supports. The host selects the group that matches the
+    active layout.
+  values:
+    front:
+      id: "front"
+      description: "Front left/right channels (L, R)."
+    surrounds:
+      id: "surrounds"
+      description: "Surround channels (LS, RS, BL, BR, SL, SR)."
+    heights:
+      id: "heights"
+      description: "Height channels (TFL, TFR, TRL, TRR, and equivalents)."
+    all:
+      id: "all"
+      description: "All channels treated as a single group."
+    custom:
+      id: "custom"
+      description: >
+        Plugin-defined custom grouping. Channel membership must be declared in
+        the plugin's config_schema.
+
+latency:
+  description: >
+    How the plugin reports its processing latency. The host uses this to
+    perform delay compensation across the plugin chain.
+  values:
+    zero:
+      id: "zero"
+      description: "No latency. Plugin is sample-exact (e.g., static gain trim)."
+    fixed:
+      id: "fixed"
+      description: >
+        Constant latency in samples declared in the manifest field
+        latency_samples. Host applies static delay compensation.
+    dynamic:
+      id: "dynamic"
+      description: >
+        Latency varies per block or configuration. Plugin must report its current
+        latency at each block boundary via the host callback.
+
+deterministic_seed_policy:
+  description: >
+    Plugin's determinism contract for any internal randomness (e.g., TPDF
+    dither, decorrelation noise). Plugins that declare seed_required or
+    seed_optional receive a deterministic seed from the host derived from the
+    scene hash and render pass index.
+  values:
+    none:
+      id: "none"
+      description: >
+        Plugin is fully deterministic with no internal randomness. No seed is
+        needed or accepted.
+    seed_required:
+      id: "seed_required"
+      description: >
+        Plugin uses randomness and requires a host-provided seed. The same seed
+        must produce identical output. The plugin must reject execution if no
+        seed is supplied.
+    seed_optional:
+      id: "seed_optional"
+      description: >
+        Plugin supports seeding for reproducible output but can run unseeded
+        (non-reproducible) when a seed is not provided. Unseeded runs must be
+        disclosed in the render report.
+
+bed_only:
+  description: >
+    Whether the plugin operates exclusively on bed audio (non-object stems).
+    A bed_only plugin cannot be applied to object-based audio tracks; the host
+    must bypass it and log a diagnostic if object audio is encountered.
+  type: boolean
+  notes: >
+    Complementary to supports_objects in capabilities.scene. If bed_only: true,
+    supports_objects must be absent or false in the manifest.
+
+requires_speaker_positions:
+  description: >
+    Whether the plugin requires speaker position metadata (from the layout
+    registry) to function correctly. If true, the manifest must also declare
+    either capabilities.supported_layout_ids or layout-backed
+    capabilities.scene.supported_target_ids so the host can verify the metadata
+    is available before invoking the plugin.
+  type: boolean
+  cross_reference: "capabilities.scene.requires_speaker_positions"

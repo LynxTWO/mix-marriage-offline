@@ -93,6 +93,33 @@
           "type": "integer",
           "minimum": 1
         },
+        "channel_mode": {
+          "type": "string",
+          "enum": ["per_channel", "linked_group", "true_multichannel"],
+          "description": "How the plugin processes audio channels (per ontology/plugin_semantics.yaml)."
+        },
+        "link_groups": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["front", "surrounds", "heights", "all", "custom"]
+          },
+          "uniqueItems": true,
+          "description": "Channel groups active when channel_mode is linked_group."
+        },
+        "latency": {
+          "$ref": "#/$defs/plugin_latency",
+          "description": "Latency contract for host delay compensation."
+        },
+        "deterministic_seed_policy": {
+          "type": "string",
+          "enum": ["none", "seed_required", "seed_optional"],
+          "description": "Plugin's determinism contract for internal randomness."
+        },
+        "bed_only": {
+          "type": "boolean",
+          "description": "If true, plugin operates only on bed audio; cannot be applied to objects."
+        },
         "supported_layout_ids": {
           "type": "array",
           "items": { "type": "string" },
@@ -113,6 +140,23 @@
           "type": "array",
           "items": { "type": "string" },
           "uniqueItems": true
+        }
+      }
+    },
+    "plugin_latency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["zero", "fixed", "dynamic"],
+          "description": "Latency reporting mode (per ontology/plugin_semantics.yaml)."
+        },
+        "samples": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Latency in samples. Required when type is fixed."
         }
       }
     },
