@@ -695,6 +695,7 @@ def _run_safe_render_command(
     output_formats: list[str] | None = None,
     run_config: dict[str, Any] | None = None,
     force: bool = False,
+    user_profile: dict[str, Any] | None = None,
 ) -> int:
     """Run the full plugin-chain render: detect → resolve → gate → render.
 
@@ -743,6 +744,7 @@ def _run_safe_render_command(
         scene=report,
         target_layout=target,
         options={},
+        user_profile=user_profile,
     )
     _preflight_decision = preflight_receipt.get("final_decision", "pass")
     print(

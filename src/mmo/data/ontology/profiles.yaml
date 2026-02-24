@@ -1,0 +1,171 @@
+# ontology/profiles.yaml
+# User-facing style/safety profiles for MMO (DoD 4.7).
+# These profiles translate user "intent and vibe" into safe parameter ranges
+# and preflight gate threshold overrides.
+#
+# Profiles are identified by PROFILE.USER.* IDs (distinct from authority
+# profiles under PROFILE.ASSIST / PROFILE.FULL_SEND).
+#
+# Each profile declares:
+#   label         — short human name
+#   description   — what this profile is for
+#   style_intent  — vibe keywords for UI display
+#   gate_overrides — preflight gate threshold overrides (merged into options)
+#   param_bounds  — safe parameter ranges (min/max) for key mix parameters
+#   safety_notes  — human-readable safety rationale
+
+_meta:
+  schema_version: "1.0.0"
+  description: "User style/safety profiles for MMO preflight and render gating (DoD 4.7)."
+  profiles:
+    - PROFILE.USER.CONSERVATIVE
+    - PROFILE.USER.BROADCAST
+    - PROFILE.USER.CLUB
+
+profiles:
+  PROFILE.USER.BROADCAST:
+    label: "Broadcast"
+    description: >
+      Optimised for broadcast delivery: tight loudness targets, strict clipping
+      headroom, and conservative fold-similarity thresholds to protect listeners
+      on TV / radio / streaming platforms.
+    style_intent:
+      - "clear"
+      - "controlled"
+      - "consistent"
+    gate_overrides:
+      lfe_boost_warn_db: 2.0
+      lfe_boost_error_db: 4.0
+      predicted_lufs_delta_warn_abs: 1.5
+      predicted_lufs_delta_error_abs: 3.0
+      correlation_warn_lte: -0.15
+      correlation_error_lte: -0.5
+      confidence_warn_below: 0.6
+      confidence_error_below: 0.25
+    param_bounds:
+      gain_db:
+        min: -12.0
+        max: 3.0
+        unit_id: "UNIT.DB"
+      eq_gain_db:
+        min: -6.0
+        max: 4.0
+        unit_id: "UNIT.DB"
+      eq_bands:
+        min: 1
+        max: 6
+        unit_id: "UNIT.COUNT"
+      comp_ratio:
+        min: 1.0
+        max: 4.0
+        unit_id: "UNIT.RATIO"
+      comp_threshold_db:
+        min: -40.0
+        max: -6.0
+        unit_id: "UNIT.DB"
+      true_peak_ceiling_dbtp:
+        min: -3.0
+        max: -1.0
+        unit_id: "UNIT.DBTP"
+    safety_notes:
+      - "Loudness delta tolerance is tighter than default to prevent listener fatigue on linear broadcast chains."
+      - "LFE boost thresholds are tightened to prevent subwoofer damage on consumer broadcast hardware."
+      - "Gain range is limited to avoid loudness-war-style over-compression."
+
+  PROFILE.USER.CLUB:
+    label: "Club"
+    description: >
+      Optimised for club / dance-floor playback: extended low-end headroom,
+      wider stereo width tolerances, and elevated energy ceilings while still
+      preventing destructive clipping or phase cancellation.
+    style_intent:
+      - "punchy"
+      - "wide"
+      - "energetic"
+    gate_overrides:
+      lfe_boost_warn_db: 4.5
+      lfe_boost_error_db: 9.0
+      predicted_lufs_delta_warn_abs: 3.0
+      predicted_lufs_delta_error_abs: 6.0
+      correlation_warn_lte: -0.3
+      correlation_error_lte: -0.7
+      confidence_warn_below: 0.4
+      confidence_error_below: 0.15
+    param_bounds:
+      gain_db:
+        min: -18.0
+        max: 6.0
+        unit_id: "UNIT.DB"
+      eq_gain_db:
+        min: -9.0
+        max: 9.0
+        unit_id: "UNIT.DB"
+      eq_bands:
+        min: 1
+        max: 12
+        unit_id: "UNIT.COUNT"
+      comp_ratio:
+        min: 1.0
+        max: 8.0
+        unit_id: "UNIT.RATIO"
+      comp_threshold_db:
+        min: -60.0
+        max: 0.0
+        unit_id: "UNIT.DB"
+      true_peak_ceiling_dbtp:
+        min: -3.0
+        max: -0.5
+        unit_id: "UNIT.DBTP"
+    safety_notes:
+      - "LFE headroom is extended to support club subwoofer systems without premature gating."
+      - "Correlation and phase thresholds are widened to allow intentional width effects."
+      - "Hard clipping floor is maintained at -0.5 dBTP despite wider ranges."
+
+  PROFILE.USER.CONSERVATIVE:
+    label: "Conservative"
+    description: >
+      Maximum safety for unfamiliar material: tightest gate thresholds, smallest
+      parameter ranges, and strict approval requirements. Ideal for archiving,
+      mastering prep, or working on projects where you do not know the stems well.
+    style_intent:
+      - "safe"
+      - "transparent"
+      - "minimal"
+    gate_overrides:
+      lfe_boost_warn_db: 1.5
+      lfe_boost_error_db: 3.0
+      predicted_lufs_delta_warn_abs: 1.0
+      predicted_lufs_delta_error_abs: 2.0
+      correlation_warn_lte: -0.1
+      correlation_error_lte: -0.4
+      confidence_warn_below: 0.7
+      confidence_error_below: 0.35
+    param_bounds:
+      gain_db:
+        min: -6.0
+        max: 2.0
+        unit_id: "UNIT.DB"
+      eq_gain_db:
+        min: -3.0
+        max: 3.0
+        unit_id: "UNIT.DB"
+      eq_bands:
+        min: 1
+        max: 4
+        unit_id: "UNIT.COUNT"
+      comp_ratio:
+        min: 1.0
+        max: 2.5
+        unit_id: "UNIT.RATIO"
+      comp_threshold_db:
+        min: -30.0
+        max: -6.0
+        unit_id: "UNIT.DB"
+      true_peak_ceiling_dbtp:
+        min: -3.0
+        max: -2.0
+        unit_id: "UNIT.DBTP"
+    safety_notes:
+      - "Parameter ranges are at minimum viable adjustments to preserve mix intent."
+      - "Confidence threshold is high; very-low-confidence scenes block rather than warn."
+      - "All gate error thresholds are tightened to catch marginal cases early."

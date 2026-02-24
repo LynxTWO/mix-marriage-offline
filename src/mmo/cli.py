@@ -164,6 +164,22 @@ def _normalize_cli_path_arg(path_text: str) -> str:
     return path_text.replace("\\", "/")
 
 
+def _resolve_user_profile_arg(
+    profile_id_raw: str | None,
+    profiles_path: Path,
+) -> "dict[str, Any] | None":
+    """Load a user style/safety profile by ID, or return None if no ID provided.
+
+    Returns None (not an error) when ``profile_id_raw`` is empty/None so that
+    callers that do not specify ``--user-profile`` get silent pass-through.
+    Raises ``ValueError`` if the ID is non-empty but not found.
+    """
+    if not isinstance(profile_id_raw, str) or not profile_id_raw.strip():
+        return None
+    from mmo.core.profiles import get_profile  # noqa: WPS433
+    return get_profile(profile_id_raw.strip(), profiles_path)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="MMO command-line tools.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -970,6 +986,12 @@ def main(argv: list[str] | None = None) -> int:
         "--profile",
         default="PROFILE.ASSIST",
         help="Authority profile ID for render gating (default: PROFILE.ASSIST).",
+    )
+    safe_render_parser.add_argument(
+        "--user-profile",
+        default=None,
+        dest="user_profile_id",
+        help="Optional user style/safety profile ID (e.g. PROFILE.USER.CONSERVATIVE).",
     )
     safe_render_parser.add_argument(
         "--output-formats",
@@ -1926,6 +1948,58 @@ def main(argv: list[str] | None = None) -> int:
         "--cache-dir",
         default=None,
         help="Optional cache directory (default: <repo_root>/.mmo_cache).",
+    )
+
+    profile_parser = subparsers.add_parser(
+        "profile",
+        help="User style/safety profile tools (DoD 4.7).",
+    )
+    profile_subparsers = profile_parser.add_subparsers(
+        dest="profile_command",
+        required=True,
+    )
+    profile_list_parser = profile_subparsers.add_parser(
+        "list",
+        help="List user style/safety profiles.",
+    )
+    profile_list_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for profile list.",
+    )
+    profile_show_parser = profile_subparsers.add_parser(
+        "show",
+        help="Show one user style/safety profile.",
+    )
+    profile_show_parser.add_argument(
+        "profile_id",
+        help="Profile ID (e.g., PROFILE.USER.CONSERVATIVE).",
+    )
+    profile_show_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for profile details.",
+    )
+    profile_apply_parser = profile_subparsers.add_parser(
+        "apply",
+        help="Apply a profile to a scene and emit updated preflight options.",
+    )
+    profile_apply_parser.add_argument(
+        "profile_id",
+        help="Profile ID to apply (e.g., PROFILE.USER.BROADCAST).",
+    )
+    profile_apply_parser.add_argument(
+        "--scene",
+        default=None,
+        help="Optional path to a scene/report JSON to validate against the profile.",
+    )
+    profile_apply_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="json",
+        help="Output format for apply result.",
     )
 
     locks_parser = subparsers.add_parser("locks", help="Scene lock registry tools.")
@@ -5304,6 +5378,10 @@ def main(argv: list[str] | None = None) -> int:
                 output_formats=safe_render_formats,
                 run_config=merged_run_config,
                 force=bool(getattr(args, "force", False)),
+                user_profile=_resolve_user_profile_arg(
+                    getattr(args, "user_profile_id", None),
+                    ontology / "profiles.yaml",
+                ),
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
@@ -6064,6 +6142,97 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
         print("Unknown translation command.", file=sys.stderr)
+        return 2
+    if args.command == "profile":
+        from mmo.core.profiles import apply_to_gates, get_profile, list_profiles
+        profiles_path = ontology / "profiles.yaml"
+        if args.profile_command == "list":
+            try:
+                rows = list_profiles(profiles_path)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(rows, indent=2, sort_keys=True))
+            else:
+                for row in rows:
+                    intents = ", ".join(row.get("style_intent") or [])
+                    print(
+                        f"{row.get('profile_id', '')}"
+                        f"  {row.get('label', '')}"
+                        f"  [{intents}]"
+                    )
+            return 0
+        if args.profile_command == "show":
+            try:
+                payload = get_profile(args.profile_id, profiles_path)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(f"Profile ID : {payload.get('profile_id', '')}")
+                print(f"Label      : {payload.get('label', '')}")
+                print(f"Description: {str(payload.get('description', '')).strip()}")
+                intents = ", ".join(payload.get("style_intent") or [])
+                print(f"Style      : {intents}")
+                overrides = payload.get("gate_overrides") or {}
+                if overrides:
+                    print("Gate overrides:")
+                    for k, v in sorted(overrides.items()):
+                        print(f"  {k}: {v}")
+                bounds = payload.get("param_bounds") or {}
+                if bounds:
+                    print("Param bounds:")
+                    for param, bound in sorted(bounds.items()):
+                        if isinstance(bound, dict):
+                            print(f"  {param}: min={bound.get('min')} max={bound.get('max')} {bound.get('unit_id', '')}")
+                notes = payload.get("safety_notes") or []
+                if notes:
+                    print("Safety notes:")
+                    for note in notes:
+                        print(f"  - {note}")
+            return 0
+        if args.profile_command == "apply":
+            try:
+                profile = get_profile(args.profile_id, profiles_path)
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            gate_options = apply_to_gates(profile, {})
+            scene_issues: list[dict] = []
+            if isinstance(getattr(args, "scene", None), str) and args.scene.strip():
+                scene_path = Path(args.scene.strip())
+                try:
+                    scene_data = _load_json_object(scene_path, label="Scene")
+                except (OSError, ValueError) as exc:
+                    print(str(exc), file=sys.stderr)
+                    return 1
+                from mmo.core.profiles import validate_against_scene
+                scene_issues = validate_against_scene(profile, scene_data)
+            result: dict[str, Any] = {
+                "profile_id": profile.get("profile_id", ""),
+                "label": profile.get("label", ""),
+                "gate_options": gate_options,
+                "param_bounds": profile.get("param_bounds", {}),
+                "scene_issues": scene_issues,
+            }
+            if args.format == "json":
+                print(json.dumps(result, indent=2, sort_keys=True))
+            else:
+                print(f"Profile: {result['profile_id']}  ({result['label']})")
+                print("Gate options applied:")
+                for k, v in sorted(result["gate_options"].items()):
+                    print(f"  {k}: {v}")
+                if scene_issues:
+                    print("Scene compatibility issues:")
+                    for iss in scene_issues:
+                        print(f"  [{iss.get('severity','?')}] {iss.get('code','')}: {iss.get('message','')}")
+                else:
+                    print("Scene compatibility: OK")
+            return 0
+        print("Unknown profile command.", file=sys.stderr)
         return 2
     if args.command == "locks":
         scene_locks_path = ontology /"scene_locks.yaml"

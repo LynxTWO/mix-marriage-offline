@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/profile.schema.json",
+  "title": "MMO User Profile Registry",
+  "description": "User style/safety profiles for MMO preflight and render gating (DoD 4.7).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["_meta", "profiles"],
+  "properties": {
+    "_meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "description", "profiles"],
+      "properties": {
+        "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "description": { "type": "string", "minLength": 1 },
+        "profiles": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/profile_entry"
+      }
+    }
+  },
+  "$defs": {
+    "profile_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "description", "style_intent", "gate_overrides", "param_bounds", "safety_notes"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "style_intent": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "gate_overrides": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "lfe_boost_warn_db": { "type": "number" },
+            "lfe_boost_error_db": { "type": "number" },
+            "predicted_lufs_delta_warn_abs": { "type": "number", "minimum": 0 },
+            "predicted_lufs_delta_error_abs": { "type": "number", "minimum": 0 },
+            "correlation_warn_lte": { "type": "number" },
+            "correlation_error_lte": { "type": "number" },
+            "polarity_warn_lte": { "type": "number" },
+            "polarity_error_lte": { "type": "number" },
+            "confidence_warn_below": { "type": "number", "minimum": 0, "maximum": 1 },
+            "confidence_error_below": { "type": "number", "minimum": 0, "maximum": 1 },
+            "warn_on_composed_path": { "type": "boolean" }
+          }
+        },
+        "param_bounds": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/param_bound"
+          }
+        },
+        "safety_notes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "param_bound": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min", "max", "unit_id"],
+      "properties": {
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "unit_id": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

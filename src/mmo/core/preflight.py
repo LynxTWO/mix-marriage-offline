@@ -563,6 +563,8 @@ def evaluate_preflight(
     scene: Dict[str, Any],
     target_layout: str,
     options: Dict[str, Any],
+    *,
+    user_profile: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Run all render-safety gates and return a deterministic preflight receipt.
 
@@ -599,6 +601,12 @@ def evaluate_preflight(
             confidence_error_below    (float, default 0.2)
             warn_on_composed_path     (bool, default True)
 
+    user_profile:
+        Optional user style/safety profile dict (as returned by
+        ``mmo.core.profiles.get_profile``).  When provided, the profile's
+        ``gate_overrides`` are merged into ``options`` before gate evaluation.
+        Profile values take precedence over keys already in ``options``.
+
     Returns
     -------
     dict
@@ -609,6 +617,11 @@ def evaluate_preflight(
         - ``"warn"`` if any gate has outcome ``"warn"`` (and none block)
         - ``"pass"`` otherwise
     """
+    # Merge user profile gate overrides into options (profile wins over caller options)
+    if isinstance(user_profile, dict):
+        from mmo.core.profiles import apply_to_gates
+        options = apply_to_gates(user_profile, options)
+
     target_layout_id = _normalise_layout_id(target_layout)
     source_layout_id = _extract_source_layout(session, scene)
 
@@ -665,6 +678,10 @@ def evaluate_preflight(
         "confidence_summary": confidence_summary,
         "final_decision": final_decision,
     }
+    if isinstance(user_profile, dict):
+        user_profile_id = user_profile.get("profile_id")
+        if isinstance(user_profile_id, str) and user_profile_id:
+            receipt["user_profile_id"] = user_profile_id
     return receipt
 
 
