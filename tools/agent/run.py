@@ -126,6 +126,7 @@ if __package__:
         resolve_scope_paths,
     )
     from .trace import Tracer
+    from .validate_graph import validate_graph
 else:
     _here = pathlib.Path(__file__).resolve().parent.parent.parent
     if str(_here) not in sys.path:
@@ -155,6 +156,7 @@ else:
         resolve_scope_paths,
     )
     from tools.agent.trace import Tracer
+    from tools.agent.validate_graph import validate_graph
 
 
 # ---------------------------------------------------------------------------
@@ -454,6 +456,7 @@ def _print_summary(
 
     n_py  = sum(1 for e in edges if e["kind"] == "py_import")
     n_pif = sum(1 for e in edges if e["kind"] == "py_import_file")
+    n_pir = sum(1 for e in edges if e["kind"] == "py_import_relative")
     n_sc  = sum(1 for e in edges if e["kind"] == "schema_ref")
     n_id  = sum(1 for e in edges if e["kind"] == "id_ref")
 
@@ -465,11 +468,12 @@ def _print_summary(
         print(f"Build mode       : seed-first diff")
         print(f"Seeds            : {len(meta.get('seeds', []))}")
     print(f"Nodes            : {len(nodes)}")
-    print(f"Edges total      : {len(edges)}")
-    print(f"  py_import      : {n_py}")
-    print(f"  py_import_file : {n_pif}")
-    print(f"  schema_ref     : {n_sc}")
-    print(f"  id_ref         : {n_id}")
+    print(f"Edges total          : {len(edges)}")
+    print(f"  py_import          : {n_py}")
+    print(f"  py_import_file     : {n_pif}")
+    print(f"  py_import_relative : {n_pir}")
+    print(f"  schema_ref         : {n_sc}")
+    print(f"  id_ref             : {n_id}")
 
     top = top_connected_nodes(graph, n=20)
     if top:
@@ -995,6 +999,13 @@ def _mode_patch(
         )
         tracer.emit("patch_refused", reason="malformed_graph")
         return 2
+
+    # Schema validation (non-fatal warnings)
+    schema_errors = validate_graph(graph)
+    if schema_errors:
+        for err in schema_errors:
+            print(f"  [WARN] Graph schema: {err}", file=sys.stderr)
+        tracer.emit("graph_schema_warnings", count=len(schema_errors))
 
     # Graph is valid — proceed with stub
     print(

@@ -38,6 +38,7 @@ from .repo_ops import (
     build_id_allowlist,
     list_files,
     parse_py_imports,
+    parse_relative_py_imports,
     resolve_module_to_path,
     scan_id_refs,
     scan_schema_refs,
@@ -269,6 +270,40 @@ def build_graph(
                         ie.dst,   # evidence = original dotted module name
                         rel,
                     )
+
+            # Relative import edges (py_import_relative)
+            try:
+                rel_import_edges = parse_relative_py_imports(
+                    py_path, root, budgets, tracer
+                )
+            except BudgetExceededError as exc:
+                warnings.append(
+                    f"Budget exceeded parsing relative imports in {rel}: {exc}"
+                )
+                break
+            for rie in rel_import_edges:
+                add_edge("py_import_relative", rie.src, rie.dst, rie.evidence, rel)
+                # Also emit py_import_file when the dst is a resolved abs module
+                if not rie.dst.startswith("."):
+                    resolved_rel_mod = resolve_module_to_path(
+                        rie.dst, effective_repo_root
+                    )
+                    if resolved_rel_mod is not None:
+                        try:
+                            resolved_rel_path = (
+                                (effective_repo_root / resolved_rel_mod)
+                                .relative_to(root)
+                                .as_posix()
+                            )
+                        except ValueError:
+                            resolved_rel_path = resolved_rel_mod
+                        add_edge(
+                            "py_import_file",
+                            rie.src,
+                            resolved_rel_path,
+                            rie.dst,
+                            rel,
+                        )
 
     # -----------------------------------------------------------------------
     # Phase 2: JSON schema $ref edges
@@ -503,6 +538,37 @@ def build_graph_from_files(
                         ie.dst,
                         rel,
                     )
+
+            # Relative import edges (py_import_relative)
+            try:
+                rel_import_edges = parse_relative_py_imports(
+                    py_path, root, budgets, tracer
+                )
+            except BudgetExceededError as exc:
+                warnings.append(
+                    f"Budget exceeded parsing relative imports in {rel}: {exc}"
+                )
+                break
+            for rie in rel_import_edges:
+                add_edge("py_import_relative", rie.src, rie.dst, rie.evidence, rel)
+                if not rie.dst.startswith("."):
+                    resolved_rel_mod = resolve_module_to_path(rie.dst, repo_root)
+                    if resolved_rel_mod is not None:
+                        try:
+                            resolved_rel_path = (
+                                (repo_root / resolved_rel_mod)
+                                .relative_to(root)
+                                .as_posix()
+                            )
+                        except ValueError:
+                            resolved_rel_path = resolved_rel_mod
+                        add_edge(
+                            "py_import_file",
+                            rie.src,
+                            resolved_rel_path,
+                            rie.dst,
+                            rel,
+                        )
 
     # -----------------------------------------------------------------------
     # Phase 2: JSON schema $ref edges

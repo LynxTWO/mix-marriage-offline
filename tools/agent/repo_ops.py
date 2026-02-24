@@ -7,14 +7,16 @@ uniformly across all primitives.
 All returned collections are sorted for determinism.
 
 Public API:
-    list_files             Glob files under root, sorted by POSIX path.
-    read_slice             Read a line range from a file (budget-tracked).
-    grep                   Regex search; uses ripgrep if available, Python fallback.
-    parse_py_imports       AST-based import extraction from .py files.
-    resolve_module_to_path Map a dotted module name to a repo-relative file path.
-    scan_schema_refs       Extract $ref edges from JSON schema files.
-    scan_id_refs           Detect MMO canonical ID references in any text file.
-    build_id_allowlist     Build an allowlist of real IDs from ontology YAML files.
+    list_files                 Glob files under root, sorted by POSIX path.
+    read_slice                 Read a line range from a file (budget-tracked).
+    grep                       Regex search; uses ripgrep if available, Python fallback.
+    parse_py_imports           AST-based import extraction from .py files (absolute imports only).
+    parse_relative_py_imports  AST-based relative import extraction; emits py_import_relative edges.
+    resolve_module_to_path     Map a dotted module name to a repo-relative file path.
+    resolve_relative_import    Resolve a relative import to an absolute dotted module name.
+    scan_schema_refs           Extract $ref edges from JSON schema files.
+    scan_id_refs               Detect MMO canonical ID references in any text file.
+    build_id_allowlist         Build an allowlist of real IDs from ontology YAML files.
 """
 
 from __future__ import annotations
@@ -73,6 +75,109 @@ _IMPORT_PREFIX_DIRS: tuple[str, ...] = ("", "src")
 
 
 # ---------------------------------------------------------------------------
+# Relative import support helpers
+# ---------------------------------------------------------------------------
+
+def _get_package_parts(src_posix: str) -> list[str]:
+    """Return the dotted package path components for *src_posix*.
+
+    Given the POSIX-relative path of a Python source file, strips the
+    package prefix directory (``"src/"`` or repo root) and returns the
+    directory components that form the package name.
+
+    Examples::
+
+        _get_package_parts("src/mmo/core/plan.py")  # → ["mmo", "core"]
+        _get_package_parts("tools/agent/run.py")    # → ["tools", "agent"]
+
+    The search order tries longer prefixes first so that ``src/`` is
+    preferred over the empty-prefix fallback.
+    """
+    # Try non-empty prefixes first (longest-prefix match is more specific).
+    for prefix in sorted(_IMPORT_PREFIX_DIRS, key=len, reverse=True):
+        if not prefix:
+            continue
+        prefix_posix = prefix + "/"
+        if src_posix.startswith(prefix_posix):
+            inner = src_posix[len(prefix_posix):]
+            import pathlib as _pathlib
+            parts = _pathlib.PurePosixPath(inner).parts
+            return list(parts[:-1])  # directory components only, no filename
+
+    # Empty-prefix fallback: file lives directly under the repo root.
+    import pathlib as _pathlib
+    parts = _pathlib.PurePosixPath(src_posix).parts
+    return list(parts[:-1])
+
+
+def resolve_relative_import(
+    src_posix: str,
+    level: int,
+    module: Optional[str],
+) -> Optional[str]:
+    """Resolve a Python relative import to an absolute dotted module name.
+
+    Uses the POSIX-relative path of the importing file and the ``level``
+    (number of leading dots) to determine the base package, then appends
+    *module* to form the resolved name.
+
+    Resolution rules:
+
+    * ``level = 1`` → base is the immediate package of the source file.
+    * ``level = 2`` → base is one package level above (``from .. import X``).
+    * ``level = N`` → base is ``N - 1`` levels above the package.
+
+    Args:
+        src_posix: POSIX-relative path of the importing ``.py`` file
+                   (e.g. ``"src/mmo/core/plan.py"``).
+        level:     Number of leading dots in the relative import (``>= 1``).
+        module:    Module part after the dots (e.g. ``"utils"`` for
+                   ``from .utils import X``).  ``None`` or ``""`` when
+                   importing directly from the package (``from . import X``).
+
+    Returns:
+        Resolved dotted module name (e.g. ``"mmo.core.utils"``), or ``None``
+        if resolution fails (e.g. the ascent goes past the package root).
+
+    Examples::
+
+        # from .utils import Foo  in src/mmo/core/plan.py
+        resolve_relative_import("src/mmo/core/plan.py", 1, "utils")
+        # → "mmo.core.utils"
+
+        # from ..base import Bar  in src/mmo/core/plan.py
+        resolve_relative_import("src/mmo/core/plan.py", 2, "base")
+        # → "mmo.base"
+
+        # from . import something  in src/mmo/core/plan.py
+        resolve_relative_import("src/mmo/core/plan.py", 1, None)
+        # → "mmo.core"
+    """
+    if level <= 0:
+        return None
+
+    pkg_parts = _get_package_parts(src_posix)
+
+    # level=1: stay in current package (no ascent needed)
+    # level=2: go one package up, etc.
+    ascent = level - 1
+    if ascent > len(pkg_parts):
+        return None  # can't ascend past the root
+
+    base_parts = pkg_parts[: len(pkg_parts) - ascent]
+
+    if module:
+        combined = base_parts + module.split(".")
+    else:
+        combined = base_parts
+
+    if not combined:
+        return None
+
+    return ".".join(combined)
+
+
+# ---------------------------------------------------------------------------
 # Named return types
 # ---------------------------------------------------------------------------
 
@@ -118,6 +223,24 @@ class IdRefEdge(NamedTuple):
     """The matched ID string (e.g. ``"ACTION.UTILITY.GAIN"``)."""
     evidence: str
     """Up to 80-char snippet surrounding the match."""
+
+
+class RelativeImportEdge(NamedTuple):
+    """A Python relative import dependency edge.
+
+    Produced by :func:`parse_relative_py_imports` for ``from . import X``
+    and ``from .X import Y`` style imports.  The ``dst`` is the resolved
+    absolute dotted module name when resolution succeeds, or the raw relative
+    notation (e.g. ``".utils"``, ``"..base"``) when resolution fails.
+    """
+
+    src: str
+    """Source file (POSIX-relative path)."""
+    dst: str
+    """Resolved absolute module name (e.g. ``"mmo.core.utils"``) or raw
+    relative notation (e.g. ``".utils"``) when unresolvable."""
+    evidence: str
+    """Raw relative import notation, e.g. ``".utils"``, ``"..base.foo"``."""
 
 
 # ---------------------------------------------------------------------------
@@ -306,9 +429,13 @@ def parse_py_imports(
     budgets: Budgets,
     tracer: Tracer,
 ) -> list[ImportEdge]:
-    """Extract Python import edges from *path* using the AST.
+    """Extract **absolute** Python import edges from *path* using the AST.
 
-    Handles both ``import X`` and ``from X import Y`` forms.
+    Handles both ``import X`` and absolute ``from X import Y`` forms.
+    Relative imports (``from . import X``, ``from .X import Y``, etc.) are
+    intentionally skipped here — use :func:`parse_relative_py_imports` to
+    obtain those as :class:`RelativeImportEdge` namedtuples.
+
     Returns edges sorted and deduplicated.
 
     Args:
@@ -340,9 +467,89 @@ def parse_py_imports(
             for alias in node.names:
                 edges.add(ImportEdge(rel, alias.name, "ast_import"))
         elif isinstance(node, ast.ImportFrom):
+            # Skip relative imports (level > 0): handled by parse_relative_py_imports.
+            if (node.level or 0) > 0:
+                continue
             module = node.module or ""
             if module:
                 edges.add(ImportEdge(rel, module, "ast_import"))
+
+    return sorted(edges)
+
+
+def parse_relative_py_imports(
+    path: pathlib.Path,
+    root: pathlib.Path,
+    budgets: Budgets,
+    tracer: Tracer,
+) -> list[RelativeImportEdge]:
+    """Extract **relative** Python import edges from *path* using the AST.
+
+    Handles ``from . import X``, ``from .X import Y``, ``from .. import X``,
+    and similar relative forms (``ast.ImportFrom`` nodes with ``level >= 1``).
+
+    For each relative import:
+
+    * When ``from .module import X`` (``node.module`` is set): one edge whose
+      ``dst`` is the resolved absolute module name (e.g. ``"mmo.core.module"``)
+      if resolvable, or the raw relative notation (e.g. ``".module"``) if not.
+      The ``evidence`` is always the raw relative notation.
+
+    * When ``from . import X, Y`` (``node.module`` is empty): one edge per
+      imported *name*.  Each edge's ``dst`` is the resolved module obtained by
+      appending the name to the current package (e.g. ``"mmo.core.X"``), or
+      the raw relative notation (e.g. ``".X"``) if unresolvable.
+
+    Budget: charges **one file read** (same as :func:`parse_py_imports`).
+
+    Args:
+        path: The ``.py`` file to parse.
+        root: Repo root for computing the POSIX-relative ``src`` field.
+        budgets: Budget tracker (charges one file read).
+        tracer: Trace sink.
+
+    Returns:
+        Sorted, deduplicated list of :class:`RelativeImportEdge` namedtuples.
+    """
+    text = _read_file_text(path, budgets, tracer)
+    if not text:
+        return []
+    try:
+        rel = path.relative_to(root).as_posix()
+    except ValueError:
+        rel = str(path)
+
+    edges: set[RelativeImportEdge] = set()
+    try:
+        tree = ast.parse(text, filename=str(path))
+    except SyntaxError:
+        tracer.emit("parse_error", kind="syntax", path=rel)
+        return []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        level = node.level or 0
+        if level <= 0:
+            continue  # absolute import — handled by parse_py_imports
+
+        module = node.module or ""
+        dots = "." * level
+
+        if module:
+            # from .module import X  →  one edge targeting the module
+            raw = dots + module
+            resolved = resolve_relative_import(rel, level, module)
+            dst = resolved if resolved is not None else raw
+            edges.add(RelativeImportEdge(rel, dst, raw))
+        else:
+            # from . import X, Y  →  one edge per imported name
+            for alias in node.names:
+                name = alias.name
+                raw = dots + name
+                resolved = resolve_relative_import(rel, level, name)
+                dst = resolved if resolved is not None else raw
+                edges.add(RelativeImportEdge(rel, dst, raw))
 
     return sorted(edges)
 

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/agent_graph.schema.json",
+  "title": "MMO Agent Graph",
+  "description": "Dependency graph artifact produced by the agent REPL harness (tools/agent/).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["nodes", "edges", "warnings"],
+  "properties": {
+    "nodes": {
+      "description": "Graph nodes, sorted by (kind, id). Each node represents a file or canonical ID.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind"],
+        "properties": {
+          "id":   {"type": "string", "minLength": 1, "description": "POSIX-relative path from repo root, or a canonical ID string."},
+          "kind": {"type": "string", "minLength": 1, "description": "Node kind. Currently always 'file'."}
+        }
+      }
+    },
+    "edges": {
+      "description": "Directed dependency edges, sorted by (kind, src, dst, evidence).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["dst", "evidence", "kind", "source_file", "src"],
+        "properties": {
+          "dst": {
+            "type": "string",
+            "description": "Destination node id (file path, dotted module name, canonical ID, or $ref string)."
+          },
+          "evidence": {
+            "type": "string",
+            "description": "Human-readable evidence string for the edge (e.g. dotted module name, $ref value, ID snippet)."
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["id_ref", "py_import", "py_import_file", "py_import_relative", "schema_ref"],
+            "description": "Edge kind: py_import=absolute Python import; py_import_file=resolved file path; py_import_relative=relative Python import; schema_ref=JSON $ref; id_ref=MMO canonical ID reference."
+          },
+          "source_file": {
+            "type": "string",
+            "description": "POSIX-relative path of the file that produced this edge."
+          },
+          "src": {
+            "type": "string",
+            "description": "Source node id."
+          }
+        }
+      }
+    },
+    "warnings": {
+      "description": "Human-readable warnings emitted during graph build (e.g. budget hits, parse errors).",
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "meta": {
+      "description": "Optional metadata injected by diff/seed-first build modes.",
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

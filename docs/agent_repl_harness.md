@@ -30,8 +30,9 @@ Locate → Graph → Plan → Patch (optional, guarded)
 |----------------------|------|
 | `budgets.py`         | Hard budget caps; raises `BudgetExceededError` on overflow. |
 | `trace.py`           | Structured NDJSON trace log for every operation. |
-| `repo_ops.py`        | Safe primitives: `list_files`, `read_slice`, `grep`, `parse_py_imports`, `resolve_module_to_path`, `scan_schema_refs`, `scan_id_refs`, `build_id_allowlist`. |
+| `repo_ops.py`        | Safe primitives: `list_files`, `read_slice`, `grep`, `parse_py_imports`, `parse_relative_py_imports`, `resolve_module_to_path`, `resolve_relative_import`, `scan_schema_refs`, `scan_id_refs`, `build_id_allowlist`. |
 | `graph_build.py`     | Orchestrates a full graph build; writes deterministic JSON.  Also exposes `build_graph_from_files()` for the seed-first path. |
+| `validate_graph.py`  | `validate_graph(graph) → list[str]` — validates a graph dict against `schemas/agent_graph.schema.json`. |
 | `scoping.py`         | Scope presets, diff BFS expansion, graph filtering. |
 | `diff_seed_first.py` | Seed-first BFS expansion: cheap AST + schema-ref crawl from changed files. |
 | `explain.py`         | Edge-path explanations: shortest path + scope justifications. |
@@ -67,6 +68,38 @@ Best-effort resolver: maps a dotted module name to a repo-relative file path.
   (priority 1).  Within the same tier, shortest path then lex order wins.
 - Only performs filesystem existence checks — **no file reads, no budget charges**.
 - Returns `None` for stdlib or third-party modules not found under `root`.
+
+### `resolve_relative_import(src_posix, level, module)` *(new)*
+Resolves a Python relative import to an absolute dotted module name.
+
+```python
+# from .utils import Foo  in src/mmo/core/plan.py
+resolve_relative_import("src/mmo/core/plan.py", 1, "utils")
+# → "mmo.core.utils"
+
+# from ..base import Bar  in src/mmo/core/plan.py
+resolve_relative_import("src/mmo/core/plan.py", 2, "base")
+# → "mmo.base"
+
+# from . import something  in src/mmo/core/plan.py
+resolve_relative_import("src/mmo/core/plan.py", 1, None)
+# → "mmo.core"
+```
+
+- `level = 1` → base is the immediate package of the source file.
+- `level = N` → base is `N − 1` levels above the package.
+- Returns `None` when ascent would go past the package root.
+- No file reads, no budget charges.
+
+### `parse_relative_py_imports(path, root, budgets, tracer)` *(new)*
+Extracts `py_import_relative` edges from relative imports in a `.py` file.
+
+- Handles `from . import X`, `from .X import Y`, `from .. import X`, etc.
+- `dst` is the resolved absolute module name when resolvable, or the raw
+  relative notation (e.g. `".utils"`) otherwise.
+- `evidence` is always the raw relative notation (e.g. `".utils"`, `"..base"`).
+- Charges **one file read** (independent of `parse_py_imports`).
+- Returns sorted, deduplicated `RelativeImportEdge` namedtuples.
 
 ### `scan_schema_refs(path, root, budgets, tracer)`
 Recursively walks a JSON file and extracts every `$ref` value.
@@ -389,8 +422,9 @@ After running, two files are written to `<out>/` (default: `sandbox_tmp/`):
 
 | Kind | `src` | `dst` | `evidence` |
 |------|-------|-------|------------|
-| `py_import` | Python file (rel path) | Imported module (dotted) | `"ast_import"` |
+| `py_import` | Python file (rel path) | Imported module (dotted, absolute) | `"ast_import"` |
 | `py_import_file` | Python file (rel path) | Resolved file path (rel) | Dotted module name |
+| `py_import_relative` | Python file (rel path) | Resolved abs module name (or raw `".X"`) | Raw relative notation |
 | `schema_ref` | Schema file (rel path) | `$ref` target | Raw `$ref` string |
 | `id_ref` | Any text file (rel path) | Matched MMO ID string | 80-char snippet |
 
@@ -402,6 +436,19 @@ After running, two files are written to `<out>/` (default: `sandbox_tmp/`):
 - Only in-repo modules are resolved; stdlib and third-party packages remain as
   `py_import`-only edges.
 - Resolution uses only filesystem existence checks (no file reads, no budget).
+
+**`py_import_relative` edges** *(new)*:
+- Emitted for relative imports: `from . import X`, `from .X import Y`, `from .. import X`, etc.
+- `dst` is the resolved absolute dotted module name when resolution succeeds
+  (e.g. `"mmo.core.utils"` for `from .utils import Foo` in `src/mmo/core/plan.py`).
+  Falls back to the raw relative notation (e.g. `".utils"`) on failure.
+- `evidence` is always the raw relative notation (e.g. `".utils"`, `"..base"`).
+- A companion `py_import_file` edge is also emitted for the resolved file (same
+  as for absolute `py_import` edges) when the module resolves to an in-repo file.
+- **Bug fix**: before this change, relative imports were incorrectly emitted as
+  absolute `py_import` edges (e.g. `from .utils import X` → edge to `"utils"`).
+  Those edges are now suppressed from `py_import` and emitted correctly under
+  `py_import_relative`.
 
 All lists are deterministically sorted:
 - Nodes by `(kind, id)`.
@@ -468,12 +515,13 @@ One JSON object per line, sequence-numbered (no timestamps):
 
 ```
 === Agent Graph Summary ===
-Nodes            : 87
-Edges total      : 612
-  py_import      : 210
-  py_import_file : 145
-  schema_ref     : 134
-  id_ref         : 123
+Nodes                : 87
+Edges total          : 640
+  py_import          : 210
+  py_import_file     : 165
+  py_import_relative : 28
+  schema_ref         : 134
+  id_ref             : 103
 
 Top 10 most connected nodes (by degree):
    1. [file  ] deg= 42  src/mmo/cli.py
@@ -512,6 +560,47 @@ python -m tools.agent.run graph-only \
     --max-file-reads 500 \
     --max-total-lines 200000
 ```
+
+---
+
+## Graph schema + validate_graph()
+
+The artifact structure is formally defined in `schemas/agent_graph.schema.json`
+(also mirrored to `src/mmo/data/schemas/agent_graph.schema.json` for packaged
+installs).  The schema is strict (`additionalProperties: false`) and enumerates
+all valid edge kinds.
+
+### `validate_graph(graph, schema_path=None)` → `list[str]`
+
+Validates a graph dict and returns a list of error strings (empty = valid).
+
+```python
+import json
+from tools.agent.validate_graph import validate_graph
+
+graph = json.loads(pathlib.Path("sandbox_tmp/agent_graph.json").read_text(encoding="utf-8"))
+errors = validate_graph(graph)
+if errors:
+    for err in errors:
+        print(f"  [ERROR] {err}")
+else:
+    print("Graph is valid.")
+```
+
+**Two-phase validation:**
+
+1. **Structural check** (always, no external dependencies): verifies required
+   keys, field types, and known edge kinds.
+2. **JSON Schema check** (when `jsonschema` is installed): full validation
+   against `schemas/agent_graph.schema.json`.
+
+`patch` mode calls `validate_graph()` automatically after loading the artifact
+and prints any errors as `[WARN]` messages (non-fatal, preserving exit codes).
+
+**Gotcha:** `validate_graph` requires the repo-local schema file
+(`schemas/agent_graph.schema.json`) to exist for phase 2.  If the schema is
+missing (e.g. installed wheel without schemas), only the structural check runs —
+still catches most issues.
 
 ---
 
@@ -795,6 +884,32 @@ python -m tools.agent.run graph-only --profile code --index-skip-path ""
 
 ## Daily recipes
 
+### Self-dogfood: run the harness on itself
+
+The harness is self-validating.  Running it on `tools/agent/` should always
+produce a valid graph with no schema errors:
+
+```bash
+# Run on the harness directory itself (no diff, no contract stamp for speed)
+python -m tools.agent.run graph-only \
+    --root tools/agent \
+    --no-contract-stamp \
+    --no-index \
+    --max-file-reads 200 \
+    --max-total-lines 50000
+
+# Validate the resulting artifact
+python -c "
+import json, pathlib
+from tools.agent.validate_graph import validate_graph
+g = json.loads(pathlib.Path('sandbox_tmp/agent_graph.json').read_text('utf-8'))
+errs = validate_graph(g)
+print('VALID' if not errs else 'ERRORS: ' + str(errs))
+"
+```
+
+The automated equivalent runs in `tests/test_agent_harness.py::TestSelfDogfood`.
+
 ### Which mode for which task?
 
 | Task | Recommended command |
@@ -849,7 +964,9 @@ python -m tools.agent.run graph-only \
 
 **Add a new edge kind:** implement a scan function in `repo_ops.py` (accept
 `path, root, budgets, tracer`, return sorted namedtuples), call it from the
-appropriate phase in `graph_build.build_graph`, and add a test.
+appropriate phase in `graph_build.build_graph`, add the new kind to the
+`"enum"` in `schemas/agent_graph.schema.json` **and** its packaged mirror
+(`src/mmo/data/schemas/agent_graph.schema.json`), then add a test.
 
 **Add symbol-level nodes:** parse `ast.FunctionDef` / `ast.ClassDef` nodes in
 `parse_py_imports` and emit `{"kind": "symbol", "id": "module:ClassName"}` nodes.

@@ -78,6 +78,31 @@ PR C — budget profiles and index skip:
     TestProfileAndIndexSkip.test_is_path_skipped_exact_match
     TestProfileAndIndexSkip.test_is_path_skipped_prefix_match
     TestProfileAndIndexSkip.test_is_path_skipped_partial_prefix_no_match
+
+Relative import support:
+    TestRelativeImport.test_resolve_level1_with_module
+    TestRelativeImport.test_resolve_level2_with_module
+    TestRelativeImport.test_resolve_level1_no_module
+    TestRelativeImport.test_resolve_exceeds_depth_returns_none
+    TestRelativeImport.test_resolve_level1_root_file
+    TestRelativeImport.test_parse_relative_py_imports_basic
+    TestRelativeImport.test_parse_py_imports_skips_relative
+    TestRelativeImport.test_relative_import_emits_py_import_relative_edge
+    TestRelativeImport.test_relative_import_emits_py_import_file_when_resolved
+
+Graph schema validation:
+    TestValidateGraph.test_valid_graph_returns_no_errors
+    TestValidateGraph.test_empty_lists_is_valid
+    TestValidateGraph.test_missing_nodes_key_returns_error
+    TestValidateGraph.test_missing_edges_key_returns_error
+    TestValidateGraph.test_missing_warnings_key_returns_error
+    TestValidateGraph.test_not_a_dict_returns_error
+    TestValidateGraph.test_unknown_edge_kind_returns_error
+
+Self-dogfood integration:
+    TestSelfDogfood.test_harness_runs_on_tools_agent_dir
+    TestSelfDogfood.test_harness_graph_is_deterministic
+    TestSelfDogfood.test_harness_graph_passes_validate_graph
     TestProfileAndIndexSkip.test_is_path_skipped_unrelated_path
     TestProfileAndIndexSkip.test_is_path_skipped_empty_skip_set
     TestProfileAndIndexSkip.test_build_id_occurrences_skips_docs_files
@@ -124,10 +149,13 @@ from tools.agent.index_build import build_index, save_index  # noqa: E402
 from tools.agent.repo_ops import (  # noqa: E402
     build_id_allowlist,
     parse_py_imports,
+    parse_relative_py_imports,
     resolve_module_to_path,
+    resolve_relative_import,
     scan_id_refs,
     scan_schema_refs,
 )
+from tools.agent.validate_graph import validate_graph  # noqa: E402
 from tools.agent.run import main as harness_main  # noqa: E402
 from tools.agent.scoping import (  # noqa: E402
     expand_diff_scope,
@@ -145,6 +173,7 @@ _CLI_PY = _REPO_ROOT / "src" / "mmo" / "resources.py"
 _SCHEMAS_DIR = _REPO_ROOT / "schemas"
 _ONTOLOGY_DIR = _REPO_ROOT / "ontology"
 _CORE_DIR = _REPO_ROOT / "src" / "mmo" / "core"
+_TOOLS_AGENT_DIR = _REPO_ROOT / "tools" / "agent"
 
 
 def _budgets(max_file_reads: int = 200, max_total_lines: int = 200_000) -> Budgets:
@@ -2600,3 +2629,302 @@ class TestProfileAndIndexSkip:
 
         assert args_code.max_file_reads > args_default.max_file_reads
         assert args_code.max_total_lines > args_default.max_total_lines
+
+
+# ===========================================================================
+# Relative import support (py_import_relative edge kind)
+# ===========================================================================
+
+class TestRelativeImport:
+    """Unit tests for resolve_relative_import and parse_relative_py_imports."""
+
+    def test_resolve_level1_with_module(self) -> None:
+        """from .utils import X  in src/mmo/core/plan.py → mmo.core.utils"""
+        result = resolve_relative_import("src/mmo/core/plan.py", 1, "utils")
+        assert result == "mmo.core.utils", f"Unexpected: {result}"
+
+    def test_resolve_level2_with_module(self) -> None:
+        """from ..base import Y  in src/mmo/core/plan.py → mmo.base"""
+        result = resolve_relative_import("src/mmo/core/plan.py", 2, "base")
+        assert result == "mmo.base", f"Unexpected: {result}"
+
+    def test_resolve_level1_no_module(self) -> None:
+        """from . import something  in src/mmo/core/plan.py → mmo.core"""
+        result = resolve_relative_import("src/mmo/core/plan.py", 1, None)
+        assert result == "mmo.core", f"Unexpected: {result}"
+
+    def test_resolve_exceeds_depth_returns_none(self) -> None:
+        """Ascending past the root returns None (e.g. from ... import x in mmo/a.py)."""
+        result = resolve_relative_import("src/mmo/a.py", 3, "x")
+        assert result is None, f"Expected None, got: {result}"
+
+    def test_resolve_level1_root_file(self) -> None:
+        """from . import x  in tools/agent/run.py → tools.agent"""
+        result = resolve_relative_import("tools/agent/run.py", 1, None)
+        assert result == "tools.agent", f"Unexpected: {result}"
+
+    def test_parse_relative_py_imports_basic(self, tmp_path: pathlib.Path) -> None:
+        """parse_relative_py_imports returns RelativeImportEdge namedtuples."""
+        src = tmp_path / "pkg" / "module.py"
+        src.parent.mkdir(parents=True)
+        src.write_text("from .utils import Foo\nfrom ..base import Bar\n",
+                       encoding="utf-8")
+        edges = parse_relative_py_imports(src, tmp_path, _budgets(), Tracer())
+        assert len(edges) >= 1, "Expected at least one relative import edge"
+        for e in edges:
+            assert hasattr(e, "src")
+            assert hasattr(e, "dst")
+            assert hasattr(e, "evidence")
+            # evidence must start with dots
+            assert e.evidence.startswith("."), (
+                f"evidence should start with dots: {e.evidence!r}"
+            )
+
+    def test_parse_py_imports_skips_relative(self, tmp_path: pathlib.Path) -> None:
+        """parse_py_imports must NOT emit edges for relative imports."""
+        src = tmp_path / "pkg" / "mod.py"
+        src.parent.mkdir(parents=True)
+        src.write_text(
+            "from .utils import Foo\nimport os\nfrom os.path import join\n",
+            encoding="utf-8",
+        )
+        edges = parse_py_imports(src, tmp_path, _budgets(), Tracer())
+        dsts = {e.dst for e in edges}
+        # ".utils" must NOT appear as a dst in py_import edges
+        assert ".utils" not in dsts, (
+            f"Relative import '.utils' leaked into py_import edges: {dsts}"
+        )
+        # Absolute imports must still be present
+        assert "os" in dsts, f"Expected 'os' in dsts: {dsts}"
+
+    def test_relative_import_emits_py_import_relative_edge(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """build_graph_from_files emits py_import_relative edges for relative imports."""
+        pkg = tmp_path / "mypkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("", encoding="utf-8")
+        utils = pkg / "utils.py"
+        utils.write_text("X = 1\n", encoding="utf-8")
+        mod = pkg / "mod.py"
+        mod.write_text("from .utils import X\n", encoding="utf-8")
+
+        files = [mod, utils, pkg / "__init__.py"]
+        graph = build_graph_from_files(
+            files=files,
+            root=tmp_path,
+            repo_root=tmp_path,
+            budgets=_budgets(),
+            tracer=Tracer(),
+            use_id_allowlist=False,
+        )
+        edge_kinds = {e["kind"] for e in graph["edges"]}
+        assert "py_import_relative" in edge_kinds, (
+            f"Expected py_import_relative edges; got kinds: {edge_kinds}"
+        )
+        rel_edges = [e for e in graph["edges"] if e["kind"] == "py_import_relative"]
+        # evidence must start with dots
+        for e in rel_edges:
+            assert e["evidence"].startswith("."), (
+                f"evidence should start with dot: {e['evidence']!r}"
+            )
+
+    def test_relative_import_emits_py_import_file_when_resolved(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Resolved relative imports also produce py_import_file edges."""
+        pkg = tmp_path / "mypkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("", encoding="utf-8")
+        utils = pkg / "utils.py"
+        utils.write_text("X = 1\n", encoding="utf-8")
+        mod = pkg / "mod.py"
+        mod.write_text("from .utils import X\n", encoding="utf-8")
+
+        files = [mod, utils, pkg / "__init__.py"]
+        graph = build_graph_from_files(
+            files=files,
+            root=tmp_path,
+            repo_root=tmp_path,
+            budgets=_budgets(),
+            tracer=Tracer(),
+            use_id_allowlist=False,
+        )
+        # There should be a py_import_file edge from mod.py to utils.py
+        pif_edges = [
+            e for e in graph["edges"]
+            if e["kind"] == "py_import_file"
+            and "mod.py" in e["src"]
+            and "utils.py" in e["dst"]
+        ]
+        assert len(pif_edges) >= 1, (
+            f"Expected py_import_file edge mod.py→utils.py; "
+            f"edges: {[(e['src'], e['dst'], e['kind']) for e in graph['edges']]}"
+        )
+
+
+# ===========================================================================
+# Graph schema validation (validate_graph)
+# ===========================================================================
+
+class TestValidateGraph:
+    """Tests for tools.agent.validate_graph.validate_graph()."""
+
+    @staticmethod
+    def _valid_graph() -> dict:
+        return {
+            "nodes": [{"id": "src/mmo/cli.py", "kind": "file"}],
+            "edges": [
+                {
+                    "src": "src/mmo/cli.py",
+                    "dst": "src/mmo/core/render_plan.py",
+                    "kind": "py_import_file",
+                    "evidence": "mmo.core.render_plan",
+                    "source_file": "src/mmo/cli.py",
+                }
+            ],
+            "warnings": [],
+        }
+
+    def test_valid_graph_returns_no_errors(self) -> None:
+        errors = validate_graph(self._valid_graph())
+        assert errors == [], f"Expected no errors; got: {errors}"
+
+    def test_empty_lists_is_valid(self) -> None:
+        graph = {"nodes": [], "edges": [], "warnings": []}
+        assert validate_graph(graph) == []
+
+    def test_missing_nodes_key_returns_error(self) -> None:
+        errors = validate_graph({"edges": [], "warnings": []})
+        assert any("nodes" in e for e in errors), (
+            f"Expected error about 'nodes'; got: {errors}"
+        )
+
+    def test_missing_edges_key_returns_error(self) -> None:
+        errors = validate_graph({"nodes": [], "warnings": []})
+        assert any("edges" in e for e in errors), (
+            f"Expected error about 'edges'; got: {errors}"
+        )
+
+    def test_missing_warnings_key_returns_error(self) -> None:
+        errors = validate_graph({"nodes": [], "edges": []})
+        assert any("warnings" in e for e in errors), (
+            f"Expected error about 'warnings'; got: {errors}"
+        )
+
+    def test_not_a_dict_returns_error(self) -> None:
+        errors = validate_graph(["not", "a", "dict"])
+        assert len(errors) >= 1, "Expected at least one error for non-dict input"
+
+    def test_unknown_edge_kind_returns_error(self) -> None:
+        """An unrecognised edge kind must produce a validation error."""
+        graph = self._valid_graph()
+        graph["edges"][0]["kind"] = "unknown_kind_xyz"
+        errors = validate_graph(graph)
+        assert any("unknown_kind_xyz" in e or "kind" in e for e in errors), (
+            f"Expected error about unknown edge kind; got: {errors}"
+        )
+
+    def test_valid_all_edge_kinds(self) -> None:
+        """Every documented edge kind is accepted by the validator."""
+        for kind in (
+            "py_import", "py_import_file", "py_import_relative",
+            "schema_ref", "id_ref",
+        ):
+            graph = {
+                "nodes": [{"id": "a.py", "kind": "file"}],
+                "edges": [{
+                    "src": "a.py", "dst": "b.py", "kind": kind,
+                    "evidence": "x", "source_file": "a.py",
+                }],
+                "warnings": [],
+            }
+            errors = validate_graph(graph)
+            assert errors == [], (
+                f"Edge kind '{kind}' should be valid; got errors: {errors}"
+            )
+
+
+# ===========================================================================
+# Self-dogfood integration tests
+# ===========================================================================
+
+class TestSelfDogfood:
+    """Harness runs on the tools/agent/ directory itself without crashing.
+
+    These tests verify that the harness eats its own dogfood:
+    the directory that *is* the harness can be scanned by the harness,
+    the resulting graph is deterministic, and validate_graph() reports no errors.
+    """
+
+    _COMMON_ARGS = [
+        "--no-contract-stamp",
+        "--no-index",
+        "--max-file-reads", "200",
+        "--max-total-lines", "50000",
+        "--max-steps", "200",
+    ]
+
+    def _run(self, out_dir: pathlib.Path) -> dict:
+        """Run graph-only on tools/agent/ and return the parsed graph."""
+        rc = harness_main([
+            "graph-only",
+            "--root", str(_TOOLS_AGENT_DIR),
+            "--out", str(out_dir),
+        ] + list(self._COMMON_ARGS))
+        assert rc in (0, 1), f"Unexpected exit code {rc} (budget issues are ok)"
+        graph_path = out_dir / "agent_graph.json"
+        assert graph_path.exists(), "agent_graph.json not written"
+        return json.loads(graph_path.read_text(encoding="utf-8"))
+
+    def test_harness_runs_on_tools_agent_dir(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """graph-only on tools/agent/ succeeds and writes a graph artifact."""
+        assert _TOOLS_AGENT_DIR.is_dir(), f"tools/agent dir missing: {_TOOLS_AGENT_DIR}"
+        graph = self._run(tmp_path / "out")
+
+        # Must have the three required keys
+        assert "nodes" in graph
+        assert "edges" in graph
+        assert "warnings" in graph
+
+        # Must find at least some of the harness's own .py files
+        node_ids = {n["id"] for n in graph["nodes"]}
+        assert any("run.py" in nid for nid in node_ids), (
+            f"run.py not found in graph nodes; sample: {sorted(node_ids)[:10]}"
+        )
+
+    def test_harness_graph_is_deterministic(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Two consecutive graph-only runs produce byte-identical JSON."""
+        g1 = self._run(tmp_path / "run1")
+        g2 = self._run(tmp_path / "run2")
+        assert g1 == g2, (
+            "Graph is not deterministic: runs produced different results.\n"
+            f"Nodes run1={len(g1['nodes'])} run2={len(g2['nodes'])}\n"
+            f"Edges run1={len(g1['edges'])} run2={len(g2['edges'])}"
+        )
+
+    def test_harness_graph_passes_validate_graph(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """validate_graph() reports no errors on a freshly built graph."""
+        graph = self._run(tmp_path / "out")
+        errors = validate_graph(graph)
+        assert errors == [], (
+            f"validate_graph reported errors on self-built graph:\n"
+            + "\n".join(f"  {e}" for e in errors)
+        )
+
+    def test_harness_graph_contains_py_import_relative_edges(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """tools/agent/ uses relative imports, so py_import_relative edges must appear."""
+        graph = self._run(tmp_path / "out")
+        edge_kinds = {e["kind"] for e in graph["edges"]}
+        assert "py_import_relative" in edge_kinds, (
+            f"Expected py_import_relative edges in tools/agent/ graph; "
+            f"found kinds: {sorted(edge_kinds)}"
+        )
