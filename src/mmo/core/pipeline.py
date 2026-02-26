@@ -150,7 +150,7 @@ def _coerce_plugin_capabilities(value: Any) -> PluginCapabilities | None:
     )
 
 
-def load_plugins(plugins_dir: Path) -> List[PluginEntry]:
+def _load_plugins_from_dir(plugins_dir: Path) -> List[PluginEntry]:
     entries: List[PluginEntry] = []
     for manifest_path in _collect_manifests(plugins_dir):
         data = _load_yaml(manifest_path)
@@ -181,6 +181,19 @@ def load_plugins(plugins_dir: Path) -> List[PluginEntry]:
         )
     entries.sort(key=lambda entry: entry.plugin_id)
     return entries
+
+
+def load_plugins(
+    plugins_dir: Path,
+    plugin_dir: Path | None = None,
+) -> List[PluginEntry]:
+    """Load plugins from the primary and external plugin roots."""
+    from mmo.core.plugin_loader import load_registered_plugins  # noqa: WPS433
+
+    return load_registered_plugins(
+        plugins_dir=plugins_dir,
+        plugin_dir=plugin_dir,
+    )
 
 
 def _coerce_list(value: Any) -> List[Any]:

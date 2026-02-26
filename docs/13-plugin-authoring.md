@@ -16,6 +16,16 @@ Example starter pack:
 - `plugins/examples/gain_v0/gain_v0.plugin.yaml`
 - `plugins/examples/gain_v0/ui/layout.json`
 
+## 1.1 External plugin roots
+
+MMO now loads plugins from two roots:
+
+- Primary root: `--plugins` (default: `plugins/` in repo mode).
+- External root: `~/.mmo/plugins/` by default, or `--plugin-dir <path>` to override.
+
+External plugin manifests are automatically validated (schema + ontology semantics)
+before registration. Duplicate `plugin_id` values across roots are rejected.
+
 ## 2. Manifest checklist
 
 - `plugin_id` matches schema pattern for the plugin type
@@ -53,6 +63,13 @@ Run both commands and confirm deterministic output across repeated runs:
 ```powershell
 python -m mmo plugins show --include-ui-hints --include-ui-layout-snapshot
 python -m mmo plugins ui-lint
+```
+
+With external plugins:
+
+```powershell
+python -m mmo plugins list --plugins plugins --plugin-dir ~/.mmo/plugins
+python -m mmo render --report report.json --plugins plugins --plugin-dir ~/.mmo/plugins --out-manifest render_manifest.json
 ```
 
 Use `python -m mmo plugins show PLUGIN.RENDERER.EXAMPLE_GAIN_V0 ...` to target a specific plugin.

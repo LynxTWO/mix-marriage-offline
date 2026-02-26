@@ -335,7 +335,7 @@ def load_and_validate_plugins(
     if errors_by_path:
         raise PluginRegistryError(errors_by_path)
 
-    # Delegate actual loading to the pipeline loader
-    from mmo.core.pipeline import load_plugins  # noqa: WPS433
+    # Delegate actual loading to the single-root pipeline loader.
+    from mmo.core.pipeline import _load_plugins_from_dir  # noqa: WPS433
 
-    return load_plugins(plugins_dir)
+    return _load_plugins_from_dir(plugins_dir)

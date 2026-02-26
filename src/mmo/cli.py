@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
 import subprocess
 import sys
@@ -261,6 +262,11 @@ def main(argv: list[str] | None = None) -> int:
         "--plugins",
         default="plugins",
         help="Path to the plugins directory.",
+    )
+    analyze_parser.add_argument(
+        "--plugin-dir",
+        default=None,
+        help="Optional external plugins directory (default: ~/.mmo/plugins).",
     )
     analyze_parser.add_argument(
         "--keep-scan",
@@ -903,6 +909,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to plugins directory.",
     )
     render_parser.add_argument(
+        "--plugin-dir",
+        default=None,
+        help="Optional external plugins directory (default: ~/.mmo/plugins).",
+    )
+    render_parser.add_argument(
         "--out-manifest",
         required=True,
         help="Path to output render manifest JSON.",
@@ -961,6 +972,11 @@ def main(argv: list[str] | None = None) -> int:
         "--plugins",
         default="plugins",
         help="Path to plugins directory (default: plugins).",
+    )
+    safe_render_parser.add_argument(
+        "--plugin-dir",
+        default=None,
+        help="Optional external plugins directory (default: ~/.mmo/plugins).",
     )
     safe_render_parser.add_argument(
         "--target",
@@ -1117,6 +1133,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to plugins directory.",
     )
     apply_parser.add_argument(
+        "--plugin-dir",
+        default=None,
+        help="Optional external plugins directory (default: ~/.mmo/plugins).",
+    )
+    apply_parser.add_argument(
         "--out-manifest",
         required=True,
         help="Path to output apply manifest JSON.",
@@ -1231,6 +1252,11 @@ def main(argv: list[str] | None = None) -> int:
         "--plugins",
         default="plugins",
         help="Path to plugins directory used by --include-plugins.",
+    )
+    bundle_parser.add_argument(
+        "--plugin-dir",
+        default=None,
+        help="Optional external plugins directory (default: ~/.mmo/plugins).",
     )
     bundle_parser.add_argument(
         "--include-plugin-layouts",
@@ -1539,6 +1565,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to plugins directory.",
     )
     plugins_list_parser.add_argument(
+        "--plugin-dir",
+        default=None,
+        help="Optional external plugins directory (default: ~/.mmo/plugins).",
+    )
+    plugins_list_parser.add_argument(
         "--format",
         choices=["json", "text"],
         default="text",
@@ -1552,6 +1583,11 @@ def main(argv: list[str] | None = None) -> int:
         "--plugins",
         default="plugins",
         help="Path to plugins directory.",
+    )
+    plugins_ui_lint_parser.add_argument(
+        "--plugin-dir",
+        default=None,
+        help="Optional external plugins directory (default: ~/.mmo/plugins).",
     )
     plugins_ui_lint_parser.add_argument(
         "--format",
@@ -1576,6 +1612,11 @@ def main(argv: list[str] | None = None) -> int:
         "--plugins",
         default="plugins",
         help="Path to plugins directory.",
+    )
+    plugins_show_parser.add_argument(
+        "--plugin-dir",
+        default=None,
+        help="Optional external plugins directory (default: ~/.mmo/plugins).",
     )
     plugins_show_parser.add_argument(
         "--format",
@@ -2629,6 +2670,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to plugins directory used by --include-plugins.",
     )
     project_bundle_parser.add_argument(
+        "--plugin-dir",
+        default=None,
+        help="Optional external plugins directory (default: ~/.mmo/plugins).",
+    )
+    project_bundle_parser.add_argument(
         "--include-plugin-layouts",
         action="store_true",
         help=(
@@ -2734,6 +2780,11 @@ def main(argv: list[str] | None = None) -> int:
         "--plugins",
         default="plugins",
         help="Path to plugins directory used by --include-plugins.",
+    )
+    project_build_gui_parser.add_argument(
+        "--plugin-dir",
+        default=None,
+        help="Optional external plugins directory (default: ~/.mmo/plugins).",
     )
     project_build_gui_parser.add_argument(
         "--include-plugin-layouts",
@@ -3094,6 +3145,11 @@ def main(argv: list[str] | None = None) -> int:
         "--plugins",
         default="plugins",
         help="Path to plugins directory.",
+    )
+    downmix_render_parser.add_argument(
+        "--plugin-dir",
+        default=None,
+        help="Optional external plugins directory (default: ~/.mmo/plugins).",
     )
     downmix_render_parser.add_argument(
         "--out-manifest",
@@ -4006,6 +4062,11 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 1
+
+    plugin_dir_override = getattr(args, "plugin_dir", None)
+    if isinstance(plugin_dir_override, str) and plugin_dir_override.strip():
+        os.environ["MMO_PLUGIN_DIR"] = plugin_dir_override.strip()
+
     from mmo.resources import (
         _repo_checkout_root,
         ontology_dir,
