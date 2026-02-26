@@ -10,12 +10,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from mmo.core.presets import load_preset_run_config
+from mmo.core.config import load_effective_run_config
 from mmo.core.routing import apply_routing_plan_to_report
 from mmo.core.run_config import (
     RUN_CONFIG_SCHEMA_VERSION,
-    load_run_config,
-    merge_run_config,
     normalize_run_config,
 )
 from mmo.core.timeline import load_timeline
@@ -250,20 +248,12 @@ def _load_and_merge_run_config(
     preset_id: str | None = None,
     presets_dir: Path | None = None,
 ) -> dict[str, Any]:
-    merged_cfg: dict[str, Any] = {}
-    if preset_id:
-        if presets_dir is None:
-            raise ValueError("presets_dir is required when preset_id is provided.")
-        preset_cfg = load_preset_run_config(presets_dir, preset_id)
-        merged_cfg = merge_run_config(merged_cfg, preset_cfg)
-    if config_path:
-        file_cfg = load_run_config(Path(config_path))
-        merged_cfg = merge_run_config(merged_cfg, file_cfg)
-    merged_cfg = merge_run_config(merged_cfg, cli_overrides)
-    if preset_id:
-        merged_cfg["preset_id"] = preset_id.strip()
-        return normalize_run_config(merged_cfg)
-    return merged_cfg
+    return load_effective_run_config(
+        Path(config_path) if config_path else None,
+        cli_overrides,
+        preset_id=preset_id,
+        presets_dir=presets_dir,
+    )
 
 
 def _config_string(config: dict[str, Any], key: str, default: str) -> str:

@@ -117,8 +117,17 @@ def ontology_dir() -> Path:
 
 
 def presets_dir() -> Path:
-    """Return the directory containing preset JSON files."""
-    return data_root() / "presets"
+    """Return the directory containing preset JSON files.
+
+    Prefers ``ontology/presets`` when present so presets can be shipped inside
+    the ontology package tree, while preserving backward compatibility with the
+    legacy top-level ``presets`` directory.
+    """
+    root = data_root()
+    ontology_presets = root / "ontology" / "presets"
+    if (ontology_presets / "index.json").is_file():
+        return ontology_presets
+    return root / "presets"
 
 
 def default_cache_dir() -> Path:

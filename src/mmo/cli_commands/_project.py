@@ -14,6 +14,11 @@ from mmo.cli_commands._helpers import (
     _validate_json_payload,
     _write_json_file,
 )
+from mmo.core.config import (
+    default_project_session_path,
+    load_project_session_into_project,
+    save_project_session,
+)
 from mmo.core.event_log import validate_event_log_jsonl
 from mmo.core.run_config import normalize_run_config
 from mmo.resources import (
@@ -28,8 +33,10 @@ __all__ = [
     "_render_project_text",
     "_run_project_bundle",
     "_run_project_pack",
+    "_run_project_load",
     "_run_project_render_init",
     "_run_project_render_run",
+    "_run_project_save",
     "_run_project_write_render_request",
     "_run_project_show",
     "_run_project_validate",
@@ -565,6 +572,58 @@ def _run_project_show(
 
     print(f"Unsupported format: {output_format}", file=sys.stderr)
     return 2
+
+
+def _run_project_save(
+    *,
+    project_dir: Path,
+    session_path: Path | None,
+    force: bool,
+) -> int:
+    try:
+        payload = save_project_session(
+            project_dir,
+            session_path=session_path,
+            force=force,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
+
+
+def _run_project_load(
+    *,
+    project_dir: Path,
+    session_path: Path | None,
+    force: bool,
+) -> int:
+    resolved_session_path = (
+        session_path.resolve()
+        if session_path is not None
+        else default_project_session_path(project_dir.resolve())
+    )
+    if not resolved_session_path.is_file():
+        print(
+            f"Project session file is missing: {resolved_session_path.as_posix()}",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        payload = load_project_session_into_project(
+            project_dir,
+            session_path=resolved_session_path,
+            force=force,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
 
 
 def _run_project_build_gui(

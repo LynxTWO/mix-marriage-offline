@@ -1,0 +1,6 @@
+{
+  "schema_version": "0.1.0",
+  "profile_id": "PROFILE.ASSIST",
+  "meters": "basic",
+  "max_seconds": 120
+}

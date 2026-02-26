@@ -2523,6 +2523,44 @@ def main(argv: list[str] | None = None) -> int:
         help="Output format (default: json).",
     )
 
+    project_save_parser = project_subparsers.add_parser(
+        "save",
+        help="Save project session JSON (scene + history + receipts).",
+    )
+    project_save_parser.add_argument(
+        "project_dir",
+        help="Path to the project scaffold directory.",
+    )
+    project_save_parser.add_argument(
+        "--session",
+        default=None,
+        help="Output path for project session JSON (default: <project_dir>/project_session.json).",
+    )
+    project_save_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing session JSON.",
+    )
+
+    project_load_parser = project_subparsers.add_parser(
+        "load",
+        help="Load project session JSON into scene/history/receipt artifacts.",
+    )
+    project_load_parser.add_argument(
+        "project_dir",
+        help="Path to the project scaffold directory.",
+    )
+    project_load_parser.add_argument(
+        "--session",
+        default=None,
+        help="Input path for project session JSON (default: <project_dir>/project_session.json).",
+    )
+    project_load_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing scene/history/receipt files.",
+    )
+
     project_validate_parser = project_subparsers.add_parser(
         "validate",
         help="Validate project scaffold files against their schemas.",
@@ -4967,6 +5005,30 @@ def main(argv: list[str] | None = None) -> int:
                     print("stems_overrides.yaml preserved (use --force to overwrite).")
 
             return 0
+
+        if args.project_command == "save":
+            return _run_project_save(
+                project_dir=Path(args.project_dir),
+                session_path=(
+                    Path(args.session)
+                    if isinstance(getattr(args, "session", None), str)
+                    and args.session.strip()
+                    else None
+                ),
+                force=bool(getattr(args, "force", False)),
+            )
+
+        if args.project_command == "load":
+            return _run_project_load(
+                project_dir=Path(args.project_dir),
+                session_path=(
+                    Path(args.session)
+                    if isinstance(getattr(args, "session", None), str)
+                    and args.session.strip()
+                    else None
+                ),
+                force=bool(getattr(args, "force", False)),
+            )
 
         if args.project_command == "validate":
             return _run_project_validate(

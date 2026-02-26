@@ -454,6 +454,109 @@ class TestGuiRpcProjectRenderRun(unittest.TestCase):
             self.assertNotIn("\\", path_value)
 
 
+class TestGuiRpcProjectSession(unittest.TestCase):
+    def test_project_save_and_load_round_trip(self) -> None:
+        project_dir, _ = _init_project(_SANDBOX / "project_session")
+
+        scene_path = project_dir / "drafts" / "scene.draft.json"
+        history_path = project_dir / "renders" / "event_log.jsonl"
+        receipt_path = project_dir / "renders" / "render_preflight.json"
+
+        original_scene = json.loads(scene_path.read_text(encoding="utf-8"))
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        history_path.write_text(
+            json.dumps({"event_id": "EVENT.ORIGINAL", "kind": "info"}, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        original_history = [{"event_id": "EVENT.ORIGINAL", "kind": "info"}]
+        original_receipt = {"schema_version": "0.1.0", "checks": [], "issues": []}
+        receipt_path.write_text(
+            json.dumps(original_receipt, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        exit_code, responses, _, stderr = _run_rpc(
+            [
+                {
+                    "id": "session-save",
+                    "method": "project.save",
+                    "params": {"project_dir": str(project_dir)},
+                }
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr, "")
+        self.assertEqual(len(responses), 1)
+        self.assertTrue(responses[0]["ok"])
+        save_result = responses[0]["result"]
+        self.assertEqual(
+            save_result["session_path"],
+            (project_dir / "project_session.json").resolve().as_posix(),
+        )
+        self.assertEqual(save_result["history_count"], 1)
+        self.assertEqual(save_result["receipt_count"], 1)
+
+        scene_path.write_text(
+            json.dumps({"schema_version": "0.1.0", "scene_id": "SCENE.MUTATED"}, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+        history_path.write_text(
+            json.dumps({"event_id": "EVENT.MUTATED", "kind": "warn"}, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        receipt_path.write_text(
+            json.dumps({"schema_version": "0.1.0", "checks": [{"check_id": "MUTATED"}], "issues": []}, indent=2, sort_keys=True)
+            + "\n",
+            encoding="utf-8",
+        )
+
+        exit_code, responses, _, stderr = _run_rpc(
+            [
+                {
+                    "id": "session-load-no-force",
+                    "method": "project.load",
+                    "params": {"project_dir": str(project_dir)},
+                }
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr, "")
+        self.assertEqual(len(responses), 1)
+        self.assertFalse(responses[0]["ok"])
+        self.assertEqual(responses[0]["error"]["code"], "RPC.METHOD_FAILED")
+        self.assertIn("use --force", responses[0]["error"]["message"])
+
+        exit_code, responses, _, stderr = _run_rpc(
+            [
+                {
+                    "id": "session-load-force",
+                    "method": "project.load",
+                    "params": {"project_dir": str(project_dir), "force": True},
+                }
+            ]
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr, "")
+        self.assertEqual(len(responses), 1)
+        self.assertTrue(responses[0]["ok"])
+        load_result = responses[0]["result"]
+        self.assertIn("drafts/scene.draft.json", load_result["written"])
+        self.assertIn("renders/event_log.jsonl", load_result["written"])
+        self.assertIn("renders/render_preflight.json", load_result["written"])
+        self.assertEqual(load_result["history_count"], 1)
+        self.assertEqual(load_result["receipt_count"], 1)
+
+        self.assertEqual(json.loads(scene_path.read_text(encoding="utf-8")), original_scene)
+        restored_history = [
+            json.loads(line)
+            for line in history_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        self.assertEqual(restored_history, original_history)
+        self.assertEqual(json.loads(receipt_path.read_text(encoding="utf-8")), original_receipt)
+
+
 class TestGuiRpcDiscover(unittest.TestCase):
     def test_rpc_discover_is_byte_identical_across_runs(self) -> None:
         request = {

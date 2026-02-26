@@ -44,6 +44,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Config/preset resolution module `src/mmo/core/config.py` with merged run-config loading
+  (`preset -> config file -> CLI overrides`) and ontology-first preset resolution
+  (`ontology/presets/` preferred, legacy `presets/` still supported).
+- New project session persistence contract (`schemas/project_session.schema.json`) and
+  deterministic save/load support for `scene + history + receipts`.
+- New CLI commands:
+  - `mmo project save <project_dir> [--session <path>] [--force]`
+  - `mmo project load <project_dir> [--session <path>] [--force]`
+- GUI RPC integration for session persistence via:
+  - `project.save`
+  - `project.load`
+- Canonical ontology preset mirror at `ontology/presets/` (plus packaged mirror under
+  `src/mmo/data/ontology/presets/`) to keep install-safe preset loading.
+
 - Minimal viable CustomTkinter desktop GUI (`mmo-gui`, `src/mmo/gui/main.py`) with:
   drag/drop stems selection, target selector, `--render-many`, `--layout-standard`,
   live subprocess log streaming, and high-risk approval dialog before final safe-render.

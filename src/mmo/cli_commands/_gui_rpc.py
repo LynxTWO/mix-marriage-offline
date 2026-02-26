@@ -9,8 +9,10 @@ from typing import Any, Callable, TextIO
 
 from mmo.cli_commands._project import (
     _run_project_build_gui,
+    _run_project_load,
     _run_project_pack,
     _run_project_render_run,
+    _run_project_save,
     _run_project_show,
     _run_project_validate,
     _run_project_write_render_request,
@@ -213,6 +215,69 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
                 "last_built_markers",
                 "project_dir",
                 "schema_versions",
+            ],
+        },
+    },
+    "project.save": {
+        "params_schema": {
+            "required": {
+                "project_dir": "string",
+            },
+            "optional": {
+                "force": "boolean",
+                "session": "string",
+            },
+            "examples": [
+                {
+                    "project_dir": "C:/mmo/project",
+                },
+                {
+                    "force": True,
+                    "project_dir": "C:/mmo/project",
+                    "session": "C:/mmo/project/project_session.json",
+                },
+            ],
+        },
+        "result_shape": {
+            "keys": [
+                "history_count",
+                "ok",
+                "project_dir",
+                "receipt_count",
+                "scene_path",
+                "session_path",
+                "written",
+            ],
+        },
+    },
+    "project.load": {
+        "params_schema": {
+            "required": {
+                "project_dir": "string",
+            },
+            "optional": {
+                "force": "boolean",
+                "session": "string",
+            },
+            "examples": [
+                {
+                    "project_dir": "C:/mmo/project",
+                },
+                {
+                    "force": True,
+                    "project_dir": "C:/mmo/project",
+                    "session": "C:/mmo/project/project_session.json",
+                },
+            ],
+        },
+        "result_shape": {
+            "keys": [
+                "history_count",
+                "ok",
+                "project_dir",
+                "receipt_count",
+                "session_path",
+                "written",
             ],
         },
     },
@@ -497,6 +562,64 @@ def _handle_project_show(params: dict[str, Any]) -> dict[str, Any]:
         invoke=lambda: _run_project_show(
             project_dir=Path(project_dir),
             output_format="json",
+        ),
+    )
+
+
+def _handle_project_save(params: dict[str, Any]) -> dict[str, Any]:
+    _validate_allowed_params(
+        method="project.save",
+        params=params,
+        allowed={"project_dir", "session", "force"},
+    )
+    project_dir = _require_str_param(method="project.save", params=params, name="project_dir")
+    session = _optional_str_param(
+        method="project.save",
+        params=params,
+        name="session",
+        default=None,
+    )
+    force = _optional_bool_param(
+        method="project.save",
+        params=params,
+        name="force",
+        default=False,
+    )
+    return _call_json_command(
+        method="project.save",
+        invoke=lambda: _run_project_save(
+            project_dir=Path(project_dir),
+            session_path=Path(session) if isinstance(session, str) else None,
+            force=force,
+        ),
+    )
+
+
+def _handle_project_load(params: dict[str, Any]) -> dict[str, Any]:
+    _validate_allowed_params(
+        method="project.load",
+        params=params,
+        allowed={"project_dir", "session", "force"},
+    )
+    project_dir = _require_str_param(method="project.load", params=params, name="project_dir")
+    session = _optional_str_param(
+        method="project.load",
+        params=params,
+        name="session",
+        default=None,
+    )
+    force = _optional_bool_param(
+        method="project.load",
+        params=params,
+        name="force",
+        default=False,
+    )
+    return _call_json_command(
+        method="project.load",
+        invoke=lambda: _run_project_load(
+            project_dir=Path(project_dir),
+            session_path=Path(session) if isinstance(session, str) else None,
+            force=force,
         ),
     )
 
@@ -851,6 +974,8 @@ def _handle_rpc_discover(params: dict[str, Any]) -> dict[str, Any]:
 _RPC_METHOD_HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "env.doctor": _handle_env_doctor,
     "project.show": _handle_project_show,
+    "project.save": _handle_project_save,
+    "project.load": _handle_project_load,
     "project.build_gui": _handle_project_build_gui,
     "project.render_run": _handle_project_render_run,
     "project.validate": _handle_project_validate,

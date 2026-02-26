@@ -1,0 +1,218 @@
+{
+  "schema_version": "0.1.0",
+  "presets": [
+    {
+      "preset_id": "PRESET.DRAFT_MIX",
+      "file": "draft_mix.json",
+      "label": "Draft mix",
+      "description": "Fast drafting checks and truth meters for iteration."
+    },
+    {
+      "preset_id": "PRESET.SAFE_CLEANUP",
+      "file": "safe_cleanup.json",
+      "label": "Safe cleanup",
+      "description": "Conservative checks and exports. No aggressive auto-apply.",
+      "help_id": "HELP.PRESET.SAFE_CLEANUP",
+      "category": "WORKFLOW",
+      "tags": ["conservative", "translation", "prep"],
+      "goals": [
+        "clean technical issues",
+        "avoid extremes",
+        "ready for mixing"
+      ],
+      "warnings": [
+        "does not change tone",
+        "no aggressive auto-apply"
+      ]
+    },
+    {
+      "preset_id": "PRESET.TURBO_DRAFT",
+      "file": "turbo_draft.json",
+      "label": "Turbo draft",
+      "description": "Aggressive drafting profile with truth meters for quick passes.",
+      "help_id": "HELP.PRESET.TURBO_DRAFT",
+      "overlay": "Fast",
+      "category": "VIBE",
+      "tags": ["fast", "aggressive", "auto"],
+      "goals": [
+        "quick draft",
+        "reduce obvious problems",
+        "move fast"
+      ],
+      "warnings": [
+        "may apply extreme changes",
+        "review EXTREME flags"
+      ]
+    },
+    {
+      "preset_id": "PRESET.VIBE.BRIGHT_AIRY",
+      "file": "vibe_bright_airy.json",
+      "label": "Bright airy",
+      "description": "Lift openness and sparkle while keeping detail controlled.",
+      "help_id": "HELP.PRESET.VIBE.BRIGHT_AIRY",
+      "overlay": "Air",
+      "category": "VIBE",
+      "tags": ["airy", "bright", "open", "indie-pop", "dream-pop"],
+      "goals": [
+        "open upper mids",
+        "add perceived air",
+        "keep transient detail"
+      ],
+      "warnings": [
+        "can expose harshness",
+        "watch sibilance"
+      ]
+    },
+    {
+      "preset_id": "PRESET.VIBE.DENSE_GLUE",
+      "file": "vibe_dense_glue.json",
+      "label": "Dense glue",
+      "description": "Drive assertive cohesion and thickness for impact-first mixes.",
+      "help_id": "HELP.PRESET.VIBE.DENSE_GLUE",
+      "overlay": "Glue",
+      "category": "VIBE",
+      "tags": ["dense", "glue", "cohesive", "rock", "alt-pop"],
+      "goals": [
+        "increase density",
+        "tighten mix cohesion",
+        "hold center focus"
+      ],
+      "warnings": [
+        "can reduce micro-dynamics",
+        "check low-mid buildup",
+        "review EXTREME flags"
+      ]
+    },
+    {
+      "preset_id": "PRESET.VIBE.LIVE_YOU_ARE_THERE",
+      "file": "vibe_live_you_are_there.json",
+      "label": "Live, you-are-there",
+      "description": "Keep dynamics and space. Avoid squashing the room out of the performance.",
+      "help_id": "HELP.PRESET.VIBE.LIVE_YOU_ARE_THERE",
+      "overlay": "Live",
+      "category": "VIBE",
+      "tags": ["live", "dynamic", "natural", "room", "translation"],
+      "goals": [
+        "keep dynamics",
+        "preserve space",
+        "avoid harsh fixes"
+      ],
+      "warnings": [
+        "not the loudest",
+        "dont expect heavy glue",
+        "review any EXTREME flags"
+      ]
+    },
+    {
+      "preset_id": "PRESET.VIBE.PUNCHY_TIGHT",
+      "file": "vibe_punchy_tight.json",
+      "label": "Punchy tight",
+      "description": "Push transient definition and low-end discipline for punch.",
+      "help_id": "HELP.PRESET.VIBE.PUNCHY_TIGHT",
+      "overlay": "Punch",
+      "category": "VIBE",
+      "tags": ["punchy", "tight", "transient", "hip-hop", "edm"],
+      "goals": [
+        "tighten low end",
+        "emphasize punch",
+        "reduce transient smear"
+      ],
+      "warnings": [
+        "can feel aggressive",
+        "watch clipping risk"
+      ]
+    },
+    {
+      "preset_id": "PRESET.VIBE.TRANSLATION_SAFE",
+      "file": "vibe_translation_safe.json",
+      "label": "Translation safe",
+      "description": "Favor reliable playback translation across phones, buds, and speakers.",
+      "help_id": "HELP.PRESET.VIBE.TRANSLATION_SAFE",
+      "overlay": "Safe",
+      "category": "VIBE",
+      "tags": ["translation", "safe", "balanced", "acoustic", "podcast"],
+      "goals": [
+        "protect cross-device playback",
+        "preserve intelligibility",
+        "avoid risky moves"
+      ],
+      "warnings": [
+        "less dramatic tone shaping",
+        "prioritizes reliability"
+      ]
+    },
+    {
+      "preset_id": "PRESET.VIBE.VOCAL_FORWARD",
+      "file": "vibe_vocal_forward.json",
+      "label": "Vocal forward",
+      "description": "Prioritize vocal intelligibility and reduce common translation risks.",
+      "help_id": "HELP.PRESET.VIBE.VOCAL_FORWARD",
+      "overlay": "Vocal",
+      "category": "VIBE",
+      "tags": ["vocal", "clarity", "translation"],
+      "goals": [
+        "improve vocal clarity",
+        "avoid masking",
+        "protect mono"
+      ],
+      "warnings": [
+        "may reduce width",
+        "review extremes"
+      ]
+    },
+    {
+      "preset_id": "PRESET.VIBE.WARM_INTIMATE",
+      "file": "vibe_warm_intimate.json",
+      "label": "Warm intimate",
+      "description": "Lean into closeness, body, and warmth without losing clarity.",
+      "help_id": "HELP.PRESET.VIBE.WARM_INTIMATE",
+      "overlay": "Warm",
+      "category": "VIBE",
+      "tags": ["warm", "intimate", "vocal", "singer-songwriter", "lo-fi"],
+      "goals": [
+        "bring vocal proximity",
+        "soften brittle highs",
+        "retain low-mid body"
+      ],
+      "warnings": [
+        "may narrow perceived width",
+        "can darken top end"
+      ]
+    },
+    {
+      "preset_id": "PRESET.VIBE.WIDE_CINEMATIC",
+      "file": "vibe_wide_cinematic.json",
+      "label": "Wide cinematic",
+      "description": "Build spacious width and depth while preserving a stable center.",
+      "help_id": "HELP.PRESET.VIBE.WIDE_CINEMATIC",
+      "overlay": "Wide",
+      "category": "VIBE",
+      "tags": ["wide", "cinematic", "spacious", "ambient", "soundtrack"],
+      "goals": [
+        "expand perceived space",
+        "keep center anchor",
+        "maintain depth cues"
+      ],
+      "warnings": [
+        "check mono fold-down",
+        "can reduce center impact"
+      ]
+    }
+  ],
+  "packs": [
+    {
+      "pack_id": "PACK.VIBE_STARTER",
+      "label": "Vibe starter",
+      "description": "A compact vibe-first preset pack for quick directional passes.",
+      "preset_ids": [
+        "PRESET.VIBE.WARM_INTIMATE",
+        "PRESET.VIBE.BRIGHT_AIRY",
+        "PRESET.VIBE.LIVE_YOU_ARE_THERE",
+        "PRESET.VIBE.PUNCHY_TIGHT",
+        "PRESET.VIBE.WIDE_CINEMATIC",
+        "PRESET.VIBE.DENSE_GLUE",
+        "PRESET.VIBE.TRANSLATION_SAFE"
+      ]
+    }
+  ]
+}

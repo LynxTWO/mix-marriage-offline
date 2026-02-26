@@ -141,6 +141,7 @@ The project is “complete enough” when all items below are true.
 - [ ] Preview/A-B audition is loudness-compensated by default (auto-gain for evaluation), and the report discloses the compensation used.
 - [ ] Presets (example: EQ vibe presets) can be initialized from measured stem features, and preset preview does not create surprise loudness jumps.
 - [ ] A “variant runner” can render multiple output variants (profiles/presets/targets) while reusing cached analysis artifacts keyed by content hash.
+- [x] Project session JSON persistence exists for `scene + history + receipts` via `mmo project save/load`, with deterministic JSON output and strict schema validation.
 
 ### 4.8.1 GUI is ergonomically safe and AI-readable (a work of art in itself, so creatives and nerds alike love it. Strong typography, cinematic color contrast, and intentional spacing/visual hierarchy so it feels crafted, not utilitarian, while still staying cross-platform and deterministic)
 - [x] Minimal desktop CustomTkinter shell exists for stems drop, target/layout selection,
