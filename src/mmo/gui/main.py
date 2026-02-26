@@ -14,6 +14,7 @@ from typing import Any, Mapping, Sequence
 
 from mmo.core.render_targets import list_render_targets
 from mmo.core.speaker_layout import LayoutStandard
+from mmo.gui.dashboard import VisualizationDashboardPanel
 
 try:  # Optional at import time so tests can run without GUI deps.
     import customtkinter as _ctk
@@ -34,6 +35,27 @@ _DEFAULT_RENDER_MANY_TARGET_IDS: tuple[str, ...] = (
     "TARGET.SURROUND.5_1",
     "TARGET.SURROUND.7_1",
 )
+_STUDIO_THEME: Mapping[str, str] = {
+    "bg": "#0A0A09",
+    "hero": "#13110E",
+    "hero_edge": "#2B2318",
+    "hero_text": "#F2E8D2",
+    "hero_muted": "#C6B08C",
+    "surface": "#13110F",
+    "surface_edge": "#2B2318",
+    "text": "#F2E8D2",
+    "text_muted": "#B59F7F",
+    "accent": "#D79B48",
+    "accent_hover": "#C48735",
+    "accent_cool": "#5DA4A0",
+    "danger": "#B44A3A",
+    "danger_hover": "#913729",
+    "panel": "#0B0A09",
+    "panel_edge": "#2A2219",
+}
+_FONT_UI = "Inter"
+_FONT_DISPLAY = "Space Grotesk"
+_FONT_MONO = "Consolas"
 _LAYOUT_SHORTHANDS: Mapping[str, str] = {
     "stereo": "LAYOUT.2_0",
     "2.0": "LAYOUT.2_0",
@@ -301,15 +323,16 @@ else:
 class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
     def __init__(self) -> None:
         super().__init__()
-        self.title("MMO Studio Canvas")
+        self.title("MMO StudioConsole Noir")
         self.geometry("1360x840")
         self.minsize(1100, 740)
-        self.configure(fg_color="#F6F1E8")
+        self.configure(fg_color=_STUDIO_THEME["bg"])
 
         self._worker_thread: threading.Thread | None = None
         self._process_lock = threading.Lock()
         self._active_process: subprocess.Popen[str] | None = None
         self._cancel_file_path: Path | None = None
+        self._dashboard_panel: VisualizationDashboardPanel | None = None
 
         self._target_layouts = render_target_layout_map()
         self._target_ids = tuple(sorted(self._target_layouts))
@@ -340,35 +363,35 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
 
         hero = _ctk.CTkFrame(
             self,
-            fg_color="#12263A",
+            fg_color=_STUDIO_THEME["hero"],
             corner_radius=18,
             border_width=1,
-            border_color="#1F3F5B",
+            border_color=_STUDIO_THEME["hero_edge"],
         )
         hero.grid(row=0, column=0, columnspan=2, padx=18, pady=(18, 10), sticky="nsew")
         hero.grid_columnconfigure(0, weight=1)
         _ctk.CTkLabel(
             hero,
-            text="MMO Studio Canvas",
-            font=("Segoe UI Semibold", 30),
-            text_color="#F6F1E8",
+            text="MMO StudioConsole Noir",
+            font=(_FONT_DISPLAY, 30, "bold"),
+            text_color=_STUDIO_THEME["hero_text"],
         ).grid(row=0, column=0, padx=20, pady=(16, 2), sticky="w")
         _ctk.CTkLabel(
             hero,
             text=(
-                "Offline + deterministic. Drag stems, choose targets, preview risk, and render "
-                "with bounded authority."
+                "Offline + deterministic. Shape the mix in one canvas: feel, evidence, and "
+                "bounded authority approval."
             ),
-            font=("Segoe UI", 15),
-            text_color="#D1E5F4",
+            font=(_FONT_UI, 15),
+            text_color=_STUDIO_THEME["hero_muted"],
         ).grid(row=1, column=0, padx=20, pady=(0, 16), sticky="w")
 
         controls = _ctk.CTkFrame(
             self,
-            fg_color="#FBF8F2",
+            fg_color=_STUDIO_THEME["surface"],
             corner_radius=18,
             border_width=1,
-            border_color="#D9CBB8",
+            border_color=_STUDIO_THEME["surface_edge"],
         )
         controls.grid(row=1, column=0, padx=(18, 9), pady=(0, 18), sticky="nsew")
         controls.grid_columnconfigure(0, weight=1)
@@ -376,14 +399,14 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         _ctk.CTkLabel(
             controls,
             text="Inputs",
-            font=("Segoe UI Semibold", 20),
-            text_color="#1E3A4C",
+            font=(_FONT_DISPLAY, 20, "bold"),
+            text_color=_STUDIO_THEME["text"],
         ).grid(row=0, column=0, padx=16, pady=(14, 6), sticky="w")
 
         self._drop_zone = _ctk.CTkFrame(
             controls,
-            fg_color="#EAF3FB",
-            border_color="#6A9BB8",
+            fg_color=_STUDIO_THEME["panel"],
+            border_color=_STUDIO_THEME["panel_edge"],
             border_width=2,
             corner_radius=14,
         )
@@ -392,15 +415,15 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         self._drop_hint = _ctk.CTkLabel(
             self._drop_zone,
             text="Drop a stems folder here",
-            font=("Segoe UI Semibold", 16),
-            text_color="#214D66",
+            font=(_FONT_UI, 16, "bold"),
+            text_color=_STUDIO_THEME["text"],
         )
         self._drop_hint.grid(row=0, column=0, padx=16, pady=(14, 2), sticky="w")
         _ctk.CTkLabel(
             self._drop_zone,
             text="or click Browse to choose a directory.",
-            font=("Segoe UI", 13),
-            text_color="#2D6888",
+            font=(_FONT_UI, 13),
+            text_color=_STUDIO_THEME["text_muted"],
         ).grid(row=1, column=0, padx=16, pady=(0, 12), sticky="w")
 
         self._stems_entry = _ctk.CTkEntry(controls, textvariable=self._stems_var, height=34)
@@ -409,15 +432,16 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             controls,
             text="Browse Stems Folder",
             command=self._choose_stems_dir,
-            fg_color="#D95F39",
-            hover_color="#B84B2A",
+            fg_color=_STUDIO_THEME["accent"],
+            hover_color=_STUDIO_THEME["accent_hover"],
+            text_color="#1A1208",
         ).grid(row=3, column=0, padx=16, pady=(0, 10), sticky="ew")
 
         _ctk.CTkLabel(
             controls,
             text="Output Root",
-            font=("Segoe UI Semibold", 15),
-            text_color="#1E3A4C",
+            font=(_FONT_UI, 15, "bold"),
+            text_color=_STUDIO_THEME["text"],
         ).grid(row=4, column=0, padx=16, pady=(4, 4), sticky="w")
         _ctk.CTkEntry(controls, textvariable=self._out_var, height=34).grid(
             row=5,
@@ -430,25 +454,27 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             controls,
             text="Browse Output Folder",
             command=self._choose_out_dir,
-            fg_color="#3A7FA8",
-            hover_color="#2D6485",
+            fg_color=_STUDIO_THEME["accent_cool"],
+            hover_color="#4A8681",
+            text_color="#06100F",
         ).grid(row=6, column=0, padx=16, pady=(0, 10), sticky="ew")
 
         _ctk.CTkLabel(
             controls,
             text="Render Focus",
-            font=("Segoe UI Semibold", 20),
-            text_color="#1E3A4C",
+            font=(_FONT_DISPLAY, 20, "bold"),
+            text_color=_STUDIO_THEME["text"],
         ).grid(row=7, column=0, padx=16, pady=(8, 6), sticky="w")
 
         self._target_menu = _ctk.CTkOptionMenu(
             controls,
             values=list(self._target_ids),
             variable=self._target_var,
-            fg_color="#214D66",
-            button_color="#2D6888",
-            button_hover_color="#1F4C65",
-            dropdown_fg_color="#153246",
+            fg_color="#1B1712",
+            button_color=_STUDIO_THEME["accent"],
+            button_hover_color=_STUDIO_THEME["accent_hover"],
+            dropdown_fg_color=_STUDIO_THEME["panel"],
+            text_color=_STUDIO_THEME["text"],
         )
         self._target_menu.grid(row=8, column=0, padx=16, pady=(0, 6), sticky="ew")
 
@@ -459,7 +485,9 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             onvalue=True,
             offvalue=False,
             command=self._sync_render_many_widgets,
-            progress_color="#D95F39",
+            progress_color=_STUDIO_THEME["accent"],
+            text_color=_STUDIO_THEME["text_muted"],
+            font=(_FONT_UI, 13),
         )
         self._render_many_switch.grid(row=9, column=0, padx=16, pady=(0, 4), sticky="w")
 
@@ -474,10 +502,11 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             controls,
             values=list(layout_standard_options()),
             variable=self._layout_standard_var,
-            fg_color="#214D66",
-            button_color="#2D6888",
-            button_hover_color="#1F4C65",
-            dropdown_fg_color="#153246",
+            fg_color="#1B1712",
+            button_color=_STUDIO_THEME["accent"],
+            button_hover_color=_STUDIO_THEME["accent_hover"],
+            dropdown_fg_color=_STUDIO_THEME["panel"],
+            text_color=_STUDIO_THEME["text"],
         )
         self._layout_menu.grid(row=11, column=0, padx=16, pady=(0, 6), sticky="ew")
 
@@ -501,16 +530,17 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             text="Run Analyze + Safe Render",
             command=self._start_pipeline,
             height=42,
-            fg_color="#D95F39",
-            hover_color="#B84B2A",
-            font=("Segoe UI Semibold", 15),
+            fg_color=_STUDIO_THEME["accent"],
+            hover_color=_STUDIO_THEME["accent_hover"],
+            text_color="#1A1208",
+            font=(_FONT_UI, 15, "bold"),
         )
         self._run_button.grid(row=14, column=0, padx=16, pady=(6, 10), sticky="ew")
 
         self._progress_bar = _ctk.CTkProgressBar(
             controls,
-            fg_color="#D9CBB8",
-            progress_color="#D95F39",
+            fg_color="#261F16",
+            progress_color=_STUDIO_THEME["accent"],
             height=14,
             corner_radius=999,
         )
@@ -522,8 +552,8 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             text="Cancel Running Job",
             command=self._request_cancel,
             height=34,
-            fg_color="#6E2A2A",
-            hover_color="#5A2222",
+            fg_color=_STUDIO_THEME["danger"],
+            hover_color=_STUDIO_THEME["danger_hover"],
             state="disabled",
         )
         self._cancel_button.grid(row=16, column=0, padx=16, pady=(0, 8), sticky="ew")
@@ -531,18 +561,18 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         _ctk.CTkLabel(
             controls,
             textvariable=self._status_var,
-            font=("Segoe UI", 13),
-            text_color="#2A5C78",
+            font=(_FONT_UI, 13),
+            text_color=_STUDIO_THEME["text_muted"],
             justify="left",
             wraplength=520,
         ).grid(row=17, column=0, padx=16, pady=(0, 14), sticky="w")
 
         log_panel = _ctk.CTkFrame(
             self,
-            fg_color="#0E1E2D",
+            fg_color=_STUDIO_THEME["surface"],
             corner_radius=18,
             border_width=1,
-            border_color="#2B4C65",
+            border_color=_STUDIO_THEME["surface_edge"],
         )
         log_panel.grid(row=1, column=1, padx=(9, 18), pady=(0, 18), sticky="nsew")
         log_panel.grid_columnconfigure(0, weight=1)
@@ -550,22 +580,48 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
 
         _ctk.CTkLabel(
             log_panel,
-            text="Live Render Log",
-            font=("Consolas", 18, "bold"),
-            text_color="#D1E5F4",
+            text="Live Log + Visualization",
+            font=(_FONT_DISPLAY, 18, "bold"),
+            text_color=_STUDIO_THEME["text"],
         ).grid(row=0, column=0, padx=16, pady=(14, 6), sticky="w")
 
-        self._log_box = _ctk.CTkTextbox(
+        self._surfaces_tabs = _ctk.CTkTabview(
             log_panel,
-            fg_color="#071320",
-            text_color="#E0EEF8",
-            border_color="#325E7E",
+            fg_color=_STUDIO_THEME["panel"],
+            segmented_button_fg_color="#1B1712",
+            segmented_button_selected_color=_STUDIO_THEME["accent"],
+            segmented_button_selected_hover_color=_STUDIO_THEME["accent_hover"],
+            segmented_button_unselected_color="#14110E",
+            segmented_button_unselected_hover_color="#1D1814",
+            text_color=_STUDIO_THEME["text"],
+        )
+        self._surfaces_tabs.grid(row=1, column=0, padx=12, pady=(0, 12), sticky="nsew")
+        self._surfaces_tabs.add("Live Log")
+        self._surfaces_tabs.add("Dashboard")
+
+        log_tab = self._surfaces_tabs.tab("Live Log")
+        log_tab.grid_columnconfigure(0, weight=1)
+        log_tab.grid_rowconfigure(0, weight=1)
+        self._log_box = _ctk.CTkTextbox(
+            log_tab,
+            fg_color=_STUDIO_THEME["panel"],
+            text_color=_STUDIO_THEME["text"],
+            border_color=_STUDIO_THEME["panel_edge"],
             border_width=1,
             corner_radius=10,
-            font=("Consolas", 12),
+            font=(_FONT_MONO, 12),
         )
-        self._log_box.grid(row=1, column=0, padx=16, pady=(0, 14), sticky="nsew")
-        self._append_log("MMO Studio Canvas initialized.")
+        self._log_box.grid(row=0, column=0, padx=8, pady=8, sticky="nsew")
+
+        dashboard_tab = self._surfaces_tabs.tab("Dashboard")
+        dashboard_tab.grid_columnconfigure(0, weight=1)
+        dashboard_tab.grid_rowconfigure(0, weight=1)
+        self._dashboard_panel = VisualizationDashboardPanel(
+            dashboard_tab,
+            ctk_module=_ctk,
+        )
+        self._dashboard_panel.grid(row=0, column=0, padx=8, pady=8, sticky="nsew")
+        self._append_log("MMO StudioConsole Noir initialized.")
 
     def _wire_drag_drop(self) -> None:
         if DND_FILES is None:
@@ -618,6 +674,26 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             self._target_menu.configure(state="normal")
             self._render_many_entry.configure(state="disabled")
 
+    def _primary_layout_for_config(self, config: GuiRunConfig) -> str:
+        if config.render_many:
+            layout_ids = normalize_render_many_layout_ids(
+                config.render_many_target_ids,
+                target_layouts=self._target_layouts,
+            )
+            return layout_ids[0] if layout_ids else "LAYOUT.2_0"
+        return resolve_single_target_layout_id(
+            config.target_id,
+            target_layouts=self._target_layouts,
+        )
+
+    def _sync_dashboard_layout(self, config: GuiRunConfig) -> None:
+        if self._dashboard_panel is None:
+            return
+        self._dashboard_panel.set_layout(
+            layout_id=self._primary_layout_for_config(config),
+            layout_standard=config.layout_standard,
+        )
+
     def _append_log(self, line: str) -> None:
         self._log_box.insert("end", f"{line}\n")
         self._log_box.see("end")
@@ -626,11 +702,21 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         self.after(0, lambda text=line: self._append_log(text))
 
     def _set_status_threadsafe(self, status: str) -> None:
-        self.after(0, lambda value=status: self._status_var.set(value))
+        def _apply() -> None:
+            self._status_var.set(status)
+            if self._dashboard_panel is not None:
+                self._dashboard_panel.set_status_line(status)
+
+        self.after(0, _apply)
 
     def _set_progress_threadsafe(self, fraction: float) -> None:
         clamped = max(0.0, min(1.0, float(fraction)))
-        self.after(0, lambda value=clamped: self._progress_bar.set(value))
+        def _apply() -> None:
+            self._progress_bar.set(clamped)
+            if self._dashboard_panel is not None:
+                self._dashboard_panel.set_progress(clamped)
+
+        self.after(0, _apply)
 
     def _set_running_threadsafe(self, running: bool) -> None:
         def _apply() -> None:
@@ -699,6 +785,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         if config is None:
             return
 
+        self._sync_dashboard_layout(config)
         self._set_running_threadsafe(True)
         self._set_status_threadsafe("Running analyze + dry-run safety preview...")
         self._set_progress_threadsafe(0.0)
@@ -757,6 +844,17 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             return False
         if not isinstance(payload, Mapping):
             return False
+
+        if self._dashboard_panel is not None:
+            snapshot = dict(payload)
+            self.after(
+                0,
+                lambda payload_snapshot=snapshot: (
+                    self._dashboard_panel.ingest_live_payload(payload_snapshot)
+                    if self._dashboard_panel is not None
+                    else None
+                ),
+            )
 
         progress_value = payload.get("progress")
         if isinstance(progress_value, (int, float)):
@@ -939,7 +1037,7 @@ def launch_gui() -> int:
         )
         return 2
 
-    _ctk.set_appearance_mode("system")
+    _ctk.set_appearance_mode("dark")
     app = _MMOGuiApp()
     app.mainloop()
     return 0
