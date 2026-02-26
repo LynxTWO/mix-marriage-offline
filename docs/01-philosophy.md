@@ -1,11 +1,13 @@
 # docs/01-philosophy.md
 
 ## Mix Marriage Offline Philosophy
-### Truth meters in the core. Taste in the plugins. Humans keep the meaning.
+
+### Truth meters in the core. Taste in the plugins. Humans keep the meaning
 
 ---
 
 ## 1) The north star
+
 Mixing is both **engineering** and **art**.
 
 - Engineering answers: “Is this stable, safe, and translating?”
@@ -24,6 +26,7 @@ No guesswork. No magical black boxes. No silent changes.
 ## 2) What this project believes (and enforces)
 
 ### 2.1 Objective core vs subjective strategy
+
 We keep two worlds separate on purpose:
 
 #### Objective Core (truth layer)
@@ -188,7 +191,7 @@ This is how we can welcome experimental plugins without ruining trust.
 
 ---
 
-## 8) The tool doesn’t chase perfection. It chases coherence.
+## 8) The tool doesn’t chase perfection. It chases coherence
 
 Perfection is genre-dependent, context-dependent, and taste-dependent.
 
@@ -270,6 +273,7 @@ ML should be additive, not required, and never a black box that overrides the tr
 ---
 
 ## 12) Summary
+
 Mix Marriage Offline is built around a simple promise:
 
 **Truth meters in the core. Taste in the plugins. Humans keep the meaning.**

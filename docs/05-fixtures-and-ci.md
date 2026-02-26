@@ -1,12 +1,15 @@
 # docs/05-fixtures-and-ci.md
 
 ## Fixtures and CI
-### How MMO stays trustworthy as it evolves.
+
+### How MMO stays trustworthy as it evolves
 
 ---
 
 ## 1) Why fixtures exist
+
 Audio tooling fails in two common ways:
+
 - subtle regressions (a “small change” quietly breaks detection)
 - untestable logic (“it sounds better” without measurable outcomes)
 
@@ -16,6 +19,7 @@ Fixtures are the foundation of that promise.
 A **fixture** is a deterministic test session with known problems, stored as stems and expected outputs.
 
 Fixtures enable:
+
 - regression testing
 - benchmark comparisons over time
 - contributor onboarding (“run the fixtures, see what changes”)
@@ -24,13 +28,18 @@ Fixtures enable:
 ---
 
 ## 2) Fixture philosophy
+
 ### 2.1 Prefer synthetic or freely licensed audio
+
 To keep the repository legally clean:
+
 - Prefer synthetic signals and generated stems (tones, noise, impulses, simple mixes).
 - If real audio is included, it must be clearly licensed for redistribution.
 
 ### 2.2 Test problems, not “taste”
+
 Fixtures should target technical conditions:
+
 - mud in 200–500 Hz
 - harshness in 2–5 kHz
 - persistent resonances
@@ -43,6 +52,7 @@ We do not attempt to encode “the perfect mix.”
 We encode detectable, measurable failure modes.
 
 ### 2.3 Allow ranges, not exact numbers
+
 Audio metrics can vary slightly across platforms and libraries.  
 Fixture expectations should use tolerances (for example ±0.5 LUFS).
 
@@ -85,39 +95,47 @@ in docs, tests, and `--dry-run` demos without media downloads.
 ---
 
 ## 4) What a fixture “expects”
+
 Each fixture should specify expectations at three layers:
 
 ### 4.1 Validation expectations
+
 - sample rate consistency
 - stem alignment
 - length checks
 - role parsing correctness
 
 ### 4.2 Measurement expectations
+
 - LUFS integrated in a tolerance band
 - true peak in a tolerance band
 - band energy characteristics (directional expectations)
 
 ### 4.3 Detection expectations
+
 - specific issue IDs appear (ontology IDs)
 - minimum severity thresholds (or severity band ranges)
 - evidence includes reasonable time/frequency ranges
 - confidence meets minimum level for the known condition
 
 Optionally:
+
 - recommendation expectations (actions exist and include required params)
 - translation score expectations (phone profile should fail, etc.)
 
 ---
 
 ## 5) CI goals
+
 CI exists to ensure:
+
 - core “truth layer” changes do not regress fixtures
 - plugin outputs remain schema-valid
 - ontology changes remain consistent and non-breaking
 - code style and typing do not degrade
 
 Minimum CI checks:
+
 - lint (ruff/black or similar)
 - type checks (mypy optional early)
 - unit tests (pytest)
@@ -127,8 +145,11 @@ Minimum CI checks:
 ---
 
 ## 6) Regression rules (what blocks a PR)
+
 ### 6.1 Core changes (high bar)
+
 Any change in:
+
 - meters
 - validation
 - gates
@@ -137,12 +158,15 @@ Any change in:
 must pass all fixtures and unit tests.
 
 If fixture outcomes change:
+
 - the PR must explain why
 - the expected outputs must be updated intentionally
 - maintainers must review with extra caution
 
 ### 6.2 Plugin changes (moderate bar)
+
 Plugins must:
+
 - pass schema and ontology validation
 - include at least one fixture proving behavior
 - avoid breaking other plugins through ID misuse
@@ -150,6 +174,7 @@ Plugins must:
 ---
 
 ## 7) How to add a fixture (contributor workflow)
+
 1) Decide the target failure mode (mud, harshness, etc.)
 2) Add a generator script or a stems folder:
    - generator preferred for reproducibility
@@ -225,7 +250,6 @@ After this doc:
 - implement `tests/test_fixtures.py` using tolerance-based checks
 - add ontology validation tests to CI
 
-
 ## Unit tests
 
 From the repo root:
@@ -236,8 +260,8 @@ PYTHONPATH=src python -m pytest
 ```
 
 Notes:
-- `PYTHONPATH=src` ensures the `mmo` package is importable in tests.
 
+- `PYTHONPATH=src` ensures the `mmo` package is importable in tests.
 
 ## Session fixtures (validation-only)
 
@@ -249,8 +273,8 @@ PYTHONPATH=src python tools/run_session_fixtures.py fixtures/sessions
 ```
 
 Notes:
-- Session fixtures generate tiny WAV files on the fly and only assert issue IDs.
 
+- Session fixtures generate tiny WAV files on the fly and only assert issue IDs.
 
 ## Policy fixtures
 
@@ -275,9 +299,9 @@ python tools/run_policy_fixtures.py fixtures/policies/downmix
 ```
 
 Notes:
+
 - `tools/validate_policies.py` prints a JSON payload that conforms to `schemas/validation_result.schema.json`.
 - Add `--strict` to enable a lower warning threshold for coefficient `sum_abs`.
-
 
 ## Full determinism harness (public session)
 
@@ -301,7 +325,6 @@ python tools/validate_policies.py ontology/policies/downmix.yaml
 python tools/run_policy_fixtures.py fixtures/policies/downmix
 ```
 
-
 ## Plugin manifests
 
 Plugin manifests are validated independently.
@@ -316,4 +339,5 @@ PYTHONPATH=src python tools/validate_plugins.py plugins
 ```
 
 Notes:
+
 - `tools/validate_plugins.py` prints a JSON payload that conforms to `schemas/validation_result.schema.json`.

@@ -3,12 +3,14 @@
 This document defines the first real GUI shell for MMO as a thin dev client.
 
 Scope:
+
 - spawn `mmo gui rpc`,
 - call `rpc.discover`, `env.doctor`, `project.show`, `project.build_gui`,
 - render plugin forms from `config_schema` + `ui_hints`,
 - render layout snapshots from plugin `ui_layout`.
 
 Non-goals:
+
 - no installers,
 - no audio preview,
 - no production packaging.
@@ -85,6 +87,7 @@ In the running GUI:
 5. Click `Call project.build_gui + refresh`.
 
 Expected result:
+
 - `project.show` output includes `ui_bundle.json` with `exists: true`.
 - Plugin cards are rendered (schema fields when present).
 - Layout snapshots render as section/widget overlays when plugin layouts exist.
@@ -98,5 +101,6 @@ npm test
 ```
 
 `npm test` runs Node unit tests for:
+
 - RPC subprocess client behavior,
 - schema-to-form field mapping.

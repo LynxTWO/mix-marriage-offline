@@ -1,12 +1,15 @@
 # docs/04-plugin-api.md
 
 ## MMO Plugin API
-### How detectors, resolvers, and renderers plug into the core safely.
+
+### How detectors, resolvers, and renderers plug into the core safely
 
 ---
 
 ## 1) Goals
+
 The plugin system exists to:
+
 - let the community improve detection and strategy without destabilizing the “truth layer”
 - enable taste and workflow diversity (multiple strategies for the same problem)
 - keep outputs consistent through **ontology IDs** and **schema validation**
@@ -18,32 +21,38 @@ They are modules that implement strict interfaces and return validated data stru
 ---
 
 ## 2) Plugin types
+
 MMO supports three plugin types:
 
 ### 2.1 Detector plugins
+
 **Purpose:** convert measured features into **issues** (problem statements with evidence).
 
 **Input:** Session + measured features  
 **Output:** `issues[]`
 
 Examples:
+
 - resonance detector
 - mud/harshness detector
 - mono collapse risk detector
 - surround downmix intelligibility loss detector
 
 ### 2.2 Resolver plugins
+
 **Purpose:** convert issues into **actions** (recommendations), often with multiple strategy options.
 
 **Input:** Session + issues + user intent/limits  
 **Output:** `recommendations[]` (action options)
 
 Examples:
+
 - conservative EQ resolver
 - masking strategy resolver (subtractive EQ vs dynamic EQ suggestion)
 - surround focus resolver (center/front stage balance suggestions)
 
 ### 2.3 Renderer plugins (optional)
+
 **Purpose:** apply a gated action plan to create **rendered stem variants**.
 
 **Input:** Session + gated action plan  
@@ -54,35 +63,44 @@ Default behavior should be conservative and never clip by default.
 ---
 
 ## 3) What plugins must obey
+
 ### 3.1 Ontology-first
+
 Plugins must use canonical IDs from the ontology YAML:
+
 - roles, features, issues, actions, params, units, evidence fields
 - layouts and speakers for surround
 
 If an ID is not in the ontology, it is not valid.
 
 ### 3.2 Explainability requirements
+
 Detectors must include evidence:
+
 - time range (seconds)
 - frequency range (Hz), when applicable
 - stems involved
 - confidence
 
 Resolvers must include:
+
 - explicit action parameters with units
 - risk level
 - expected effect and tradeoffs
 - whether approval is required
 
 ### 3.3 Determinism
+
 Given identical inputs and settings, plugin outputs should be stable.
 Avoid randomness. If randomness is required, it must be seeded and logged.
 
 ### 3.4 Safety gates are final
+
 Plugins can propose anything, but the core enforces gates.
 Plugins must not attempt to “bypass” gates or weaken the schema.
 
 ### 3.5 Numeric precision
+
 - Internal audio buffers are float64 normalized [-1, 1).
 - All meters, detectors, and resolvers operating on PCM must use float64.
 - Plugins must not downcast precision.
@@ -91,6 +109,7 @@ Plugins must not attempt to “bypass” gates or weaken the schema.
 ---
 
 ## 4) Plugin packaging (recommended)
+
 ### 4.1 Directory layout (repo-local plugins)
 
 A minimal plugin package:
@@ -136,20 +155,24 @@ MMO records plugin metadata (including version and file hash) in output manifest
 ---
 
 ## 5) Data contracts (conceptual)
+
 The core validates plugin outputs against schemas and ontology rules.
 
 Plugins will generally consume and produce these objects:
 
 ### 5.1 Inputs
+
 - `Session`: stems, buses, settings, layouts, checksums
 - `Features`: measured meters and stats (already computed by core pipeline)
 
 ### 5.2 Outputs
+
 - `Issue` objects (from detectors)
 - `Recommendation` objects (from resolvers)
 - `RenderManifest` objects (from renderers)
 
 All outputs must:
+
 - use ontology IDs
 - include units
 - include required fields

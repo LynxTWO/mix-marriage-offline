@@ -1,14 +1,17 @@
 # docs/03-ontology.md
 
 ## MMO Ontology
-### A shared, canonical vocabulary for plugins, reports, and reproducibility.
+
+### A shared, canonical vocabulary for plugins, reports, and reproducibility
 
 ---
 
 ## 1) Why an ontology exists
+
 Open-source projects break when contributors can’t agree on terms.
 
 MMO avoids that by defining a single, canonical vocabulary (the “ontology”) that every plugin and report uses:
+
 - track roles
 - channel layouts and speakers
 - measured features
@@ -23,6 +26,7 @@ Contributors can name internal variables however they like.
 But anything leaving a plugin must use **canonical ontology IDs**.
 
 This is the key to:
+
 - interoperability between plugins
 - consistent reports and recall sheets
 - stable regression tests (fixtures)
@@ -31,6 +35,7 @@ This is the key to:
 ---
 
 ## 2) Source of truth
+
 **YAML is the source of truth.**
 
 All canonical IDs and definitions live in `ontology/*.yaml` and `ontology/policies/*.yaml`.
@@ -258,4 +263,3 @@ After this doc, we implement the ontology YAML skeletons and a registry loader t
 - validates IDs and required fields
 - provides lookup helpers (labels/descriptions/required params/units)
 - outputs a compiled registry manifest for debugging
-

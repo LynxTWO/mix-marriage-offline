@@ -45,22 +45,27 @@ Locate → Graph → Plan → Patch (optional, guarded)
 ## REPL primitives
 
 ### `list_files(root, pattern, budgets, tracer)`
+
 Glob files under `root` matching `pattern` (e.g. `"*.py"`).
 Returns a sorted list of absolute paths.  Charges **one step**.
 
 ### `read_slice(path, start, end, budgets, tracer)`
+
 Read lines `[start, end)` (0-indexed) from a file.
 Charges **one step + one file read**.
 
 ### `grep(pattern, root, glob, budgets, tracer)`
+
 Regex search across files matching `glob`.  Uses `rg` if available, pure-Python
 otherwise.  Charges **one step + grep hits**.
 
 ### `parse_py_imports(path, root, budgets, tracer)`
+
 AST-based Python import extraction.  Returns `ImportEdge` namedtuples with
 `(src, dst, evidence="ast_import")`.  Charges **one file read**.
 
 ### `resolve_module_to_path(module, root)` *(Upgrade 1)*
+
 Best-effort resolver: maps a dotted module name to a repo-relative file path.
 
 - Searches under `root` itself and `root/src/` (src-layout).
@@ -70,6 +75,7 @@ Best-effort resolver: maps a dotted module name to a repo-relative file path.
 - Returns `None` for stdlib or third-party modules not found under `root`.
 
 ### `resolve_relative_import(src_posix, level, module)` *(new)*
+
 Resolves a Python relative import to an absolute dotted module name.
 
 ```python
@@ -92,6 +98,7 @@ resolve_relative_import("src/mmo/core/plan.py", 1, None)
 - No file reads, no budget charges.
 
 ### `parse_relative_py_imports(path, root, budgets, tracer)` *(new)*
+
 Extracts `py_import_relative` edges from relative imports in a `.py` file.
 
 - Handles `from . import X`, `from .X import Y`, `from .. import X`, etc.
@@ -102,11 +109,13 @@ Extracts `py_import_relative` edges from relative imports in a `.py` file.
 - Returns sorted, deduplicated `RelativeImportEdge` namedtuples.
 
 ### `scan_schema_refs(path, root, budgets, tracer)`
+
 Recursively walks a JSON file and extracts every `$ref` value.
 Local refs (`#/$defs/…`) produce intra-file edges; cross-file refs produce
 inter-file edges.  Charges **one file read**.
 
 ### `scan_id_refs(path, root, budgets, tracer, allowlist=None)` *(enhanced)*
+
 Regex scan for MMO canonical IDs (e.g. `ACTION.UTILITY.GAIN`, `LAYOUT.2_0`,
 `ROLE.DRUMS.KICK`) and snake-case aliases (`action_`, `layout_`, …).
 Returns `IdRefEdge` namedtuples.  Charges **one file read**.
@@ -116,6 +125,7 @@ allowlist are emitted (allowlist mode).  `None` or an empty frozenset uses full
 regex mode (backward-compatible default).
 
 ### `build_id_allowlist(ontology_root, budgets, tracer)` *(Upgrade 2)*
+
 Builds a `frozenset[str]` of canonical MMO IDs from YAML files under
 `ontology_root`.
 
@@ -149,6 +159,7 @@ python -m tools.agent.run graph-only --max-file-reads 200 --max-total-lines 5000
 ```
 
 Exit codes:
+
 - `0` — success
 - `1` — budget cap hit or other error
 - `2` — refused (patch mode without a valid graph artifact)
@@ -210,6 +221,7 @@ python -m tools.agent.run graph-only --diff --preset core --diff-cap 30
 ```
 
 **Behaviour:**
+
 1. Runs `git diff --name-only HEAD` to get the seed file list.
 2. Builds the full (possibly scoped) graph.
 3. Expands seeds by one BFS step using graph edges.  The BFS queue is stable-
@@ -289,6 +301,7 @@ python -m tools.agent.run graph-only --no-id-allowlist
 ```
 
 Fallback rules:
+
 - If `ontology/` does not exist under the repo root, the allowlist is empty
   and the harness automatically falls back to regex mode (no error).
 - A warning is printed and traced when fallback occurs.
@@ -429,6 +442,7 @@ After running, two files are written to `<out>/` (default: `sandbox_tmp/`):
 | `id_ref` | Any text file (rel path) | Matched MMO ID string | 80-char snippet |
 
 **`py_import_file` edges** (Upgrade 1):
+
 - Added alongside every `py_import` edge when the dotted module can be found
   as an actual file under the repo root.
 - `dst` is the POSIX-relative file path (e.g. `src/mmo/core/render_plan.py`).
@@ -438,6 +452,7 @@ After running, two files are written to `<out>/` (default: `sandbox_tmp/`):
 - Resolution uses only filesystem existence checks (no file reads, no budget).
 
 **`py_import_relative` edges** *(new)*:
+
 - Emitted for relative imports: `from . import X`, `from .X import Y`, `from .. import X`, etc.
 - `dst` is the resolved absolute dotted module name when resolution succeeds
   (e.g. `"mmo.core.utils"` for `from .utils import Foo` in `src/mmo/core/plan.py`).
@@ -451,6 +466,7 @@ After running, two files are written to `<out>/` (default: `sandbox_tmp/`):
   `py_import_relative`.
 
 All lists are deterministically sorted:
+
 - Nodes by `(kind, id)`.
 - Edges by `(kind, src, dst, evidence)`.
 
@@ -547,6 +563,7 @@ They apply **per harness run** and use these defaults:
 | `--max-graph-nodes-summary` | 200 | Display cap for node summary (not a hard stop) |
 
 When any hard cap is hit:
+
 1. `BudgetExceededError` is raised internally.
 2. The current phase records a warning and aborts its loop.
 3. Subsequent phases are skipped if the budget remains exceeded.

@@ -1,12 +1,15 @@
 # docs/02-architecture.md
 
 ## Mix Marriage Offline Architecture
-### Offline stems in. Truth-first analysis. Explainable actions out.
+
+### Offline stems in. Truth-first analysis. Explainable actions out
 
 ---
 
 ## 1) System overview
+
 Mix Marriage Offline (MMO) is a standalone, offline tool that consumes a folder of exported stems and produces:
+
 - validated session metadata
 - measured features (meters and signal stats)
 - detected issues (with evidence)
@@ -19,6 +22,7 @@ MMO is intentionally DAW-agnostic. The bridge back into any DAW is the **recall 
 ---
 
 ## 2) Design constraints
+
 - Offline first (no cloud dependency).
 - No DAW integration required.
 - Deterministic outputs given identical inputs/settings.
@@ -48,6 +52,7 @@ MMO is intentionally DAW-agnostic. The bridge back into any DAW is the **recall 
 ---
 
 ## 4) High-level pipeline
+
 The core pipeline is linear and explicit:
 
 1) **Validate**
@@ -307,4 +312,3 @@ This makes results comparable across machines and over time.
 9) Optional safe rendering
 10) Surround foundation (layouts + downmix QA)
 11) Immersive render targets and height support (5.1.2, 5.1.4, 7.1.2, 7.1.4 beds)
-

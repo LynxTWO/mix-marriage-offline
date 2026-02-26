@@ -67,13 +67,16 @@ The stats file includes:
 2. Inspect `*.corpus.stats.json` for unknown and ambiguous tokens.
 3. Review the suggestions YAML (if generated with `--suggestions-out`).
 4. Merge suggestions into a user role lexicon:
+
    ```powershell
    python -m mmo role-lexicon merge-suggestions `
      --suggestions "private\cambridge.role_lexicon.suggestions.yaml" `
      --out "ontology\role_lexicon.yaml" `
      --deny "bad_token1,bad_token2"
    ```
+
 5. Re-run the stems pipeline with the new lexicon:
+
    ```powershell
    python -m mmo stems pipeline `
      --root <stems_root> `

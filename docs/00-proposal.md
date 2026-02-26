@@ -1,11 +1,13 @@
 # docs/00-proposal.md
 
 ## Mix Marriage Offline
-### An open-source, offline mixing assistant that handles the technical math so humans can focus on vibe, intent, and performance.
+
+### An open-source, offline mixing assistant that handles the technical math so humans can focus on vibe, intent, and performance
 
 ---
 
 ## 1) What this is
+
 Mix Marriage Offline is a standalone desktop tool that analyzes exported stems in a folder and outputs:
 
 - A ranked list of technical issues (with evidence).
@@ -20,6 +22,7 @@ It’s a **technical co-pilot** that keeps the engineering side honest, so the h
 ---
 
 ## 2) Why this matters
+
 Mixing is two jobs wearing one hat:
 
 ### Objective engineering
@@ -50,6 +53,7 @@ Let the human decide what the music means.
 - Surround mixing is a steep learning curve and feels inaccessible to most creators.
 
 ### The opportunity
+
 If we make the technical layer:
 
 - repeatable,
@@ -64,6 +68,7 @@ then mixing becomes more about intent and less about fighting the process.
 ## 4) Key principles
 
 ### 4.1 Objective core vs subjective strategy
+
 We separate the system into two worlds:
 
 #### Objective Core (truth layer)

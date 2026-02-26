@@ -12,6 +12,7 @@ Use it when creating a new plugin under `plugins/`.
 - `x_mmo_ui` blocks on all parameters referenced by the layout.
 
 Example starter pack:
+
 - `plugins/examples/gain_v0/gain_v0.plugin.yaml`
 - `plugins/examples/gain_v0/ui/layout.json`
 
