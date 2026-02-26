@@ -44,7 +44,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Placeholder for in-progress changes.
+- Cross-platform release binary packaging via `tools/build_binaries.py`, with
+  PyInstaller as the primary backend and automatic Nuitka fallback.
+- Release workflow binary matrix for `ubuntu-latest`, `windows-latest`, and
+  `macos-latest`, publishing per-platform archives and checksums.
 - Clarified living-doc roles: `PROJECT_WHEN_COMPLETE.md` (progress/status),
   `CHANGELOG.md` (release summary), and `GEMINI.md` (AI/operator guidance).
 - Added local-only ignore rules for temp/build artifacts (`.mmo_tmp`, `mmo_tmp`,

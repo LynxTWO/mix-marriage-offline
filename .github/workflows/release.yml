@@ -25,9 +25,9 @@ jobs:
         run: python tools/validate_contracts.py
 
       - name: Run tests
-        run: python -m pytest -q
+        run: tools/run_pytest.sh -q
 
-  build:
+  build-python-dist:
     needs: validate
     runs-on: ubuntu-latest
     steps:
@@ -46,21 +46,56 @@ jobs:
       - name: Upload dist artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: mmo-python-dist
           path: dist/
 
+  build-binaries:
+    needs: validate
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install binary build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[truth,pdf]" pyinstaller nuitka ordered-set zstandard
+
+      - name: Build standalone binary (PyInstaller + Nuitka fallback)
+        run: python tools/build_binaries.py --output-dir dist
+
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmo-binaries-${{ matrix.os }}
+          path: dist/mmo-*
+          if-no-files-found: error
+
   release:
-    needs: build
+    needs: [build-python-dist, build-binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download dist artifacts
+      - name: Download wheel/sdist artifacts
         uses: actions/download-artifact@v4
         with:
-          name: dist
+          name: mmo-python-dist
+          path: dist/
+
+      - name: Download binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: mmo-binaries-*
+          merge-multiple: true
           path: dist/
 
       - name: Create GitHub Release

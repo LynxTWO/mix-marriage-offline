@@ -36,7 +36,27 @@ MMO's promise:
 
 ## Install
 
-Core install:
+Prebuilt binaries (no Python required):
+
+- Download the matching release asset from GitHub Releases:
+  - Windows: `mmo-windows-<arch>.zip`
+  - Linux: `mmo-linux-<arch>.tar.gz`
+  - macOS: `mmo-macos-<arch>.tar.gz`
+- Extract the archive and run the binary:
+
+```powershell
+# Windows (PowerShell)
+Expand-Archive .\mmo-windows-x86_64.zip -DestinationPath .
+.\mmo-windows-x86_64.exe --help
+```
+
+```sh
+# Linux/macOS
+tar -xzf mmo-linux-x86_64.tar.gz
+./mmo-linux-x86_64 --help
+```
+
+Python install (repo/dev):
 
 ```sh
 pip install .
