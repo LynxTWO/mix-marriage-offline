@@ -29,13 +29,16 @@ MMO is intentionally DAW-agnostic. The bridge back into any DAW is the **recall 
 ---
 
 ## 3) Inputs and assumptions
+
 ### 3.1 Stem folder rules
+
 - All stems start at 0:00 (full-length stems with leading silence allowed).
 - All stems share the same sample rate and bit depth.
 - Stems are aligned and roughly equal length (within tolerance).
 - Roles are inferred from naming convention or assigned in-app.
 
 ### 3.2 Surround and multichannel stems
+
 - Stems may be mono, stereo, or multichannel (layout-aware).
 - Channel layout is either inferred (from filename or container metadata) or assigned by the user.
 - MMO can run layout-specific checks and downmix translation checks.
@@ -88,9 +91,11 @@ The core pipeline is linear and explicit:
 ---
 
 ## 5) Core data model (conceptual)
+
 MMO uses a small set of canonical objects, validated by schemas and ontology IDs.
 
 ### 5.1 Session
+
 - session_id
 - created_at
 - engine_version, ontology_version
@@ -102,6 +107,7 @@ MMO uses a small set of canonical objects, validated by schemas and ontology IDs
 - input_checksums (per file)
 
 ### 5.2 Stem
+
 - stem_id
 - file_path, checksum
 - role_id (ontology)
@@ -110,11 +116,13 @@ MMO uses a small set of canonical objects, validated by schemas and ontology IDs
 - duration, sample_rate, bit_depth
 
 ### 5.3 Bus
+
 - bus_id (DRUMS/VOCALS/MUSIC/MIX)
 - member_stem_ids[]
 - channel_layout_id
 
 ### 5.4 Feature
+
 - feature_id (ontology)
 - scope: stem_id or bus_id
 - value + unit
@@ -122,6 +130,7 @@ MMO uses a small set of canonical objects, validated by schemas and ontology IDs
 - computation metadata (algorithm version)
 
 ### 5.5 Issue
+
 - issue_id (ontology)
 - scope: stem/bus/session
 - severity 0–100
@@ -134,6 +143,7 @@ MMO uses a small set of canonical objects, validated by schemas and ontology IDs
   - supporting feature references
 
 ### 5.6 Action
+
 - action_id (ontology)
 - target (stem/bus/channel group)
 - params (ontology param keys + values + units)
@@ -142,6 +152,7 @@ MMO uses a small set of canonical objects, validated by schemas and ontology IDs
 - expected_effect and tradeoffs
 
 ### 5.7 ActionPlan
+
 - ordered list of actions
 - gating results (allowed/rejected reasons)
 - provenance (which resolver produced it)
@@ -149,12 +160,15 @@ MMO uses a small set of canonical objects, validated by schemas and ontology IDs
 ---
 
 ## 6) Ontology and registries
+
 MMO uses YAML as the source of truth for canonical names and IDs:
+
 - roles, features, issues, actions, params, units, evidence fields
 - speakers, layouts, downmix policies
 - safety gates and policy references
 
 At runtime, `registry` loads the YAML and exposes:
+
 - ID validation (reject unknown IDs)
 - required parameter enforcement for actions
 - unit validation
@@ -165,35 +179,50 @@ Plugins must output ontology IDs, not ad-hoc strings.
 ---
 
 ## 7) Plugin architecture
+
 MMO supports three plugin types:
 
 ### 7.1 Detector plugins
+
 Input:
+
 - session + measured features (stems/buses/layout)
+
 Output:
+
 - issues[] with evidence, severity, confidence
 
 Examples:
+
 - resonance detector
 - mud/harshness detector
 - mono collapse risk detector
 - downmix intelligibility loss detector (surround)
 
 ### 7.2 Resolver plugins
+
 Input:
+
 - session + issues[] + intent/limits
+
 Output:
+
 - action options (recommendations) + rationale
 
 Examples:
+
 - conservative EQ resolver (suggest notches)
 - masking strategy resolver (suggest dynamic EQ vs subtractive EQ)
 - surround focus resolver (suggest center/front balance strategies)
 
 ### 7.3 Renderer plugins (optional)
+
 Input:
+
 - session + gated action plan
+
 Output:
+
 - rendered stem variants (WAV) + render manifest
 
 Default renderer behavior is conservative and safe.
@@ -201,9 +230,11 @@ Default renderer behavior is conservative and safe.
 ---
 
 ## 8) Safety gates
+
 Safety gates live in the core, not in plugins.
 
 Gates enforce:
+
 - user limits (max EQ change, max compression ratio, etc.)
 - “never clip by default”
 - “mix-bus changes require explicit enable”
@@ -215,9 +246,11 @@ Plugins can propose anything, but the core decides what is allowed.
 ---
 
 ## 9) Translation checks
+
 Translation checks are implemented as policy-driven simulations, then measured again.
 
 Examples:
+
 - stereo and mono collapse checks
 - phone profile (band-limit + mono emphasis)
 - earbuds profile (presence and fatigue risk)
@@ -225,6 +258,7 @@ Examples:
 - surround downmix profiles (5.1 → 2.0, 7.1.4 → 5.1/2.0)
 
 Outputs:
+
 - translation score (0–100) per profile
 - top risks + evidence
 - suggested mitigations
@@ -232,9 +266,11 @@ Outputs:
 ---
 
 ## 10) CLI and automation (planned)
+
 A minimal CLI keeps the tool scriptable.
 
 Examples:
+
 - `mmo scan <folder>`
 - `mmo analyze <folder> --intent preset.json`
 - `mmo export <project.mmo_project.json>`
@@ -245,7 +281,9 @@ The CLI output should always include paths to exported artifacts.
 ---
 
 ## 11) Reproducibility and audit trail
+
 Every run produces a manifest:
+
 - stem checksums
 - ontology + engine versions
 - plugin versions/hashes
@@ -257,6 +295,7 @@ This makes results comparable across machines and over time.
 ---
 
 ## 12) What’s next (implementation order)
+
 1) Ontology YAML + registry loader + validators
 2) Meter truth layer (LUFS, true peak, crest factor)
 3) Basic features (spectral bands, correlation)

@@ -1,0 +1,54 @@
+# FILM 7.1.4 channel layout descriptor
+# Standard: FILM / Pro Tools / cinema legacy
+# Layout ID: LAYOUT.7_1_4
+# Channel count: 12
+
+layout_id: "LAYOUT.7_1_4"
+standard: "FILM"
+channel_count: 12
+description: >
+  7.1.4 bed in FILM (Pro Tools / Dolby cinema) order. Used by Pro Tools internal
+  tracks and panning, Dolby Atmos Production Suite, and cinema legacy workflows.
+  Note: LFE is at slot 7 (after all surround channels), opposite to SMPTE.
+  MMO remaps from FILM to SMPTE at import, and from SMPTE to FILM at export.
+
+channels:
+  - slot: 0
+    id: "FL"
+    label: "Front Left"
+  - slot: 1
+    id: "FC"
+    label: "Front Centre"
+  - slot: 2
+    id: "FR"
+    label: "Front Right"
+  - slot: 3
+    id: "SL"
+    label: "Side Surround Left (Ls)"
+  - slot: 4
+    id: "SR"
+    label: "Side Surround Right (Rs)"
+  - slot: 5
+    id: "BL"
+    label: "Back Surround Left (Lrs)"
+  - slot: 6
+    id: "BR"
+    label: "Back Surround Right (Rrs)"
+  - slot: 7
+    id: "LFE"
+    label: "LFE / Subwoofer"
+  - slot: 8
+    id: "TFL"
+    label: "Top Front Left"
+  - slot: 9
+    id: "TFR"
+    label: "Top Front Right"
+  - slot: 10
+    id: "TBL"
+    label: "Top Back Left (TRL)"
+  - slot: 11
+    id: "TBR"
+    label: "Top Back Right (TRR)"
+
+# Mnemonic: L C R Ls Rs Lrs Rrs LFE TFL TFR TRL TRR
+# Key difference from SMPTE: C at slot 1 (not 2), LFE at slot 7 (not 3)

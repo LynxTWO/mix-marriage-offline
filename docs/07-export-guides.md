@@ -3,7 +3,9 @@
 MMO works best when stems are exported consistently. This guide is DAW-agnostic and focuses on rules that prevent the most common failures.
 
 ## Quick checklist
+
 Before you export:
+
 - All stems start at 0:00 (sample aligned).
 - All stems are the same length (include reverb and delay tails).
 - Same sample rate and bit depth for every file.
@@ -11,9 +13,10 @@ Before you export:
 - Clear naming so roles can be assigned.
 
 ## Quick CLI flow
+
 Use the demo stems generator to create deterministic stems, then run the one-shot analyzer.
 
-```
+```sh
 PYTHONPATH=src python tools/make_demo_stems.py /tmp/mmo_demo
 PYTHONPATH=src python tools/analyze_stems.py /tmp/mmo_demo --out-report examples/demo_run/out.json --peak --csv examples/demo_run/recall.csv
 ```
@@ -21,6 +24,7 @@ PYTHONPATH=src python tools/analyze_stems.py /tmp/mmo_demo --out-report examples
 Use `--keep-scan` to retain the intermediate `examples/demo_run/out.scan.json` scan output.
 
 Artifacts:
+
 - `examples/demo_run/out.json` (final report after the plugin pipeline)
 - `examples/demo_run/recall.csv` (recall/export summary)
 
@@ -31,7 +35,7 @@ It loads the `fixtures/immersive/report.7_1_4.json` fixture and renders in dry-r
 mode for all 5 channel-ordering standards (SMPTE, FILM, LOGIC_PRO, VST3, AAF) in
 parallel. No audio files are required.
 
-```
+```sh
 PYTHONPATH=src python -m mmo safe-render \
   --demo \
   --plugins plugins \
@@ -49,7 +53,7 @@ Per-standard receipts are written to:
 
 To run the full (non-dry-run) render-many for a real 7.1.4 session, use:
 
-```
+```sh
 PYTHONPATH=src python -m mmo safe-render \
   --report /path/to/report.json \
   --plugins plugins \
@@ -63,7 +67,7 @@ PYTHONPATH=src python -m mmo safe-render \
 
 To render in Film (Pro Tools) channel order:
 
-```
+```sh
 PYTHONPATH=src python -m mmo safe-render \
   --report /path/to/report.json \
   --plugins plugins \
@@ -76,91 +80,110 @@ PYTHONPATH=src python -m mmo safe-render \
 
 Agent harness with combined schema + ontology scope:
 
-```
+```sh
 python -m tools.agent.run graph-only --preset schemas,ontology
 ```
 
 ## Render (optional)
+
 If you want MMO to render only conservative gain/trim recommendations, use the renderer tool. It only applies low-risk, approval-free, negative gain/trim values.
 
-```
+```sh
 PYTHONPATH=src python tools/render_gain_trim.py /tmp/mmo_demo --report examples/demo_run/out.json --out-dir rendered
 ```
 
 You can also run the renderer as part of the analyze flow:
 
-```
+```sh
 PYTHONPATH=src python tools/analyze_stems.py /tmp/mmo_demo --out-report examples/demo_run/out.json --peak --render-gain-trim-out rendered
 ```
 
 ## Recommended file format
+
 - WAV, PCM
 - 24-bit (or 32-bit float if your DAW supports it cleanly)
 - Keep the session sample rate (44.1k, 48k, 96k). Do not mix rates inside one folder.
 
 Avoid:
+
 - MP3/AAC or any other lossy exports. For lossless stems, use WAV, FLAC, or WavPack (all acceptable).
 - Normalization on export
 - Per-stem limiting that changes the intent
 
 ## Supported stem formats (current)
+
 MMO detects several stem formats by extension. WAV metadata is always decoded; FLAC/WavPack metadata is decoded when ffprobe/FFmpeg is available (or MMO_FFPROBE_PATH is set).
 
 WAV (.wav/.wave):
+
 - Metadata supported.
 
 Lossless:
+
 - FLAC (.flac), WavPack (.wv)
 - Warning: requires ffprobe/FFmpeg for metadata. If missing, install FFmpeg or set MMO_FFPROBE_PATH.
 
 Lossless detected but not decoded yet:
+
 - AIFF (.aif/.aiff)
 - Warning: unsupported format. Export WAV for analysis.
 
 Lossy formats:
+
 - MP3 (.mp3), AAC (.aac), Ogg (.ogg), Opus (.opus)
 - Warning: lossy stems are discouraged because further processing and resampling can compound artifacts and make comparisons less reliable.
 
 M4A (.m4a):
+
 - Ambiguous container (AAC or ALAC). Treated as unsupported until probed.
 
 ## Strict mode
+
 Running `scan_session --strict` elevates lossy and unsupported format warnings to higher severity for CI and advanced checks.
 
 ## Stem alignment rules
+
 MMO assumes stems can be summed and compared.
 
 Required:
+
 - Stems must start at the same timeline point (0:00).
 - Stems must be the same duration.
 
 Common mistakes:
+
 - Render as used that trims silence differently per stem.
 - Printing effects with tails cut off.
 - Exporting only regions that do not line up.
 
 ## Naming conventions
+
 MMO can work with friendly names, but consistency helps.
 
 ### Option A (recommended): role-first naming
+
 Use the canonical role ID in the filename.
 
 Examples:
+
 - `01_ROLE.DRUMS.KICK.wav`
 - `02_ROLE.DRUMS.SNARE.wav`
 - `10_ROLE.VOCALS.LEAD.wav`
 
 ### Option B: human naming with a mapping file
+
 If you prefer names like:
+
 - `Kick In.wav`
 - `Lead Vox.wav`
 
 Add a mapping file later (planned) or keep a simple text note for now. The goal is that every stem can be assigned a `ROLE.*` deterministically.
 
 ## Folder layout convention
+
 Recommended:
 
-```
+```text
 MySong/
 stems/
 01_ROLE.DRUMS.KICK.wav
@@ -172,13 +195,16 @@ REF_mix_you_like.wav
 ```
 
 Notes:
+
 - `refs/` is optional. Reference tracks are not included in the mix sum.
 - Keep the folder self-contained so it can be zipped and shared.
 
 ## What to do about buses
+
 If you export both stems and buses, be explicit.
 
 Recommended:
+
 - Export raw stems.
 - Optionally export a few buses if they represent your intent:
   - `BUS_DRUMS.wav`
@@ -186,38 +212,47 @@ Recommended:
   - `BUS_VOCALS.wav`
 
 Avoid:
+
 - exporting only buses and calling them stems
 - double-printing (stems already include bus processing)
 
 ## Printing effects
+
 Decide what truth you want MMO to evaluate.
 
 Typical options:
+
 - Dry stems only (effects separate)
 - Printed stems including their creative effects
 - Hybrid: vocals printed, drums dry, etc.
 
 Whatever you choose, keep it consistent and name it clearly:
+
 - `ROLE.VOCALS.LEAD_PRINTED.wav`
 - `ROLE.VOCALS.LEAD_DRY.wav`
 
 ## Multichannel and surround exports
+
 If you export multichannel stems (5.1, 7.1.4), consistency matters.
 
 Recommended:
+
 - Interleaved multichannel WAV per stem.
 - Use a single known layout and keep it consistent across all stems.
 
 You should be able to declare one `LAYOUT.*` for the session, such as:
+
 - `LAYOUT.STEREO`
 - `LAYOUT.5_1`
 - `LAYOUT.7_1_4`
 
 Avoid:
+
 - mixing interleaved and split-mono formats in the same folder
 - exporting different channel orders stem to stem
 
 If your DAW exports split mono only, keep the grouping obvious:
+
 - `ROLE.MUSIC.PAD__ch00.wav`
 - `ROLE.MUSIC.PAD__ch01.wav`
 - and document the channel order used.
@@ -308,7 +343,7 @@ Use `--layout-standard AAF` when a layout was inferred from AAF metadata.
 Pass `--layout-standard <STANDARD>` to any render or export command to declare the
 active ordering for file I/O. MMO will remap at the import/export boundary.
 
-```
+```sh
 # Analyze stems in SMPTE order (default — no flag needed)
 PYTHONPATH=src python tools/analyze_stems.py /path/to/stems \
   --out-report out.json --csv recall.csv
@@ -338,6 +373,7 @@ Export your DAW project using SMPTE channel order for best compatibility with MM
 ### Height channel rules
 
 Height channels (TFL, TFR, TRL, TRR) at elevation 45°:
+
 - Must be included in the interleaved stem, not as separate files.
 - Export at the same level as bed channels — do not pre-attenuate heights.
 - MMO applies -6 dB height-to-bed fold for downstream downmix (per `POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0`).
@@ -347,6 +383,7 @@ Height channels (TFL, TFR, TRL, TRR) at elevation 45°:
 Height channels carry the spatial air layer (overhead ambience, ceiling reflections, objects above).
 
 Recommended practices:
+
 - Keep height content below -12 dBFS RMS to avoid overwhelming the bed.
 - Treat heights conservatively: MMO is advisory, not prescriptive.
 - If you intend silence in heights, still export them (as silence) to maintain channel count consistency.
@@ -354,12 +391,14 @@ Recommended practices:
 ### Downmix paths for immersive
 
 MMO can validate fold-down translation for:
+
 - 7.1.4 → 5.1 via `DMX.IMM.7_1_4_TO_5_1.COMPOSED`
 - 7.1.4 → 2.0 via `DMX.IMM.7_1_4_TO_2_0.COMPOSED`
 - 5.1.4 → 5.1 via `DMX.IMM.5_1_4_TO_5_1.HEIGHT_TO_BED`
 
 Run downmix QA for a 7.1.4 source:
-```
+
+```sh
 PYTHONPATH=src python -m mmo downmix qa \
   --src /path/to/714_src.wav \
   --ref /path/to/stereo_ref.wav \
@@ -368,18 +407,23 @@ PYTHONPATH=src python -m mmo downmix qa \
 ```
 
 ## Headroom and safety
+
 Leave room for analysis and translation checks.
 
 Recommended:
+
 - peaks below -1.0 dBFS on stems
 - true peak below -1.0 dBTP on the mix bus export (if you include it)
 
 Do not:
+
 - normalize stems to 0 dBFS
 - clip and assume it is fine because it is loud
 
 ## Sanity check before you run MMO
+
 Pick 2 to 3 stems and confirm:
+
 - they start at the same time
 - they end at the same time
 - summing them in your DAW lines up with expectation

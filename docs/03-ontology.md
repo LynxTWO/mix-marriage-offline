@@ -41,7 +41,9 @@ If an ID doesn’t exist in YAML, it is not valid.
 ---
 
 ## 3) ID conventions (canonical keys)
+
 ### 3.1 Format
+
 Canonical IDs are uppercase, dot-separated:
 
 - `ROLE.DRUM.KICK`
@@ -55,13 +57,16 @@ Canonical IDs are uppercase, dot-separated:
 - `REASON.CLIP_RISK`
 
 ### 3.2 Rules
+
 - IDs are stable. Once released, **do not rename** an ID.
 - Labels and descriptions can improve over time without breaking compatibility.
 - Avoid overloaded words. Prefer specificity (`HARSHNESS` vs `BRIGHT`).
 - IDs must be unique globally within their category.
 
 ### 3.3 Human readability
+
 Every ontology entry should include:
+
 - `label` (human-friendly)
 - `description` (plain language)
 - optionally `notes` and `examples`
@@ -69,7 +74,9 @@ Every ontology entry should include:
 ---
 
 ## 4) Versioning and compatibility
+
 ### 4.1 Ontology version
+
 The ontology has its own semantic version: `ontology_version: X.Y.Z`
 
 - **PATCH**: typos, description improvements, non-breaking metadata
@@ -77,9 +84,11 @@ The ontology has its own semantic version: `ontology_version: X.Y.Z`
 - **MAJOR**: breaking changes (avoid; prefer deprecations)
 
 ### 4.2 Deprecation policy
+
 Never silently remove or rename IDs.
 
 Instead:
+
 - mark the old ID as `deprecated: true`
 - add `replaced_by: NEW.ID`
 - keep support for at least one major version cycle
@@ -87,54 +96,58 @@ Instead:
 ---
 
 ## 5) Ontology file map
+
 The ontology is split for reviewability and low merge-conflict risk.
 
 Minimum set:
 
-- `ontology/ontology.yaml`  
+- `ontology/ontology.yaml`
   Declares `ontology_version` and includes references to the other YAML files.
 
-- `ontology/units.yaml`  
+- `ontology/units.yaml`
   Canonical units: Hz, dB, dBTP, LUFS, ms, samples, percent, degrees, meters, etc.
 
-- `ontology/speakers.yaml`  
+- `ontology/speakers.yaml`
   Speaker definitions with metadata (azimuth/elevation), for surround reasoning.
 
-- `ontology/layouts.yaml`  
+- `ontology/layouts.yaml`
   Channel layouts (2.0, 2.1, 5.1, 7.1, 7.1.4, etc.) and channel groups.
 
-- `ontology/roles.yaml`  
+- `ontology/roles.yaml`
   Track/stem roles used for auto-bus creation and context.
 
-- `ontology/features.yaml`  
+- `ontology/features.yaml`
   Measured feature IDs (meters + signal stats).
 
-- `ontology/issues.yaml`  
+- `ontology/issues.yaml`
   Detected problem IDs with definitions and typical evidence.
 
-- `ontology/actions.yaml`  
+- `ontology/actions.yaml`
   Action IDs with required parameters and constraints.
 
-- `ontology/params.yaml`  
+- `ontology/params.yaml`
   Parameter keys and units (e.g., EQ freq/Q/gain).
 
-- `ontology/evidence.yaml`  
+- `ontology/evidence.yaml`
   Evidence keys used to justify issues and actions (time ranges, freq ranges, stems involved).
 
 - `ontology/reasons.yaml`
   Canonical `REASON.*` codes used by gates to explain plan rejections/downgrades.
 
 Policies (swappable by design):
-- `ontology/policies/gates.yaml`  
+
+- `ontology/policies/gates.yaml`
   Non-negotiable safety rules and default thresholds.
 
-- `ontology/policies/downmix.yaml` and `ontology/policies/downmix_policies/*.yaml`  
+- `ontology/policies/downmix.yaml` and `ontology/policies/downmix_policies/*.yaml`
   Downmix profile references and fold-down policy definitions.
 
 ---
 
 ## 6) What the ontology does (and does not do)
+
 ### 6.1 The ontology DOES
+
 - define what IDs are valid
 - provide labels and descriptions for UI and reports
 - define required parameters for actions
@@ -143,6 +156,7 @@ Policies (swappable by design):
 - enable strict validation and reproducibility
 
 ### 6.2 The ontology DOES NOT
+
 - implement DSP algorithms
 - decide severity scoring logic
 - decide “best” strategy for fixes
@@ -153,6 +167,7 @@ Those belong in plugins and policies, constrained by gates.
 ---
 
 ## 7) Validation rules (enforced by the core)
+
 At runtime, the core loads the ontology and enforces:
 
 1) **ID validity**
@@ -176,6 +191,7 @@ This validation is what makes the plugin ecosystem safe to expand.
 ---
 
 ## 8) Adding a new ontology entry (contributor workflow)
+
 When adding a new feature/issue/action:
 
 1) Choose the correct category file (`features.yaml`, `issues.yaml`, etc.)
@@ -192,7 +208,9 @@ When adding a new feature/issue/action:
 ---
 
 ## 9) Examples
+
 ### 9.1 Feature example
+
 A measured loudness feature:
 
 - ID: `FEATURE.LOUDNESS.LUFS_I`
@@ -201,6 +219,7 @@ A measured loudness feature:
 - Description: Integrated loudness over the full program.
 
 ### 9.2 Issue example
+
 A harshness issue:
 
 - ID: `ISSUE.SPECTRAL.HARSHNESS`
@@ -211,6 +230,7 @@ A harshness issue:
 - Severity is determined by plugin logic, not ontology.
 
 ### 9.3 Action example
+
 An EQ notch:
 
 - ID: `ACTION.EQ.BELL_CUT`
@@ -222,6 +242,7 @@ An EQ notch:
 ---
 
 ## 10) Practical guidance (keep it sane)
+
 - Prefer adding new IDs over renaming old ones.
 - Keep the ontology descriptive, not prescriptive.
 - Use policies for thresholds and fold-down coefficients, not the core ontology.
@@ -230,7 +251,9 @@ An EQ notch:
 ---
 
 ## 11) What’s next
+
 After this doc, we implement the ontology YAML skeletons and a registry loader that:
+
 - loads all YAML files
 - validates IDs and required fields
 - provides lookup helpers (labels/descriptions/required params/units)

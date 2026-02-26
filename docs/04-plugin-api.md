@@ -92,9 +92,10 @@ Plugins must not attempt to “bypass” gates or weaken the schema.
 
 ## 4) Plugin packaging (recommended)
 ### 4.1 Directory layout (repo-local plugins)
+
 A minimal plugin package:
 
-```
+```text
 plugins/
   detectors/
     resonance_detector.py
@@ -105,10 +106,12 @@ plugins/
 ```
 
 Each plugin module provides:
+
 - a `PLUGIN_META` dict or a `plugin.yaml` manifest (recommended)
 - a class implementing the relevant interface
 
 ### 4.2 plugin.yaml (recommended manifest)
+
 Each plugin should include a manifest for metadata and compatibility.
 
 Example:
@@ -154,37 +157,44 @@ All outputs must:
 ---
 
 ## 6) Interfaces (behavioral contract)
+
 Below is the behavioral contract. The concrete Python types live in `src/mmo/plugins/interfaces.py`.
 
 ### 6.1 Detector interface
+
 A detector must implement:
 
 - `id()` → plugin_id string
 - `run(session, features)` → list of Issue
 
 Rules:
+
 - do not modify session
 - return zero or more issues
 - each issue must include evidence and confidence
 
 ### 6.2 Resolver interface
+
 A resolver must implement:
 
 - `id()` → plugin_id string
 - `run(session, issues)` → list of Recommendation
 
 Rules:
+
 - may return multiple recommendations per issue
 - must include explicit action parameters and risk level
 - should include multiple strategy options when meaningful
 
 ### 6.3 Renderer interface
+
 A renderer must implement:
 
 - `id()` → plugin_id string
 - `render(session, gated_action_plan, output_dir)` → RenderManifest
 
 Rules:
+
 - output files must be sample-aligned and length-matched to inputs
 - default behavior must prevent clipping unless user allows it
 - render manifest must list all produced files and applied actions
@@ -192,11 +202,14 @@ Rules:
 ---
 
 ## 7) Risk levels and approval flags (required)
+
 Each recommendation must include:
+
 - `risk`: low | medium | high
 - `requires_approval`: true | false
 
 Suggested defaults:
+
 - any EQ move > 2 dB → medium/high, requires approval
 - broadband tonal shifts → requires approval
 - compression ratio > 3:1 → requires approval
@@ -207,14 +220,19 @@ The core gates may override or block actions even if a plugin marks them “low.
 ---
 
 ## 8) Validation and error handling
+
 ### 8.1 Validation
+
 Plugin outputs are validated in this order:
+
 1) schema validation (required fields and types)
 2) ontology validation (IDs and required params)
 3) safety gate validation (limits and policies)
 
 ### 8.2 Errors
+
 Plugins should fail gracefully:
+
 - raise structured exceptions
 - include actionable error messages
 - never crash the entire pipeline if a single plugin fails (unless configured)
@@ -224,17 +242,21 @@ The core should mark the plugin as failed and continue with remaining plugins.
 ---
 
 ## 9) Compatibility and deprecation
+
 Plugins must declare:
+
 - minimum MMO version
 - minimum ontology version
 
 If an ontology ID is deprecated:
+
 - plugins should transition to the replacement ID
 - core may support aliases for a deprecation window
 
 ---
 
 ## 10) How to write a plugin (quick start)
+
 1) Pick a type: detector, resolver, renderer.
 2) Choose the ontology IDs you will emit.
 3) Implement the interface class.
@@ -290,7 +312,9 @@ ls_idx  = context.channel_order.index("SPK.LS")
 This is safe regardless of whether the active standard is SMPTE or Film.
 
 ## 12) What’s next
+
 After this doc:
+
 - implement `schemas/plugin.schema.json`
 - implement the plugin registry/loader (`src/mmo/plugins/host.py`)
 - create one reference detector and resolver that pass schema + ontology validation

@@ -61,7 +61,7 @@ This runs the full pipeline in one shot:
 
 The output is a self-contained project directory:
 
-```
+```text
 project/
   stems/
     stems_index.json
@@ -74,8 +74,7 @@ project/
   README.txt
 ```
 
-**`--bundle` flag (pointer bundle):**
-You can pass `--bundle path/to/bundle.json` to also write a pointer bundle JSON.
+**`--bundle` flag (pointer bundle):** You can pass `--bundle path/to/bundle.json` to also write a pointer bundle JSON.
 This is a *scaffold-only* bundle built from the init artifacts alone (stems index, stems map, scene draft).
 It does **not** contain a scan report, listen pack, or metering data.
 For a complete GUI payload, see [section 5](#5-build-a-gui-payload-stems-arc) below.
@@ -136,7 +135,7 @@ After init, refresh, and optional auditions, you can produce a full
 `ui_bundle.json` suitable for GUI consumption. This requires two additional
 commands: `scan` (to generate a report) and `bundle` (to assemble the payload).
 
-**Step 1 -- Generate a scan report:**
+### Step 1 -- Generate a scan report
 
 ```powershell
 python -m mmo scan "D:\MySession\stems" `
@@ -147,7 +146,7 @@ This writes `report.json` containing file metadata, issues, and validation
 results. No meters or peak data are included unless you pass `--meters` or
 `--peak`.
 
-**Step 2 -- (Optional) Build a listen pack:**
+### Step 2 -- (Optional) Build a listen pack
 
 If you ran `stems audition` in step 4, you can include the audition index in
 the bundle. Otherwise, skip `--listen-pack` in step 3.
@@ -160,7 +159,7 @@ the bundle. Otherwise, skip `--listen-pack` in step 3.
 }
 ```
 
-**Step 3 -- Assemble the UI bundle:**
+### Step 3 -- Assemble the UI bundle
 
 ```powershell
 python -m mmo bundle `
@@ -176,7 +175,7 @@ All flags except `--report` and `--out` are optional.
 Each extra flag adds its payload to the bundle under a dedicated key.
 The output is validated against `schemas/ui_bundle.schema.json`.
 
-**Pointer bundle vs full UI bundle:**
+### Pointer bundle vs full UI bundle
 
 | | Pointer bundle (`project init --bundle`) | Full UI bundle (`mmo bundle`) |
 |---|---|---|
@@ -213,9 +212,7 @@ python -m mmo role-lexicon merge-suggestions `
 Re-run `project refresh` (or `project init`) with `--role-lexicon ontology\role_lexicon.yaml`
 to apply the improved lexicon.
 
-**Privacy:** Corpus outputs (`*.corpus.jsonl`, `*.corpus.stats.json`,
-`*.suggested.yaml`) must stay in ignored paths (`private/`, `corpus/`).
-Never commit them.
+**Privacy:** Corpus outputs (`*.corpus.jsonl`, `*.corpus.stats.json`, `*.suggested.yaml`) must stay in ignored paths (`private/`, `corpus/`). Never commit them.
 
 See [18-corpus-scanning.md](18-corpus-scanning.md) for full flag reference and workflow.
 

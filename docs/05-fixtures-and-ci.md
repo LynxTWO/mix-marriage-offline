@@ -49,9 +49,10 @@ Fixture expectations should use tolerances (for example ±0.5 LUFS).
 ---
 
 ## 3) Fixture directory layout
+
 Recommended structure:
 
-```
+```text
 fixtures/
   README.md
   generate/
@@ -157,7 +158,9 @@ Plugins must:
 ---
 
 ## 8) Suggested fixtures (starter set)
+
 ### Stereo fixtures
+
 - `mud_demo`: boosted 250 Hz on multiple stems
 - `harsh_demo`: narrow boost around 3–4 kHz on vocal/cymbals
 - `resonance_demo`: persistent narrow peaks in one stem
@@ -165,19 +168,24 @@ Plugins must:
 - `sub_only_bass_demo`: bass lives only below 60 Hz, fails phone translation
 
 ### Surround fixtures (later milestones)
+
 - `downmix_dialogue_loss_5_1_demo`: center content cancels/vanishes on stereo fold-down
 - `lfe_overuse_demo`: too much bass routed to LFE
 
 ---
 
 ## 9) Test implementation guidance
+
 ### 9.1 Use tolerance-based assertions
+
 Examples:
+
 - LUFS within ±0.5
 - true peak within ±0.5 dBTP
 - severity ≥ threshold or within a band
 
 ### 9.2 Prefer “presence” assertions for issues
+
 - assert `ISSUE.SPECTRAL.MUD` exists
 - assert evidence includes 200–500 Hz
 - assert severity ≥ 70 for fixture
@@ -187,13 +195,16 @@ Avoid brittle exact-value comparisons unless necessary.
 ---
 
 ## 10) CI configuration notes
+
 A minimal GitHub Actions workflow should:
+
 - install dependencies
 - run `pytest`
 - validate ontology YAML
 - fail fast on schema validation errors
 
 When the project grows:
+
 - add caching
 - add matrix builds for Windows/macOS/Linux
 - add optional performance benchmarks (non-blocking initially)
@@ -201,7 +212,9 @@ When the project grows:
 ---
 
 ## 11) What’s next
+
 After this doc:
+
 - write `fixtures/README.md`
 - implement fixture generators for mud and harshness
 - implement `tests/test_fixtures.py` using tolerance-based checks

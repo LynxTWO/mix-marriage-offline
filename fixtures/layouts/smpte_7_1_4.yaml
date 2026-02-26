@@ -1,0 +1,52 @@
+# SMPTE 7.1.4 channel layout descriptor
+# Standard: SMPTE / ITU-R BS.775 / Dolby Atmos bed (broadcast, streaming, DCP)
+# Layout ID: LAYOUT.7_1_4
+# Channel count: 12
+
+layout_id: "LAYOUT.7_1_4"
+standard: "SMPTE"
+channel_count: 12
+description: >
+  7.1.4 bed in SMPTE order. Used by Netflix, broadcast, DCP (SMPTE 428-12),
+  FFmpeg WAV/FLAC output, and most streaming delivery specifications.
+  This is the MMO internal canonical ordering for 7.1.4.
+
+channels:
+  - slot: 0
+    id: "FL"
+    label: "Front Left"
+  - slot: 1
+    id: "FR"
+    label: "Front Right"
+  - slot: 2
+    id: "FC"
+    label: "Front Centre"
+  - slot: 3
+    id: "LFE"
+    label: "LFE / Subwoofer"
+  - slot: 4
+    id: "SL"
+    label: "Side Surround Left (Ls)"
+  - slot: 5
+    id: "SR"
+    label: "Side Surround Right (Rs)"
+  - slot: 6
+    id: "BL"
+    label: "Back Surround Left (Lrs)"
+  - slot: 7
+    id: "BR"
+    label: "Back Surround Right (Rrs)"
+  - slot: 8
+    id: "TFL"
+    label: "Top Front Left"
+  - slot: 9
+    id: "TFR"
+    label: "Top Front Right"
+  - slot: 10
+    id: "TBL"
+    label: "Top Back Left (TRL)"
+  - slot: 11
+    id: "TBR"
+    label: "Top Back Right (TRR)"
+
+# Mnemonic: L R C LFE Ls Rs Lrs Rrs TFL TFR TRL TRR

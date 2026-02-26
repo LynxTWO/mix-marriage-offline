@@ -14,9 +14,9 @@ Mixing is both **engineering** and **art**.
 When one person has to hold both jobs at once, something gets compromised.  
 This project exists to make that compromise optional.
 
-**North star:**  
-The machine handles the technical math relentlessly.  
-The human focuses on intent, vibe, and performance.  
+**North star:**
+The machine handles the technical math relentlessly.
+The human focuses on intent, vibe, and performance.
 No guesswork. No magical black boxes. No silent changes.
 
 ---
@@ -26,14 +26,16 @@ No guesswork. No magical black boxes. No silent changes.
 ### 2.1 Objective core vs subjective strategy
 We keep two worlds separate on purpose:
 
-**Objective Core (truth layer)**
+#### Objective Core (truth layer)
+
 - Metering (LUFS, true peak, spectral energy, correlation, etc.)
 - Validation (stem alignment, sample rate consistency, length checks)
 - Translation checks (downmix, mono, phone, etc.)
 - Safety gates (no clipping, bounded processing, required evidence)
 - Schemas (strict, validated I/O)
 
-**Subjective Strategy (plugin layer)**
+#### Subjective Strategy (plugin layer)
+
 - Detectors (how to interpret features into “issues”)
 - Resolvers (how to propose fixes)
 - Renderers (how to apply actions to produce variants)
@@ -47,9 +49,11 @@ This separation is how we avoid “one house sound” while still keeping qualit
 ---
 
 ## 3) Bounded authority
+
 The tool is an assistant, not a dictator.
 
 It can:
+
 - measure
 - warn
 - explain
@@ -57,16 +61,19 @@ It can:
 - and optionally render conservative variants
 
 It must not:
+
 - rewrite the user’s artistic intent
 - apply large changes silently
 - chase a curve at all costs
 - optimize for loudness while sacrificing meaning
 
 ### Default rule
+
 - Low-risk changes may be auto-applied *inside strict user limits*.
 - High-impact changes always require approval.
 
 “High impact” includes, by default:
+
 - large EQ moves
 - broadband tonal shifts
 - heavy compression
@@ -76,7 +83,9 @@ It must not:
 ---
 
 ## 4) Explainability is non-negotiable
+
 Every issue must have:
+
 - **what**: name and type
 - **why**: a plain-English rationale
 - **where**: evidence (time range, frequency range, involved stems)
@@ -84,6 +93,7 @@ Every issue must have:
 - **impact**: what it affects (fatigue, intelligibility, translation, etc.)
 
 Every recommendation must have:
+
 - **parameters**: explicit values with units
 - **risk**: low/medium/high
 - **expected effect**: what should improve and what tradeoff might occur
@@ -94,11 +104,13 @@ If the tool cannot explain it, it should not do it.
 ---
 
 ## 5) Determinism and reproducibility
+
 This is a technical tool. It has to be repeatable.
 
 Given the same stems and the same settings, the system should produce the same output.
 
 Reports include:
+
 - core engine version
 - ontology version
 - plugin versions and hashes
@@ -106,6 +118,7 @@ Reports include:
 - stem checksums
 
 This prevents:
+
 - “works on my machine”
 - argument-by-vibes
 - invisible regressions
@@ -114,9 +127,11 @@ This prevents:
 ---
 
 ## 6) Ontology-first: a shared language
+
 Open source projects fail when contributors can’t agree on terms.
 
 We solve that by defining a canonical vocabulary:
+
 - roles
 - features
 - issues
@@ -125,10 +140,11 @@ We solve that by defining a canonical vocabulary:
 - units
 - evidence fields
 
-Internal variable names can vary.  
+Internal variable names can vary.
 But anything leaving a plugin must use the canonical IDs.
 
 Why this matters:
+
 - plugins interoperate
 - reports stay consistent
 - fixtures stay testable
@@ -137,8 +153,11 @@ Why this matters:
 ---
 
 ## 7) Fixtures and gates: how quality stays high
+
 ### 7.1 Fixtures
+
 We maintain a library of known test sessions (fixtures) that intentionally contain:
+
 - mud
 - harshness
 - masking
@@ -148,14 +167,17 @@ We maintain a library of known test sessions (fixtures) that intentionally conta
 - etc.
 
 They function as:
+
 - regression tests
 - benchmarks
 - contributor onboarding tools
 
 ### 7.2 Safety gates
+
 Gates are non-negotiable rules enforced by the core, regardless of plugin creativity.
 
 Examples:
+
 - don’t clip rendered stems by default
 - don’t exceed user-defined max EQ change
 - don’t apply mix-bus actions unless explicitly enabled
@@ -167,11 +189,13 @@ This is how we can welcome experimental plugins without ruining trust.
 ---
 
 ## 8) The tool doesn’t chase perfection. It chases coherence.
+
 Perfection is genre-dependent, context-dependent, and taste-dependent.
 
 This tool is not trying to create “the correct mix.”
 
 It’s trying to create:
+
 - stable gain structure
 - reduced fatigue
 - clear hierarchy (when requested)
@@ -180,6 +204,7 @@ It’s trying to create:
 - fewer technical landmines
 
 The human decides whether the mix should feel:
+
 - intimate or cinematic
 - clean or gritty
 - restrained or violent
@@ -191,16 +216,19 @@ The machine helps the mix stay coherent inside those decisions.
 ---
 
 ## 9) Surround and immersive philosophy
+
 Surround becomes manageable when:
+
 - layouts are first-class metadata
 - channel groups are measured explicitly
 - downmix survival is tested automatically
 - common pitfalls are flagged early
 
-The goal is not “surround purity.”  
+The goal is not “surround purity.”
 The goal is **immersive intent that still survives real-world playback**.
 
 We treat downmix checks as translation checks:
+
 - 5.1 → stereo
 - 7.1.4 → 5.1
 - immersive → headphones
@@ -212,12 +240,15 @@ Note: We aim to support practical, open workflows. Dolby Atmos rendering and lic
 ---
 
 ## 10) The role of ML (if used at all)
+
 Machine learning can help later with:
+
 - better ranking
 - better masking prediction
 - better “what fix is least destructive” estimation
 
 But the foundation is:
+
 - deterministic DSP
 - validated meters
 - measurable fixtures
@@ -228,6 +259,7 @@ ML should be additive, not required, and never a black box that overrides the tr
 ---
 
 ## 11) Community values
+
 - Be rigorous and humble.
 - Prefer testable changes over cleverness.
 - Keep the core stable.

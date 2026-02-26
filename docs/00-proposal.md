@@ -22,18 +22,20 @@ It’s a **technical co-pilot** that keeps the engineering side honest, so the h
 ## 2) Why this matters
 Mixing is two jobs wearing one hat:
 
-**Objective engineering**  
+### Objective engineering
+
 Gain staging, loudness, clipping safety, masking, resonances, dynamics control, translation.
 
-**Subjective art**  
+### Subjective art
+
 Mood, texture, space, hierarchy, energy, emotional story.
 
 When one person must do both, something gets compromised. Usually it’s the technical details or the creative intent. Sometimes both.
 
 The goal here is simple:
 
-**Never compromise on technical quality.**  
-Let the machine do the math chores relentlessly.  
+**Never compromise on technical quality.**
+Let the machine do the math chores relentlessly.
 Let the human decide what the music means.
 
 ---
@@ -41,6 +43,7 @@ Let the human decide what the music means.
 ## 3) What problem we are solving
 
 ### The pain
+
 - DAW integration is fragile and slow to build.
 - Many “auto” tools chase a curve or a loudness target and flatten character.
 - Technical quality control is tiring and repetitive.
@@ -63,17 +66,22 @@ then mixing becomes more about intent and less about fighting the process.
 ### 4.1 Objective core vs subjective strategy
 We separate the system into two worlds:
 
-**Objective Core (truth layer)**  
+#### Objective Core (truth layer)
+
 Meters, validation, analysis, translation checks, safety gates. This is deterministic and heavily tested.
 
-**Subjective Plugins (strategy layer)**  
+#### Subjective Plugins (strategy layer)
+
 Detectors, resolvers, renderers, profiles. These can evolve fast and be swapped without breaking the core.
 
 ### 4.2 Bounded authority
+
 The tool can recommend anything, but it only auto-applies low-risk actions inside user-defined limits. High-impact moves require explicit approval.
 
 ### 4.3 Explainability
+
 Every issue and recommendation must include:
+
 - what it is,
 - why it matters,
 - where it happens (time + frequency + tracks),
@@ -82,7 +90,9 @@ Every issue and recommendation must include:
 No black box vibes.
 
 ### 4.4 Reproducibility
+
 Given the same stems and settings, the system should produce the same results. Reports include:
+
 - engine version,
 - ontology version,
 - plugin versions/hashes,
@@ -90,7 +100,9 @@ Given the same stems and settings, the system should produce the same results. R
 - stem checksums.
 
 ### 4.5 Open source by design
+
 This is meant to be a “living instrument.”
+
 - DSP experts improve meters and analysis.
 - Mix engineers improve strategies and profiles.
 - QA people harden fixtures and regression tests.
@@ -101,7 +113,9 @@ This is meant to be a “living instrument.”
 ## 5) How it works (high level)
 
 ### Input
+
 You export stems from any DAW, using simple rules:
+
 - all stems start at 0:00
 - same sample rate/bit depth
 - consistent length
@@ -110,6 +124,7 @@ You export stems from any DAW, using simple rules:
 Put stems in a folder and point the tool at it.
 
 ### Pipeline
+
 1) Validate stems and metadata.
 2) Assign roles and build virtual buses (drums, vocals, music, mix).
 3) Measure core features (LUFS, true peak, spectral bands, dynamics stats).
@@ -123,13 +138,16 @@ Put stems in a folder and point the tool at it.
 ## 6) Outputs
 
 ### 6.1 Report (PDF + JSON)
+
 - Ranked issue list with evidence
 - Stem and bus diagnostics
 - Recommendations with parameters, risk level, and rationale
 - Translation test results and “most likely failures”
 
 ### 6.2 Recall sheet (CSV/TXT)
+
 DAW-agnostic instruction list:
+
 - track/stem identifier
 - action type (e.g., EQ bell cut)
 - parameters (freq/Q/gain)
@@ -137,7 +155,9 @@ DAW-agnostic instruction list:
 - priority and risk level
 
 ### 6.3 Optional rendered stems
+
 Conservative processing variants:
+
 - `<original>__MMO_v1.wav`
 - sample-aligned and length-matched
 - no clipping by default
@@ -146,7 +166,9 @@ Conservative processing variants:
 ---
 
 ## 7) Surround and immersive audio (long-term goal)
+
 Surround mixing is powerful but technically intimidating. This tool aims to reduce the barrier by baking in:
+
 - channel layout awareness (2.1, 5.1, 7.1, 7.1.4, etc.)
 - channel-group measurement (front stage, surrounds, heights, LFE)
 - downmix translation checks (surround → stereo/mono)
@@ -157,6 +179,7 @@ Important note: Dolby Atmos itself involves licensing and proprietary tooling. T
 ---
 
 ## 8) What makes this different from “auto mastering” tools
+
 - It is mix-first and stem-aware, not just a final stereo file processor.
 - It is intent-constrained, not curve-chasing.
 - It is transparent and testable.
@@ -166,6 +189,7 @@ Important note: Dolby Atmos itself involves licensing and proprietary tooling. T
 ---
 
 ## 9) Who this is for
+
 - Mixers who want faster technical QA and better translation.
 - Artists who want the technical layer handled so they can focus on performance and vibe.
 - Developers and DSP nerds who want to build something meaningful and measurable.
@@ -174,6 +198,7 @@ Important note: Dolby Atmos itself involves licensing and proprietary tooling. T
 ---
 
 ## 10) Planned milestones (short version)
+
 - **M0:** Repo, docs, ontology YAML, schemas, plugin host skeleton.
 - **M1:** Validation + metering truth layer.
 - **M2:** Core stereo issue detectors + conservative recommendations + recall export.
@@ -186,7 +211,9 @@ See `docs/06-roadmap.md` for the detailed plan.
 ---
 
 ## 11) How to contribute
+
 This project welcomes:
+
 - New detectors (issues + evidence + severity scoring).
 - New resolvers (strategy plugins that turn issues into action plans).
 - Better meters and analysis (core changes require strong review).
@@ -194,6 +221,7 @@ This project welcomes:
 - Documentation and export guides.
 
 Start here:
+
 - `docs/04-plugin-api.md`
 - `docs/05-fixtures-and-ci.md`
 - `CONTRIBUTING.md`
@@ -201,7 +229,9 @@ Start here:
 ---
 
 ## 12) Status
+
 Early-stage design and scaffolding. We are building the foundation first:
+
 - shared ontology (YAML source of truth)
 - strict schemas and validators
 - test fixtures

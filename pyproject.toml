@@ -4,10 +4,35 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mix-marriage-offline"
-description = "Offline mixing assistant for stem analysis."
+description = "Offline, deterministic stem-folder mixing assistant with multi-standard surround support."
 readme = "README.md"
 requires-python = ">=3.12"
 dynamic = ["version"]
+license = {text = "Apache-2.0"}
+keywords = [
+  "audio",
+  "mixing",
+  "stems",
+  "surround",
+  "immersive",
+  "offline",
+  "deterministic",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Multimedia :: Sound/Audio",
+  "Topic :: Multimedia :: Sound/Audio :: Analysis",
+  "Topic :: Multimedia :: Sound/Audio :: Mixers",
+  "Topic :: Utilities",
+]
 dependencies = [
   "PyYAML",
   "jsonschema",
