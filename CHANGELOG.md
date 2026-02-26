@@ -44,6 +44,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Minimal viable CustomTkinter desktop GUI (`mmo-gui`, `src/mmo/gui/main.py`) with:
+  drag/drop stems selection, target selector, `--render-many`, `--layout-standard`,
+  live subprocess log streaming, and high-risk approval dialog before final safe-render.
+- Repo launcher `gui/main.py` and packaged GUI entrypoint `src/mmo/gui/__main__.py`.
+- Binary packaging support for GUI artifacts via `tools/build_binaries.py --with-gui`
+  (`--gui-entrypoint`, `--gui-name`) so CLI + GUI can ship together.
 - Cross-platform release binary packaging via `tools/build_binaries.py`, with
   PyInstaller as the primary backend and automatic Nuitka fallback.
 - Release workflow binary matrix for `ubuntu-latest`, `windows-latest`, and

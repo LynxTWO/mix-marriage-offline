@@ -83,7 +83,7 @@ The project is “complete enough” when all items below are true.
 - [ ] Plugin channel routing uses `ProcessContext.channel_order` (list of `SPK.*` IDs) instead of hard-coded indices.
 
 #### 4.4.1 Loudness and layout mapping (meter contract)
-- [ ] Program loudness uses ITU-R BS.1770-style weighting with explicit, tested channel mapping.
+- [ ] Program loudness uses ITU-R BS.1770-5 weighting with explicit, tested channel mapping.
 - [ ] LFE is excluded from program loudness (weight 0.0) and is always reported separately.
 - [ ] Common layout naming conventions are mapped correctly, including FFmpeg-style aliases:
   - 5.1 (back surrounds: BL/BR).
@@ -142,7 +142,9 @@ The project is “complete enough” when all items below are true.
 - [ ] Presets (example: EQ vibe presets) can be initialized from measured stem features, and preset preview does not create surprise loudness jumps.
 - [ ] A “variant runner” can render multiple output variants (profiles/presets/targets) while reusing cached analysis artifacts keyed by content hash.
 
-### 4.8.1 GUI is ergonomically safe and AI-readable (if GUI is shipped)
+### 4.8.1 GUI is ergonomically safe and AI-readable (a work of art in itself, so creatives and nerds alike love it. Strong typography, cinematic color contrast, and intentional spacing/visual hierarchy so it feels crafted, not utilitarian, while still staying cross-platform and deterministic)
+- [x] Minimal desktop CustomTkinter shell exists for stems drop, target/layout selection,
+  live logs, and bounded-authority approval flow before final safe-render.
 - [ ] A GUI exists (local web app is fine) that exposes the same workflow as the CLI: validate → analyze → scene → render → results → compare.
 - [ ] GUI copy and structure follow the design system in ontology/gui_design.yaml (theme tokens, screen templates, and progressive disclosure).
 - [ ] Any plugin/config UI is generated from JSON Schema with optional UI hints (example: x_mmo_ui or a dedicated ui_hints registry) so agents do not hand-build one-off forms.

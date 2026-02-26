@@ -153,6 +153,26 @@ class TestRunConfig(unittest.TestCase):
                 }
             )
 
+    def test_normalize_render_layout_standard_accepts_all_known_values(self) -> None:
+        normalized = normalize_run_config(
+            {
+                "schema_version": "0.1.0",
+                "render": {"layout_standard": "logic_pro"},
+            }
+        )
+        self.assertEqual(
+            normalized.get("render", {}).get("layout_standard"),
+            "LOGIC_PRO",
+        )
+
+        with self.assertRaisesRegex(ValueError, "render.layout_standard"):
+            normalize_run_config(
+                {
+                    "schema_version": "0.1.0",
+                    "render": {"layout_standard": "BROADCAST_PLUS"},
+                }
+            )
+
     def test_diff_run_config_is_sorted_and_tracks_nested_paths(self) -> None:
         before = normalize_run_config(
             {

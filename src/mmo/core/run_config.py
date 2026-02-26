@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS, supported_output_formats
+from mmo.core.speaker_layout import LayoutStandard
 
 RUN_CONFIG_SCHEMA_VERSION = "0.1.0"
 
@@ -20,9 +21,10 @@ _TOP_LEVEL_KEYS = {
     "apply",
 }
 _DOWNMIX_KEYS = {"source_layout_id", "target_layout_id", "policy_id"}
-_RENDER_KEYS = {"out_dir", "output_formats"}
+_RENDER_KEYS = {"out_dir", "output_formats", "layout_standard"}
 _APPLY_KEYS = {"output_formats"}
 _OUTPUT_FORMAT_ORDER = tuple(LOSSLESS_OUTPUT_FORMATS)
+_LAYOUT_STANDARD_ORDER = tuple(standard.value for standard in LayoutStandard)
 
 
 def _coerce_non_negative_float(value: Any, field_name: str) -> float:
@@ -109,6 +111,9 @@ def _normalize_render(value: Any) -> dict[str, Any]:
                 value[key],
                 field_name="render.output_formats",
             )
+            continue
+        if key == "layout_standard":
+            normalized[key] = _normalize_layout_standard(value[key])
             continue
         normalized[key] = _coerce_optional_string(value[key])
     return normalized
@@ -224,6 +229,18 @@ def _normalize_output_formats(value: Any, *, field_name: str) -> list[str]:
         raise ValueError(f"{field_name} must include at least one format.")
 
     return [fmt for fmt in _OUTPUT_FORMAT_ORDER if fmt in selected]
+
+
+def _normalize_layout_standard(value: Any) -> str:
+    if not isinstance(value, str):
+        raise ValueError("render.layout_standard must be a string.")
+    normalized = value.strip().upper()
+    if normalized not in _LAYOUT_STANDARD_ORDER:
+        allowed = ", ".join(_LAYOUT_STANDARD_ORDER)
+        raise ValueError(
+            f"render.layout_standard must be one of: {allowed}."
+        )
+    return normalized
 
 
 def normalize_run_config(cfg: dict[str, Any]) -> dict[str, Any]:

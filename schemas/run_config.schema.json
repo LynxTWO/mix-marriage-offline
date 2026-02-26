@@ -28,8 +28,8 @@
         "out_dir": { "type": "string" },
         "layout_standard": {
           "type": "string",
-          "enum": ["SMPTE", "FILM"],
-          "description": "Channel ordering standard for render output. SMPTE (default) matches WAV/FLAC/FFmpeg byte order. FILM matches pro mixing room / Pro Tools order.",
+          "enum": ["SMPTE", "FILM", "LOGIC_PRO", "VST3", "AAF"],
+          "description": "Channel ordering standard for render output. SMPTE (default) matches WAV/FLAC/FFmpeg order; FILM matches Pro Tools/cinema; LOGIC_PRO matches Apple/Logic ordering; VST3 matches Cubase/Nuendo speaker arrangement; AAF maps interchange metadata order.",
           "default": "SMPTE"
         },
         "output_formats": {

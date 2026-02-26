@@ -17,6 +17,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = REPO_ROOT / "src"
 DEFAULT_ENTRYPOINT = SRC_DIR / "mmo" / "__main__.py"
+DEFAULT_GUI_ENTRYPOINT = SRC_DIR / "mmo" / "gui" / "__main__.py"
 
 
 class BuildError(RuntimeError):
@@ -218,13 +219,28 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--entrypoint",
-        default="src/mmo/__main__.py",
+        default=str(DEFAULT_ENTRYPOINT.relative_to(REPO_ROOT)),
         help="CLI entrypoint file to compile.",
     )
     parser.add_argument(
         "--name",
         default="mmo",
         help="Base artifact name (platform and arch tags are appended).",
+    )
+    parser.add_argument(
+        "--with-gui",
+        action="store_true",
+        help="Also build a GUI artifact (CustomTkinter entrypoint).",
+    )
+    parser.add_argument(
+        "--gui-entrypoint",
+        default=str(DEFAULT_GUI_ENTRYPOINT.relative_to(REPO_ROOT)),
+        help="GUI entrypoint file to compile when --with-gui is set.",
+    )
+    parser.add_argument(
+        "--gui-name",
+        default="mmo-gui",
+        help="Base artifact name for the GUI binary.",
     )
     parser.add_argument(
         "--prefer",
@@ -240,17 +256,106 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _resolve_entrypoint_path(repo_root: Path, entrypoint_value: str) -> Path:
+    entrypoint = Path(entrypoint_value)
+    if not entrypoint.is_absolute():
+        entrypoint = (repo_root / entrypoint).resolve()
+    return entrypoint
+
+
+def _build_artifact(
+    *,
+    repo_root: Path,
+    src_dir: Path,
+    output_dir: Path,
+    build_dir: Path,
+    entrypoint: Path,
+    artifact_name: str,
+    backend_order: list[str],
+    no_archive: bool,
+) -> int:
+    binary_stem = f"{artifact_name}-{_platform_tag()}-{_arch_tag()}"
+    binary_name = f"{binary_stem}{_binary_suffix()}"
+    artifact_build_dir = build_dir / artifact_name
+    artifact_build_dir.mkdir(parents=True, exist_ok=True)
+
+    failures: list[str] = []
+    built_binary: Path | None = None
+    selected_backend: str | None = None
+
+    for backend in backend_order:
+        try:
+            if backend == "pyinstaller":
+                built_binary = _build_with_pyinstaller(
+                    repo_root=repo_root,
+                    src_dir=src_dir,
+                    entrypoint=entrypoint,
+                    build_dir=artifact_build_dir,
+                    binary_stem=binary_stem,
+                    binary_name=binary_name,
+                )
+            else:
+                built_binary = _build_with_nuitka(
+                    repo_root=repo_root,
+                    src_dir=src_dir,
+                    entrypoint=entrypoint,
+                    build_dir=artifact_build_dir,
+                    binary_stem=binary_stem,
+                    binary_name=binary_name,
+                )
+            selected_backend = backend
+            break
+        except BuildError as exc:
+            message = f"{backend}: {exc}"
+            failures.append(message)
+            print(f"warning: {artifact_name}: {message}", file=sys.stderr)
+
+    if built_binary is None or selected_backend is None:
+        print(f"error: all binary build backends failed for {artifact_name}.", file=sys.stderr)
+        for failure in failures:
+            print(f"  - {failure}", file=sys.stderr)
+        return 1
+
+    final_binary = output_dir / binary_name
+    shutil.copy2(built_binary, final_binary)
+    if not sys.platform.startswith("win"):
+        final_binary.chmod(final_binary.stat().st_mode | 0o111)
+
+    binary_checksum = _write_sha256(final_binary)
+    print(f"Built binary ({artifact_name}, {selected_backend}): {final_binary}")
+    print(f"SHA256: {binary_checksum}")
+
+    if no_archive:
+        return 0
+
+    archive = _archive_binary(
+        binary_path=final_binary,
+        output_dir=output_dir,
+        binary_stem=binary_stem,
+    )
+    archive_checksum = _write_sha256(archive)
+    print(f"Built archive ({artifact_name}): {archive}")
+    print(f"SHA256: {archive_checksum}")
+    return 0
+
+
 def main() -> int:
     args = _parse_args()
     repo_root = Path(args.repo_root).resolve()
     src_dir = (repo_root / "src").resolve()
 
-    entrypoint = Path(args.entrypoint)
-    if not entrypoint.is_absolute():
-        entrypoint = (repo_root / entrypoint).resolve()
+    entrypoint = _resolve_entrypoint_path(repo_root, args.entrypoint)
     if not entrypoint.exists():
         print(f"error: entrypoint does not exist: {entrypoint}", file=sys.stderr)
         return 2
+
+    gui_entrypoint: Path | None = None
+    if args.with_gui:
+        gui_entrypoint = _resolve_entrypoint_path(repo_root, args.gui_entrypoint)
+        if not gui_entrypoint.exists():
+            print(f"error: gui entrypoint does not exist: {gui_entrypoint}", file=sys.stderr)
+            return 2
+
     if not src_dir.exists():
         print(f"error: src dir does not exist: {src_dir}", file=sys.stderr)
         return 2
@@ -265,67 +370,27 @@ def main() -> int:
         shutil.rmtree(build_dir)
     build_dir.mkdir(parents=True, exist_ok=True)
 
-    binary_stem = f"{args.name}-{_platform_tag()}-{_arch_tag()}"
-    binary_name = f"{binary_stem}{_binary_suffix()}"
     backend_order = ["pyinstaller", "nuitka"]
     if args.prefer == "nuitka":
         backend_order.reverse()
 
-    failures: list[str] = []
-    built_binary: Path | None = None
-    selected_backend: str | None = None
-    for backend in backend_order:
-        try:
-            if backend == "pyinstaller":
-                built_binary = _build_with_pyinstaller(
-                    repo_root=repo_root,
-                    src_dir=src_dir,
-                    entrypoint=entrypoint,
-                    build_dir=build_dir,
-                    binary_stem=binary_stem,
-                    binary_name=binary_name,
-                )
-            else:
-                built_binary = _build_with_nuitka(
-                    repo_root=repo_root,
-                    src_dir=src_dir,
-                    entrypoint=entrypoint,
-                    build_dir=build_dir,
-                    binary_stem=binary_stem,
-                    binary_name=binary_name,
-                )
-            selected_backend = backend
-            break
-        except BuildError as exc:
-            message = f"{backend}: {exc}"
-            failures.append(message)
-            print(f"warning: {message}", file=sys.stderr)
+    build_specs: list[tuple[str, Path]] = [(args.name, entrypoint)]
+    if gui_entrypoint is not None:
+        build_specs.append((args.gui_name, gui_entrypoint))
 
-    if built_binary is None or selected_backend is None:
-        print("error: all binary build backends failed.", file=sys.stderr)
-        for failure in failures:
-            print(f"  - {failure}", file=sys.stderr)
-        return 1
-
-    final_binary = output_dir / binary_name
-    shutil.copy2(built_binary, final_binary)
-    if not sys.platform.startswith("win"):
-        final_binary.chmod(final_binary.stat().st_mode | 0o111)
-    binary_checksum = _write_sha256(final_binary)
-    print(f"Built binary ({selected_backend}): {final_binary}")
-    print(f"SHA256: {binary_checksum}")
-
-    if args.no_archive:
-        return 0
-
-    archive = _archive_binary(
-        binary_path=final_binary,
-        output_dir=output_dir,
-        binary_stem=binary_stem,
-    )
-    archive_checksum = _write_sha256(archive)
-    print(f"Built archive: {archive}")
-    print(f"SHA256: {archive_checksum}")
+    for artifact_name, artifact_entrypoint in build_specs:
+        rc = _build_artifact(
+            repo_root=repo_root,
+            src_dir=src_dir,
+            output_dir=output_dir,
+            build_dir=build_dir,
+            entrypoint=artifact_entrypoint,
+            artifact_name=artifact_name,
+            backend_order=backend_order,
+            no_archive=bool(args.no_archive),
+        )
+        if rc != 0:
+            return rc
     return 0
 
 
