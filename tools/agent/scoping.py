@@ -56,7 +56,9 @@ def resolve_scope_paths(
     Args:
         root: Repository root (used to resolve relative paths).
         scope_args: List of relative or absolute path strings from ``--scope``.
-        preset: Optional preset name (key in :data:`PRESETS`).
+        preset: Optional preset name or comma-separated list of preset names
+            (keys in :data:`PRESETS`).  Example: ``"schemas,ontology"`` expands
+            both the ``schemas`` and ``ontology`` presets.
 
     Returns:
         Sorted, deduplicated list of absolute :class:`pathlib.Path` objects.
@@ -66,8 +68,9 @@ def resolve_scope_paths(
     raw: list[pathlib.Path] = []
 
     if preset is not None:
-        for rel in PRESETS.get(preset, []):
-            raw.append(root / rel)
+        for preset_name in [p.strip() for p in preset.split(",") if p.strip()]:
+            for rel in PRESETS.get(preset_name, []):
+                raw.append(root / rel)
 
     for s in scope_args:
         p = pathlib.Path(s)

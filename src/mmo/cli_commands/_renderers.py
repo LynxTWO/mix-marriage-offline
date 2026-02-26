@@ -36,8 +36,10 @@ __all__ = [
     "_run_downmix_render",
     "_run_apply_command",
     "_run_safe_render_command",
+    "_run_safe_render_demo",
     "_run_render_many_targets",
     "_RENDER_MANY_DEFAULT_TARGETS",
+    "_DEMO_LAYOUT_STANDARDS",
     "_write_routing_plan_artifact",
     "_run_bundle",
     "_build_validated_listen_pack",
@@ -1203,3 +1205,116 @@ def _run_safe_render_command(
         file=sys.stderr,
     )
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Demo: render-many-standards (all 5 channel-ordering standards in parallel)
+# ---------------------------------------------------------------------------
+
+_DEMO_LAYOUT_STANDARDS: list[str] = ["SMPTE", "FILM", "LOGIC_PRO", "VST3", "AAF"]
+"""All 5 channel-ordering standards used by the --demo render-many flow."""
+
+
+def _run_safe_render_demo(
+    *,
+    fixture_path: Path,
+    plugins_dir: Path,
+    out_dir: Path | None,
+    profile_id: str = "PROFILE.ASSIST",
+    run_config: dict[str, Any] | None = None,
+    force: bool = False,
+) -> int:
+    """Run the render-many-standards demo using the built-in 7.1.4 fixture.
+
+    Loads ``fixture_path`` (``fixtures/immersive/report.7_1_4.json``) and
+    runs a dry-run safe-render pass for every channel-ordering standard in
+    :data:`_DEMO_LAYOUT_STANDARDS` (SMPTE, FILM, LOGIC_PRO, VST3, AAF) in
+    parallel using :class:`concurrent.futures.ThreadPoolExecutor`.
+
+    Each standard gets its own sub-directory under ``out_dir``.  All passes
+    run in ``--dry-run`` mode so no audio I/O is required.
+
+    Args:
+        fixture_path: Path to the 7.1.4 fixture report JSON.
+        plugins_dir: Plugins directory (passed through to safe-render).
+        out_dir: Root output directory.  Per-standard sub-dirs are created
+            automatically (e.g. ``<out_dir>/SMPTE/``, ``<out_dir>/FILM/``).
+        profile_id: Authority profile for gating (default PROFILE.ASSIST).
+        run_config: Optional merged run config dict.
+        force: Overwrite existing output files if True.
+
+    Returns:
+        0 if all standard passes succeed, 1 if any fail.
+    """
+    import concurrent.futures  # noqa: WPS433
+
+    if not fixture_path.exists():
+        print(
+            f"safe-render --demo: fixture not found: {fixture_path.as_posix()}",
+            file=sys.stderr,
+        )
+        return 1
+
+    standards = _DEMO_LAYOUT_STANDARDS
+    print(
+        f"safe-render --demo: fixture={fixture_path.as_posix()}"
+        f" standards={','.join(standards)}",
+        file=sys.stderr,
+    )
+
+    def _run_one_standard(standard: str) -> tuple[str, int]:
+        std_out_dir = (out_dir / standard) if out_dir is not None else None
+        std_receipt = (
+            std_out_dir / "receipt.json" if std_out_dir is not None else None
+        )
+        rc = _run_safe_render_command(
+            repo_root=None,
+            report_path=fixture_path,
+            plugins_dir=plugins_dir,
+            out_dir=std_out_dir,
+            out_manifest_path=(
+                std_out_dir / "render_manifest.json" if std_out_dir is not None else None
+            ),
+            receipt_out_path=std_receipt,
+            qa_out_path=None,
+            profile_id=profile_id,
+            target="7.1.4",
+            dry_run=True,  # demo always dry-run — no audio required
+            approve=None,
+            output_formats=None,
+            run_config=run_config,
+            force=force,
+            user_profile=None,
+            render_many_targets=None,
+            layout_standard=standard,
+        )
+        return standard, rc
+
+    results: list[tuple[str, int]] = []
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=len(standards), thread_name_prefix="demo_standard"
+    ) as pool:
+        futures = {pool.submit(_run_one_standard, std): std for std in standards}
+        for fut in concurrent.futures.as_completed(futures):
+            try:
+                results.append(fut.result())
+            except Exception as exc:  # noqa: BLE001
+                std = futures[fut]
+                print(
+                    f"safe-render --demo: standard={std} raised {exc}",
+                    file=sys.stderr,
+                )
+                results.append((std, 1))
+
+    # Stable output order
+    results.sort(key=lambda r: r[0])
+    failed = [std for std, rc in results if rc != 0]
+    succeeded = [std for std, rc in results if rc == 0]
+    print(
+        f"safe-render --demo: completed"
+        f" succeeded={len(succeeded)}"
+        f" failed={len(failed)}"
+        f"{' failed_standards=' + ','.join(failed) if failed else ''}",
+        file=sys.stderr,
+    )
+    return 0 if not failed else 1

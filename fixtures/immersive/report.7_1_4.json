@@ -1,0 +1,64 @@
+{
+  "engine_version": "0.1.0",
+  "features": {},
+  "generated_at": "2026-01-01T00:00:00Z",
+  "issues": [],
+  "ontology_version": "0.1.0",
+  "project_id": "PROJECT.DEMO.IMMERSIVE",
+  "recommendations": [
+    {
+      "action_id": "ACTION.UTILITY.GAIN",
+      "confidence": 0.95,
+      "issue_id": "ISSUE.SAFETY.CLIPPING_SAMPLES",
+      "params": [
+        {
+          "param_id": "PARAM.GAIN.DB",
+          "value": -1.5
+        }
+      ],
+      "recommendation_id": "REC.DEMO.IMM.GAIN.001",
+      "requires_approval": false,
+      "risk": "low",
+      "target": {
+        "scope": "stem",
+        "stem_id": "bed_7_1_4"
+      }
+    }
+  ],
+  "report_id": "REPORT.DEMO.IMMERSIVE.7_1_4",
+  "schema_version": "0.1.0",
+  "session": {
+    "source_layout_id": "LAYOUT.7_1_4",
+    "stems": [
+      {
+        "file_path": "stems/bed_7_1_4.wav",
+        "measurements": [
+          {
+            "evidence_id": "EVID.METER.CLIP_SAMPLE_COUNT",
+            "value": 0
+          },
+          {
+            "evidence_id": "EVID.METER.PEAK_DBFS",
+            "value": -2.0
+          }
+        ],
+        "stem_id": "bed_7_1_4"
+      },
+      {
+        "file_path": "stems/bed_7_1_4_film.wav",
+        "measurements": [
+          {
+            "evidence_id": "EVID.METER.CLIP_SAMPLE_COUNT",
+            "value": 0
+          },
+          {
+            "evidence_id": "EVID.METER.PEAK_DBFS",
+            "value": -2.0
+          }
+        ],
+        "stem_id": "bed_7_1_4_film"
+      }
+    ],
+    "stems_dir": "fixtures/immersive/stems"
+  }
+}

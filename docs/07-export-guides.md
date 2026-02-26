@@ -24,6 +24,62 @@ Artifacts:
 - `examples/demo_run/out.json` (final report after the plugin pipeline)
 - `examples/demo_run/recall.csv` (recall/export summary)
 
+## Render-many demo (7.1.4 SMPTE + FILM, all 5 standards)
+
+Use the built-in `--demo` flag to run the render-many-standards end-to-end flow.
+It loads the `fixtures/immersive/report.7_1_4.json` fixture and renders in dry-run
+mode for all 5 channel-ordering standards (SMPTE, FILM, LOGIC_PRO, VST3, AAF) in
+parallel. No audio files are required.
+
+```
+PYTHONPATH=src python -m mmo safe-render \
+  --demo \
+  --plugins plugins \
+  --out-dir examples/demo_immersive \
+  --profile PROFILE.ASSIST
+```
+
+Per-standard receipts are written to:
+
+- `examples/demo_immersive/SMPTE/receipt.json`
+- `examples/demo_immersive/FILM/receipt.json`
+- `examples/demo_immersive/LOGIC_PRO/receipt.json`
+- `examples/demo_immersive/VST3/receipt.json`
+- `examples/demo_immersive/AAF/receipt.json`
+
+To run the full (non-dry-run) render-many for a real 7.1.4 session, use:
+
+```
+PYTHONPATH=src python -m mmo safe-render \
+  --report /path/to/report.json \
+  --plugins plugins \
+  --render-many \
+  --render-many-targets stereo,5.1,7.1.4 \
+  --layout-standard SMPTE \
+  --out-dir rendered \
+  --receipt-out receipt.json \
+  --profile PROFILE.ASSIST
+```
+
+To render in Film (Pro Tools) channel order:
+
+```
+PYTHONPATH=src python -m mmo safe-render \
+  --report /path/to/report.json \
+  --plugins plugins \
+  --render-many \
+  --layout-standard FILM \
+  --out-dir rendered_film \
+  --receipt-out receipt_film.json \
+  --profile PROFILE.ASSIST
+```
+
+Agent harness with combined schema + ontology scope:
+
+```
+python -m tools.agent.run graph-only --preset schemas,ontology
+```
+
 ## Render (optional)
 If you want MMO to render only conservative gain/trim recommendations, use the renderer tool. It only applies low-risk, approval-free, negative gain/trim values.
 

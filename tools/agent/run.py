@@ -40,6 +40,7 @@ Usage (from repo root)::
 Scoping (Upgrade 3)::
 
     python -m tools.agent.run graph-only --preset schemas
+    python -m tools.agent.run graph-only --preset schemas,ontology
     python -m tools.agent.run graph-only --scope src/mmo/core --scope ontology
     python -m tools.agent.run graph-only --diff
     python -m tools.agent.run graph-only --diff --diff-cap 30
@@ -268,12 +269,13 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--preset",
-        choices=["core", "schemas", "ontology", "cli"],
         default=None,
+        metavar="PRESET[,PRESET...]",
         help=(
-            "Named scope preset. "
-            "core=src/mmo/core, schemas=schemas, ontology=ontology, "
-            "cli=src/mmo/cli.py+src/mmo/cli_commands."
+            "Named scope preset or comma-separated list of presets. "
+            "Available: core=src/mmo/core, schemas=schemas, ontology=ontology, "
+            "cli=src/mmo/cli.py+src/mmo/cli_commands. "
+            "Example: --preset schemas,ontology"
         ),
     )
     parser.add_argument(

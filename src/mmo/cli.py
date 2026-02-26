@@ -950,8 +950,12 @@ def main(argv: list[str] | None = None) -> int:
         raise
     safe_render_parser.add_argument(
         "--report",
-        required=True,
-        help="Path to report JSON (from mmo analyze or equivalent).",
+        required=False,
+        default=None,
+        help=(
+            "Path to report JSON (from mmo analyze or equivalent). "
+            "Required unless --demo is used."
+        ),
     )
     safe_render_parser.add_argument(
         "--plugins",
@@ -1051,11 +1055,23 @@ def main(argv: list[str] | None = None) -> int:
         "--layout-standard",
         default="SMPTE",
         dest="layout_standard",
-        choices=["SMPTE", "FILM"],
+        choices=["SMPTE", "FILM", "LOGIC_PRO", "VST3", "AAF"],
         help=(
-            "Channel ordering standard for render output: "
-            "SMPTE (default, WAV/FLAC/FFmpeg/broadcast order) or "
-            "FILM (pro mixing room / Pro Tools / cinema order)."
+            "Channel ordering standard for render I/O: "
+            "SMPTE (default, WAV/FLAC/FFmpeg/broadcast order), "
+            "FILM (Pro Tools/cinema), LOGIC_PRO (Apple/DTS), "
+            "VST3 (Cubase/Nuendo 7.1+), or AAF (metadata-driven)."
+        ),
+    )
+    safe_render_parser.add_argument(
+        "--demo",
+        action="store_true",
+        default=False,
+        help=(
+            "Run the render-many-standards demo: load the built-in 7.1.4 "
+            "SMPTE+FILM fixture from fixtures/immersive/ and render to all "
+            "5 channel-ordering standards (SMPTE, FILM, LOGIC_PRO, VST3, AAF) "
+            "in parallel. Implies --dry-run. Use --out-dir to set the output root."
         ),
     )
 
@@ -5402,6 +5418,12 @@ def main(argv: list[str] | None = None) -> int:
             print(str(exc), file=sys.stderr)
             return 1
     if args.command == "safe-render":
+        if not getattr(args, "demo", False) and not getattr(args, "report", None):
+            print(
+                "safe-render: --report is required unless --demo is used.",
+                file=sys.stderr,
+            )
+            return 1
         safe_render_overrides: dict[str, Any] = {}
         if _flag_present(raw_argv, "--output-formats"):
             try:
@@ -5417,7 +5439,8 @@ def main(argv: list[str] | None = None) -> int:
         _safe_render_layout_standard = (
             str(getattr(args, "layout_standard", "SMPTE")).strip().upper() or "SMPTE"
         )
-        if _safe_render_layout_standard not in ("SMPTE", "FILM"):
+        _all_layout_standards = ("SMPTE", "FILM", "LOGIC_PRO", "VST3", "AAF")
+        if _safe_render_layout_standard not in _all_layout_standards:
             _safe_render_layout_standard = "SMPTE"
         if _flag_present(raw_argv, "--layout-standard"):
             _set_nested(
@@ -5440,6 +5463,33 @@ def main(argv: list[str] | None = None) -> int:
             "render",
             ["wav"],
         )
+        _demo_flag = bool(getattr(args, "demo", False))
+        if _demo_flag:
+            from mmo.cli_commands._renderers import (  # noqa: WPS433
+                _run_safe_render_demo,
+            )
+            # Locate fixture relative to the repo root (or CWD for installed)
+            _demo_fixture = Path("fixtures/immersive/report.7_1_4.json")
+            if not _demo_fixture.exists():
+                # Fall back to path relative to this file (installed package)
+                _demo_fixture = (
+                    Path(__file__).resolve().parent.parent.parent
+                    / "fixtures" / "immersive" / "report.7_1_4.json"
+                )
+            try:
+                return _run_safe_render_demo(
+                    fixture_path=_demo_fixture,
+                    plugins_dir=Path(getattr(args, "plugins", "plugins")),
+                    out_dir=(
+                        Path(args.out_dir) if getattr(args, "out_dir", None) else None
+                    ),
+                    profile_id=getattr(args, "profile", "PROFILE.ASSIST"),
+                    run_config=merged_run_config,
+                    force=bool(getattr(args, "force", False)),
+                )
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
         _render_many_flag = bool(getattr(args, "render_many", False))
         _render_many_targets_raw = getattr(args, "render_many_targets", None)
         _render_many_targets: list[str] | None = None

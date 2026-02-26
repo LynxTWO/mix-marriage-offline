@@ -22,6 +22,8 @@ Test matrix:
     test_preset_schemas_limits_scope         Upgrade 3: --preset schemas
     test_scope_ontology_only                 Upgrade 3: --scope ontology
     test_expand_diff_scope_deterministic     Upgrade 3: BFS expansion is deterministic
+    test_preset_comma_separated_schemas_ontology  comma-separated --preset schemas,ontology
+    test_cli_preset_comma_separated_flag     CLI: --preset schemas,ontology runs OK
 
 PR A — contract stamp:
     TestContractStamp.test_stamp_written_after_graph_only_run
@@ -1040,6 +1042,47 @@ class TestScoping:
             "--max-steps", "200",
         ])
         assert rc in (0, 1), f"Expected 0 or 1, got {rc}"
+
+    def test_preset_comma_separated_schemas_ontology(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """--preset schemas,ontology expands both presets into scope_paths."""
+        from tools.agent.scoping import resolve_scope_paths
+
+        root = _REPO_ROOT
+        scope = resolve_scope_paths(root, [], "schemas,ontology")
+        scope_posix = [p.as_posix() for p in scope]
+        # Must contain paths from both presets
+        assert any("schemas" in s for s in scope_posix), (
+            f"Expected 'schemas' path in scope: {scope_posix}"
+        )
+        assert any("ontology" in s for s in scope_posix), (
+            f"Expected 'ontology' path in scope: {scope_posix}"
+        )
+
+    def test_cli_preset_comma_separated_flag(self, tmp_path: pathlib.Path) -> None:
+        """--preset schemas,ontology CLI flag runs without error."""
+        rc = harness_main([
+            "graph-only",
+            "--root", str(_REPO_ROOT),
+            "--out", str(tmp_path),
+            "--preset", "schemas,ontology",
+            "--no-contract-stamp",
+            "--no-index",
+            "--max-file-reads", "200",
+            "--max-total-lines", "100000",
+            "--max-steps", "200",
+        ])
+        assert rc in (0, 1), f"Expected 0 or 1, got {rc}"
+        graph_path = tmp_path / "agent_graph.json"
+        assert graph_path.exists(), "graph artifact must be written"
+        graph = json.loads(graph_path.read_text(encoding="utf-8"))
+        node_ids = [n["id"] for n in graph["nodes"]]
+        # Both schemas/ and ontology/ files must appear
+        has_schema = any("schemas/" in nid for nid in node_ids)
+        has_ontology = any("ontology/" in nid for nid in node_ids)
+        assert has_schema, "Expected schema file nodes in graph"
+        assert has_ontology, "Expected ontology file nodes in graph"
 
     def test_cli_no_id_allowlist_flag(self, tmp_path: pathlib.Path) -> None:
         """--no-id-allowlist CLI flag runs and graph still has id_ref edges."""
