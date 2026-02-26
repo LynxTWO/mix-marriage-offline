@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-02-21
+Last updated: 2026-02-26
 
 This is the single-page milestone checklist for current delivery phases.
 
@@ -36,7 +36,7 @@ Definition of done:
 - [x] Core DSP/render primitives exist.
 - [ ] Phase 1 meter/gate pack is finalized.
 - [ ] Phase 1 resolver pack has fixture coverage.
-- [ ] Repeat runs produce byte-stable outputs for covered fixtures.
+- [x] Repeat runs produce byte-stable outputs for covered fixtures.
 
 ## Status System
 State: `done`

@@ -129,7 +129,7 @@ The project is “complete enough” when all items below are true.
 ### 4.7 Fixtures and CI prevent regressions
 - [ ] Fixture sessions exist for stereo, 5.1, 7.1, and one immersive target.
 - [ ] Fixture for “stereo stems with baked pan/width” validates inference is advisory and confidence-gated.
-- [ ] Determinism tests exist (byte-stable or numerically stable within documented tolerance).
+- [x] Determinism tests exist (byte-stable or numerically stable within documented tolerance).
 - [ ] Downmix similarity tests exist and fail CI when gates regress.
 - [ ] CI runs on Windows, Linux, macOS (or documents any limitations).
 

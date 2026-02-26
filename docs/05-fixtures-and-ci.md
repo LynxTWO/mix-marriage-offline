@@ -55,6 +55,9 @@ Recommended structure:
 ```text
 fixtures/
   README.md
+  public_session/
+    report.7_1_4.json
+    stems/
   generate/
     make_mud_fixture.py
     make_harsh_fixture.py
@@ -76,6 +79,8 @@ fixtures/
 ```
 
 Generated fixtures should be reproducible from scripts in `fixtures/generate/`.
+Public example fixtures should remain small and schema-valid so they can be used
+in docs, tests, and `--dry-run` demos without media downloads.
 
 ---
 
@@ -272,6 +277,21 @@ python tools/run_policy_fixtures.py fixtures/policies/downmix
 Notes:
 - `tools/validate_policies.py` prints a JSON payload that conforms to `schemas/validation_result.schema.json`.
 - Add `--strict` to enable a lower warning threshold for coefficient `sum_abs`.
+
+
+## Full determinism harness (public session)
+
+The byte-stability tripwire for the full safe-render pipeline is:
+
+- `tests/test_full_determinism.py`
+- fixture input: `fixtures/public_session/report.7_1_4.json`
+- standards covered: `SMPTE` and `FILM`
+
+Run it directly:
+
+```bash
+python -m pytest -q tests/test_full_determinism.py
+```
 
 ### Local verify (run yourself)
 

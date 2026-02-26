@@ -148,6 +148,15 @@ mmo safe-render \
 # Demo flow: load the built-in 7.1.4 fixture and dry-run to all 5 standards
 mmo safe-render --demo --out-dir out/demo/
 
+# Public example session fixture (7.1.4 SMPTE + FILM), dry-run render
+mmo safe-render \
+  --report fixtures/public_session/report.7_1_4.json \
+  --target 7.1.4 \
+  --layout-standard FILM \
+  --dry-run \
+  --receipt-out out/public_session/receipt.json \
+  --out-manifest out/public_session/render_manifest.json
+
 # One-shot: analyze + render-many in a single workflow pass
 mmo run ./stems \
   --render-many \

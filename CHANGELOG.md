@@ -52,6 +52,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `CHANGELOG.md` (release summary), and `GEMINI.md` (AI/operator guidance).
 - Added local-only ignore rules for temp/build artifacts (`.mmo_tmp`, `mmo_tmp`,
   `.tmp_pip`, pip temp caches, `.venv_wsl`, `build`).
+- Full determinism harness `tests/test_full_determinism.py` that asserts
+  byte-stable safe-render + bundle artifacts for SMPTE and FILM on the new
+  public fixture `fixtures/public_session/report.7_1_4.json`.
 
 ## [2026-02-17]
 
