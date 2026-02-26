@@ -1,4 +1,4 @@
-"""Determinism and layout-awareness tests for GUI visualization dashboard v1.1."""
+"""Determinism + visual snapshot tests for GUI visualization dashboard v1.1."""
 
 from __future__ import annotations
 
@@ -6,12 +6,14 @@ from dataclasses import replace
 
 from mmo.gui.dashboard import (
     DashboardTelemetry,
+    build_dashboard_surface_snapshot,
     build_object_projections,
     build_speaker_projections,
     build_visualization_frame,
     classify_correlation_risk,
     default_dashboard_telemetry,
     frame_signature,
+    surface_snapshot_signature,
 )
 
 
@@ -27,6 +29,9 @@ def _fixed_telemetry() -> DashboardTelemetry:
         object_tokens=("LEAD VOX", "FX WIDE", "HEIGHT AIR"),
         mood_line="The mix is breathing with stable center.",
         explain_line="Fixed telemetry for deterministic visualization tests.",
+        live_what="Tighten depth contour",
+        live_why="Phase-safe spatial polish",
+        live_where=("LEAD VOX", "FX WIDE", "HEIGHT AIR"),
     )
 
 
@@ -36,7 +41,16 @@ def test_dashboard_frame_signature_is_deterministic_for_fixed_input() -> None:
     frame_b = build_visualization_frame(telemetry, tick=24)
     assert frame_a == frame_b
     assert frame_signature(frame_a) == frame_signature(frame_b)
-    assert frame_signature(frame_a) == "57eb6a447976ca11771d5643892f88eb318876061271f4e9b80a8824130958ca"
+    assert frame_signature(frame_a) == "2db5a09e6613385483afbaa2cfc7231ff685efd741d2b42e1fa44b91a256d40c"
+
+
+def test_dashboard_surface_snapshot_signature_is_deterministic() -> None:
+    telemetry = _fixed_telemetry()
+    frame = build_visualization_frame(telemetry, tick=24)
+    snapshot_a = build_dashboard_surface_snapshot(frame)
+    snapshot_b = build_dashboard_surface_snapshot(frame)
+    assert snapshot_a == snapshot_b
+    assert surface_snapshot_signature(frame) == "311043d2e1e511d04e56a03cb2149c3284c5213187af899ffcee98b75116d9b5"
 
 
 def test_dashboard_frame_changes_deterministically_across_ticks() -> None:
@@ -44,6 +58,7 @@ def test_dashboard_frame_changes_deterministically_across_ticks() -> None:
     frame_a = build_visualization_frame(telemetry, tick=8)
     frame_b = build_visualization_frame(telemetry, tick=9)
     assert frame_signature(frame_a) != frame_signature(frame_b)
+    assert surface_snapshot_signature(frame_a) != surface_snapshot_signature(frame_b)
 
 
 def test_speaker_projection_respects_layout_standard_slot_order() -> None:
@@ -72,6 +87,18 @@ def test_object_projection_is_sorted_unique_and_deterministic() -> None:
     )
     assert objects_a == objects_b
     assert [row.object_id for row in objects_a] == ["HEIGHT AIR", "FX WIDE", "LEAD VOX"]
+
+
+def test_intent_cards_have_explainability_fields() -> None:
+    telemetry = _fixed_telemetry()
+    frame = build_visualization_frame(telemetry, tick=24)
+    assert len(frame.intent_cards) == 3
+    for row in frame.intent_cards:
+        assert row.what
+        assert row.why
+        assert row.where
+        assert 0.0 <= row.confidence <= 1.0
+        assert row.badge in {"LOCKED", "READY", "WATCH"}
 
 
 def test_correlation_risk_thresholds_are_stable() -> None:

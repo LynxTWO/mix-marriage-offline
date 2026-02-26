@@ -22,6 +22,7 @@ def main() -> int:
         build_visualization_frame,
         default_dashboard_telemetry,
         frame_signature,
+        surface_snapshot_signature,
     )
 
     telemetry = default_dashboard_telemetry()
@@ -32,6 +33,7 @@ def main() -> int:
                 "layout_id": telemetry.layout_id,
                 "layout_standard": telemetry.layout_standard,
                 "frame_signature": frame_signature(frame),
+                "surface_signature": surface_snapshot_signature(frame),
             },
             indent=2,
             sort_keys=True,

@@ -12,6 +12,7 @@ Non-negotiables:
 - Offline-first, deterministic behavior, explainability, bounded authority.
 - Objective Core contracts cannot be broken by plugins.
 - Layout safety and downmix QA gates must be preserved.
+- Keep GUI dashboard rendering deterministic (frame + surface snapshot signatures).
 - Route runtime progress/cancel/live-log wiring through `mmo.core.progress`
   and keep ETA/runtime diagnostics out of deterministic persisted artifacts.
 - Keep `fixtures/public_session/report.7_1_4.json` and

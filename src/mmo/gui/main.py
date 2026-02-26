@@ -596,8 +596,17 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             text_color=_STUDIO_THEME["text"],
         )
         self._surfaces_tabs.grid(row=1, column=0, padx=12, pady=(0, 12), sticky="nsew")
-        self._surfaces_tabs.add("Live Log")
         self._surfaces_tabs.add("Dashboard")
+        self._surfaces_tabs.add("Live Log")
+
+        dashboard_tab = self._surfaces_tabs.tab("Dashboard")
+        dashboard_tab.grid_columnconfigure(0, weight=1)
+        dashboard_tab.grid_rowconfigure(0, weight=1)
+        self._dashboard_panel = VisualizationDashboardPanel(
+            dashboard_tab,
+            ctk_module=_ctk,
+        )
+        self._dashboard_panel.grid(row=0, column=0, padx=8, pady=8, sticky="nsew")
 
         log_tab = self._surfaces_tabs.tab("Live Log")
         log_tab.grid_columnconfigure(0, weight=1)
@@ -612,15 +621,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             font=(_FONT_MONO, 12),
         )
         self._log_box.grid(row=0, column=0, padx=8, pady=8, sticky="nsew")
-
-        dashboard_tab = self._surfaces_tabs.tab("Dashboard")
-        dashboard_tab.grid_columnconfigure(0, weight=1)
-        dashboard_tab.grid_rowconfigure(0, weight=1)
-        self._dashboard_panel = VisualizationDashboardPanel(
-            dashboard_tab,
-            ctk_module=_ctk,
-        )
-        self._dashboard_panel.grid(row=0, column=0, padx=8, pady=8, sticky="nsew")
+        self._surfaces_tabs.set("Dashboard")
         self._append_log("MMO StudioConsole Noir initialized.")
 
     def _wire_drag_drop(self) -> None:

@@ -8,7 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- No unreleased changes yet.
+- Artistic GUI Visualization Dashboard v1.1 for `mmo-gui`:
+  - Real-time frequency-colored spectrum analyzer with warm glow curves.
+  - Vectorscope with confidence glow and deterministic trail rendering.
+  - Correlation/phase meter with explicit low/medium/high risk zones.
+  - Cinematic 3D speaker layout + object placement previews with confidence badges.
+  - Per-object intent cards (what/why/where/confidence) and deterministic
+    surface snapshot signatures for screenshot-style regression tests.
 
 ## [1.0.0] — 2026-02-26
 

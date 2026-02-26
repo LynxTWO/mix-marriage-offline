@@ -78,6 +78,9 @@ class DashboardTelemetry:
     mood_line: str
     explain_line: str
     object_tokens: tuple[str, ...]
+    live_what: str = ""
+    live_why: str = ""
+    live_where: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -101,6 +104,16 @@ class ObjectProjection:
 
 
 @dataclass(frozen=True)
+class IntentCard:
+    object_id: str
+    what: str
+    why: str
+    where: tuple[str, ...]
+    confidence: float
+    badge: str
+
+
+@dataclass(frozen=True)
 class DashboardFrame:
     spectrum_levels: tuple[float, ...]
     vectorscope_points: tuple[tuple[float, float], ...]
@@ -108,6 +121,7 @@ class DashboardFrame:
     correlation_risk: str
     speaker_points: tuple[SpeakerProjection, ...]
     object_points: tuple[ObjectProjection, ...]
+    intent_cards: tuple[IntentCard, ...]
     mood_line: str
     explain_line: str
 
@@ -122,6 +136,9 @@ def default_dashboard_telemetry() -> DashboardTelemetry:
         mood_line="Signal path ready. The mix is breathing quietly.",
         explain_line="Awaiting live telemetry from the bounded pipeline.",
         object_tokens=(),
+        live_what="",
+        live_why="",
+        live_where=(),
     )
 
 
@@ -259,6 +276,236 @@ def build_object_projections(
     return tuple(sorted(rows, key=lambda row: (row.depth, row.object_id)))
 
 
+_INTENT_WHY_VARIANTS: tuple[str, ...] = (
+    "preserve center gravity while keeping width musical.",
+    "maintain translation safety while lifting emotional motion.",
+    "protect vocal focus without flattening the stereo scene.",
+    "keep low-end anchors stable as height energy opens.",
+)
+
+
+def _intent_badge(confidence: float) -> str:
+    if confidence >= 0.82:
+        return "LOCKED"
+    if confidence >= 0.68:
+        return "READY"
+    return "WATCH"
+
+
+def _dedupe_tokens(tokens: Sequence[str]) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            {
+                token.strip()
+                for token in tokens
+                if isinstance(token, str) and token.strip()
+            }
+        )
+    )
+
+
+def _intent_where_slice(where_pool: Sequence[str], *, seed: int) -> tuple[str, ...]:
+    if not where_pool:
+        return ("signal-wide",)
+    span = 1 + (seed % min(3, len(where_pool)))
+    start = (seed // 11) % len(where_pool)
+    return tuple(where_pool[(start + idx) % len(where_pool)] for idx in range(span))
+
+
+def build_intent_cards(
+    telemetry: DashboardTelemetry,
+    *,
+    object_points: Sequence[ObjectProjection],
+) -> tuple[IntentCard, ...]:
+    ranked = tuple(sorted(object_points, key=lambda row: (-row.confidence, row.object_id)))
+    if not ranked:
+        ranked = (
+            ObjectProjection(
+                object_id="CENTER FOCUS",
+                confidence=_clamp(telemetry.confidence, 0.0, 1.0),
+                x=0.5,
+                y=0.5,
+                depth=0.0,
+            ),
+        )
+    where_pool = _dedupe_tokens(telemetry.live_where or telemetry.object_tokens)
+    if not where_pool:
+        where_pool = tuple(row.object_id for row in ranked[:4])
+
+    what_root = telemetry.live_what.strip() or "Shape object intent"
+    why_root = telemetry.live_why.strip()
+    cards: list[IntentCard] = []
+    for idx, row in enumerate(ranked[:4]):
+        seed = _stable_seed(
+            (
+                telemetry.layout_id,
+                telemetry.layout_standard,
+                row.object_id,
+                str(idx),
+            )
+        )
+        confidence = _clamp((row.confidence * 0.72) + (telemetry.confidence * 0.28), 0.0, 1.0)
+        why_tail = _INTENT_WHY_VARIANTS[seed % len(_INTENT_WHY_VARIANTS)]
+        why_text = (
+            f"{why_root.rstrip('.')} and {why_tail}"
+            if why_root
+            else f"Deterministic spatial steering to {why_tail}"
+        )
+        cards.append(
+            IntentCard(
+                object_id=row.object_id,
+                what=f"{what_root}: {row.object_id}",
+                why=why_text,
+                where=_intent_where_slice(where_pool, seed=seed),
+                confidence=confidence,
+                badge=_intent_badge(confidence),
+            )
+        )
+    return tuple(cards)
+
+
+def _nearest_speaker_id(
+    *,
+    point: ObjectProjection,
+    speakers: Sequence[SpeakerProjection],
+) -> str | None:
+    if not speakers:
+        return None
+    best_id: str | None = None
+    best_dist = float("inf")
+    for speaker in speakers:
+        dx = point.x - speaker.x
+        dy = point.y - speaker.y
+        dz = point.depth - speaker.depth
+        dist = (dx * dx) + (dy * dy) + (dz * dz)
+        if dist < best_dist:
+            best_dist = dist
+            best_id = speaker.speaker_id
+    return best_id
+
+
+def _surface_snapshot_spectrum(frame: DashboardFrame) -> dict[str, Any]:
+    points: list[list[Any]] = []
+    bins = len(frame.spectrum_levels)
+    stride = 1 if bins <= 80 else 2
+    for idx, level in enumerate(frame.spectrum_levels):
+        if idx % stride != 0 and idx != bins - 1:
+            continue
+        ratio = idx / float(max(1, bins - 1))
+        points.append(
+            [
+                round(ratio, 4),
+                round(1.0 - (0.84 * level), 4),
+                _spectrum_color(idx, bins),
+                round(_clamp(level * (0.6 + (0.4 * ratio)), 0.0, 1.0), 4),
+            ]
+        )
+    return {
+        "baseline": 0.92,
+        "mood": frame.mood_line,
+        "points": points,
+    }
+
+
+def _surface_snapshot_vectorscope(frame: DashboardFrame) -> dict[str, Any]:
+    risk_color = {
+        "low": _THEME["accent_cool"],
+        "medium": _THEME["risk_medium"],
+        "high": _THEME["risk_high"],
+    }[frame.correlation_risk]
+    points: list[list[float]] = []
+    for idx, (x, y) in enumerate(frame.vectorscope_points):
+        if idx % 4 == 0 or idx == len(frame.vectorscope_points) - 1:
+            points.append([round(x, 4), round(y, 4)])
+    return {
+        "risk_color": risk_color,
+        "points": points,
+        "glow": round(_clamp(0.45 + (abs(frame.correlation) * 0.35), 0.0, 1.0), 4),
+    }
+
+
+def _surface_snapshot_correlation(frame: DashboardFrame) -> dict[str, Any]:
+    return {
+        "value": round(frame.correlation, 4),
+        "risk": frame.correlation_risk,
+        "zones": [
+            {"name": "high", "start": -1.0, "end": _CORRELATION_ERROR_LTE},
+            {"name": "medium", "start": _CORRELATION_ERROR_LTE, "end": _CORRELATION_WARN_LTE},
+            {"name": "low", "start": _CORRELATION_WARN_LTE, "end": 1.0},
+        ],
+    }
+
+
+def _surface_snapshot_spatial(frame: DashboardFrame) -> dict[str, Any]:
+    active_speakers = {
+        speaker_id
+        for row in frame.object_points
+        for speaker_id in [_nearest_speaker_id(point=row, speakers=frame.speaker_points)]
+        if speaker_id is not None
+    }
+    speaker_rows = [
+        {
+            "speaker_id": row.speaker_id,
+            "slot_index": row.slot_index,
+            "x": round(row.x, 4),
+            "y": round(row.y, 4),
+            "depth": round(row.depth, 4),
+            "active": row.speaker_id in active_speakers,
+            "height": row.is_height,
+            "lfe": row.is_lfe,
+        }
+        for row in frame.speaker_points
+    ]
+    object_rows = [
+        {
+            "object_id": row.object_id,
+            "x": round(row.x, 4),
+            "y": round(row.y, 4),
+            "depth": round(row.depth, 4),
+            "confidence": round(row.confidence, 4),
+        }
+        for row in frame.object_points
+    ]
+    return {
+        "speakers": speaker_rows,
+        "objects": object_rows,
+    }
+
+
+def _surface_snapshot_cards(frame: DashboardFrame) -> dict[str, Any]:
+    cards = [
+        {
+            "object_id": card.object_id,
+            "what": card.what,
+            "why": card.why,
+            "where": list(card.where),
+            "confidence": round(card.confidence, 4),
+            "badge": card.badge,
+        }
+        for card in frame.intent_cards
+    ]
+    return {"cards": cards}
+
+
+def build_dashboard_surface_snapshot(frame: DashboardFrame) -> dict[str, Any]:
+    return {
+        "spectrum": _surface_snapshot_spectrum(frame),
+        "vectorscope": _surface_snapshot_vectorscope(frame),
+        "correlation": _surface_snapshot_correlation(frame),
+        "spatial": _surface_snapshot_spatial(frame),
+        "intent_cards": _surface_snapshot_cards(frame),
+    }
+
+
+def surface_snapshot_signature(frame: DashboardFrame) -> str:
+    blob = json.dumps(
+        build_dashboard_surface_snapshot(frame),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(blob).hexdigest()
+
+
 def build_spectrum_levels(
     telemetry: DashboardTelemetry,
     *,
@@ -329,6 +576,11 @@ def build_visualization_frame(
     tick: int,
 ) -> DashboardFrame:
     corr = _clamp(telemetry.correlation, -1.0, 1.0)
+    object_points = build_object_projections(
+        layout_id=telemetry.layout_id,
+        layout_standard=telemetry.layout_standard,
+        object_tokens=telemetry.object_tokens,
+    )
     return DashboardFrame(
         spectrum_levels=build_spectrum_levels(telemetry, tick=tick),
         vectorscope_points=build_vectorscope_points(telemetry, tick=tick),
@@ -338,10 +590,10 @@ def build_visualization_frame(
             layout_id=telemetry.layout_id,
             layout_standard=telemetry.layout_standard,
         ),
-        object_points=build_object_projections(
-            layout_id=telemetry.layout_id,
-            layout_standard=telemetry.layout_standard,
-            object_tokens=telemetry.object_tokens,
+        object_points=object_points,
+        intent_cards=build_intent_cards(
+            telemetry,
+            object_points=object_points,
         ),
         mood_line=telemetry.mood_line,
         explain_line=telemetry.explain_line,
@@ -378,6 +630,17 @@ def frame_signature(frame: DashboardFrame) -> str:
                 "depth": round(row.depth, 6),
             }
             for row in frame.object_points
+        ],
+        "intent_cards": [
+            {
+                "object_id": row.object_id,
+                "what": row.what,
+                "why": row.why,
+                "where": list(row.where),
+                "confidence": round(row.confidence, 6),
+                "badge": row.badge,
+            }
+            for row in frame.intent_cards
         ],
         "mood_line": frame.mood_line,
         "explain_line": frame.explain_line,
@@ -467,6 +730,23 @@ def _spectrum_color(idx: int, total: int) -> str:
     return _lerp_color("#D79B48", "#4FA6A0", (ratio - 0.45) / 0.55)
 
 
+def _risk_color(risk: str) -> str:
+    return {
+        "low": _THEME["risk_low"],
+        "medium": _THEME["risk_medium"],
+        "high": _THEME["risk_high"],
+    }.get(risk, _THEME["accent_cool"])
+
+
+def _trim_text(text: str, max_len: int) -> str:
+    cleaned = str(text).strip()
+    if len(cleaned) <= max_len:
+        return cleaned
+    if max_len <= 3:
+        return cleaned[:max_len]
+    return f"{cleaned[: max_len - 3]}..."
+
+
 class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
     def __init__(self, parent: Any, *, ctk_module: Any) -> None:
         import tkinter as _tk
@@ -490,6 +770,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
         self.container.grid_rowconfigure(1, weight=1)
         self.container.grid_rowconfigure(2, weight=1)
         self.container.grid_rowconfigure(3, weight=1)
+        self.container.grid_rowconfigure(4, weight=1)
         self._build_widgets()
         self._render_and_schedule()
 
@@ -560,6 +841,9 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
                 where_items=where_items,
             ),
             object_tokens=where_items,
+            live_what=what_text,
+            live_why=why_text,
+            live_where=where_items,
         )
         self._last_live_payload = {
             "what": what_text,
@@ -588,44 +872,51 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             button_color=_THEME["accent_hot"],
             button_hover_color=_THEME["accent_warm"],
             text_color=_THEME["text_muted"],
-            font=("Inter", 12),
+            font=("Space Grotesk", 12),
         )
         self._engineer_switch.grid(row=0, column=1, padx=(6, 12), pady=(10, 4), sticky="e")
 
         self._spectrum_canvas = self._create_canvas(
-            title="Spectrum (musical map)",
+            title="Spectrum Analyzer · warm frequency bloom",
             row=1,
             column=0,
             columnspan=2,
-            height=156,
+            height=168,
         )
         self._vectorscope_canvas = self._create_canvas(
-            title="Vectorscope",
+            title="Vectorscope · musical confidence glow",
             row=2,
             column=0,
             columnspan=1,
-            height=176,
+            height=188,
         )
         self._correlation_canvas = self._create_canvas(
-            title="Correlation + phase risk",
+            title="Correlation + phase meter · precision risk",
             row=2,
             column=1,
             columnspan=1,
-            height=176,
+            height=188,
         )
         self._speaker_canvas = self._create_canvas(
-            title="3D speaker view",
+            title="Cinematic 3D layout · active channels",
             row=3,
             column=0,
             columnspan=1,
-            height=184,
+            height=198,
         )
         self._objects_canvas = self._create_canvas(
-            title="Object placement preview",
+            title="Object placement preview · confidence badges",
             row=3,
             column=1,
             columnspan=1,
-            height=184,
+            height=198,
+        )
+        self._intent_canvas = self._create_canvas(
+            title="Intent cards · what / why / where / confidence",
+            row=4,
+            column=0,
+            columnspan=2,
+            height=170,
         )
 
         self._explain_label = ctk.CTkLabel(
@@ -633,11 +924,11 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             text=self._telemetry.explain_line,
             justify="left",
             wraplength=980,
-            font=("Inter", 12),
+            font=("Space Grotesk", 12),
             text_color=_THEME["text_muted"],
         )
         self._explain_label.grid(
-            row=4,
+            row=5,
             column=0,
             columnspan=2,
             padx=12,
@@ -652,7 +943,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             border_color=_THEME["surface_edge"],
             fg_color=_THEME["panel"],
             text_color=_THEME["text"],
-            font=("Consolas", 11),
+            font=("JetBrains Mono", 11),
         )
         self._engineer_box.grid_remove()
 
@@ -686,7 +977,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
         ctk.CTkLabel(
             frame,
             text=title,
-            font=("Inter", 13, "bold"),
+            font=("Space Grotesk", 13, "bold"),
             text_color=_THEME["accent_warm"],
         ).grid(row=0, column=0, padx=10, pady=(8, 2), sticky="w")
         canvas = self._tk.Canvas(
@@ -705,7 +996,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
         self._engineer_mode = bool(self._engineer_switch.get())
         if self._engineer_mode:
             self._engineer_box.grid(
-                row=5,
+                row=6,
                 column=0,
                 columnspan=2,
                 padx=12,
@@ -725,9 +1016,11 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
         self._draw_correlation(frame)
         self._draw_speakers(frame)
         self._draw_objects(frame)
+        self._draw_intent_cards(frame)
         self._explain_label.configure(text=frame.explain_line)
 
         if self._engineer_mode:
+            surface_snapshot = build_dashboard_surface_snapshot(frame)
             snapshot = {
                 "tick": self._tick,
                 "layout_id": self._telemetry.layout_id,
@@ -736,6 +1029,8 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
                 "correlation": round(frame.correlation, 4),
                 "correlation_risk": frame.correlation_risk,
                 "frame_signature": frame_signature(frame),
+                "surface_signature": surface_snapshot_signature(frame),
+                "surface_snapshot": surface_snapshot,
                 "live_payload": self._last_live_payload,
             }
             self._engineer_box.delete("1.0", "end")
@@ -753,21 +1048,58 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
         canvas = self._spectrum_canvas
         width, height = self._canvas_size(canvas, min_w=240, min_h=130)
         canvas.delete("all")
-        baseline = height - 18
+        baseline = height * 0.9
         bins = len(frame.spectrum_levels)
-        canvas.create_rectangle(0, 0, width, height, fill=_THEME["panel"], outline="")
-        canvas.create_line(0, baseline, width, baseline, fill=_THEME["surface_edge"], width=1)
+        for band_idx in range(10):
+            y0 = (band_idx * height) / 10.0
+            y1 = ((band_idx + 1) * height) / 10.0
+            shade = _lerp_color("#070605", "#19140F", band_idx / 9.0)
+            canvas.create_rectangle(0, y0, width, y1, fill=shade, outline="")
+        canvas.create_line(0, baseline, width, baseline, fill="#3C2F21", width=1)
+
+        points: list[float] = []
         for idx, level in enumerate(frame.spectrum_levels):
-            x0 = (idx * width) / float(max(1, bins))
-            x1 = ((idx + 1) * width) / float(max(1, bins))
-            bar_top = baseline - (level * (height - 30))
-            canvas.create_rectangle(
-                x0 + 0.5,
-                bar_top,
-                x1 - 0.5,
-                baseline,
-                fill=_spectrum_color(idx, bins),
-                outline="",
+            ratio = idx / float(max(1, bins - 1))
+            x = ratio * width
+            y = baseline - (level * (height * 0.72))
+            points.extend([x, y])
+
+        if len(points) >= 4:
+            area_poly = [0.0, baseline, *points, float(width), baseline, float(width), float(height), 0.0, float(height)]
+            canvas.create_polygon(*area_poly, fill="#120F0B", outline="")
+            for glow_width, glow_mix in ((9, 0.35), (6, 0.2), (4, 0.08)):
+                glow_color = _lerp_color(_THEME["accent_hot"], "#FFF6E7", glow_mix)
+                canvas.create_line(
+                    *points,
+                    fill=glow_color,
+                    width=glow_width,
+                    smooth=True,
+                    splinesteps=22,
+                )
+            for idx in range(1, bins):
+                x0 = ((idx - 1) / float(max(1, bins - 1))) * width
+                x1 = (idx / float(max(1, bins - 1))) * width
+                y0 = points[((idx - 1) * 2) + 1]
+                y1 = points[(idx * 2) + 1]
+                canvas.create_line(
+                    x0,
+                    y0,
+                    x1,
+                    y1,
+                    fill=_spectrum_color(idx, bins),
+                    width=2.2,
+                    smooth=True,
+                )
+        for tick_label, tick_ratio in (("40Hz", 0.03), ("160Hz", 0.16), ("1k", 0.5), ("8k", 0.84), ("16k", 0.97)):
+            x = tick_ratio * width
+            canvas.create_line(x, baseline, x, baseline + 6, fill="#6C5B44", width=1)
+            canvas.create_text(
+                x,
+                baseline + 12,
+                text=tick_label,
+                anchor="n",
+                fill="#8C7A62",
+                font=("JetBrains Mono", 8),
             )
         canvas.create_text(
             10,
@@ -775,27 +1107,32 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             text=self._telemetry.mood_line,
             anchor="nw",
             fill=_THEME["text_muted"],
-            font=("Inter", 11),
+            font=("Space Grotesk", 11),
         )
 
     def _draw_vectorscope(self, frame: DashboardFrame) -> None:
         canvas = self._vectorscope_canvas
         width, height = self._canvas_size(canvas, min_w=180, min_h=150)
         canvas.delete("all")
-        canvas.create_rectangle(0, 0, width, height, fill=_THEME["panel"], outline="")
+        canvas.create_rectangle(0, 0, width, height, fill="#090807", outline="")
         cx = width * 0.5
         cy = height * 0.5
-        radius = min(width, height) * 0.4
-        canvas.create_oval(
-            cx - radius,
-            cy - radius,
-            cx + radius,
-            cy + radius,
-            outline=_THEME["surface_edge"],
-            width=1,
-        )
-        canvas.create_line(cx - radius, cy, cx + radius, cy, fill=_THEME["surface_edge"], width=1)
-        canvas.create_line(cx, cy - radius, cx, cy + radius, fill=_THEME["surface_edge"], width=1)
+        radius = min(width, height) * 0.42
+        for ring in range(1, 5):
+            ring_radius = radius * (ring / 4.0)
+            canvas.create_oval(
+                cx - ring_radius,
+                cy - ring_radius,
+                cx + ring_radius,
+                cy + ring_radius,
+                outline="#2A2319",
+                width=1,
+            )
+        for angle_deg in range(0, 180, 30):
+            radians = math.radians(angle_deg)
+            dx = math.cos(radians) * radius
+            dy = math.sin(radians) * radius
+            canvas.create_line(cx - dx, cy - dy, cx + dx, cy + dy, fill="#241E16", width=1)
 
         coords: list[float] = []
         for x_norm, y_norm in frame.vectorscope_points:
@@ -805,47 +1142,90 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
                     cy - (y_norm * radius),
                 ]
             )
-        risk_color = {
-            "low": _THEME["accent_cool"],
-            "medium": _THEME["risk_medium"],
-            "high": _THEME["risk_high"],
-        }[frame.correlation_risk]
+        risk_color = _risk_color(frame.correlation_risk)
+        confidence = _clamp(self._telemetry.confidence, 0.0, 1.0)
+        for idx in range(4, 0, -1):
+            glow_radius = radius * (0.25 + (confidence * 0.35) + (idx * 0.05))
+            canvas.create_oval(
+                cx - glow_radius,
+                cy - glow_radius,
+                cx + glow_radius,
+                cy + glow_radius,
+                outline=_lerp_color(risk_color, "#FFF6E7", 0.18 + (idx * 0.07)),
+                width=1,
+            )
         if len(coords) >= 4:
-            canvas.create_line(*coords, fill=risk_color, width=2, smooth=True)
-        glow_radius = radius * (0.35 + (0.5 * _clamp(self._telemetry.confidence, 0.0, 1.0)))
-        canvas.create_oval(
-            cx - glow_radius,
-            cy - glow_radius,
-            cx + glow_radius,
-            cy + glow_radius,
-            outline=_lerp_color(risk_color, "#FFFFFF", 0.22),
-            width=1,
+            canvas.create_line(*coords, fill="#1B1711", width=5, smooth=True, splinesteps=16)
+            canvas.create_line(*coords, fill=risk_color, width=2, smooth=True, splinesteps=16)
+        canvas.create_oval(cx - 2, cy - 2, cx + 2, cy + 2, fill="#E9DBC5", outline="")
+        canvas.create_text(
+            10,
+            10,
+            text=f"Confidence glow {int(round(confidence * 100.0))}%",
+            anchor="nw",
+            fill="#C6B08C",
+            font=("Space Grotesk", 10),
         )
 
     def _draw_correlation(self, frame: DashboardFrame) -> None:
         canvas = self._correlation_canvas
         width, height = self._canvas_size(canvas, min_w=180, min_h=150)
         canvas.delete("all")
-        canvas.create_rectangle(0, 0, width, height, fill=_THEME["panel"], outline="")
+        canvas.create_rectangle(0, 0, width, height, fill="#080706", outline="")
+        risk_color = _risk_color(frame.correlation_risk)
+
+        gauge_left = width * 0.14
+        gauge_top = height * 0.08
+        gauge_right = width * 0.86
+        gauge_bottom = height * 0.65
+        canvas.create_arc(
+            gauge_left,
+            gauge_top,
+            gauge_right,
+            gauge_bottom,
+            start=180,
+            extent=180,
+            style="arc",
+            outline="#2B2319",
+            width=2,
+        )
+        for marker_corr in (-1.0, -0.6, -0.2, 0.0, 0.5, 1.0):
+            ratio = (marker_corr + 1.0) * 0.5
+            angle = math.radians(180.0 - (ratio * 180.0))
+            cx = width * 0.5
+            cy = gauge_bottom
+            radius = (gauge_right - gauge_left) * 0.45
+            x0 = cx + (math.cos(angle) * (radius - 4))
+            y0 = cy - (math.sin(angle) * (radius - 4))
+            x1 = cx + (math.cos(angle) * (radius + 7))
+            y1 = cy - (math.sin(angle) * (radius + 7))
+            canvas.create_line(x0, y0, x1, y1, fill="#403223", width=1)
+
+        corr_ratio = (frame.correlation + 1.0) * 0.5
+        corr_angle = math.radians(180.0 - (corr_ratio * 180.0))
+        cx = width * 0.5
+        cy = gauge_bottom
+        needle_radius = (gauge_right - gauge_left) * 0.44
+        nx = cx + (math.cos(corr_angle) * needle_radius)
+        ny = cy - (math.sin(corr_angle) * needle_radius)
+        canvas.create_line(cx, cy, nx, ny, fill="#20170F", width=5)
+        canvas.create_line(cx, cy, nx, ny, fill=risk_color, width=2)
+        canvas.create_oval(cx - 5, cy - 5, cx + 5, cy + 5, fill="#E8D9C2", outline="")
 
         bar_left = 20
         bar_right = width - 20
-        bar_mid = (bar_left + bar_right) * 0.5
-        bar_top = (height * 0.55) - 10
-        bar_bottom = bar_top + 20
-        canvas.create_rectangle(bar_left, bar_top, bar_right, bar_bottom, fill="#1B1712", outline="")
+        bar_top = (height * 0.74) - 10
+        bar_bottom = bar_top + 22
+        canvas.create_rectangle(bar_left, bar_top, bar_right, bar_bottom, fill="#1A150F", outline="")
         warn_x = bar_left + ((bar_right - bar_left) * ((_CORRELATION_WARN_LTE + 1.0) / 2.0))
         error_x = bar_left + ((bar_right - bar_left) * ((_CORRELATION_ERROR_LTE + 1.0) / 2.0))
         canvas.create_rectangle(bar_left, bar_top, error_x, bar_bottom, fill="#4D1B16", outline="")
         canvas.create_rectangle(error_x, bar_top, warn_x, bar_bottom, fill="#5A3A19", outline="")
-        canvas.create_line(bar_mid, bar_top - 6, bar_mid, bar_bottom + 6, fill=_THEME["surface_edge"], width=1)
+        canvas.create_rectangle(warn_x, bar_top, bar_right, bar_bottom, fill="#173223", outline="")
+        bar_mid = (bar_left + bar_right) * 0.5
+        canvas.create_line(bar_mid, bar_top - 6, bar_mid, bar_bottom + 6, fill="#564532", width=1)
 
         marker_x = bar_left + ((bar_right - bar_left) * ((frame.correlation + 1.0) / 2.0))
-        risk_color = {
-            "low": _THEME["risk_low"],
-            "medium": _THEME["risk_medium"],
-            "high": _THEME["risk_high"],
-        }[frame.correlation_risk]
         canvas.create_oval(
             marker_x - 7,
             bar_top - 6,
@@ -859,21 +1239,37 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             height * 0.26,
             text=f"Correlation {frame.correlation:+.2f}",
             fill=_THEME["text"],
-            font=("Inter", 14, "bold"),
+            font=("Space Grotesk", 14, "bold"),
         )
         canvas.create_text(
             width * 0.5,
-            height * 0.79,
+            height * 0.9,
             text=f"Phase risk: {frame.correlation_risk.upper()}",
             fill=_THEME["text_muted"],
-            font=("Inter", 11),
+            font=("Space Grotesk", 11),
         )
 
     def _draw_speakers(self, frame: DashboardFrame) -> None:
         canvas = self._speaker_canvas
         width, height = self._canvas_size(canvas, min_w=180, min_h=160)
         canvas.delete("all")
-        canvas.create_rectangle(0, 0, width, height, fill=_THEME["panel"], outline="")
+        canvas.create_rectangle(0, 0, width, height, fill="#090807", outline="")
+        canvas.create_oval(
+            width * 0.18,
+            height * 0.05,
+            width * 0.82,
+            height * 0.7,
+            fill="#15100C",
+            outline="",
+        )
+        canvas.create_oval(
+            width * 0.28,
+            height * 0.0,
+            width * 0.72,
+            height * 0.45,
+            fill="#1C1610",
+            outline="",
+        )
 
         def sx(value: float) -> float:
             return value * width
@@ -881,9 +1277,18 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
         def sy(value: float) -> float:
             return value * height
 
-        canvas.create_line(sx(0.12), sy(0.78), sx(0.88), sy(0.78), fill=_THEME["surface_edge"])
-        canvas.create_line(sx(0.22), sy(0.18), sx(0.5), sy(0.06), fill=_THEME["surface_edge"])
-        canvas.create_line(sx(0.78), sy(0.18), sx(0.5), sy(0.06), fill=_THEME["surface_edge"])
+        active_speakers = {
+            speaker_id
+            for row in frame.object_points
+            for speaker_id in [_nearest_speaker_id(point=row, speakers=frame.speaker_points)]
+            if speaker_id is not None
+        }
+
+        canvas.create_line(sx(0.1), sy(0.8), sx(0.9), sy(0.8), fill="#3A2D20", width=2)
+        canvas.create_line(sx(0.2), sy(0.2), sx(0.5), sy(0.08), fill="#3A2D20", width=1)
+        canvas.create_line(sx(0.8), sy(0.2), sx(0.5), sy(0.08), fill="#3A2D20", width=1)
+        canvas.create_line(sx(0.2), sy(0.2), sx(0.2), sy(0.8), fill="#281F15", width=1)
+        canvas.create_line(sx(0.8), sy(0.2), sx(0.8), sy(0.8), fill="#281F15", width=1)
 
         for row in frame.speaker_points:
             fill = _THEME["accent_warm"]
@@ -891,23 +1296,76 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
                 fill = _THEME["risk_high"]
             elif row.is_height:
                 fill = _THEME["accent_cool"]
-            radius = 4.0 + max(0.0, min(4.0, row.depth + 1.1))
+            is_active = row.speaker_id in active_speakers
+            fill = _lerp_color(fill, _THEME["accent_hot"], 0.22 if is_active else 0.0)
+            radius = 4.0 + max(0.0, min(4.2, row.depth + 1.1)) + (1.6 if is_active else 0.0)
             cx = sx(row.x)
             cy = sy(row.y)
+            if is_active:
+                for glow in (8.0, 5.5, 3.5):
+                    canvas.create_oval(
+                        cx - glow,
+                        cy - glow,
+                        cx + glow,
+                        cy + glow,
+                        outline=_lerp_color(fill, "#FFF3DE", 0.28),
+                        width=1,
+                    )
             canvas.create_oval(cx - radius, cy - radius, cx + radius, cy + radius, fill=fill, outline="")
             canvas.create_text(
                 cx,
                 cy - (radius + 7),
                 text=f"{row.speaker_id}:{row.slot_index}",
                 fill=_THEME["text_muted"],
-                font=("Inter", 9),
+                font=("Space Grotesk", 9),
+            )
+
+        for row in frame.object_points:
+            x = sx(row.x)
+            y = sy(row.y)
+            color = _lerp_color(_THEME["accent_cool"], _THEME["accent_hot"], row.confidence)
+            canvas.create_line(width * 0.5, height * 0.58, x, y, fill="#413223", width=1)
+            canvas.create_oval(x - 3, y - 3, x + 3, y + 3, fill=color, outline="")
+            badge_w = 46
+            badge_h = 15
+            bx0 = x + 6
+            by0 = y - 20
+            canvas.create_rectangle(
+                bx0,
+                by0,
+                bx0 + badge_w,
+                by0 + badge_h,
+                fill="#16120D",
+                outline="#4D3A28",
+            )
+            canvas.create_text(
+                bx0 + (badge_w / 2.0),
+                by0 + (badge_h / 2.0),
+                text=f"{int(round(row.confidence * 100.0))}%",
+                fill="#EADDC8",
+                font=("JetBrains Mono", 8),
             )
 
     def _draw_objects(self, frame: DashboardFrame) -> None:
         canvas = self._objects_canvas
         width, height = self._canvas_size(canvas, min_w=180, min_h=160)
         canvas.delete("all")
-        canvas.create_rectangle(0, 0, width, height, fill=_THEME["panel"], outline="")
+        canvas.create_rectangle(0, 0, width, height, fill="#090807", outline="")
+        cx = width * 0.5
+        cy = height * 0.56
+        max_radius = min(width, height) * 0.4
+        for ring in range(1, 5):
+            radius = max_radius * (ring / 4.0)
+            canvas.create_oval(
+                cx - radius,
+                cy - radius,
+                cx + radius,
+                cy + radius,
+                outline="#30271D",
+                width=1,
+            )
+        canvas.create_line(cx - max_radius, cy, cx + max_radius, cy, fill="#2A2118", width=1)
+        canvas.create_line(cx, cy - max_radius, cx, cy + max_radius, fill="#2A2118", width=1)
 
         def sx(value: float) -> float:
             return value * width
@@ -918,19 +1376,132 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
         for speaker in frame.speaker_points:
             x = sx(speaker.x)
             y = sy(speaker.y)
-            canvas.create_oval(x - 2, y - 2, x + 2, y + 2, fill="#2B2318", outline="")
+            canvas.create_oval(x - 2, y - 2, x + 2, y + 2, fill="#3B2F21", outline="")
 
         for row in frame.object_points:
             x = sx(row.x)
             y = sy(row.y)
             radius = 4.0 + (row.confidence * 4.0)
             color = _lerp_color(_THEME["accent_cool"], _THEME["accent_hot"], row.confidence)
-            canvas.create_line(width * 0.5, height * 0.55, x, y, fill="#3A3022", width=1)
+            canvas.create_line(cx, cy, x, y, fill="#3A2E22", width=1)
+            for glow in (radius + 5, radius + 2):
+                canvas.create_oval(
+                    x - glow,
+                    y - glow,
+                    x + glow,
+                    y + glow,
+                    outline=_lerp_color(color, "#FFF2DD", 0.16),
+                    width=1,
+                )
             canvas.create_oval(x - radius, y - radius, x + radius, y + radius, fill=color, outline="")
+            badge_width = 120
+            badge_height = 16
+            bx0 = x - (badge_width / 2.0)
+            by0 = y - (radius + 24)
+            canvas.create_rectangle(
+                bx0,
+                by0,
+                bx0 + badge_width,
+                by0 + badge_height,
+                fill="#17120D",
+                outline="#4E3B28",
+            )
             canvas.create_text(
-                x,
-                y - (radius + 8),
-                text=f"{row.object_id[:14]} ({int(row.confidence * 100)}%)",
+                bx0 + (badge_width / 2.0),
+                by0 + (badge_height / 2.0),
+                text=f"{_trim_text(row.object_id, 14)} · {int(round(row.confidence * 100.0))}%",
                 fill=_THEME["text_muted"],
-                font=("Inter", 9),
+                font=("Space Grotesk", 9),
+            )
+
+    def _draw_intent_cards(self, frame: DashboardFrame) -> None:
+        canvas = self._intent_canvas
+        width, height = self._canvas_size(canvas, min_w=260, min_h=120)
+        canvas.delete("all")
+        canvas.create_rectangle(0, 0, width, height, fill="#0A0908", outline="")
+
+        cards = frame.intent_cards
+        if not cards:
+            canvas.create_text(
+                12,
+                12,
+                text="Intent cards are waiting for live object evidence.",
+                anchor="nw",
+                fill=_THEME["text_muted"],
+                font=("Space Grotesk", 11),
+            )
+            return
+
+        cols = min(4, len(cards))
+        if width < 980:
+            cols = min(2, len(cards))
+        rows = max(1, math.ceil(len(cards) / float(cols)))
+        pad = 10.0
+        card_w = (width - (pad * (cols + 1))) / float(cols)
+        card_h = (height - (pad * (rows + 1))) / float(rows)
+
+        for idx, card in enumerate(cards):
+            row_idx = idx // cols
+            col_idx = idx % cols
+            x0 = pad + (col_idx * (card_w + pad))
+            y0 = pad + (row_idx * (card_h + pad))
+            x1 = x0 + card_w
+            y1 = y0 + card_h
+
+            accent = _lerp_color(_THEME["accent_cool"], _THEME["accent_hot"], card.confidence)
+            canvas.create_rectangle(x0, y0, x1, y1, fill="#14100C", outline="#3A2D21", width=1)
+            canvas.create_rectangle(x0 + 1, y0 + 1, x1 - 1, y0 + 4, fill=accent, outline=accent)
+
+            badge_w = 58
+            badge_h = 16
+            bx1 = x1 - 8
+            bx0 = bx1 - badge_w
+            by0 = y0 + 8
+            canvas.create_rectangle(bx0, by0, bx1, by0 + badge_h, fill="#1D1711", outline="#4D3A28")
+            canvas.create_text(
+                (bx0 + bx1) / 2.0,
+                by0 + (badge_h / 2.0),
+                text=card.badge,
+                fill="#F0DEBE",
+                font=("JetBrains Mono", 8),
+            )
+            canvas.create_text(
+                x0 + 8,
+                y0 + 10,
+                text=_trim_text(card.object_id, 18),
+                anchor="nw",
+                fill="#F2E8D2",
+                font=("Space Grotesk", 11, "bold"),
+            )
+            canvas.create_text(
+                x0 + 8,
+                y0 + 28,
+                text=f"what: {_trim_text(card.what, 54)}",
+                anchor="nw",
+                fill="#D9C39E",
+                font=("Space Grotesk", 9),
+            )
+            canvas.create_text(
+                x0 + 8,
+                y0 + 46,
+                text=f"why: {_trim_text(card.why, 56)}",
+                anchor="nw",
+                fill="#BBA683",
+                font=("Space Grotesk", 9),
+            )
+            canvas.create_text(
+                x0 + 8,
+                y0 + 64,
+                text=f"where: {_trim_text(', '.join(card.where), 58)}",
+                anchor="nw",
+                fill="#A59275",
+                font=("Space Grotesk", 9),
+            )
+            canvas.create_text(
+                x0 + 8,
+                y1 - 10,
+                text=f"confidence {int(round(card.confidence * 100.0))}%",
+                anchor="sw",
+                fill=accent,
+                font=("JetBrains Mono", 9),
             )

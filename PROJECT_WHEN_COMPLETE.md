@@ -148,6 +148,9 @@ The project is “complete enough” when all items below are true.
 ### 4.8.1 GUI is ergonomically safe and AI-readable (a work of art in itself, so creatives and nerds alike love it. Strong typography, cinematic color contrast, and intentional spacing/visual hierarchy so it feels crafted, not utilitarian, while still staying cross-platform and deterministic)
 - [x] Minimal desktop CustomTkinter shell exists for stems drop, target/layout selection,
   live logs, and bounded-authority approval flow before final safe-render.
+- [x] Visualization Dashboard v1.1 exists as the primary GUI surface with deterministic
+  spectrum/vectorscope/correlation visuals, cinematic 3D speaker/object views, and
+  explainable per-object intent cards (`what/why/where/confidence`).
 - [ ] A GUI exists (local web app is fine) that exposes the same workflow as the CLI: validate → analyze → scene → render → results → compare.
 - [ ] GUI copy and structure follow the design system in ontology/gui_design.yaml (theme tokens, screen templates, and progressive disclosure).
 - [ ] Any plugin/config UI is generated from JSON Schema with optional UI hints (example: x_mmo_ui or a dedicated ui_hints registry) so agents do not hand-build one-off forms.
