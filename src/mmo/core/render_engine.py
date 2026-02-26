@@ -73,6 +73,8 @@ def _normalize_options(options: dict[str, Any] | None) -> dict[str, Any]:
             _coerce_str(options.get("downmix_policy_id", "")).strip() or None
         ),
         "layout_standard": raw_standard or DEFAULT_CHANNEL_STANDARD,
+        "stem_ids": sorted(str(s) for s in (options.get("stem_ids") or [])),
+        "stem_max_workers": max(1, int(options.get("stem_max_workers") or 2)),
     }
 
 
@@ -232,6 +234,33 @@ def _execute_job(
         notes.append(f"using {active_standard} channel order (Film/Cinema ordering requested).")
     else:
         notes.append(f"using {active_standard or DEFAULT_CHANNEL_STANDARD} channel order (SMPTE/ITU-R default).")
+
+    # Stem dispatch: layout-aware, seeded, parallel (stems → plugins phase).
+    # Each stem is processed with the target layout's LayoutContext so that
+    # plugin chains receive the correct channel slot assignments.
+    stem_ids: list[str] = list(options.get("stem_ids") or [])
+    if stem_ids:
+        try:
+            from mmo.core.dsp_dispatch import StemJob, dispatch_stems
+
+            target_layout_id = _coerce_str(contract.get("target_layout_id")).strip()
+            stem_workers = max(1, int(options.get("stem_max_workers") or 2))
+            stem_jobs = [
+                StemJob(
+                    stem_id=sid,
+                    layout_id=target_layout_id or "LAYOUT.2_0",
+                    standard=active_standard,
+                    params={},
+                    render_seed=0,
+                )
+                for sid in stem_ids  # already sorted by _normalize_options
+            ]
+            stem_results = dispatch_stems(stem_jobs, max_workers=stem_workers)
+            notes.append(
+                f"stem_dispatch: {len(stem_results)} stem(s) ({active_standard})."
+            )
+        except (ValueError, ImportError) as exc:
+            notes.append(f"stem_dispatch skipped: {exc}")
 
     if dry_run:
         status = "skipped"
@@ -410,6 +439,9 @@ def render_scene_to_targets(
         - ``contexts`` (list): Render contexts.
         - ``gates_policy_id`` (str): Override gates policy ID.
         - ``downmix_policy_id`` (str): Override downmix policy ID.
+        - ``stem_ids`` (list[str]): Stem IDs to dispatch through the layout-aware
+          plugin chain (stems → plugins phase).  Empty list skips stem dispatch.
+        - ``stem_max_workers`` (int, default 2): Thread pool size for stem dispatch.
 
     Returns
     -------
