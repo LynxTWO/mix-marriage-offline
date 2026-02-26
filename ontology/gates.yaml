@@ -15,6 +15,9 @@ _meta:
     - GATE.LAYOUT_NEGOTIATION
     - GATE.DOWNMIX_SIMILARITY
     - GATE.DOWNMIX_SIMILARITY_MEASURED
+    - GATE.LRA_BOUNDS
+    - GATE.TRUE_PEAK_PER_CHANNEL
+    - GATE.TRANSLATION_CURVES
     - GATE.CORRELATION_RISK
     - GATE.PHASE_RISK
     - GATE.CONFIDENCE_LOW
@@ -64,6 +67,42 @@ gates:
       lufs_delta_error_abs: 6.0
       correlation_warn_lte: -0.2
       correlation_error_lte: -0.6
+
+  GATE.LRA_BOUNDS:
+    kind: objective_meter_lra
+    description: >
+      Evaluate objective loudness range (LRA) from provided meter metadata.
+      Warn when range is outside recommended musical bounds; block when
+      excessively dynamic for safe translation.
+    default_enabled: true
+    fallback_policy: warn
+    thresholds:
+      lra_warn_lu_lte: 1.5
+      lra_warn_lu_gte: 18.0
+      lra_error_lu_gte: 24.0
+
+  GATE.TRUE_PEAK_PER_CHANNEL:
+    kind: objective_meter_true_peak_per_channel
+    description: >
+      Evaluate per-channel true-peak measurements from provided meter metadata.
+      Warn or block when any channel exceeds safe true-peak ceilings.
+    default_enabled: true
+    fallback_policy: warn
+    thresholds:
+      true_peak_channel_warn_dbtp: -2.0
+      true_peak_channel_error_dbtp: -1.0
+
+  GATE.TRANSLATION_CURVES:
+    kind: objective_meter_translation_curves
+    description: >
+      Evaluate translation-curve deltas for stereo/mono/earbuds/car targets.
+      Warn or block when measured spectral translation diverges from profile
+      curves.
+    default_enabled: true
+    fallback_policy: warn
+    thresholds:
+      translation_curve_warn_db: 2.5
+      translation_curve_error_db: 4.0
 
   GATE.CORRELATION_RISK:
     kind: correlation_check

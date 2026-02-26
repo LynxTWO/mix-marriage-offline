@@ -613,6 +613,9 @@ class TestRegressionFixtures(unittest.TestCase):
         expected = {
             "GATE.LAYOUT_NEGOTIATION",
             "GATE.DOWNMIX_SIMILARITY",
+            "GATE.LRA_BOUNDS",
+            "GATE.TRUE_PEAK_PER_CHANNEL",
+            "GATE.TRANSLATION_CURVES",
             "GATE.CORRELATION_RISK",
             "GATE.PHASE_RISK",
             "GATE.CONFIDENCE_LOW",

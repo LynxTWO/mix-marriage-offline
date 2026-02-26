@@ -8,9 +8,13 @@ metadata *before* any audio is decoded or written.  It produces a deterministic
 Gates evaluated (in order):
   1. ``GATE.LAYOUT_NEGOTIATION`` — downmix path exists?
   2. ``GATE.DOWNMIX_SIMILARITY``  — matrix-based LFE / loudness risk
-  3. ``GATE.CORRELATION_RISK``    — scene correlation metadata
-  4. ``GATE.PHASE_RISK``          — polarity / phase-inversion flags
-  5. ``GATE.CONFIDENCE_LOW``      — scene inference confidence
+  3. ``GATE.DOWNMIX_SIMILARITY_MEASURED`` — measured similarity from rendered audio
+  4. ``GATE.LRA_BOUNDS``          — loudness range (if objective meters provided)
+  5. ``GATE.TRUE_PEAK_PER_CHANNEL`` — per-channel true peak (if objective meters provided)
+  6. ``GATE.TRANSLATION_CURVES``  — translation-curve deltas (if objective meters provided)
+  7. ``GATE.CORRELATION_RISK``    — scene correlation metadata
+  8. ``GATE.PHASE_RISK``          — polarity / phase-inversion flags
+  9. ``GATE.CONFIDENCE_LOW``      — scene inference confidence
 
 Public API
 ----------
@@ -30,6 +34,7 @@ from mmo.core.downmix import (
     predict_fold_similarity,
     resolve_preflight_matrix,
 )
+from mmo.core.meters import assess_translation_curves
 
 PREFLIGHT_RECEIPT_SCHEMA_VERSION = "0.1.0"
 
@@ -254,6 +259,22 @@ def _extract_phase_report(
         "polarity_risk": polarity_risk,
         "details": details,
     }
+
+
+# ---------------------------------------------------------------------------
+# Objective meter extraction
+# ---------------------------------------------------------------------------
+
+def _extract_objective_meters(scene: Dict[str, Any]) -> Dict[str, Any]:
+    objective = scene.get("objective_meters")
+    if isinstance(objective, dict):
+        return dict(objective)
+    metadata = scene.get("metadata")
+    if isinstance(metadata, dict):
+        objective = metadata.get("objective_meters")
+        if isinstance(objective, dict):
+            return dict(objective)
+    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -645,6 +666,255 @@ def _eval_downmix_similarity_measured(
     return gate, check
 
 
+def _eval_lra_bounds(
+    objective_meters: Dict[str, Any],
+    options: Dict[str, Any],
+) -> Dict[str, Any]:
+    gate_id = "GATE.LRA_BOUNDS"
+    lra_raw = objective_meters.get("loudness_range_lu")
+    if not isinstance(lra_raw, (int, float)):
+        return _gate_result(
+            gate_id,
+            "skipped",
+            "info",
+            "LRA objective meter unavailable; LRA gate skipped.",
+            {"reason": "loudness_range_lu_unavailable"},
+        )
+    lra_lu = float(lra_raw)
+    warn_low = float(options.get("lra_warn_lu_lte", 1.5))
+    warn_high = float(options.get("lra_warn_lu_gte", 18.0))
+    error_high = float(options.get("lra_error_lu_gte", 24.0))
+
+    if lra_lu >= error_high:
+        return _gate_result(
+            gate_id,
+            "block",
+            "error",
+            f"LRA {lra_lu:.2f} LU exceeds error threshold ({error_high:.2f} LU).",
+            {
+                "loudness_range_lu": round(lra_lu, 6),
+                "warn_low_lu": warn_low,
+                "warn_high_lu": warn_high,
+                "error_high_lu": error_high,
+            },
+        )
+    if lra_lu <= warn_low or lra_lu >= warn_high:
+        return _gate_result(
+            gate_id,
+            "warn",
+            "warn",
+            (
+                f"LRA {lra_lu:.2f} LU is outside recommended range "
+                f"[{warn_low:.2f}, {warn_high:.2f}] LU."
+            ),
+            {
+                "loudness_range_lu": round(lra_lu, 6),
+                "warn_low_lu": warn_low,
+                "warn_high_lu": warn_high,
+            },
+        )
+    return _gate_result(
+        gate_id,
+        "pass",
+        "info",
+        f"LRA within bounds: {lra_lu:.2f} LU.",
+        {"loudness_range_lu": round(lra_lu, 6)},
+    )
+
+
+def _eval_true_peak_per_channel(
+    objective_meters: Dict[str, Any],
+    options: Dict[str, Any],
+) -> Dict[str, Any]:
+    gate_id = "GATE.TRUE_PEAK_PER_CHANNEL"
+    raw = objective_meters.get("true_peak_per_channel_dbtp")
+    if not isinstance(raw, dict):
+        return _gate_result(
+            gate_id,
+            "skipped",
+            "info",
+            "Per-channel true-peak data unavailable; true-peak gate skipped.",
+            {"reason": "true_peak_per_channel_unavailable"},
+        )
+
+    per_channel: Dict[str, float] = {}
+    for key in sorted(raw.keys()):
+        value = raw.get(key)
+        if isinstance(value, (int, float)):
+            per_channel[str(key)] = float(value)
+
+    if not per_channel:
+        return _gate_result(
+            gate_id,
+            "skipped",
+            "info",
+            "Per-channel true-peak data unavailable; true-peak gate skipped.",
+            {"reason": "true_peak_per_channel_unavailable"},
+        )
+
+    warn_dbtp = float(options.get("true_peak_channel_warn_dbtp", -2.0))
+    error_dbtp = float(options.get("true_peak_channel_error_dbtp", -1.0))
+    hottest_channel, hottest_value = max(
+        per_channel.items(),
+        key=lambda item: (item[1], item[0]),
+    )
+    rounded = {
+        key: round(value, 6)
+        for key, value in sorted(per_channel.items(), key=lambda item: item[0])
+    }
+
+    if hottest_value > error_dbtp:
+        return _gate_result(
+            gate_id,
+            "block",
+            "error",
+            (
+                f"Channel {hottest_channel} true-peak {hottest_value:+.2f} dBTP "
+                f"exceeds error threshold ({error_dbtp:+.2f} dBTP)."
+            ),
+            {
+                "hottest_channel": hottest_channel,
+                "hottest_value_dbtp": round(hottest_value, 6),
+                "warn_dbtp": warn_dbtp,
+                "error_dbtp": error_dbtp,
+                "per_channel_dbtp": rounded,
+            },
+        )
+    if hottest_value > warn_dbtp:
+        return _gate_result(
+            gate_id,
+            "warn",
+            "warn",
+            (
+                f"Channel {hottest_channel} true-peak {hottest_value:+.2f} dBTP "
+                f"exceeds warning threshold ({warn_dbtp:+.2f} dBTP)."
+            ),
+            {
+                "hottest_channel": hottest_channel,
+                "hottest_value_dbtp": round(hottest_value, 6),
+                "warn_dbtp": warn_dbtp,
+                "per_channel_dbtp": rounded,
+            },
+        )
+    return _gate_result(
+        gate_id,
+        "pass",
+        "info",
+        f"Per-channel true-peak within bounds (max {hottest_value:+.2f} dBTP).",
+        {
+            "hottest_channel": hottest_channel,
+            "hottest_value_dbtp": round(hottest_value, 6),
+            "per_channel_dbtp": rounded,
+        },
+    )
+
+
+def _eval_translation_curves(
+    objective_meters: Dict[str, Any],
+    options: Dict[str, Any],
+) -> Dict[str, Any]:
+    gate_id = "GATE.TRANSLATION_CURVES"
+    warn_delta_db = float(options.get("translation_curve_warn_db", 2.5))
+    error_delta_db = float(options.get("translation_curve_error_db", 4.0))
+
+    raw_deltas = objective_meters.get("translation_curve_deltas_db")
+    if isinstance(raw_deltas, dict):
+        profiles: list[dict[str, Any]] = []
+        max_delta: float | None = None
+        for profile_id in sorted(raw_deltas.keys()):
+            value = raw_deltas.get(profile_id)
+            if not isinstance(value, (int, float)):
+                continue
+            delta_db = float(value)
+            if max_delta is None or delta_db > max_delta:
+                max_delta = delta_db
+            if delta_db > error_delta_db:
+                status = "high"
+            elif delta_db > warn_delta_db:
+                status = "medium"
+            else:
+                status = "low"
+            profiles.append(
+                {
+                    "profile_id": str(profile_id),
+                    "delta_db": round(delta_db, 6),
+                    "status": status,
+                }
+            )
+        curves_summary: Dict[str, Any] = {
+            "profiles": profiles,
+            "max_delta_db": None if max_delta is None else round(max_delta, 6),
+        }
+    else:
+        measured_curve = objective_meters.get("translation_curve_levels_db")
+        if not isinstance(measured_curve, dict):
+            return _gate_result(
+                gate_id,
+                "skipped",
+                "info",
+                "Translation-curve objective data unavailable; translation gate skipped.",
+                {"reason": "translation_curve_data_unavailable"},
+            )
+        curves_summary = assess_translation_curves(
+            measured_curve,
+            warn_delta_db=warn_delta_db,
+            error_delta_db=error_delta_db,
+        )
+
+    max_delta_db = curves_summary.get("max_delta_db")
+    if not isinstance(max_delta_db, (int, float)):
+        return _gate_result(
+            gate_id,
+            "skipped",
+            "info",
+            "Translation-curve objective data unavailable; translation gate skipped.",
+            {"reason": "translation_curve_data_unavailable"},
+        )
+    max_delta = float(max_delta_db)
+
+    if max_delta > error_delta_db:
+        return _gate_result(
+            gate_id,
+            "block",
+            "error",
+            (
+                f"Translation curve drift {max_delta:.2f} dB exceeds error threshold "
+                f"({error_delta_db:.2f} dB)."
+            ),
+            {
+                "max_delta_db": round(max_delta, 6),
+                "warn_delta_db": warn_delta_db,
+                "error_delta_db": error_delta_db,
+                "profiles": curves_summary.get("profiles", []),
+            },
+        )
+    if max_delta > warn_delta_db:
+        return _gate_result(
+            gate_id,
+            "warn",
+            "warn",
+            (
+                f"Translation curve drift {max_delta:.2f} dB exceeds warning threshold "
+                f"({warn_delta_db:.2f} dB)."
+            ),
+            {
+                "max_delta_db": round(max_delta, 6),
+                "warn_delta_db": warn_delta_db,
+                "profiles": curves_summary.get("profiles", []),
+            },
+        )
+    return _gate_result(
+        gate_id,
+        "pass",
+        "info",
+        f"Translation curve drift within bounds (max {max_delta:.2f} dB).",
+        {
+            "max_delta_db": round(max_delta, 6),
+            "profiles": curves_summary.get("profiles", []),
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -692,6 +962,13 @@ def evaluate_preflight(
             confidence_warn_below     (float, default 0.5)
             confidence_error_below    (float, default 0.2)
             warn_on_composed_path     (bool, default True)
+            lra_warn_lu_lte           (float, default 1.5)
+            lra_warn_lu_gte           (float, default 18.0)
+            lra_error_lu_gte          (float, default 24.0)
+            true_peak_channel_warn_dbtp  (float, default -2.0)
+            true_peak_channel_error_dbtp (float, default -1.0)
+            translation_curve_warn_db    (float, default 2.5)
+            translation_curve_error_db   (float, default 4.0)
 
     user_profile:
         Optional user style/safety profile dict (as returned by
@@ -727,6 +1004,7 @@ def evaluate_preflight(
 
     # --- Confidence ---
     confidence_summary = _extract_confidence_summary(scene, options)
+    objective_meters = _extract_objective_meters(scene)
 
     # --- Gate evaluations (deterministic order) ---
     gates_evaluated: List[Dict[str, Any]] = []
@@ -754,15 +1032,27 @@ def evaluate_preflight(
         if measured_check is not None:
             measured_similarity_checks.append(measured_check)
 
-    # 4. Correlation risk
+    # 4. LRA objective gate
+    lra_gate = _eval_lra_bounds(objective_meters, options)
+    gates_evaluated.append(lra_gate)
+
+    # 5. Per-channel true-peak objective gate
+    true_peak_gate = _eval_true_peak_per_channel(objective_meters, options)
+    gates_evaluated.append(true_peak_gate)
+
+    # 6. Translation-curve objective gate
+    translation_gate = _eval_translation_curves(objective_meters, options)
+    gates_evaluated.append(translation_gate)
+
+    # 7. Correlation risk
     corr_gate = _eval_correlation_risk(phase_report, options)
     gates_evaluated.append(corr_gate)
 
-    # 5. Phase risk
+    # 8. Phase risk
     phase_gate = _eval_phase_risk(phase_report, options)
     gates_evaluated.append(phase_gate)
 
-    # 6. Confidence
+    # 9. Confidence
     conf_gate = _eval_confidence_low(confidence_summary, options)
     gates_evaluated.append(conf_gate)
 
