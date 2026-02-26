@@ -7,6 +7,8 @@
 
 An open-source, offline mixing assistant that handles the technical math so humans can focus on vibe, intent, and performance.
 
+Website: https://danielboyd.github.io/mix-marriage-offline/
+
 MMO is a standalone tool that analyzes exported stems in a folder and produces:
 
 - A ranked list of technical issues with evidence
@@ -36,24 +38,27 @@ MMO's promise:
 
 ## Install
 
-Prebuilt binaries (no Python required):
+One-click installers (no Python required):
 
 - Download the matching release asset from GitHub Releases:
-  - Windows: `mmo-windows-<arch>.zip`
-  - Linux: `mmo-linux-<arch>.tar.gz`
-  - macOS: `mmo-macos-<arch>.tar.gz`
-- Extract the archive and run the binary:
+  - Windows installer: `mmo-setup-windows-<arch>-v<version>.exe`
+  - macOS app bundle: `MMO-v<version>-macos-<arch>.app.zip`
+  - Linux AppImage: `mmo-v<version>-linux-<arch>.AppImage`
+- Launch:
 
 ```powershell
-# Windows (PowerShell)
-Expand-Archive .\mmo-windows-x86_64.zip -DestinationPath .
-.\mmo-windows-x86_64.exe --help
+# Windows (PowerShell): run installer
+.\mmo-setup-windows-x86_64-v1.0.0.exe
 ```
 
 ```sh
-# Linux/macOS
-tar -xzf mmo-linux-x86_64.tar.gz
-./mmo-linux-x86_64 --help
+# macOS
+unzip MMO-v1.0.0-macos-arm64.app.zip
+open "MMO-v1.0.0-macos-arm64.app"
+
+# Linux
+chmod +x mmo-v1.0.0-linux-x86_64.AppImage
+./mmo-v1.0.0-linux-x86_64.AppImage
 ```
 
 Python install (repo/dev):
@@ -67,6 +72,24 @@ Optional extras:
 ```sh
 pip install .[pdf]
 pip install .[truth]
+```
+
+Verify signatures/checksums:
+
+```powershell
+# Windows Authenticode (expect Status = Valid)
+Get-AuthenticodeSignature .\mmo-setup-windows-x86_64-v1.0.0.exe | Format-List
+```
+
+```sh
+# macOS code signature
+codesign --verify --deep --strict --verbose=2 "MMO-v1.0.0-macos-arm64.app"
+```
+
+```sh
+# Linux detached signature + checksum
+gpg --verify mmo-v1.0.0-linux-x86_64.AppImage.asc mmo-v1.0.0-linux-x86_64.AppImage
+sha256sum -c mmo-v1.0.0-linux-x86_64.AppImage.sha256
 ```
 
 ---
@@ -306,7 +329,7 @@ mmo safe-render --report out/report.json --out-dir out/rendered/ --dry-run
 
 ## Surround and immersive audio
 
-MMO v0.2 includes full multi-standard support for immersive layouts (5.1, 7.1, 7.1.4, 9.1.6, etc.) via the `SpeakerLayout` module:
+MMO v1.0 includes full multi-standard support for immersive layouts (5.1, 7.1, 7.1.4, 9.1.6, etc.) via the `SpeakerLayout` module:
 
 - channel layout awareness (2.0, 5.1, 7.1, 7.1.4, Dolby Atmos beds, etc.)
 - channel-group measurement (front stage, surrounds, heights, LFE)
@@ -334,7 +357,7 @@ tests/      Automated tests
 
 ## Status
 
-v0.2 — Active development.
+v1.0.0 — Stable core release with active plugin and UX iteration.
 
 What works now:
 

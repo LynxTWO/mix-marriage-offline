@@ -77,7 +77,10 @@ class TestPluginLoader(unittest.TestCase):
 
             with patch.dict(
                 os.environ,
-                {"HOME": home_root.as_posix()},
+                {
+                    "HOME": home_root.as_posix(),
+                    "USERPROFILE": (tmp_root / "different_windows_home").as_posix(),
+                },
                 clear=False,
             ):
                 os.environ.pop(PLUGIN_DIR_ENV_VAR, None)
@@ -88,6 +91,60 @@ class TestPluginLoader(unittest.TestCase):
                 plugin_ids,
                 ["PLUGIN.RENDERER.BASE_PLUGIN", "PLUGIN.RENDERER.USER_PLUGIN"],
             )
+
+    def test_empty_env_plugin_dir_falls_back_to_default_user_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_root = Path(tmp)
+            base_plugins = tmp_root / "base_plugins"
+            home_root = tmp_root / "home"
+            user_plugins = home_root / ".mmo" / "plugins"
+
+            _write_renderer_plugin(
+                root=base_plugins,
+                plugin_id="PLUGIN.RENDERER.BASE_PLUGIN",
+                module_name="base_plugin_renderer",
+            )
+            _write_renderer_plugin(
+                root=user_plugins,
+                plugin_id="PLUGIN.RENDERER.USER_PLUGIN",
+                module_name="user_plugin_renderer",
+            )
+
+            with patch.dict(
+                os.environ,
+                {PLUGIN_DIR_ENV_VAR: "", "HOME": home_root.as_posix()},
+                clear=False,
+            ):
+                plugins = load_registered_plugins(base_plugins)
+
+            plugin_ids = [entry.plugin_id for entry in plugins]
+            self.assertEqual(
+                plugin_ids,
+                ["PLUGIN.RENDERER.BASE_PLUGIN", "PLUGIN.RENDERER.USER_PLUGIN"],
+            )
+
+    def test_missing_default_user_plugins_dir_does_not_raise(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_root = Path(tmp)
+            base_plugins = tmp_root / "base_plugins"
+            home_root = tmp_root / "home_without_plugins"
+
+            _write_renderer_plugin(
+                root=base_plugins,
+                plugin_id="PLUGIN.RENDERER.BASE_PLUGIN",
+                module_name="base_plugin_renderer",
+            )
+
+            with patch.dict(
+                os.environ,
+                {"HOME": home_root.as_posix()},
+                clear=False,
+            ):
+                os.environ.pop(PLUGIN_DIR_ENV_VAR, None)
+                plugins = load_registered_plugins(base_plugins)
+
+            plugin_ids = [entry.plugin_id for entry in plugins]
+            self.assertEqual(plugin_ids, ["PLUGIN.RENDERER.BASE_PLUGIN"])
 
     def test_plugin_dir_override_takes_precedence_over_default_user_dir(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

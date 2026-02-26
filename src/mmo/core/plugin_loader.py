@@ -13,7 +13,10 @@ PLUGIN_DIR_ENV_VAR = "MMO_PLUGIN_DIR"
 
 def default_user_plugins_dir() -> Path:
     """Return the default per-user external plugin directory."""
-    return Path.home() / ".mmo" / "plugins"
+    raw_home = os.environ.get("HOME", "").strip()
+    if raw_home:
+        return Path(raw_home).expanduser() / ".mmo" / "plugins"
+    return Path(os.path.expanduser("~")) / ".mmo" / "plugins"
 
 
 def _resolved_external_plugin_dir(

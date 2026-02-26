@@ -1,12 +1,18 @@
 name: release
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v0.2.0)"
+        description: "Release tag (e.g. v1.0.0)"
         required: true
-        default: "v0.2.0"
+        default: "v1.0.0"
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
 
 jobs:
   validate:
@@ -65,16 +71,47 @@ jobs:
       - name: Install binary build dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[truth,pdf]" pyinstaller nuitka ordered-set zstandard
+          python -m pip install -e ".[truth,pdf,gui]" pyinstaller nuitka ordered-set zstandard
+
+      - name: Install Inno Setup (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Install AppImage tooling (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2 wget
+          wget -qO /tmp/appimagetool.AppImage \
+            https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /tmp/appimagetool.AppImage
+          echo "APPIMAGETOOL=/tmp/appimagetool.AppImage" >> "$GITHUB_ENV"
 
       - name: Build standalone binary (PyInstaller + Nuitka fallback)
-        run: python tools/build_binaries.py --output-dir dist
+        run: python tools/build_binaries.py --output-dir dist --with-gui
+
+      - name: Build one-click installers
+        env:
+          MMO_WINDOWS_PFX_PATH: ${{ secrets.MMO_WINDOWS_PFX_PATH }}
+          MMO_WINDOWS_PFX_PASSWORD: ${{ secrets.MMO_WINDOWS_PFX_PASSWORD }}
+          MMO_WINDOWS_TIMESTAMP_URL: ${{ secrets.MMO_WINDOWS_TIMESTAMP_URL }}
+          MMO_MACOS_SIGN_IDENTITY: ${{ secrets.MMO_MACOS_SIGN_IDENTITY }}
+          MMO_LINUX_GPG_KEY_ID: ${{ secrets.MMO_LINUX_GPG_KEY_ID }}
+        run: python tools/build_installers.py --input-dir dist --output-dir dist/installers --version "${{ env.RELEASE_TAG }}"
 
       - name: Upload binary artifacts
         uses: actions/upload-artifact@v4
         with:
           name: mmo-binaries-${{ matrix.os }}
-          path: dist/mmo-*
+          path: |
+            dist/mmo-*
+            dist/MMO-*
+            dist/installers/*.exe
+            dist/installers/*.zip
+            dist/installers/*.AppImage
+            dist/installers/*.asc
+            dist/installers/*.sha256
           if-no-files-found: error
 
   release:
@@ -101,9 +138,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag }}
-          name: "MMO ${{ github.event.inputs.tag }}"
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "MMO ${{ env.RELEASE_TAG }}"
           body_path: CHANGELOG.md
-          files: dist/*
+          files: dist/**
           draft: false
           prerelease: false

@@ -4,6 +4,54 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- No unreleased changes yet.
+
+## [1.0.0] — 2026-02-26
+
+### Added
+
+- One-click installer packaging for release artifacts:
+  - Windows setup `.exe` via Inno Setup.
+  - macOS `.app` bundle packaging (plus zip artifact).
+  - Linux `.AppImage` packaging.
+- Config/preset resolution module `src/mmo/core/config.py` with merged run-config loading
+  (`preset -> config file -> CLI overrides`) and ontology-first preset resolution.
+- Project session persistence contract (`schemas/project_session.schema.json`) and
+  deterministic save/load commands:
+  - `mmo project save <project_dir> [--session <path>] [--force]`
+  - `mmo project load <project_dir> [--session <path>] [--force]`
+- Minimal CustomTkinter desktop GUI (`mmo-gui`) with drag/drop stems selection,
+  render target controls, live subprocess logs, and high-risk approval gating.
+- Full determinism harness `tests/test_full_determinism.py` for byte-stable
+  safe-render + bundle outputs on the public fixture.
+- Thread-safe progress/cancel core (`src/mmo/core/progress.py`) wired through CLI
+  and GUI with explainable live log fields (`what/why/where/confidence`).
+- Cross-platform signing hooks in `tools/build_installers.py`:
+  - Authenticode (`signtool`) for Windows.
+  - `codesign` verification flow for macOS apps.
+  - Optional detached GPG signing for Linux AppImage artifacts.
+- GitHub Pages site under `site/` with a dedicated deployment workflow
+  (`.github/workflows/pages.yml`) for a public release landing page.
+
+### Changed
+
+- Release workflow (`.github/workflows/release.yml`) now:
+  - supports both tag-push (`v*`) and manual dispatch triggers,
+  - builds CLI + GUI binaries,
+  - emits platform installer artifacts, and
+  - carries signing env hooks via repository secrets.
+- Canonical ontology preset mirror is now available at `ontology/presets/` with
+  packaged data under `src/mmo/data/ontology/presets/` for install-safe loading.
+- Plugin loader default external root now prefers `HOME` when present, improving
+  Windows CI behavior for fallback `~/.mmo/plugins` resolution.
+- README installation docs now target v1.0 installer artifacts and include
+  signature/checksum verification commands.
+- Project version bumped to `1.0.0`.
+
 ## [0.2.0] — 2026-02-26
 
 ### Added
@@ -39,46 +87,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal temp path in tests uses `tempfile.gettempdir()` instead of hardcoded `/tmp/`.
 - `mmo.resources` resolver used everywhere for ontology/schema loading (no repo-root
   path assumptions).
-
-## [Unreleased]
-
-### Added
-
-- Config/preset resolution module `src/mmo/core/config.py` with merged run-config loading
-  (`preset -> config file -> CLI overrides`) and ontology-first preset resolution
-  (`ontology/presets/` preferred, legacy `presets/` still supported).
-- New project session persistence contract (`schemas/project_session.schema.json`) and
-  deterministic save/load support for `scene + history + receipts`.
-- New CLI commands:
-  - `mmo project save <project_dir> [--session <path>] [--force]`
-  - `mmo project load <project_dir> [--session <path>] [--force]`
-- GUI RPC integration for session persistence via:
-  - `project.save`
-  - `project.load`
-- Canonical ontology preset mirror at `ontology/presets/` (plus packaged mirror under
-  `src/mmo/data/ontology/presets/`) to keep install-safe preset loading.
-
-- Minimal viable CustomTkinter desktop GUI (`mmo-gui`, `src/mmo/gui/main.py`) with:
-  drag/drop stems selection, target selector, `--render-many`, `--layout-standard`,
-  live subprocess log streaming, and high-risk approval dialog before final safe-render.
-- Repo launcher `gui/main.py` and packaged GUI entrypoint `src/mmo/gui/__main__.py`.
-- Binary packaging support for GUI artifacts via `tools/build_binaries.py --with-gui`
-  (`--gui-entrypoint`, `--gui-name`) so CLI + GUI can ship together.
-- Cross-platform release binary packaging via `tools/build_binaries.py`, with
-  PyInstaller as the primary backend and automatic Nuitka fallback.
-- Release workflow binary matrix for `ubuntu-latest`, `windows-latest`, and
-  `macos-latest`, publishing per-platform archives and checksums.
-- Clarified living-doc roles: `PROJECT_WHEN_COMPLETE.md` (progress/status),
-  `CHANGELOG.md` (release summary), and `GEMINI.md` (AI/operator guidance).
-- Added local-only ignore rules for temp/build artifacts (`.mmo_tmp`, `mmo_tmp`,
-  `.tmp_pip`, pip temp caches, `.venv_wsl`, `build`).
-- Full determinism harness `tests/test_full_determinism.py` that asserts
-  byte-stable safe-render + bundle artifacts for SMPTE and FILM on the new
-  public fixture `fixtures/public_session/report.7_1_4.json`.
-- Thread-safe progress/cancel core (`src/mmo/core/progress.py`) with ETA snapshots
-  plus explainable live log events (`what/why/where/confidence`), integrated into
-  `render_engine`, `safe-render` CLI (`--live-progress`, `--cancel-file`), and the
-  CustomTkinter GUI (live progress bar + cancel button).
 
 ## [2026-02-17]
 

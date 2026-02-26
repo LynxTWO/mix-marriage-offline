@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mix Marriage Offline · v1.0</title>
+    <meta
+      name="description"
+      content="Mix Marriage Offline is an offline, deterministic mixing assistant with one-click installers for Windows, macOS, and Linux."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Sora:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-a" aria-hidden="true"></div>
+    <div class="ambient ambient-b" aria-hidden="true"></div>
+    <div class="ambient ambient-c" aria-hidden="true"></div>
+
+    <header class="hero section">
+      <nav class="topbar">
+        <span class="brand">Mix Marriage Offline</span>
+        <a class="link" href="https://github.com/danielboyd/mix-marriage-offline">GitHub</a>
+      </nav>
+
+      <div class="hero-grid">
+        <div class="hero-copy reveal" style="--delay: 0.05s">
+          <p class="eyebrow">v1.0 stable core</p>
+          <h1>
+            Precision engineering
+            <span class="ital">without</span>
+            stealing the art.
+          </h1>
+          <p class="lede">
+            MMO is an offline mixing co-pilot for stem-folder workflows. Deterministic analysis,
+            explainable planning, and bounded authority from first scan to final render.
+          </p>
+          <div class="actions">
+            <a class="btn btn-primary" href="https://github.com/danielboyd/mix-marriage-offline/releases/tag/v1.0.0">
+              Download v1.0.0
+            </a>
+            <a class="btn btn-ghost" href="https://github.com/danielboyd/mix-marriage-offline#readme">
+              Read docs
+            </a>
+          </div>
+        </div>
+
+        <aside class="hero-panel reveal" style="--delay: 0.15s">
+          <h2>One-click installables</h2>
+          <ul>
+            <li><strong>Windows:</strong> signed setup <code>.exe</code></li>
+            <li><strong>macOS:</strong> signed desktop <code>.app</code></li>
+            <li><strong>Linux:</strong> portable <code>.AppImage</code></li>
+          </ul>
+          <p>
+            Every release ships deterministic checksums and platform-native packaging so users can
+            install quickly without a Python toolchain.
+          </p>
+        </aside>
+      </div>
+    </header>
+
+    <main>
+      <section class="section">
+        <div class="section-header reveal" style="--delay: 0.1s">
+          <p class="eyebrow">Why teams use MMO</p>
+          <h2>Objective math in front, creative intent intact.</h2>
+        </div>
+        <div class="cards">
+          <article class="card reveal" style="--delay: 0.15s">
+            <h3>Deterministic by design</h3>
+            <p>Same inputs and settings produce the same outputs, artifacts, and evidence.</p>
+          </article>
+          <article class="card reveal" style="--delay: 0.2s">
+            <h3>Explainable safety</h3>
+            <p>Every recommendation includes what, why, where, and confidence for quick review.</p>
+          </article>
+          <article class="card reveal" style="--delay: 0.25s">
+            <h3>Layout fluent</h3>
+            <p>SMPTE, FILM, LOGIC_PRO, VST3, and AAF are first-class from import to render.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header reveal" style="--delay: 0.1s">
+          <p class="eyebrow">v1.0 release track</p>
+          <h2>Built for real-world delivery.</h2>
+        </div>
+        <div class="timeline">
+          <div class="timeline-item reveal" style="--delay: 0.15s">
+            <p class="timeline-kicker">Analyze once</p>
+            <p>Scan stems, score risk, and build a deterministic issue map.</p>
+          </div>
+          <div class="timeline-item reveal" style="--delay: 0.2s">
+            <p class="timeline-kicker">Render many</p>
+            <p>Deliver stereo, surround, and immersive targets from one planning pass.</p>
+          </div>
+          <div class="timeline-item reveal" style="--delay: 0.25s">
+            <p class="timeline-kicker">Ship confidently</p>
+            <p>Installer artifacts, checksums, signatures, and release notes in one workflow.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="section footer reveal" style="--delay: 0.15s">
+      <p>Mix Marriage Offline · Apache-2.0 · Built for offline engineering workflows.</p>
+    </footer>
+
+    <script>
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("is-visible");
+            }
+          }
+        },
+        { threshold: 0.2 }
+      );
+      for (const node of document.querySelectorAll(".reveal")) {
+        observer.observe(node);
+      }
+    </script>
+  </body>
+</html>

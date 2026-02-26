@@ -129,6 +129,13 @@ Each plugin module provides:
 - a `PLUGIN_META` dict or a `plugin.yaml` manifest (recommended)
 - a class implementing the relevant interface
 
+External plugin roots:
+
+- Repo/local root from `--plugins` is always loaded first.
+- Optional external root can be set with `MMO_PLUGIN_DIR`.
+- If `MMO_PLUGIN_DIR` is unset (or empty), MMO falls back to the default
+  user directory: `~/.mmo/plugins` (resolved via `HOME`/platform home lookup).
+
 ### 4.2 plugin.yaml (recommended manifest)
 
 Each plugin should include a manifest for metadata and compatibility.
