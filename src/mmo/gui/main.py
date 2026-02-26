@@ -68,6 +68,7 @@ class GuiPipelinePaths:
     final_receipt_path: Path
     dry_manifest_path: Path
     final_manifest_path: Path
+    cancel_token_path: Path
 
 
 def _as_posix(path: Path) -> str:
@@ -153,6 +154,7 @@ def build_pipeline_paths(workspace_dir: Path) -> GuiPipelinePaths:
         final_receipt_path=workspace_dir / "safe_render.receipt.json",
         dry_manifest_path=workspace_dir / "safe_render.dry_manifest.json",
         final_manifest_path=workspace_dir / "safe_render.render_manifest.json",
+        cancel_token_path=workspace_dir / "safe_render.cancel",
     )
 
 
@@ -178,6 +180,8 @@ def build_safe_render_cli_argv(
     *,
     dry_run: bool,
     approve: str | None,
+    live_progress: bool = False,
+    cancel_file: Path | None = None,
 ) -> list[str]:
     target_layouts = render_target_layout_map()
     argv: list[str] = [
@@ -227,6 +231,10 @@ def build_safe_render_cli_argv(
 
     if isinstance(approve, str) and approve.strip():
         argv.extend(["--approve", approve.strip()])
+    if live_progress:
+        argv.append("--live-progress")
+    if cancel_file is not None:
+        argv.extend(["--cancel-file", _as_posix(cancel_file)])
     return argv
 
 
@@ -243,12 +251,16 @@ def build_pipeline_cli_argvs(
         paths,
         dry_run=True,
         approve=None,
+        live_progress=True,
+        cancel_file=paths.cancel_token_path,
     )
     final_argv = build_safe_render_cli_argv(
         config,
         paths,
         dry_run=False,
         approve=approve,
+        live_progress=True,
+        cancel_file=paths.cancel_token_path,
     )
     return analyze_argv, dry_run_argv, final_argv, paths
 
@@ -295,6 +307,9 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         self.configure(fg_color="#F6F1E8")
 
         self._worker_thread: threading.Thread | None = None
+        self._process_lock = threading.Lock()
+        self._active_process: subprocess.Popen[str] | None = None
+        self._cancel_file_path: Path | None = None
 
         self._target_layouts = render_target_layout_map()
         self._target_ids = tuple(sorted(self._target_layouts))
@@ -312,6 +327,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         self._layout_standard_var = _ctk.StringVar(value=LayoutStandard.SMPTE.value)
         self._profile_var = _ctk.StringVar(value=_DEFAULT_PROFILE_ID)
         self._status_var = _ctk.StringVar(value="Ready.")
+        self._progress_var = _ctk.DoubleVar(value=0.0)
 
         self._build_layout()
         self._wire_drag_drop()
@@ -491,6 +507,27 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         )
         self._run_button.grid(row=14, column=0, padx=16, pady=(6, 10), sticky="ew")
 
+        self._progress_bar = _ctk.CTkProgressBar(
+            controls,
+            fg_color="#D9CBB8",
+            progress_color="#D95F39",
+            height=14,
+            corner_radius=999,
+        )
+        self._progress_bar.grid(row=15, column=0, padx=16, pady=(0, 8), sticky="ew")
+        self._progress_bar.set(0.0)
+
+        self._cancel_button = _ctk.CTkButton(
+            controls,
+            text="Cancel Running Job",
+            command=self._request_cancel,
+            height=34,
+            fg_color="#6E2A2A",
+            hover_color="#5A2222",
+            state="disabled",
+        )
+        self._cancel_button.grid(row=16, column=0, padx=16, pady=(0, 8), sticky="ew")
+
         _ctk.CTkLabel(
             controls,
             textvariable=self._status_var,
@@ -498,7 +535,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             text_color="#2A5C78",
             justify="left",
             wraplength=520,
-        ).grid(row=15, column=0, padx=16, pady=(0, 14), sticky="w")
+        ).grid(row=17, column=0, padx=16, pady=(0, 14), sticky="w")
 
         log_panel = _ctk.CTkFrame(
             self,
@@ -591,9 +628,14 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
     def _set_status_threadsafe(self, status: str) -> None:
         self.after(0, lambda value=status: self._status_var.set(value))
 
+    def _set_progress_threadsafe(self, fraction: float) -> None:
+        clamped = max(0.0, min(1.0, float(fraction)))
+        self.after(0, lambda value=clamped: self._progress_bar.set(value))
+
     def _set_running_threadsafe(self, running: bool) -> None:
         def _apply() -> None:
             self._run_button.configure(state="disabled" if running else "normal")
+            self._cancel_button.configure(state="normal" if running else "disabled")
 
         self.after(0, _apply)
 
@@ -659,8 +701,11 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
 
         self._set_running_threadsafe(True)
         self._set_status_threadsafe("Running analyze + dry-run safety preview...")
+        self._set_progress_threadsafe(0.0)
         workspace_dir = config.out_dir / _DEFAULT_GUI_WORKSPACE
         workspace_dir.mkdir(parents=True, exist_ok=True)
+        self._cancel_file_path = build_pipeline_paths(workspace_dir).cancel_token_path
+        self._clear_cancel_file()
 
         self._worker_thread = threading.Thread(
             target=self._run_pipeline_worker,
@@ -669,6 +714,76 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             name="mmo_gui_worker",
         )
         self._worker_thread.start()
+
+    def _clear_cancel_file(self) -> None:
+        path = self._cancel_file_path
+        if path is None:
+            return
+        try:
+            if path.exists():
+                path.unlink()
+        except OSError:
+            pass
+
+    def _cancel_requested(self) -> bool:
+        path = self._cancel_file_path
+        return bool(path is not None and path.exists())
+
+    def _request_cancel(self) -> None:
+        self._set_status_threadsafe("Cancellation requested...")
+        self._append_log("Cancellation requested by user.")
+        path = self._cancel_file_path
+        if path is not None:
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("cancel\n", encoding="utf-8")
+            except OSError as exc:
+                self._append_log(f"Failed to write cancel file: {exc}")
+        with self._process_lock:
+            process = self._active_process
+        if process is not None and process.poll() is None:
+            process.terminate()
+
+    def _consume_live_progress_line(self, line: str) -> bool:
+        prefix = "[MMO-LIVE] "
+        if not line.startswith(prefix):
+            return False
+        payload_text = line[len(prefix):].strip()
+        if not payload_text:
+            return False
+        try:
+            payload = json.loads(payload_text)
+        except json.JSONDecodeError:
+            return False
+        if not isinstance(payload, Mapping):
+            return False
+
+        progress_value = payload.get("progress")
+        if isinstance(progress_value, (int, float)):
+            self._set_progress_threadsafe(float(progress_value))
+
+        what = payload.get("what")
+        why = payload.get("why")
+        where = payload.get("where")
+        confidence = payload.get("confidence")
+        where_text = ""
+        if isinstance(where, list):
+            where_text = ", ".join(
+                str(item)
+                for item in where
+                if isinstance(item, str) and item.strip()
+            )
+        if isinstance(what, str) and isinstance(why, str):
+            conf_text = (
+                f"{float(confidence):.2f}"
+                if isinstance(confidence, (int, float))
+                else "n/a"
+            )
+            detail = f"[LIVE] {what} | why={why} | where={where_text or '(none)'} | confidence={conf_text}"
+            self._append_log_threadsafe(detail)
+            self._set_status_threadsafe(what)
+            return True
+        return False
 
     def _run_command(self, cli_argv: Sequence[str]) -> int:
         command = build_python_command(cli_argv)
@@ -681,10 +796,19 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             encoding="utf-8",
             errors="replace",
         )
+        with self._process_lock:
+            self._active_process = process
         assert process.stdout is not None
-        for line in process.stdout:
-            self._append_log_threadsafe(line.rstrip("\n"))
-        return process.wait()
+        try:
+            for line in process.stdout:
+                stripped = line.rstrip("\n")
+                if self._consume_live_progress_line(stripped):
+                    continue
+                self._append_log_threadsafe(stripped)
+            return process.wait()
+        finally:
+            with self._process_lock:
+                self._active_process = None
 
     def _approve_high_risk_prompt(self, receipt_payload: Mapping[str, Any]) -> bool:
         from tkinter import messagebox
@@ -737,14 +861,25 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             )
 
             analyze_rc = self._run_command(analyze_argv)
+            if analyze_rc != 0 and self._cancel_requested():
+                self._set_status_threadsafe("Cancelled during analysis.")
+                return
             if analyze_rc != 0:
                 self._set_status_threadsafe("Analyze failed. Check live log.")
                 return
+            self._set_progress_threadsafe(0.15)
 
             dry_rc = self._run_command(dry_run_argv)
+            if dry_rc != 0 and self._cancel_requested():
+                self._set_status_threadsafe("Cancelled during dry-run safety preview.")
+                return
+            if dry_rc == 130:
+                self._set_status_threadsafe("Cancelled during dry-run safety preview.")
+                return
             if dry_rc != 0:
                 self._set_status_threadsafe("Dry-run safety preview failed. Check live log.")
                 return
+            self._set_progress_threadsafe(0.45)
 
             approve_value: str | None = None
             if paths.dry_receipt_path.exists():
@@ -773,15 +908,23 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             )
             self._set_status_threadsafe("Rendering...")
             final_rc = self._run_command(final_argv)
+            if final_rc != 0 and self._cancel_requested():
+                self._set_status_threadsafe("Render cancelled.")
+                return
+            if final_rc == 130:
+                self._set_status_threadsafe("Render cancelled.")
+                return
             if final_rc != 0:
                 self._set_status_threadsafe("Render failed. Check live log.")
                 return
 
+            self._set_progress_threadsafe(1.0)
             self._set_status_threadsafe(f"Completed. Artifacts in {_as_posix(config.out_dir)}")
         except Exception as exc:  # noqa: BLE001
             self._show_error_threadsafe("GUI pipeline error", str(exc))
             self._set_status_threadsafe("Pipeline failed with an unexpected error.")
         finally:
+            self._clear_cancel_file()
             self._set_running_threadsafe(False)
 
 
@@ -821,4 +964,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
-

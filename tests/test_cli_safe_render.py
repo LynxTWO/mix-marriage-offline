@@ -650,3 +650,62 @@ class TestSafeRenderForce(unittest.TestCase):
                 ]
             )
             self.assertEqual(exit_code, 1, "should fail when receipt exists and --force not given")
+
+
+class TestSafeRenderLiveProgressAndCancel(unittest.TestCase):
+    def test_live_progress_emits_explainable_log_lines(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            stems_dir = temp / "stems"
+            _write_16bit_wav(stems_dir / "kick.wav", amplitude=0.45)
+            report = _make_report(stems_dir, "kick.wav", "kick")
+            report_path = temp / "report.json"
+            report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+            exit_code, _stdout, stderr = _run_main(
+                [
+                    "safe-render",
+                    "--report", str(report_path),
+                    "--plugins", str(_PLUGINS_DIR),
+                    "--dry-run",
+                    "--live-progress",
+                ]
+            )
+            self.assertEqual(exit_code, 0, msg=stderr)
+            live_lines = [
+                line[len("[MMO-LIVE] "):]
+                for line in stderr.splitlines()
+                if line.startswith("[MMO-LIVE] ")
+            ]
+            self.assertGreater(len(live_lines), 0, msg=stderr)
+            for raw in live_lines:
+                payload = json.loads(raw)
+                self.assertIn("what", payload)
+                self.assertIn("why", payload)
+                self.assertIn("where", payload)
+                self.assertIn("confidence", payload)
+                self.assertIn("progress", payload)
+
+    def test_cancel_file_stops_safe_render_with_exit_130(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            stems_dir = temp / "stems"
+            _write_16bit_wav(stems_dir / "kick.wav", amplitude=0.45)
+            report = _make_report(stems_dir, "kick.wav", "kick")
+            report_path = temp / "report.json"
+            report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+            cancel_file = temp / "cancel.flag"
+            cancel_file.write_text("cancel\n", encoding="utf-8")
+
+            exit_code, _stdout, stderr = _run_main(
+                [
+                    "safe-render",
+                    "--report", str(report_path),
+                    "--plugins", str(_PLUGINS_DIR),
+                    "--dry-run",
+                    "--cancel-file", str(cancel_file),
+                ]
+            )
+            self.assertEqual(exit_code, 130, msg=stderr)
+            self.assertIn("cancelled", stderr.lower())

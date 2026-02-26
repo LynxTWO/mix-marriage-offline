@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from mmo.core.progress import CancelToken, CancelledError, ProgressTracker, format_live_log_line
 from mmo.resources import ontology_dir, schemas_dir
 
 from mmo.core.deliverables_index import (
@@ -557,6 +558,41 @@ def _run_deliverables_index_command(
 _RENDER_MANY_DEFAULT_TARGETS: list[str] = ["stereo", "5.1", "7.1.4"]
 
 
+def _check_cancel_requested(
+    *,
+    cancel_token: CancelToken,
+    cancel_file: Path | None,
+) -> None:
+    if cancel_file is not None:
+        try:
+            if cancel_file.exists():
+                cancel_token.cancel(
+                    f"cancel requested via {cancel_file.resolve().as_posix()}"
+                )
+        except OSError:
+            pass
+    cancel_token.raise_if_cancelled()
+
+
+def _new_safe_render_progress(
+    *,
+    total_steps: int,
+    cancel_token: CancelToken,
+    live_progress: bool,
+) -> ProgressTracker:
+    if not live_progress:
+        return ProgressTracker(total_steps=total_steps, cancel_token=cancel_token)
+
+    def _live_logger(event: Any) -> None:
+        print(format_live_log_line(event), file=sys.stderr)
+
+    return ProgressTracker(
+        total_steps=total_steps,
+        cancel_token=cancel_token,
+        log_listener=_live_logger,
+    )
+
+
 def _run_render_many_targets(
     *,
     render_many_targets: list[str],
@@ -574,6 +610,9 @@ def _run_render_many_targets(
     force: bool = False,
     user_profile: dict[str, Any] | None = None,
     layout_standard: str = "SMPTE",
+    live_progress: bool = False,
+    cancel_file: Path | None = None,
+    cancel_token: CancelToken | None = None,
 ) -> int:
     """Run safe-render for multiple targets in parallel (mix-once, render-many).
 
@@ -581,6 +620,8 @@ def _run_render_many_targets(
     receipt / manifest files.  Returns 0 only when every target succeeds.
     """
     import concurrent.futures  # noqa: WPS433
+    token = cancel_token or CancelToken()
+    _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
 
     targets = render_many_targets if render_many_targets else _RENDER_MANY_DEFAULT_TARGETS
     print(
@@ -589,6 +630,7 @@ def _run_render_many_targets(
     )
 
     def _run_one(tgt: str) -> tuple[str, int]:
+        _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
         tgt_slug = tgt.replace(".", "_").replace(" ", "_")
         tgt_out_dir = (out_dir / tgt_slug) if out_dir is not None else None
         tgt_manifest = (
@@ -622,6 +664,9 @@ def _run_render_many_targets(
             user_profile=user_profile,
             render_many_targets=None,  # do not recurse
             layout_standard=layout_standard,
+            live_progress=live_progress,
+            cancel_file=cancel_file,
+            cancel_token=token,
         )
         return tgt, rc
 
@@ -640,11 +685,16 @@ def _run_render_many_targets(
                     file=sys.stderr,
                 )
                 results.append((tgt, 1))
+            _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
 
     # Stable output order
     results.sort(key=lambda r: r[0])
+    if token.is_cancelled:
+        return 130
     failed = [tgt for tgt, rc in results if rc != 0]
     succeeded = [tgt for tgt, rc in results if rc == 0]
+    if any(rc == 130 for _, rc in results):
+        return 130
     print(
         f"safe-render/render-many: completed"
         f" succeeded={len(succeeded)}"
@@ -802,6 +852,9 @@ def _run_safe_render_command(
     user_profile: dict[str, Any] | None = None,
     render_many_targets: list[str] | None = None,
     layout_standard: str = "SMPTE",
+    live_progress: bool = False,
+    cancel_file: Path | None = None,
+    cancel_token: CancelToken | None = None,
 ) -> int:
     """Run the full plugin-chain render: detect → resolve → gate → render.
 
@@ -827,384 +880,522 @@ def _run_safe_render_command(
     from mmo.core.render_qa import build_safe_render_qa  # noqa: WPS433
     from mmo.core.scene_builder import build_scene_from_session  # noqa: WPS433
 
-    # -- render-many: delegate to multi-target helper --------------------------
+    token = cancel_token or CancelToken()
+    progress = _new_safe_render_progress(
+        total_steps=6 if dry_run else 8,
+        cancel_token=token,
+        live_progress=live_progress,
+    )
+
     if render_many_targets:
-        return _run_render_many_targets(
-            render_many_targets=render_many_targets,
-            repo_root=repo_root,
-            report_path=report_path,
-            plugins_dir=plugins_dir,
-            out_dir=out_dir,
-            receipt_out_path=receipt_out_path,
-            qa_out_path=qa_out_path,
-            profile_id=profile_id,
-            dry_run=dry_run,
-            approve=approve,
-            output_formats=output_formats,
-            run_config=run_config,
-            force=force,
-            user_profile=user_profile,
-            layout_standard=layout_standard,
+        try:
+            return _run_render_many_targets(
+                render_many_targets=render_many_targets,
+                repo_root=repo_root,
+                report_path=report_path,
+                plugins_dir=plugins_dir,
+                out_dir=out_dir,
+                receipt_out_path=receipt_out_path,
+                qa_out_path=qa_out_path,
+                profile_id=profile_id,
+                dry_run=dry_run,
+                approve=approve,
+                output_formats=output_formats,
+                run_config=run_config,
+                force=force,
+                user_profile=user_profile,
+                layout_standard=layout_standard,
+                live_progress=live_progress,
+                cancel_file=cancel_file,
+                cancel_token=token,
+            )
+        except CancelledError as exc:
+            print(f"safe-render: cancelled ({exc})", file=sys.stderr)
+            return 130
+
+    try:
+        _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
+        progress.emit_log(
+            kind="info",
+            scope="render",
+            what="safe-render started",
+            why="Beginning bounded-authority render workflow.",
+            where=[report_path.resolve().as_posix(), target],
+            confidence=1.0,
+            evidence={"codes": ["SAFE_RENDER.STARTED"]},
         )
 
-    # -- overwrite guards -------------------------------------------------------
-    for out_path, label in (
-        (receipt_out_path, "receipt-out"),
-        (out_manifest_path, "out-manifest"),
-        (qa_out_path, "qa-out"),
-    ):
-        if out_path is not None and out_path.exists() and not force:
+        for out_path, label in (
+            (receipt_out_path, "receipt-out"),
+            (out_manifest_path, "out-manifest"),
+            (qa_out_path, "qa-out"),
+        ):
+            if out_path is not None and out_path.exists() and not force:
+                print(
+                    f"File exists (use --force to overwrite): {out_path.as_posix()}",
+                    file=sys.stderr,
+                )
+                return 1
+
+        report = _load_report(report_path)
+        if run_config is not None:
+            normalized_run_config = normalize_run_config(run_config)
+            report["run_config"] = normalized_run_config
+            if routing_layout_ids_from_run_config(normalized_run_config) is not None:
+                apply_routing_plan_to_report(report, normalized_run_config)
+
+        session_payload = report.get("session")
+        session_for_preflight: dict[str, Any] = {"profile_id": profile_id}
+        if isinstance(session_payload, dict):
+            src_layout = session_payload.get("source_layout_id")
+            if not src_layout:
+                rc = report.get("run_config")
+                if isinstance(rc, dict):
+                    src_layout = rc.get("source_layout_id")
+            if isinstance(src_layout, str) and src_layout.strip():
+                session_for_preflight["source_layout_id"] = src_layout.strip()
+            try:
+                preflight_scene = build_scene_from_session(session_payload)
+            except (ValueError, KeyError, TypeError):
+                preflight_scene = report
+            else:
+                report_recs = report.get("recommendations")
+                if isinstance(report_recs, list) and report_recs:
+                    preflight_scene["recommendations"] = report_recs
+                report_qa = report.get("qa_issues")
+                if isinstance(report_qa, list) and report_qa:
+                    preflight_scene["qa_issues"] = report_qa
+                report_meta = report.get("metadata")
+                if isinstance(report_meta, dict):
+                    scene_meta = preflight_scene.setdefault("metadata", {})
+                    for key in ("correlation", "polarity_inverted"):
+                        val = report_meta.get(key)
+                        if val is not None and key not in scene_meta:
+                            scene_meta[key] = val
+                scene_meta = preflight_scene.setdefault("metadata", {})
+                if "confidence" not in scene_meta:
+                    recs_for_conf = report.get("recommendations")
+                    rec_scores = [
+                        float(r["confidence"])
+                        for r in (recs_for_conf if isinstance(recs_for_conf, list) else [])
+                        if isinstance(r, dict)
+                        and isinstance(r.get("confidence"), (int, float))
+                    ]
+                    report_meta_conf = (
+                        report_meta.get("confidence")
+                        if isinstance(report_meta, dict) else None
+                    )
+                    if isinstance(report_meta_conf, (int, float)):
+                        scene_meta["confidence"] = float(report_meta_conf)
+                    elif rec_scores:
+                        scene_meta["confidence"] = sum(rec_scores) / len(rec_scores)
+                    else:
+                        scene_meta["confidence"] = 1.0
+        else:
+            preflight_scene = report
+
+        _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
+        preflight_receipt = evaluate_preflight(
+            session=session_for_preflight,
+            scene=preflight_scene,
+            target_layout=target,
+            options={},
+            user_profile=user_profile,
+        )
+        _preflight_decision = preflight_receipt.get("final_decision", "pass")
+        print(
+            f"safe-render: preflight={_preflight_decision}"
+            f" target={target}",
+            file=sys.stderr,
+        )
+        progress.advance(
+            phase="preflight",
+            what="preflight evaluated",
+            why="Evaluated safety gates before running any rendering stage.",
+            where=[target],
+            confidence=1.0,
+            evidence={"codes": ["SAFE_RENDER.PREFLIGHT.EVALUATED"]},
+        )
+
+        if not dry_run and preflight_receipt_blocks(preflight_receipt):
+            blocked_gates = [
+                g["gate_id"]
+                for g in preflight_receipt.get("gates_evaluated", [])
+                if g.get("outcome") == "block"
+            ]
             print(
-                f"File exists (use --force to overwrite): {out_path.as_posix()}",
+                f"safe-render: preflight BLOCKED by gates: {', '.join(blocked_gates)}",
+                file=sys.stderr,
+            )
+            if receipt_out_path is not None:
+                block_receipt_id = _build_receipt_id(
+                    _coerce_str(report.get("report_id")),
+                    target,
+                )
+                blocked_receipt: dict[str, Any] = {
+                    "schema_version": "0.1.0",
+                    "receipt_id": block_receipt_id,
+                    "context": "safe_render",
+                    "status": "blocked",
+                    "dry_run": False,
+                    "target": target,
+                    "profile_id": profile_id,
+                    "approved_by": [],
+                    "recommendations_summary": {
+                        "total": 0,
+                        "auto_eligible": 0,
+                        "approved_by_user": 0,
+                        "blocked": 0,
+                    },
+                    "blocked_recommendations": [],
+                    "renderer_manifests": [],
+                    "qa_issues": [],
+                    "notes": [
+                        "preflight_blocked=true",
+                        f"blocked_gates={', '.join(blocked_gates)}",
+                        f"target={target}",
+                        f"profile_id={profile_id}",
+                        (
+                            "layout_standard="
+                            f"{layout_standard} (channel ordering: "
+                            f"{'SMPTE/ITU-R default' if layout_standard == 'SMPTE' else 'Film/Cinema/Pro Tools'})"
+                        ),
+                    ],
+                }
+                receipt_out_path.parent.mkdir(parents=True, exist_ok=True)
+                _write_json_file(receipt_out_path, blocked_receipt)
+            progress.emit_log(
+                kind="warn",
+                scope="render",
+                what="safe-render blocked",
+                why="Preflight gates blocked rendering for the selected target.",
+                where=[target],
+                confidence=1.0,
+                evidence={
+                    "codes": ["SAFE_RENDER.BLOCKED"],
+                    "ids": blocked_gates,
+                },
+            )
+            return 1
+
+        _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
+        plugins = load_plugins(plugins_dir)
+        detector_ids = [p.plugin_id for p in plugins if p.plugin_type == "detector"]
+        resolver_ids = [p.plugin_id for p in plugins if p.plugin_type == "resolver"]
+        renderer_ids = [p.plugin_id for p in plugins if p.plugin_type == "renderer"]
+        print(
+            f"safe-render: target={target}"
+            f" detectors={len(detector_ids)}"
+            f" resolvers={len(resolver_ids)}"
+            f" renderers={len(renderer_ids)}",
+            file=sys.stderr,
+        )
+        progress.advance(
+            phase="plugins",
+            what="plugins loaded",
+            why="Loaded detector, resolver, and renderer plugins for this target.",
+            where=[plugins_dir.resolve().as_posix()],
+            confidence=1.0,
+            evidence={
+                "codes": ["SAFE_RENDER.PLUGINS.LOADED"],
+                "metrics": [
+                    {"name": "detector_count", "value": float(len(detector_ids))},
+                    {"name": "resolver_count", "value": float(len(resolver_ids))},
+                    {"name": "renderer_count", "value": float(len(renderer_ids))},
+                ],
+            },
+        )
+
+        _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
+        run_detectors(report, plugins)
+        progress.advance(
+            phase="detect",
+            what="detectors completed",
+            why="Ran non-mutating analysis detectors to update report evidence.",
+            where=[target],
+            confidence=1.0,
+            evidence={"codes": ["SAFE_RENDER.DETECTORS.COMPLETED"]},
+        )
+
+        _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
+        run_resolvers(report, plugins)
+        progress.advance(
+            phase="resolve",
+            what="resolvers completed",
+            why="Produced advisory recommendations from detector findings.",
+            where=[target],
+            confidence=1.0,
+            evidence={"codes": ["SAFE_RENDER.RESOLVERS.COMPLETED"]},
+        )
+
+        _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
+        apply_gates_to_report(
+            report,
+            policy_path=ontology_dir() / "policies" / "gates.yaml",
+            profile_id=profile_id,
+            profiles_path=ontology_dir() / "policies" / "authority_profiles.yaml",
+        )
+
+        recommendations = report.get("recommendations")
+        recs: list[dict[str, Any]] = []
+        if isinstance(recommendations, list):
+            recs = [rec for rec in recommendations if isinstance(rec, dict)]
+
+        parsed_approve = _parse_approve_arg(approve)
+        approved_by_user_count = _apply_approve_overrides(recs, parsed_approve)
+        eligible = [rec for rec in recs if rec.get("eligible_render") is True]
+        blocked_summaries = _build_blocked_rec_summaries(recs)
+        blocked_count = len(blocked_summaries)
+
+        print(
+            f"safe-render:"
+            f" total_recommendations={len(recs)}"
+            f" eligible={len(eligible)}"
+            f" approved_by_user={approved_by_user_count}"
+            f" blocked={blocked_count}",
+            file=sys.stderr,
+        )
+        progress.advance(
+            phase="gates",
+            what="authority gates applied",
+            why="Classified recommendations into eligible and blocked sets.",
+            where=[target],
+            confidence=1.0,
+            evidence={
+                "codes": ["SAFE_RENDER.GATES.APPLIED"],
+                "metrics": [
+                    {"name": "recommendation_total", "value": float(len(recs))},
+                    {"name": "eligible_total", "value": float(len(eligible))},
+                    {"name": "blocked_total", "value": float(blocked_count)},
+                ],
+            },
+        )
+
+        approve_list: list[str] = (
+            [approve] if isinstance(approve, str) and approve
+            else sorted(parsed_approve) if isinstance(parsed_approve, set)
+            else []
+        )
+        receipt_id = _build_receipt_id(
+            _coerce_str(report.get("report_id")),
+            target,
+        )
+
+        if dry_run:
+            status = "blocked" if blocked_count > 0 and len(eligible) == 0 else "dry_run_only"
+            receipt: dict[str, Any] = {
+                "schema_version": "0.1.0",
+                "receipt_id": receipt_id,
+                "context": "safe_render",
+                "status": status,
+                "dry_run": True,
+                "target": target,
+                "profile_id": profile_id,
+                "approved_by": approve_list,
+                "recommendations_summary": {
+                    "total": len(recs),
+                    "auto_eligible": len(eligible) - approved_by_user_count,
+                    "approved_by_user": approved_by_user_count,
+                    "blocked": blocked_count,
+                },
+                "blocked_recommendations": blocked_summaries,
+                "renderer_manifests": [],
+                "qa_issues": [],
+                "notes": [
+                    "dry_run=true: no audio was written",
+                    f"target={target}",
+                    f"profile_id={profile_id}",
+                    (
+                        "layout_standard="
+                        f"{layout_standard} (channel ordering: "
+                        f"{'SMPTE/ITU-R default' if layout_standard == 'SMPTE' else 'Film/Cinema/Pro Tools'})"
+                    ),
+                ],
+            }
+            if receipt_out_path is not None:
+                receipt_out_path.parent.mkdir(parents=True, exist_ok=True)
+                _write_json_file(receipt_out_path, receipt)
+            if out_manifest_path is not None:
+                dry_manifest = {
+                    "schema_version": "0.1.0",
+                    "report_id": _coerce_str(report.get("report_id")),
+                    "renderer_manifests": [],
+                }
+                _validate_render_manifest(
+                    dry_manifest,
+                    schemas_dir() / "render_manifest.schema.json",
+                )
+                out_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+                out_manifest_path.write_text(
+                    json.dumps(dry_manifest, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+            progress.advance(
+                phase="dry_run",
+                what="dry-run receipt written",
+                why="Recorded bounded-authority results without writing audio.",
+                where=[
+                    receipt_out_path.resolve().as_posix()
+                    if receipt_out_path is not None
+                    else "safe_render.receipt.json"
+                ],
+                confidence=1.0,
+                evidence={"codes": ["SAFE_RENDER.DRY_RUN.COMPLETED"]},
+            )
+            print(
+                f"safe-render: dry-run complete"
+                f" (would apply {len(eligible)} recs, {blocked_count} blocked)",
+                file=sys.stderr,
+            )
+            return 0
+
+        if out_dir is None:
+            print(
+                "safe-render: --out-dir is required for full render (not --dry-run).",
                 file=sys.stderr,
             )
             return 1
 
-    # -- load inputs -----------------------------------------------------------
-    report = _load_report(report_path)
-    if run_config is not None:
-        normalized_run_config = normalize_run_config(run_config)
-        report["run_config"] = normalized_run_config
-        if routing_layout_ids_from_run_config(normalized_run_config) is not None:
-            apply_routing_plan_to_report(report, normalized_run_config)
-
-    # -- stage 1: build scene from validated session (mix-once, render-many) --
-    session_payload = report.get("session")
-    session_for_preflight: dict[str, Any] = {"profile_id": profile_id}
-    if isinstance(session_payload, dict):
-        # Carry source_layout_id into preflight session context
-        src_layout = session_payload.get("source_layout_id")
-        if not src_layout:
-            rc = report.get("run_config")
-            if isinstance(rc, dict):
-                src_layout = rc.get("source_layout_id")
-        if isinstance(src_layout, str) and src_layout.strip():
-            session_for_preflight["source_layout_id"] = src_layout.strip()
-        try:
-            preflight_scene = build_scene_from_session(session_payload)
-        except (ValueError, KeyError, TypeError):
-            preflight_scene = report  # safe fallback when session is incomplete
-        else:
-            # Augment scene with analysis data from report so preflight gates
-            # have full context: recommendations confidence, qa_issues, and any
-            # metadata the analysis pass produced (e.g. correlation, polarity).
-            report_recs = report.get("recommendations")
-            if isinstance(report_recs, list) and report_recs:
-                preflight_scene["recommendations"] = report_recs
-            report_qa = report.get("qa_issues")
-            if isinstance(report_qa, list) and report_qa:
-                preflight_scene["qa_issues"] = report_qa
-            # Merge report metadata (correlation, polarity_inverted) into scene.
-            report_meta = report.get("metadata")
-            if isinstance(report_meta, dict):
-                scene_meta = preflight_scene.setdefault("metadata", {})
-                for key in ("correlation", "polarity_inverted"):
-                    val = report_meta.get(key)
-                    if val is not None and key not in scene_meta:
-                        scene_meta[key] = val
-            # Compute effective confidence for preflight from report recommendations.
-            # If no confidence values exist in the report, default to 1.0 so that
-            # a scene built without metering data preserves the existing
-            # "no data → assume full confidence" semantics.
-            scene_meta = preflight_scene.setdefault("metadata", {})
-            if "confidence" not in scene_meta:
-                recs_for_conf = report.get("recommendations")
-                rec_scores = [
-                    float(r["confidence"])
-                    for r in (recs_for_conf if isinstance(recs_for_conf, list) else [])
-                    if isinstance(r, dict)
-                    and isinstance(r.get("confidence"), (int, float))
-                ]
-                report_meta_conf = (
-                    report_meta.get("confidence")
-                    if isinstance(report_meta, dict) else None
-                )
-                if isinstance(report_meta_conf, (int, float)):
-                    scene_meta["confidence"] = float(report_meta_conf)
-                elif rec_scores:
-                    scene_meta["confidence"] = sum(rec_scores) / len(rec_scores)
-                else:
-                    # No confidence data → assume full confidence (backward compat)
-                    scene_meta["confidence"] = 1.0
-    else:
-        preflight_scene = report
-
-    # -- stage 1a: preflight safety gates (no audio; fail-fast) ---------------
-    preflight_receipt = evaluate_preflight(
-        session=session_for_preflight,
-        scene=preflight_scene,
-        target_layout=target,
-        options={},
-        user_profile=user_profile,
-    )
-    _preflight_decision = preflight_receipt.get("final_decision", "pass")
-    print(
-        f"safe-render: preflight={_preflight_decision}"
-        f" target={target}",
-        file=sys.stderr,
-    )
-    if not dry_run and preflight_receipt_blocks(preflight_receipt):
-        blocked_gates = [
-            g["gate_id"]
-            for g in preflight_receipt.get("gates_evaluated", [])
-            if g.get("outcome") == "block"
-        ]
-        print(
-            f"safe-render: preflight BLOCKED by gates: {', '.join(blocked_gates)}",
-            file=sys.stderr,
+        _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
+        manifests = run_renderers(
+            report,
+            plugins,
+            output_dir=out_dir,
+            output_formats=output_formats,
         )
-        if receipt_out_path is not None:
-            block_receipt_id = _build_receipt_id(
-                _coerce_str(report.get("report_id")), target
+        deliverables = build_deliverables_for_renderer_manifests(manifests)
+        render_manifest = {
+            "schema_version": "0.1.0",
+            "report_id": _coerce_str(report.get("report_id")),
+            "renderer_manifests": manifests,
+        }
+        if deliverables:
+            render_manifest["deliverables"] = deliverables
+        _validate_render_manifest(
+            render_manifest,
+            schemas_dir() / "render_manifest.schema.json",
+        )
+        if out_manifest_path is not None:
+            out_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            out_manifest_path.write_text(
+                json.dumps(render_manifest, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
             )
-            blocked_receipt: dict[str, Any] = {
-                "schema_version": "0.1.0",
-                "receipt_id": block_receipt_id,
-                "context": "safe_render",
-                "status": "blocked",
-                "dry_run": False,
-                "target": target,
-                "profile_id": profile_id,
-                "approved_by": [],
-                "recommendations_summary": {
-                    "total": 0,
-                    "auto_eligible": 0,
-                    "approved_by_user": 0,
-                    "blocked": 0,
-                },
-                "blocked_recommendations": [],
-                "renderer_manifests": [],
-                "qa_issues": [],
-                "notes": [
-                    f"preflight_blocked=true",
-                    f"blocked_gates={', '.join(blocked_gates)}",
-                    f"target={target}",
-                    f"profile_id={profile_id}",
-                    f"layout_standard={layout_standard} (channel ordering: {'SMPTE/ITU-R default' if layout_standard == 'SMPTE' else 'Film/Cinema/Pro Tools'})",
+        output_count = sum(
+            len(m.get("outputs", []))
+            for m in manifests
+            if isinstance(m, dict)
+        )
+        progress.advance(
+            phase="render",
+            what="renderers completed",
+            why="Applied eligible actions and wrote deterministic render outputs.",
+            where=[out_dir.resolve().as_posix()],
+            confidence=1.0,
+            evidence={
+                "codes": ["SAFE_RENDER.RENDERERS.COMPLETED"],
+                "metrics": [{"name": "output_count", "value": float(output_count)}],
+            },
+        )
+
+        _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
+        qa_payload: dict[str, Any] = {}
+        qa_issues: list[dict[str, Any]] = []
+        if qa_out_path is not None or receipt_out_path is not None:
+            output_entries = _collect_output_entries_from_manifests(manifests, out_dir)
+            if output_entries:
+                qa_payload = build_safe_render_qa(output_entries=output_entries)
+                qa_issues = qa_payload.get("issues") or []
+            else:
+                qa_payload = {
+                    "schema_version": "0.1.0",
+                    "outputs": [],
+                    "issues": [],
+                    "thresholds": {},
+                }
+        if qa_out_path is not None:
+            qa_out_path.parent.mkdir(parents=True, exist_ok=True)
+            _write_json_file(qa_out_path, qa_payload)
+        qa_error_count = sum(
+            1
+            for iss in qa_issues
+            if isinstance(iss, dict) and _coerce_str(iss.get("severity")) == "error"
+        )
+        progress.advance(
+            phase="qa",
+            what="render QA completed",
+            why="Computed post-render QA metrics and issue severities.",
+            where=[
+                qa_out_path.resolve().as_posix()
+                if qa_out_path is not None
+                else "safe_render.qa"
+            ],
+            confidence=1.0,
+            evidence={
+                "codes": ["SAFE_RENDER.QA.COMPLETED"],
+                "metrics": [
+                    {"name": "qa_error_count", "value": float(qa_error_count)},
+                    {"name": "qa_warn_count", "value": float(len(qa_issues) - qa_error_count)},
                 ],
-            }
-            receipt_out_path.parent.mkdir(parents=True, exist_ok=True)
-            _write_json_file(receipt_out_path, blocked_receipt)
-        return 1
+            },
+        )
 
-    # -- load plugins ----------------------------------------------------------
-    plugins = load_plugins(plugins_dir)
-    detector_ids = [p.plugin_id for p in plugins if p.plugin_type == "detector"]
-    resolver_ids = [p.plugin_id for p in plugins if p.plugin_type == "resolver"]
-    renderer_ids = [p.plugin_id for p in plugins if p.plugin_type == "renderer"]
-    print(
-        f"safe-render: target={target}"
-        f" detectors={len(detector_ids)}"
-        f" resolvers={len(resolver_ids)}"
-        f" renderers={len(renderer_ids)}",
-        file=sys.stderr,
-    )
-
-    # -- stage 2: analysis / metering pass (detectors, no audio mutation) ------
-    run_detectors(report, plugins)
-
-    # -- stage 3: scene inference / resolve pass (advisory) -------------------
-    run_resolvers(report, plugins)
-
-    # -- stage 4: bounded authority gate --------------------------------------
-    apply_gates_to_report(
-        report,
-        policy_path=ontology_dir() / "policies" / "gates.yaml",
-        profile_id=profile_id,
-        profiles_path=ontology_dir() / "policies" / "authority_profiles.yaml",
-    )
-
-    recommendations = report.get("recommendations")
-    recs: list[dict[str, Any]] = []
-    if isinstance(recommendations, list):
-        recs = [rec for rec in recommendations if isinstance(rec, dict)]
-
-    # -- apply --approve overrides --------------------------------------------
-    parsed_approve = _parse_approve_arg(approve)
-    approved_by_user_count = _apply_approve_overrides(recs, parsed_approve)
-
-    auto_eligible = [
-        rec for rec in recs
-        if rec.get("eligible_render") is True
-        and not (rec.get("requires_approval") and rec.get("_approved_by_user"))
-    ]
-    eligible = [rec for rec in recs if rec.get("eligible_render") is True]
-    blocked_summaries = _build_blocked_rec_summaries(recs)
-    blocked_count = len(blocked_summaries)
-
-    print(
-        f"safe-render:"
-        f" total_recommendations={len(recs)}"
-        f" eligible={len(eligible)}"
-        f" approved_by_user={approved_by_user_count}"
-        f" blocked={blocked_count}",
-        file=sys.stderr,
-    )
-
-    approve_list: list[str] = (
-        [approve] if isinstance(approve, str) and approve
-        else sorted(parsed_approve) if isinstance(parsed_approve, set)
-        else []
-    )
-    receipt_id = _build_receipt_id(
-        _coerce_str(report.get("report_id")), target
-    )
-
-    # -- dry-run: write receipt only, no audio --------------------------------
-    if dry_run:
-        status = "blocked" if blocked_count > 0 and len(eligible) == 0 else "dry_run_only"
-        receipt: dict[str, Any] = {
+        receipt = {
             "schema_version": "0.1.0",
             "receipt_id": receipt_id,
             "context": "safe_render",
-            "status": status,
-            "dry_run": True,
+            "status": "completed",
+            "dry_run": False,
             "target": target,
             "profile_id": profile_id,
             "approved_by": approve_list,
             "recommendations_summary": {
                 "total": len(recs),
-                "auto_eligible": len(eligible) - approved_by_user_count,
+                "auto_eligible": max(0, len(eligible) - approved_by_user_count),
                 "approved_by_user": approved_by_user_count,
                 "blocked": blocked_count,
             },
             "blocked_recommendations": blocked_summaries,
-            "renderer_manifests": [],
-            "qa_issues": [],
+            "renderer_manifests": manifests,
+            "qa_issues": qa_issues,
             "notes": [
-                f"dry_run=true: no audio was written",
                 f"target={target}",
                 f"profile_id={profile_id}",
-                f"layout_standard={layout_standard} (channel ordering: {'SMPTE/ITU-R default' if layout_standard == 'SMPTE' else 'Film/Cinema/Pro Tools'})",
+                f"renderers={','.join(renderer_ids) if renderer_ids else '<none>'}",
+                (
+                    "layout_standard="
+                    f"{layout_standard} (channel ordering: "
+                    f"{'SMPTE/ITU-R default' if layout_standard == 'SMPTE' else 'Film/Cinema/Pro Tools'})"
+                ),
             ],
         }
         if receipt_out_path is not None:
             receipt_out_path.parent.mkdir(parents=True, exist_ok=True)
             _write_json_file(receipt_out_path, receipt)
-        if out_manifest_path is not None:
-            # Write an empty dry-run manifest
-            dry_manifest = {
-                "schema_version": "0.1.0",
-                "report_id": _coerce_str(report.get("report_id")),
-                "renderer_manifests": [],
-            }
-            _validate_render_manifest(
-                dry_manifest,
-                schemas_dir() / "render_manifest.schema.json",
-            )
-            out_manifest_path.parent.mkdir(parents=True, exist_ok=True)
-            out_manifest_path.write_text(
-                json.dumps(dry_manifest, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
+        progress.advance(
+            phase="receipt",
+            what="safe-render receipt written",
+            why="Persisted explainable render outcome and QA summary.",
+            where=[
+                receipt_out_path.resolve().as_posix()
+                if receipt_out_path is not None
+                else "safe_render.receipt.json"
+            ],
+            confidence=1.0,
+            evidence={"codes": ["SAFE_RENDER.RECEIPT.WRITTEN"]},
+        )
+
         print(
-            f"safe-render: dry-run complete"
-            f" (would apply {len(eligible)} recs, {blocked_count} blocked)",
+            f"safe-render: completed"
+            f" outputs={output_count}"
+            f" qa_errors={qa_error_count}"
+            f" qa_warns={len(qa_issues) - qa_error_count}",
             file=sys.stderr,
         )
         return 0
-
-    # -- stage 5: render pass (plugin renderers write audio) ------------------
-    if out_dir is None:
-        print(
-            "safe-render: --out-dir is required for full render (not --dry-run).",
-            file=sys.stderr,
-        )
-        return 1
-
-    manifests = run_renderers(
-        report,
-        plugins,
-        output_dir=out_dir,
-        output_formats=output_formats,
-    )
-    deliverables = build_deliverables_for_renderer_manifests(manifests)
-    render_manifest = {
-        "schema_version": "0.1.0",
-        "report_id": _coerce_str(report.get("report_id")),
-        "renderer_manifests": manifests,
-    }
-    if deliverables:
-        render_manifest["deliverables"] = deliverables
-    _validate_render_manifest(
-        render_manifest,
-        schemas_dir() / "render_manifest.schema.json",
-    )
-    if out_manifest_path is not None:
-        out_manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        out_manifest_path.write_text(
-            json.dumps(render_manifest, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-
-    # -- stage 6: post-render QA pass (spectral slopes + gates) ---------------
-    qa_payload: dict[str, Any] = {}
-    qa_issues: list[dict[str, Any]] = []
-    if qa_out_path is not None or receipt_out_path is not None:
-        output_entries = _collect_output_entries_from_manifests(manifests, out_dir)
-        if output_entries:
-            qa_payload = build_safe_render_qa(output_entries=output_entries)
-            qa_issues = qa_payload.get("issues") or []
-        else:
-            qa_payload = {
-                "schema_version": "0.1.0",
-                "outputs": [],
-                "issues": [],
-                "thresholds": {},
-            }
-
-    if qa_out_path is not None:
-        qa_out_path.parent.mkdir(parents=True, exist_ok=True)
-        _write_json_file(qa_out_path, qa_payload)
-
-    # -- stage 7: export pass (write safe-run receipt) ------------------------
-    status = "completed"
-    receipt = {
-        "schema_version": "0.1.0",
-        "receipt_id": receipt_id,
-        "context": "safe_render",
-        "status": status,
-        "dry_run": False,
-        "target": target,
-        "profile_id": profile_id,
-        "approved_by": approve_list,
-        "recommendations_summary": {
-            "total": len(recs),
-            "auto_eligible": max(0, len(eligible) - approved_by_user_count),
-            "approved_by_user": approved_by_user_count,
-            "blocked": blocked_count,
-        },
-        "blocked_recommendations": blocked_summaries,
-        "renderer_manifests": manifests,
-        "qa_issues": qa_issues,
-        "notes": [
-            f"target={target}",
-            f"profile_id={profile_id}",
-            f"renderers={','.join(renderer_ids) if renderer_ids else '<none>'}",
-            f"layout_standard={layout_standard} (channel ordering: {'SMPTE/ITU-R default' if layout_standard == 'SMPTE' else 'Film/Cinema/Pro Tools'})",
-        ],
-    }
-    if receipt_out_path is not None:
-        receipt_out_path.parent.mkdir(parents=True, exist_ok=True)
-        _write_json_file(receipt_out_path, receipt)
-
-    output_count = sum(
-        len(m.get("outputs", []))
-        for m in manifests
-        if isinstance(m, dict)
-    )
-    qa_error_count = sum(
-        1 for iss in qa_issues
-        if isinstance(iss, dict) and _coerce_str(iss.get("severity")) == "error"
-    )
-    print(
-        f"safe-render: completed"
-        f" outputs={output_count}"
-        f" qa_errors={qa_error_count}"
-        f" qa_warns={len(qa_issues) - qa_error_count}",
-        file=sys.stderr,
-    )
-    return 0
+    except CancelledError as exc:
+        print(f"safe-render: cancelled ({exc})", file=sys.stderr)
+        return 130
 
 
 # ---------------------------------------------------------------------------

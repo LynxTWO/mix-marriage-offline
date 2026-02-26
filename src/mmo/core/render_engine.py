@@ -32,6 +32,7 @@ from typing import Any
 
 from mmo.core.downmix import predict_fold_similarity, resolve_preflight_matrix
 from mmo.core.layout_negotiation import DEFAULT_CHANNEL_STANDARD
+from mmo.core.progress import CancelToken, CancelledError, ProgressTracker
 from mmo.core.render_contract import contracts_to_render_targets
 from mmo.core.render_plan import build_render_plan
 
@@ -75,6 +76,10 @@ def _normalize_options(options: dict[str, Any] | None) -> dict[str, Any]:
         "layout_standard": raw_standard or DEFAULT_CHANNEL_STANDARD,
         "stem_ids": sorted(str(s) for s in (options.get("stem_ids") or [])),
         "stem_max_workers": max(1, int(options.get("stem_max_workers") or 2)),
+        "progress_listener": options.get("progress_listener"),
+        "log_listener": options.get("log_listener"),
+        "cancel_token": options.get("cancel_token"),
+        "progress_tracker": options.get("progress_tracker"),
     }
 
 
@@ -208,6 +213,7 @@ def _execute_job(
     contract: dict[str, Any],
     source_layout_id: str | None,
     options: dict[str, Any],
+    cancel_token: CancelToken,
 ) -> dict[str, Any]:
     """Execute a single render job and return a result dict.
 
@@ -215,6 +221,7 @@ def _execute_job(
     In real mode, FFmpeg is invoked when available; the job degrades
     gracefully to ``skipped`` if FFmpeg is not found.
     """
+    cancel_token.raise_if_cancelled()
     dry_run = bool(options.get("dry_run", True))
 
     job_qa = _build_job_qa(
@@ -240,6 +247,7 @@ def _execute_job(
     # plugin chains receive the correct channel slot assignments.
     stem_ids: list[str] = list(options.get("stem_ids") or [])
     if stem_ids:
+        cancel_token.raise_if_cancelled()
         try:
             from mmo.core.dsp_dispatch import StemJob, dispatch_stems
 
@@ -263,9 +271,11 @@ def _execute_job(
             notes.append(f"stem_dispatch skipped: {exc}")
 
     if dry_run:
+        cancel_token.raise_if_cancelled()
         status = "skipped"
         notes.append("dry_run: audio render skipped.")
     else:
+        cancel_token.raise_if_cancelled()
         # Real rendering path: gracefully degrade when FFmpeg unavailable.
         try:
             from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
@@ -459,6 +469,32 @@ def render_scene_to_targets(
         raise ValueError("contracts must be a non-empty list.")
 
     opts = _normalize_options(options)
+    progress_tracker = opts.get("progress_tracker")
+    if isinstance(progress_tracker, ProgressTracker):
+        progress = progress_tracker
+        cancel_token = progress.cancel_token
+    else:
+        maybe_token = opts.get("cancel_token")
+        cancel_token = maybe_token if isinstance(maybe_token, CancelToken) else CancelToken()
+        progress = ProgressTracker(
+            total_steps=0,
+            cancel_token=cancel_token,
+            progress_listener=opts.get("progress_listener"),
+            log_listener=opts.get("log_listener"),
+        )
+
+    cancel_token.raise_if_cancelled()
+    progress.set_phase("plan")
+    progress.emit_log(
+        kind="info",
+        scope="render",
+        what="render planning started",
+        why="Building deterministic render jobs from scene + target contracts.",
+        where=[_coerce_str(scene.get("scene_path")).strip() or "scene.json"],
+        confidence=1.0,
+        evidence={"codes": ["RENDER.ENGINE.PLAN.STARTED"]},
+    )
+
     source_layout_id = _extract_source_layout_id(scene)
     contract_index = _build_contract_index(contracts)
 
@@ -488,41 +524,95 @@ def render_scene_to_targets(
         contexts=opts.get("contexts") or ["render"],
         policies=policies or None,
     )
+    plan_jobs: list[dict[str, Any]] = list(plan.get("jobs") or [])
+    progress.set_total_steps(len(plan_jobs) + 2)
+    progress.advance(
+        phase="plan",
+        what="render plan built",
+        why="Prepared deterministic per-target render jobs.",
+        where=[_coerce_str(plan.get("plan_path")).strip() or "render_plan.json"],
+        confidence=1.0,
+        evidence={
+            "codes": ["RENDER.ENGINE.PLAN.BUILT"],
+            "metrics": [{"name": "job_count", "value": float(len(plan_jobs))}],
+        },
+    )
 
     # Dispatch jobs — parallel when more than one job and max_workers > 1.
-    plan_jobs: list[dict[str, Any]] = list(plan.get("jobs") or [])
     max_workers: int = int(opts.get("max_workers") or _DEFAULT_MAX_WORKERS)
 
     def _run_job(plan_job: dict[str, Any]) -> dict[str, Any]:
+        cancel_token.raise_if_cancelled()
         job_id = _coerce_str(plan_job.get("job_id")).strip()
         target_id = _coerce_str(plan_job.get("target_id")).strip()
         contract = contract_index.get(target_id) or {}
-        return _execute_job(
+        progress.emit_log(
+            kind="action",
+            scope="render",
+            what=f"render job started: {job_id}",
+            why="Dispatching target contract through deterministic render execution.",
+            where=[job_id, target_id or "(unknown_target)"],
+            confidence=1.0,
+            evidence={"codes": ["RENDER.ENGINE.JOB.STARTED"]},
+        )
+        result = _execute_job(
             job_id=job_id,
             contract=contract,
             source_layout_id=source_layout_id,
             options=opts,
+            cancel_token=cancel_token,
         )
+        status = _coerce_str(result.get("status")).strip() or "unknown"
+        confidence = 1.0 if status in {"completed", "skipped"} else 0.0
+        progress.advance(
+            phase="execute",
+            what=f"render job completed: {job_id}",
+            why=f"Render job finished with status={status}.",
+            where=[job_id, target_id or "(unknown_target)"],
+            confidence=confidence,
+            evidence={
+                "codes": ["RENDER.ENGINE.JOB.COMPLETED"],
+                "notes": [f"status={status}"],
+            },
+        )
+        return result
 
     if max_workers <= 1 or len(plan_jobs) <= 1:
-        job_results: list[dict[str, Any]] = [_run_job(j) for j in plan_jobs]
+        job_results: list[dict[str, Any]] = []
+        for job in plan_jobs:
+            cancel_token.raise_if_cancelled()
+            job_results.append(_run_job(job))
     else:
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=max_workers
         ) as executor:
             futures = {executor.submit(_run_job, j): j for j in plan_jobs}
-            job_results = [
-                future.result()
-                for future in concurrent.futures.as_completed(futures)
-            ]
+            job_results = []
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    job_results.append(future.result())
+                except CancelledError:
+                    cancel_token.cancel("render engine cancelled")
+                    for pending in futures:
+                        pending.cancel()
+                    raise
 
     # Sort deterministically — as_completed order is non-deterministic.
     job_results.sort(key=lambda r: _coerce_str(r.get("job_id")))
 
-    return _build_render_report(
+    report = _build_render_report(
         scene=scene,
         contracts=contracts,
         plan=plan,
         job_results=job_results,
         options=opts,
     )
+    progress.advance(
+        phase="report",
+        what="render report assembled",
+        why="Collected job outcomes, policies, and QA gates into schema-valid payload.",
+        where=[_coerce_str(scene.get("scene_path")).strip() or "scene.json"],
+        confidence=1.0,
+        evidence={"codes": ["RENDER.ENGINE.REPORT.BUILT"]},
+    )
+    return report

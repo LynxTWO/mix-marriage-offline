@@ -146,6 +146,7 @@ class TestGuiSmoke(unittest.TestCase):
                 final_receipt_path=workspace / "receipt.final.json",
                 dry_manifest_path=workspace / "manifest.json",
                 final_manifest_path=workspace / "manifest.final.json",
+                cancel_token_path=workspace / "cancel.token",
             )
             _write_report(paths.report_path, stems_dir)
 
@@ -223,4 +224,3 @@ class TestGuiSmoke(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

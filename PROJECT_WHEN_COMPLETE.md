@@ -138,6 +138,8 @@ The project is “complete enough” when all items below are true.
 - [ ] Errors are actionable (tell the user what/why/where/how to fix).
 - [ ] Reports include: issues, actions taken, actions suggested, confidence, and evidence references.
 - [ ] A “dry-run” mode exists for suggestions without applying changes.
+- [x] `safe-render` supports live explainable progress logging (`what/why/where/confidence`)
+  and cooperative cancellation (`--cancel-file`) for CLI/GUI runs.
 - [ ] Preview/A-B audition is loudness-compensated by default (auto-gain for evaluation), and the report discloses the compensation used.
 - [ ] Presets (example: EQ vibe presets) can be initialized from measured stem features, and preset preview does not create surprise loudness jumps.
 - [ ] A “variant runner” can render multiple output variants (profiles/presets/targets) while reusing cached analysis artifacts keyed by content hash.

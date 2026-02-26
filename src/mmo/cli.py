@@ -1064,6 +1064,23 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     safe_render_parser.add_argument(
+        "--live-progress",
+        action="store_true",
+        default=False,
+        help=(
+            "Emit real-time explainable progress logs to stderr "
+            "(what/why/where/confidence + progress + ETA)."
+        ),
+    )
+    safe_render_parser.add_argument(
+        "--cancel-file",
+        default=None,
+        help=(
+            "Optional cancellation sentinel path. If the file exists during "
+            "safe-render execution, the run exits with code 130."
+        ),
+    )
+    safe_render_parser.add_argument(
         "--demo",
         action="store_true",
         default=False,
@@ -5601,6 +5618,12 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 render_many_targets=_render_many_targets,
                 layout_standard=_safe_render_layout_standard,
+                live_progress=bool(getattr(args, "live_progress", False)),
+                cancel_file=(
+                    Path(args.cancel_file)
+                    if getattr(args, "cancel_file", None)
+                    else None
+                ),
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)

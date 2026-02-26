@@ -17,12 +17,14 @@ from __future__ import annotations
 import json
 import unittest
 from pathlib import Path
+from typing import Any
 
 import jsonschema
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
 from mmo.core.render_contract import build_render_contract, contracts_to_render_targets
+from mmo.core.progress import CancelToken, CancelledError
 from mmo.core.render_engine import render_scene_to_targets
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -746,6 +748,44 @@ class TestRenderEngineRequestSummary(unittest.TestCase):
         self.assertEqual(
             report["request"].get("routing_plan_path"), "routing/plan.json"
         )
+
+
+class TestRenderEngineProgressAndCancel(unittest.TestCase):
+    def test_progress_and_log_callbacks_receive_updates(self) -> None:
+        scene = _make_scene(source_layout_id="LAYOUT.7_1_4")
+        contracts = [
+            _stereo_contract(source_layout_id="LAYOUT.7_1_4"),
+            _surround_51_contract(source_layout_id="LAYOUT.7_1_4"),
+        ]
+        snapshots: list[Any] = []
+        logs: list[Any] = []
+
+        report = render_scene_to_targets(
+            scene,
+            contracts,
+            {
+                "dry_run": True,
+                "progress_listener": snapshots.append,
+                "log_listener": logs.append,
+            },
+        )
+        self.assertEqual(len(report.get("jobs", [])), 2)
+        self.assertGreater(len(snapshots), 0)
+        self.assertGreater(len(logs), 0)
+        self.assertTrue(any(getattr(event, "what", "") for event in logs))
+        self.assertAlmostEqual(float(snapshots[-1].progress), 1.0, places=6)
+
+    def test_cancelled_token_raises_cancelled_error(self) -> None:
+        scene = _make_scene(source_layout_id="LAYOUT.2_0")
+        contracts = [_stereo_contract(source_layout_id="LAYOUT.2_0")]
+        token = CancelToken()
+        token.cancel("test cancellation")
+        with self.assertRaises(CancelledError):
+            render_scene_to_targets(
+                scene,
+                contracts,
+                {"dry_run": True, "cancel_token": token},
+            )
 
 
 if __name__ == "__main__":

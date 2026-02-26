@@ -75,6 +75,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Full determinism harness `tests/test_full_determinism.py` that asserts
   byte-stable safe-render + bundle artifacts for SMPTE and FILM on the new
   public fixture `fixtures/public_session/report.7_1_4.json`.
+- Thread-safe progress/cancel core (`src/mmo/core/progress.py`) with ETA snapshots
+  plus explainable live log events (`what/why/where/confidence`), integrated into
+  `render_engine`, `safe-render` CLI (`--live-progress`, `--cancel-file`), and the
+  CustomTkinter GUI (live progress bar + cancel button).
 
 ## [2026-02-17]
 
