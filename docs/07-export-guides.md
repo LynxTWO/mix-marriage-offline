@@ -181,29 +181,98 @@ For Dolby Atmos-style bed exports (5.1.2, 5.1.4, 7.1.2, 7.1.4), additional rules
 
 ### Channel ordering standards
 
-MMO supports two channel-ordering standards. The default for all file I/O is **SMPTE**.
+MMO supports five channel-ordering standards. The internal canonical is always **SMPTE**.
+All imports from other standards are remapped to SMPTE at the file boundary.
+All exports remap from SMPTE back to the target standard.
 
-**SMPTE / ITU-R (default)**
+| Standard   | Used by | Internal? |
+|------------|---------|-----------|
+| SMPTE      | WAV (WAVEFORMATEXTENSIBLE), FLAC, WavPack, FFmpeg, Dolby Atmos beds, Netflix delivery, DCP | **Yes — always** |
+| FILM       | Pro Tools internal tracks/metering, cinema dubbing stages, theatrical feature-film pipelines | No |
+| LOGIC_PRO  | Logic Pro bounces, DTS-native files, Apple ecosystem | No |
+| VST3       | Steinberg Cubase/Nuendo for 7.1+; follows SMPTE for ≤5.1 | No |
+| AAF        | AAF/OMF/XML interchange (ordering read from per-channel labels, not assumed) | No |
 
-The ordering used in WAV, FLAC, WavPack, FFmpeg, and most DAW exports:
+#### SMPTE / ITU-R BS.775 (default)
 
-| Layout | SMPTE order |
-|--------|-------------|
+| Layout | Channel order |
+|--------|---------------|
+| 2.0    | L R |
+| 2.1    | L R LFE |
 | 5.1    | L R C LFE Ls Rs |
 | 7.1    | L R C LFE Ls Rs Lrs Rrs |
+| 5.1.2  | L R C LFE Ls Rs TFL TFR |
+| 5.1.4  | L R C LFE Ls Rs TFL TFR TRL TRR |
+| 7.1.2  | L R C LFE Ls Rs Lrs Rrs TFL TFR |
 | 7.1.4  | L R C LFE Ls Rs Lrs Rrs TFL TFR TRL TRR |
 
 Verify 7.1.4 SMPTE: the first four channels must be L, R, C, LFE.
 
-**Film / Cinema / Pro Tools**
+#### Film / Cinema / Pro Tools
 
-The ordering used in most professional mixing rooms and cinema dubbing stages:
-
-| Layout | Film order |
-|--------|------------|
+| Layout | Channel order |
+|--------|---------------|
+| 2.0    | L R |
+| 2.1    | L R LFE |
 | 5.1    | L C R Ls Rs LFE |
 | 7.1    | L C R Ls Rs Lrs Rrs LFE |
+| 5.1.2  | L C R Ls Rs LFE TFL TFR |
+| 5.1.4  | L C R Ls Rs LFE TFL TFR TRL TRR |
+| 7.1.2  | L C R Ls Rs Lrs Rrs LFE TFL TFR |
 | 7.1.4  | L C R Ls Rs Lrs Rrs LFE TFL TFR TRL TRR |
+
+#### Logic Pro / DTS
+
+| Layout | Channel order |
+|--------|---------------|
+| 5.1    | L R Ls Rs C LFE |
+| 7.1    | L R Lrs Rrs Ls Rs C LFE |
+
+Logic Pro bounces a "5.1 WAV" without a channel mask — it is very likely in LOGIC_PRO order
+even if the header does not state it.
+
+#### Steinberg VST3 (Cubase / Nuendo) for 7.1+
+
+Follows SMPTE for ≤5.1. For 7.1+, rear surrounds (Lrs/Rrs) occupy slots 4-5 and side
+surrounds (Lss/Rss) occupy slots 6-7 — the reverse of SMPTE.
+
+| Layout | Channel order |
+|--------|---------------|
+| 7.1    | L R C LFE Lrs Rrs Lss Rss |
+| 7.1.4  | L R C LFE Lrs Rrs Lss Rss TFL TFR TRL TRR |
+
+#### AAF / OMF / XML interchange
+
+AAF containers carry explicit per-channel speaker labels or a channel mask.
+The ordering must be read from the metadata, not assumed.
+Use `--layout-standard AAF` when a layout was inferred from AAF metadata.
+
+### Specifying the layout standard on the CLI
+
+Pass `--layout-standard <STANDARD>` to any render or export command to declare the
+active ordering for file I/O. MMO will remap at the import/export boundary.
+
+```
+# Analyze stems in SMPTE order (default — no flag needed)
+PYTHONPATH=src python tools/analyze_stems.py /path/to/stems \
+  --out-report out.json --csv recall.csv
+
+# Analyze stems exported from Pro Tools (Film order)
+PYTHONPATH=src python tools/analyze_stems.py /path/to/stems \
+  --layout-standard FILM --out-report out.json --csv recall.csv
+
+# Analyze stems bounced from Logic Pro
+PYTHONPATH=src python tools/analyze_stems.py /path/to/stems \
+  --layout-standard LOGIC_PRO --out-report out.json --csv recall.csv
+
+# Analyze stems from a Cubase/Nuendo 7.1.4 session
+PYTHONPATH=src python tools/analyze_stems.py /path/to/stems \
+  --layout-standard VST3 --out-report out.json --csv recall.csv
+
+# Render conservative gain/trim recommendations — Film input, SMPTE output
+PYTHONPATH=src python tools/render_gain_trim.py /path/to/stems \
+  --report out.json --layout-standard FILM --out-dir rendered
+```
 
 If your project uses Film ordering, pass `--layout-standard FILM` to `mmo safe-render`
 so MMO generates the correct `channel_order` in the render contract and receipt.

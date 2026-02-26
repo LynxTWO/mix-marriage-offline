@@ -9,6 +9,7 @@ from mmo.exporters.pdf_report import export_report_pdf
 from mmo.exporters import pdf_report
 from mmo.exporters.pdf_utils import render_maybe_json
 from mmo.exporters.recall_sheet import export_recall_sheet
+from mmo.exporters import pdf_report as _pdf_report
 
 try:
     import reportlab  # noqa: F401
@@ -399,6 +400,7 @@ class TestRecallSheet(unittest.TestCase):
                 "target_layout_ids",
                 "profile_id",
                 "preflight_status",
+                "layout_standard",
             ],
         )
 
@@ -553,8 +555,8 @@ class TestRecallSheetContextFields(unittest.TestCase):
             out = Path(tmp) / "recall.csv"
             export_recall_sheet(report, out)
             rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
-        # 14 columns total
-        self.assertEqual(len(rows[0]), 14)
+        # 15 columns total (added layout_standard)
+        self.assertEqual(len(rows[0]), 15)
         data = rows[1]
         # scene_id col 9
         self.assertEqual(data[9], "")
@@ -566,6 +568,8 @@ class TestRecallSheetContextFields(unittest.TestCase):
         self.assertEqual(data[12], "PROFILE.ASSIST")
         # preflight_status col 13 — missing when no preflight
         self.assertEqual(data[13], "missing")
+        # layout_standard col 14 — empty when not provided
+        self.assertEqual(data[14], "")
 
     def test_scene_context_populated(self) -> None:
         report = self._minimal_report()
@@ -640,6 +644,203 @@ class TestRecallSheetContextFields(unittest.TestCase):
             export_recall_sheet(report, out_a, scene=scene, preflight=preflight, request=request)
             export_recall_sheet(report, out_b, scene=scene, preflight=preflight, request=request)
             self.assertEqual(out_a.read_bytes(), out_b.read_bytes())
+
+
+class TestRecallSheetLayoutStandard(unittest.TestCase):
+    """Tests for the layout_standard column in recall_sheet."""
+
+    def _minimal_report(self) -> dict:
+        return {
+            "issues": [
+                {
+                    "issue_id": "ISSUE.TEST",
+                    "severity": 50,
+                    "confidence": 0.7,
+                    "message": "test",
+                    "evidence": [{"evidence_id": "EVID.FILE.FORMAT", "value": "wav"}],
+                }
+            ],
+            "recommendations": [],
+        }
+
+    def test_layout_standard_column_empty_by_default(self) -> None:
+        report = self._minimal_report()
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out)
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        self.assertEqual(rows[0][-1], "layout_standard")
+        self.assertEqual(rows[1][-1], "")
+
+    def test_layout_standard_column_populated(self) -> None:
+        report = self._minimal_report()
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out, layout_standard="FILM")
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        self.assertEqual(rows[0][-1], "layout_standard")
+        self.assertEqual(rows[1][-1], "FILM")
+
+    def test_layout_standard_deterministic(self) -> None:
+        """Same inputs → byte-identical output regardless of layout_standard."""
+        report = self._minimal_report()
+        with tempfile.TemporaryDirectory() as tmp:
+            out_a = Path(tmp) / "a.csv"
+            out_b = Path(tmp) / "b.csv"
+            export_recall_sheet(report, out_a, layout_standard="SMPTE")
+            export_recall_sheet(report, out_b, layout_standard="SMPTE")
+            self.assertEqual(out_a.read_bytes(), out_b.read_bytes())
+
+
+class TestPdfReportLayoutFeatures(unittest.TestCase):
+    """Tests for layout_standard, scene, preflight, and height-bed notes in PDF report."""
+
+    def _load_report(self) -> dict:
+        path = Path("fixtures/export/report_small.json")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_speaker_layout_summary_table_known_layout(self) -> None:
+        tbl = _pdf_report._speaker_layout_summary_table("LAYOUT.5_1", "SMPTE")
+        # Returns None only when reportlab is absent; otherwise a Table or None from preset
+        # We just verify it doesn't raise and the function is callable.
+        # (Table object cannot be inspected without reportlab)
+        try:
+            import reportlab  # noqa: F401
+            self.assertIsNotNone(tbl)
+        except ImportError:
+            pass  # reportlab absent; function still must not raise
+
+    def test_speaker_layout_summary_table_unknown_layout(self) -> None:
+        tbl = _pdf_report._speaker_layout_summary_table("LAYOUT.UNKNOWN", "SMPTE")
+        self.assertIsNone(tbl)
+
+    def test_speaker_layout_summary_table_empty_args(self) -> None:
+        self.assertIsNone(_pdf_report._speaker_layout_summary_table("", "SMPTE"))
+        self.assertIsNone(_pdf_report._speaker_layout_summary_table("LAYOUT.5_1", ""))
+
+    def test_scene_diagram_lines_with_objects(self) -> None:
+        scene = {
+            "scene_id": "SCENE.DRAFT.test",
+            "objects": [
+                {"object_id": "OBJ.001", "role_id": "ROLE.DRUMS.KICK"},
+                {"object_id": "OBJ.002", "role_id": "ROLE.BASS.DI", "layout_id": "LAYOUT.STEREO"},
+            ],
+            "beds": [],
+        }
+        lines = _pdf_report._scene_diagram_lines(scene)
+        self.assertTrue(any("SCENE.DRAFT.test" in line for line in lines))
+        self.assertTrue(any("OBJ.001" in line for line in lines))
+        self.assertTrue(any("ROLE.DRUMS.KICK" in line for line in lines))
+        self.assertTrue(any("LAYOUT.STEREO" in line for line in lines))
+
+    def test_scene_diagram_lines_empty(self) -> None:
+        lines = _pdf_report._scene_diagram_lines({})
+        self.assertTrue(lines[0].startswith("Scene:"))
+        self.assertTrue(any("Objects" in line for line in lines))
+        self.assertEqual(_pdf_report._scene_diagram_lines(None), [])  # type: ignore[arg-type]
+
+    def test_preflight_gate_table_no_data_returns_none(self) -> None:
+        result = _pdf_report._preflight_gate_table({"checks": [], "issues": []})
+        self.assertIsNone(result)
+
+    def test_preflight_gate_table_with_issues(self) -> None:
+        preflight = {
+            "checks": [],
+            "issues": [
+                {
+                    "issue_id": "ISSUE.RENDER.PREFLIGHT.INPUT_MISSING",
+                    "severity": "error",
+                    "message": "Input path does not exist.",
+                }
+            ],
+        }
+        try:
+            import reportlab  # noqa: F401
+            tbl = _pdf_report._preflight_gate_table(preflight)
+            self.assertIsNotNone(tbl)
+        except ImportError:
+            pass  # cannot build Table without reportlab
+
+    def test_height_bed_notes_immersive_source(self) -> None:
+        downmix_qa = {
+            "log": json.dumps(
+                {
+                    "source_layout_id": "LAYOUT.7_1_4",
+                    "target_layout_id": "LAYOUT.2_0",
+                }
+            )
+        }
+        notes = _pdf_report._height_bed_notes(downmix_qa)
+        self.assertEqual(len(notes), 2)
+        self.assertIn("LAYOUT.7_1_4", notes[0])
+        self.assertIn("LAYOUT.2_0", notes[0])
+        self.assertIn("-6 dB", notes[0])
+        self.assertIn("-12 dBFS", notes[1])
+
+    def test_height_bed_notes_stereo_source_empty(self) -> None:
+        downmix_qa = {
+            "log": json.dumps(
+                {
+                    "source_layout_id": "LAYOUT.2_0",
+                    "target_layout_id": "LAYOUT.2_0",
+                }
+            )
+        }
+        notes = _pdf_report._height_bed_notes(downmix_qa)
+        self.assertEqual(notes, [])
+
+    def test_height_bed_notes_missing_layout_empty(self) -> None:
+        notes = _pdf_report._height_bed_notes({})
+        self.assertEqual(notes, [])
+
+    def test_export_report_pdf_with_layout_standard(self) -> None:
+        if not self._has_reportlab():
+            self.skipTest("reportlab not installed")
+        report = self._load_report()
+        # Add a stem with layout_id so the speaker layout table is triggered
+        report["session"] = {
+            "stems": [
+                {
+                    "stem_id": "drums",
+                    "layout_id": "LAYOUT.5_1",
+                    "file_path": "drums.wav",
+                    "measurements": [],
+                }
+            ]
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "report.pdf"
+            export_report_pdf(report, out, layout_standard="SMPTE")
+            self.assertTrue(out.exists())
+            self.assertGreater(out.stat().st_size, 0)
+
+    def test_export_report_pdf_with_scene_and_preflight(self) -> None:
+        if not self._has_reportlab():
+            self.skipTest("reportlab not installed")
+        report = self._load_report()
+        scene = {
+            "scene_id": "SCENE.DRAFT.test001",
+            "objects": [{"object_id": "OBJ.001", "role_id": "ROLE.DRUMS.KICK"}],
+            "beds": [],
+        }
+        preflight = {
+            "plan_id": "PLAN.test.001",
+            "checks": [],
+            "issues": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "report.pdf"
+            export_report_pdf(report, out, scene=scene, preflight=preflight)
+            self.assertTrue(out.exists())
+            self.assertGreater(out.stat().st_size, 0)
+
+    @staticmethod
+    def _has_reportlab() -> bool:
+        try:
+            import reportlab  # noqa: F401
+            return True
+        except ImportError:
+            return False
 
 
 if __name__ == "__main__":

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from mmo.core.gates import load_gates_policy
+from mmo.core.speaker_layout import get_preset
 from mmo.exporters.pdf_utils import render_maybe_json, truncate_value
 
 try:
@@ -601,6 +602,131 @@ def _vibe_signals_lines(vibe_signals: Dict[str, Any]) -> List[str]:
     return lines
 
 
+def _speaker_layout_summary_table(layout_id: str, standard_str: str) -> "Table | None":
+    """Build a per-slot channel table for layout_id × standard_str."""
+    if not layout_id or not standard_str:
+        return None
+    layout = get_preset(layout_id, standard_str)
+    if layout is None:
+        return None
+    header = ["slot", "SPK_id", "position", "lfe", "height"]
+    rows: List[List[str]] = [header]
+    height_slots_set = set(layout.height_slots)
+    for i, pos in enumerate(layout.channel_order):
+        rows.append([
+            str(i),
+            pos.value,
+            pos.name,
+            "yes" if layout.is_lfe_channel(i) else "",
+            "yes" if i in height_slots_set else "",
+        ])
+    table = Table(rows, repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return table
+
+
+def _scene_diagram_lines(scene: Dict[str, Any]) -> List[str]:
+    """Text lines representing the scene objects and beds."""
+    if not isinstance(scene, dict):
+        return []
+    scene_id = _safe_str(scene.get("scene_id"))
+    objects = scene.get("objects", [])
+    beds = scene.get("beds", [])
+    lines: List[str] = [f"Scene: {scene_id}"]
+    if isinstance(objects, list):
+        lines.append(f"Objects: {len(objects)}")
+        for obj in sorted(
+            (o for o in objects if isinstance(o, dict)),
+            key=lambda o: str(o.get("object_id", "")),
+        ):
+            obj_id = _safe_str(obj.get("object_id", ""))
+            role_id = _safe_str(obj.get("role_id", ""))
+            layout_id = _safe_str(obj.get("layout_id", ""))
+            entry = f"  {obj_id}  {role_id}"
+            if layout_id:
+                entry += f"  [{layout_id}]"
+            lines.append(entry)
+    if isinstance(beds, list) and beds:
+        lines.append(f"Beds: {len(beds)}")
+        for bed in sorted(
+            (b for b in beds if isinstance(b, dict)),
+            key=lambda b: str(b.get("bed_id", "")),
+        ):
+            bed_id = _safe_str(bed.get("bed_id", ""))
+            layout_id = _safe_str(bed.get("layout_id", ""))
+            lines.append(f"  {bed_id}  layout={layout_id}")
+    return lines
+
+
+def _preflight_gate_table(preflight: Dict[str, Any]) -> "Table | None":
+    """Table of preflight checks + issues."""
+    if not isinstance(preflight, dict):
+        return None
+    checks = preflight.get("checks", [])
+    issues = preflight.get("issues", [])
+    rows: List[List[str]] = [["id", "severity", "message"]]
+    if isinstance(checks, list):
+        for check in sorted(
+            (c for c in checks if isinstance(c, dict)),
+            key=lambda c: str(c.get("check_id", "")),
+        ):
+            rows.append([
+                _safe_str(check.get("check_id")),
+                _safe_str(check.get("outcome", check.get("severity", ""))),
+                _safe_str(check.get("message")),
+            ])
+    if isinstance(issues, list):
+        for issue in sorted(
+            (i for i in issues if isinstance(i, dict)),
+            key=lambda i: str(i.get("issue_id", "")),
+        ):
+            rows.append([
+                _safe_str(issue.get("issue_id")),
+                _safe_str(issue.get("severity")),
+                _safe_str(issue.get("message")),
+            ])
+    if len(rows) == 1:
+        return None
+    table = Table(rows, repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    return table
+
+
+def _height_bed_notes(downmix_qa: Dict[str, Any]) -> List[str]:
+    """Advisory notes about height-bed fold when source is an immersive layout."""
+    log_payload = _downmix_qa_log_payload(downmix_qa)
+    source_layout_id = _safe_str(log_payload.get("source_layout_id"))
+    target_layout_id = _safe_str(log_payload.get("target_layout_id"))
+    if not source_layout_id or not target_layout_id:
+        return []
+    _immersive = {"LAYOUT.5_1_2", "LAYOUT.5_1_4", "LAYOUT.7_1_2", "LAYOUT.7_1_4"}
+    if source_layout_id not in _immersive:
+        return []
+    return [
+        (
+            f"Height-bed fold: {source_layout_id} \u2192 {target_layout_id}. "
+            "MMO applies -6 dB height-to-bed fold (POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0)."
+        ),
+        "Height guidance: keep TFL/TFR/TBL/TBR content below -12 dBFS RMS.",
+    ]
+
+
 def _compare_table(rows: List[List[str]]) -> Table:
     table = Table(rows, repeatRows=1)
     table.setStyle(
@@ -836,6 +962,9 @@ def export_report_pdf(
     include_measurements: bool = True,
     include_gates: bool = True,
     truncate_values: int = 200,
+    layout_standard: Optional[str] = None,
+    scene: Optional[Dict[str, Any]] = None,
+    preflight: Optional[Dict[str, Any]] = None,
 ) -> None:
     if SimpleDocTemplate is None:
         raise RuntimeError("reportlab is required for PDF export")
@@ -854,7 +983,37 @@ def export_report_pdf(
     profile_id = _safe_str(report.get("profile_id"))
     if profile_id:
         story.append(Paragraph(f"Authority profile: {profile_id}", styles["Normal"]))
+    if layout_standard:
+        story.append(
+            Paragraph(
+                f"Layout standard: {layout_standard} (internal canonical: SMPTE)",
+                styles["Normal"],
+            )
+        )
     story.append(Spacer(1, 12))
+
+    # Speaker layout summary table — show channel order for first stem layout × standard.
+    session_for_layout = report.get("session", {})
+    stems_for_layout = session_for_layout.get("stems", []) if isinstance(session_for_layout, dict) else []
+    first_layout_id = ""
+    for _s in stems_for_layout:
+        if isinstance(_s, dict) and _s.get("layout_id"):
+            first_layout_id = _safe_str(_s["layout_id"])
+            break
+    if first_layout_id and layout_standard:
+        layout_tbl = _speaker_layout_summary_table(first_layout_id, layout_standard)
+        if layout_tbl is not None:
+            story.append(Paragraph("Speaker Layout", styles["Heading2"]))
+            story.append(Spacer(1, 6))
+            story.append(
+                Paragraph(
+                    f"layout_id: {first_layout_id}  |  standard: {layout_standard}",
+                    styles["Normal"],
+                )
+            )
+            story.append(Spacer(1, 6))
+            story.append(layout_tbl)
+            story.append(Spacer(1, 12))
 
     issues = report.get("issues", [])
     if isinstance(issues, list) and issues:
@@ -918,6 +1077,29 @@ def export_report_pdf(
             )
         )
 
+    # Scene diagram
+    if isinstance(scene, dict):
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Scene", styles["Heading2"]))
+        story.append(Spacer(1, 6))
+        for line in _scene_diagram_lines(scene):
+            story.append(Paragraph(line, styles["Normal"]))
+
+    # Preflight gate table
+    if isinstance(preflight, dict):
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Preflight", styles["Heading2"]))
+        story.append(Spacer(1, 6))
+        plan_id = _safe_str(preflight.get("plan_id"))
+        if plan_id:
+            story.append(Paragraph(f"plan_id: {plan_id}", styles["Normal"]))
+        pf_table = _preflight_gate_table(preflight)
+        if pf_table is not None:
+            story.append(Spacer(1, 6))
+            story.append(pf_table)
+        else:
+            story.append(Paragraph("No preflight checks or issues recorded.", styles["Normal"]))
+
     mix_complexity = report.get("mix_complexity")
     if isinstance(mix_complexity, dict):
         density_mean = _safe_str(mix_complexity.get("density_mean"))
@@ -978,6 +1160,9 @@ def export_report_pdf(
         if thresholds_line:
             story.append(Paragraph(thresholds_line, styles["Normal"]))
         story.append(Paragraph(_downmix_qa_provenance_line(), styles["Normal"]))
+        if has_downmix_qa:
+            for note in _height_bed_notes(downmix_qa):
+                story.append(Paragraph(note, styles["Normal"]))
         next_checks = _downmix_qa_next_checks(report)
         if next_checks:
             story.append(Spacer(1, 6))

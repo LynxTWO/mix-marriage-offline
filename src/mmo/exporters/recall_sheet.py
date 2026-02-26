@@ -143,6 +143,7 @@ def export_recall_sheet(
     preflight: Optional[Dict[str, Any]] = None,
     profile_id: Optional[str] = None,
     request: Optional[Dict[str, Any]] = None,
+    layout_standard: Optional[str] = None,
 ) -> None:
     """Write an issue-centric recall sheet CSV to *out_path*.
 
@@ -150,7 +151,7 @@ def export_recall_sheet(
                   target_scope, target_id, evidence_summary, action_ids
     Context columns (always emitted; empty when context not provided):
                   scene_id, scene_object_count, target_layout_ids,
-                  profile_id, preflight_status
+                  profile_id, preflight_status, layout_standard
 
     Rows sorted by severity DESC, confidence DESC, issue_id ASC.
     """
@@ -170,6 +171,7 @@ def export_recall_sheet(
     ctx_layout_ids = _extract_target_layout_ids(request)
     ctx_profile_id = _extract_profile_id(profile_id, report)
     ctx_preflight_status = _extract_preflight_status(preflight)
+    ctx_layout_standard = layout_standard.strip() if isinstance(layout_standard, str) and layout_standard.strip() else ""
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -191,6 +193,7 @@ def export_recall_sheet(
                 "target_layout_ids",
                 "profile_id",
                 "preflight_status",
+                "layout_standard",
             ]
         )
         for rank, issue in enumerate(sorted_issues, start=1):
@@ -212,5 +215,6 @@ def export_recall_sheet(
                     ctx_layout_ids,
                     ctx_profile_id,
                     ctx_preflight_status,
+                    ctx_layout_standard,
                 ]
             )
