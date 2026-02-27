@@ -4,6 +4,13 @@ import {
   formatAuditionCompensationReceipt,
   resolveAuditionLoudnessDb,
 } from "/lib/audition_loudness.mjs";
+import {
+  buildWaveformProfile,
+  computeChannelRms,
+  formatPeakDbfs,
+  meterLevelFromDbfs,
+  rmsToDbfs,
+} from "/lib/headphone_preview_meter.mjs";
 
 const discoverButton = document.getElementById("discover-button");
 const doctorButton = document.getElementById("doctor-button");
@@ -39,6 +46,7 @@ const auditionInputSlotSelect = document.getElementById("audition-input-slot-sel
 const auditionOutputSlotSelect = document.getElementById("audition-output-slot-select");
 const auditionPlayInputButton = document.getElementById("audition-play-input-button");
 const auditionPlayOutputButton = document.getElementById("audition-play-output-button");
+const previewHeadphonesButton = document.getElementById("preview-headphones-button");
 const auditionInputSha = document.getElementById("audition-input-sha");
 const auditionOutputSha = document.getElementById("audition-output-sha");
 const auditionAudio = document.getElementById("audition-audio");
@@ -46,6 +54,11 @@ const auditionLoudnessMatchLabel = document.getElementById("audition-loudness-ma
 const auditionLoudnessMatchToggle = document.getElementById("audition-loudness-match-toggle");
 const auditionLoudnessReceipt = document.getElementById("audition-loudness-receipt");
 const auditionStatus = document.getElementById("audition-status");
+const headphonePreviewVisual = document.getElementById("headphone-preview-visual");
+const headphonePreviewWaveform = document.getElementById("headphone-preview-waveform");
+const headphonePreviewPeak = document.getElementById("headphone-preview-peak");
+const headphonePreviewMeterLeft = document.getElementById("headphone-preview-meter-left");
+const headphonePreviewMeterRight = document.getElementById("headphone-preview-meter-right");
 
 const projectDirInput = document.getElementById("project-dir-input");
 const stemsRootInput = document.getElementById("stems-root-input");
@@ -95,9 +108,15 @@ const state = {
   },
 };
 const AUDITION_ALLOW_BOOST = false;
+const HEADPHONE_PREVIEW_BAR_COUNT = 28;
 let auditionAudioContext = null;
 let auditionAudioGainNode = null;
 let auditionAudioSourceNode = null;
+let auditionAnalyserLeft = null;
+let auditionAnalyserRight = null;
+let auditionAnalyserDataLeft = null;
+let auditionAnalyserDataRight = null;
+let headphonePreviewAnimationFrame = 0;
 
 function normalizePath(value) {
   if (typeof value !== "string") {
@@ -1134,6 +1153,107 @@ function _renderAuditionLoudnessToggle({ disabled } = { disabled: false }) {
   }
 }
 
+function _ensureHeadphonePreviewBars() {
+  if (!headphonePreviewWaveform) {
+    return [];
+  }
+  if (headphonePreviewWaveform.childElementCount === 0) {
+    for (let index = 0; index < HEADPHONE_PREVIEW_BAR_COUNT; index += 1) {
+      const bar = document.createElement("span");
+      bar.className = "headphone-preview-wave-bar";
+      headphonePreviewWaveform.appendChild(bar);
+    }
+  }
+  return Array.from(headphonePreviewWaveform.children);
+}
+
+function _setHeadphonePreviewActive(active) {
+  if (!headphonePreviewVisual) {
+    return;
+  }
+  headphonePreviewVisual.classList.toggle("is-active", Boolean(active));
+}
+
+function _renderHeadphonePreviewFrame(leftLevel, rightLevel, peakDbfs) {
+  const safeLeft = Math.max(0, Math.min(1, Number.isFinite(leftLevel) ? leftLevel : 0));
+  const safeRight = Math.max(0, Math.min(1, Number.isFinite(rightLevel) ? rightLevel : 0));
+  if (headphonePreviewMeterLeft) {
+    headphonePreviewMeterLeft.style.width = `${(safeLeft * 100).toFixed(1)}%`;
+  }
+  if (headphonePreviewMeterRight) {
+    headphonePreviewMeterRight.style.width = `${(safeRight * 100).toFixed(1)}%`;
+  }
+  if (headphonePreviewPeak) {
+    headphonePreviewPeak.textContent = formatPeakDbfs(peakDbfs);
+  }
+  const bars = _ensureHeadphonePreviewBars();
+  if (bars.length === 0) {
+    return;
+  }
+  const profile = buildWaveformProfile({
+    leftLevel: safeLeft,
+    rightLevel: safeRight,
+    timeSeconds: auditionAudio?.currentTime || 0,
+    barCount: bars.length,
+  });
+  for (let index = 0; index < bars.length; index += 1) {
+    const bar = bars[index];
+    const height = profile[index] ?? 0.1;
+    bar.style.transform = `scaleY(${height.toFixed(4)})`;
+    bar.style.opacity = (0.3 + (height * 0.68)).toFixed(3);
+  }
+}
+
+function _renderHeadphonePreviewIdle() {
+  _renderHeadphonePreviewFrame(0, 0, Number.NEGATIVE_INFINITY);
+}
+
+function _stopHeadphonePreviewAnimation() {
+  if (headphonePreviewAnimationFrame && typeof window !== "undefined") {
+    window.cancelAnimationFrame(headphonePreviewAnimationFrame);
+  }
+  headphonePreviewAnimationFrame = 0;
+  _setHeadphonePreviewActive(false);
+}
+
+function _headphonePreviewTick() {
+  if (!auditionAudio || auditionAudio.paused || auditionAudio.ended) {
+    _stopHeadphonePreviewAnimation();
+    _renderHeadphonePreviewIdle();
+    return;
+  }
+  let leftLevel = 0;
+  let rightLevel = 0;
+  let peakDbfs = Number.NEGATIVE_INFINITY;
+  if (
+    auditionAnalyserLeft
+    && auditionAnalyserRight
+    && auditionAnalyserDataLeft
+    && auditionAnalyserDataRight
+  ) {
+    auditionAnalyserLeft.getFloatTimeDomainData(auditionAnalyserDataLeft);
+    auditionAnalyserRight.getFloatTimeDomainData(auditionAnalyserDataRight);
+    const leftDbfs = rmsToDbfs(computeChannelRms(auditionAnalyserDataLeft));
+    const rightDbfs = rmsToDbfs(computeChannelRms(auditionAnalyserDataRight));
+    leftLevel = meterLevelFromDbfs(leftDbfs);
+    rightLevel = meterLevelFromDbfs(rightDbfs);
+    peakDbfs = Math.max(leftDbfs, rightDbfs);
+  }
+  _renderHeadphonePreviewFrame(leftLevel, rightLevel, peakDbfs);
+  if (typeof window === "undefined") {
+    return;
+  }
+  headphonePreviewAnimationFrame = window.requestAnimationFrame(_headphonePreviewTick);
+}
+
+function _startHeadphonePreviewAnimation() {
+  if (typeof window === "undefined" || headphonePreviewAnimationFrame) {
+    return;
+  }
+  _setHeadphonePreviewActive(true);
+  headphonePreviewAnimationFrame = window.requestAnimationFrame(_headphonePreviewTick);
+}
+
 function _audioContextConstructor() {
   if (typeof window === "undefined") {
     return null;
@@ -1163,6 +1283,18 @@ async function _ensureAuditionGainNode() {
     auditionAudioGainNode = auditionAudioContext.createGain();
     auditionAudioSourceNode.connect(auditionAudioGainNode);
     auditionAudioGainNode.connect(auditionAudioContext.destination);
+  }
+  if (!auditionAnalyserLeft || !auditionAnalyserRight) {
+    const splitter = auditionAudioContext.createChannelSplitter(2);
+    auditionAnalyserLeft = auditionAudioContext.createAnalyser();
+    auditionAnalyserRight = auditionAudioContext.createAnalyser();
+    auditionAnalyserLeft.fftSize = 1024;
+    auditionAnalyserRight.fftSize = 1024;
+    auditionAnalyserDataLeft = new Float32Array(auditionAnalyserLeft.fftSize);
+    auditionAnalyserDataRight = new Float32Array(auditionAnalyserRight.fftSize);
+    auditionAudioGainNode.connect(splitter);
+    splitter.connect(auditionAnalyserLeft, 0);
+    splitter.connect(auditionAnalyserRight, 1);
   }
   if (auditionAudioContext.state === "suspended") {
     try {
@@ -1250,11 +1382,16 @@ function _renderAuditionPanel() {
     auditionOutputSlotSelect.disabled = true;
     auditionPlayInputButton.disabled = true;
     auditionPlayOutputButton.disabled = true;
+    if (previewHeadphonesButton) {
+      previewHeadphonesButton.disabled = true;
+    }
     auditionInputSha.textContent = "sha256: -";
     auditionOutputSha.textContent = "sha256: -";
     _renderAuditionLoudnessToggle({ disabled: true });
     _setAuditionReceipt("Loudness match unavailable: no render_execute jobs.");
     state.audition.activeStream = "";
+    _stopHeadphonePreviewAnimation();
+    _renderHeadphonePreviewIdle();
     _setAuditionStatus("No render_execute jobs available for audition.");
     return;
   }
@@ -1307,6 +1444,9 @@ function _renderAuditionPanel() {
   auditionOutputSlotSelect.disabled = outputPointers.length === 0;
   auditionPlayInputButton.disabled = inputPointers.length === 0;
   auditionPlayOutputButton.disabled = outputPointers.length === 0;
+  if (previewHeadphonesButton) {
+    previewHeadphonesButton.disabled = outputPointers.length === 0;
+  }
 
   const selectedInput = _selectedPointerOrNull(selectedJob, "input", state.audition.inputSlot);
   const selectedOutput = _selectedPointerOrNull(selectedJob, "output", state.audition.outputSlot);
@@ -1350,6 +1490,11 @@ async function _playAudition(streamKind) {
   } catch {
     _setAuditionStatus(`Loaded ${label}; press play on the audio controls if autoplay was blocked.`);
   }
+}
+
+async function _playHeadphonePreview() {
+  await _playAudition("output");
+  _setAuditionStatus(`Preview on Headphones: ${state.audition.jobId}`);
 }
 
 function _renderTimelineEntries() {
@@ -2722,6 +2867,37 @@ if (auditionPlayOutputButton) {
   });
 }
 
+if (previewHeadphonesButton) {
+  previewHeadphonesButton.addEventListener("click", async () => {
+    try {
+      await _playHeadphonePreview();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      _setAuditionStatus(message);
+      setStatus(message);
+    }
+  });
+}
+
+if (auditionAudio) {
+  auditionAudio.addEventListener("play", () => {
+    void _ensureAuditionGainNode();
+    _startHeadphonePreviewAnimation();
+  });
+  auditionAudio.addEventListener("pause", () => {
+    _stopHeadphonePreviewAnimation();
+    _renderHeadphonePreviewIdle();
+  });
+  auditionAudio.addEventListener("ended", () => {
+    _stopHeadphonePreviewAnimation();
+    _renderHeadphonePreviewIdle();
+  });
+  auditionAudio.addEventListener("emptied", () => {
+    _stopHeadphonePreviewAnimation();
+    _renderHeadphonePreviewIdle();
+  });
+}
+
 if (maxTheoreticalQualityToggle) {
   maxTheoreticalQualityToggle.addEventListener("change", () => {
     state.renderRequestIntent.max_theoretical_quality = maxTheoreticalQualityToggle.checked;
@@ -2760,4 +2936,5 @@ renderRenderArtifactsViewer();
 _syncMaxTheoreticalQualityToggle();
 _renderFineModeIndicator();
 _refreshFineSteps();
+_renderHeadphonePreviewIdle();
 setStatus("Ready. Start with rpc.discover.");

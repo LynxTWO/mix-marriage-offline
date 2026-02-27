@@ -8,7 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- No unreleased entries yet.
+- Artistic headphone preview UX polish in `mmo-gui`:
+  - Added a dedicated `Preview on Headphones` control in the Audition panel.
+  - Added deterministic pulsing waveform visualization and warm analog L/R metering
+    driven by live audio analyser data.
+  - Added deterministic screenshot assets:
+    `docs/screenshots/preview_headphones_desktop.svg` and
+    `docs/screenshots/preview_headphones_mobile.svg`.
+- Binaural preview renderer refinement:
+  - Added conservative HRTF far-ear shading control (`hrtf_amount`) while preserving
+    existing RMS gate behavior and deterministic output.
+  - Improved five-standard layout awareness with explicit standard fallback candidates
+    (including AAF -> FILM/SMPTE fallback) and preview metadata trace fields.
 
 ## [1.1.0] — 2026-02-27
 

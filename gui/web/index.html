@@ -174,9 +174,33 @@
             <select id="audition-output-slot-select"></select>
           </label>
           <button id="audition-play-output-button" type="button">Play Output</button>
+          <button id="preview-headphones-button" type="button" class="preview-headphones-button">
+            Preview on Headphones
+          </button>
           <code id="audition-output-sha" class="audition-sha">sha256: -</code>
         </div>
         <audio id="audition-audio" controls preload="metadata" class="audition-audio"></audio>
+        <div id="headphone-preview-visual" class="headphone-preview-visual" aria-hidden="true">
+          <div class="headphone-preview-header">
+            <span class="headphone-preview-title">Headphone View</span>
+            <span id="headphone-preview-peak" class="headphone-preview-peak">-inf dBFS</span>
+          </div>
+          <div id="headphone-preview-waveform" class="headphone-preview-waveform"></div>
+          <div class="headphone-preview-meters">
+            <div class="headphone-preview-meter-row">
+              <span class="headphone-preview-meter-label">L</span>
+              <div class="headphone-preview-meter-track">
+                <div id="headphone-preview-meter-left" class="headphone-preview-meter-fill"></div>
+              </div>
+            </div>
+            <div class="headphone-preview-meter-row">
+              <span class="headphone-preview-meter-label">R</span>
+              <div class="headphone-preview-meter-track">
+                <div id="headphone-preview-meter-right" class="headphone-preview-meter-fill"></div>
+              </div>
+            </div>
+          </div>
+        </div>
         <p id="audition-status" class="subtle">No audio selected.</p>
       </section>
 

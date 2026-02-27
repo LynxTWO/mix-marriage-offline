@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="750" height="1334" viewBox="0 0 750 1334" role="img" aria-label="MMO GUI mobile screenshot showing headphone preview waveform and analog meters">
+  <defs>
+    <linearGradient id="bgm" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f9efdf" />
+      <stop offset="100%" stop-color="#edd2b0" />
+    </linearGradient>
+    <linearGradient id="btn" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#b35818" />
+      <stop offset="100%" stop-color="#f1a24f" />
+    </linearGradient>
+    <linearGradient id="meterm" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#20c997" />
+      <stop offset="65%" stop-color="#f2aa2b" />
+      <stop offset="100%" stop-color="#df4f2d" />
+    </linearGradient>
+  </defs>
+
+  <rect width="750" height="1334" fill="url(#bgm)" />
+  <rect x="34" y="34" width="682" height="1266" rx="24" fill="#fff8ee" stroke="#d7af84" stroke-width="2" />
+
+  <text x="72" y="106" font-family="Segoe UI, Arial, sans-serif" font-size="34" font-weight="700" fill="#6d3510">Audition (A/B)</text>
+
+  <rect x="72" y="138" width="606" height="74" rx="14" fill="#fff" stroke="#d8b58d" />
+  <text x="98" y="184" font-family="Consolas, monospace" font-size="24" fill="#5f3012">JOB.001  output slot 0</text>
+
+  <rect x="72" y="236" width="290" height="74" rx="14" fill="#045982" />
+  <text x="136" y="282" font-family="Segoe UI, Arial, sans-serif" font-size="25" fill="#fff">Play Output</text>
+
+  <rect x="388" y="236" width="290" height="74" rx="14" fill="url(#btn)" />
+  <text x="424" y="282" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700" fill="#2b1808">Headphones</text>
+
+  <rect x="72" y="342" width="606" height="760" rx="16" fill="#fef4e8" stroke="#dfb98d" />
+  <text x="104" y="392" font-family="Segoe UI, Arial, sans-serif" font-size="21" font-weight="700" letter-spacing="2" fill="#8d4a17">HEADPHONE VIEW</text>
+  <text x="520" y="392" font-family="Consolas, monospace" font-size="24" fill="#7f3f16">-10.2 dBFS</text>
+
+  <rect x="104" y="420" width="542" height="330" rx="12" fill="#2b1b0d" stroke="#b6875d" />
+  <g fill="#efbf84" opacity="0.92">
+    <rect x="122" y="704" width="14" height="32" rx="6" />
+    <rect x="140" y="680" width="14" height="56" rx="6" />
+    <rect x="158" y="640" width="14" height="96" rx="6" />
+    <rect x="176" y="620" width="14" height="116" rx="6" />
+    <rect x="194" y="594" width="14" height="142" rx="6" />
+    <rect x="212" y="632" width="14" height="104" rx="6" />
+    <rect x="230" y="664" width="14" height="72" rx="6" />
+    <rect x="248" y="686" width="14" height="50" rx="6" />
+    <rect x="266" y="700" width="14" height="36" rx="6" />
+    <rect x="284" y="678" width="14" height="58" rx="6" />
+    <rect x="302" y="648" width="14" height="88" rx="6" />
+    <rect x="320" y="614" width="14" height="122" rx="6" />
+    <rect x="338" y="592" width="14" height="144" rx="6" />
+    <rect x="356" y="618" width="14" height="118" rx="6" />
+    <rect x="374" y="652" width="14" height="84" rx="6" />
+    <rect x="392" y="680" width="14" height="56" rx="6" />
+    <rect x="410" y="702" width="14" height="34" rx="6" />
+    <rect x="428" y="686" width="14" height="50" rx="6" />
+    <rect x="446" y="656" width="14" height="80" rx="6" />
+    <rect x="464" y="622" width="14" height="114" rx="6" />
+    <rect x="482" y="596" width="14" height="140" rx="6" />
+    <rect x="500" y="620" width="14" height="116" rx="6" />
+    <rect x="518" y="650" width="14" height="86" rx="6" />
+    <rect x="536" y="680" width="14" height="56" rx="6" />
+    <rect x="554" y="700" width="14" height="36" rx="6" />
+    <rect x="572" y="682" width="14" height="54" rx="6" />
+    <rect x="590" y="652" width="14" height="84" rx="6" />
+    <rect x="608" y="620" width="14" height="116" rx="6" />
+  </g>
+
+  <text x="104" y="806" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#8d4a17">L</text>
+  <rect x="134" y="786" width="512" height="28" rx="14" fill="#d9c3ac" />
+  <rect x="134" y="786" width="398" height="28" rx="14" fill="url(#meterm)" />
+
+  <text x="104" y="860" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#8d4a17">R</text>
+  <rect x="134" y="840" width="512" height="28" rx="14" fill="#d9c3ac" />
+  <rect x="134" y="840" width="328" height="28" rx="14" fill="url(#meterm)" />
+
+  <text x="102" y="930" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#7b4720">Preview on Headphones: JOB.001</text>
+</svg>

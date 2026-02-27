@@ -6,6 +6,9 @@
   --muted: #60707d;
   --accent: #045982;
   --accent-soft: #dcedf7;
+  --analog-low: #20c997;
+  --analog-mid: #f2aa2b;
+  --analog-hot: #df4f2d;
 }
 
 * {
@@ -197,6 +200,124 @@ button:hover {
 .audition-audio {
   width: 100%;
   margin-bottom: 0.45rem;
+}
+
+.preview-headphones-button {
+  border-color: #9f541a;
+  background: linear-gradient(135deg, #b45a18 0%, #de7a28 45%, #eea243 100%);
+  color: #1f1407;
+  font-weight: 700;
+  box-shadow: 0 6px 16px rgba(152, 81, 28, 0.28);
+}
+
+.preview-headphones-button:hover {
+  background: linear-gradient(135deg, #c3641c 0%, #ea8834 48%, #f4b053 100%);
+}
+
+.headphone-preview-visual {
+  margin-bottom: 0.55rem;
+  border: 1px solid #e8c39c;
+  border-radius: 10px;
+  padding: 0.65rem;
+  background:
+    radial-gradient(circle at 16% 15%, rgba(255, 206, 157, 0.28), transparent 36%),
+    radial-gradient(circle at 88% 14%, rgba(255, 170, 98, 0.24), transparent 40%),
+    linear-gradient(145deg, #fff4e4 0%, #f6dfc6 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.headphone-preview-visual.is-active {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 0 0 1px rgba(208, 123, 54, 0.2),
+    0 0 20px rgba(225, 142, 67, 0.35);
+}
+
+.headphone-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+
+.headphone-preview-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7f4115;
+}
+
+.headphone-preview-peak {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.82rem;
+  color: #653312;
+}
+
+.headphone-preview-waveform {
+  display: grid;
+  grid-template-columns: repeat(28, minmax(0, 1fr));
+  gap: 0.16rem;
+  align-items: end;
+  min-height: 68px;
+  padding: 0.4rem 0.25rem 0.3rem;
+  border: 1px solid #d4ab82;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #3a250f 0%, #251708 100%);
+  margin-bottom: 0.5rem;
+}
+
+.headphone-preview-wave-bar {
+  display: block;
+  width: 100%;
+  min-height: 4px;
+  border-radius: 999px;
+  transform-origin: center bottom;
+  transform: scaleY(0.16);
+  opacity: 0.45;
+  transition: transform 90ms linear, opacity 90ms linear;
+  background: linear-gradient(180deg, #fbe6c8 0%, #f5be77 42%, #ce6b2f 100%);
+}
+
+.headphone-preview-meters {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.headphone-preview-meter-row {
+  display: grid;
+  grid-template-columns: 1.1rem 1fr;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.headphone-preview-meter-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #7f4115;
+}
+
+.headphone-preview-meter-track {
+  height: 0.7rem;
+  border-radius: 999px;
+  border: 1px solid #c58f61;
+  overflow: hidden;
+  background: linear-gradient(90deg, rgba(90, 65, 41, 0.24), rgba(143, 102, 66, 0.22));
+}
+
+.headphone-preview-meter-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--analog-low) 0%,
+    var(--analog-mid) 62%,
+    var(--analog-hot) 100%
+  );
+  box-shadow: 0 0 7px rgba(241, 152, 70, 0.42);
+  transition: width 88ms linear;
 }
 
 .toggle-inline {

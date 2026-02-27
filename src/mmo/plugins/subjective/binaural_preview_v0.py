@@ -57,6 +57,16 @@ _DEFAULT_LAYOUT_BY_CHANNEL_COUNT: dict[int, str] = {
     12: "LAYOUT.7_1_4",
 }
 
+_STANDARD_FALLBACKS: dict[str, tuple[str, ...]] = {
+    "SMPTE": ("SMPTE",),
+    "FILM": ("FILM", "SMPTE"),
+    "LOGIC_PRO": ("LOGIC_PRO", "SMPTE"),
+    "VST3": ("VST3", "SMPTE"),
+    # AAF/OMF interchange commonly carries cinema-biased ordering metadata.
+    # Prefer FILM mapping first, then fall back to SMPTE when no preset exists.
+    "AAF": ("FILM", "SMPTE"),
+}
+
 _SPEAKER_AZIMUTH_DEG: dict[SpeakerPosition, float] = {
     SpeakerPosition.M: 0.0,
     SpeakerPosition.FL: -30.0,
@@ -132,6 +142,11 @@ def _normalize_standard(layout_standard: str) -> str:
     return PREFERRED_STANDARD
 
 
+def _standard_candidates(layout_standard: str) -> tuple[str, ...]:
+    normalized = _normalize_standard(layout_standard)
+    return _STANDARD_FALLBACKS.get(normalized, (PREFERRED_STANDARD,))
+
+
 def _bit_depth_for_output(bits_per_sample: int) -> int:
     if bits_per_sample in _SUPPORTED_WAV_BITS:
         return bits_per_sample
@@ -155,18 +170,20 @@ def _resolve_preview_layout(
     layout_id_hint: str | None,
 ) -> SpeakerLayout:
     normalized_standard = _normalize_standard(layout_standard)
+    candidates = _standard_candidates(normalized_standard)
 
     if isinstance(layout_id_hint, str) and layout_id_hint.strip():
-        preferred = get_preset(layout_id_hint.strip(), normalized_standard)
-        if preferred is None:
-            preferred = get_preset(layout_id_hint.strip(), PREFERRED_STANDARD)
-        if preferred is not None and preferred.num_channels == channel_count:
-            return preferred
+        hint = layout_id_hint.strip()
+        for standard in candidates:
+            preferred = get_preset(hint, standard)
+            if preferred is not None and preferred.num_channels == channel_count:
+                return preferred
 
     if channel_count == 1:
+        mono_standard = candidates[0] if candidates else PREFERRED_STANDARD
         return SpeakerLayout(
             layout_id="LAYOUT.1_0",
-            standard=LayoutStandard[_normalize_standard(PREFERRED_STANDARD)],
+            standard=LayoutStandard[_normalize_standard(mono_standard)],
             channel_order=(SpeakerPosition.M,),
         )
 
@@ -177,15 +194,16 @@ def _resolve_preview_layout(
             f"{channel_count}."
         )
 
-    preferred = get_preset(layout_id, normalized_standard)
-    if preferred is None:
-        preferred = get_preset(layout_id, PREFERRED_STANDARD)
-    if preferred is None or preferred.num_channels != channel_count:
-        raise ValueError(
-            "Unable to resolve a layout preset for headphone preview: "
-            f"layout_id={layout_id}, standard={normalized_standard}, channels={channel_count}."
-        )
-    return preferred
+    for standard in candidates:
+        preferred = get_preset(layout_id, standard)
+        if preferred is not None and preferred.num_channels == channel_count:
+            return preferred
+
+    raise ValueError(
+        "Unable to resolve a layout preset for headphone preview: "
+        f"layout_id={layout_id}, requested_standard={normalized_standard}, "
+        f"candidates={candidates}, channels={channel_count}."
+    )
 
 
 def _add_shifted(target: Any, source: Any, *, gain: float, delay_samples: int) -> None:
@@ -243,19 +261,77 @@ def _dry_fold_stereo(
     return np.clip(folded, -1.0, 1.0)
 
 
+def _speaker_pan(position: SpeakerPosition) -> float:
+    azimuth = _SPEAKER_AZIMUTH_DEG.get(position, 0.0)
+    return max(-1.0, min(1.0, azimuth / 150.0))
+
+
+def _one_pole_lowpass(
+    signal: Any,
+    *,
+    sample_rate_hz: int,
+    cutoff_hz: float,
+) -> Any:
+    import numpy as np
+
+    samples = np.asarray(signal, dtype=np.float64)
+    if samples.size == 0:
+        return samples
+    if sample_rate_hz <= 0:
+        return samples.copy()
+    cutoff = max(20.0, min(float(cutoff_hz), float(sample_rate_hz) * 0.49))
+    alpha = math.exp(-2.0 * math.pi * cutoff / float(sample_rate_hz))
+    out = np.empty_like(samples)
+    prev = 0.0
+    for idx in range(samples.size):
+        current = float(samples[idx])
+        prev = ((1.0 - alpha) * current) + (alpha * prev)
+        out[idx] = prev
+    return out
+
+
+def _conservative_hrtf_pair(
+    *,
+    channel: Any,
+    sample_rate_hz: int,
+    position: SpeakerPosition,
+    width: float,
+    hrtf_amount: float,
+) -> tuple[Any, Any]:
+    if position == SpeakerPosition.LFE or hrtf_amount <= 0.0:
+        return channel, channel
+
+    pan = _speaker_pan(position)
+    abs_pan = abs(pan)
+    if abs_pan <= 1e-3:
+        return channel, channel
+
+    width_clamped = max(0.20, min(1.40, float(width)))
+    amount = max(0.0, min(1.0, float(hrtf_amount)))
+    shadow_strength = abs_pan * width_clamped * amount
+    cutoff_hz = 6800.0 - (4800.0 * shadow_strength)
+    far_lowpassed = _one_pole_lowpass(
+        channel,
+        sample_rate_hz=sample_rate_hz,
+        cutoff_hz=cutoff_hz,
+    )
+    filtered_weight = 0.55 + (0.35 * amount)
+    far_ear = (far_lowpassed * filtered_weight) + (channel * (1.0 - filtered_weight))
+    return channel, far_ear
+
+
 def _speaker_binaural_parameters(
     *,
     position: SpeakerPosition,
     sample_rate_hz: int,
     width: float,
     lfe_trim_db: float,
-) -> tuple[float, float, int, int, float, int]:
+) -> tuple[float, float, int, int, float, int, float]:
     if position == SpeakerPosition.LFE:
         gain = _db_to_gain(lfe_trim_db)
-        return gain, gain, 0, 0, 0.0, 0
+        return gain, gain, 0, 0, 0.0, 0, 0.0
 
-    azimuth = _SPEAKER_AZIMUTH_DEG.get(position, 0.0)
-    pan = max(-1.0, min(1.0, azimuth / 150.0))
+    pan = _speaker_pan(position)
     abs_pan = abs(pan)
 
     base_gain_db = _BASE_GAIN_DB.get(position, -2.0)
@@ -293,6 +369,7 @@ def _speaker_binaural_parameters(
         right_delay,
         crossfeed_gain,
         crossfeed_delay,
+        pan,
     )
 
 
@@ -424,6 +501,14 @@ class BinauralPreviewV0Plugin:
             minimum_value=0.3,
             maximum_value=6.0,
         )
+        hrtf_amount = optional_float_param(
+            plugin_id=PLUGIN_ID,
+            params=params,
+            param_name="hrtf_amount",
+            default_value=0.55,
+            minimum_value=0.0,
+            maximum_value=1.0,
+        )
         bypass = parse_bypass_for_stage(plugin_id=PLUGIN_ID, params=params)
         macro_mix, macro_mix_input = parse_macro_mix_for_stage(
             plugin_id=PLUGIN_ID,
@@ -439,6 +524,7 @@ class BinauralPreviewV0Plugin:
                     {"name": "stage_index", "value": ctx.stage_index},
                     {"name": "gate_rms_dbfs", "value": gate_rms_dbfs},
                     {"name": "virtualize_width", "value": virtualize_width},
+                    {"name": "hrtf_amount", "value": hrtf_amount},
                     {"name": "lfe_trim_db", "value": lfe_trim_db},
                     {"name": "macro_mix", "value": macro_mix},
                     {"name": "macro_mix_input", "value": macro_mix_input},
@@ -462,6 +548,7 @@ class BinauralPreviewV0Plugin:
 
         processed_channels = 0
         gated_channels = 0
+        hrtf_shaped_channels = 0
 
         for slot in range(channel_count):
             channel = buf_f32_or_f64[slot].astype(np.float64, copy=False)
@@ -478,6 +565,7 @@ class BinauralPreviewV0Plugin:
                 right_delay,
                 crossfeed_gain,
                 crossfeed_delay_samples,
+                pan,
             ) = _speaker_binaural_parameters(
                 position=position,
                 sample_rate_hz=sample_rate,
@@ -485,20 +573,40 @@ class BinauralPreviewV0Plugin:
                 lfe_trim_db=lfe_trim_db,
             )
 
-            _add_shifted(left, channel, gain=left_gain, delay_samples=left_delay)
-            _add_shifted(right, channel, gain=right_gain, delay_samples=right_delay)
+            near_channel, far_channel = _conservative_hrtf_pair(
+                channel=channel,
+                sample_rate_hz=sample_rate,
+                position=position,
+                width=virtualize_width,
+                hrtf_amount=hrtf_amount,
+            )
+            if position != SpeakerPosition.LFE and abs(pan) > 1e-3 and hrtf_amount > 0.0:
+                hrtf_shaped_channels += 1
+
+            if pan < 0.0:
+                left_source = near_channel
+                right_source = far_channel
+            elif pan > 0.0:
+                left_source = far_channel
+                right_source = near_channel
+            else:
+                left_source = near_channel
+                right_source = near_channel
+
+            _add_shifted(left, left_source, gain=left_gain, delay_samples=left_delay)
+            _add_shifted(right, right_source, gain=right_gain, delay_samples=right_delay)
 
             if crossfeed_gain > 0.0 and position != SpeakerPosition.LFE:
                 _add_shifted(
                     left,
-                    channel,
-                    gain=right_gain * crossfeed_gain,
+                    right_source,
+                    gain=left_gain * crossfeed_gain,
                     delay_samples=right_delay + crossfeed_delay_samples,
                 )
                 _add_shifted(
                     right,
-                    channel,
-                    gain=left_gain * crossfeed_gain,
+                    left_source,
+                    gain=right_gain * crossfeed_gain,
                     delay_samples=left_delay + crossfeed_delay_samples,
                 )
 
@@ -539,10 +647,12 @@ class BinauralPreviewV0Plugin:
                 {"name": "stage_index", "value": ctx.stage_index},
                 {"name": "gate_rms_dbfs", "value": gate_rms_dbfs},
                 {"name": "virtualize_width", "value": virtualize_width},
+                {"name": "hrtf_amount", "value": hrtf_amount},
                 {"name": "lfe_trim_db", "value": lfe_trim_db},
                 {"name": "output_headroom_db", "value": output_headroom_db},
                 {"name": "processed_channels", "value": float(processed_channels)},
                 {"name": "gated_channels", "value": float(gated_channels)},
+                {"name": "hrtf_shaped_channels", "value": float(hrtf_shaped_channels)},
                 {"name": "output_peak_dbfs", "value": peak_dbfs},
                 {"name": "macro_mix", "value": macro_mix},
                 {"name": "macro_mix_input", "value": macro_mix_input},
@@ -565,6 +675,7 @@ def render_headphone_preview_wav(
     layout_id_hint: str | None = None,
     gate_rms_dbfs: float = -58.0,
     virtualize_width: float = 0.85,
+    hrtf_amount: float = 0.55,
     lfe_trim_db: float = -12.0,
     output_headroom_db: float = 1.0,
 ) -> dict[str, Any]:
@@ -617,6 +728,7 @@ def render_headphone_preview_wav(
         {
             "gate_rms_dbfs": gate_rms_dbfs,
             "virtualize_width": virtualize_width,
+            "hrtf_amount": hrtf_amount,
             "lfe_trim_db": lfe_trim_db,
             "output_headroom_db": output_headroom_db,
             "macro_mix": 1.0,
@@ -761,6 +873,7 @@ def build_headphone_preview_manifest(
                 "metadata": {
                     "preview_of_output_id": str(output.get("output_id") or ""),
                     "preview_source_path": source_path.resolve().as_posix(),
+                    "preview_requested_layout_standard": _normalize_standard(layout_standard),
                     "preview_layout_id_used": str(render_info["layout_id"]),
                     "preview_layout_standard_used": str(render_info["layout_standard"]),
                     "preview_stage_what": str(render_info["stage_what"]),

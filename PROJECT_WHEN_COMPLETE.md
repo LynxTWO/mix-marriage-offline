@@ -162,6 +162,8 @@ The project is “complete enough” when all items below are true.
 - [x] GUI includes a bounded-authority `Preview on Headphones` action that
   forwards to `safe-render --preview-headphones` and writes deterministic
   binaural audition files.
+- [x] Web GUI Audition panel includes deterministic headphone preview visuals:
+  pulsing waveform display and warm analog L/R metering driven by live playback.
 - [ ] A GUI exists (local web app is fine) that exposes the same workflow as the CLI: validate → analyze → scene → render → results → compare.
 - [ ] GUI copy and structure follow the design system in ontology/gui_design.yaml (theme tokens, screen templates, and progressive disclosure).
 - [ ] Any plugin/config UI is generated from JSON Schema with optional UI hints (example: x_mmo_ui or a dedicated ui_hints registry) so agents do not hand-build one-off forms.
