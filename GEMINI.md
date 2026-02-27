@@ -20,3 +20,5 @@ Non-negotiables:
 - Keep watch-folder automation deterministic: debounce event bursts, detect
   changed stem sets by signature, and launch install-safe `python -m mmo run`
   render-many batches.
+- Keep offline plugin marketplace discovery install-safe via bundled
+  `ontology/plugin_index.yaml` and deterministic CLI/GUI listing paths.

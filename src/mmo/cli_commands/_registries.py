@@ -48,6 +48,10 @@ from mmo.core.run_config import (
     normalize_run_config,
 )
 from mmo.core.scene_locks import get_scene_lock, list_scene_locks
+from mmo.core.plugin_market import (
+    build_plugin_market_list_payload,
+    update_plugin_market_snapshot,
+)
 from mmo.core.plugin_schema_index import (
     build_plugin_show_payload,
 )
@@ -117,6 +121,10 @@ __all__ = [
     "_ui_examples_paths",
     "_build_ui_examples_list_payload",
     "_build_ui_examples_show_payload",
+    "_build_plugin_market_list_payload",
+    "_build_plugin_market_update_payload",
+    "_render_plugin_market_list_text",
+    "_render_plugin_market_update_text",
     "_build_plugins_list_payload",
     "_build_plugins_ui_lint_payload",
     "_build_plugins_show_payload",
@@ -1730,6 +1738,97 @@ def _build_plugins_list_payload(*, plugins_dir: Path) -> list[dict[str, Any]]:
             row["capabilities"] = plugin.capabilities.to_dict()
         payload.append(row)
     return payload
+
+
+def _build_plugin_market_list_payload(
+    *,
+    plugins_dir: Path,
+    plugin_dir: Path | None = None,
+    index_path: Path | None = None,
+) -> dict[str, Any]:
+    return build_plugin_market_list_payload(
+        plugins_dir=plugins_dir,
+        plugin_dir=plugin_dir,
+        index_path=index_path,
+    )
+
+
+def _build_plugin_market_update_payload(
+    *,
+    out_path: Path | None = None,
+    index_path: Path | None = None,
+) -> dict[str, Any]:
+    return update_plugin_market_snapshot(
+        out_path=out_path,
+        index_path=index_path,
+    )
+
+
+def _render_plugin_market_list_text(payload: dict[str, Any]) -> str:
+    entries = payload.get("entries")
+    entry_count = payload.get("entry_count")
+    installed_count = payload.get("installed_count")
+    if (
+        not isinstance(entries, list)
+        or not isinstance(entry_count, int)
+        or not isinstance(installed_count, int)
+    ):
+        return "(invalid payload)"
+
+    lines: list[str] = [
+        (
+            "Offline plugin marketplace "
+            f"({entry_count} entry(s), {installed_count} installed)."
+        )
+    ]
+    scan_error = payload.get("installed_scan_error")
+    if isinstance(scan_error, str) and scan_error.strip():
+        lines.append(f"Installed scan warning: {scan_error.strip()}")
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        plugin_id = _coerce_str(entry.get("plugin_id")).strip()
+        plugin_type = _coerce_str(entry.get("plugin_type")).strip() or "-"
+        version = _coerce_str(entry.get("version")).strip() or "-"
+        install_state = _coerce_str(entry.get("install_state")).strip() or "available"
+        tags_raw = entry.get("tags")
+        tags = "-"
+        if isinstance(tags_raw, list):
+            normalized_tags = [
+                item.strip()
+                for item in tags_raw
+                if isinstance(item, str) and item.strip()
+            ]
+            if normalized_tags:
+                tags = ",".join(normalized_tags)
+        summary = _coerce_str(entry.get("summary")).strip()
+        lines.append(
+            (
+                f"{plugin_id} [{plugin_type}] v{version} "
+                f"state={install_state} tags={tags}"
+            )
+        )
+        if summary:
+            lines.append(f"  {summary}")
+    return "\n".join(lines)
+
+
+def _render_plugin_market_update_text(payload: dict[str, Any]) -> str:
+    out_path = _coerce_str(payload.get("out_path")).strip() or "-"
+    entry_count_raw = payload.get("entry_count")
+    entry_count = (
+        str(entry_count_raw)
+        if isinstance(entry_count_raw, int)
+        and not isinstance(entry_count_raw, bool)
+        and entry_count_raw >= 0
+        else "-"
+    )
+    sha256 = _coerce_str(payload.get("sha256")).strip() or "-"
+    return (
+        "Offline plugin marketplace updated: "
+        f"{entry_count} entry(s) -> {out_path} (sha256={sha256})"
+    )
 
 
 def _build_plugins_ui_lint_payload(*, plugins_dir: Path) -> dict[str, Any]:

@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Offline plugin marketplace/discovery:
+  - New bundled index `ontology/plugin_index.yaml` (mirrored to packaged data).
+  - New core module `src/mmo/core/plugin_market.py` for deterministic marketplace
+    listing and local index snapshot updates.
+  - New CLI commands: `mmo plugin list` and `mmo plugin update`.
+  - New GUI marketplace browser panel backed by GUI RPC methods
+    `plugin.market.list` and `plugin.market.update`.
 - Smart batch watch-folder workflow:
   - New core module `src/mmo/core/watch_folder.py` with watchdog-backed
     folder monitoring, debounce/settle behavior, and deterministic

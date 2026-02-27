@@ -690,6 +690,85 @@ class TestGuiRpcDiscover(unittest.TestCase):
         )
 
 
+class TestGuiRpcPluginMarket(unittest.TestCase):
+    def test_plugin_market_list_is_deterministic(self) -> None:
+        request = {
+            "id": "req-plugin-market-list",
+            "method": "plugin.market.list",
+            "params": {
+                "plugins": str(_REPO_ROOT / "plugins"),
+            },
+        }
+        exit_a, responses_a, stdout_a, stderr_a = _run_rpc([request])
+        exit_b, responses_b, stdout_b, stderr_b = _run_rpc([request])
+
+        self.assertEqual(exit_a, 0)
+        self.assertEqual(exit_b, 0)
+        self.assertEqual(stderr_a, "")
+        self.assertEqual(stderr_b, "")
+        self.assertEqual(stdout_a, stdout_b)
+        self.assertEqual(responses_a, responses_b)
+
+        self.assertEqual(len(responses_a), 1)
+        response = responses_a[0]
+        self.assertTrue(response["ok"])
+        result = response["result"]
+        self.assertEqual(result.get("market_id"), "MARKET.PLUGIN.OFFLINE.V0")
+        self.assertGreater(result.get("entry_count", 0), 0)
+        entries = result.get("entries")
+        self.assertIsInstance(entries, list)
+        if not isinstance(entries, list):
+            return
+        safe_entry = next(
+            (
+                entry
+                for entry in entries
+                if isinstance(entry, dict)
+                and entry.get("plugin_id") == "PLUGIN.RENDERER.SAFE"
+            ),
+            None,
+        )
+        self.assertIsNotNone(safe_entry)
+        if not isinstance(safe_entry, dict):
+            return
+        self.assertTrue(safe_entry.get("installed"))
+        self.assertEqual(safe_entry.get("install_state"), "installed")
+
+    def test_plugin_market_update_writes_snapshot(self) -> None:
+        out_path = _SANDBOX / "plugin_market" / "plugin_index.snapshot.json"
+        request = {
+            "id": "req-plugin-market-update",
+            "method": "plugin.market.update",
+            "params": {
+                "out": str(out_path),
+            },
+        }
+        exit_a, responses_a, stdout_a, stderr_a = _run_rpc([request])
+        exit_b, responses_b, stdout_b, stderr_b = _run_rpc([request])
+
+        self.assertEqual(exit_a, 0)
+        self.assertEqual(exit_b, 0)
+        self.assertEqual(stderr_a, "")
+        self.assertEqual(stderr_b, "")
+        self.assertEqual(stdout_a, stdout_b)
+        self.assertEqual(responses_a, responses_b)
+
+        self.assertEqual(len(responses_a), 1)
+        response = responses_a[0]
+        self.assertTrue(response["ok"])
+        result = response["result"]
+        self.assertEqual(result.get("out_path"), out_path.resolve().as_posix())
+        self.assertIsInstance(result.get("sha256"), str)
+        self.assertEqual(len(result.get("sha256", "")), 64)
+        self.assertTrue(out_path.is_file())
+
+        snapshot_payload = json.loads(out_path.read_text(encoding="utf-8"))
+        entries = snapshot_payload.get("entries")
+        self.assertIsInstance(entries, list)
+        if isinstance(entries, list):
+            self.assertEqual(len(entries), result.get("entry_count"))
+
+
 class TestGuiRpcDeterminism(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

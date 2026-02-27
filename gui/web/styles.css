@@ -163,6 +163,12 @@ button:hover {
   gap: 0.85rem;
 }
 
+.plugin-market-container {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.65rem;
+}
+
 .chain-container {
   display: grid;
   gap: 0.75rem;
@@ -227,9 +233,25 @@ button:hover {
   background: #fcfdff;
 }
 
+.plugin-market-card {
+  border: 1px solid #cad9e4;
+  border-radius: 8px;
+  padding: 0.7rem;
+  background: #fbfdff;
+}
+
 .plugin-card h3 {
   margin: 0 0 0.5rem 0;
   font-size: 1rem;
+}
+
+.plugin-market-card h3 {
+  margin: 0 0 0.35rem 0;
+  font-size: 0.94rem;
+}
+
+.plugin-market-card p {
+  margin: 0 0 0.35rem 0;
 }
 
 .field-row {

@@ -1628,6 +1628,57 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional variant_result JSON path (switches to variants mode).",
     )
 
+    plugin_parser = subparsers.add_parser(
+        "plugin",
+        help="Offline plugin marketplace and discovery tools.",
+    )
+    plugin_subparsers = plugin_parser.add_subparsers(dest="plugin_command", required=True)
+    plugin_list_parser = plugin_subparsers.add_parser(
+        "list",
+        help="List entries from the bundled offline plugin marketplace index.",
+    )
+    plugin_list_parser.add_argument(
+        "--plugins",
+        default="plugins",
+        help="Path to plugins directory used to mark installed plugins.",
+    )
+    plugin_list_parser.add_argument(
+        "--plugin-dir",
+        default=None,
+        help="Optional external plugins directory (default: ~/.mmo/plugins).",
+    )
+    plugin_list_parser.add_argument(
+        "--index",
+        default=None,
+        help="Optional path to plugin index YAML (defaults to bundled ontology/plugin_index.yaml).",
+    )
+    plugin_list_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for plugin marketplace list.",
+    )
+    plugin_update_parser = plugin_subparsers.add_parser(
+        "update",
+        help="Write a deterministic local snapshot of the offline marketplace index.",
+    )
+    plugin_update_parser.add_argument(
+        "--out",
+        default=None,
+        help="Optional output path for the snapshot JSON.",
+    )
+    plugin_update_parser.add_argument(
+        "--index",
+        default=None,
+        help="Optional path to plugin index YAML (defaults to bundled ontology/plugin_index.yaml).",
+    )
+    plugin_update_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for plugin marketplace update receipt.",
+    )
+
     plugins_parser = subparsers.add_parser("plugins", help="Plugin registry tools.")
     plugins_subparsers = plugins_parser.add_subparsers(dest="plugins_command", required=True)
     plugins_list_parser = plugins_subparsers.add_parser(
@@ -5986,6 +6037,58 @@ def main(argv: list[str] | None = None) -> int:
             cache_enabled=args.cache == "on",
             cache_dir=Path(args.cache_dir) if args.cache_dir else None,
         )
+    if args.command == "plugin":
+        if args.plugin_command == "list":
+            try:
+                payload = _build_plugin_market_list_payload(
+                    plugins_dir=Path(args.plugins),
+                    plugin_dir=(
+                        Path(args.plugin_dir)
+                        if isinstance(args.plugin_dir, str) and args.plugin_dir.strip()
+                        else None
+                    ),
+                    index_path=(
+                        Path(args.index)
+                        if isinstance(args.index, str) and args.index.strip()
+                        else None
+                    ),
+                )
+            except (RuntimeError, ValueError, AttributeError, OSError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_plugin_market_list_text(payload))
+            return 0
+
+        if args.plugin_command == "update":
+            try:
+                payload = _build_plugin_market_update_payload(
+                    out_path=(
+                        Path(args.out)
+                        if isinstance(args.out, str) and args.out.strip()
+                        else None
+                    ),
+                    index_path=(
+                        Path(args.index)
+                        if isinstance(args.index, str) and args.index.strip()
+                        else None
+                    ),
+                )
+            except (RuntimeError, ValueError, AttributeError, OSError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_plugin_market_update_text(payload))
+            return 0
+
+        print("Unknown plugin command.", file=sys.stderr)
+        return 2
     if args.command == "plugins":
         if args.plugins_command == "list":
             try:

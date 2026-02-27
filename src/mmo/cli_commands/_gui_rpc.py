@@ -18,6 +18,10 @@ from mmo.cli_commands._project import (
     _run_project_write_render_request,
 )
 from mmo.core.env_doctor import build_env_doctor_report
+from mmo.core.plugin_market import (
+    build_plugin_market_list_payload,
+    update_plugin_market_snapshot,
+)
 
 try:
     from mmo import __version__ as _MMO_VERSION
@@ -361,6 +365,68 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
                 "policies",
                 "target_ids",
                 "target_layout_ids",
+            ],
+        },
+    },
+    "plugin.market.list": {
+        "params_schema": {
+            "required": {},
+            "optional": {
+                "index": "string",
+                "plugin_dir": "string",
+                "plugins": "string",
+            },
+            "examples": [
+                {},
+                {
+                    "plugins": "C:/mmo/plugins",
+                },
+                {
+                    "index": "C:/mmo/ontology/plugin_index.yaml",
+                    "plugins": "C:/mmo/plugins",
+                },
+            ],
+        },
+        "result_shape": {
+            "keys": [
+                "entries",
+                "entry_count",
+                "index_path",
+                "installed_count",
+                "market_id",
+                "schema_version",
+            ],
+            "optional_keys": [
+                "installed_scan_error",
+                "plugin_dir",
+                "plugins_dir",
+            ],
+        },
+    },
+    "plugin.market.update": {
+        "params_schema": {
+            "required": {},
+            "optional": {
+                "index": "string",
+                "out": "string",
+            },
+            "examples": [
+                {},
+                {
+                    "out": "C:/mmo/cache/plugin_index.snapshot.json",
+                },
+            ],
+        },
+        "result_shape": {
+            "keys": [
+                "entry_count",
+                "market_id",
+                "out_path",
+                "schema_version",
+                "sha256",
+            ],
+            "optional_keys": [
+                "index_path",
             ],
         },
     },
@@ -962,6 +1028,69 @@ def _handle_project_write_render_request(params: dict[str, Any]) -> dict[str, An
     )
 
 
+def _handle_plugin_market_list(params: dict[str, Any]) -> dict[str, Any]:
+    _validate_allowed_params(
+        method="plugin.market.list",
+        params=params,
+        allowed={"plugins", "plugin_dir", "index"},
+    )
+    plugins = _optional_str_param(
+        method="plugin.market.list",
+        params=params,
+        name="plugins",
+        default="plugins",
+    )
+    plugin_dir = _optional_str_param(
+        method="plugin.market.list",
+        params=params,
+        name="plugin_dir",
+        default=None,
+    )
+    index = _optional_str_param(
+        method="plugin.market.list",
+        params=params,
+        name="index",
+        default=None,
+    )
+
+    try:
+        return build_plugin_market_list_payload(
+            plugins_dir=Path(plugins) if isinstance(plugins, str) else Path("plugins"),
+            plugin_dir=Path(plugin_dir) if isinstance(plugin_dir, str) else None,
+            index_path=Path(index) if isinstance(index, str) else None,
+        )
+    except (RuntimeError, ValueError, AttributeError, OSError) as exc:
+        raise _RpcMethodError(message=str(exc)) from exc
+
+
+def _handle_plugin_market_update(params: dict[str, Any]) -> dict[str, Any]:
+    _validate_allowed_params(
+        method="plugin.market.update",
+        params=params,
+        allowed={"out", "index"},
+    )
+    out = _optional_str_param(
+        method="plugin.market.update",
+        params=params,
+        name="out",
+        default=None,
+    )
+    index = _optional_str_param(
+        method="plugin.market.update",
+        params=params,
+        name="index",
+        default=None,
+    )
+
+    try:
+        return update_plugin_market_snapshot(
+            out_path=Path(out) if isinstance(out, str) else None,
+            index_path=Path(index) if isinstance(index, str) else None,
+        )
+    except (RuntimeError, ValueError, AttributeError, OSError) as exc:
+        raise _RpcMethodError(message=str(exc)) from exc
+
+
 def _handle_rpc_discover(params: dict[str, Any]) -> dict[str, Any]:
     _validate_allowed_params(
         method="rpc.discover",
@@ -981,6 +1110,8 @@ _RPC_METHOD_HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "project.validate": _handle_project_validate,
     "project.pack": _handle_project_pack,
     "project.write_render_request": _handle_project_write_render_request,
+    "plugin.market.list": _handle_plugin_market_list,
+    "plugin.market.update": _handle_plugin_market_update,
     "rpc.discover": _handle_rpc_discover,
 }
 

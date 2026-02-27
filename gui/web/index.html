@@ -69,6 +69,19 @@
       </section>
 
       <section class="panel">
+        <h2>Plugin Marketplace</h2>
+        <p class="subtle">
+          Offline discovery browser backed by bundled <code>ontology/plugin_index.yaml</code>.
+        </p>
+        <div class="row">
+          <button id="plugin-market-list-button" type="button">Refresh marketplace</button>
+          <button id="plugin-market-update-button" type="button">Update local cache</button>
+        </div>
+        <pre id="plugin-market-output" class="code-block"></pre>
+        <div id="plugin-market-container" class="plugin-market-container"></div>
+      </section>
+
+      <section class="panel">
         <h2>Plugin Chain Editor</h2>
         <p class="subtle">
           Build a <code>render_request.options.plugin_chain</code> from schema-capable plugins,

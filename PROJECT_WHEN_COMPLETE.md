@@ -146,6 +146,8 @@ The project is “complete enough” when all items below are true.
 - [x] `mmo watch <folder>` supports smart batch processing for incoming stems by
   debouncing filesystem events and auto-running deterministic `--render-many`
   workflows on changed stem sets.
+- [x] Offline plugin marketplace discovery is available via bundled ontology index,
+  CLI (`mmo plugin list/update`), and GUI browser surfaces.
 - [ ] Preview/A-B audition is loudness-compensated by default (auto-gain for evaluation), and the report discloses the compensation used.
 - [ ] Presets (example: EQ vibe presets) can be initialized from measured stem features, and preset preview does not create surprise loudness jumps.
 - [ ] A “variant runner” can render multiple output variants (profiles/presets/targets) while reusing cached analysis artifacts keyed by content hash.

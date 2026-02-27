@@ -18,6 +18,10 @@ const doctorOutput = document.getElementById("doctor-output");
 const projectOutput = document.getElementById("project-output");
 const statusOutput = document.getElementById("status-output");
 const pluginsContainer = document.getElementById("plugins-container");
+const pluginMarketContainer = document.getElementById("plugin-market-container");
+const pluginMarketListButton = document.getElementById("plugin-market-list-button");
+const pluginMarketUpdateButton = document.getElementById("plugin-market-update-button");
+const pluginMarketOutput = document.getElementById("plugin-market-output");
 const chainContainer = document.getElementById("chain-container");
 const chainOutput = document.getElementById("chain-output");
 const intentOutput = document.getElementById("intent-output");
@@ -53,6 +57,8 @@ const fineModeIndicator = document.getElementById("fine-mode-indicator");
 
 const state = {
   projectShow: null,
+  pluginMarket: null,
+  pluginMarketUpdate: null,
   pluginsById: new Map(),
   editablePluginIds: [],
   pluginChain: [],
@@ -664,6 +670,90 @@ function renderPluginForms(plugins) {
     pluginsContainer.appendChild(card);
   }
   _refreshFineSteps();
+}
+
+function _normalizeMarketplaceEntries(payload) {
+  if (!_isObject(payload)) {
+    return [];
+  }
+  const entries = Array.isArray(payload.entries) ? payload.entries : [];
+  const normalized = entries
+    .filter((entry) => _isObject(entry))
+    .map((entry) => ({
+      install_state: typeof entry.install_state === "string" ? entry.install_state : "available",
+      installed: entry.installed === true,
+      manifest_path: typeof entry.manifest_path === "string" ? entry.manifest_path : "",
+      name: typeof entry.name === "string" ? entry.name : "",
+      plugin_id: typeof entry.plugin_id === "string" ? entry.plugin_id : "",
+      plugin_type: typeof entry.plugin_type === "string" ? entry.plugin_type : "",
+      summary: typeof entry.summary === "string" ? entry.summary : "",
+      tags: Array.isArray(entry.tags) ? entry.tags.filter((tag) => typeof tag === "string") : [],
+      version: typeof entry.version === "string" ? entry.version : "",
+    }));
+  normalized.sort((left, right) => left.plugin_id.localeCompare(right.plugin_id));
+  return normalized;
+}
+
+function renderPluginMarketplace(payload) {
+  if (!pluginMarketContainer || !pluginMarketOutput) {
+    return;
+  }
+
+  const entries = _normalizeMarketplaceEntries(payload);
+  pluginMarketContainer.innerHTML = "";
+  if (entries.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "subtle";
+    empty.textContent = "No marketplace entries loaded.";
+    pluginMarketContainer.appendChild(empty);
+  } else {
+    for (const entry of entries) {
+      const card = document.createElement("article");
+      card.className = "plugin-market-card";
+
+      const title = document.createElement("h3");
+      title.textContent = `${entry.plugin_id} [${entry.plugin_type}]`;
+      card.appendChild(title);
+
+      const meta = document.createElement("p");
+      meta.className = "subtle";
+      const tags = entry.tags.length > 0 ? entry.tags.join(",") : "-";
+      meta.textContent = (
+        `version=${entry.version || "-"} `
+        + `state=${entry.install_state || "available"} `
+        + `tags=${tags}`
+      );
+      card.appendChild(meta);
+
+      if (entry.summary) {
+        const summary = document.createElement("p");
+        summary.textContent = entry.summary;
+        card.appendChild(summary);
+      }
+      if (entry.manifest_path) {
+        const manifest = document.createElement("code");
+        manifest.textContent = entry.manifest_path;
+        card.appendChild(manifest);
+      }
+      pluginMarketContainer.appendChild(card);
+    }
+  }
+
+  const header = _isObject(payload) ? payload : {};
+  pluginMarketOutput.textContent = JSON.stringify(
+    {
+      entry_count: typeof header.entry_count === "number" ? header.entry_count : entries.length,
+      index_path: typeof header.index_path === "string" ? header.index_path : "",
+      installed_count: typeof header.installed_count === "number" ? header.installed_count : 0,
+      installed_scan_error: typeof header.installed_scan_error === "string"
+        ? header.installed_scan_error
+        : "",
+      market_id: typeof header.market_id === "string" ? header.market_id : "",
+      schema_version: typeof header.schema_version === "string" ? header.schema_version : "",
+    },
+    null,
+    2,
+  );
 }
 
 function _isEditablePlugin(plugin) {
@@ -2332,6 +2422,26 @@ async function runSafeRun() {
   setStatus("Safe Run completed. Receipt is ready.");
 }
 
+async function refreshPluginMarketplace() {
+  const pluginsDir = normalizePath(pluginsDirInput.value) || "plugins";
+  setStatus("Calling plugin.market.list...");
+  const result = await apiRpc("plugin.market.list", { plugins: pluginsDir });
+  state.pluginMarket = _deepClone(result);
+  renderPluginMarketplace(result);
+  setStatus("plugin.market.list completed.");
+}
+
+async function updatePluginMarketplace() {
+  setStatus("Calling plugin.market.update...");
+  const result = await apiRpc("plugin.market.update", {});
+  state.pluginMarketUpdate = _deepClone(result);
+  if (pluginMarketOutput) {
+    pluginMarketOutput.textContent = JSON.stringify(result, null, 2);
+  }
+  setStatus("plugin.market.update completed.");
+  await refreshPluginMarketplace();
+}
+
 async function refreshDiscover() {
   setStatus("Calling rpc.discover...");
   const result = await apiRpc("rpc.discover", {});
@@ -2471,6 +2581,26 @@ doctorButton.addEventListener("click", async () => {
     setStatus(error instanceof Error ? error.message : String(error));
   }
 });
+
+if (pluginMarketListButton) {
+  pluginMarketListButton.addEventListener("click", async () => {
+    try {
+      await refreshPluginMarketplace();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    }
+  });
+}
+
+if (pluginMarketUpdateButton) {
+  pluginMarketUpdateButton.addEventListener("click", async () => {
+    try {
+      await updatePluginMarketplace();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    }
+  });
+}
 
 showProjectButton.addEventListener("click", async () => {
   try {
@@ -2625,6 +2755,7 @@ if (auditionLoudnessMatchToggle) {
 
 renderChainPluginSelect();
 renderPluginChainEditor();
+renderPluginMarketplace(state.pluginMarket);
 renderRenderArtifactsViewer();
 _syncMaxTheoreticalQualityToggle();
 _renderFineModeIndicator();
