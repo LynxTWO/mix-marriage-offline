@@ -1692,6 +1692,33 @@ def main(argv: list[str] | None = None) -> int:
         default="text",
         help="Output format for plugin marketplace update receipt.",
     )
+    plugin_install_parser = plugin_subparsers.add_parser(
+        "install",
+        help="Install one plugin from the bundled offline marketplace index.",
+    )
+    plugin_install_parser.add_argument(
+        "plugin_id",
+        help="Marketplace plugin_id to install.",
+    )
+    plugin_install_parser.add_argument(
+        "--plugins",
+        default=None,
+        help=(
+            "Optional plugin root for installation "
+            "(default: user plugin root ~/.mmo/plugins)."
+        ),
+    )
+    plugin_install_parser.add_argument(
+        "--index",
+        default=None,
+        help="Optional path to plugin index YAML (defaults to bundled ontology/plugin_index.yaml).",
+    )
+    plugin_install_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for plugin marketplace install receipt.",
+    )
 
     plugins_parser = subparsers.add_parser("plugins", help="Plugin registry tools.")
     plugins_subparsers = plugins_parser.add_subparsers(dest="plugins_command", required=True)
@@ -6112,6 +6139,31 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(payload, indent=2, sort_keys=True))
             else:
                 print(_render_plugin_market_update_text(payload))
+            return 0
+
+        if args.plugin_command == "install":
+            try:
+                payload = _build_plugin_market_install_payload(
+                    plugin_id=args.plugin_id,
+                    plugins_dir=(
+                        Path(args.plugins)
+                        if isinstance(args.plugins, str) and args.plugins.strip()
+                        else None
+                    ),
+                    index_path=(
+                        Path(args.index)
+                        if isinstance(args.index, str) and args.index.strip()
+                        else None
+                    ),
+                )
+            except (RuntimeError, ValueError, AttributeError, OSError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_plugin_market_install_text(payload))
             return 0
 
         print("Unknown plugin command.", file=sys.stderr)

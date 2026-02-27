@@ -101,6 +101,38 @@ class TestCliPluginMarketplace(unittest.TestCase):
             if isinstance(entries, list):
                 self.assertEqual(len(entries), payload.get("entry_count"))
 
+    def test_plugin_market_install_json_is_deterministic_after_first_install(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            plugins_dir = Path(temp_dir) / "plugins"
+            command = (
+                "plugin",
+                "install",
+                "PLUGIN.RENDERER.GAIN_TRIM",
+                "--plugins",
+                str(plugins_dir),
+                "--index",
+                str(repo_root / "ontology" / "plugin_index.yaml"),
+                "--format",
+                "json",
+            )
+            first = self._run(*command)
+            second = self._run(*command)
+
+            self.assertEqual(first.returncode, 0, msg=first.stderr)
+            self.assertEqual(second.returncode, 0, msg=second.stderr)
+
+            first_payload = json.loads(first.stdout)
+            second_payload = json.loads(second.stdout)
+            self.assertEqual(first_payload.get("plugin_id"), "PLUGIN.RENDERER.GAIN_TRIM")
+            self.assertEqual(second_payload.get("plugin_id"), "PLUGIN.RENDERER.GAIN_TRIM")
+            self.assertTrue(first_payload.get("changed"))
+            self.assertFalse(second_payload.get("changed"))
+            self.assertTrue(second_payload.get("already_installed"))
+
+            self.assertTrue((plugins_dir / "renderers" / "gain_trim_renderer.plugin.yaml").is_file())
+            self.assertTrue((plugins_dir / "renderers" / "gain_trim_renderer.py").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

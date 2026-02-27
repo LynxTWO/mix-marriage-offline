@@ -6,6 +6,7 @@ from pathlib import Path
 
 from mmo.core.plugin_market import (
     build_plugin_market_list_payload,
+    install_plugin_market_entry,
     load_plugin_market_index,
     update_plugin_market_snapshot,
 )
@@ -18,6 +19,7 @@ class TestPluginMarket(unittest.TestCase):
 
         self.assertEqual(payload.get("schema_version"), "0.1.0")
         self.assertEqual(payload.get("market_id"), "MARKET.PLUGIN.OFFLINE.V0")
+        self.assertEqual(payload.get("install_asset_root"), "plugin_market/assets")
         entries = payload.get("entries")
         self.assertIsInstance(entries, list)
         if not isinstance(entries, list):
@@ -57,6 +59,7 @@ class TestPluginMarket(unittest.TestCase):
             return
         self.assertTrue(safe_entry.get("installed"))
         self.assertEqual(safe_entry.get("install_state"), "installed")
+        self.assertTrue(safe_entry.get("installable"))
 
     def test_update_plugin_market_snapshot_is_deterministic(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -88,6 +91,34 @@ class TestPluginMarket(unittest.TestCase):
             self.assertIsInstance(entries, list)
             if isinstance(entries, list):
                 self.assertEqual(len(entries), first.get("entry_count"))
+
+    def test_install_plugin_market_entry_is_deterministic(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            install_root = Path(temp_dir) / "plugins"
+
+            first = install_plugin_market_entry(
+                plugin_id="PLUGIN.RENDERER.SAFE",
+                plugins_dir=install_root,
+                index_path=repo_root / "ontology" / "plugin_index.yaml",
+            )
+            second = install_plugin_market_entry(
+                plugin_id="PLUGIN.RENDERER.SAFE",
+                plugins_dir=install_root,
+                index_path=repo_root / "ontology" / "plugin_index.yaml",
+            )
+
+            self.assertEqual(first.get("plugin_id"), "PLUGIN.RENDERER.SAFE")
+            self.assertTrue(first.get("changed"))
+            self.assertFalse(first.get("already_installed"))
+            self.assertEqual(second.get("plugin_id"), "PLUGIN.RENDERER.SAFE")
+            self.assertFalse(second.get("changed"))
+            self.assertTrue(second.get("already_installed"))
+
+            manifest_path = install_root / "renderers" / "safe_renderer.plugin.yaml"
+            module_path = install_root / "renderers" / "safe_renderer.py"
+            self.assertTrue(manifest_path.is_file())
+            self.assertTrue(module_path.is_file())
 
 
 if __name__ == "__main__":

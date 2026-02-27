@@ -50,6 +50,7 @@ from mmo.core.run_config import (
 from mmo.core.scene_locks import get_scene_lock, list_scene_locks
 from mmo.core.plugin_market import (
     build_plugin_market_list_payload,
+    install_plugin_market_entry,
     update_plugin_market_snapshot,
 )
 from mmo.core.plugin_schema_index import (
@@ -123,8 +124,10 @@ __all__ = [
     "_build_ui_examples_show_payload",
     "_build_plugin_market_list_payload",
     "_build_plugin_market_update_payload",
+    "_build_plugin_market_install_payload",
     "_render_plugin_market_list_text",
     "_render_plugin_market_update_text",
+    "_render_plugin_market_install_text",
     "_build_plugins_list_payload",
     "_build_plugins_ui_lint_payload",
     "_build_plugins_show_payload",
@@ -1764,6 +1767,19 @@ def _build_plugin_market_update_payload(
     )
 
 
+def _build_plugin_market_install_payload(
+    *,
+    plugin_id: str,
+    plugins_dir: Path | None = None,
+    index_path: Path | None = None,
+) -> dict[str, Any]:
+    return install_plugin_market_entry(
+        plugin_id=plugin_id,
+        plugins_dir=plugins_dir,
+        index_path=index_path,
+    )
+
+
 def _render_plugin_market_list_text(payload: dict[str, Any]) -> str:
     entries = payload.get("entries")
     entry_count = payload.get("entry_count")
@@ -1829,6 +1845,14 @@ def _render_plugin_market_update_text(payload: dict[str, Any]) -> str:
         "Offline plugin marketplace updated: "
         f"{entry_count} entry(s) -> {out_path} (sha256={sha256})"
     )
+
+
+def _render_plugin_market_install_text(payload: dict[str, Any]) -> str:
+    plugin_id = _coerce_str(payload.get("plugin_id")).strip() or "-"
+    plugins_dir = _coerce_str(payload.get("plugins_dir")).strip() or "-"
+    changed = bool(payload.get("changed"))
+    state = "installed" if changed else "already installed"
+    return f"Offline plugin install {state}: {plugin_id} -> {plugins_dir}"
 
 
 def _build_plugins_ui_lint_payload(*, plugins_dir: Path) -> dict[str, Any]:

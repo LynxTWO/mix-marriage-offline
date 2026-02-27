@@ -12,6 +12,11 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from mmo.core.plugin_loader import default_user_plugins_dir
+from mmo.core.plugin_market import (
+    build_plugin_market_list_payload,
+    install_plugin_market_entry,
+)
 from mmo.core.render_targets import list_render_targets
 from mmo.core.speaker_layout import LayoutStandard
 from mmo.gui.dashboard import VisualizationDashboardPanel
@@ -69,6 +74,16 @@ _LAYOUT_SHORTHANDS: Mapping[str, str] = {
     "7.1.4": "LAYOUT.7_1_4",
     "7_1_4": "LAYOUT.7_1_4",
 }
+_DISCOVER_GRADIENTS: Mapping[str, tuple[str, str, str, str]] = {
+    "ember": ("#21110A", "#60311A", "#F0B469", "#F8ECD2"),
+    "tide": ("#0E1D1F", "#16484D", "#78D8D2", "#DCF7F4"),
+    "sunset": ("#1E130D", "#5D2E1A", "#F0A265", "#FFE9D5"),
+}
+_DISCOVER_TYPE_GRADIENT: Mapping[str, str] = {
+    "detector": "ember",
+    "resolver": "tide",
+    "renderer": "sunset",
+}
 
 
 @dataclass(frozen=True)
@@ -94,8 +109,129 @@ class GuiPipelinePaths:
     cancel_token_path: Path
 
 
+@dataclass(frozen=True)
+class PluginDiscoverCard:
+    plugin_id: str
+    plugin_type: str
+    name: str
+    version: str
+    summary: str
+    tags: tuple[str, ...]
+    preview_tagline: str
+    preview_gradient: str
+    preview_chips: tuple[str, ...]
+    install_state: str
+    installable: bool
+
+
 def _as_posix(path: Path) -> str:
     return path.resolve().as_posix()
+
+
+def _discover_gradient_for_type(plugin_type: str) -> str:
+    normalized = plugin_type.strip().casefold() if isinstance(plugin_type, str) else ""
+    return _DISCOVER_TYPE_GRADIENT.get(normalized, "ember")
+
+
+def _normalized_preview(
+    entry: Mapping[str, Any],
+    *,
+    plugin_type: str,
+    summary: str,
+    tags: tuple[str, ...],
+) -> tuple[str, str, tuple[str, ...]]:
+    preview = entry.get("preview")
+    default_gradient = _discover_gradient_for_type(plugin_type)
+    default_tagline = summary or "Offline-ready plugin card."
+    default_chips = tags[:3]
+
+    if not isinstance(preview, Mapping):
+        return (default_tagline, default_gradient, default_chips)
+
+    raw_tagline = preview.get("tagline")
+    tagline = raw_tagline.strip() if isinstance(raw_tagline, str) and raw_tagline.strip() else default_tagline
+
+    raw_gradient = preview.get("gradient")
+    gradient = (
+        raw_gradient.strip().casefold()
+        if isinstance(raw_gradient, str) and raw_gradient.strip()
+        else default_gradient
+    )
+    if gradient not in _DISCOVER_GRADIENTS:
+        gradient = default_gradient
+
+    chips: list[str] = []
+    seen: set[str] = set()
+    raw_chips = preview.get("chips")
+    if isinstance(raw_chips, list):
+        for raw_chip in raw_chips:
+            if not isinstance(raw_chip, str):
+                continue
+            chip = raw_chip.strip()
+            if not chip:
+                continue
+            dedupe_key = chip.casefold()
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            chips.append(chip)
+
+    if not chips:
+        chips = list(default_chips)
+    return (tagline, gradient, tuple(chips[:4]))
+
+
+def build_plugin_discover_cards(payload: Mapping[str, Any]) -> tuple[PluginDiscoverCard, ...]:
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        return ()
+
+    cards: list[PluginDiscoverCard] = []
+    for raw_entry in entries:
+        if not isinstance(raw_entry, Mapping):
+            continue
+        plugin_id = str(raw_entry.get("plugin_id", "")).strip()
+        if not plugin_id:
+            continue
+        plugin_type = str(raw_entry.get("plugin_type", "")).strip() or "unknown"
+        name = str(raw_entry.get("name", "")).strip() or plugin_id
+        version = str(raw_entry.get("version", "")).strip() or "-"
+        summary = str(raw_entry.get("summary", "")).strip()
+
+        tags_raw = raw_entry.get("tags")
+        if isinstance(tags_raw, list):
+            tags = tuple(
+                item.strip()
+                for item in tags_raw
+                if isinstance(item, str) and item.strip()
+            )
+        else:
+            tags = ()
+        preview_tagline, preview_gradient, preview_chips = _normalized_preview(
+            raw_entry,
+            plugin_type=plugin_type,
+            summary=summary,
+            tags=tags,
+        )
+        install_state = str(raw_entry.get("install_state", "")).strip().casefold() or "available"
+        installable = bool(raw_entry.get("installable"))
+        cards.append(
+            PluginDiscoverCard(
+                plugin_id=plugin_id,
+                plugin_type=plugin_type,
+                name=name,
+                version=version,
+                summary=summary,
+                tags=tags,
+                preview_tagline=preview_tagline,
+                preview_gradient=preview_gradient,
+                preview_chips=preview_chips,
+                install_state=install_state,
+                installable=installable,
+            )
+        )
+
+    return tuple(sorted(cards, key=lambda row: (row.plugin_id, row.plugin_type, row.version)))
 
 
 def layout_standard_options() -> tuple[str, ...]:
@@ -374,6 +510,10 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         self._active_process: subprocess.Popen[str] | None = None
         self._cancel_file_path: Path | None = None
         self._dashboard_panel: VisualizationDashboardPanel | None = None
+        self._discover_cards_frame: Any | None = None
+        self._discover_status_var = _ctk.StringVar(value="Offline plugin hub ready.")
+        self._discover_install_buttons: dict[str, Any] = {}
+        self._discover_installing_ids: set[str] = set()
 
         self._target_layouts = render_target_layout_map()
         self._target_ids = tuple(sorted(self._target_layouts))
@@ -651,6 +791,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         self._surfaces_tabs.grid(row=1, column=0, padx=12, pady=(0, 12), sticky="nsew")
         self._surfaces_tabs.add("Dashboard")
         self._surfaces_tabs.add("Live Log")
+        self._surfaces_tabs.add("Discover")
 
         dashboard_tab = self._surfaces_tabs.tab("Dashboard")
         dashboard_tab.grid_columnconfigure(0, weight=1)
@@ -674,8 +815,255 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             font=(_FONT_MONO, 12),
         )
         self._log_box.grid(row=0, column=0, padx=8, pady=8, sticky="nsew")
+
+        discover_tab = self._surfaces_tabs.tab("Discover")
+        discover_tab.grid_columnconfigure(0, weight=1)
+        discover_tab.grid_rowconfigure(1, weight=1)
+
+        discover_header = _ctk.CTkFrame(
+            discover_tab,
+            fg_color="#11100E",
+            border_color="#2B2318",
+            border_width=1,
+            corner_radius=10,
+        )
+        discover_header.grid(row=0, column=0, padx=8, pady=(8, 6), sticky="ew")
+        discover_header.grid_columnconfigure(0, weight=1)
+        _ctk.CTkLabel(
+            discover_header,
+            text="Offline Plugin Hub",
+            font=(_FONT_DISPLAY, 18, "bold"),
+            text_color="#F7E8C8",
+        ).grid(row=0, column=0, padx=12, pady=(10, 0), sticky="w")
+        _ctk.CTkLabel(
+            discover_header,
+            text=(
+                "Discover deterministic plugin packs with preview cards. "
+                "Install in one click to your selected plugin root."
+            ),
+            font=(_FONT_UI, 12),
+            text_color="#CDB28A",
+        ).grid(row=1, column=0, padx=12, pady=(0, 10), sticky="w")
+        _ctk.CTkButton(
+            discover_header,
+            text="Refresh Discover",
+            command=self._refresh_discover_cards,
+            fg_color=_STUDIO_THEME["accent_cool"],
+            hover_color="#4A8681",
+            text_color="#06100F",
+            width=160,
+        ).grid(row=0, column=1, rowspan=2, padx=(8, 12), pady=10, sticky="e")
+
+        self._discover_cards_frame = _ctk.CTkScrollableFrame(
+            discover_tab,
+            fg_color="#0F0D0B",
+            border_color="#2A2219",
+            border_width=1,
+            corner_radius=10,
+        )
+        self._discover_cards_frame.grid(row=1, column=0, padx=8, pady=(0, 6), sticky="nsew")
+        self._discover_cards_frame.grid_columnconfigure(0, weight=1)
+
+        _ctk.CTkLabel(
+            discover_tab,
+            textvariable=self._discover_status_var,
+            font=(_FONT_UI, 12),
+            text_color=_STUDIO_THEME["text_muted"],
+            justify="left",
+            wraplength=560,
+        ).grid(row=2, column=0, padx=10, pady=(0, 8), sticky="w")
+
         self._surfaces_tabs.set("Dashboard")
         self._append_log("MMO StudioConsole Noir initialized.")
+        self._refresh_discover_cards()
+
+    def _discover_plugins_root_path(self) -> Path:
+        raw_plugins = self._plugins_var.get().strip()
+        if raw_plugins:
+            return Path(raw_plugins).expanduser().resolve()
+        return default_user_plugins_dir().expanduser().resolve()
+
+    def _refresh_discover_cards(self) -> None:
+        frame = self._discover_cards_frame
+        if frame is None:
+            return
+        install_root = self._discover_plugins_root_path()
+        try:
+            payload = build_plugin_market_list_payload(
+                plugins_dir=install_root,
+            )
+        except (RuntimeError, ValueError, AttributeError, OSError) as exc:
+            self._discover_status_var.set(
+                f"Discover unavailable: {exc}"
+            )
+            self._append_log(f"Discover refresh failed: {exc}")
+            return
+
+        cards = build_plugin_discover_cards(payload)
+        for child in frame.winfo_children():
+            child.destroy()
+
+        self._discover_install_buttons = {}
+
+        if not cards:
+            _ctk.CTkLabel(
+                frame,
+                text="No marketplace cards available.",
+                text_color="#B9A07E",
+                font=(_FONT_UI, 13),
+            ).grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        else:
+            self._render_discover_cards(cards)
+
+        entry_count = payload.get("entry_count")
+        installed_count = payload.get("installed_count")
+        if isinstance(entry_count, int) and isinstance(installed_count, int):
+            self._discover_status_var.set(
+                f"Discover ready: {entry_count} card(s), {installed_count} installed. "
+                f"Install target: {_as_posix(install_root)}"
+            )
+        else:
+            self._discover_status_var.set(
+                f"Discover ready. Install target: {_as_posix(install_root)}"
+            )
+
+    def _render_discover_cards(self, cards: Sequence[PluginDiscoverCard]) -> None:
+        frame = self._discover_cards_frame
+        if frame is None:
+            return
+        for row_index, card in enumerate(cards):
+            gradient = _DISCOVER_GRADIENTS.get(card.preview_gradient, _DISCOVER_GRADIENTS["ember"])
+            card_frame = _ctk.CTkFrame(
+                frame,
+                fg_color=gradient[0],
+                border_color=gradient[1],
+                border_width=2,
+                corner_radius=12,
+            )
+            card_frame.grid(row=row_index, column=0, padx=8, pady=8, sticky="ew")
+            card_frame.grid_columnconfigure(0, weight=1)
+
+            header = f"{card.name}  [{card.plugin_type}]  v{card.version}"
+            _ctk.CTkLabel(
+                card_frame,
+                text=header,
+                font=(_FONT_DISPLAY, 16, "bold"),
+                text_color=gradient[2],
+            ).grid(row=0, column=0, padx=12, pady=(10, 0), sticky="w")
+            _ctk.CTkLabel(
+                card_frame,
+                text=card.preview_tagline,
+                font=(_FONT_UI, 12, "bold"),
+                text_color=gradient[3],
+            ).grid(row=1, column=0, padx=12, pady=(2, 0), sticky="w")
+            _ctk.CTkLabel(
+                card_frame,
+                text=card.summary,
+                font=(_FONT_UI, 12),
+                text_color="#DEC7A2",
+                wraplength=520,
+                justify="left",
+            ).grid(row=2, column=0, padx=12, pady=(2, 2), sticky="w")
+
+            chips = card.preview_chips or card.tags[:3]
+            chips_text = "  ".join(f"[{chip}]" for chip in chips)
+            if chips_text:
+                _ctk.CTkLabel(
+                    card_frame,
+                    text=chips_text,
+                    font=(_FONT_MONO, 11),
+                    text_color="#C9E0DC" if card.plugin_type == "resolver" else "#E3C89A",
+                    justify="left",
+                    wraplength=520,
+                ).grid(row=3, column=0, padx=12, pady=(0, 10), sticky="w")
+
+            state_text = card.install_state.upper()
+            _ctk.CTkLabel(
+                card_frame,
+                text=f"{card.plugin_id}  |  state={state_text}",
+                font=(_FONT_MONO, 11),
+                text_color="#BDA47E",
+            ).grid(row=4, column=0, padx=12, pady=(0, 10), sticky="w")
+
+            button_text = "Install"
+            button_state = "normal"
+            button_color = _STUDIO_THEME["accent"]
+            button_hover = _STUDIO_THEME["accent_hover"]
+            if card.install_state == "installed":
+                button_text = "Installed"
+                button_state = "disabled"
+                button_color = "#4A3A24"
+                button_hover = "#4A3A24"
+            elif not card.installable:
+                button_text = "Unavailable"
+                button_state = "disabled"
+                button_color = "#403226"
+                button_hover = "#403226"
+            elif card.plugin_id in self._discover_installing_ids:
+                button_text = "Installing..."
+                button_state = "disabled"
+
+            install_button = _ctk.CTkButton(
+                card_frame,
+                text=button_text,
+                command=lambda pid=card.plugin_id: self._on_install_discover_plugin(pid),
+                width=150,
+                fg_color=button_color,
+                hover_color=button_hover,
+                state=button_state,
+                text_color="#1A1208" if button_state == "normal" else "#EAD9BE",
+            )
+            install_button.grid(row=0, column=1, rowspan=5, padx=(6, 12), pady=12, sticky="e")
+            self._discover_install_buttons[card.plugin_id] = install_button
+
+    def _on_install_discover_plugin(self, plugin_id: str) -> None:
+        normalized_plugin_id = plugin_id.strip()
+        if not normalized_plugin_id:
+            return
+        if normalized_plugin_id in self._discover_installing_ids:
+            return
+        self._discover_installing_ids.add(normalized_plugin_id)
+        button = self._discover_install_buttons.get(normalized_plugin_id)
+        if button is not None:
+            button.configure(text="Installing...", state="disabled")
+
+        thread = threading.Thread(
+            target=self._run_discover_install_worker,
+            args=(normalized_plugin_id,),
+            daemon=True,
+            name=f"mmo_gui_install_{normalized_plugin_id}",
+        )
+        thread.start()
+
+    def _run_discover_install_worker(self, plugin_id: str) -> None:
+        install_root = self._discover_plugins_root_path()
+        try:
+            receipt = install_plugin_market_entry(
+                plugin_id=plugin_id,
+                plugins_dir=install_root,
+            )
+            changed = bool(receipt.get("changed"))
+            if changed:
+                self._append_log_threadsafe(
+                    f"Installed plugin card {plugin_id} into {_as_posix(install_root)}"
+                )
+                self._set_status_threadsafe(
+                    f"Installed plugin {plugin_id}."
+                )
+            else:
+                self._append_log_threadsafe(
+                    f"Plugin card already installed: {plugin_id}"
+                )
+                self._set_status_threadsafe(
+                    f"Plugin {plugin_id} is already installed."
+                )
+        except (RuntimeError, ValueError, AttributeError, OSError) as exc:
+            self._append_log_threadsafe(f"Plugin install failed for {plugin_id}: {exc}")
+            self._set_status_threadsafe(f"Plugin install failed: {plugin_id}")
+            self._show_error_threadsafe("Plugin install failed", str(exc))
+        finally:
+            self._discover_installing_ids.discard(plugin_id)
+            self.after(0, self._refresh_discover_cards)
 
     def _wire_drag_drop(self) -> None:
         if DND_FILES is None:

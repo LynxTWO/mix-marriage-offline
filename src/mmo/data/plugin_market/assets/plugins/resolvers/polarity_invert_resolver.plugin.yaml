@@ -1,0 +1,11 @@
+plugin_id: "PLUGIN.RESOLVER.POLARITY_INVERT"
+plugin_type: "resolver"
+name: "Polarity Invert Resolver"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Recommends polarity inversion for negatively correlated stereo stems."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "plugins.resolvers.polarity_invert_resolver:PolarityInvertResolver"
+capabilities:
+  - "ACTION.UTILITY.POLARITY_INVERT"

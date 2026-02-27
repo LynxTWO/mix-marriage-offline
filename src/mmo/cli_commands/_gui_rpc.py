@@ -20,6 +20,7 @@ from mmo.cli_commands._project import (
 from mmo.core.env_doctor import build_env_doctor_report
 from mmo.core.plugin_market import (
     build_plugin_market_list_payload,
+    install_plugin_market_entry,
     update_plugin_market_snapshot,
 )
 
@@ -427,6 +428,41 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
             ],
             "optional_keys": [
                 "index_path",
+            ],
+        },
+    },
+    "plugin.market.install": {
+        "params_schema": {
+            "required": {
+                "plugin_id": "string",
+            },
+            "optional": {
+                "index": "string",
+                "plugins": "string",
+            },
+            "examples": [
+                {
+                    "plugin_id": "PLUGIN.RENDERER.GAIN_TRIM",
+                },
+                {
+                    "plugin_id": "PLUGIN.RENDERER.GAIN_TRIM",
+                    "plugins": "C:/mmo/plugins",
+                },
+            ],
+        },
+        "result_shape": {
+            "keys": [
+                "changed",
+                "manifest_path",
+                "module_path",
+                "plugin_id",
+                "plugins_dir",
+                "schema_version",
+            ],
+            "optional_keys": [
+                "copied_files",
+                "index_path",
+                "market_id",
             ],
         },
     },
@@ -1091,6 +1127,40 @@ def _handle_plugin_market_update(params: dict[str, Any]) -> dict[str, Any]:
         raise _RpcMethodError(message=str(exc)) from exc
 
 
+def _handle_plugin_market_install(params: dict[str, Any]) -> dict[str, Any]:
+    _validate_allowed_params(
+        method="plugin.market.install",
+        params=params,
+        allowed={"plugin_id", "plugins", "index"},
+    )
+    plugin_id = _require_str_param(
+        method="plugin.market.install",
+        params=params,
+        name="plugin_id",
+    )
+    plugins = _optional_str_param(
+        method="plugin.market.install",
+        params=params,
+        name="plugins",
+        default=None,
+    )
+    index = _optional_str_param(
+        method="plugin.market.install",
+        params=params,
+        name="index",
+        default=None,
+    )
+
+    try:
+        return install_plugin_market_entry(
+            plugin_id=plugin_id,
+            plugins_dir=Path(plugins) if isinstance(plugins, str) else None,
+            index_path=Path(index) if isinstance(index, str) else None,
+        )
+    except (RuntimeError, ValueError, AttributeError, OSError) as exc:
+        raise _RpcMethodError(message=str(exc)) from exc
+
+
 def _handle_rpc_discover(params: dict[str, Any]) -> dict[str, Any]:
     _validate_allowed_params(
         method="rpc.discover",
@@ -1112,6 +1182,7 @@ _RPC_METHOD_HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "project.write_render_request": _handle_project_write_render_request,
     "plugin.market.list": _handle_plugin_market_list,
     "plugin.market.update": _handle_plugin_market_update,
+    "plugin.market.install": _handle_plugin_market_install,
     "rpc.discover": _handle_rpc_discover,
 }
 

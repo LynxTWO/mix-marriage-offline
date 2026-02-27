@@ -16,6 +16,7 @@ from mmo.cli import main as cli_main
 from mmo.gui.main import (
     GuiPipelinePaths,
     GuiRunConfig,
+    build_plugin_discover_cards,
     build_pipeline_cli_argvs,
     build_safe_render_cli_argv,
     build_watch_cli_argv,
@@ -173,6 +174,43 @@ class TestGuiSmoke(unittest.TestCase):
             )
             self.assertIn("--visual-queue", argv)
             self.assertIn("--cinematic-progress", argv)
+
+    def test_plugin_discover_cards_are_sorted_and_deterministic(self) -> None:
+        payload = {
+            "entries": [
+                {
+                    "plugin_id": "PLUGIN.RENDERER.SAFE",
+                    "plugin_type": "renderer",
+                    "name": "Safe Renderer",
+                    "summary": "Conservative deterministic rendering.",
+                    "version": "0.1.0",
+                    "tags": ["render", "safety"],
+                    "preview": {
+                        "tagline": "Bounded-authority final print path.",
+                        "gradient": "sunset",
+                        "chips": ["Safe", "Render", "Deterministic"],
+                    },
+                    "install_state": "available",
+                    "installable": True,
+                },
+                {
+                    "plugin_id": "PLUGIN.DETECTOR.MUD",
+                    "plugin_type": "detector",
+                    "name": "Mud Detector",
+                    "summary": "Find low-mid masking.",
+                    "version": "0.1.0",
+                    "tags": ["analysis", "tonal"],
+                    "install_state": "installed",
+                    "installable": True,
+                },
+            ]
+        }
+        first = build_plugin_discover_cards(payload)
+        second = build_plugin_discover_cards(payload)
+        self.assertEqual(first, second)
+        self.assertEqual(tuple(card.plugin_id for card in first), ("PLUGIN.DETECTOR.MUD", "PLUGIN.RENDERER.SAFE"))
+        self.assertEqual(first[0].preview_gradient, "ember")
+        self.assertEqual(first[1].preview_gradient, "sunset")
 
     def test_cli_and_gui_safe_render_dry_run_parity_is_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as td:

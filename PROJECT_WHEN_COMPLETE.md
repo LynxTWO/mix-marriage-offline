@@ -151,6 +151,8 @@ The project is “complete enough” when all items below are true.
   monitoring without changing render decisions.
 - [x] Offline plugin marketplace discovery is available via bundled ontology index,
   CLI (`mmo plugin list/update`), and GUI browser surfaces.
+- [x] Desktop GUI includes an artistic `Discover` marketplace tab with preview
+  cards and deterministic one-click offline plugin install flow.
 - [ ] Preview/A-B audition is loudness-compensated by default (auto-gain for evaluation), and the report discloses the compensation used.
 - [ ] Presets (example: EQ vibe presets) can be initialized from measured stem features, and preset preview does not create surprise loudness jumps.
 - [ ] A “variant runner” can render multiple output variants (profiles/presets/targets) while reusing cached analysis artifacts keyed by content hash.

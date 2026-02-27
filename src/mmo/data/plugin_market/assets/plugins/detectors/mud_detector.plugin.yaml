@@ -1,0 +1,11 @@
+plugin_id: "PLUGIN.DETECTOR.MUD"
+plugin_type: "detector"
+name: "Mud Detector"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Detects low-mid buildup / mud (stub implementation)."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "plugins.detectors.mud_detector:MudDetector"
+capabilities:
+  - "ISSUE.SPECTRAL.MUD"

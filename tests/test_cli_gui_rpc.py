@@ -768,6 +768,30 @@ class TestGuiRpcPluginMarket(unittest.TestCase):
         if isinstance(entries, list):
             self.assertEqual(len(entries), result.get("entry_count"))
 
+    def test_plugin_market_install_copies_assets(self) -> None:
+        plugins_dir = _SANDBOX / "rpc_plugin_market_install" / "plugins"
+        request = {
+            "id": "req-plugin-market-install",
+            "method": "plugin.market.install",
+            "params": {
+                "plugin_id": "PLUGIN.RESOLVER.HEADROOM_GAIN",
+                "plugins": str(plugins_dir),
+            },
+        }
+
+        exit_code, responses, _, stderr = _run_rpc([request])
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr, "")
+        self.assertEqual(len(responses), 1)
+        response = responses[0]
+        self.assertTrue(response["ok"])
+        result = response["result"]
+        self.assertEqual(result.get("plugin_id"), "PLUGIN.RESOLVER.HEADROOM_GAIN")
+        self.assertEqual(result.get("plugins_dir"), plugins_dir.resolve().as_posix())
+        self.assertTrue((plugins_dir / "resolvers" / "headroom_gain_resolver.plugin.yaml").is_file())
+        self.assertTrue((plugins_dir / "resolvers" / "headroom_gain_resolver.py").is_file())
+
 
 class TestGuiRpcDeterminism(unittest.TestCase):
     @classmethod

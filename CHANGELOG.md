@@ -26,6 +26,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Added ASCII cinematic queue rendering for live operator visibility.
   - Added CLI flags `mmo watch --visual-queue --cinematic-progress`.
   - Added GUI watch-argv support for visual queue flags via `build_watch_cli_argv()`.
+- Artistic offline plugin hub:
+  - Added deterministic plugin marketplace install flow (`plugin install`,
+    `plugin.market.install`) that copies bundled offline plugin assets into
+    a chosen plugin root.
+  - Added a new `Discover` tab in `mmo-gui` with styled preview cards and
+    one-click install actions.
+  - Extended `ontology/plugin_index.yaml` with preview metadata and
+    install asset root contract for bundled offline installs.
 
 ## [1.1.0] — 2026-02-27
 

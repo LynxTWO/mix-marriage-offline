@@ -24,3 +24,6 @@ Non-negotiables:
   explicit state transitions, and install-safe CLI wiring).
 - Keep offline plugin marketplace discovery install-safe via bundled
   `ontology/plugin_index.yaml` and deterministic CLI/GUI listing paths.
+- Keep offline plugin hub installs deterministic and install-safe by sourcing
+  plugin assets from packaged data (no repo-root assumptions) and writing
+  stable manifest/module outputs in one-click install flows.

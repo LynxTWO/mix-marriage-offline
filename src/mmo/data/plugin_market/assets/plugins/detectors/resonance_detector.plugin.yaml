@@ -1,0 +1,11 @@
+plugin_id: "PLUGIN.DETECTOR.RESONANCE"
+plugin_type: "detector"
+name: "Resonance Detector"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Detects persistent narrow-band resonances (stub implementation)."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "plugins.detectors.resonance_detector:ResonanceDetector"
+capabilities:
+  - "ISSUE.SPECTRAL.RESONANCE"
