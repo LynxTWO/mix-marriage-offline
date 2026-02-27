@@ -17,3 +17,6 @@ Non-negotiables:
   and keep ETA/runtime diagnostics out of deterministic persisted artifacts.
 - Keep `fixtures/public_session/report.7_1_4.json` and
   `tests/test_full_determinism.py` in sync for full-pipeline byte-stability checks.
+- Keep watch-folder automation deterministic: debounce event bursts, detect
+  changed stem sets by signature, and launch install-safe `python -m mmo run`
+  render-many batches.

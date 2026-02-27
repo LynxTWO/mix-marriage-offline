@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Smart batch watch-folder workflow:
+  - New core module `src/mmo/core/watch_folder.py` with watchdog-backed
+    folder monitoring, debounce/settle behavior, and deterministic
+    stem-set signature tracking.
+  - New CLI command `mmo watch <folder>` that auto-runs
+    `run --render-many` for new/changed stem sets.
+  - GUI helper `build_watch_cli_argv()` for stable watch-command argv wiring.
 - Artistic GUI Visualization Dashboard v1.1 for `mmo-gui`:
   - Real-time frequency-colored spectrum analyzer with warm glow curves.
   - Vectorscope with confidence glow and deterministic trail rendering.

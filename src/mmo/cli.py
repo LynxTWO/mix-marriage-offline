@@ -153,6 +153,12 @@ try:
         merge_run_config,
         normalize_run_config,
     )
+    from mmo.core.watch_folder import (
+        DEFAULT_WATCH_TARGET_IDS,
+        WatchFolderConfig,
+        parse_watch_targets_csv,
+        run_watch_folder,
+    )
     from mmo.core.timeline import load_timeline
     from mmo.core.variants import build_variant_plan, run_variant_plan
     from mmo.ui.tui import choose_from_list, multi_toggle, render_header, yes_no
@@ -762,6 +768,66 @@ def main(argv: list[str] | None = None) -> int:
         "--variants",
         action="store_true",
         help="Force delegation to variants mode, even for a single preset/config.",
+    )
+
+    watch_parser = subparsers.add_parser(
+        "watch",
+        help=(
+            "Watch a folder for new/updated stems and automatically run "
+            "deterministic render-many batches."
+        ),
+    )
+    watch_parser.add_argument(
+        "folder",
+        help="Folder to monitor for stem sets.",
+    )
+    watch_parser.add_argument(
+        "--out",
+        default=None,
+        help=(
+            "Output root for watch batches "
+            "(default: <folder>/_mmo_watch_out)."
+        ),
+    )
+    watch_parser.add_argument(
+        "--targets",
+        default=",".join(DEFAULT_WATCH_TARGET_IDS),
+        help=(
+            "Comma-separated render-many target IDs "
+            "(default: TARGET.STEREO.2_0,TARGET.SURROUND.5_1,TARGET.SURROUND.7_1)."
+        ),
+    )
+    watch_parser.add_argument(
+        "--profile",
+        default="PROFILE.ASSIST",
+        help="Authority profile ID for render-many runs (default: PROFILE.ASSIST).",
+    )
+    watch_parser.add_argument(
+        "--settle-seconds",
+        type=float,
+        default=3.0,
+        help=(
+            "Debounce window in seconds before processing changed stem sets "
+            "(default: 3.0)."
+        ),
+    )
+    watch_parser.add_argument(
+        "--poll-interval",
+        type=float,
+        default=0.5,
+        help="Watch loop poll interval in seconds (default: 0.5).",
+    )
+    watch_parser.add_argument(
+        "--once",
+        action="store_true",
+        default=False,
+        help="Process current stem sets once and exit (no long-running watch loop).",
+    )
+    watch_parser.add_argument(
+        "--no-existing",
+        action="store_true",
+        default=False,
+        help="Skip processing stem sets already present when the command starts.",
     )
 
     ui_parser = subparsers.add_parser(
@@ -5296,6 +5362,23 @@ def main(argv: list[str] | None = None) -> int:
             args=args,
         )
         return exit_code
+    if args.command == "watch":
+        try:
+            target_ids = parse_watch_targets_csv(args.targets)
+            watch_config = WatchFolderConfig(
+                watch_dir=Path(args.folder),
+                out_dir=Path(args.out) if args.out else None,
+                target_ids=target_ids,
+                profile_id=args.profile,
+                settle_seconds=float(args.settle_seconds),
+                poll_interval_seconds=float(args.poll_interval),
+                include_existing=not bool(args.no_existing),
+                once=bool(args.once),
+            )
+            return run_watch_folder(watch_config)
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
     if args.command == "analyze":
         analyze_overrides: dict[str, Any] = {}
         if _flag_present(raw_argv, "--profile"):

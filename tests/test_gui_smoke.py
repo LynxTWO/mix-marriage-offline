@@ -18,6 +18,7 @@ from mmo.gui.main import (
     GuiRunConfig,
     build_pipeline_cli_argvs,
     build_safe_render_cli_argv,
+    build_watch_cli_argv,
     has_high_risk_blocked_recommendations,
     main as gui_main,
     normalize_render_many_layout_ids,
@@ -132,6 +133,34 @@ class TestGuiSmoke(unittest.TestCase):
             layout_idx = final_argv.index("--layout-standard")
             self.assertEqual(final_argv[layout_idx + 1], "FILM")
             self.assertIn("--out-report", analyze_argv)
+
+    def test_watch_cli_args_include_targets_and_once_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            temp_root = Path(td)
+            watch_dir = temp_root / "incoming"
+            out_dir = temp_root / "watch_out"
+            first = build_watch_cli_argv(
+                watch_dir,
+                out_dir=out_dir,
+                target_ids=("TARGET.STEREO.2_0", "TARGET.SURROUND.5_1"),
+                once=True,
+                include_existing=False,
+            )
+            second = build_watch_cli_argv(
+                watch_dir,
+                out_dir=out_dir,
+                target_ids=("TARGET.STEREO.2_0", "TARGET.SURROUND.5_1"),
+                once=True,
+                include_existing=False,
+            )
+
+            self.assertEqual(first, second)
+            self.assertEqual(first[0], "watch")
+            self.assertIn("--out", first)
+            self.assertIn("--targets", first)
+            self.assertIn("TARGET.STEREO.2_0,TARGET.SURROUND.5_1", first)
+            self.assertIn("--once", first)
+            self.assertIn("--no-existing", first)
 
     def test_cli_and_gui_safe_render_dry_run_parity_is_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as td:

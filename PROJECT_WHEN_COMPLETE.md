@@ -143,6 +143,9 @@ The project is “complete enough” when all items below are true.
 - [x] `safe-render` supports deterministic headphone preview rendering via
   `--preview-headphones`, writing explainable binaural preview outputs that
   reference their source render artifacts.
+- [x] `mmo watch <folder>` supports smart batch processing for incoming stems by
+  debouncing filesystem events and auto-running deterministic `--render-many`
+  workflows on changed stem sets.
 - [ ] Preview/A-B audition is loudness-compensated by default (auto-gain for evaluation), and the report discloses the compensation used.
 - [ ] Presets (example: EQ vibe presets) can be initialized from measured stem features, and preset preview does not create surprise loudness jumps.
 - [ ] A “variant runner” can render multiple output variants (profiles/presets/targets) while reusing cached analysis artifacts keyed by content hash.

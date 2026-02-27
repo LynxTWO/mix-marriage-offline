@@ -197,6 +197,38 @@ def build_analyze_cli_argv(
     ]
 
 
+def build_watch_cli_argv(
+    watch_dir: Path,
+    *,
+    out_dir: Path | None = None,
+    target_ids: Sequence[str] = _DEFAULT_RENDER_MANY_TARGET_IDS,
+    once: bool = False,
+    include_existing: bool = True,
+) -> list[str]:
+    argv = [
+        "watch",
+        _as_posix(watch_dir),
+    ]
+
+    if out_dir is not None:
+        argv.extend(["--out", _as_posix(out_dir)])
+
+    normalized_target_ids = [
+        token.strip()
+        for token in target_ids
+        if isinstance(token, str) and token.strip()
+    ]
+    if normalized_target_ids:
+        argv.extend(["--targets", ",".join(normalized_target_ids)])
+
+    if once:
+        argv.append("--once")
+    if not include_existing:
+        argv.append("--no-existing")
+
+    return argv
+
+
 def build_safe_render_cli_argv(
     config: GuiRunConfig,
     paths: GuiPipelinePaths,
