@@ -8,7 +8,7 @@ import shlex
 import subprocess
 import sys
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -79,6 +79,7 @@ class GuiRunConfig:
     render_many: bool
     render_many_target_ids: tuple[str, ...]
     layout_standard: str
+    preview_headphones: bool
     plugins_dir: Path
     profile_id: str = _DEFAULT_PROFILE_ID
 
@@ -257,6 +258,8 @@ def build_safe_render_cli_argv(
         argv.append("--live-progress")
     if cancel_file is not None:
         argv.extend(["--cancel-file", _as_posix(cancel_file)])
+    if config.preview_headphones:
+        argv.append("--preview-headphones")
     return argv
 
 
@@ -537,6 +540,18 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         )
         self._run_button.grid(row=14, column=0, padx=16, pady=(6, 10), sticky="ew")
 
+        self._preview_headphones_button = _ctk.CTkButton(
+            controls,
+            text="Preview on Headphones",
+            command=self._start_pipeline_headphones,
+            height=38,
+            fg_color="#8A6331",
+            hover_color="#755228",
+            text_color="#F8EEDB",
+            font=(_FONT_UI, 14, "bold"),
+        )
+        self._preview_headphones_button.grid(row=15, column=0, padx=16, pady=(0, 10), sticky="ew")
+
         self._progress_bar = _ctk.CTkProgressBar(
             controls,
             fg_color="#261F16",
@@ -544,7 +559,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             height=14,
             corner_radius=999,
         )
-        self._progress_bar.grid(row=15, column=0, padx=16, pady=(0, 8), sticky="ew")
+        self._progress_bar.grid(row=16, column=0, padx=16, pady=(0, 8), sticky="ew")
         self._progress_bar.set(0.0)
 
         self._cancel_button = _ctk.CTkButton(
@@ -556,7 +571,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             hover_color=_STUDIO_THEME["danger_hover"],
             state="disabled",
         )
-        self._cancel_button.grid(row=16, column=0, padx=16, pady=(0, 8), sticky="ew")
+        self._cancel_button.grid(row=17, column=0, padx=16, pady=(0, 8), sticky="ew")
 
         _ctk.CTkLabel(
             controls,
@@ -565,7 +580,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             text_color=_STUDIO_THEME["text_muted"],
             justify="left",
             wraplength=520,
-        ).grid(row=17, column=0, padx=16, pady=(0, 14), sticky="w")
+        ).grid(row=18, column=0, padx=16, pady=(0, 14), sticky="w")
 
         log_panel = _ctk.CTkFrame(
             self,
@@ -722,6 +737,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
     def _set_running_threadsafe(self, running: bool) -> None:
         def _apply() -> None:
             self._run_button.configure(state="disabled" if running else "normal")
+            self._preview_headphones_button.configure(state="disabled" if running else "normal")
             self._cancel_button.configure(state="normal" if running else "disabled")
 
         self.after(0, _apply)
@@ -774,6 +790,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             render_many=bool(self._render_many_var.get()),
             render_many_target_ids=render_many_targets,
             layout_standard=normalize_layout_standard(self._layout_standard_var.get()),
+            preview_headphones=False,
             plugins_dir=plugins_dir.resolve(),
             profile_id=profile_raw,
         )
@@ -785,10 +802,32 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         config = self._collect_config()
         if config is None:
             return
+        self._start_pipeline_with_config(
+            config,
+            status_text="Running analyze + dry-run safety preview...",
+        )
 
+    def _start_pipeline_headphones(self) -> None:
+        if self._worker_thread is not None and self._worker_thread.is_alive():
+            return
+
+        config = self._collect_config()
+        if config is None:
+            return
+        self._start_pipeline_with_config(
+            replace(config, preview_headphones=True),
+            status_text="Running analyze + headphone virtualization preview...",
+        )
+
+    def _start_pipeline_with_config(
+        self,
+        config: GuiRunConfig,
+        *,
+        status_text: str,
+    ) -> None:
         self._sync_dashboard_layout(config)
         self._set_running_threadsafe(True)
-        self._set_status_threadsafe("Running analyze + dry-run safety preview...")
+        self._set_status_threadsafe(status_text)
         self._set_progress_threadsafe(0.0)
         workspace_dir = config.out_dir / _DEFAULT_GUI_WORKSPACE
         workspace_dir.mkdir(parents=True, exist_ok=True)

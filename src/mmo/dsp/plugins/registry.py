@@ -9,6 +9,7 @@ from mmo.dsp.plugins.multiband_dynamic_auto_v0 import MultibandDynamicAutoV0Plug
 from mmo.dsp.plugins.multiband_expander_v0 import MultibandExpanderV0Plugin
 from mmo.dsp.plugins.simple_compressor_v0 import SimpleCompressorV0Plugin
 from mmo.dsp.plugins.tilt_eq_v0 import TiltEqV0Plugin
+from mmo.plugins.subjective.binaural_preview_v0 import BinauralPreviewV0Plugin
 from mmo.plugins.subjective.eq_safety_v0 import EqSafetyV0Plugin
 from mmo.plugins.subjective.early_reflections_v0 import EarlyReflectionsV0Plugin
 from mmo.plugins.subjective.height_air_v0 import HeightAirV0Plugin
@@ -30,6 +31,7 @@ _MULTICHANNEL_PLUGIN_REGISTRY: dict[str, MultichannelPlugin] = {
     "early_reflections_v0": EarlyReflectionsV0Plugin(),
     "eq_safety_v0": EqSafetyV0Plugin(),
     "reverb_safety_v0": ReverbSafetyV0Plugin(),
+    "binaural_preview_v0": BinauralPreviewV0Plugin(),
 }
 
 

@@ -324,6 +324,71 @@ class TestSafeRenderFullRender(unittest.TestCase):
             self.assertIsInstance(qa["outputs"], list)
             self.assertIsInstance(qa["issues"], list)
 
+    def test_full_render_preview_headphones_writes_binaural_outputs(self) -> None:
+        recs = [
+            {
+                "recommendation_id": "REC.TEST.GAIN.001",
+                "issue_id": "ISSUE.SAFETY.CLIPPING_SAMPLES",
+                "action_id": "ACTION.UTILITY.GAIN",
+                "risk": "low",
+                "requires_approval": False,
+                "target": {"scope": "stem", "stem_id": "kick"},
+                "params": [{"param_id": "PARAM.GAIN.DB", "value": -3.0}],
+            }
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            stems_dir = temp / "stems"
+            _write_16bit_wav(stems_dir / "kick.wav", amplitude=0.45)
+
+            report = _make_report(
+                stems_dir, "kick.wav", "kick",
+                clip_count=0, peak_dbfs=-6.0,
+                recommendations=recs,
+            )
+            report_path = temp / "report.json"
+            report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+            out_dir = temp / "renders"
+            manifest_path = temp / "render_manifest.json"
+            receipt_path = temp / "receipt.json"
+
+            exit_code, _o, err = _run_main(
+                [
+                    "safe-render",
+                    "--report", str(report_path),
+                    "--plugins", str(_PLUGINS_DIR),
+                    "--target", "stereo",
+                    "--out-dir", str(out_dir),
+                    "--out-manifest", str(manifest_path),
+                    "--receipt-out", str(receipt_path),
+                    "--preview-headphones",
+                ]
+            )
+            self.assertEqual(exit_code, 0, msg=err)
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifests = manifest.get("renderer_manifests", [])
+            self.assertIsInstance(manifests, list)
+
+            preview_manifest = None
+            for row in manifests:
+                if isinstance(row, dict) and row.get("renderer_id") == "PLUGIN.RENDERER.BINAURAL_PREVIEW_V0":
+                    preview_manifest = row
+                    break
+            self.assertIsNotNone(preview_manifest, "expected headphone preview renderer manifest")
+
+            outputs = preview_manifest.get("outputs", []) if isinstance(preview_manifest, dict) else []
+            self.assertGreater(len(outputs), 0, "expected at least one headphone preview output")
+
+            first_output = outputs[0]
+            self.assertEqual(first_output.get("format"), "wav")
+            self.assertEqual(first_output.get("channel_count"), 2)
+            metadata = first_output.get("metadata", {})
+            self.assertIn("preview_of_output_id", metadata)
+            preview_path = out_dir / Path(first_output.get("file_path", ""))
+            self.assertTrue(preview_path.exists(), f"missing preview file: {preview_path}")
+
     def test_receipt_blocked_recs_visible(self) -> None:
         """High-risk recs appear in blocked_recommendations without --approve."""
         schema = json.loads(

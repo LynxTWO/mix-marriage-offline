@@ -610,6 +610,7 @@ def _run_render_many_targets(
     force: bool = False,
     user_profile: dict[str, Any] | None = None,
     layout_standard: str = "SMPTE",
+    preview_headphones: bool = False,
     live_progress: bool = False,
     cancel_file: Path | None = None,
     cancel_token: CancelToken | None = None,
@@ -664,6 +665,7 @@ def _run_render_many_targets(
             user_profile=user_profile,
             render_many_targets=None,  # do not recurse
             layout_standard=layout_standard,
+            preview_headphones=preview_headphones,
             live_progress=live_progress,
             cancel_file=cancel_file,
             cancel_token=token,
@@ -852,6 +854,7 @@ def _run_safe_render_command(
     user_profile: dict[str, Any] | None = None,
     render_many_targets: list[str] | None = None,
     layout_standard: str = "SMPTE",
+    preview_headphones: bool = False,
     live_progress: bool = False,
     cancel_file: Path | None = None,
     cancel_token: CancelToken | None = None,
@@ -905,6 +908,7 @@ def _run_safe_render_command(
                 force=force,
                 user_profile=user_profile,
                 layout_standard=layout_standard,
+                preview_headphones=preview_headphones,
                 live_progress=live_progress,
                 cancel_file=cancel_file,
                 cancel_token=token,
@@ -1206,6 +1210,11 @@ def _run_safe_render_command(
                     f"target={target}",
                     f"profile_id={profile_id}",
                     (
+                        "headphone_preview_requested=true"
+                        if preview_headphones
+                        else "headphone_preview_requested=false"
+                    ),
+                    (
                         "layout_standard="
                         f"{layout_standard} (channel ordering: "
                         f"{'SMPTE/ITU-R default' if layout_standard == 'SMPTE' else 'Film/Cinema/Pro Tools'})"
@@ -1263,6 +1272,23 @@ def _run_safe_render_command(
             output_dir=out_dir,
             output_formats=output_formats,
         )
+        preview_output_count = 0
+        preview_skipped_count = 0
+        if preview_headphones:
+            from mmo.plugins.subjective.binaural_preview_v0 import (  # noqa: WPS433
+                build_headphone_preview_manifest,
+            )
+
+            preview_manifest = build_headphone_preview_manifest(
+                renderer_manifests=manifests,
+                output_dir=out_dir,
+                layout_standard=layout_standard,
+            )
+            manifests.append(preview_manifest)
+            preview_outputs = preview_manifest.get("outputs")
+            preview_skipped = preview_manifest.get("skipped")
+            preview_output_count = len(preview_outputs) if isinstance(preview_outputs, list) else 0
+            preview_skipped_count = len(preview_skipped) if isinstance(preview_skipped, list) else 0
         deliverables = build_deliverables_for_renderer_manifests(manifests)
         render_manifest = {
             "schema_version": "0.1.0",
@@ -1362,6 +1388,12 @@ def _run_safe_render_command(
                 f"target={target}",
                 f"profile_id={profile_id}",
                 f"renderers={','.join(renderer_ids) if renderer_ids else '<none>'}",
+                (
+                    "headphone_preview="
+                    f"enabled(outputs={preview_output_count},skipped={preview_skipped_count})"
+                    if preview_headphones
+                    else "headphone_preview=disabled"
+                ),
                 (
                     "layout_standard="
                     f"{layout_standard} (channel ordering: "

@@ -1080,6 +1080,15 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     safe_render_parser.add_argument(
+        "--preview-headphones",
+        action="store_true",
+        default=False,
+        help=(
+            "Render additional deterministic stereo headphone preview WAV files "
+            "using conservative binaural virtualization."
+        ),
+    )
+    safe_render_parser.add_argument(
         "--live-progress",
         action="store_true",
         default=False,
@@ -5679,6 +5688,7 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 render_many_targets=_render_many_targets,
                 layout_standard=_safe_render_layout_standard,
+                preview_headphones=bool(getattr(args, "preview_headphones", False)),
                 live_progress=bool(getattr(args, "live_progress", False)),
                 cancel_file=(
                     Path(args.cancel_file)

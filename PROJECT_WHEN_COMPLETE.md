@@ -140,6 +140,9 @@ The project is “complete enough” when all items below are true.
 - [ ] A “dry-run” mode exists for suggestions without applying changes.
 - [x] `safe-render` supports live explainable progress logging (`what/why/where/confidence`)
   and cooperative cancellation (`--cancel-file`) for CLI/GUI runs.
+- [x] `safe-render` supports deterministic headphone preview rendering via
+  `--preview-headphones`, writing explainable binaural preview outputs that
+  reference their source render artifacts.
 - [ ] Preview/A-B audition is loudness-compensated by default (auto-gain for evaluation), and the report discloses the compensation used.
 - [ ] Presets (example: EQ vibe presets) can be initialized from measured stem features, and preset preview does not create surprise loudness jumps.
 - [ ] A “variant runner” can render multiple output variants (profiles/presets/targets) while reusing cached analysis artifacts keyed by content hash.
@@ -151,6 +154,9 @@ The project is “complete enough” when all items below are true.
 - [x] Visualization Dashboard v1.1 exists as the primary GUI surface with deterministic
   spectrum/vectorscope/correlation visuals, cinematic 3D speaker/object views, and
   explainable per-object intent cards (`what/why/where/confidence`).
+- [x] GUI includes a bounded-authority `Preview on Headphones` action that
+  forwards to `safe-render --preview-headphones` and writes deterministic
+  binaural audition files.
 - [ ] A GUI exists (local web app is fine) that exposes the same workflow as the CLI: validate → analyze → scene → render → results → compare.
 - [ ] GUI copy and structure follow the design system in ontology/gui_design.yaml (theme tokens, screen templates, and progressive disclosure).
 - [ ] Any plugin/config UI is generated from JSON Schema with optional UI hints (example: x_mmo_ui or a dedicated ui_hints registry) so agents do not hand-build one-off forms.

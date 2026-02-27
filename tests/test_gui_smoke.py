@@ -112,6 +112,7 @@ class TestGuiSmoke(unittest.TestCase):
                     "TARGET.SURROUND.5_1",
                 ),
                 layout_standard="FILM",
+                preview_headphones=False,
                 plugins_dir=_PLUGINS_DIR,
             )
             workspace = temp_root / "work"
@@ -157,6 +158,7 @@ class TestGuiSmoke(unittest.TestCase):
                 render_many=False,
                 render_many_target_ids=(),
                 layout_standard="SMPTE",
+                preview_headphones=False,
                 plugins_dir=_PLUGINS_DIR,
             )
             config.out_dir.mkdir(parents=True, exist_ok=True)
@@ -201,6 +203,36 @@ class TestGuiSmoke(unittest.TestCase):
             self.assertEqual(stdout_a, stdout_b)
             self.assertEqual(stderr_a, stderr_b)
             self.assertEqual(bytes_a, bytes_b)
+
+    def test_preview_headphones_flag_is_forwarded_to_safe_render_argv(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            temp_root = Path(td)
+            config = GuiRunConfig(
+                stems_dir=temp_root / "stems",
+                out_dir=temp_root / "out",
+                target_id="TARGET.STEREO.2_0",
+                render_many=False,
+                render_many_target_ids=(),
+                layout_standard="SMPTE",
+                preview_headphones=True,
+                plugins_dir=_PLUGINS_DIR,
+            )
+            workspace = temp_root / "workspace"
+            paths = GuiPipelinePaths(
+                report_path=workspace / "report.json",
+                dry_receipt_path=workspace / "dry.receipt.json",
+                final_receipt_path=workspace / "final.receipt.json",
+                dry_manifest_path=workspace / "dry.manifest.json",
+                final_manifest_path=workspace / "final.manifest.json",
+                cancel_token_path=workspace / "cancel.token",
+            )
+            argv = build_safe_render_cli_argv(
+                config,
+                paths,
+                dry_run=True,
+                approve=None,
+            )
+            self.assertIn("--preview-headphones", argv)
 
     def test_high_risk_detection_helper(self) -> None:
         self.assertTrue(

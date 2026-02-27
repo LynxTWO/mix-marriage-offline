@@ -15,6 +15,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Cinematic 3D speaker layout + object placement previews with confidence badges.
   - Per-object intent cards (what/why/where/confidence) and deterministic
     surface snapshot signatures for screenshot-style regression tests.
+- Headphone binaural preview renderer for `safe-render`:
+  - New deterministic conservative preview plugin:
+    `src/mmo/plugins/subjective/binaural_preview_v0.py`
+    (5-standard aware: SMPTE, FILM, LOGIC_PRO, VST3, AAF).
+  - New CLI flag: `mmo safe-render --preview-headphones`.
+  - GUI action: `Preview on Headphones` button in `mmo-gui`.
+  - Preview outputs include explainable metadata linking each
+    `.headphones.wav` to the source render output.
 
 ## [1.0.0] — 2026-02-26
 
