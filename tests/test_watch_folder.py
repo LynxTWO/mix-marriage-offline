@@ -120,6 +120,11 @@ class TestWatchFolder(unittest.TestCase):
             mark_dirty_holder: dict[str, object] = {}
             stop_event = threading.Event()
 
+            fake_time = 0.0
+
+            def _fake_clock() -> float:
+                return fake_time
+
             class _FakeObserver:
                 def stop(self) -> None:
                     return None
@@ -135,14 +140,16 @@ class TestWatchFolder(unittest.TestCase):
             sleep_calls = 0
 
             def _fake_sleep(_seconds: float) -> None:
-                nonlocal sleep_calls
+                nonlocal sleep_calls, fake_time
                 sleep_calls += 1
+                fake_time += max(_seconds, 1e-5)  # always advance at least a tick
                 if sleep_calls == 1:
                     _write_audio(watch_dir / "new_set" / "snare.wav")
                     callback = mark_dirty_holder.get("callback")
                     self.assertTrue(callable(callback))
                     if callable(callback):
                         callback()
+                    fake_time += 0.01  # guarantee > settle_seconds=1e-6
                 elif sleep_calls >= 5:
                     stop_event.set()
 
@@ -165,6 +172,7 @@ class TestWatchFolder(unittest.TestCase):
                     command_runner=_fake_runner,
                     sleeper=_fake_sleep,
                     stop_event=stop_event,
+                    clock=_fake_clock,
                     log=lambda _: None,
                 )
 
