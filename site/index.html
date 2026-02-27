@@ -3,128 +3,374 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Mix Marriage Offline · v1.0</title>
+    <title>Mix Marriage Offline · Where precision meets the muse.</title>
     <meta
       name="description"
-      content="Mix Marriage Offline is an offline, deterministic mixing assistant with one-click installers for Windows, macOS, and Linux."
+      content="Mix Marriage Offline (MMO) — offline, deterministic stem-folder mixing assistant. One-click installers for Windows, macOS, and Linux. SMPTE/FILM/Logic/VST3/AAF layout-fluent. Mix once, feel forever."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Sora:wght@300;400;500;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+
+    <!-- Cinematic film-grain overlay -->
+    <div class="grain" aria-hidden="true"></div>
+
+    <!-- Ambient light pools -->
     <div class="ambient ambient-a" aria-hidden="true"></div>
     <div class="ambient ambient-b" aria-hidden="true"></div>
     <div class="ambient ambient-c" aria-hidden="true"></div>
 
-    <header class="hero section">
-      <nav class="topbar">
-        <span class="brand">Mix Marriage Offline</span>
-        <a class="link" href="https://github.com/danielboyd/mix-marriage-offline">GitHub</a>
-      </nav>
+    <!-- NAV -->
+    <nav class="topbar" role="navigation" aria-label="Site navigation">
+      <span class="brand">
+        <span class="brand-mmo">MMO</span>
+        <span class="brand-full">Mix Marriage Offline</span>
+      </span>
+      <div class="nav-links">
+        <a class="nav-link" href="#features">Features</a>
+        <a class="nav-link" href="#workflow">Workflow</a>
+        <a class="nav-link" href="#download">Download</a>
+        <a class="nav-link nav-link-gh" href="https://github.com/LynxTWO/mix-marriage-offline" target="_blank" rel="noopener">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.942.359.31.678.921.678 1.856 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </nav>
 
-      <div class="hero-grid">
-        <div class="hero-copy reveal" style="--delay: 0.05s">
-          <p class="eyebrow">v1.0 stable core</p>
+    <!-- HERO -->
+    <header class="hero section-wide">
+      <div class="hero-inner">
+        <div class="hero-copy reveal" style="--delay:0.05s">
+          <p class="eyebrow">v1.1 · offline · deterministic</p>
           <h1>
-            Precision engineering
-            <span class="ital">without</span>
-            stealing the art.
+            Where precision<br>
+            meets <span class="ital">the muse.</span>
           </h1>
           <p class="lede">
-            MMO is an offline mixing co-pilot for stem-folder workflows. Deterministic analysis,
-            explainable planning, and bounded authority from first scan to final render.
+            MMO is your offline mixing co-pilot. Deterministic analysis, explainable plans,
+            bounded authority — so you stay in the driver's seat.
           </p>
+          <p class="lede lede-sub">Mix once. Feel forever.</p>
           <div class="actions">
-            <a class="btn btn-primary" href="https://github.com/danielboyd/mix-marriage-offline/releases/tag/v1.0.0">
-              Download v1.0.0
+            <a class="btn btn-primary" href="#download">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              Download v1.1
             </a>
-            <a class="btn btn-ghost" href="https://github.com/danielboyd/mix-marriage-offline#readme">
+            <a class="btn btn-ghost" href="https://github.com/LynxTWO/mix-marriage-offline#readme" target="_blank" rel="noopener">
               Read docs
             </a>
           </div>
         </div>
 
-        <aside class="hero-panel reveal" style="--delay: 0.15s">
-          <h2>One-click installables</h2>
-          <ul>
-            <li><strong>Windows:</strong> signed setup <code>.exe</code></li>
-            <li><strong>macOS:</strong> signed desktop <code>.app</code></li>
-            <li><strong>Linux:</strong> portable <code>.AppImage</code></li>
-          </ul>
-          <p>
-            Every release ships deterministic checksums and platform-native packaging so users can
-            install quickly without a Python toolchain.
-          </p>
+        <!-- Console mockup panel -->
+        <aside class="console-mockup reveal" style="--delay:0.18s" aria-label="Dashboard preview">
+          <div class="console-bar">
+            <span class="console-dot dot-r"></span>
+            <span class="console-dot dot-y"></span>
+            <span class="console-dot dot-g"></span>
+            <span class="console-title">MMO · Dashboard</span>
+          </div>
+          <div class="console-body">
+            <div class="vibe-row">
+              <span class="vibe-label">Safety</span>
+              <span class="vibe-value safe">CLEAR</span>
+            </div>
+            <div class="vibe-row">
+              <span class="vibe-label">Layout</span>
+              <span class="vibe-value">7.1.4 SMPTE</span>
+            </div>
+            <div class="vibe-row">
+              <span class="vibe-label">Issues</span>
+              <span class="vibe-value warn">2 moderate</span>
+            </div>
+            <!-- Live spectrum bars -->
+            <div class="spectrum-bars" aria-hidden="true">
+              <div class="bar" style="--h:38%"></div>
+              <div class="bar" style="--h:72%"></div>
+              <div class="bar" style="--h:55%"></div>
+              <div class="bar" style="--h:90%"></div>
+              <div class="bar" style="--h:63%"></div>
+              <div class="bar" style="--h:48%"></div>
+              <div class="bar" style="--h:81%"></div>
+              <div class="bar" style="--h:44%"></div>
+              <div class="bar" style="--h:67%"></div>
+              <div class="bar" style="--h:59%"></div>
+              <div class="bar" style="--h:75%"></div>
+              <div class="bar" style="--h:32%"></div>
+              <div class="bar" style="--h:88%"></div>
+              <div class="bar" style="--h:51%"></div>
+              <div class="bar" style="--h:69%"></div>
+              <div class="bar" style="--h:42%"></div>
+            </div>
+            <!-- 3D speaker layout SVG -->
+            <div class="speaker-grid">
+              <svg viewBox="0 0 140 110" fill="none" xmlns="http://www.w3.org/2000/svg" class="speaker-svg" role="img" aria-label="7.1.4 speaker layout top-down view">
+                <rect x="5" y="5" width="130" height="100" rx="8" stroke="#c9933a" stroke-width="0.8" stroke-dasharray="4 3" opacity="0.35"/>
+                <circle cx="70" cy="62" r="5" fill="#c9933a" opacity="0.9"/>
+                <text x="70" y="76" text-anchor="middle" fill="#c9933a" font-size="6" opacity="0.8">YOU</text>
+                <circle cx="35" cy="22" r="4.5" fill="#e8b86d" opacity="0.85"/>
+                <text x="35" y="16" text-anchor="middle" fill="#e8b86d" font-size="5.5">L</text>
+                <circle cx="70" cy="16" r="4.5" fill="#e8b86d" opacity="0.85"/>
+                <text x="70" y="10" text-anchor="middle" fill="#e8b86d" font-size="5.5">C</text>
+                <circle cx="105" cy="22" r="4.5" fill="#e8b86d" opacity="0.85"/>
+                <text x="105" y="16" text-anchor="middle" fill="#e8b86d" font-size="5.5">R</text>
+                <circle cx="70" cy="30" r="3" fill="#c9933a" opacity="0.6"/>
+                <text x="70" y="27" text-anchor="middle" fill="#c9933a" font-size="4.5">LFE</text>
+                <circle cx="16" cy="62" r="4.5" fill="#8fa8c8" opacity="0.75"/>
+                <text x="9" y="62" text-anchor="middle" fill="#8fa8c8" font-size="5">Ls</text>
+                <circle cx="124" cy="62" r="4.5" fill="#8fa8c8" opacity="0.75"/>
+                <text x="131" y="62" text-anchor="middle" fill="#8fa8c8" font-size="5">Rs</text>
+                <circle cx="24" cy="92" r="4.5" fill="#7aa0c0" opacity="0.7"/>
+                <text x="24" y="103" text-anchor="middle" fill="#7aa0c0" font-size="5">Lrs</text>
+                <circle cx="116" cy="92" r="4.5" fill="#7aa0c0" opacity="0.7"/>
+                <text x="116" y="103" text-anchor="middle" fill="#7aa0c0" font-size="5">Rrs</text>
+                <!-- height rings -->
+                <circle cx="35" cy="22" r="8" stroke="#c9933a" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
+                <circle cx="105" cy="22" r="8" stroke="#c9933a" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
+                <circle cx="24" cy="92" r="8" stroke="#c9933a" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
+                <circle cx="116" cy="92" r="8" stroke="#c9933a" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.4"/>
+              </svg>
+              <p class="speaker-caption">7.1.4 · SMPTE canonical</p>
+            </div>
+          </div>
         </aside>
       </div>
     </header>
 
     <main>
-      <section class="section">
-        <div class="section-header reveal" style="--delay: 0.1s">
-          <p class="eyebrow">Why teams use MMO</p>
-          <h2>Objective math in front, creative intent intact.</h2>
+
+      <!-- STANDARDS STRIP -->
+      <section class="standards-strip" aria-label="Supported channel standards">
+        <p class="strip-label reveal" style="--delay:0.05s">Five channel standards, one workflow:</p>
+        <div class="standards reveal" style="--delay:0.08s">
+          <span class="std std-active" title="Internal canonical standard">SMPTE</span>
+          <span class="std-sep">·</span>
+          <span class="std">FILM</span>
+          <span class="std-sep">·</span>
+          <span class="std">LOGIC PRO</span>
+          <span class="std-sep">·</span>
+          <span class="std">VST3</span>
+          <span class="std-sep">·</span>
+          <span class="std">AAF</span>
+        </div>
+      </section>
+
+      <!-- FEATURES -->
+      <section id="features" class="section">
+        <div class="section-header reveal" style="--delay:0.05s">
+          <p class="eyebrow">Why engineers choose MMO</p>
+          <h2>Objective math in front.<br><span class="ital">Creative intent intact.</span></h2>
         </div>
         <div class="cards">
-          <article class="card reveal" style="--delay: 0.15s">
+          <article class="card reveal" style="--delay:0.08s">
+            <div class="card-icon" aria-hidden="true">⧖</div>
             <h3>Deterministic by design</h3>
-            <p>Same inputs and settings produce the same outputs, artifacts, and evidence.</p>
+            <p>Same inputs and settings yield identical outputs, artifacts, and evidence — every single time.</p>
           </article>
-          <article class="card reveal" style="--delay: 0.2s">
+          <article class="card reveal" style="--delay:0.11s">
+            <div class="card-icon" aria-hidden="true">◎</div>
             <h3>Explainable safety</h3>
-            <p>Every recommendation includes what, why, where, and confidence for quick review.</p>
+            <p>Every recommendation carries what, why, where, and confidence. No black-box surprises.</p>
           </article>
-          <article class="card reveal" style="--delay: 0.25s">
+          <article class="card reveal" style="--delay:0.14s">
+            <div class="card-icon" aria-hidden="true">≋</div>
             <h3>Layout fluent</h3>
-            <p>SMPTE, FILM, LOGIC_PRO, VST3, and AAF are first-class from import to render.</p>
+            <p>SMPTE, FILM, LOGIC PRO, VST3, and AAF are first-class from import all the way to render.</p>
+          </article>
+          <article class="card reveal" style="--delay:0.17s">
+            <div class="card-icon" aria-hidden="true">⊕</div>
+            <h3>Offline first</h3>
+            <p>Zero network calls in the core flow. Your stems, your machine, your privacy.</p>
+          </article>
+          <article class="card reveal" style="--delay:0.20s">
+            <div class="card-icon" aria-hidden="true">⚡</div>
+            <h3>Plugin marketplace</h3>
+            <p>Discover and install community detectors, resolvers, and renderers — fully offline, CLI and GUI.</p>
+          </article>
+          <article class="card reveal" style="--delay:0.23s">
+            <div class="card-icon" aria-hidden="true">◈</div>
+            <h3>Watch automation</h3>
+            <p>Smart watch-folder triggers deterministic batch renders the moment stems land in a folder.</p>
           </article>
         </div>
       </section>
 
-      <section class="section">
-        <div class="section-header reveal" style="--delay: 0.1s">
-          <p class="eyebrow">v1.0 release track</p>
-          <h2>Built for real-world delivery.</h2>
+      <!-- WORKFLOW -->
+      <section id="workflow" class="section">
+        <div class="section-header reveal" style="--delay:0.05s">
+          <p class="eyebrow">The MMO workflow</p>
+          <h2>Analyze once. Render <span class="ital">everywhere.</span></h2>
         </div>
-        <div class="timeline">
-          <div class="timeline-item reveal" style="--delay: 0.15s">
-            <p class="timeline-kicker">Analyze once</p>
-            <p>Scan stems, score risk, and build a deterministic issue map.</p>
+        <div class="flow">
+          <div class="flow-step reveal" style="--delay:0.08s">
+            <span class="flow-num">01</span>
+            <h3>Scan stems</h3>
+            <p>Point MMO at your stem folder. It validates formats, measures levels, and builds a deterministic issue map.</p>
           </div>
-          <div class="timeline-item reveal" style="--delay: 0.2s">
-            <p class="timeline-kicker">Render many</p>
-            <p>Deliver stereo, surround, and immersive targets from one planning pass.</p>
+          <div class="flow-arrow reveal" style="--delay:0.11s" aria-hidden="true">→</div>
+          <div class="flow-step reveal" style="--delay:0.14s">
+            <span class="flow-num">02</span>
+            <h3>Plan renders</h3>
+            <p>One planning pass targets stereo, 5.1, 7.1, 7.1.4, and any mix of the five layout standards.</p>
           </div>
-          <div class="timeline-item reveal" style="--delay: 0.25s">
-            <p class="timeline-kicker">Ship confidently</p>
-            <p>Installer artifacts, checksums, signatures, and release notes in one workflow.</p>
+          <div class="flow-arrow reveal" style="--delay:0.17s" aria-hidden="true">→</div>
+          <div class="flow-step reveal" style="--delay:0.20s">
+            <span class="flow-num">03</span>
+            <h3>Ship confidently</h3>
+            <p>Installer artifacts, checksums, signatures, translation QA, and PDF recall sheets in one run.</p>
           </div>
+        </div>
+
+        <!-- CLI block -->
+        <div class="cli-block reveal" style="--delay:0.10s">
+          <div class="cli-bar">
+            <span class="cli-dot"></span><span class="cli-dot"></span><span class="cli-dot"></span>
+            <span class="cli-title">Terminal</span>
+          </div>
+          <pre class="cli-body"><code><span class="c-dim"># Scan + render to all 5 layout standards in one pass</span>
+<span class="c-prompt">$</span> mmo safe-render \
+    --report out/report.json \
+    --render-many \
+    --render-many-targets stereo,5.1,7.1.4 \
+    --out-dir out/deliverables/
+
+<span class="c-dim"># Watch folder: deterministic batch on every stem drop</span>
+<span class="c-prompt">$</span> mmo watch ./stems --out-dir out/ --render-many
+
+<span class="c-dim"># Browse the offline plugin marketplace</span>
+<span class="c-prompt">$</span> mmo plugin list</code></pre>
         </div>
       </section>
+
+      <!-- LAYOUT TABLE -->
+      <section class="section section-panel">
+        <div class="section-header reveal" style="--delay:0.05s">
+          <p class="eyebrow">Channel layout standards</p>
+          <h2>7.1.4 — slot map across all five standards</h2>
+        </div>
+        <div class="table-wrap reveal" style="--delay:0.10s">
+          <table class="layout-table" aria-label="7.1.4 channel order by standard">
+            <thead>
+              <tr>
+                <th>Slot</th>
+                <th class="th-smpte">SMPTE</th>
+                <th>FILM</th>
+                <th>LOGIC PRO</th>
+                <th>VST3</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>1</td><td class="td-smpte">L</td><td>L</td><td>L</td><td>L</td></tr>
+              <tr><td>2</td><td class="td-smpte">R</td><td>C</td><td>C</td><td>R</td></tr>
+              <tr><td>3</td><td class="td-smpte">C</td><td>R</td><td>R</td><td>C</td></tr>
+              <tr><td>4</td><td class="td-smpte">LFE</td><td>Ls</td><td>Ls</td><td>LFE</td></tr>
+              <tr><td>5</td><td class="td-smpte">Ls</td><td>Rs</td><td>Rs</td><td>Ls</td></tr>
+              <tr><td>6</td><td class="td-smpte">Rs</td><td>Lrs</td><td>Lrs</td><td>Rs</td></tr>
+              <tr><td>7</td><td class="td-smpte">Lrs</td><td>Rrs</td><td>Rrs</td><td>Lrs</td></tr>
+              <tr><td>8</td><td class="td-smpte">Rrs</td><td>LFE</td><td>LFE</td><td>Rrs</td></tr>
+              <tr><td>9–12</td><td class="td-smpte">TFL TFR TRL TRR</td><td>TFL TFR TRL TRR</td><td>TFL TFR TRL TRR</td><td>TFL TFR TRL TRR</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="table-note reveal" style="--delay:0.12s">Internal canonical standard is always <strong>SMPTE</strong>. MMO remaps on import and export — mix once, deliver everywhere.</p>
+      </section>
+
+      <!-- DOWNLOAD -->
+      <section id="download" class="section">
+        <div class="section-header reveal" style="--delay:0.05s">
+          <p class="eyebrow">One-click installers</p>
+          <h2>Download for <span class="ital">your platform.</span></h2>
+          <p class="section-sub">No Python required. Signed binaries with checksums on every tagged release.</p>
+        </div>
+        <div class="dl-cards">
+          <a class="dl-card reveal" style="--delay:0.08s"
+             href="https://github.com/LynxTWO/mix-marriage-offline/releases/latest"
+             target="_blank" rel="noopener" aria-label="Download MMO for Windows">
+            <div class="dl-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="34" height="34"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+            </div>
+            <h3>Windows</h3>
+            <p>Signed <code>.exe</code> installer</p>
+            <span class="dl-badge">Download →</span>
+          </a>
+          <a class="dl-card reveal" style="--delay:0.12s"
+             href="https://github.com/LynxTWO/mix-marriage-offline/releases/latest"
+             target="_blank" rel="noopener" aria-label="Download MMO for macOS">
+            <div class="dl-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="34" height="34"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg>
+            </div>
+            <h3>macOS</h3>
+            <p>Signed <code>.app</code> bundle</p>
+            <span class="dl-badge">Download →</span>
+          </a>
+          <a class="dl-card reveal" style="--delay:0.16s"
+             href="https://github.com/LynxTWO/mix-marriage-offline/releases/latest"
+             target="_blank" rel="noopener" aria-label="Download MMO for Linux">
+            <div class="dl-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="34" height="34"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.533-.05.291-.128.898.082 1.51.067.185.136.37.228.518.23.37.514.686.832.958a4.52 4.52 0 003.054 1.168c.76.012 1.527-.12 2.244-.432.714-.31 1.386-.739 1.977-1.261.537-.476.9-1.061 1.137-1.682.237-.625.32-1.276.28-1.906l.039-.048c.262-.353.473-.73.674-1.134a4.12 4.12 0 00.26-1.01c.035-.283.052-.574.07-.86.073-1.142.124-2.287.293-3.414.145-.97.379-1.927.745-2.775.391-.904.929-1.72 1.612-2.41.683-.692 1.525-1.263 2.483-1.594.463-.164.953-.257 1.446-.263h.048c.447 0 .888.094 1.298.27 2.157.933 3.193 3.514 2.267 5.672a4.52 4.52 0 01-2.627 2.405c-.976.348-1.997.382-2.997.133-.974-.24-1.895-.72-2.724-1.302l-.02-.015c-.04.248-.075.497-.1.747-.03.282-.042.566-.042.85 0 .37.02.74.062 1.107a3.93 3.93 0 00.347 1.298c.304.667.786 1.268 1.438 1.68a4.69 4.69 0 002.137.71c.87.093 1.771-.011 2.609-.33.84-.32 1.607-.839 2.208-1.505.594-.66 1.008-1.45 1.168-2.295.163-.842.08-1.728-.225-2.538l.006-.009c.294-.405.52-.854.673-1.33.15-.47.229-.965.239-1.47a4.64 4.64 0 00-.181-1.41c-.298-1.02-.93-1.932-1.738-2.644-.403-.36-.856-.648-1.34-.865a4.98 4.98 0 00-1.563-.383 5.12 5.12 0 00-1.593.098c-.513.133-.997.359-1.43.66a5.46 5.46 0 00-1.084 1.092 6.25 6.25 0 00-.672 1.469c-.11.358-.173.73-.187 1.107-.014.36.012.726.076 1.082.13.717.415 1.402.828 1.99.41.585.943 1.073 1.55 1.405.3.163.614.286.943.36.33.07.669.09 1.01.058a3.8 3.8 0 001.9-.748 3.53 3.53 0 001.084-1.565c.182-.553.218-1.15.097-1.72a3.15 3.15 0 00-.64-1.386 3.13 3.13 0 00-1.168-.895 3.16 3.16 0 00-1.44-.24c-.49.033-.968.175-1.397.41-.434.237-.81.57-1.101.97-.29.4-.49.864-.578 1.357a3.51 3.51 0 00.028 1.434"/></svg>
+            </div>
+            <h3>Linux</h3>
+            <p>Portable <code>.AppImage</code></p>
+            <span class="dl-badge">Download →</span>
+          </a>
+        </div>
+        <p class="dl-verify reveal" style="--delay:0.20s">
+          Every release ships SHA-256 checksums and platform signatures.
+          <a href="https://github.com/LynxTWO/mix-marriage-offline/releases" target="_blank" rel="noopener">View all releases →</a>
+        </p>
+      </section>
+
     </main>
 
-    <footer class="section footer reveal" style="--delay: 0.15s">
-      <p>Mix Marriage Offline · Apache-2.0 · Built for offline engineering workflows.</p>
+    <!-- FOOTER -->
+    <footer class="footer-bar">
+      <div class="footer-inner">
+        <span class="footer-brand">Mix Marriage Offline</span>
+        <span class="footer-sep">·</span>
+        <span>Apache-2.0</span>
+        <span class="footer-sep">·</span>
+        <a class="footer-link" href="https://github.com/LynxTWO/mix-marriage-offline" target="_blank" rel="noopener">GitHub</a>
+        <span class="footer-sep">·</span>
+        <a class="footer-link" href="https://github.com/LynxTWO/mix-marriage-offline/releases" target="_blank" rel="noopener">Releases</a>
+        <span class="footer-sep">·</span>
+        <a class="footer-link" href="https://github.com/LynxTWO/mix-marriage-offline/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+      </div>
+      <p class="footer-tagline">The machine handles the math. You handle the music.</p>
     </footer>
 
     <script>
+      // Intersection observer for reveal animations
       const observer = new IntersectionObserver(
         (entries) => {
           for (const entry of entries) {
             if (entry.isIntersecting) {
               entry.target.classList.add("is-visible");
+              observer.unobserve(entry.target);
             }
           }
         },
-        { threshold: 0.2 }
+        { threshold: 0.12, rootMargin: "0px 0px -40px 0px" }
       );
       for (const node of document.querySelectorAll(".reveal")) {
         observer.observe(node);
+      }
+
+      // Spectrum bar live animation (console mockup)
+      const bars = document.querySelectorAll(".bar");
+      if (bars.length) {
+        function animateBars() {
+          bars.forEach((b) => {
+            const h = 18 + Math.random() * 74;
+            b.style.setProperty("--h", h + "%");
+          });
+        }
+        setInterval(animateBars, 900);
       }
     </script>
   </body>

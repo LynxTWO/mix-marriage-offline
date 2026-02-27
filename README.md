@@ -1,13 +1,13 @@
 # Mix Marriage Offline (MMO)
 
-[![CI](https://github.com/danielboyd/mix-marriage-offline/actions/workflows/ci.yml/badge.svg)](https://github.com/danielboyd/mix-marriage-offline/actions/workflows/ci.yml)
-[![Policy Validation](https://github.com/danielboyd/mix-marriage-offline/actions/workflows/policy-validation.yml/badge.svg)](https://github.com/danielboyd/mix-marriage-offline/actions/workflows/policy-validation.yml)
+[![CI](https://github.com/LynxTWO/mix-marriage-offline/actions/workflows/ci.yml/badge.svg)](https://github.com/LynxTWO/mix-marriage-offline/actions/workflows/ci.yml)
+[![Policy Validation](https://github.com/LynxTWO/mix-marriage-offline/actions/workflows/policy-validation.yml/badge.svg)](https://github.com/LynxTWO/mix-marriage-offline/actions/workflows/policy-validation.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
 
 An open-source, offline mixing assistant that handles the technical math so humans can focus on vibe, intent, and performance.
 
-Website: https://danielboyd.github.io/mix-marriage-offline/
+Website: [lynxtwo.github.io/mix-marriage-offline](https://lynxtwo.github.io/mix-marriage-offline/)
 
 MMO is a standalone tool that analyzes exported stems in a folder and produces:
 
