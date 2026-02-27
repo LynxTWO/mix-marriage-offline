@@ -156,7 +156,9 @@ try:
     from mmo.core.watch_folder import (
         DEFAULT_WATCH_TARGET_IDS,
         WatchFolderConfig,
+        WatchQueueSnapshot,
         parse_watch_targets_csv,
+        render_watch_queue_snapshot,
         run_watch_folder,
     )
     from mmo.core.timeline import load_timeline
@@ -828,6 +830,18 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         default=False,
         help="Skip processing stem sets already present when the command starts.",
+    )
+    watch_parser.add_argument(
+        "--visual-queue",
+        action="store_true",
+        default=False,
+        help="Print an ASCII watch queue snapshot after each batch-state change.",
+    )
+    watch_parser.add_argument(
+        "--cinematic-progress",
+        action="store_true",
+        default=False,
+        help="Use cinematic mood labels in visual queue output.",
     )
 
     ui_parser = subparsers.add_parser(
@@ -5426,7 +5440,20 @@ def main(argv: list[str] | None = None) -> int:
                 include_existing=not bool(args.no_existing),
                 once=bool(args.once),
             )
-            return run_watch_folder(watch_config)
+            queue_listener: Callable[[WatchQueueSnapshot], None] | None = None
+            if bool(args.visual_queue):
+                queue_listener = (
+                    lambda snapshot: print(
+                        render_watch_queue_snapshot(
+                            snapshot,
+                            cinematic=bool(args.cinematic_progress),
+                        )
+                    )
+                )
+            return run_watch_folder(
+                watch_config,
+                queue_listener=queue_listener,
+            )
         except (RuntimeError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
             return 1

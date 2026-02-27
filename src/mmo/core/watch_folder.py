@@ -6,7 +6,7 @@ import subprocess
 import sys
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -20,6 +20,27 @@ DEFAULT_WATCH_TARGET_IDS: tuple[str, ...] = (
 )
 
 _SLUG_CLEAN_RE = re.compile(r"[^a-z0-9._-]+")
+
+WATCH_QUEUE_STATE_PENDING = "pending"
+WATCH_QUEUE_STATE_RUNNING = "running"
+WATCH_QUEUE_STATE_SUCCEEDED = "succeeded"
+WATCH_QUEUE_STATE_FAILED = "failed"
+_WATCH_QUEUE_DONE_STATES = {
+    WATCH_QUEUE_STATE_SUCCEEDED,
+    WATCH_QUEUE_STATE_FAILED,
+}
+_WATCH_QUEUE_STATE_TOKENS: dict[str, str] = {
+    WATCH_QUEUE_STATE_PENDING: "[..]",
+    WATCH_QUEUE_STATE_RUNNING: "[>>]",
+    WATCH_QUEUE_STATE_SUCCEEDED: "[OK]",
+    WATCH_QUEUE_STATE_FAILED: "[!!]",
+}
+_WATCH_QUEUE_MOODS: tuple[str, ...] = (
+    "fade-in",
+    "lift",
+    "drive",
+    "resolve",
+)
 
 
 @dataclass(frozen=True)
@@ -44,6 +65,94 @@ class ResolvedWatchFolderConfig:
     poll_interval_seconds: float
     include_existing: bool
     once: bool
+
+
+@dataclass(frozen=True)
+class WatchQueueItem:
+    batch_key: str
+    stems_dir: Path
+    out_dir: Path
+    state: str = WATCH_QUEUE_STATE_PENDING
+    return_code: int | None = None
+
+
+@dataclass(frozen=True)
+class WatchQueueSnapshot:
+    tick: int
+    total: int
+    completed: int
+    running: int
+    failed: int
+    pending: int
+    progress: float
+    items: tuple[WatchQueueItem, ...]
+
+
+WatchQueueListener = Callable[[WatchQueueSnapshot], None]
+
+
+class _WatchQueueState:
+    def __init__(self, items: Sequence[WatchQueueItem]) -> None:
+        self._tick = 0
+        self._order = [item.batch_key for item in items]
+        self._items = {item.batch_key: item for item in items}
+
+    def snapshot(self) -> WatchQueueSnapshot:
+        ordered_items = tuple(self._items[key] for key in self._order)
+        total = len(ordered_items)
+        running = sum(1 for row in ordered_items if row.state == WATCH_QUEUE_STATE_RUNNING)
+        failed = sum(1 for row in ordered_items if row.state == WATCH_QUEUE_STATE_FAILED)
+        pending = sum(1 for row in ordered_items if row.state == WATCH_QUEUE_STATE_PENDING)
+        completed = sum(1 for row in ordered_items if row.state in _WATCH_QUEUE_DONE_STATES)
+        if total == 0:
+            progress = 1.0
+        else:
+            weighted = 0.0
+            for row in ordered_items:
+                if row.state == WATCH_QUEUE_STATE_PENDING:
+                    weighted += 0.0
+                elif row.state == WATCH_QUEUE_STATE_RUNNING:
+                    weighted += 0.6
+                else:
+                    weighted += 1.0
+            progress = weighted / float(total)
+        return WatchQueueSnapshot(
+            tick=self._tick,
+            total=total,
+            completed=completed,
+            running=running,
+            failed=failed,
+            pending=pending,
+            progress=progress,
+            items=ordered_items,
+        )
+
+    def mark_running(self, batch_key: str) -> WatchQueueSnapshot:
+        item = self._items.get(batch_key)
+        if item is None:
+            return self.snapshot()
+        if item.state == WATCH_QUEUE_STATE_RUNNING:
+            return self.snapshot()
+        self._items[batch_key] = replace(
+            item,
+            state=WATCH_QUEUE_STATE_RUNNING,
+            return_code=None,
+        )
+        self._tick += 1
+        return self.snapshot()
+
+    def mark_finished(self, batch_key: str, *, exit_code: int) -> WatchQueueSnapshot:
+        item = self._items.get(batch_key)
+        if item is None:
+            return self.snapshot()
+        state = WATCH_QUEUE_STATE_SUCCEEDED if int(exit_code) == 0 else WATCH_QUEUE_STATE_FAILED
+        self._items[batch_key] = replace(
+            item,
+            state=state,
+            return_code=int(exit_code),
+        )
+        self._tick += 1
+        return self.snapshot()
 
 
 @dataclass
@@ -212,6 +321,56 @@ def batch_out_dir_for_stems_dir(
     return out_root.resolve() / f"{slug}__{key_hash}"
 
 
+def _clamp(value: float, *, lo: float, hi: float) -> float:
+    return max(lo, min(hi, float(value)))
+
+
+def _watch_queue_label(item: WatchQueueItem) -> str:
+    label = "root" if item.batch_key == "." else item.batch_key
+    return label.replace("\\", "/")
+
+
+def render_watch_queue_snapshot(
+    snapshot: WatchQueueSnapshot,
+    *,
+    width: int = 44,
+    cinematic: bool = True,
+) -> str:
+    bar_width = max(12, min(96, int(width)))
+    progress = _clamp(snapshot.progress, lo=0.0, hi=1.0)
+    filled = int(round(progress * bar_width))
+    if filled <= 0:
+        bar = "." * bar_width
+    elif filled >= bar_width:
+        bar = "=" * bar_width
+    else:
+        bar = ("=" * (filled - 1)) + ">" + ("." * (bar_width - filled))
+
+    mood = _WATCH_QUEUE_MOODS[snapshot.tick % len(_WATCH_QUEUE_MOODS)] if cinematic else "steady"
+    lines = [
+        (
+            "watch queue | total="
+            f"{snapshot.total} done={snapshot.completed} run={snapshot.running} "
+            f"fail={snapshot.failed} pending={snapshot.pending}"
+        ),
+        f"[{bar}] {int(round(progress * 100.0)):3d}% | mood={mood}",
+    ]
+
+    for item in snapshot.items[:8]:
+        state_token = _WATCH_QUEUE_STATE_TOKENS.get(item.state, "[??]")
+        suffix = ""
+        if item.state == WATCH_QUEUE_STATE_FAILED and item.return_code is not None:
+            suffix = f" (exit {item.return_code})"
+        elif item.state == WATCH_QUEUE_STATE_RUNNING:
+            suffix = " (rendering)"
+        lines.append(f"{state_token} {_watch_queue_label(item)}{suffix}")
+
+    if len(snapshot.items) > 8:
+        lines.append(f"... +{len(snapshot.items) - 8} more batch(es)")
+
+    return "\n".join(lines)
+
+
 def build_render_many_run_argv(
     *,
     stems_dir: Path,
@@ -281,19 +440,38 @@ def _process_changed_stem_sets(
     command_runner: Callable[[Sequence[str]], int],
     log: Callable[[str], None],
     log_error: Callable[[str], None],
+    queue_listener: WatchQueueListener | None = None,
 ) -> int:
     failures = 0
     changed_stem_sets = tracker.collect_changed_stem_sets(config.watch_dir)
+    queue_items: list[WatchQueueItem] = []
     for stems_dir in changed_stem_sets:
-        batch_key = batch_key_from_stems_dir(
-            watch_dir=config.watch_dir,
-            stems_dir=stems_dir,
+        queue_items.append(
+            WatchQueueItem(
+                batch_key=batch_key_from_stems_dir(
+                    watch_dir=config.watch_dir,
+                    stems_dir=stems_dir,
+                ),
+                stems_dir=stems_dir,
+                out_dir=batch_out_dir_for_stems_dir(
+                    out_root=config.out_dir,
+                    watch_dir=config.watch_dir,
+                    stems_dir=stems_dir,
+                ),
+            )
         )
-        out_dir = batch_out_dir_for_stems_dir(
-            out_root=config.out_dir,
-            watch_dir=config.watch_dir,
-            stems_dir=stems_dir,
-        )
+
+    queue_state = _WatchQueueState(queue_items)
+    if queue_listener is not None:
+        queue_listener(queue_state.snapshot())
+
+    for item in queue_items:
+        if queue_listener is not None:
+            queue_listener(queue_state.mark_running(item.batch_key))
+
+        stems_dir = item.stems_dir
+        out_dir = item.out_dir
+        batch_key = item.batch_key
         out_dir.mkdir(parents=True, exist_ok=True)
         argv = build_render_many_run_argv(
             stems_dir=stems_dir,
@@ -303,6 +481,8 @@ def _process_changed_stem_sets(
         )
         log(f"watch: batch={batch_key} -> {out_dir.as_posix()}")
         exit_code = command_runner(argv)
+        if queue_listener is not None:
+            queue_listener(queue_state.mark_finished(batch_key, exit_code=exit_code))
         if exit_code != 0:
             failures += 1
             log_error(f"watch: batch failed ({exit_code}) for {stems_dir.as_posix()}")
@@ -318,6 +498,7 @@ def run_watch_folder(
     stop_event: threading.Event | None = None,
     log: Callable[[str], None] = print,
     log_error: Callable[[str], None] | None = None,
+    queue_listener: WatchQueueListener | None = None,
 ) -> int:
     resolved = resolve_watch_folder_config(config)
     resolved.out_dir.mkdir(parents=True, exist_ok=True)
@@ -334,6 +515,7 @@ def run_watch_folder(
             command_runner=command,
             log=log,
             log_error=error_writer,
+            queue_listener=queue_listener,
         )
 
     if not resolved.include_existing:
@@ -361,6 +543,7 @@ def run_watch_folder(
                     command_runner=command,
                     log=log,
                     log_error=error_writer,
+                    queue_listener=queue_listener,
                 )
                 if batch_status != 0:
                     overall_status = 1
@@ -373,13 +556,21 @@ def run_watch_folder(
 
 __all__ = [
     "DEFAULT_WATCH_TARGET_IDS",
+    "WATCH_QUEUE_STATE_PENDING",
+    "WATCH_QUEUE_STATE_RUNNING",
+    "WATCH_QUEUE_STATE_SUCCEEDED",
+    "WATCH_QUEUE_STATE_FAILED",
     "WatchFolderConfig",
     "ResolvedWatchFolderConfig",
     "WatchBatchTracker",
+    "WatchQueueItem",
+    "WatchQueueSnapshot",
+    "WatchQueueListener",
     "batch_key_from_stems_dir",
     "stem_set_signature",
     "batch_out_dir_for_stems_dir",
     "build_render_many_run_argv",
+    "render_watch_queue_snapshot",
     "parse_watch_targets_csv",
     "resolve_watch_folder_config",
     "run_watch_folder",

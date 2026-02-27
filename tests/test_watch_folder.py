@@ -12,8 +12,10 @@ from mmo.core.watch_folder import (
     DEFAULT_WATCH_TARGET_IDS,
     WatchBatchTracker,
     WatchFolderConfig,
+    WatchQueueSnapshot,
     batch_out_dir_for_stems_dir,
     parse_watch_targets_csv,
+    render_watch_queue_snapshot,
     run_watch_folder,
 )
 
@@ -104,6 +106,72 @@ class TestWatchFolder(unittest.TestCase):
                 self.assertIn("--render-many", argv)
                 self.assertIn("--targets", argv)
                 self.assertIn("TARGET.STEREO.2_0,TARGET.SURROUND.5_1", argv)
+
+    def test_render_watch_queue_snapshot_is_stable_and_cinematic(self) -> None:
+        snapshot = WatchQueueSnapshot(
+            tick=3,
+            total=3,
+            completed=1,
+            running=1,
+            failed=0,
+            pending=1,
+            progress=0.53,
+            items=(),
+        )
+
+        rendered = render_watch_queue_snapshot(snapshot, width=20, cinematic=True)
+        self.assertIn("watch queue | total=3 done=1 run=1 fail=0 pending=1", rendered)
+        self.assertIn("| mood=resolve", rendered)
+        self.assertIn("[==========>.........]  53%", rendered)
+
+    def test_run_watch_folder_once_emits_visual_queue_snapshots(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            watch_dir = root / "watch"
+            _write_audio(watch_dir / "set_a" / "kick.wav")
+            _write_audio(watch_dir / "set_b" / "snare.wav")
+
+            seen_snapshots: list[WatchQueueSnapshot] = []
+            run_calls = 0
+
+            def _fake_runner(_argv: list[str] | tuple[str, ...]) -> int:
+                nonlocal run_calls
+                run_calls += 1
+                return 0
+
+            config = WatchFolderConfig(
+                watch_dir=watch_dir,
+                out_dir=root / "renders",
+                target_ids=("TARGET.STEREO.2_0",),
+                once=True,
+                include_existing=True,
+            )
+            exit_code = run_watch_folder(
+                config,
+                command_runner=_fake_runner,
+                queue_listener=seen_snapshots.append,
+                log=lambda _: None,
+            )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(run_calls, 2)
+            self.assertEqual(len(seen_snapshots), 5)
+            first = seen_snapshots[0]
+            self.assertEqual(first.pending, 2)
+            self.assertEqual(first.running, 0)
+            self.assertEqual(first.completed, 0)
+            self.assertAlmostEqual(first.progress, 0.0)
+
+            last = seen_snapshots[-1]
+            self.assertEqual(last.total, 2)
+            self.assertEqual(last.completed, 2)
+            self.assertEqual(last.running, 0)
+            self.assertEqual(last.failed, 0)
+            self.assertAlmostEqual(last.progress, 1.0)
+            self.assertEqual(
+                tuple(item.state for item in last.items),
+                ("succeeded", "succeeded"),
+            )
 
     def test_watch_mode_no_existing_processes_only_new_sets(self) -> None:
         with tempfile.TemporaryDirectory() as td:

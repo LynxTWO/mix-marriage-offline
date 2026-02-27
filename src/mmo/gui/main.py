@@ -204,6 +204,8 @@ def build_watch_cli_argv(
     target_ids: Sequence[str] = _DEFAULT_RENDER_MANY_TARGET_IDS,
     once: bool = False,
     include_existing: bool = True,
+    visual_queue: bool = False,
+    cinematic_progress: bool = False,
 ) -> list[str]:
     argv = [
         "watch",
@@ -225,6 +227,10 @@ def build_watch_cli_argv(
         argv.append("--once")
     if not include_existing:
         argv.append("--no-existing")
+    if visual_queue:
+        argv.append("--visual-queue")
+    if cinematic_progress:
+        argv.append("--cinematic-progress")
 
     return argv
 

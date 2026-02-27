@@ -20,6 +20,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     existing RMS gate behavior and deterministic output.
   - Improved five-standard layout awareness with explicit standard fallback candidates
     (including AAF -> FILM/SMPTE fallback) and preview metadata trace fields.
+- Watch-folder cinematic queue telemetry:
+  - Added deterministic watch-batch queue snapshots in `src/mmo/core/watch_folder.py`
+    with explicit pending/running/succeeded/failed states.
+  - Added ASCII cinematic queue rendering for live operator visibility.
+  - Added CLI flags `mmo watch --visual-queue --cinematic-progress`.
+  - Added GUI watch-argv support for visual queue flags via `build_watch_cli_argv()`.
 
 ## [1.1.0] — 2026-02-27
 

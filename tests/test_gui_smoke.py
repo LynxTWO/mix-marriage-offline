@@ -162,6 +162,18 @@ class TestGuiSmoke(unittest.TestCase):
             self.assertIn("--once", first)
             self.assertIn("--no-existing", first)
 
+    def test_watch_cli_args_support_visual_queue_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            temp_root = Path(td)
+            watch_dir = temp_root / "incoming"
+            argv = build_watch_cli_argv(
+                watch_dir,
+                visual_queue=True,
+                cinematic_progress=True,
+            )
+            self.assertIn("--visual-queue", argv)
+            self.assertIn("--cinematic-progress", argv)
+
     def test_cli_and_gui_safe_render_dry_run_parity_is_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             temp_root = Path(td)
