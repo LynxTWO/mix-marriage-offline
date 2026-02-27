@@ -22,6 +22,17 @@ It is a technical co-pilot that keeps the engineering side honest, so the human 
 
 ---
 
+## v1.1.0 highlights
+
+- Offline plugin marketplace and updateable local index (`mmo plugin list/update` + GUI browser).
+- Smart watch-folder automation for deterministic batch `run --render-many` workflows.
+- GUI Visualization Dashboard v1.1 with deterministic spectrum/vectorscope/correlation and 3D scene previews.
+- Deterministic headphone preview flow (`safe-render --preview-headphones`).
+- New benchmark suite in [`benchmarks/`](benchmarks/) and a new user-facing workflow guide at [`docs/user_guide.md`](docs/user_guide.md).
+- Community onboarding assets are now first-class in the docs flow (`README`, `CONTRIBUTING`, `CODE_OF_CONDUCT`, `SECURITY`, user guide).
+
+---
+
 ## Why this exists
 
 Mixing is two jobs wearing one hat:
@@ -48,17 +59,17 @@ One-click installers (no Python required):
 
 ```powershell
 # Windows (PowerShell): run installer
-.\mmo-setup-windows-x86_64-v1.0.0.exe
+.\mmo-setup-windows-x86_64-v1.1.0.exe
 ```
 
 ```sh
 # macOS
-unzip MMO-v1.0.0-macos-arm64.app.zip
-open "MMO-v1.0.0-macos-arm64.app"
+unzip MMO-v1.1.0-macos-arm64.app.zip
+open "MMO-v1.1.0-macos-arm64.app"
 
 # Linux
-chmod +x mmo-v1.0.0-linux-x86_64.AppImage
-./mmo-v1.0.0-linux-x86_64.AppImage
+chmod +x mmo-v1.1.0-linux-x86_64.AppImage
+./mmo-v1.1.0-linux-x86_64.AppImage
 ```
 
 Python install (repo/dev):
@@ -78,18 +89,18 @@ Verify signatures/checksums:
 
 ```powershell
 # Windows Authenticode (expect Status = Valid)
-Get-AuthenticodeSignature .\mmo-setup-windows-x86_64-v1.0.0.exe | Format-List
+Get-AuthenticodeSignature .\mmo-setup-windows-x86_64-v1.1.0.exe | Format-List
 ```
 
 ```sh
 # macOS code signature
-codesign --verify --deep --strict --verbose=2 "MMO-v1.0.0-macos-arm64.app"
+codesign --verify --deep --strict --verbose=2 "MMO-v1.1.0-macos-arm64.app"
 ```
 
 ```sh
 # Linux detached signature + checksum
-gpg --verify mmo-v1.0.0-linux-x86_64.AppImage.asc mmo-v1.0.0-linux-x86_64.AppImage
-sha256sum -c mmo-v1.0.0-linux-x86_64.AppImage.sha256
+gpg --verify mmo-v1.1.0-linux-x86_64.AppImage.asc mmo-v1.1.0-linux-x86_64.AppImage
+sha256sum -c mmo-v1.1.0-linux-x86_64.AppImage.sha256
 ```
 
 ---
@@ -267,11 +278,13 @@ Start here: [docs/README.md](docs/README.md)
 
 Key reads:
 
+- User guide: [docs/user_guide.md](docs/user_guide.md)
 - Product vision: [docs/09-product-vision.md](docs/09-product-vision.md)
 - Authority modes: [docs/10-authority-profiles.md](docs/10-authority-profiles.md)
 - GUI vision: [docs/11-gui-vision.md](docs/11-gui-vision.md)
 - GUI dev shell: [docs/12-gui-dev.md](docs/12-gui-dev.md)
 - Export guides: [docs/07-export-guides.md](docs/07-export-guides.md)
+- Benchmark suite: [benchmarks/README.md](benchmarks/README.md)
 
 ---
 
@@ -357,7 +370,7 @@ tests/      Automated tests
 
 ## Status
 
-v1.0.0 — Stable core release with active plugin and UX iteration.
+v1.1.0 — Release with marketplace/watch automation, GUI dashboard v1.1, benchmarks, and user/community docs.
 
 What works now:
 
@@ -369,6 +382,10 @@ What works now:
 - `safe-render` with bounded authority gates
 - Mix-once render-many: render to N standards in one pass
 - Conservative subjective plugins (gain trim, translation checks)
+- Offline plugin marketplace with CLI + GUI browsing
+- Smart watch-folder batch automation (`mmo watch`)
+- Deterministic headphone preview renders (`--preview-headphones`)
+- Benchmarks suite (`benchmarks/suite.py`) for repeatable timing snapshots
 - Deterministic pipeline, strict schemas, full CI matrix (Linux/Windows/macOS)
 
 ---

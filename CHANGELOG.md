@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- No unreleased entries yet.
+
+## [1.1.0] — 2026-02-27
+
+### Added
+
 - Offline plugin marketplace/discovery:
   - New bundled index `ontology/plugin_index.yaml` (mirrored to packaged data).
   - New core module `src/mmo/core/plugin_market.py` for deterministic marketplace
@@ -37,6 +43,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - GUI action: `Preview on Headphones` button in `mmo-gui`.
   - Preview outputs include explainable metadata linking each
     `.headphones.wav` to the source render output.
+- Deterministic benchmark suite:
+  - New `benchmarks/suite.py` with repeatable CLI + harness timing cases.
+  - New benchmark usage doc: `benchmarks/README.md`.
+- Community-facing workflow docs:
+  - New end-user guide `docs/user_guide.md`.
+  - Docs index now links the user guide directly for onboarding.
+
+### Changed
+
+- README release docs now target `v1.1.0` installer artifacts and include
+  v1.1 highlights (marketplace, watch mode, dashboard, benchmarks, user guide).
+- Project version bumped to `1.1.0`.
 
 ## [1.0.0] — 2026-02-26
 

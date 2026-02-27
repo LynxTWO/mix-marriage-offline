@@ -8,6 +8,8 @@ The numeric prefixes reflect a recommended reading order. Gaps may exist as docu
 
 - [00-quickstart.md](00-quickstart.md)
   Golden-path walkthrough: stems to project scaffold in five minutes.
+- [user_guide.md](user_guide.md)
+  End-user CLI/GUI workflow guide with scan, render-many, QA, and troubleshooting.
 - [STATUS.md](STATUS.md)
   Live project checklist with milestone definitions and done criteria.
 - [milestones.yaml](milestones.yaml)
