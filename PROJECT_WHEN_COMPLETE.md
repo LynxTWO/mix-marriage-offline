@@ -31,15 +31,15 @@ Outputs:
 The project is “complete enough” when all items below are true.
 
 ### 4.1 Docs are complete and accurate
-- [ ] docs/proposal.md exists and matches the implemented scope.
-- [ ] docs/philosophy.md documents Objective Core vs Subjective Plugins and bounded authority.
-- [ ] docs/architecture.md maps modules to repo paths and data flow.
+- [ ] docs/00-proposal.md exists and matches the implemented scope.
+- [ ] docs/01-philosophy.md documents Objective Core vs Subjective Plugins and bounded authority.
+- [ ] docs/02-architecture.md maps modules to repo paths and data flow.
 - [ ] docs/scene_model.md defines objects vs bed/field, confidence, locks, and routing intent.
 - [ ] docs/render_contracts.md defines canonical channel sets, orders, speaker metadata, and downmix rules.
-- [ ] docs/plugin_api.md + docs/plugin_semantics.md define plugin contracts (channel_mode, link groups, latency, determinism seeds).
-- [ ] docs/fixtures_ci.md documents fixtures, CI gates, and determinism expectations.
-- [ ] docs/export_guides.md documents how users should export stems for best results.
-- [ ] docs/roadmap.md clearly separates “now” vs “later.”
+- [ ] docs/04-plugin-api.md + docs/13-plugin-authoring.md define plugin contracts (channel_mode, link groups, latency, determinism seeds).
+- [ ] docs/05-fixtures-and-ci.md documents fixtures, CI gates, and determinism expectations.
+- [ ] docs/07-export-guides.md documents how users should export stems for best results.
+- [ ] docs/06-roadmap.md clearly separates “now” vs “later.”
 
 ### 4.2 Ontology is stable and versioned
 - [ ] ontology/*.yaml covers roles, features, issues, actions, params, units, evidence.
@@ -49,12 +49,12 @@ The project is “complete enough” when all items below are true.
 - [ ] Ontology changes are additive unless a version bump is made and migration notes exist.
 
 ### 4.3 Schemas are complete and enforced
-- [ ] schemas/project.json validates project input structure.
-- [ ] schemas/scene.json validates layout-agnostic intent.
-- [ ] schemas/render_request.json defines render targets and options.
-- [ ] schemas/render_report.json defines QA + evidence output.
-- [ ] schemas/report.json defines human-readable report payload shape.
-- [ ] schemas/plugin_manifest.json defines plugin capabilities and semantics.
+- [ ] schemas/project.schema.json validates project input structure.
+- [ ] schemas/scene.schema.json validates layout-agnostic intent.
+- [ ] schemas/render_request.schema.json defines render targets and options.
+- [ ] schemas/render_report.schema.json defines QA + evidence output.
+- [ ] schemas/report.schema.json defines human-readable report payload shape.
+- [ ] schemas/plugin.schema.json defines plugin capabilities and semantics.
 - [ ] Every schema is strict (`additionalProperties: false`) where appropriate.
 - [ ] CLI and core reject invalid inputs with clear, actionable errors.
 
@@ -112,6 +112,8 @@ The project is “complete enough” when all items below are true.
 - [ ] Plugins report latency (fixed/dynamic) and host delay-comp policy.
 - [ ] Plugins may suggest actions with confidence, but cannot override explicit user intent.
 - [ ] High-impact moves require explicit approval in the workflow contract.
+- [x] Installed package plugin loading does not rely on repo-root imports; bundled
+  manifests under `mmo.data/plugins` are discovered from any working directory.
 
 ### 4.6 Rendering targets are supported (minimum viable set)
 - [ ] Stereo (2.0) render contract is correct and validated.

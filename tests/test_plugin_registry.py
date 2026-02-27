@@ -49,7 +49,7 @@ def _base_manifest(**overrides: Any) -> Dict[str, Any]:
         "plugin_type": "detector",
         "name": "Test Plugin",
         "version": "0.1.0",
-        "entrypoint": "plugins.detectors.clipping_headroom_detector:ClippingHeadroomDetector",
+        "entrypoint": "mmo.plugins.detectors.clipping_headroom_detector:ClippingHeadroomDetector",
     }
     base.update(overrides)
     return base
@@ -61,7 +61,7 @@ def _renderer_manifest(**overrides: Any) -> Dict[str, Any]:
         "plugin_type": "renderer",
         "name": "Test Renderer",
         "version": "0.1.0",
-        "entrypoint": "plugins.renderers.safe_renderer:SafeRenderer",
+        "entrypoint": "mmo.plugins.renderers.safe_renderer:SafeRenderer",
     }
     base.update(overrides)
     return base
@@ -475,7 +475,7 @@ class TestLoadAndValidatePlugins(unittest.TestCase):
                     'plugin_type: "detector"',
                     'name: "Bad Plugin"',
                     'version: "0.1.0"',
-                    'entrypoint: "plugins.detectors.clipping_headroom_detector:ClippingHeadroomDetector"',
+                    'entrypoint: "mmo.plugins.detectors.clipping_headroom_detector:ClippingHeadroomDetector"',
                     "",
                 ]),
                 encoding="utf-8",

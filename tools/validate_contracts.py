@@ -138,6 +138,22 @@ TARGETS_REGISTRY_LOADER: tuple[str, str, str] = (
     "ontology/render_targets.yaml",
 )
 
+PKG_MIRROR_EXPECTED_PAIRS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("schemas", "src/mmo/data/schemas", ()),
+    ("ontology", "src/mmo/data/ontology", ()),
+    ("presets", "src/mmo/data/presets", ()),
+    (
+        "plugins",
+        "src/mmo/data/plugins",
+        (
+            "**/*.plugin.yaml",
+            "**/*.plugin.yml",
+            "**/plugin.yaml",
+            "**/plugin.yml",
+        ),
+    ),
+)
+
 
 def _tail_text(value: str, *, max_lines: int = 20, max_chars: int = 2000) -> str:
     text = value.strip()
@@ -208,6 +224,54 @@ def _details_from_unparsed_output(stdout: str, stderr: str) -> dict[str, Any]:
     if stderr_tail:
         details["stderr_tail"] = stderr_tail
     return details
+
+
+def _pkg_mirror_expectation_errors(details: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    raw_pairs = details.get("mirror_pairs")
+    if not isinstance(raw_pairs, list):
+        return ["PKG.MIRROR result missing mirror_pairs list in validator JSON output."]
+
+    actual_pairs: dict[tuple[str, str], tuple[str, ...]] = {}
+    for item in raw_pairs:
+        if not isinstance(item, dict):
+            continue
+        source = item.get("source")
+        mirror = item.get("mirror")
+        include_patterns = item.get("include_patterns")
+        if not isinstance(source, str) or not isinstance(mirror, str):
+            continue
+        normalized_patterns: tuple[str, ...] = ()
+        if isinstance(include_patterns, list):
+            normalized_patterns = tuple(
+                sorted(
+                    {
+                        pattern
+                        for pattern in include_patterns
+                        if isinstance(pattern, str) and pattern
+                    }
+                )
+            )
+        actual_pairs[(source, mirror)] = normalized_patterns
+
+    for expected_source, expected_mirror, expected_patterns in PKG_MIRROR_EXPECTED_PAIRS:
+        pair_key = (expected_source, expected_mirror)
+        if pair_key not in actual_pairs:
+            errors.append(
+                "PKG.MIRROR missing expected mirror pair: "
+                f"{expected_source} -> {expected_mirror}"
+            )
+            continue
+        actual_patterns = actual_pairs[pair_key]
+        normalized_expected = tuple(sorted(expected_patterns))
+        if actual_patterns != normalized_expected:
+            errors.append(
+                "PKG.MIRROR include_patterns mismatch for "
+                f"{expected_source} -> {expected_mirror}: "
+                f"expected {list(normalized_expected)}, got {list(actual_patterns)}"
+            )
+
+    return errors
 
 
 def _run_external_check(
@@ -283,6 +347,14 @@ def _run_external_check(
     elif parse_error is not None:
         details = dict(details)
         details["parse_warning"] = parse_error
+
+    if ok and check.check_id == "PKG.MIRROR" and isinstance(details, dict):
+        expectation_errors = _pkg_mirror_expectation_errors(details)
+        if expectation_errors:
+            ok = False
+            exit_code = 1
+            errors.extend(expectation_errors)
+            errors.append(f"Run alone: {_standalone_command(check)}")
 
     return _build_check_payload(
         check_id=check.check_id,

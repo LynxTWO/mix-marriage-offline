@@ -31,7 +31,7 @@ def _write_manifest(
                 'description: "Temporary renderer manifest for validator tests."',
                 'mmo_min_version: "0.1.0"',
                 'ontology_min_version: "0.1.0"',
-                'entrypoint: "plugins.renderers.safe_renderer:SafeRenderer"',
+                'entrypoint: "mmo.plugins.renderers.safe_renderer:SafeRenderer"',
                 "capabilities:",
                 capabilities_block,
                 "",

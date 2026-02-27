@@ -253,3 +253,62 @@ class TestPluginLoader(unittest.TestCase):
 
             with self.assertRaises(ValueError):
                 load_registered_plugins(base_plugins, plugin_dir=external_plugins)
+
+    def test_packaged_plugins_are_used_when_other_roots_are_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_root = Path(tmp)
+            missing_primary = tmp_root / "missing_primary"
+            home_root = tmp_root / "home_without_plugins"
+            packaged_plugins = tmp_root / "packaged_plugins"
+
+            _write_renderer_plugin(
+                root=packaged_plugins,
+                plugin_id="PLUGIN.RENDERER.PACKAGED_PLUGIN",
+                module_name="packaged_plugin_renderer",
+            )
+
+            with patch.dict(
+                os.environ,
+                {"HOME": home_root.as_posix(), PLUGIN_DIR_ENV_VAR: ""},
+                clear=False,
+            ):
+                with patch(
+                    "mmo.core.plugin_loader.packaged_plugins_dir",
+                    return_value=packaged_plugins.resolve(),
+                ):
+                    plugins = load_registered_plugins(missing_primary)
+
+            plugin_ids = [entry.plugin_id for entry in plugins]
+            self.assertEqual(plugin_ids, ["PLUGIN.RENDERER.PACKAGED_PLUGIN"])
+
+    def test_packaged_plugins_are_fallback_only_when_primary_has_plugins(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_root = Path(tmp)
+            base_plugins = tmp_root / "base_plugins"
+            home_root = tmp_root / "home_without_plugins"
+            packaged_plugins = tmp_root / "packaged_plugins"
+
+            _write_renderer_plugin(
+                root=base_plugins,
+                plugin_id="PLUGIN.RENDERER.BASE_PLUGIN",
+                module_name="base_plugin_renderer",
+            )
+            _write_renderer_plugin(
+                root=packaged_plugins,
+                plugin_id="PLUGIN.RENDERER.PACKAGED_PLUGIN",
+                module_name="packaged_plugin_renderer",
+            )
+
+            with patch.dict(
+                os.environ,
+                {"HOME": home_root.as_posix(), PLUGIN_DIR_ENV_VAR: ""},
+                clear=False,
+            ):
+                with patch(
+                    "mmo.core.plugin_loader.packaged_plugins_dir",
+                    return_value=packaged_plugins.resolve(),
+                ):
+                    plugins = load_registered_plugins(base_plugins)
+
+            plugin_ids = [entry.plugin_id for entry in plugins]
+            self.assertEqual(plugin_ids, ["PLUGIN.RENDERER.BASE_PLUGIN"])

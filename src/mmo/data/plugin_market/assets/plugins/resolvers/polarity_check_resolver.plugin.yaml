@@ -6,6 +6,6 @@ license: "Apache-2.0"
 description: "Provides guidance-only recommendations for negative correlation in multichannel pairs."
 mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
-entrypoint: "plugins.resolvers.polarity_check_resolver:PolarityCheckGuidanceResolver"
+entrypoint: "mmo.plugins.resolvers.polarity_check_resolver:PolarityCheckGuidanceResolver"
 capabilities:
   - "ACTION.DIAGNOSTIC.CHECK_POLARITY"

@@ -15,6 +15,13 @@ The numeric prefixes reflect a recommended reading order. Gaps may exist as docu
 - [milestones.yaml](milestones.yaml)
   Machine-readable milestone IDs, states, and doc section links.
 
+## Installed vs checkout paths
+
+- Repo checkout mode may use `plugins/` as the primary plugin root.
+- Installed package mode always has bundled manifests under `mmo.data/plugins`.
+- Runtime plugin scanning order is: primary (`--plugins`), external (`--plugin-dir`
+  or `~/.mmo/plugins`), then built-in packaged root fallback.
+
 ## Contribution workflow
 
 - [Status system (`STATUS.md` + `milestones.yaml`)](STATUS.md)

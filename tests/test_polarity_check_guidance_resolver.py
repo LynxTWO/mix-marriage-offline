@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 
 from mmo.core.gates import apply_gates_to_report
-from plugins.resolvers.polarity_check_resolver import PolarityCheckGuidanceResolver
+from mmo.plugins.resolvers.polarity_check_resolver import PolarityCheckGuidanceResolver
 
 
 class TestPolarityCheckGuidanceResolver(unittest.TestCase):

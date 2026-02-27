@@ -1,7 +1,7 @@
 import unittest
 
-from plugins.detectors.phase_correlation_detector import PhaseCorrelationDetector
-from plugins.resolvers.polarity_invert_resolver import PolarityInvertResolver
+from mmo.plugins.detectors.phase_correlation_detector import PhaseCorrelationDetector
+from mmo.plugins.resolvers.polarity_invert_resolver import PolarityInvertResolver
 
 
 class TestPhaseCorrelationDetectorPairs(unittest.TestCase):

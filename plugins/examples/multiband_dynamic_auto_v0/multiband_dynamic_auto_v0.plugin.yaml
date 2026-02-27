@@ -6,7 +6,7 @@ license: "Apache-2.0"
 description: "Slope-driven multiband dynamics with auto compress-or-expand mode and optional lookahead."
 mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
-entrypoint: "plugins.renderers.safe_renderer:SafeRenderer"
+entrypoint: "mmo.plugins.renderers.safe_renderer:SafeRenderer"
 numeric_precision: "float64"
 capabilities:
   max_channels: 2

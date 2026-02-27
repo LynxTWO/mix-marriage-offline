@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import random
 import struct
 import subprocess
@@ -377,19 +378,24 @@ def _plugin_manifest_aliases(
 
 
 def _plugins_search_roots() -> list[Path]:
+    from mmo.core.plugin_loader import (  # noqa: WPS433
+        PLUGIN_DIR_ENV_VAR,
+        default_user_plugins_dir,
+    )
+    from mmo.resources import plugins_dir as bundled_plugins_dir  # noqa: WPS433
+
     candidates: list[Path] = []
 
-    try:
-        from mmo.resources import _repo_checkout_root  # noqa: WPS433
-    except Exception:  # pragma: no cover - defensive fallback
-        _repo_checkout_root = None
-
-    if callable(_repo_checkout_root):
-        repo_root = _repo_checkout_root()
-        if repo_root is not None:
-            candidates.append((repo_root / "plugins").resolve())
-
     candidates.append((Path.cwd() / "plugins").resolve())
+    raw_external_plugins = os.environ.get(PLUGIN_DIR_ENV_VAR, "").strip()
+    if raw_external_plugins:
+        candidates.append(Path(raw_external_plugins).expanduser().resolve())
+    else:
+        candidates.append(default_user_plugins_dir().expanduser().resolve())
+
+    bundled_plugins = bundled_plugins_dir()
+    if bundled_plugins is not None:
+        candidates.append(bundled_plugins)
 
     roots: list[Path] = []
     seen: set[str] = set()

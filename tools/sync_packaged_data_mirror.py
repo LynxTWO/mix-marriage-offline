@@ -1,8 +1,7 @@
 """Sync repo-root data folders into src/mmo/data/ for wheel packaging.
 
-Copies schemas/, ontology/, and presets/ from the repo root into
-src/mmo/data/{schemas,ontology,presets}, creating directories as needed
-and deleting stale files that no longer exist in the source.
+Copies selected repo-root folders into src/mmo/data/, creating directories as
+needed and deleting stale files that no longer exist in source.
 
 Usage:
     python tools/sync_packaged_data_mirror.py
@@ -10,16 +9,40 @@ Usage:
 
 from __future__ import annotations
 
+import fnmatch
 import shutil
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-MIRROR_PAIRS: tuple[tuple[str, str], ...] = (
-    ("schemas", "src/mmo/data/schemas"),
-    ("ontology", "src/mmo/data/ontology"),
-    ("presets", "src/mmo/data/presets"),
+PLUGIN_MANIFEST_ALLOWLIST: tuple[str, ...] = (
+    "**/*.plugin.yaml",
+    "**/*.plugin.yml",
+    "**/plugin.yaml",
+    "**/plugin.yml",
+)
+
+
+@dataclass(frozen=True)
+class MirrorPair:
+    src_rel: str
+    dst_rel: str
+    include_patterns: tuple[str, ...] | None = None
+    include_prefixes: tuple[str, ...] | None = None
+
+
+MIRROR_PAIRS: tuple[MirrorPair, ...] = (
+    MirrorPair("schemas", "src/mmo/data/schemas"),
+    MirrorPair("ontology", "src/mmo/data/ontology"),
+    MirrorPair("presets", "src/mmo/data/presets"),
+    MirrorPair(
+        "plugins",
+        "src/mmo/data/plugins",
+        include_patterns=PLUGIN_MANIFEST_ALLOWLIST,
+        include_prefixes=("detectors/", "resolvers/", "renderers/"),
+    ),
 )
 
 IGNORED_NAMES: frozenset[str] = frozenset({
@@ -29,7 +52,41 @@ IGNORED_NAMES: frozenset[str] = frozenset({
 })
 
 
-def _relative_files(root: Path) -> set[Path]:
+def _matches_include_patterns(
+    rel_path: Path,
+    include_patterns: tuple[str, ...] | None,
+) -> bool:
+    if include_patterns is None:
+        return True
+
+    rel_text = rel_path.as_posix()
+    for pattern in include_patterns:
+        normalized_pattern = pattern.replace("\\", "/")
+        if fnmatch.fnmatch(rel_text, normalized_pattern):
+            return True
+        if normalized_pattern.startswith("**/") and fnmatch.fnmatch(
+            rel_text,
+            normalized_pattern[3:],
+        ):
+            return True
+    return False
+
+
+def _matches_include_prefixes(
+    rel_path: Path,
+    include_prefixes: tuple[str, ...] | None,
+) -> bool:
+    if include_prefixes is None:
+        return True
+    rel_text = rel_path.as_posix()
+    return any(rel_text.startswith(prefix) for prefix in include_prefixes)
+
+
+def _relative_files(
+    root: Path,
+    include_patterns: tuple[str, ...] | None = None,
+    include_prefixes: tuple[str, ...] | None = None,
+) -> set[Path]:
     """Return relative paths for all real files under *root*, ignoring junk."""
     result: set[Path] = set()
     if not root.is_dir():
@@ -38,30 +95,49 @@ def _relative_files(root: Path) -> set[Path]:
         if any(part in IGNORED_NAMES for part in item.parts):
             continue
         if item.is_file():
-            result.add(item.relative_to(root))
+            rel_path = item.relative_to(root)
+            if _matches_include_patterns(rel_path, include_patterns):
+                if _matches_include_prefixes(rel_path, include_prefixes):
+                    result.add(rel_path)
     return result
 
 
 def sync(*, dry_run: bool = False) -> dict[str, list[str]]:
-    """Perform the sync.  Returns a dict with 'copied' and 'deleted' lists."""
+    """Perform the sync. Returns a dict with 'copied' and 'deleted' lists."""
     copied: list[str] = []
     deleted: list[str] = []
 
-    for src_rel, dst_rel in MIRROR_PAIRS:
-        src_dir = REPO_ROOT / src_rel
-        dst_dir = REPO_ROOT / dst_rel
+    for pair in MIRROR_PAIRS:
+        src_dir = REPO_ROOT / pair.src_rel
+        dst_dir = REPO_ROOT / pair.dst_rel
 
         if not src_dir.is_dir():
-            print(f"SKIP  source missing: {src_rel}/", file=sys.stderr)
+            print(f"SKIP  source missing: {pair.src_rel}/", file=sys.stderr)
             continue
 
-        src_files = _relative_files(src_dir)
-        dst_files = _relative_files(dst_dir)
+        src_files = _relative_files(
+            src_dir,
+            pair.include_patterns,
+            pair.include_prefixes,
+        )
+        dst_files = _relative_files(
+            dst_dir,
+            pair.include_patterns,
+            pair.include_prefixes,
+        )
+        disallowed_dst_files: set[Path] = set()
+        if pair.include_prefixes is not None:
+            dst_pattern_files = _relative_files(dst_dir, pair.include_patterns, None)
+            disallowed_dst_files = {
+                rel
+                for rel in dst_pattern_files
+                if not _matches_include_prefixes(rel, pair.include_prefixes)
+            }
 
         # Delete stale files in mirror that are no longer in source.
-        for stale in sorted(dst_files - src_files):
+        for stale in sorted((dst_files - src_files) | disallowed_dst_files):
             target = dst_dir / stale
-            tag = f"DELETE {dst_rel}/{stale}"
+            tag = f"DELETE {pair.dst_rel}/{stale}"
             if dry_run:
                 print(f"  [dry-run] {tag}")
             else:
@@ -83,7 +159,7 @@ def sync(*, dry_run: bool = False) -> dict[str, list[str]]:
             # Quick content compare to avoid unnecessary writes.
             if dst_file.exists() and dst_file.read_bytes() == src_file.read_bytes():
                 continue
-            tag = f"COPY  {src_rel}/{rel} -> {dst_rel}/{rel}"
+            tag = f"COPY  {pair.src_rel}/{rel} -> {pair.dst_rel}/{rel}"
             if dry_run:
                 print(f"  [dry-run] {tag}")
             else:

@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, List
 
+from mmo.resources import plugins_dir as packaged_plugins_dir
 from mmo.resources import schemas_dir
 
 PLUGIN_DIR_ENV_VAR = "MMO_PLUGIN_DIR"
@@ -41,6 +42,7 @@ def resolve_plugin_roots(
     Order:
       1) Primary plugin directory (``--plugins`` style path)
       2) External plugin directory (``--plugin-dir`` / ``MMO_PLUGIN_DIR`` / default)
+      3) Built-in packaged plugin directory (``mmo.data/plugins``)
     """
     primary = plugins_dir.expanduser().resolve()
     roots: List[Path] = []
@@ -58,6 +60,10 @@ def resolve_plugin_roots(
             roots.append(external)
     elif external_is_explicit:
         raise ValueError(f"External plugin directory does not exist: {external.as_posix()}")
+
+    built_in = packaged_plugins_dir()
+    if built_in is not None and built_in not in roots:
+        roots.append(built_in)
 
     return tuple(roots)
 
@@ -118,15 +124,28 @@ def _validate_plugin_root(
 
 def _register_plugin_entries(
     loaded_by_root: list[tuple[Path, list["PluginEntry"]]],
+    *,
+    built_in_root: Path | None,
 ) -> list["PluginEntry"]:
     registered: dict[str, PluginEntry] = {}
     source_by_id: dict[str, str] = {}
+    built_in_source = built_in_root.as_posix() if built_in_root is not None else None
+    has_non_built_in_entries = any(
+        entries and plugin_root.as_posix() != built_in_source
+        for plugin_root, entries in loaded_by_root
+    )
 
     for plugin_root, entries in loaded_by_root:
         source = plugin_root.as_posix()
+        if has_non_built_in_entries and source == built_in_source:
+            # Built-in packaged manifests are only a fallback when no other roots load plugins.
+            continue
         for entry in entries:
             existing_source = source_by_id.get(entry.plugin_id)
             if existing_source is not None:
+                if source == built_in_source:
+                    # Keep earlier roots authoritative; packaged manifests are fallback.
+                    continue
                 raise ValueError(
                     "Duplicate plugin_id detected across plugin roots: "
                     f"{entry.plugin_id!r} in {existing_source} and {source}"
@@ -141,10 +160,11 @@ def load_registered_plugins(
     plugins_dir: Path,
     plugin_dir: Path | None = None,
 ) -> list["PluginEntry"]:
-    """Load plugins from primary + external roots with validation and registration.
+    """Load plugins from primary, external, and built-in roots.
 
     Validation is strict (schema + semantics) before entrypoint imports.
-    Registration enforces unique ``plugin_id`` across all resolved roots.
+    Registration enforces unique ``plugin_id`` across primary/external roots.
+    Built-in packaged manifests are used only when primary/external roots load no plugins.
     """
     from mmo.core.pipeline import PluginEntry, _load_plugins_from_dir  # noqa: WPS433
 
@@ -156,4 +176,7 @@ def load_registered_plugins(
         with _plugin_import_paths(plugin_root):
             loaded_by_root.append((plugin_root, _load_plugins_from_dir(plugin_root)))
 
-    return _register_plugin_entries(loaded_by_root)
+    return _register_plugin_entries(
+        loaded_by_root,
+        built_in_root=packaged_plugins_dir(),
+    )

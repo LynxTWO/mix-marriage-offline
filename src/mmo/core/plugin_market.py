@@ -159,6 +159,23 @@ def _relative_path_without_plugins_prefix(path_text: str, *, field_name: str) ->
     return Path(*parts[1:])
 
 
+def _relative_module_path_for_entrypoint(path_text: str, *, field_name: str) -> Path:
+    normalized = path_text.strip().replace("\\", "/")
+    candidate = Path(normalized)
+    if candidate.is_absolute():
+        raise ValueError(f"{field_name} must be relative: {path_text}")
+    if any(part == ".." for part in candidate.parts):
+        raise ValueError(f"{field_name} cannot escape root: {path_text}")
+    parts = candidate.parts
+    if len(parts) >= 2 and parts[0] == "plugins":
+        return Path(*parts[1:])
+    if len(parts) >= 3 and parts[0] == "mmo" and parts[1] == "plugins":
+        return Path(*parts[2:])
+    raise ValueError(
+        f"{field_name} must begin with 'plugins/' or 'mmo/plugins/': {path_text}"
+    )
+
+
 def _normalize_index_entries(
     rows: Any,
     *,
@@ -381,7 +398,7 @@ def _entrypoint_module_path(entrypoint: str, *, plugin_id: str) -> Path:
             f"Manifest entrypoint must be module:symbol for {plugin_id}: {entrypoint}"
         )
     module_candidate = Path(module_name.replace(".", "/") + ".py")
-    return _relative_path_without_plugins_prefix(
+    return _relative_module_path_for_entrypoint(
         module_candidate.as_posix(),
         field_name="entrypoint module",
     )

@@ -129,12 +129,14 @@ Each plugin module provides:
 - a `PLUGIN_META` dict or a `plugin.yaml` manifest (recommended)
 - a class implementing the relevant interface
 
-External plugin roots:
+Plugin scan roots (in order):
 
-- Repo/local root from `--plugins` is always loaded first.
-- Optional external root can be set with `MMO_PLUGIN_DIR`.
-- If `MMO_PLUGIN_DIR` is unset (or empty), MMO falls back to the default
-  user directory: `~/.mmo/plugins` (resolved via `HOME`/platform home lookup).
+- Primary root from `--plugins`.
+- External root from `--plugin-dir` / `MMO_PLUGIN_DIR` / default `~/.mmo/plugins`.
+- Built-in packaged root from `mmo.data/plugins` (when present in the install).
+
+Primary/external roots take precedence. Built-in packaged manifests are loaded last
+as a fallback so installed wheels work without a repo checkout.
 
 ### 4.2 plugin.yaml (recommended manifest)
 
@@ -152,7 +154,7 @@ license: "Apache-2.0"
 description: "Detects persistent narrow-band resonances and flags safe notch suggestions."
 mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
-entrypoint: "plugins.detectors.resonance_detector:ResonanceDetector"
+entrypoint: "mmo.plugins.detectors.resonance_detector:ResonanceDetector"
 capabilities:
   - "ISSUE.SPECTRAL.RESONANCE"
 ```

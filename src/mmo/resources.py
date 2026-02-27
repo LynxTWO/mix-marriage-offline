@@ -130,6 +130,18 @@ def presets_dir() -> Path:
     return root / "presets"
 
 
+def plugins_dir() -> Path | None:
+    """Return the packaged plugin-manifest directory when available."""
+    try:
+        root = data_root()
+    except RuntimeError:
+        return None
+    candidate = (root / "plugins").resolve()
+    if candidate.is_dir():
+        return candidate
+    return None
+
+
 def default_cache_dir() -> Path:
     """Return a suitable cache directory for MMO artefacts.
 

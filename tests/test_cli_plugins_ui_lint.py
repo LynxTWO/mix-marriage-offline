@@ -107,7 +107,7 @@ def _write_plugin_fixture(
         "plugin_type": "renderer",
         "name": "Plugin UI Lint Fixture",
         "version": "0.1.0",
-        "entrypoint": "plugins.renderers.safe_renderer:SafeRenderer",
+        "entrypoint": "mmo.plugins.renderers.safe_renderer:SafeRenderer",
     }
     if config_schema is not None:
         manifest["config_schema"] = config_schema

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import importlib
-import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence
 
@@ -51,14 +50,6 @@ class PluginEntry:
     manifest_path: Path
     manifest: Dict[str, Any]
 
-
-def _ensure_repo_on_path() -> None:
-    from mmo.resources import _repo_checkout_root
-    root = _repo_checkout_root()
-    if root is not None and str(root) not in sys.path:
-        sys.path.insert(0, str(root))
-
-
 def _load_yaml(path: Path) -> Dict[str, Any]:
     if yaml is None:
         raise RuntimeError("PyYAML is required to load plugin manifests.")
@@ -83,7 +74,6 @@ def _load_entrypoint(entrypoint: str) -> Any:
     if ":" not in entrypoint:
         raise ValueError(f"Entrypoint must be module:Symbol, got {entrypoint!r}")
     module_name, symbol_name = entrypoint.split(":", 1)
-    _ensure_repo_on_path()
     module = importlib.import_module(module_name)
     symbol = getattr(module, symbol_name, None)
     if symbol is None:

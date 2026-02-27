@@ -66,7 +66,7 @@ class TestCliPluginsShow(unittest.TestCase):
                     'description: "Temporary renderer for plugins show tests."',
                     'mmo_min_version: "0.1.0"',
                     'ontology_min_version: "0.1.0"',
-                    'entrypoint: "plugins.renderers.safe_renderer:SafeRenderer"',
+                    'entrypoint: "mmo.plugins.renderers.safe_renderer:SafeRenderer"',
                     'ui_layout: "ui/layout.json"',
                     "config_schema:",
                     '  "$schema": "https://json-schema.org/draft/2020-12/schema"',

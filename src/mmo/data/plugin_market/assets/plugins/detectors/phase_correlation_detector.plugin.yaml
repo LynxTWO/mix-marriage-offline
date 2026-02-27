@@ -6,7 +6,7 @@ license: "Apache-2.0"
 description: "Detects negative correlation for stereo stems and multichannel pair correlations."
 mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
-entrypoint: "plugins.detectors.phase_correlation_detector:PhaseCorrelationDetector"
+entrypoint: "mmo.plugins.detectors.phase_correlation_detector:PhaseCorrelationDetector"
 capabilities:
   - "ISSUE.IMAGING.NEGATIVE_CORRELATION"
   - "ISSUE.IMAGING.NEGATIVE_CORRELATION_PAIR"

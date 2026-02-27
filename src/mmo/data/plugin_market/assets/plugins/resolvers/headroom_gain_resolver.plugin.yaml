@@ -6,6 +6,6 @@ license: "Apache-2.0"
 description: "Recommends deterministic gain trims for clipping/headroom issues."
 mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
-entrypoint: "plugins.resolvers.headroom_gain_resolver:HeadroomGainResolver"
+entrypoint: "mmo.plugins.resolvers.headroom_gain_resolver:HeadroomGainResolver"
 capabilities:
   - "ACTION.UTILITY.GAIN"

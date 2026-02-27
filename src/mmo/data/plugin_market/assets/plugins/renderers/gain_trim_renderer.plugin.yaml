@@ -6,7 +6,7 @@ license: "Apache-2.0"
 description: "Render conservative stem-level gain/trim recommendations to WAV PCM outputs."
 mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
-entrypoint: "plugins.renderers.gain_trim_renderer:GainTrimRenderer"
+entrypoint: "mmo.plugins.renderers.gain_trim_renderer:GainTrimRenderer"
 capabilities:
   max_channels: 32
   supported_contexts:

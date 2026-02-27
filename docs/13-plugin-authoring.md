@@ -18,13 +18,15 @@ Example starter pack:
 
 ## 1.1 External plugin roots
 
-MMO now loads plugins from two roots:
+MMO now loads plugins from three roots:
 
 - Primary root: `--plugins` (default: `plugins/` in repo mode).
 - External root: `~/.mmo/plugins/` by default, or `--plugin-dir <path>` to override.
+- Built-in packaged root: `mmo.data/plugins` (loaded last when present).
 
 External plugin manifests are automatically validated (schema + ontology semantics)
-before registration. Duplicate `plugin_id` values across roots are rejected.
+before registration. Duplicate `plugin_id` values across primary/external roots are
+rejected deterministically; built-in packaged manifests are fallback-only.
 
 ## 2. Manifest checklist
 
