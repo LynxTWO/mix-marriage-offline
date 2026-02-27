@@ -19,6 +19,7 @@ from mmo.core.routing import (
     routing_layout_ids_from_run_config,
 )
 from mmo.core.run_config import normalize_run_config
+from mmo.core.target_tokens import resolve_target_token
 
 from mmo.cli_commands._helpers import (
     _coerce_str,
@@ -624,7 +625,21 @@ def _run_render_many_targets(
     token = cancel_token or CancelToken()
     _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
 
-    targets = render_many_targets if render_many_targets else _RENDER_MANY_DEFAULT_TARGETS
+    targets_raw = (
+        render_many_targets
+        if render_many_targets
+        else _RENDER_MANY_DEFAULT_TARGETS
+    )
+    targets: list[str] = []
+    for raw_target in targets_raw:
+        normalized_target = _coerce_str(raw_target).strip()
+        if not normalized_target:
+            continue
+        # Validate every token using the shared resolver before launching jobs.
+        resolve_target_token(normalized_target)
+        targets.append(normalized_target)
+    if not targets:
+        raise ValueError("--render-many-targets must include at least one target token.")
     print(
         f"safe-render/render-many: targets={','.join(targets)}",
         file=sys.stderr,
@@ -919,6 +934,7 @@ def _run_safe_render_command(
 
     try:
         _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
+        resolved_target = resolve_target_token(target)
         progress.emit_log(
             kind="info",
             scope="render",
@@ -1002,14 +1018,15 @@ def _run_safe_render_command(
         preflight_receipt = evaluate_preflight(
             session=session_for_preflight,
             scene=preflight_scene,
-            target_layout=target,
+            target_layout=resolved_target.layout_id,
             options={},
             user_profile=user_profile,
         )
         _preflight_decision = preflight_receipt.get("final_decision", "pass")
         print(
             f"safe-render: preflight={_preflight_decision}"
-            f" target={target}",
+            f" target={target}"
+            f" resolved_layout={resolved_target.layout_id}",
             file=sys.stderr,
         )
         progress.advance(

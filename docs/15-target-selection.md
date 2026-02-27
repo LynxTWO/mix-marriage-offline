@@ -2,32 +2,49 @@
 
 This guide explains how MMO target selection works in CLI and UI flows.
 
-## What Targets Are
+## Token Types
 
-Render targets are canonical output layouts from `ontology/render_targets.yaml`.
+MMO accepts interchangeable target tokens:
 
-- `TARGET.STEREO.2_0`: baseline stereo reality check and widest playback coverage.
-- `TARGET.SURROUND.5_1`: surround bed with center + LFE + side channels.
-- `TARGET.SURROUND.7_1`: surround with additional rear channels for deeper rear imaging.
+- `TARGET.*` IDs from `ontology/render_targets.yaml` (delivery-target entries).
+- `LAYOUT.*` IDs from `ontology/layouts.yaml` (speaker-layout entries).
+- Musician-friendly shorthands: `stereo`, `2.0`, `5.1`, `7.1`, `7.1.4`, `binaural`.
 
-Practical selection guidance:
+Examples:
 
-- Choose stereo when you need universal playback and a translation baseline.
-- Choose 5.1 when center anchoring and surround spread are part of delivery intent.
-- Choose 7.1 when rear motion/depth cues matter and the playback context supports it.
+- `TARGET.STEREO.2_0`
+- `LAYOUT.5_1`
+- `stereo`
+- `7.1.4`
 
-## IDs, Aliases, and Deterministic Resolution
+## Deterministic Resolution Order
 
-MMO accepts both canonical target IDs and friendly aliases (for example `Stereo (streaming)`).
+MMO resolves tokens with `mmo.core.target_tokens.resolve_target_token` in this order:
 
-Resolution is deterministic (`mmo.core.render_targets.resolve_render_target_id`):
+1. `TARGET.*` ID
+2. `LAYOUT.*` ID
+3. Canonical shorthands (`stereo`, `2.0`, `5.1`, `7.1`, `7.1.4`, `binaural`)
+4. Render-target alias matching, then layout-alias matching
+5. Ambiguous matches fail with a deterministic error listing sorted candidates
 
-1. Trim input token; reject empty input.
-2. If token exactly matches a known `target_id`, use it.
-3. Otherwise normalize alias comparison by removing whitespace and case-folding.
-4. Match against target `aliases` using the same normalization.
-5. If multiple matches exist, fail with a deterministic ambiguity error listing sorted IDs.
-6. If no matches exist, fail with a deterministic unknown-token error listing sorted available targets.
+`ResolvedTarget` includes:
+
+- `target_id` (optional; `None` when a token resolves to layout-only)
+- `layout_id`
+- `display_label`
+- `source` (`target_id`, `layout_id`, `shorthand`, `alias`)
+
+Notes:
+
+- Commands that require concrete render target IDs resolve layout tokens to target IDs only when the mapping is unambiguous.
+- If a layout maps to multiple targets, MMO errors with sorted candidates.
+- `binaural` is gated until `LAYOUT.BINAURAL` exists in the layout registry.
+
+## Practical Guidance
+
+- Use `stereo` for quick musician flow.
+- Use `TARGET.*` for explicit engineering control.
+- Use `LAYOUT.*` when you care about speaker layout and want target selection inferred.
 
 ## `mmo targets recommend` Usage
 

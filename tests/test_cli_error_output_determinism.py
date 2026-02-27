@@ -275,11 +275,11 @@ class TestCliErrorOutputDeterminism(unittest.TestCase):
                 ],
             ]
 
-            def _resolve_from_local_registry(token: str, _: Path) -> str:
+            def _resolve_from_local_registry(token: str, *_args: object) -> str:
                 return resolve_target_id_from_registry(token, targets_path)
 
             with mock.patch(
-                "mmo.cli_commands._scene.resolve_render_target_id",
+                "mmo.core.target_tokens.resolve_render_target_id",
                 side_effect=_resolve_from_local_registry,
             ):
                 for command in commands:

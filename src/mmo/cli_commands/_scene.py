@@ -28,6 +28,7 @@ from mmo.core.render_targets import (
     resolve_render_target_id,
 )
 from mmo.core.run_config import merge_run_config, normalize_run_config
+from mmo.core.target_tokens import resolve_target_token
 from mmo.core.scene_editor import (
     INTENT_PARAM_KEY_TO_ID,
     add_lock as edit_scene_add_lock,
@@ -1497,6 +1498,41 @@ def _parse_scene_template_ids_csv(raw_value: str) -> list[str]:
     return template_ids
 
 
+def _resolve_target_token_to_target_id(
+    token: str,
+    *,
+    render_targets_path: Path,
+) -> str:
+    resolved = resolve_target_token(token)
+    if isinstance(resolved.target_id, str) and resolved.target_id:
+        return resolve_render_target_id(resolved.target_id, render_targets_path)
+
+    registry = load_render_targets_registry(render_targets_path)
+    candidates = sorted(
+        {
+            _coerce_str(row.get("target_id")).strip()
+            for row in registry.find_targets_for_layout(resolved.layout_id)
+            if isinstance(row, dict)
+            and _coerce_str(row.get("target_id")).strip()
+        }
+    )
+    if len(candidates) == 1:
+        return candidates[0]
+    if len(candidates) > 1:
+        raise ValueError(
+            (
+                f"Ambiguous target token: {token}. "
+                f"Candidates: {', '.join(candidates)}"
+            )
+        )
+    raise ValueError(
+        (
+            f"Target token resolved to {resolved.layout_id}, "
+            "but no render target maps to that layout."
+        )
+    )
+
+
 def _parse_target_ids_csv(raw_value: str, *, render_targets_path: Path) -> list[str]:
     if not isinstance(raw_value, str):
         raise ValueError("targets must be a comma-separated string.")
@@ -1505,10 +1541,15 @@ def _parse_target_ids_csv(raw_value: str, *, render_targets_path: Path) -> list[
     for item in raw_value.split(","):
         normalized = item.strip()
         if normalized:
-            selected.add(resolve_render_target_id(normalized, render_targets_path))
+            selected.add(
+                _resolve_target_token_to_target_id(
+                    normalized,
+                    render_targets_path=render_targets_path,
+                )
+            )
 
     if not selected:
-        raise ValueError("targets must include at least one target ID.")
+        raise ValueError("targets must include at least one target token.")
     return sorted(selected)
 
 
@@ -1520,7 +1561,10 @@ def _build_selected_render_targets_payload(
     rows: list[dict[str, Any]] = []
     resolved_target_ids = sorted(
         {
-            resolve_render_target_id(target_id, render_targets_path)
+            _resolve_target_token_to_target_id(
+                target_id,
+                render_targets_path=render_targets_path,
+            )
             for target_id in target_ids
         }
     )

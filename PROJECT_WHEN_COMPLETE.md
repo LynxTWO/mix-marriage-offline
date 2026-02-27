@@ -137,6 +137,9 @@ The project is “complete enough” when all items below are true.
 
 ### 4.8 UX/CLI is usable for real work
 - [ ] CLI can: validate, analyze, generate scene, render, and output reports.
+- [x] Target selection is interchangeable across CLI/GUI flows: `TARGET.*`,
+  `LAYOUT.*`, and musician shorthands (`stereo`, `5.1`, `7.1`, `7.1.4`);
+  ambiguous tokens fail deterministically with sorted candidates.
 - [ ] Errors are actionable (tell the user what/why/where/how to fix).
 - [ ] Reports include: issues, actions taken, actions suggested, confidence, and evidence references.
 - [ ] A “dry-run” mode exists for suggestions without applying changes.

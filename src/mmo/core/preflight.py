@@ -35,38 +35,9 @@ from mmo.core.downmix import (
     resolve_preflight_matrix,
 )
 from mmo.core.meters import assess_translation_curves
+from mmo.core.target_tokens import resolve_target_token
 
 PREFLIGHT_RECEIPT_SCHEMA_VERSION = "0.1.0"
-
-# ---------------------------------------------------------------------------
-# Layout ID normalisation
-# ---------------------------------------------------------------------------
-
-_LAYOUT_SHORTHANDS: Dict[str, str] = {
-    "stereo": "LAYOUT.2_0",
-    "2.0": "LAYOUT.2_0",
-    "2_0": "LAYOUT.2_0",
-    "5.1": "LAYOUT.5_1",
-    "5_1": "LAYOUT.5_1",
-    "7.1": "LAYOUT.7_1",
-    "7_1": "LAYOUT.7_1",
-    "mono": "LAYOUT.1_0",
-    "1.0": "LAYOUT.1_0",
-    "2.1": "LAYOUT.2_1",
-    "4.0": "LAYOUT.4_0",
-    "4.1": "LAYOUT.4_1",
-    "7.1.4": "LAYOUT.7_1_4",
-    "binaural": "LAYOUT.BINAURAL",
-}
-
-
-def _normalise_layout_id(raw: str) -> str:
-    """Normalise a shorthand or LAYOUT.* ID to canonical form."""
-    stripped = raw.strip()
-    if stripped.startswith("LAYOUT."):
-        return stripped
-    lower = stripped.lower()
-    return _LAYOUT_SHORTHANDS.get(lower, stripped)
 
 
 # ---------------------------------------------------------------------------
@@ -944,8 +915,10 @@ def evaluate_preflight(
         ``recommendations``, ``qa_issues``).
 
     target_layout:
-        Target layout ID (e.g. ``"LAYOUT.2_0"``) or a shorthand string
-        (``"stereo"``, ``"5.1"``).  Normalised internally.
+        Target token accepted by ``mmo.core.target_tokens.resolve_target_token``.
+        Supports canonical ``TARGET.*`` IDs, canonical ``LAYOUT.*`` IDs,
+        supported shorthands (for example ``"stereo"``, ``"5.1"``,
+        ``"7.1.4"``), and deterministic alias matching.
 
     options:
         Optional threshold overrides.  All keys are optional; defaults match
@@ -996,7 +969,7 @@ def evaluate_preflight(
         from mmo.core.profiles import apply_to_gates
         options = apply_to_gates(user_profile, options)
 
-    target_layout_id = _normalise_layout_id(target_layout)
+    target_layout_id = resolve_target_token(target_layout).layout_id
     source_layout_id = _extract_source_layout(session, scene)
 
     # --- Phase / correlation ---

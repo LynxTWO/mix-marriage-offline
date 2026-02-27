@@ -460,6 +460,11 @@ class TestLayoutNormalisation(unittest.TestCase):
         receipt = evaluate_preflight({}, {}, "LAYOUT.7_1", {})
         self.assertEqual(receipt["target_layout_id"], "LAYOUT.7_1")
 
+    def test_binaural_shorthand_is_gated_until_layout_exists(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            evaluate_preflight({}, {}, "binaural", {})
+        self.assertIn("LAYOUT.BINAURAL is not defined", str(ctx.exception))
+
 
 # ---------------------------------------------------------------------------
 # Tests: core/downmix.py unit tests

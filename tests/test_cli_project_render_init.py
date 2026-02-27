@@ -383,8 +383,8 @@ class TestRenderInitTargetSelection(unittest.TestCase):
             "--target-ids", "TARGET.DOES_NOT_EXIST",
         ])
         self.assertEqual(exit_code, 1)
-        self.assertIn("Unknown target_id: TARGET.DOES_NOT_EXIST", stderr)
-        known_ids = _extract_known_ids(stderr, marker="Known target_ids:")
+        self.assertIn("Unknown render target token: TARGET.DOES_NOT_EXIST", stderr)
+        known_ids = _extract_known_ids(stderr, marker="Available targets:")
         self.assertGreater(len(known_ids), 0)
         self.assertEqual(known_ids, sorted(known_ids))
 

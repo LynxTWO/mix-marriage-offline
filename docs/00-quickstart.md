@@ -253,11 +253,35 @@ python -m mmo gates show POLICY.GATES.CORE_V0 --format json
 Render targets in Objective Core are explicit registry entries that pair a
 `LAYOUT.*` with output container and deterministic filename expectations.
 
+MMO target inputs are interchangeable across CLI/GUI:
+
+- `TARGET.*` IDs (engineering/nerd explicit)
+- `LAYOUT.*` IDs (layout explicit)
+- shorthands (musician-friendly): `stereo`, `5.1`, `7.1`, `7.1.4`, `binaural`
+
 Inspect available targets:
 
 ```powershell
 python -m mmo targets list --format text
 python -m mmo targets show TARGET.STEREO.2_0 --format json
+```
+
+Musician-friendly safe-render examples:
+
+```powershell
+python -m mmo safe-render --report report.json --target stereo --dry-run
+python -m mmo safe-render --report report.json --target 5.1 --dry-run
+python -m mmo safe-render --report report.json --target binaural --dry-run
+```
+
+`binaural` currently returns a clear "not available yet" error until
+`LAYOUT.BINAURAL` is defined in the layout registry.
+
+Nerd-explicit examples:
+
+```powershell
+python -m mmo safe-render --report report.json --target TARGET.STEREO.2_0 --dry-run
+python -m mmo safe-render --report report.json --target LAYOUT.5_1 --dry-run
 ```
 
 `render-plan plan` resolves `jobs[].resolved_target_id` from this registry

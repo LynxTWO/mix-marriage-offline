@@ -882,23 +882,51 @@ def _parse_target_ids_csv(raw_value: str) -> list[str]:
     if not isinstance(raw_value, str):
         raise ValueError("target-ids must be a comma-separated string.")
 
-    selected = {
-        item.strip()
-        for item in raw_value.split(",")
-        if isinstance(item, str) and item.strip()
-    }
-    if not selected:
-        raise ValueError("target-ids must include at least one target ID.")
-
-    normalized_target_ids = sorted(selected)
+    from mmo.core.target_tokens import resolve_target_token  # noqa: WPS433
     from mmo.core.registries.render_targets_registry import (  # noqa: WPS433
         load_render_targets_registry,
     )
 
     target_registry = load_render_targets_registry()
-    for target_id in normalized_target_ids:
-        target_registry.get_target(target_id)
-    return normalized_target_ids
+    selected: set[str] = set()
+    for raw_item in raw_value.split(","):
+        token = raw_item.strip()
+        if not token:
+            continue
+        resolved = resolve_target_token(token)
+        if isinstance(resolved.target_id, str) and resolved.target_id:
+            target_registry.get_target(resolved.target_id)
+            selected.add(resolved.target_id)
+            continue
+
+        candidates = sorted(
+            {
+                _coerce_str(row.get("target_id")).strip()
+                for row in target_registry.find_targets_for_layout(resolved.layout_id)
+                if isinstance(row, dict)
+                and _coerce_str(row.get("target_id")).strip()
+            }
+        )
+        if len(candidates) == 1:
+            selected.add(candidates[0])
+            continue
+        if len(candidates) > 1:
+            raise ValueError(
+                (
+                    f"Ambiguous target token: {token}. "
+                    f"Candidates: {', '.join(candidates)}"
+                )
+            )
+        raise ValueError(
+            (
+                f"Target token resolved to {resolved.layout_id}, "
+                "but no render target maps to that layout."
+            )
+        )
+
+    if not selected:
+        raise ValueError("target-ids must include at least one target token.")
+    return sorted(selected)
 
 
 def _parse_write_render_request_set_entries(

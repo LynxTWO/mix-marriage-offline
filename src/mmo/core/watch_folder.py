@@ -12,6 +12,7 @@ from typing import Any, Callable, Sequence
 
 from mmo.core.session import discover_stem_files
 from mmo.core.stems_index import find_stem_sets
+from mmo.core.target_tokens import resolve_target_token
 
 DEFAULT_WATCH_TARGET_IDS: tuple[str, ...] = (
     "TARGET.STEREO.2_0",
@@ -207,6 +208,12 @@ class _DirtyState:
             return True
 
 
+def _coerce_str(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    return ""
+
+
 def _resolve_existing_directory(path: Path, *, label: str) -> Path:
     resolved = path.resolve()
     if not resolved.exists():
@@ -222,12 +229,47 @@ def parse_watch_targets_csv(raw_value: str | None) -> tuple[str, ...]:
 
     seen: set[str] = set()
     target_ids: list[str] = []
+    from mmo.core.registries.render_targets_registry import (  # noqa: WPS433
+        load_render_targets_registry,
+    )
+    target_registry = load_render_targets_registry()
+
     for part in raw_value.split(","):
-        target_id = part.strip()
-        if not target_id or target_id in seen:
+        token = part.strip()
+        if not token:
             continue
-        seen.add(target_id)
-        target_ids.append(target_id)
+        resolved = resolve_target_token(token)
+        resolved_target_id: str | None = resolved.target_id
+        if not resolved_target_id:
+            candidates = sorted(
+                {
+                    _coerce_str(row.get("target_id")).strip()
+                    for row in target_registry.find_targets_for_layout(resolved.layout_id)
+                    if isinstance(row, dict)
+                    and _coerce_str(row.get("target_id")).strip()
+                }
+            )
+            if len(candidates) == 1:
+                resolved_target_id = candidates[0]
+            elif len(candidates) > 1:
+                raise ValueError(
+                    (
+                        f"Ambiguous target token: {token}. "
+                        f"Candidates: {', '.join(candidates)}"
+                    )
+                )
+            else:
+                raise ValueError(
+                    (
+                        f"Target token resolved to {resolved.layout_id}, "
+                        "but no render target maps to that layout."
+                    )
+                )
+
+        if resolved_target_id in seen:
+            continue
+        seen.add(resolved_target_id)
+        target_ids.append(resolved_target_id)
 
     if not target_ids:
         raise ValueError("Watch targets list cannot be empty.")

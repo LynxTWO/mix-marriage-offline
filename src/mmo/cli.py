@@ -695,8 +695,9 @@ def main(argv: list[str] | None = None) -> int:
         "--targets",
         default=_BASELINE_RENDER_TARGET_ID,
         help=(
-            "Comma-separated target IDs for --render-many "
-            "(default: TARGET.STEREO.2_0)."
+            "Comma-separated target tokens for --render-many "
+            "(TARGET.*, LAYOUT.*, or shorthands like stereo/5.1/7.1/7.1.4; "
+            "default: TARGET.STEREO.2_0)."
         ),
     )
     run_parser.add_argument(
@@ -795,8 +796,9 @@ def main(argv: list[str] | None = None) -> int:
         "--targets",
         default=",".join(DEFAULT_WATCH_TARGET_IDS),
         help=(
-            "Comma-separated render-many target IDs "
-            "(default: TARGET.STEREO.2_0,TARGET.SURROUND.5_1,TARGET.SURROUND.7_1)."
+            "Comma-separated render-many target tokens "
+            "(TARGET.*, LAYOUT.*, or shorthands like stereo/5.1/7.1/7.1.4; "
+            "default: TARGET.STEREO.2_0,TARGET.SURROUND.5_1,TARGET.SURROUND.7_1)."
         ),
     )
     watch_parser.add_argument(
@@ -1061,7 +1063,10 @@ def main(argv: list[str] | None = None) -> int:
     safe_render_parser.add_argument(
         "--target",
         default="stereo",
-        help="Render target label, e.g. 'stereo' (default: stereo).",
+        help=(
+            "Render target token (TARGET.*, LAYOUT.*, or shorthand like stereo/5.1/7.1/7.1.4). "
+            "Default: stereo."
+        ),
     )
     safe_render_parser.add_argument(
         "--out-dir",
@@ -1143,7 +1148,8 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         dest="render_many_targets",
         help=(
-            "Comma-separated target IDs for --render-many "
+            "Comma-separated target tokens for --render-many "
+            "(TARGET.*, LAYOUT.*, or shorthands) "
             "(default: stereo,5.1,7.1.4)."
         ),
     )
@@ -2606,8 +2612,9 @@ def main(argv: list[str] | None = None) -> int:
         "--targets",
         default=_BASELINE_RENDER_TARGET_ID,
         help=(
-            "Comma-separated target IDs for --render-many "
-            "(default: TARGET.STEREO.2_0)."
+            "Comma-separated target tokens for --render-many "
+            "(TARGET.*, LAYOUT.*, or shorthands like stereo/5.1/7.1/7.1.4; "
+            "default: TARGET.STEREO.2_0)."
         ),
     )
     project_run_parser.add_argument(
@@ -2999,7 +3006,10 @@ def main(argv: list[str] | None = None) -> int:
     project_render_init_parser.add_argument(
         "--target-ids",
         default=None,
-        help="Optional comma-separated explicit TARGET IDs (e.g. TARGET.STEREO.2_0,TARGET.SURROUND.5_1).",
+        help=(
+            "Optional comma-separated target tokens for options.target_ids "
+            "(TARGET.*, LAYOUT.*, or shorthands; e.g. TARGET.STEREO.2_0,LAYOUT.5_1,stereo)."
+        ),
     )
     project_render_init_parser.add_argument(
         "--force",
@@ -3651,8 +3661,9 @@ def main(argv: list[str] | None = None) -> int:
         "--targets",
         required=True,
         help=(
-            "Comma-separated target IDs "
-            "(e.g., TARGET.STEREO.2_0,TARGET.SURROUND.5_1)."
+            "Comma-separated target tokens "
+            "(TARGET.*, LAYOUT.*, or shorthands; "
+            "e.g., TARGET.STEREO.2_0,LAYOUT.5_1,stereo)."
         ),
     )
     render_plan_build_parser.add_argument(

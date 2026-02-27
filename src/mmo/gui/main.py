@@ -19,6 +19,7 @@ from mmo.core.plugin_market import (
 )
 from mmo.core.render_targets import list_render_targets
 from mmo.core.speaker_layout import LayoutStandard
+from mmo.core.target_tokens import resolve_target_token
 from mmo.gui.dashboard import VisualizationDashboardPanel
 
 try:  # Optional at import time so tests can run without GUI deps.
@@ -61,19 +62,6 @@ _STUDIO_THEME: Mapping[str, str] = {
 _FONT_UI = "Inter"
 _FONT_DISPLAY = "Space Grotesk"
 _FONT_MONO = "Consolas"
-_LAYOUT_SHORTHANDS: Mapping[str, str] = {
-    "stereo": "LAYOUT.2_0",
-    "2.0": "LAYOUT.2_0",
-    "2_0": "LAYOUT.2_0",
-    "mono": "LAYOUT.1_0",
-    "1.0": "LAYOUT.1_0",
-    "5.1": "LAYOUT.5_1",
-    "5_1": "LAYOUT.5_1",
-    "7.1": "LAYOUT.7_1",
-    "7_1": "LAYOUT.7_1",
-    "7.1.4": "LAYOUT.7_1_4",
-    "7_1_4": "LAYOUT.7_1_4",
-}
 _DISCOVER_GRADIENTS: Mapping[str, tuple[str, str, str, str]] = {
     "ember": ("#21110A", "#60311A", "#F0B469", "#F8ECD2"),
     "tide": ("#0E1D1F", "#16484D", "#78D8D2", "#DCF7F4"),
@@ -266,11 +254,11 @@ def _layout_from_target_token(
     stripped = token.strip()
     if not stripped:
         return ""
-    if stripped in target_layouts:
-        return target_layouts[stripped]
-    if stripped.startswith("LAYOUT."):
-        return stripped
-    return _LAYOUT_SHORTHANDS.get(stripped.casefold(), stripped)
+    try:
+        return resolve_target_token(stripped).layout_id
+    except ValueError:
+        # Keep deterministic fallback behavior for injected GUI test maps.
+        return target_layouts.get(stripped, "")
 
 
 def normalize_render_many_layout_ids(
@@ -288,11 +276,14 @@ def normalize_render_many_layout_ids(
             resolved_layouts.add(layout_id)
 
     if not resolved_layouts:
-        return (
-            "LAYOUT.2_0",
-            "LAYOUT.5_1",
-            "LAYOUT.7_1",
-        )
+        fallback_layouts = {
+            _layout_from_target_token(token, layout_map)
+            for token in _DEFAULT_RENDER_MANY_TARGET_IDS
+        }
+        fallback_layouts.discard("")
+        if fallback_layouts:
+            return tuple(sorted(fallback_layouts))
+        return ("LAYOUT.2_0",)
     return tuple(sorted(resolved_layouts))
 
 
