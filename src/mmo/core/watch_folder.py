@@ -336,6 +336,11 @@ def run_watch_folder(
             log_error=error_writer,
         )
 
+    if not resolved.include_existing:
+        # Prime signatures so the first filesystem event only processes
+        # newly changed/newly added stem sets, not everything already present.
+        tracker.collect_changed_stem_sets(resolved.watch_dir)
+
     dirty_state = _DirtyState(clock)
     if resolved.include_existing:
         dirty_state.mark_dirty()

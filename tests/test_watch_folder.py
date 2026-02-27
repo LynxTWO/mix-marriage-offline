@@ -3,8 +3,10 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from mmo.core.watch_folder import (
     DEFAULT_WATCH_TARGET_IDS,
@@ -102,6 +104,78 @@ class TestWatchFolder(unittest.TestCase):
                 self.assertIn("--render-many", argv)
                 self.assertIn("--targets", argv)
                 self.assertIn("TARGET.STEREO.2_0,TARGET.SURROUND.5_1", argv)
+
+    def test_watch_mode_no_existing_processes_only_new_sets(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            watch_dir = root / "watch"
+            _write_audio(watch_dir / "existing_set" / "kick.wav")
+
+            seen_argvs: list[list[str]] = []
+
+            def _fake_runner(argv: list[str] | tuple[str, ...]) -> int:
+                seen_argvs.append(list(argv))
+                return 0
+
+            mark_dirty_holder: dict[str, object] = {}
+            stop_event = threading.Event()
+
+            class _FakeObserver:
+                def stop(self) -> None:
+                    return None
+
+                def join(self, timeout: float | None = None) -> None:
+                    return None
+
+            def _fake_start_watchdog_observer(*, watch_dir: Path, mark_dirty: object) -> _FakeObserver:
+                del watch_dir
+                mark_dirty_holder["callback"] = mark_dirty
+                return _FakeObserver()
+
+            sleep_calls = 0
+
+            def _fake_sleep(_seconds: float) -> None:
+                nonlocal sleep_calls
+                sleep_calls += 1
+                if sleep_calls == 1:
+                    _write_audio(watch_dir / "new_set" / "snare.wav")
+                    callback = mark_dirty_holder.get("callback")
+                    self.assertTrue(callable(callback))
+                    if callable(callback):
+                        callback()
+                elif sleep_calls >= 5:
+                    stop_event.set()
+
+            config = WatchFolderConfig(
+                watch_dir=watch_dir,
+                out_dir=root / "renders",
+                target_ids=("TARGET.STEREO.2_0",),
+                settle_seconds=1e-6,
+                poll_interval_seconds=1e-6,
+                include_existing=False,
+                once=False,
+            )
+
+            with patch(
+                "mmo.core.watch_folder._start_watchdog_observer",
+                side_effect=_fake_start_watchdog_observer,
+            ):
+                exit_code = run_watch_folder(
+                    config,
+                    command_runner=_fake_runner,
+                    sleeper=_fake_sleep,
+                    stop_event=stop_event,
+                    log=lambda _: None,
+                )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(len(seen_argvs), 1)
+            argv = seen_argvs[0]
+            stems_idx = argv.index("--stems") + 1
+            self.assertEqual(
+                argv[stems_idx],
+                (watch_dir / "new_set").resolve().as_posix(),
+            )
 
 
 if __name__ == "__main__":
