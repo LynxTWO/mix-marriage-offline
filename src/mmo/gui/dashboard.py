@@ -38,6 +38,53 @@ _THEME: dict[str, str] = {
     "risk_high": "#BE4D3D",
 }
 
+_THEME_GOLDEN_HOUR: dict[str, str] = {
+    "bg": "#0D0900",
+    "surface": "#160C00",
+    "surface_edge": "#3C2C10",
+    "panel": "#0A0600",
+    "text": "#F8EDD0",
+    "text_muted": "#C9A060",
+    "accent_warm": "#E8A030",
+    "accent_hot": "#F5C048",
+    "accent_cool": "#A8B840",
+    "risk_low": "#70A848",
+    "risk_medium": "#E8A030",
+    "risk_high": "#C84030",
+}
+
+_THEME_NEON_CLUB: dict[str, str] = {
+    "bg": "#030308",
+    "surface": "#080812",
+    "surface_edge": "#181828",
+    "panel": "#020206",
+    "text": "#E8EEFF",
+    "text_muted": "#7888CC",
+    "accent_warm": "#FF6040",
+    "accent_hot": "#FF8060",
+    "accent_cool": "#40C8FF",
+    "risk_low": "#40FF80",
+    "risk_medium": "#FFCC00",
+    "risk_high": "#FF2040",
+}
+
+THEMES: dict[str, dict[str, str]] = {
+    "Golden Hour": _THEME_GOLDEN_HOUR,
+    "Midnight Studio": _THEME,
+    "Neon Club": _THEME_NEON_CLUB,
+}
+
+
+def get_theme(name: str) -> dict[str, str]:
+    """Return a copy of the named theme dict; falls back to Midnight Studio."""
+    return dict(THEMES.get(name, _THEME))
+
+
+def list_theme_names() -> tuple[str, ...]:
+    """Return sorted tuple of available theme names (stable, deterministic)."""
+    return tuple(sorted(THEMES))
+
+
 _CORRELATION_WARN_LTE = -0.2
 _CORRELATION_ERROR_LTE = -0.6
 
@@ -63,6 +110,10 @@ _SPEAKER_WORLD: dict[SpeakerPosition, tuple[float, float, float]] = {
     SpeakerPosition.FLC: (-0.4, 1.2, 0.0),
     SpeakerPosition.FRC: (0.4, 1.2, 0.0),
     SpeakerPosition.BC: (0.0, -1.0, 0.0),
+}
+
+_SPEAKER_WORLD_BY_NAME: dict[str, tuple[float, float, float]] = {
+    pos.name: coords for pos, coords in _SPEAKER_WORLD.items()
 }
 
 
@@ -757,6 +808,18 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
         self._telemetry = default_dashboard_telemetry()
         self._last_live_payload: dict[str, Any] = {}
         self._engineer_mode = False
+        self._active_theme_name: str = "Midnight Studio"
+        self._active_theme: dict[str, str] = dict(_THEME)
+
+        # Interactive 3D orbit state for speaker layout
+        self._orbit_yaw: float = 32.0
+        self._orbit_pitch: float = 25.0
+        self._orbit_drag_start: tuple[int, int] | None = None
+        self._orbit_drag_prev: tuple[float, float] = (32.0, 25.0)
+
+        # Widget references for theme hot-swap
+        self._canvas_frames: list[Any] = []
+        self._canvas_widgets: list[Any] = []
 
         self.container = ctk_module.CTkFrame(
             parent,
@@ -854,6 +917,64 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             "where": list(where_items),
         }
 
+    def set_theme(self, name: str) -> None:
+        """Hot-swap active theme by name; next render frame picks up new colors."""
+        self._active_theme_name = name if name in THEMES else "Midnight Studio"
+        self._active_theme = get_theme(self._active_theme_name)
+        self._apply_theme_to_widgets()
+
+    def _apply_theme_to_widgets(self) -> None:
+        theme = self._active_theme
+        self.container.configure(
+            fg_color=theme["surface"],
+            border_color=theme["surface_edge"],
+        )
+        for frame in self._canvas_frames:
+            frame.configure(
+                fg_color=theme["surface"],
+                border_color=theme["surface_edge"],
+            )
+        for canvas in self._canvas_widgets:
+            canvas.configure(bg=theme["panel"])
+        self._title.configure(text_color=theme["accent_hot"])
+
+    def _theme_risk_color(self, risk: str) -> str:
+        return {
+            "low": self._active_theme["risk_low"],
+            "medium": self._active_theme["risk_medium"],
+            "high": self._active_theme["risk_high"],
+        }.get(risk, self._active_theme["accent_cool"])
+
+    def _project_speaker_3d(
+        self, x: float, y: float, z: float
+    ) -> tuple[float, float, float]:
+        """Project world coords using current interactive orbit angles."""
+        yaw = math.radians(self._orbit_yaw)
+        pitch = math.radians(self._orbit_pitch)
+        x_rot = (x * math.cos(yaw)) - (y * math.sin(yaw))
+        y_rot = (x * math.sin(yaw)) + (y * math.cos(yaw))
+        y_proj = (y_rot * math.cos(pitch)) - (z * math.sin(pitch))
+        z_proj = (y_rot * math.sin(pitch)) + (z * math.cos(pitch))
+        return (0.5 + (x_rot * 0.22), 0.54 - (y_proj * 0.18), z_proj)
+
+    def _on_orbit_start(self, event: Any) -> None:
+        self._orbit_drag_start = (event.x, event.y)
+        self._orbit_drag_prev = (self._orbit_yaw, self._orbit_pitch)
+
+    def _on_orbit_drag(self, event: Any) -> None:
+        if self._orbit_drag_start is None:
+            return
+        dx = event.x - self._orbit_drag_start[0]
+        dy = event.y - self._orbit_drag_start[1]
+        self._orbit_yaw = self._orbit_drag_prev[0] + (dx * 0.5)
+        self._orbit_pitch = max(-85.0, min(85.0, self._orbit_drag_prev[1] - (dy * 0.5)))
+
+    def _on_orbit_end(self, event: Any) -> None:
+        self._orbit_drag_start = None
+
+    def _on_theme_change(self, name: str) -> None:
+        self.set_theme(name)
+
     def _build_widgets(self) -> None:
         ctk = self._ctk
         self._title = ctk.CTkLabel(
@@ -864,17 +985,36 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
         )
         self._title.grid(row=0, column=0, padx=(12, 6), pady=(10, 4), sticky="w")
 
+        _ctrl_bar = ctk.CTkFrame(self.container, fg_color="transparent")
+        _ctrl_bar.grid(row=0, column=1, padx=(6, 12), pady=(10, 4), sticky="e")
+
+        self._theme_var = ctk.StringVar(value="Midnight Studio")
+        ctk.CTkOptionMenu(
+            _ctrl_bar,
+            values=list(list_theme_names()),
+            variable=self._theme_var,
+            command=self._on_theme_change,
+            fg_color="#1B1712",
+            button_color=self._active_theme["accent_warm"],
+            button_hover_color=self._active_theme["accent_hot"],
+            dropdown_fg_color=self._active_theme["panel"],
+            text_color=self._active_theme["text"],
+            width=162,
+            height=28,
+            font=("Space Grotesk", 11),
+        ).grid(row=0, column=0, padx=(0, 10), sticky="e")
+
         self._engineer_switch = ctk.CTkSwitch(
-            self.container,
-            text="Engineer Panel",
+            _ctrl_bar,
+            text="Engineer",
             command=self._toggle_engineer_mode,
-            progress_color=_THEME["accent_hot"],
-            button_color=_THEME["accent_hot"],
-            button_hover_color=_THEME["accent_warm"],
-            text_color=_THEME["text_muted"],
+            progress_color=self._active_theme["accent_hot"],
+            button_color=self._active_theme["accent_hot"],
+            button_hover_color=self._active_theme["accent_warm"],
+            text_color=self._active_theme["text_muted"],
             font=("Space Grotesk", 12),
         )
-        self._engineer_switch.grid(row=0, column=1, padx=(6, 12), pady=(10, 4), sticky="e")
+        self._engineer_switch.grid(row=0, column=1, sticky="e")
 
         self._spectrum_canvas = self._create_canvas(
             title="Spectrum Analyzer · warm frequency bloom",
@@ -898,12 +1038,16 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             height=188,
         )
         self._speaker_canvas = self._create_canvas(
-            title="Cinematic 3D layout · active channels",
+            title="Cinematic 3D layout · drag to orbit",
             row=3,
             column=0,
             columnspan=1,
             height=198,
         )
+        self._speaker_canvas.bind("<ButtonPress-1>", self._on_orbit_start)
+        self._speaker_canvas.bind("<B1-Motion>", self._on_orbit_drag)
+        self._speaker_canvas.bind("<ButtonRelease-1>", self._on_orbit_end)
+
         self._objects_canvas = self._create_canvas(
             title="Object placement preview · confidence badges",
             row=3,
@@ -957,12 +1101,13 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
         height: int,
     ) -> Any:
         ctk = self._ctk
+        theme = self._active_theme
         frame = ctk.CTkFrame(
             self.container,
-            fg_color=_THEME["surface"],
+            fg_color=theme["surface"],
             corner_radius=14,
             border_width=1,
-            border_color=_THEME["surface_edge"],
+            border_color=theme["surface_edge"],
         )
         frame.grid(
             row=row,
@@ -978,18 +1123,20 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             frame,
             text=title,
             font=("Space Grotesk", 13, "bold"),
-            text_color=_THEME["accent_warm"],
+            text_color=theme["accent_warm"],
         ).grid(row=0, column=0, padx=10, pady=(8, 2), sticky="w")
         canvas = self._tk.Canvas(
             frame,
-            bg=_THEME["panel"],
+            bg=theme["panel"],
             relief="flat",
             bd=0,
             highlightthickness=1,
-            highlightbackground=_THEME["surface_edge"],
+            highlightbackground=theme["surface_edge"],
             height=height,
         )
         canvas.grid(row=1, column=0, padx=8, pady=(0, 8), sticky="nsew")
+        self._canvas_frames.append(frame)
+        self._canvas_widgets.append(canvas)
         return canvas
 
     def _toggle_engineer_mode(self) -> None:
@@ -1068,7 +1215,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             area_poly = [0.0, baseline, *points, float(width), baseline, float(width), float(height), 0.0, float(height)]
             canvas.create_polygon(*area_poly, fill="#120F0B", outline="")
             for glow_width, glow_mix in ((9, 0.35), (6, 0.2), (4, 0.08)):
-                glow_color = _lerp_color(_THEME["accent_hot"], "#FFF6E7", glow_mix)
+                glow_color = _lerp_color(self._active_theme["accent_hot"], "#FFF6E7", glow_mix)
                 canvas.create_line(
                     *points,
                     fill=glow_color,
@@ -1106,7 +1253,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             10,
             text=self._telemetry.mood_line,
             anchor="nw",
-            fill=_THEME["text_muted"],
+            fill=self._active_theme["text_muted"],
             font=("Space Grotesk", 11),
         )
 
@@ -1142,7 +1289,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
                     cy - (y_norm * radius),
                 ]
             )
-        risk_color = _risk_color(frame.correlation_risk)
+        risk_color = self._theme_risk_color(frame.correlation_risk)
         confidence = _clamp(self._telemetry.confidence, 0.0, 1.0)
         for idx in range(4, 0, -1):
             glow_radius = radius * (0.25 + (confidence * 0.35) + (idx * 0.05))
@@ -1163,7 +1310,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             10,
             text=f"Confidence glow {int(round(confidence * 100.0))}%",
             anchor="nw",
-            fill="#C6B08C",
+            fill=self._active_theme["text_muted"],
             font=("Space Grotesk", 10),
         )
 
@@ -1172,7 +1319,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
         width, height = self._canvas_size(canvas, min_w=180, min_h=150)
         canvas.delete("all")
         canvas.create_rectangle(0, 0, width, height, fill="#080706", outline="")
-        risk_color = _risk_color(frame.correlation_risk)
+        risk_color = self._theme_risk_color(frame.correlation_risk)
 
         gauge_left = width * 0.14
         gauge_top = height * 0.08
@@ -1238,14 +1385,14 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             width * 0.5,
             height * 0.26,
             text=f"Correlation {frame.correlation:+.2f}",
-            fill=_THEME["text"],
+            fill=self._active_theme["text"],
             font=("Space Grotesk", 14, "bold"),
         )
         canvas.create_text(
             width * 0.5,
             height * 0.9,
             text=f"Phase risk: {frame.correlation_risk.upper()}",
-            fill=_THEME["text_muted"],
+            fill=self._active_theme["text_muted"],
             font=("Space Grotesk", 11),
         )
 
@@ -1290,17 +1437,28 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
         canvas.create_line(sx(0.2), sy(0.2), sx(0.2), sy(0.8), fill="#281F15", width=1)
         canvas.create_line(sx(0.8), sy(0.2), sx(0.8), sy(0.8), fill="#281F15", width=1)
 
+        # Re-project speakers using interactive orbit angles for true 3D navigation
+        orbit_speakers: list[tuple[float, Any, float, float]] = []
         for row in frame.speaker_points:
-            fill = _THEME["accent_warm"]
+            world = _SPEAKER_WORLD_BY_NAME.get(row.speaker_id)
+            if world is not None:
+                ox, oy, odepth = self._project_speaker_3d(*world)
+            else:
+                ox, oy, odepth = row.x, row.y, row.depth
+            orbit_speakers.append((odepth, row, ox, oy))
+        orbit_speakers.sort(key=lambda t: t[0])
+
+        for odepth, row, ox, oy in orbit_speakers:
+            fill = self._active_theme["accent_warm"]
             if row.is_lfe:
-                fill = _THEME["risk_high"]
+                fill = self._active_theme["risk_high"]
             elif row.is_height:
-                fill = _THEME["accent_cool"]
+                fill = self._active_theme["accent_cool"]
             is_active = row.speaker_id in active_speakers
-            fill = _lerp_color(fill, _THEME["accent_hot"], 0.22 if is_active else 0.0)
-            radius = 4.0 + max(0.0, min(4.2, row.depth + 1.1)) + (1.6 if is_active else 0.0)
-            cx = sx(row.x)
-            cy = sy(row.y)
+            fill = _lerp_color(fill, self._active_theme["accent_hot"], 0.22 if is_active else 0.0)
+            radius = 4.0 + max(0.0, min(4.2, odepth + 1.1)) + (1.6 if is_active else 0.0)
+            cx = sx(ox)
+            cy = sy(oy)
             if is_active:
                 for glow in (8.0, 5.5, 3.5):
                     canvas.create_oval(
@@ -1316,14 +1474,14 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
                 cx,
                 cy - (radius + 7),
                 text=f"{row.speaker_id}:{row.slot_index}",
-                fill=_THEME["text_muted"],
+                fill=self._active_theme["text_muted"],
                 font=("Space Grotesk", 9),
             )
 
         for row in frame.object_points:
             x = sx(row.x)
             y = sy(row.y)
-            color = _lerp_color(_THEME["accent_cool"], _THEME["accent_hot"], row.confidence)
+            color = _lerp_color(self._active_theme["accent_cool"], self._active_theme["accent_hot"], row.confidence)
             canvas.create_line(width * 0.5, height * 0.58, x, y, fill="#413223", width=1)
             canvas.create_oval(x - 3, y - 3, x + 3, y + 3, fill=color, outline="")
             badge_w = 46
@@ -1345,6 +1503,14 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
                 fill="#EADDC8",
                 font=("JetBrains Mono", 8),
             )
+        canvas.create_text(
+            width - 6,
+            height - 6,
+            text=f"yaw {self._orbit_yaw:.0f}° pitch {self._orbit_pitch:.0f}°",
+            anchor="se",
+            fill=self._active_theme["text_muted"],
+            font=("JetBrains Mono", 8),
+        )
 
     def _draw_objects(self, frame: DashboardFrame) -> None:
         canvas = self._objects_canvas
@@ -1382,7 +1548,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             x = sx(row.x)
             y = sy(row.y)
             radius = 4.0 + (row.confidence * 4.0)
-            color = _lerp_color(_THEME["accent_cool"], _THEME["accent_hot"], row.confidence)
+            color = _lerp_color(self._active_theme["accent_cool"], self._active_theme["accent_hot"], row.confidence)
             canvas.create_line(cx, cy, x, y, fill="#3A2E22", width=1)
             for glow in (radius + 5, radius + 2):
                 canvas.create_oval(
@@ -1410,7 +1576,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
                 bx0 + (badge_width / 2.0),
                 by0 + (badge_height / 2.0),
                 text=f"{_trim_text(row.object_id, 14)} · {int(round(row.confidence * 100.0))}%",
-                fill=_THEME["text_muted"],
+                fill=self._active_theme["text_muted"],
                 font=("Space Grotesk", 9),
             )
 
@@ -1427,7 +1593,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
                 12,
                 text="Intent cards are waiting for live object evidence.",
                 anchor="nw",
-                fill=_THEME["text_muted"],
+                fill=self._active_theme["text_muted"],
                 font=("Space Grotesk", 11),
             )
             return
@@ -1448,7 +1614,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             x1 = x0 + card_w
             y1 = y0 + card_h
 
-            accent = _lerp_color(_THEME["accent_cool"], _THEME["accent_hot"], card.confidence)
+            accent = _lerp_color(self._active_theme["accent_cool"], self._active_theme["accent_hot"], card.confidence)
             canvas.create_rectangle(x0, y0, x1, y1, fill="#14100C", outline="#3A2D21", width=1)
             canvas.create_rectangle(x0 + 1, y0 + 1, x1 - 1, y0 + 4, fill=accent, outline=accent)
 
@@ -1470,7 +1636,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
                 y0 + 10,
                 text=_trim_text(card.object_id, 18),
                 anchor="nw",
-                fill="#F2E8D2",
+                fill=self._active_theme["text"],
                 font=("Space Grotesk", 11, "bold"),
             )
             canvas.create_text(
@@ -1478,7 +1644,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
                 y0 + 28,
                 text=f"what: {_trim_text(card.what, 54)}",
                 anchor="nw",
-                fill="#D9C39E",
+                fill=_lerp_color(self._active_theme["text"], self._active_theme["text_muted"], 0.25),
                 font=("Space Grotesk", 9),
             )
             canvas.create_text(
@@ -1486,7 +1652,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
                 y0 + 46,
                 text=f"why: {_trim_text(card.why, 56)}",
                 anchor="nw",
-                fill="#BBA683",
+                fill=_lerp_color(self._active_theme["text"], self._active_theme["text_muted"], 0.5),
                 font=("Space Grotesk", 9),
             )
             canvas.create_text(
@@ -1494,7 +1660,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
                 y0 + 64,
                 text=f"where: {_trim_text(', '.join(card.where), 58)}",
                 anchor="nw",
-                fill="#A59275",
+                fill=_lerp_color(self._active_theme["text"], self._active_theme["text_muted"], 0.7),
                 font=("Space Grotesk", 9),
             )
             canvas.create_text(

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from mmo.gui.dashboard import (
+    THEMES,
     DashboardTelemetry,
     build_dashboard_surface_snapshot,
     build_object_projections,
@@ -13,6 +14,8 @@ from mmo.gui.dashboard import (
     classify_correlation_risk,
     default_dashboard_telemetry,
     frame_signature,
+    get_theme,
+    list_theme_names,
     surface_snapshot_signature,
 )
 
@@ -105,3 +108,55 @@ def test_correlation_risk_thresholds_are_stable() -> None:
     assert classify_correlation_risk(-0.7) == "high"
     assert classify_correlation_risk(-0.2) == "medium"
     assert classify_correlation_risk(0.1) == "low"
+
+
+def test_theme_names_are_stable_and_sorted() -> None:
+    names = list_theme_names()
+    assert names == ("Golden Hour", "Midnight Studio", "Neon Club")
+
+
+def test_themes_registry_has_three_entries() -> None:
+    assert len(THEMES) == 3
+    assert "Midnight Studio" in THEMES
+    assert "Golden Hour" in THEMES
+    assert "Neon Club" in THEMES
+
+
+def test_all_themes_have_required_keys() -> None:
+    reference_keys = frozenset(get_theme("Midnight Studio"))
+    for name in list_theme_names():
+        theme = get_theme(name)
+        missing = reference_keys - frozenset(theme)
+        assert not missing, f"Theme '{name}' is missing color keys: {missing}"
+
+
+def test_get_theme_returns_correct_bg_for_each_theme() -> None:
+    midnight = get_theme("Midnight Studio")
+    golden = get_theme("Golden Hour")
+    neon = get_theme("Neon Club")
+    assert midnight["bg"] == "#0A0A09"
+    assert golden["bg"] == "#0D0900"
+    assert neon["bg"] == "#030308"
+
+
+def test_get_theme_returns_independent_copy() -> None:
+    a = get_theme("Midnight Studio")
+    b = get_theme("Midnight Studio")
+    assert a == b
+    a["bg"] = "#FFFFFF"
+    c = get_theme("Midnight Studio")
+    assert c["bg"] == "#0A0A09"
+
+
+def test_get_theme_falls_back_to_midnight_studio() -> None:
+    fallback = get_theme("Nonexistent Theme XYZ")
+    midnight = get_theme("Midnight Studio")
+    assert fallback == midnight
+
+
+def test_theme_switch_does_not_affect_frame_signatures() -> None:
+    """Theme is purely visual; frame computation signatures must remain stable."""
+    telemetry = _fixed_telemetry()
+    frame = build_visualization_frame(telemetry, tick=24)
+    assert frame_signature(frame) == "2db5a09e6613385483afbaa2cfc7231ff685efd741d2b42e1fa44b91a256d40c"
+    assert surface_snapshot_signature(frame) == "311043d2e1e511d04e56a03cb2149c3284c5213187af899ffcee98b75116d9b5"
