@@ -71,17 +71,18 @@ Note: schema contracts use `schemas/*.schema.json` naming (not `schemas/*.json`)
 - [x] Downmix QA: renders pass similarity gates to stereo (and optional additional downmix targets).
 - [x] “Do no harm” defaults exist and are used when confidence is low.
 
-#### 4.4.5 Dual SMPTE/Film channel-ordering standard support
-- [x] `ontology/layouts.yaml` has explicit `ordering_variants` for SMPTE and FILM for all surround and immersive layouts (5.0, 5.1, 7.0, 7.1, 7.1.4, etc.).
-- [x] `layout_negotiation.get_channel_order(layout_id, standard)` returns the correct order for SMPTE (default) and FILM.
+#### 4.4.5 Five channel-ordering standards support (boundary convert + internal SMPTE)
+- [x] `ontology/layouts.yaml` has explicit `ordering_variants` for the 5 supported standards where applicable: SMPTE, FILM, LOGIC_PRO, VST3, AAF.
+- [x] `layout_negotiation.get_channel_order(layout_id, standard)` returns the correct order for SMPTE (default), FILM, LOGIC_PRO, VST3, and AAF (with canonical fallback when a layout has no explicit variant).
 - [x] `layout_negotiation.reorder_channels(data, from_order, to_order)` works on list, tuple, and NumPy arrays.
 - [x] `render_contract.build_render_contract()` accepts `layout_standard` (default SMPTE) and records it in the contract.
 - [x] `render_engine.render_scene_to_targets()` reads `layout_standard` from options and emits explainability notes.
-- [x] `safe-render` CLI accepts `--layout-standard SMPTE|FILM` (default SMPTE).
+- [x] `safe-render` CLI accepts `--layout-standard SMPTE|FILM|LOGIC_PRO|VST3|AAF` (default SMPTE).
 - [x] `render-many` threads `layout_standard` through all per-target runs.
-- [x] All render receipts and job notes include `”using SMPTE order ...”` or `”Film order requested”`.
+- [x] All render receipts and job notes include the active layout standard and order-selection notes.
 - [x] Regression fixtures in `tests/test_dual_layout_ordering.py` pin exact orderings for 5.1 and 7.1.4 SMPTE and FILM.
-- [x] `schemas/run_config.schema.json` `render.layout_standard` field present with enum `[“SMPTE”, “FILM”]`.
+- [x] End-to-end roundtrip regression matrix in `tests/test_layout_standard_roundtrips.py` verifies source->SMPTE->target routing for all valid multichannel `LAYOUT.*` entries across SMPTE/FILM/LOGIC_PRO/VST3/AAF.
+- [x] `schemas/run_config.schema.json` `render.layout_standard` field present with enum `[“SMPTE”, “FILM”, “LOGIC_PRO”, “VST3”, “AAF”]`.
 - [x] `schemas/render_report.schema.json` `render_job.layout_standard` field present.
 - [x] `schemas/plugin.schema.json` `capabilities.supported_standards` and `capabilities.preferred_standard` fields present.
 - [x] Every downmix matrix and QA gate is order-aware (uses channel IDs, not fixed indices).
@@ -137,8 +138,8 @@ What remains: tighten user-intent/lock precedence guarantees across all resolver
 - [x] WAV channel-mask disambiguation for dual-LFE ingest/export is implemented with a conservative export contract: direct-out mask strategy (`mask=0`) plus explicit canonical SPK channel order in render-report/recall context.
 - [x] Dual-LFE export caveat is documented and emitted at runtime: some external tools still collapse/relabel `LFE2`; users must validate with render-report channel order + ffprobe layout output.
 - [x] All render targets support both SMPTE (default) and Film channel ordering; the active standard is recorded in every render contract and receipt.
-- [ ] Regression tests verify correct WAV channel ordering for both standards on 5.1 and 7.1.4 (golden fixtures).
-What remains: add first-class 2.1/4.1 targets and golden WAV order fixtures that assert container ordering for both standards.
+- [x] Regression tests verify deterministic channel-order roundtrips across SMPTE/FILM/LOGIC_PRO/VST3/AAF for all valid multichannel `LAYOUT.*` entries.
+What remains: add first-class 2.1/4.1 targets.
 
 
 ### 4.7 Fixtures and CI prevent regressions

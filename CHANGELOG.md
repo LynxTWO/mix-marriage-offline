@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Layout-standard roundtrip contract coverage:
+  - Added `docs/18-channel-standards.md` to document the five standards
+    (SMPTE/FILM/LOGIC_PRO/VST3/AAF), boundary conversion, and internal SMPTE
+    canonical processing.
+  - Added deterministic roundtrip regression matrix
+    `tests/test_layout_standard_roundtrips.py` covering all multichannel
+    ontology layouts with `source -> SMPTE -> target` assertions across all
+    five standards.
 - Dual-LFE Phase 1 contract support:
   - Added `SPK.LFE2` speaker ontology ID and new x.2 layouts:
     `LAYOUT.5_2`, `LAYOUT.7_2`, and `LAYOUT.7_2_4`.
