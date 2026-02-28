@@ -22,7 +22,7 @@ except ImportError:  # pragma: no cover - environment issue
 
 from mmo import __version__ as engine_version  # noqa: E402
 from mmo.core.lfe_audit import (  # noqa: E402
-    audit_lfe_channel,
+    audit_lfe_channels,
     build_lfe_audit_issues,
     detect_lfe_channel_indices,
     _extract_channel,
@@ -908,25 +908,29 @@ def _add_lfe_audit_issues(
                         if j < len(mains_samples):
                             mains_samples[j] += s
 
-        for lfe_idx in lfe_indices:
-            lfe_mono = _extract_channel(all_samples, channels, lfe_idx)
-            if not lfe_mono:
-                continue
-
-            audit_result = audit_lfe_channel(
-                lfe_mono,
-                mains_samples if mains_samples else None,
-                int(sample_rate_hz),
-            )
-
-            # Store LFE measurements on the stem
-            _upsert_lfe_measurements(stem, lfe_idx, audit_result)
-
-            # Build issues
-            stem_issues = build_lfe_audit_issues(
-                stem_id, lfe_idx, audit_result, strict=strict
-            )
-            issues.extend(stem_issues)
+        lfe_summary = audit_lfe_channels(
+            all_samples,
+            channels=channels,
+            lfe_indices=lfe_indices,
+            sample_rate_hz=int(sample_rate_hz),
+            mains_samples=mains_samples if mains_samples else None,
+        )
+        lfe_rows = lfe_summary.get("rows", [])
+        if isinstance(lfe_rows, list):
+            _upsert_lfe_channel_rows(stem, lfe_rows, lfe_summary)
+            for row in lfe_rows:
+                if not isinstance(row, dict):
+                    continue
+                lfe_idx = row.get("channel_index")
+                audit_result = row.get("audit_result")
+                if not isinstance(lfe_idx, int) or not isinstance(audit_result, dict):
+                    continue
+                # Keep legacy scalar evidence for compatibility.
+                _upsert_lfe_measurements(stem, lfe_idx, audit_result)
+                stem_issues = build_lfe_audit_issues(
+                    stem_id, lfe_idx, audit_result, strict=strict
+                )
+                issues.extend(stem_issues)
 
     return missing_ffmpeg
 
@@ -948,6 +952,7 @@ def _upsert_lfe_measurements(
         ("EVID.LFE.INFRASONIC_DB", audit_result.get("infrasonic_energy_db"), "UNIT.DB"),
         ("EVID.LFE.CREST_FACTOR_DB", audit_result.get("crest_factor_db"), "UNIT.DB"),
         ("EVID.LFE.PEAK_DBFS", audit_result.get("peak_dbfs"), "UNIT.DBFS"),
+        ("EVID.LFE.TRUEPEAK_DBTP", audit_result.get("true_peak_dbtp"), "UNIT.DBTP"),
     ]
     for evidence_id, value, unit_id in pairs:
         safe_val = _safe(value)
@@ -964,6 +969,46 @@ def _upsert_lfe_measurements(
                 value=safe_ratio,
                 unit_id="UNIT.DB",
             )
+
+
+def _upsert_lfe_channel_rows(
+    stem: Dict[str, Any],
+    rows: List[Dict[str, Any]],
+    summary: Dict[str, Any],
+) -> None:
+    """Store per-LFE channel rows and summed LFE energy as deterministic receipts."""
+    rendered_rows: List[Dict[str, Any]] = []
+    for row in sorted(rows, key=lambda item: int(item.get("channel_index", 0))):
+        if not isinstance(row, dict):
+            continue
+        channel_index = row.get("channel_index")
+        if not isinstance(channel_index, int):
+            continue
+        rendered_rows.append(
+            {
+                "channel_index": channel_index,
+                "inband_energy_db": row.get("inband_energy_db"),
+                "out_of_band_energy_db": row.get("out_of_band_energy_db"),
+                "true_peak_dbtp": row.get("true_peak_dbtp"),
+                "out_of_band_high": bool(row.get("out_of_band_high")),
+            }
+        )
+    if rendered_rows:
+        upsert_measurement(
+            stem,
+            evidence_id="EVID.LFE.CHANNEL_ROWS",
+            value=json.dumps(rendered_rows, sort_keys=True, separators=(",", ":")),
+            unit_id="UNIT.NONE",
+        )
+
+    summed_inband = summary.get("summed_lfe_inband_energy_db")
+    if isinstance(summed_inband, (int, float)) and math.isfinite(float(summed_inband)):
+        upsert_measurement(
+            stem,
+            evidence_id="EVID.LFE.SUM_BAND_ENERGY_DB",
+            value=round(float(summed_inband), 3),
+            unit_id="UNIT.DB",
+        )
 
 
 def _build_metering_summary(session: Dict[str, Any], mode: str) -> Dict[str, Any]:

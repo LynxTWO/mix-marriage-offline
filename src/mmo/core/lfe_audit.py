@@ -25,6 +25,10 @@ _BAND_LEVEL_LOW_DBFS: float = -55.0        # in-band energy below this → BAND_
 _BAND_LEVEL_HIGH_DBFS: float = -6.0        # in-band energy above this → BAND_LEVEL_HIGH
 
 
+def _is_lfe_token(token: str) -> bool:
+    return str(token).strip().upper().startswith("LFE")
+
+
 def detect_lfe_channel_indices(
     channels: int,
     channel_layout: Optional[str] = None,
@@ -38,14 +42,14 @@ def detect_lfe_channel_indices(
     if wav_channel_mask is not None:
         positions = positions_from_wav_mask(wav_channel_mask)
         if len(positions) == channels:
-            return [i for i, pos in enumerate(positions) if pos == "LFE"]
+            return [i for i, pos in enumerate(positions) if _is_lfe_token(pos)]
 
     # Fall back to ffprobe channel_layout string
     if channel_layout is not None:
         layout_lower = channel_layout.strip().lower()
         layout_positions = _FFMPEG_LAYOUT_KNOWN.get(layout_lower)
         if layout_positions and len(layout_positions) == channels:
-            return [i for i, pos in enumerate(layout_positions) if pos == "LFE"]
+            return [i for i, pos in enumerate(layout_positions) if _is_lfe_token(pos)]
 
     return []
 
@@ -106,6 +110,17 @@ def _compute_crest_factor_db(samples: List[float]) -> float:
     return 20.0 * math.log10(peak / rms)
 
 
+def _compute_true_peak_dbtp(samples: List[float], sample_rate_hz: int) -> float:
+    """Return true-peak in dBTP using deterministic 4x oversampling."""
+    if not samples:
+        return float("-inf")
+    import numpy as np  # noqa: WPS433
+    from mmo.dsp.meters_truth import compute_true_peak_dbtp_float64  # noqa: WPS433
+
+    array = np.asarray(samples, dtype=np.float64).reshape(-1, 1)
+    return float(compute_true_peak_dbtp_float64(array, int(sample_rate_hz)))
+
+
 def _extract_channel(
     interleaved: List[float], channels: int, channel_idx: int
 ) -> List[float]:
@@ -137,6 +152,7 @@ def audit_lfe_channel(
     )
     infrasonic_db = _compute_band_energy_db(lfe_samples, sample_rate_hz, 0.1, lfe_low_hz)
     peak_dbfs = _compute_peak_dbfs(lfe_samples)
+    true_peak_dbtp = _compute_true_peak_dbtp(lfe_samples, sample_rate_hz)
     crest_db = _compute_crest_factor_db(lfe_samples)
 
     result: Dict[str, Any] = {
@@ -146,6 +162,7 @@ def audit_lfe_channel(
         "out_of_band_energy_db": oob_high_db,
         "infrasonic_energy_db": infrasonic_db,
         "peak_dbfs": peak_dbfs,
+        "true_peak_dbtp": true_peak_dbtp,
         "crest_factor_db": crest_db,
         "out_of_band_high": (
             math.isfinite(oob_high_db) and oob_high_db > _OUT_OF_BAND_THRESHOLD_DB
@@ -175,6 +192,71 @@ def audit_lfe_channel(
         result["lfe_to_mains_ratio_db"] = None
 
     return result
+
+
+def _db_to_linear(value_db: float) -> float:
+    if not math.isfinite(value_db):
+        return 0.0
+    return 10.0 ** (value_db / 10.0)
+
+
+def _linear_to_db(value_linear: float) -> float:
+    if value_linear <= 0.0:
+        return float("-inf")
+    return 10.0 * math.log10(value_linear)
+
+
+def audit_lfe_channels(
+    interleaved: List[float],
+    *,
+    channels: int,
+    lfe_indices: List[int],
+    sample_rate_hz: int,
+    mains_samples: Optional[List[float]] = None,
+    lfe_low_hz: float = LFE_DEFAULT_LOW_HZ,
+    lfe_high_hz: float = LFE_DEFAULT_HIGH_HZ,
+) -> Dict[str, Any]:
+    """Audit multiple LFE channels and return per-channel rows + aggregate metrics."""
+    rows: List[Dict[str, Any]] = []
+    inband_linear_sum = 0.0
+    out_of_band_linear_sum = 0.0
+    out_of_band_any = False
+
+    for lfe_index in sorted({int(index) for index in lfe_indices}):
+        lfe_mono = _extract_channel(interleaved, channels, lfe_index)
+        if not lfe_mono:
+            continue
+        audit = audit_lfe_channel(
+            lfe_mono,
+            mains_samples,
+            sample_rate_hz,
+            lfe_low_hz=lfe_low_hz,
+            lfe_high_hz=lfe_high_hz,
+        )
+        inband_linear_sum += _db_to_linear(float(audit.get("inband_energy_db", float("-inf"))))
+        out_of_band_linear_sum += _db_to_linear(
+            float(audit.get("out_of_band_energy_db", float("-inf")))
+        )
+        out_of_band_any = out_of_band_any or bool(audit.get("out_of_band_high"))
+        rows.append(
+            {
+                "channel_index": lfe_index,
+                "inband_energy_db": audit.get("inband_energy_db"),
+                "out_of_band_energy_db": audit.get("out_of_band_energy_db"),
+                "true_peak_dbtp": audit.get("true_peak_dbtp"),
+                "out_of_band_high": audit.get("out_of_band_high"),
+                "audit_result": audit,
+            }
+        )
+
+    return {
+        "lfe_low_hz": lfe_low_hz,
+        "lfe_high_hz": lfe_high_hz,
+        "rows": rows,
+        "summed_lfe_inband_energy_db": _linear_to_db(inband_linear_sum),
+        "summed_lfe_out_of_band_energy_db": _linear_to_db(out_of_band_linear_sum),
+        "out_of_band_high_any": out_of_band_any,
+    }
 
 
 def _safe_db(value: float, fallback: float = -200.0) -> float:

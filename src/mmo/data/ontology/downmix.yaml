@@ -45,6 +45,8 @@ downmix:
         Each LFE channel is reported independently (level, headroom, band energy, true-peak).
         Fold-down of dual-LFE layouts routes LFE1 and LFE2 using the declared lfe_downmix_routing
         in the target conversion entry. Default: both dropped to stereo/mono targets.
+        When dual-LFE fold-in is explicitly enabled, each LFE uses half of the
+        single-LFE -10 dB gain (0.1581 each) so combined contribution remains safe.
 
   # -------------------------
   # Similarity QA Policy
@@ -110,6 +112,17 @@ downmix:
       notes:
         - "Mono fold from Lo/Ro at 0.5 each. LFE dropped."
 
+    - id: "DMX.CONV.5_2_TO_2_0"
+      source_layout_id: "LAYOUT.5_2"
+      target_layout_id: "LAYOUT.2_0"
+      policy_pack: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      default_matrix_id: "DMX.STD.5_2_TO_2_0.LO_RO_LFE_DROP"
+      lfe_treatment: "drop"
+      notes:
+        - "Default dual-LFE fold-down drops LFE1/LFE2 for translation safety."
+        - "Alternate dual-LFE safe fold uses DMX.STD.5_2_TO_2_0.LO_RO_LFE_MIX_DUAL_SAFE."
+        - "Dual-LFE safe fold sets each LFE to -16 dB (0.1581) so summed fold equals single-LFE -10 dB."
+
     - id: "DMX.CONV.7_1_TO_5_1"
       source_layout_id: "LAYOUT.7_1"
       target_layout_id: "LAYOUT.5_1"
@@ -138,6 +151,17 @@ downmix:
       lfe_treatment: "drop"
       notes:
         - "Mono fold from composed Lo/Ro. LFE dropped."
+
+    - id: "DMX.CONV.7_2_TO_2_0"
+      source_layout_id: "LAYOUT.7_2"
+      target_layout_id: "LAYOUT.2_0"
+      policy_pack: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      default_matrix_id: "DMX.STD.7_2_TO_2_0.LO_RO_COMPOSED"
+      lfe_treatment: "drop"
+      notes:
+        - "Default dual-LFE fold-down drops LFE1/LFE2."
+        - "Alternate dual-LFE safe fold uses DMX.STD.7_2_TO_2_0.LO_RO_LFE_MIX_DUAL_SAFE."
+        - "Each LFE is attenuated to preserve single-LFE -10 dB combined contribution."
 
     - id: "DMX.CONV.5_1_2_TO_5_1"
       source_layout_id: "LAYOUT.5_1_2"
@@ -203,6 +227,16 @@ downmix:
       default_matrix_id: "DMX.IMM.7_1_4_TO_2_0.COMPOSED"
       lfe_treatment: "drop"
 
+    - id: "DMX.CONV.7_2_4_TO_2_0"
+      source_layout_id: "LAYOUT.7_2_4"
+      target_layout_id: "LAYOUT.2_0"
+      policy_pack: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+      default_matrix_id: "DMX.IMM.7_2_4_TO_2_0.COMPOSED"
+      lfe_treatment: "drop"
+      notes:
+        - "Default immersive dual-LFE fold-down drops both LFEs."
+        - "Alternate DMX.IMM.7_2_4_TO_2_0.LFE_MIX_DUAL_SAFE keeps summed LFE equivalent to single-LFE -10 dB."
+
     - id: "DMX.CONV.7_1_4_TO_1_0"
       source_layout_id: "LAYOUT.7_1_4"
       target_layout_id: "LAYOUT.1_0"
@@ -258,6 +292,29 @@ downmix:
         SPK.L: {SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071, SPK.LFE: 0.3162}
         SPK.R: {SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071, SPK.LFE: 0.3162}
 
+    DMX.STD.5_2_TO_2_0.LO_RO_LFE_DROP:
+      source_layout_id: "LAYOUT.5_2"
+      target_layout_id: "LAYOUT.2_0"
+      lfe_treatment: "drop"
+      notes:
+        - "Default dual-LFE fold-down drops LFE1/LFE2."
+      coefficients:
+        SPK.L: {SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071}
+        SPK.R: {SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071}
+
+    DMX.STD.5_2_TO_2_0.LO_RO_LFE_MIX_DUAL_SAFE:
+      source_layout_id: "LAYOUT.5_2"
+      target_layout_id: "LAYOUT.2_0"
+      lfe_treatment: "fold_at_minus_10db"
+      notes:
+        - "Each LFE gets half of the single-LFE fold contribution so combined fold stays at -10 dB equivalent."
+      source_pre_filters:
+        SPK.LFE: [{type: "lowpass", freq_hz: 120, slope_db_per_oct: 24}]
+        SPK.LFE2: [{type: "lowpass", freq_hz: 120, slope_db_per_oct: 24}]
+      coefficients:
+        SPK.L: {SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071, SPK.LFE: 0.1581, SPK.LFE2: 0.1581}
+        SPK.R: {SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071, SPK.LFE: 0.1581, SPK.LFE2: 0.1581}
+
     DMX.STD.5_1_TO_1_0.MONO_FROM_LO_RO:
       source_layout_id: "LAYOUT.5_1"
       target_layout_id: "LAYOUT.1_0"
@@ -284,6 +341,29 @@ downmix:
       coefficients:
         SPK.L: {SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071, SPK.LRS: 0.5}
         SPK.R: {SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071, SPK.RRS: 0.5}
+
+    DMX.STD.7_2_TO_2_0.LO_RO_COMPOSED:
+      source_layout_id: "LAYOUT.7_2"
+      target_layout_id: "LAYOUT.2_0"
+      lfe_treatment: "drop"
+      notes:
+        - "Default dual-LFE fold-down drops LFE1/LFE2."
+      coefficients:
+        SPK.L: {SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071, SPK.LRS: 0.5}
+        SPK.R: {SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071, SPK.RRS: 0.5}
+
+    DMX.STD.7_2_TO_2_0.LO_RO_LFE_MIX_DUAL_SAFE:
+      source_layout_id: "LAYOUT.7_2"
+      target_layout_id: "LAYOUT.2_0"
+      lfe_treatment: "fold_at_minus_10db"
+      notes:
+        - "Dual-LFE safe split keeps combined LFE energy equivalent to single-LFE -10 dB fold."
+      source_pre_filters:
+        SPK.LFE: [{type: "lowpass", freq_hz: 120, slope_db_per_oct: 24}]
+        SPK.LFE2: [{type: "lowpass", freq_hz: 120, slope_db_per_oct: 24}]
+      coefficients:
+        SPK.L: {SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071, SPK.LRS: 0.5, SPK.LFE: 0.1581, SPK.LFE2: 0.1581}
+        SPK.R: {SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071, SPK.RRS: 0.5, SPK.LFE: 0.1581, SPK.LFE2: 0.1581}
 
     DMX.STD.7_1_TO_1_0.MONO_FROM_LO_RO:
       source_layout_id: "LAYOUT.7_1"
@@ -344,6 +424,57 @@ downmix:
           SPK.RRS: 0.5
           SPK.TFR: 0.5
           SPK.TRR: 0.25
+
+    DMX.IMM.7_2_4_TO_2_0.COMPOSED:
+      source_layout_id: "LAYOUT.7_2_4"
+      target_layout_id: "LAYOUT.2_0"
+      lfe_treatment: "drop"
+      notes:
+        - "Default immersive dual-LFE fold-down drops both LFEs."
+      coefficients:
+        SPK.L:
+          SPK.L: 1.0
+          SPK.C: 0.7071
+          SPK.LS: 0.7071
+          SPK.LRS: 0.5
+          SPK.TFL: 0.5
+          SPK.TRL: 0.25
+        SPK.R:
+          SPK.R: 1.0
+          SPK.C: 0.7071
+          SPK.RS: 0.7071
+          SPK.RRS: 0.5
+          SPK.TFR: 0.5
+          SPK.TRR: 0.25
+
+    DMX.IMM.7_2_4_TO_2_0.LFE_MIX_DUAL_SAFE:
+      source_layout_id: "LAYOUT.7_2_4"
+      target_layout_id: "LAYOUT.2_0"
+      lfe_treatment: "fold_at_minus_10db"
+      notes:
+        - "Each LFE uses half gain versus single-LFE -10 dB fold so the combined contribution stays equivalent."
+      source_pre_filters:
+        SPK.LFE: [{type: "lowpass", freq_hz: 120, slope_db_per_oct: 24}]
+        SPK.LFE2: [{type: "lowpass", freq_hz: 120, slope_db_per_oct: 24}]
+      coefficients:
+        SPK.L:
+          SPK.L: 1.0
+          SPK.C: 0.7071
+          SPK.LS: 0.7071
+          SPK.LRS: 0.5
+          SPK.TFL: 0.5
+          SPK.TRL: 0.25
+          SPK.LFE: 0.1581
+          SPK.LFE2: 0.1581
+        SPK.R:
+          SPK.R: 1.0
+          SPK.C: 0.7071
+          SPK.RS: 0.7071
+          SPK.RRS: 0.5
+          SPK.TFR: 0.5
+          SPK.TRR: 0.25
+          SPK.LFE: 0.1581
+          SPK.LFE2: 0.1581
 
     DMX.IMM.7_1_4_TO_1_0.MONO_FROM_COMPOSED:
       source_layout_id: "LAYOUT.7_1_4"

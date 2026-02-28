@@ -8,12 +8,13 @@ downmix_policy_pack:
   created_utc: "2026-01-29T00:00:00Z"
   label: "Standard fold-down v0"
   description: >
-    A conservative set of linear downmix matrices for common surround beds (3.0/4.0/5.1/7.1) to 2.0 and 1.0,
+    A conservative set of linear downmix matrices for common surround beds (3.0/4.0/5.0/5.1/5.2/7.1/7.2) to 2.0 and 1.0,
     plus 7.1 to 5.1 bed fold.
   notes:
     - "Center and surround contributions default to -3 dB (0.7071)."
     - "Rear surrounds fold into side surrounds at -3 dB (0.7071) for 7.1 -> 5.1."
     - "LFE is dropped by default for stereo/mono fold-downs; an alternate matrix includes LFE at -10 dB with low-pass."
+    - "Dual-LFE stereo fold-down keeps total LFE contribution equal to a single -10 dB LFE fold by splitting equally across LFE1/LFE2."
   constants:
     coef_minus_3db: 0.7071
     coef_minus_6db: 0.5
@@ -74,6 +75,31 @@ downmix_policy_pack:
       notes:
         - "This matrix simulates players that fold some LFE into stereo."
 
+    DMX.STD.5_2_TO_2_0.LO_RO_LFE_DROP:
+      label: "5.2 -> 2.0 Lo/Ro (dual-LFE dropped)"
+      source_layout_id: "LAYOUT.5_2"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L: { SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071 }
+        SPK.R: { SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071 }
+      notes:
+        - "Default dual-LFE fold-down drops LFE1/LFE2 for translation safety."
+
+    DMX.STD.5_2_TO_2_0.LO_RO_LFE_MIX_DUAL_SAFE:
+      label: "5.2 -> 2.0 Lo/Ro (dual-LFE mixed safe, LPF)"
+      source_layout_id: "LAYOUT.5_2"
+      target_layout_id: "LAYOUT.2_0"
+      source_pre_filters:
+        SPK.LFE:
+          - { type: "lowpass", freq_hz: 120, slope_db_per_oct: 24 }
+        SPK.LFE2:
+          - { type: "lowpass", freq_hz: 120, slope_db_per_oct: 24 }
+      coefficients:
+        SPK.L: { SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071, SPK.LFE: 0.1581, SPK.LFE2: 0.1581 }
+        SPK.R: { SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071, SPK.LFE: 0.1581, SPK.LFE2: 0.1581 }
+      notes:
+        - "Each LFE gets half of the single-LFE -10 dB fold gain so summed LFE stays safe."
+
     DMX.STD.5_1_TO_1_0.MONO_FROM_LO_RO:
       label: "5.1 -> 1.0 mono (from Lo/Ro)"
       source_layout_id: "LAYOUT.5_1"
@@ -107,6 +133,31 @@ downmix_policy_pack:
         SPK.R: { SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071, SPK.RRS: 0.5 }
       notes:
         - "Equivalent to (7.1 -> 5.1) followed by (5.1 -> 2.0) using -3 dB coefficients."
+
+    DMX.STD.7_2_TO_2_0.LO_RO_COMPOSED:
+      label: "7.2 -> 2.0 Lo/Ro (dual-LFE dropped)"
+      source_layout_id: "LAYOUT.7_2"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L: { SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071, SPK.LRS: 0.5 }
+        SPK.R: { SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071, SPK.RRS: 0.5 }
+      notes:
+        - "Default dual-LFE 7.2 fold-down drops both LFE channels."
+
+    DMX.STD.7_2_TO_2_0.LO_RO_LFE_MIX_DUAL_SAFE:
+      label: "7.2 -> 2.0 Lo/Ro (dual-LFE mixed safe, LPF)"
+      source_layout_id: "LAYOUT.7_2"
+      target_layout_id: "LAYOUT.2_0"
+      source_pre_filters:
+        SPK.LFE:
+          - { type: "lowpass", freq_hz: 120, slope_db_per_oct: 24 }
+        SPK.LFE2:
+          - { type: "lowpass", freq_hz: 120, slope_db_per_oct: 24 }
+      coefficients:
+        SPK.L: { SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071, SPK.LRS: 0.5, SPK.LFE: 0.1581, SPK.LFE2: 0.1581 }
+        SPK.R: { SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071, SPK.RRS: 0.5, SPK.LFE: 0.1581, SPK.LFE2: 0.1581 }
+      notes:
+        - "Dual-LFE safe split preserves single-LFE -10 dB summed contribution."
 
     DMX.STD.7_1_TO_1_0.MONO_FROM_LO_RO:
       label: "7.1 -> 1.0 mono (from composed Lo/Ro)"

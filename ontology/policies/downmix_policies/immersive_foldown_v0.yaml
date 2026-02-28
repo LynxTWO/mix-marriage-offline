@@ -13,6 +13,7 @@ downmix_policy_pack:
     - "Heights are folded at -6 dB to reduce front-stage overload and preserve intent."
     - "Composed matrices match the same coefficient choices as the Standard fold-down pack."
     - "LFE is passed through unchanged when the target has LFE, and dropped for 2.0/1.0 targets (use Standard alternates if desired)."
+    - "Dual-LFE stereo alternates split LFE1/LFE2 so combined fold equals the single-LFE -10 dB strategy."
   constants:
     coef_minus_6db: 0.5
     coef_minus_3db: 0.7071
@@ -136,6 +137,59 @@ downmix_policy_pack:
           SPK.RRS: 0.5
           SPK.TFR: 0.5
           SPK.TRR: 0.25
+
+    DMX.IMM.7_2_4_TO_2_0.COMPOSED:
+      label: "7.2.4 -> 2.0 (composed, dual-LFE dropped)"
+      source_layout_id: "LAYOUT.7_2_4"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L:
+          SPK.L: 1.0
+          SPK.C: 0.7071
+          SPK.LS: 0.7071
+          SPK.LRS: 0.5
+          SPK.TFL: 0.5
+          SPK.TRL: 0.25
+        SPK.R:
+          SPK.R: 1.0
+          SPK.C: 0.7071
+          SPK.RS: 0.7071
+          SPK.RRS: 0.5
+          SPK.TFR: 0.5
+          SPK.TRR: 0.25
+      notes:
+        - "Default immersive dual-LFE fold-down drops both LFE channels for translation safety."
+
+    DMX.IMM.7_2_4_TO_2_0.LFE_MIX_DUAL_SAFE:
+      label: "7.2.4 -> 2.0 (composed, dual-LFE mixed safe)"
+      source_layout_id: "LAYOUT.7_2_4"
+      target_layout_id: "LAYOUT.2_0"
+      source_pre_filters:
+        SPK.LFE:
+          - { type: "lowpass", freq_hz: 120, slope_db_per_oct: 24 }
+        SPK.LFE2:
+          - { type: "lowpass", freq_hz: 120, slope_db_per_oct: 24 }
+      coefficients:
+        SPK.L:
+          SPK.L: 1.0
+          SPK.C: 0.7071
+          SPK.LS: 0.7071
+          SPK.LRS: 0.5
+          SPK.TFL: 0.5
+          SPK.TRL: 0.25
+          SPK.LFE: 0.1581
+          SPK.LFE2: 0.1581
+        SPK.R:
+          SPK.R: 1.0
+          SPK.C: 0.7071
+          SPK.RS: 0.7071
+          SPK.RRS: 0.5
+          SPK.TFR: 0.5
+          SPK.TRR: 0.25
+          SPK.LFE: 0.1581
+          SPK.LFE2: 0.1581
+      notes:
+        - "Each LFE is halved versus single-LFE -10 dB fold so dual-LFE sum stays controlled."
 
     DMX.IMM.7_1_4_TO_1_0.MONO_FROM_COMPOSED:
       label: "7.1.4 -> 1.0 mono (from composed stereo)"

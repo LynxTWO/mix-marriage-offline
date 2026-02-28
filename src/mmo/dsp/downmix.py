@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import math
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -67,11 +69,173 @@ def resolve_downmix_matrix(
     )
 
 
+@dataclass
+class _Biquad:
+    b0: float
+    b1: float
+    b2: float
+    a1: float
+    a2: float
+    z1: float = 0.0
+    z2: float = 0.0
+
+    def process(self, sample: float) -> float:
+        y0 = self.b0 * sample + self.z1
+        z1 = self.b1 * sample - self.a1 * y0 + self.z2
+        z2 = self.b2 * sample - self.a2 * y0
+        self.z1 = z1
+        self.z2 = z2
+        return y0
+
+
+def _coerce_filter_type(spec: Dict[str, Any]) -> str:
+    raw_type = str(spec.get("type", "")).strip().lower()
+    if raw_type not in {"lowpass", "highpass"}:
+        raise ValueError(f"Unsupported source_pre_filters filter type: {raw_type!r}")
+    return raw_type
+
+
+def _coerce_filter_freq_hz(spec: Dict[str, Any]) -> float:
+    freq_hz = spec.get("freq_hz")
+    if isinstance(freq_hz, bool) or not isinstance(freq_hz, (int, float)):
+        raise ValueError("source_pre_filters filter requires numeric freq_hz")
+    freq = float(freq_hz)
+    if not math.isfinite(freq) or freq <= 0.0:
+        raise ValueError("source_pre_filters freq_hz must be > 0")
+    return freq
+
+
+def _coerce_filter_stage_count(spec: Dict[str, Any]) -> int:
+    slope = spec.get("slope_db_per_oct", 12.0)
+    if isinstance(slope, bool) or not isinstance(slope, (int, float)):
+        raise ValueError("source_pre_filters slope_db_per_oct must be numeric")
+    slope_value = abs(float(slope))
+    if not math.isfinite(slope_value) or slope_value <= 0.0:
+        raise ValueError("source_pre_filters slope_db_per_oct must be > 0")
+    # A single biquad contributes ~12 dB/oct. Keep stage count deterministic.
+    return max(1, int(round(slope_value / 12.0)))
+
+
+def _design_biquad(filter_type: str, freq_hz: float, sample_rate_hz: int) -> _Biquad:
+    nyquist = float(sample_rate_hz) / 2.0
+    if freq_hz >= nyquist:
+        raise ValueError(
+            f"source_pre_filters freq_hz must be < Nyquist ({nyquist:.3f} Hz)"
+        )
+    omega = 2.0 * math.pi * freq_hz / float(sample_rate_hz)
+    sin_omega = math.sin(omega)
+    cos_omega = math.cos(omega)
+    q = 1.0 / math.sqrt(2.0)  # Butterworth stage
+    alpha = sin_omega / (2.0 * q)
+    if filter_type == "lowpass":
+        b0 = (1.0 - cos_omega) / 2.0
+        b1 = 1.0 - cos_omega
+        b2 = (1.0 - cos_omega) / 2.0
+    elif filter_type == "highpass":
+        b0 = (1.0 + cos_omega) / 2.0
+        b1 = -(1.0 + cos_omega)
+        b2 = (1.0 + cos_omega) / 2.0
+    else:  # pragma: no cover - guarded by caller
+        raise ValueError(f"Unsupported filter type: {filter_type!r}")
+    a0 = 1.0 + alpha
+    a1 = -2.0 * cos_omega
+    a2 = 1.0 - alpha
+    if a0 == 0.0:
+        raise ValueError("Invalid source_pre_filters biquad design (a0 == 0)")
+    inv_a0 = 1.0 / a0
+    return _Biquad(
+        b0=b0 * inv_a0,
+        b1=b1 * inv_a0,
+        b2=b2 * inv_a0,
+        a1=a1 * inv_a0,
+        a2=a2 * inv_a0,
+    )
+
+
+def _build_source_pre_filters(
+    *,
+    source_pre_filters: Dict[str, Any] | None,
+    source_speakers: List[str] | None,
+    sample_rate_hz: int | None,
+) -> Dict[int, List[_Biquad]]:
+    if source_pre_filters is None:
+        return {}
+    if not isinstance(source_pre_filters, dict):
+        raise ValueError("source_pre_filters must be a mapping of speaker_id -> filters")
+    if not source_pre_filters:
+        return {}
+    if sample_rate_hz is None or sample_rate_hz <= 0:
+        raise ValueError(
+            "sample_rate_hz is required when source_pre_filters are provided"
+        )
+    if not isinstance(source_speakers, list) or not source_speakers:
+        raise ValueError(
+            "source_speakers are required when source_pre_filters are provided"
+        )
+
+    speaker_to_index = {
+        str(speaker_id): index for index, speaker_id in enumerate(source_speakers)
+    }
+    channel_filters: Dict[int, List[_Biquad]] = {}
+    for speaker_id in sorted(source_pre_filters.keys(), key=str):
+        if speaker_id not in speaker_to_index:
+            raise ValueError(
+                f"source_pre_filters speaker_id {speaker_id!r} not in source_speakers"
+            )
+        chain = source_pre_filters.get(speaker_id)
+        if not isinstance(chain, list) or not chain:
+            raise ValueError(
+                f"source_pre_filters[{speaker_id!r}] must be a non-empty list"
+            )
+        biquads: List[_Biquad] = []
+        for spec in chain:
+            if not isinstance(spec, dict):
+                raise ValueError(
+                    f"source_pre_filters[{speaker_id!r}] entries must be mappings"
+                )
+            filter_type = _coerce_filter_type(spec)
+            freq_hz = _coerce_filter_freq_hz(spec)
+            stage_count = _coerce_filter_stage_count(spec)
+            for _ in range(stage_count):
+                biquads.append(_design_biquad(filter_type, freq_hz, int(sample_rate_hz)))
+        channel_filters[speaker_to_index[speaker_id]] = biquads
+    return channel_filters
+
+
+def _apply_source_pre_filters(
+    interleaved_samples: List[float],
+    *,
+    channels: int,
+    filter_state: Dict[int, List[_Biquad]],
+) -> List[float]:
+    if not interleaved_samples or not filter_state:
+        return interleaved_samples
+    total = len(interleaved_samples) - (len(interleaved_samples) % channels)
+    if total <= 0:
+        return []
+    filtered = list(interleaved_samples[:total])
+    frames = total // channels
+    for channel_index, chain in filter_state.items():
+        if channel_index < 0 or channel_index >= channels:
+            continue
+        for frame_index in range(frames):
+            sample_index = frame_index * channels + channel_index
+            value = float(filtered[sample_index])
+            for biquad in chain:
+                value = biquad.process(value)
+            filtered[sample_index] = value
+    return filtered
+
+
 def apply_matrix_to_audio(
     coeffs: List[List[float]],
     source_interleaved: List[float],
     source_channels: int,
     target_channels: int = 2,
+    *,
+    source_pre_filters: Dict[str, Any] | None = None,
+    source_speakers: List[str] | None = None,
+    sample_rate_hz: int | None = None,
 ) -> List[float]:
     if target_channels <= 0:
         raise ValueError("target_channels must be positive")
@@ -83,7 +247,18 @@ def apply_matrix_to_audio(
         if len(row) != source_channels:
             raise ValueError("coeffs row width must match source_channels")
 
-    total_frames = len(source_interleaved) // source_channels
+    filter_state = _build_source_pre_filters(
+        source_pre_filters=source_pre_filters,
+        source_speakers=source_speakers,
+        sample_rate_hz=sample_rate_hz,
+    )
+    filtered_source = _apply_source_pre_filters(
+        source_interleaved,
+        channels=source_channels,
+        filter_state=filter_state,
+    )
+
+    total_frames = len(filtered_source) // source_channels
     if total_frames <= 0:
         return []
 
@@ -95,7 +270,7 @@ def apply_matrix_to_audio(
             total = 0.0
             for source_index in range(source_channels):
                 total += float(row[source_index]) * float(
-                    source_interleaved[base + source_index]
+                    filtered_source[base + source_index]
                 )
             output.append(total)
     return output
@@ -107,6 +282,10 @@ def iter_apply_matrix_to_chunks(
     source_channels: int,
     target_channels: int = 2,
     chunk_frames: int = 4096,
+    *,
+    source_pre_filters: Dict[str, Any] | None = None,
+    source_speakers: List[str] | None = None,
+    sample_rate_hz: int | None = None,
 ):
     if chunk_frames <= 0:
         raise ValueError("chunk_frames must be positive")
@@ -120,6 +299,11 @@ def iter_apply_matrix_to_chunks(
         if len(row) != source_channels:
             raise ValueError("coeffs row width must match source_channels")
 
+    filter_state = _build_source_pre_filters(
+        source_pre_filters=source_pre_filters,
+        source_speakers=source_speakers,
+        sample_rate_hz=sample_rate_hz,
+    )
     buffer: List[float] = []
     offset = 0
 
@@ -143,7 +327,12 @@ def iter_apply_matrix_to_chunks(
         if offset:
             buffer = buffer[offset:]
             offset = 0
-        buffer.extend(chunk)
+        filtered_chunk = _apply_source_pre_filters(
+            list(chunk),
+            channels=source_channels,
+            filter_state=filter_state,
+        )
+        buffer.extend(filtered_chunk)
         available_samples = len(buffer) - offset
         available_frames = available_samples // source_channels
         while available_frames >= chunk_frames:
@@ -157,6 +346,8 @@ def iter_apply_matrix_to_chunks(
     remaining_frames = len(buffer) // source_channels
     if remaining_frames > 0:
         yield _apply_frames(0, remaining_frames)
+
+
 def format_coeff_rows(
     coeffs: List[List[float]],
     *,
@@ -264,9 +455,26 @@ def build_matrix(
     coefficients = matrix_def.get("coefficients")
     if not isinstance(coefficients, dict):
         raise ValueError(f"Matrix {matrix_id} missing coefficients mapping")
-
     target_set = set(target_order)
     source_set = set(source_order)
+    source_pre_filters_def = matrix_def.get("source_pre_filters")
+    source_pre_filters: Dict[str, Any] = {}
+    if source_pre_filters_def is not None:
+        if not isinstance(source_pre_filters_def, dict):
+            raise ValueError(f"Matrix {matrix_id} source_pre_filters must be a mapping")
+        for source_speaker, chain in source_pre_filters_def.items():
+            if source_speaker not in source_set:
+                raise ValueError(
+                    f"Unknown source_pre_filters speaker {source_speaker} in {matrix_id}"
+                )
+            if not isinstance(chain, list) or not chain:
+                raise ValueError(
+                    f"Matrix {matrix_id} source_pre_filters[{source_speaker}] must be a non-empty list"
+                )
+            source_pre_filters[str(source_speaker)] = [
+                dict(spec) if isinstance(spec, dict) else spec for spec in chain
+            ]
+
     for target_speaker, source_map in coefficients.items():
         if target_speaker not in target_set:
             raise ValueError(f"Unknown target speaker {target_speaker} in {matrix_id}")
@@ -296,6 +504,7 @@ def build_matrix(
         "source_speakers": list(source_order),
         "target_speakers": list(target_order),
         "coeffs": coeffs,
+        "source_pre_filters": source_pre_filters,
     }
 
 
@@ -339,6 +548,7 @@ def compose_matrices(A: Dict[str, Any], B: Dict[str, Any]) -> Dict[str, Any]:
         "source_speakers": source_speakers,
         "target_speakers": target_speakers,
         "coeffs": coeffs,
+        "source_pre_filters": dict(A.get("source_pre_filters") or {}),
     }
 
 
@@ -467,5 +677,6 @@ def resolve_conversion(
         "source_speakers": composed["source_speakers"],
         "target_speakers": composed["target_speakers"],
         "coeffs": composed["coeffs"],
+        "source_pre_filters": dict(composed.get("source_pre_filters") or {}),
         "steps": used_steps,
     }

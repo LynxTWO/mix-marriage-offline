@@ -196,6 +196,26 @@ def _issue(
     }
 
 
+def _normalize_source_pre_filters_for_log(value: Any) -> Dict[str, List[Dict[str, Any]]]:
+    if not isinstance(value, dict):
+        return {}
+    normalized: Dict[str, List[Dict[str, Any]]] = {}
+    for speaker_id in sorted(value.keys(), key=str):
+        chain = value.get(speaker_id)
+        if not isinstance(chain, list):
+            continue
+        normalized_chain: List[Dict[str, Any]] = []
+        for spec in chain:
+            if not isinstance(spec, dict):
+                continue
+            normalized_chain.append(
+                {str(key): spec.get(key) for key in sorted(spec.keys(), key=str)}
+            )
+        if normalized_chain:
+            normalized[str(speaker_id)] = normalized_chain
+    return normalized
+
+
 def run_downmix_qa(
     src_path: Path,
     ref_path: Path,
@@ -212,6 +232,8 @@ def run_downmix_qa(
 ) -> Dict[str, Any]:
     issues: List[Dict[str, Any]] = []
     measurements: List[Dict[str, Any]] = []
+    source_pre_filters_for_log: Dict[str, List[Dict[str, Any]]] = {}
+    source_pre_filters_applied = False
 
     ffmpeg_cmd = resolve_ffmpeg_cmd()
     if ffmpeg_cmd is None:
@@ -250,6 +272,8 @@ def run_downmix_qa(
             },
             "decode_backend": "ffmpeg_f64le",
             "remainder_samples_dropped": 0,
+            "source_pre_filters_applied": source_pre_filters_applied,
+            "source_pre_filters": source_pre_filters_for_log,
         }
         log_json = json.dumps(log_payload, sort_keys=True, separators=(",", ":"))
         measurements.append(
@@ -285,6 +309,10 @@ def run_downmix_qa(
     matrix_id = matrix.get("matrix_id")
     source_speakers = matrix.get("source_speakers") or []
     coeffs = matrix.get("coeffs") or []
+    source_pre_filters_for_log = _normalize_source_pre_filters_for_log(
+        matrix.get("source_pre_filters")
+    )
+    source_pre_filters_applied = bool(source_pre_filters_for_log)
 
     resolved_policy_id = policy_id
     if resolved_policy_id is None and isinstance(matrix_id, str):
@@ -337,6 +365,8 @@ def run_downmix_qa(
             },
             "decode_backend": "ffmpeg_f64le",
             "remainder_samples_dropped": 0,
+            "source_pre_filters_applied": source_pre_filters_applied,
+            "source_pre_filters": source_pre_filters_for_log,
         }
         log_json = json.dumps(log_payload, sort_keys=True, separators=(",", ":"))
         measurements.append(
@@ -395,6 +425,8 @@ def run_downmix_qa(
             },
             "decode_backend": "ffmpeg_f64le",
             "remainder_samples_dropped": 0,
+            "source_pre_filters_applied": source_pre_filters_applied,
+            "source_pre_filters": source_pre_filters_for_log,
         }
         log_json = json.dumps(log_payload, sort_keys=True, separators=(",", ":"))
         measurements.append(
@@ -465,6 +497,8 @@ def run_downmix_qa(
             },
             "decode_backend": "ffmpeg_f64le",
             "remainder_samples_dropped": 0,
+            "source_pre_filters_applied": source_pre_filters_applied,
+            "source_pre_filters": source_pre_filters_for_log,
         }
         log_json = json.dumps(log_payload, sort_keys=True, separators=(",", ":"))
         measurements.append(
@@ -524,6 +558,8 @@ def run_downmix_qa(
             },
             "decode_backend": "ffmpeg_f64le",
             "remainder_samples_dropped": 0,
+            "source_pre_filters_applied": source_pre_filters_applied,
+            "source_pre_filters": source_pre_filters_for_log,
         }
         log_json = json.dumps(log_payload, sort_keys=True, separators=(",", ":"))
         measurements.append(
@@ -585,6 +621,8 @@ def run_downmix_qa(
             },
             "decode_backend": "ffmpeg_f64le",
             "remainder_samples_dropped": 0,
+            "source_pre_filters_applied": source_pre_filters_applied,
+            "source_pre_filters": source_pre_filters_for_log,
         }
         log_json = json.dumps(log_payload, sort_keys=True, separators=(",", ":"))
         measurements.append(
@@ -634,6 +672,9 @@ def run_downmix_qa(
             src_channels,
             target_channels=2,
             chunk_frames=_CHUNK_FRAMES,
+            source_pre_filters=source_pre_filters_for_log,
+            source_speakers=source_speakers if isinstance(source_speakers, list) else None,
+            sample_rate_hz=src_sample_rate,
         )
         if meters == "basic":
             fold_metrics = _compute_basic_metrics_from_chunks(folded_chunks)
@@ -752,6 +793,8 @@ def run_downmix_qa(
             },
             "decode_backend": "ffmpeg_f64le",
             "remainder_samples_dropped": remainder_samples_dropped,
+            "source_pre_filters_applied": source_pre_filters_applied,
+            "source_pre_filters": source_pre_filters_for_log,
         }
         log_json = json.dumps(log_payload, sort_keys=True, separators=(",", ":"))
         measurements.append(
@@ -1004,6 +1047,8 @@ def run_downmix_qa(
         },
         "decode_backend": "ffmpeg_f64le",
         "remainder_samples_dropped": remainder_samples_dropped,
+        "source_pre_filters_applied": source_pre_filters_applied,
+        "source_pre_filters": source_pre_filters_for_log,
     }
     log_json = json.dumps(log_payload, sort_keys=True, separators=(",", ":"))
     measurements.append(

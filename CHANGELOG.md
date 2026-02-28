@@ -14,6 +14,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Added deterministic ordering variants for SMPTE/FILM (plus LOGIC_PRO/VST3 where applicable) on new x.2 layouts.
   - Added contract-level loudness-input mapping helper to exclude all declared LFE channels (`SPK.LFE`, `SPK.LFE2`) from program loudness inputs.
   - Tightened layout/render-target schema validation for dual-LFE identifiers and `lfe_policy` consistency.
+- Dual-LFE Phase 2 analysis, QA, and fold-down support:
+  - Generalized loudness/meter handling to exclude any `SPK.LFE*` speaker from program loudness calculations.
+  - Expanded LFE audit output to include per-LFE rows (band energy, out-of-band detection, true-peak) and summed LFE energy metrics.
+  - Extended downmix registries/policy packs with x.2 stereo fold-down conversions and an explicit dual-LFE safe split strategy (preserving single-LFE `-10 dB` combined contribution).
+  - Implemented deterministic downmix `source_pre_filters` execution (`lowpass`/`highpass`, slope-aware), applied pre-matrix on declared source channels only.
+  - Updated downmix QA/receipts to reflect filtered fold-down paths and report applied source pre-filters.
+  - Added regression tests for multi-LFE loudness exclusion, per-channel LFE audit rows, source pre-filter behavior, and deterministic output tolerance.
 - Artistic headphone preview UX polish in `mmo-gui`:
   - Added a dedicated `Preview on Headphones` control in the Audition panel.
   - Added deterministic pulsing waveform visualization and warm analog L/R metering

@@ -29,8 +29,19 @@ from mmo.resources import ontology_dir
 # Public version tag for the coefficient specification.
 MATRIX_VERSION = "1.0.0"
 
-# LFE channel identifiers recognised in layout channel_order lists.
-_LFE_CHANNEL_IDS: frozenset[str] = frozenset({"LFE", "LFE1", "LFE2"})
+# LFE channel identifiers recognised in matrix speaker lists.
+_LFE_CHANNEL_IDS: frozenset[str] = frozenset(
+    {"LFE", "LFE1", "LFE2", "SPK.LFE", "SPK.LFE1", "SPK.LFE2"}
+)
+
+
+def _is_lfe_speaker_id(speaker_id: str) -> bool:
+    token = str(speaker_id).strip().upper()
+    if not token:
+        return False
+    if token in _LFE_CHANNEL_IDS:
+        return True
+    return token.startswith("SPK.LFE")
 
 
 def get_matrix_version() -> str:
@@ -174,7 +185,7 @@ def predict_fold_similarity(
     lfe_source_indices: List[int] = [
         i
         for i, sp in enumerate(source_speakers)
-        if sp.upper() in _LFE_CHANNEL_IDS
+        if _is_lfe_speaker_id(sp)
     ]
 
     notes: List[str] = []

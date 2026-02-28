@@ -418,6 +418,24 @@ evidence:
     value_type: "number"
     unit_id: "UNIT.DBFS"
 
+  EVID.LFE.TRUEPEAK_DBTP:
+    label: "LFE true peak"
+    description: "Oversampled true-peak of the LFE channel in dBTP."
+    value_type: "number"
+    unit_id: "UNIT.DBTP"
+
+  EVID.LFE.CHANNEL_ROWS:
+    label: "LFE per-channel audit rows"
+    description: "Deterministic JSON array with per-LFE channel metrics (band energy, out-of-band, true-peak)."
+    value_type: "string"
+    unit_id: "UNIT.NONE"
+
+  EVID.LFE.SUM_BAND_ENERGY_DB:
+    label: "Summed LFE in-band energy"
+    description: "Summed in-band energy across all detected LFE channels (default 20–120 Hz), in dB."
+    value_type: "number"
+    unit_id: "UNIT.DB"
+
   EVID.LFE.MAINS_RATIO_DB:
     label: "LFE-to-mains low-band ratio"
     description: "Difference in dB between LFE in-band energy and mains low-band energy."

@@ -37,6 +37,7 @@ _FFMPEG_LAYOUT_TOKENS: Dict[str, str] = {
     "fr": "FR",
     "fc": "FC",
     "lfe": "LFE",
+    "lfe2": "LFE2",
     "bl": "BL",
     "br": "BR",
     "sl": "SL",
@@ -62,6 +63,7 @@ _WAV_MASK_LABEL_TO_SPK_ID: Dict[str, str] = {
     "FR":  "SPK.R",
     "FC":  "SPK.C",
     "LFE": "SPK.LFE",
+    "LFE2": "SPK.LFE2",
     "BL":  "SPK.LRS",  # Back Left  = Rear Surround Left
     "BR":  "SPK.RRS",  # Back Right = Rear Surround Right
     "FLC": "SPK.FLC",
@@ -97,6 +99,7 @@ _FFMPEG_LAYOUT_KNOWN: Dict[str, List[str]] = {
     "3.1": ["FL", "FR", "FC", "LFE"],
     "quad(side)": ["FL", "FR", "SL", "SR"],
     "4.1": ["FL", "FR", "FC", "LFE", "BC"],
+    "5.2": ["FL", "FR", "FC", "LFE", "LFE2", "SL", "SR"],
     "5.0": ["FL", "FR", "FC", "BL", "BR"],
     "5.0(side)": ["FL", "FR", "FC", "SL", "SR"],
     "6.0": ["FL", "FR", "FC", "BC", "SL", "SR"],
@@ -106,6 +109,8 @@ _FFMPEG_LAYOUT_KNOWN: Dict[str, List[str]] = {
     "6.1": ["FL", "FR", "FC", "LFE", "BC", "SL", "SR"],
     "7.0": ["FL", "FR", "FC", "BL", "BR", "SL", "SR"],
     "7.0(front)": ["FL", "FR", "FC", "FLC", "FRC", "SL", "SR"],
+    "7.2": ["FL", "FR", "FC", "LFE", "LFE2", "SL", "SR", "BL", "BR"],
+    "7.2.4": ["FL", "FR", "FC", "LFE", "LFE2", "SL", "SR", "BL", "BR", "TFL", "TFR", "TBL", "TBR"],
     "7.1(wide-side)": ["FL", "FR", "FC", "LFE", "FLC", "FRC", "SL", "SR"],
     # tolerant alias: treat as 7.1
     "7.1(side)": ["FL", "FR", "FC", "LFE", "BL", "BR", "SL", "SR"],

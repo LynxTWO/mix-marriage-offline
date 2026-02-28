@@ -582,6 +582,9 @@ def _render_downmix_reference_stereo(
         raise TranslationReferenceResolutionError("Downmix matrix is missing coeffs.")
     if len(coeffs) != 2:
         raise TranslationReferenceResolutionError("Downmix matrix target must be stereo (2 channels).")
+    source_pre_filters = matrix.get("source_pre_filters")
+    if not isinstance(source_pre_filters, dict):
+        source_pre_filters = {}
 
     folded_chunks = iter_apply_matrix_to_chunks(
         coeffs,
@@ -589,6 +592,9 @@ def _render_downmix_reference_stereo(
         source_channels,
         target_channels=2,
         chunk_frames=_CHUNK_FRAMES,
+        source_pre_filters=source_pre_filters,
+        source_speakers=source_speakers,
+        sample_rate_hz=sample_rate_hz,
     )
 
     tmp_path = out_path.parent / f"{out_path.name}.tmp"

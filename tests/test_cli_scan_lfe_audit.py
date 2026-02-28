@@ -221,6 +221,12 @@ class TestLfeChannelDetection(unittest.TestCase):
         indices = detect_lfe_channel_indices(3, channel_layout="2.1")
         self.assertEqual(indices, [2])
 
+    def test_detect_dual_lfe_from_52_layout(self) -> None:
+        from mmo.core.lfe_audit import detect_lfe_channel_indices
+
+        indices = detect_lfe_channel_indices(7, channel_layout="5.2")
+        self.assertEqual(indices, [3, 4])
+
 
 class TestLfeAuditLogic(unittest.TestCase):
     """Unit tests for LFE audit computations (requires numpy)."""
@@ -309,6 +315,36 @@ class TestLfeAuditLogic(unittest.TestCase):
         self.assertIsNotNone(normal_sev)
         self.assertIsNotNone(strict_sev)
         self.assertGreater(strict_sev, normal_sev)
+
+    def test_audit_lfe_channels_returns_per_channel_rows_and_sum(self) -> None:
+        self._skip_if_no_numpy()
+        from mmo.core.lfe_audit import audit_lfe_channels
+
+        sr = 48000
+        n = sr // 2
+        lfe1 = _make_sine(60.0, sr, n, amplitude=0.6)
+        lfe2_inband = _make_sine(70.0, sr, n, amplitude=0.4)
+        lfe2_oob = _make_sine(240.0, sr, n, amplitude=0.5)
+        lfe2 = [max(-1.0, min(1.0, a + b)) for a, b in zip(lfe2_inband, lfe2_oob)]
+
+        interleaved: list[float] = []
+        for i in range(n):
+            interleaved.extend([0.0, 0.0, 0.0, lfe1[i], lfe2[i], 0.0, 0.0])
+
+        summary = audit_lfe_channels(
+            interleaved,
+            channels=7,
+            lfe_indices=[3, 4],
+            sample_rate_hz=sr,
+        )
+        rows = summary.get("rows", [])
+        self.assertEqual([row["channel_index"] for row in rows], [3, 4])
+        self.assertTrue(all("inband_energy_db" in row for row in rows))
+        self.assertTrue(all("true_peak_dbtp" in row for row in rows))
+        self.assertTrue(any(bool(row.get("out_of_band_high")) for row in rows))
+        summed = float(summary.get("summed_lfe_inband_energy_db", float("-inf")))
+        strongest = max(float(row["inband_energy_db"]) for row in rows)
+        self.assertGreaterEqual(summed, strongest)
 
 
 class TestScanSessionLfeIntegration(unittest.TestCase):

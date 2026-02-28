@@ -16,16 +16,16 @@ downmix:
   policies:
     POLICY.DOWNMIX.STANDARD_FOLDOWN_V0:
       label: "Standard fold-down v0"
-      description: "Conservative, broadly compatible Lo/Ro style fold-downs for surround beds (3.0/4.0/5.1/7.1)."
+      description: "Conservative, broadly compatible Lo/Ro style fold-downs for surround beds (3.0/4.0/5.0/5.1/5.2/7.1/7.2)."
       file: "downmix_policies/standard_foldown_v0.yaml"
-      supports_source_layouts: ["LAYOUT.3_0", "LAYOUT.4_0", "LAYOUT.5_0", "LAYOUT.5_1", "LAYOUT.7_0", "LAYOUT.7_1"]
+      supports_source_layouts: ["LAYOUT.3_0", "LAYOUT.4_0", "LAYOUT.5_0", "LAYOUT.5_1", "LAYOUT.5_2", "LAYOUT.7_0", "LAYOUT.7_1", "LAYOUT.7_2"]
       supports_target_layouts: ["LAYOUT.2_0", "LAYOUT.1_0", "LAYOUT.5_1"]
 
     POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0:
       label: "Immersive fold-down v0"
-      description: "Height-to-bed fold-downs plus bed fold-downs for common immersive beds (5.1.2/5.1.4/7.1.2/7.1.4)."
+      description: "Height-to-bed fold-downs plus bed fold-downs for common immersive beds (5.1.2/5.1.4/7.1.2/7.1.4/7.2.4)."
       file: "downmix_policies/immersive_foldown_v0.yaml"
-      supports_source_layouts: ["LAYOUT.5_1_2", "LAYOUT.5_1_4", "LAYOUT.7_1_2", "LAYOUT.7_1_4"]
+      supports_source_layouts: ["LAYOUT.5_1_2", "LAYOUT.5_1_4", "LAYOUT.7_1_2", "LAYOUT.7_1_4", "LAYOUT.7_2_4"]
       supports_target_layouts: ["LAYOUT.7_1", "LAYOUT.5_1", "LAYOUT.2_0", "LAYOUT.1_0"]
 
   # Default policy selection given a source layout.
@@ -34,12 +34,15 @@ downmix:
     LAYOUT.4_0: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
     LAYOUT.5_0: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
     LAYOUT.5_1: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+    LAYOUT.5_2: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
     LAYOUT.7_0: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
     LAYOUT.7_1: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+    LAYOUT.7_2: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
     LAYOUT.5_1_2: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
     LAYOUT.5_1_4: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
     LAYOUT.7_1_2: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
     LAYOUT.7_1_4: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+    LAYOUT.7_2_4: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
 
   # Preferred matrices for common conversions.
   # If a direct matrix isn't present, composition_paths may be used (source -> ... -> target).
@@ -54,6 +57,11 @@ downmix:
       policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
       matrix_id: "DMX.STD.5_1_TO_1_0.MONO_FROM_LO_RO"
 
+    - source_layout_id: "LAYOUT.5_2"
+      target_layout_id: "LAYOUT.2_0"
+      policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      matrix_id: "DMX.STD.5_2_TO_2_0.LO_RO_LFE_DROP"
+
     - source_layout_id: "LAYOUT.7_1"
       target_layout_id: "LAYOUT.5_1"
       policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
@@ -64,6 +72,11 @@ downmix:
       policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
       matrix_id: "DMX.STD.7_1_TO_2_0.LO_RO_COMPOSED"
 
+    - source_layout_id: "LAYOUT.7_2"
+      target_layout_id: "LAYOUT.2_0"
+      policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      matrix_id: "DMX.STD.7_2_TO_2_0.LO_RO_COMPOSED"
+
     - source_layout_id: "LAYOUT.7_1_4"
       target_layout_id: "LAYOUT.5_1"
       policy_id: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
@@ -73,6 +86,11 @@ downmix:
       target_layout_id: "LAYOUT.2_0"
       policy_id: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
       matrix_id: "DMX.IMM.7_1_4_TO_2_0.COMPOSED"
+
+    - source_layout_id: "LAYOUT.7_2_4"
+      target_layout_id: "LAYOUT.2_0"
+      policy_id: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+      matrix_id: "DMX.IMM.7_2_4_TO_2_0.COMPOSED"
 
   # Composition paths (optional helper map). The core may use these to derive a composite
   # matrix when only intermediate steps exist.

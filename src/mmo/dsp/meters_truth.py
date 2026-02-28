@@ -57,7 +57,7 @@ def bs1770_weighting_info(
     pos_set = set(positions)
 
     for idx, pos in enumerate(positions):
-        if pos == "LFE":
+        if str(pos).upper().startswith("LFE"):
             weights[idx] = 0.0
 
     has_sl_sr = "SL" in pos_set or "SR" in pos_set

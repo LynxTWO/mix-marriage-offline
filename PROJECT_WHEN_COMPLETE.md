@@ -84,14 +84,14 @@ The project is “complete enough” when all items below are true.
 
 #### 4.4.1 Loudness and layout mapping (meter contract)
 - [ ] Program loudness uses ITU-R BS.1770-5 weighting with explicit, tested channel mapping.
-- [ ] LFE is excluded from program loudness (weight 0.0) and is always reported separately.
+- [x] LFE is excluded from program loudness (weight 0.0) and is always reported separately.
 - [ ] Common layout naming conventions are mapped correctly, including FFmpeg-style aliases:
   - 5.1 (back surrounds: BL/BR).
   - 5.1(side) (side surrounds: SL/SR).
 - [ ] Layout inference treats BL/BR vs SL/SR differently for routing/semantics, while using the same BS.1770 surround weighting rules for loudness.
 
 #### 4.4.2 LFE validation and musician-friendly guidance
-- [ ] Supports 1+ LFE channels (x.1, x.2, …) with per-LFE and summed reporting (in progress: Phase 1 contract work landed for `SPK.LFE2` + x.2 layouts).
+- [x] Supports 1+ LFE channels (x.1, x.2, …) with per-LFE and summed reporting.
 - [ ] Provides an LFE “content audit” that reports:
   - band-limited level/energy (configurable band, default 20–120 Hz),
   - crest/headroom and true-peak,
@@ -125,7 +125,7 @@ The project is “complete enough” when all items below are true.
 - [ ] 7.1 render contract is correct and validated.
 - [ ] One immersive bed target (example: 7.1.4) is correct and validated.
 - [ ] LFE policy is explicit: treated as a creative send plus bass management rules.
-- [ ] Multi-LFE layouts (example: 5.2, 7.2.4) are supported as first-class layouts when declared, with canonical naming/order (LFE1, LFE2, …) (in progress: Phase 1 ontology/schema/layout-negotiation support landed).
+- [x] Multi-LFE layouts (example: 5.2, 7.2.4) are supported as first-class layouts when declared, with canonical naming/order (LFE1, LFE2, …).
 - [ ] “.2” is not assumed as dual-LFE program content unless explicitly required by target spec.
 - [ ] WAV channel-mask disambiguation for dual-LFE ingest/export remains a Phase 3 item (do not infer `.2` from mask absence).
 - [x] All render targets support both SMPTE (default) and Film channel ordering; the active standard is recorded in every render contract and receipt.

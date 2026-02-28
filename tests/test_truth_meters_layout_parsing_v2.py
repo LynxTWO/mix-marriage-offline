@@ -98,6 +98,16 @@ class TestTruthMetersLayoutParsingV2(unittest.TestCase):
         self.assertTrue(np.allclose(weights, expected, atol=1e-12, rtol=0.0))
         self.assertIn("ffmpeg_layout_known_41", mode_str)
 
+    def test_layout_52_dual_lfe(self) -> None:
+        self._skip_if_no_numpy()
+        from mmo.dsp.meters_truth import bs1770_weighting_info
+
+        weights, order_csv, mode_str = bs1770_weighting_info(7, None, "5.2")
+        expected = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 1.41, 1.41], dtype=np.float64)
+        self.assertEqual(order_csv, "FL,FR,FC,LFE,LFE2,SL,SR")
+        self.assertTrue(np.allclose(weights, expected, atol=1e-12, rtol=0.0))
+        self.assertIn("ffmpeg_layout_known_52", mode_str)
+
     def test_layout_50(self) -> None:
         self._skip_if_no_numpy()
         from mmo.dsp.meters_truth import bs1770_weighting_info
