@@ -8,6 +8,9 @@ Fixtures are deterministic inputs used for tests and CI.
   `tests/test_full_determinism.py` to verify byte-stable safe-render outputs
   for SMPTE and FILM ordering.
 - `fixtures/immersive/`: deterministic immersive fixture for `mmo safe-render --demo`.
+- `fixtures/render/`: deterministic render-plan/report fixtures for export-contract
+  regression checks (including dual-LFE x.2 edge cases such as `5.2`, `7.2`,
+  and `7.2.4`).
 - `fixtures/sessions/`: session-validation fixtures (issue-ID expectations).
 - `fixtures/policies/`: policy YAML fixtures (downmix packs, registry validation).
 

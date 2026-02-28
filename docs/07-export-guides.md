@@ -265,6 +265,32 @@ You should be able to declare one `LAYOUT.*` for the session, such as:
 - `LAYOUT.STEREO`
 - `LAYOUT.5_1`
 - `LAYOUT.7_1_4`
+- `LAYOUT.5_2` / `LAYOUT.7_2` / `LAYOUT.7_2_4` (dual-LFE x.2 layouts)
+
+### Dual-LFE WAV edge case (x.2 layouts)
+
+WAV `WAVEFORMATEXTENSIBLE` defines only one standard LFE bit in `dwChannelMask`.
+For dual-LFE exports (`SPK.LFE` + `SPK.LFE2`), MMO uses a conservative strategy:
+
+- keep canonical SPK channel order in contracts/reports/recall exports,
+- write WAV with a direct-out style mask strategy (`channel_mask=0`),
+- include warnings when a toolchain may collapse or relabel `LFE2`.
+
+When FFmpeg is used for export/transcode and supports `LFE2` layout strings,
+MMO passes explicit layout strings such as:
+
+- `FL+FR+FC+LFE+LFE2+SL+SR` (5.2)
+- `FL+FR+FC+LFE+LFE2+SL+SR+BL+BR` (7.2)
+
+Validation workflow:
+
+- Confirm `render_report.jobs[*].channel_order` contains both `SPK.LFE` and `SPK.LFE2`.
+- Confirm `render_report.jobs[*].ffmpeg_channel_layout` contains `LFE2`.
+- Run ffprobe and confirm the expected layout token order:
+
+```sh
+ffprobe -v error -select_streams a:0 -show_entries stream=channels,channel_layout -of json out.wav
+```
 
 Avoid:
 

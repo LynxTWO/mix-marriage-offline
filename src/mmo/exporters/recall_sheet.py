@@ -135,6 +135,61 @@ def _extract_preflight_status(preflight: Optional[Dict[str, Any]]) -> str:
     return "pass"
 
 
+def _extract_render_channel_orders(render_report: Optional[Dict[str, Any]]) -> str:
+    """Return pipe-joined ``LAYOUT.*:SPK,...`` entries from render_report jobs."""
+    if not isinstance(render_report, dict):
+        return ""
+    jobs = render_report.get("jobs")
+    if not isinstance(jobs, list):
+        return ""
+
+    orders_by_layout: dict[str, str] = {}
+    for job in jobs:
+        if not isinstance(job, dict):
+            continue
+        layout_id = str(job.get("target_layout_id", "")).strip()
+        channel_order = job.get("channel_order")
+        if not layout_id or not isinstance(channel_order, list):
+            continue
+        normalized = [
+            item.strip()
+            for item in channel_order
+            if isinstance(item, str) and item.strip()
+        ]
+        if not normalized:
+            continue
+        orders_by_layout.setdefault(layout_id, ",".join(normalized))
+
+    if not orders_by_layout:
+        return ""
+    return "|".join(
+        f"{layout_id}:{orders_by_layout[layout_id]}"
+        for layout_id in sorted(orders_by_layout.keys())
+    )
+
+
+def _extract_render_export_warnings(render_report: Optional[Dict[str, Any]]) -> str:
+    """Return deterministic warning summary collected from render_report jobs."""
+    if not isinstance(render_report, dict):
+        return ""
+    jobs = render_report.get("jobs")
+    if not isinstance(jobs, list):
+        return ""
+
+    warnings: set[str] = set()
+    for job in jobs:
+        if not isinstance(job, dict):
+            continue
+        job_warnings = job.get("warnings")
+        if isinstance(job_warnings, list):
+            for warning in job_warnings:
+                if isinstance(warning, str) and warning.strip():
+                    warnings.add(warning.strip())
+    if not warnings:
+        return ""
+    return " | ".join(sorted(warnings))
+
+
 def export_recall_sheet(
     report: Dict[str, Any],
     out_path: Path,
@@ -144,6 +199,7 @@ def export_recall_sheet(
     profile_id: Optional[str] = None,
     request: Optional[Dict[str, Any]] = None,
     layout_standard: Optional[str] = None,
+    render_report: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Write an issue-centric recall sheet CSV to *out_path*.
 
@@ -151,7 +207,8 @@ def export_recall_sheet(
                   target_scope, target_id, evidence_summary, action_ids
     Context columns (always emitted; empty when context not provided):
                   scene_id, scene_object_count, target_layout_ids,
-                  profile_id, preflight_status, layout_standard
+                  profile_id, preflight_status, layout_standard,
+                  render_channel_orders, render_export_warnings
 
     Rows sorted by severity DESC, confidence DESC, issue_id ASC.
     """
@@ -172,6 +229,8 @@ def export_recall_sheet(
     ctx_profile_id = _extract_profile_id(profile_id, report)
     ctx_preflight_status = _extract_preflight_status(preflight)
     ctx_layout_standard = layout_standard.strip() if isinstance(layout_standard, str) and layout_standard.strip() else ""
+    ctx_render_channel_orders = _extract_render_channel_orders(render_report)
+    ctx_render_export_warnings = _extract_render_export_warnings(render_report)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -194,6 +253,8 @@ def export_recall_sheet(
                 "profile_id",
                 "preflight_status",
                 "layout_standard",
+                "render_channel_orders",
+                "render_export_warnings",
             ]
         )
         for rank, issue in enumerate(sorted_issues, start=1):
@@ -216,5 +277,7 @@ def export_recall_sheet(
                     ctx_profile_id,
                     ctx_preflight_status,
                     ctx_layout_standard,
+                    ctx_render_channel_orders,
+                    ctx_render_export_warnings,
                 ]
             )

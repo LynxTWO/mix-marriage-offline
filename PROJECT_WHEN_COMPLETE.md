@@ -127,7 +127,8 @@ The project is “complete enough” when all items below are true.
 - [ ] LFE policy is explicit: treated as a creative send plus bass management rules.
 - [x] Multi-LFE layouts (example: 5.2, 7.2.4) are supported as first-class layouts when declared, with canonical naming/order (LFE1, LFE2, …).
 - [ ] “.2” is not assumed as dual-LFE program content unless explicitly required by target spec.
-- [ ] WAV channel-mask disambiguation for dual-LFE ingest/export remains a Phase 3 item (do not infer `.2` from mask absence).
+- [x] WAV channel-mask disambiguation for dual-LFE ingest/export is implemented with a conservative export contract: direct-out mask strategy (`mask=0`) plus explicit canonical SPK channel order in render-report/recall context.
+- [x] Dual-LFE export caveat is documented and emitted at runtime: some external tools still collapse/relabel `LFE2`; users must validate with render-report channel order + ffprobe layout output.
 - [x] All render targets support both SMPTE (default) and Film channel ordering; the active standard is recorded in every render contract and receipt.
 - [ ] Regression tests verify correct WAV channel ordering for both standards on 5.1 and 7.1.4 (golden fixtures).
 

@@ -401,6 +401,8 @@ class TestRecallSheet(unittest.TestCase):
                 "profile_id",
                 "preflight_status",
                 "layout_standard",
+                "render_channel_orders",
+                "render_export_warnings",
             ],
         )
 
@@ -555,8 +557,8 @@ class TestRecallSheetContextFields(unittest.TestCase):
             out = Path(tmp) / "recall.csv"
             export_recall_sheet(report, out)
             rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
-        # 15 columns total (added layout_standard)
-        self.assertEqual(len(rows[0]), 15)
+        # 17 columns total (added render_channel_orders + render_export_warnings)
+        self.assertEqual(len(rows[0]), 17)
         data = rows[1]
         # scene_id col 9
         self.assertEqual(data[9], "")
@@ -570,6 +572,10 @@ class TestRecallSheetContextFields(unittest.TestCase):
         self.assertEqual(data[13], "missing")
         # layout_standard col 14 — empty when not provided
         self.assertEqual(data[14], "")
+        # render_channel_orders col 15 — empty when render_report not provided
+        self.assertEqual(data[15], "")
+        # render_export_warnings col 16 — empty when render_report not provided
+        self.assertEqual(data[16], "")
 
     def test_scene_context_populated(self) -> None:
         report = self._minimal_report()
@@ -645,6 +651,52 @@ class TestRecallSheetContextFields(unittest.TestCase):
             export_recall_sheet(report, out_b, scene=scene, preflight=preflight, request=request)
             self.assertEqual(out_a.read_bytes(), out_b.read_bytes())
 
+    def test_render_report_context_populates_channel_order_and_warnings(self) -> None:
+        report = self._minimal_report()
+        render_report = {
+            "schema_version": "0.1.0",
+            "request": {
+                "target_layout_id": "LAYOUT.5_2",
+                "scene_path": "scenes/demo/scene.json",
+            },
+            "jobs": [
+                {
+                    "job_id": "JOB.001",
+                    "status": "completed",
+                    "target_layout_id": "LAYOUT.5_2",
+                    "channel_count": 7,
+                    "channel_order": [
+                        "SPK.L",
+                        "SPK.R",
+                        "SPK.C",
+                        "SPK.LFE",
+                        "SPK.LFE2",
+                        "SPK.LS",
+                        "SPK.RS",
+                    ],
+                    "warnings": [
+                        "Dual-LFE WAV export uses conservative channel-mask strategy: WAVEFORMATEXTENSIBLE DIRECTOUT (mask=0)."
+                    ],
+                    "output_files": [],
+                }
+            ],
+            "policies_applied": {},
+            "qa_gates": {"status": "not_run", "gates": []},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out, render_report=render_report)
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        header = rows[0]
+        data = rows[1]
+        render_channel_orders_index = header.index("render_channel_orders")
+        render_export_warnings_index = header.index("render_export_warnings")
+        self.assertEqual(
+            data[render_channel_orders_index],
+            "LAYOUT.5_2:SPK.L,SPK.R,SPK.C,SPK.LFE,SPK.LFE2,SPK.LS,SPK.RS",
+        )
+        self.assertIn("DIRECTOUT (mask=0)", data[render_export_warnings_index])
+
 
 class TestRecallSheetLayoutStandard(unittest.TestCase):
     """Tests for the layout_standard column in recall_sheet."""
@@ -669,8 +721,8 @@ class TestRecallSheetLayoutStandard(unittest.TestCase):
             out = Path(tmp) / "recall.csv"
             export_recall_sheet(report, out)
             rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
-        self.assertEqual(rows[0][-1], "layout_standard")
-        self.assertEqual(rows[1][-1], "")
+        layout_standard_index = rows[0].index("layout_standard")
+        self.assertEqual(rows[1][layout_standard_index], "")
 
     def test_layout_standard_column_populated(self) -> None:
         report = self._minimal_report()
@@ -678,8 +730,8 @@ class TestRecallSheetLayoutStandard(unittest.TestCase):
             out = Path(tmp) / "recall.csv"
             export_recall_sheet(report, out, layout_standard="FILM")
             rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
-        self.assertEqual(rows[0][-1], "layout_standard")
-        self.assertEqual(rows[1][-1], "FILM")
+        layout_standard_index = rows[0].index("layout_standard")
+        self.assertEqual(rows[1][layout_standard_index], "FILM")
 
     def test_layout_standard_deterministic(self) -> None:
         """Same inputs → byte-identical output regardless of layout_standard."""

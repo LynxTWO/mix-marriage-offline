@@ -1,0 +1,78 @@
+{
+  "jobs": [
+    {
+      "contexts": [
+        "render"
+      ],
+      "job_id": "JOB.001",
+      "notes": [
+        "Dual-LFE fixture job."
+      ],
+      "output_formats": [
+        "wav",
+        "flac"
+      ],
+      "target_id": "TARGET.IMMERSIVE.7_2_4",
+      "target_layout_id": "LAYOUT.7_2_4"
+    }
+  ],
+  "plan_id": "PLAN.fixture.dual_lfe_7_2_4.cdef0123",
+  "policies": {},
+  "request": {
+    "scene_path": "scenes/fixtures/dual_lfe_scene.json",
+    "target_layout_id": "LAYOUT.7_2_4"
+  },
+  "resolved": {
+    "channel_count": 13,
+    "channel_order": [
+      "SPK.L",
+      "SPK.R",
+      "SPK.C",
+      "SPK.LFE",
+      "SPK.LFE2",
+      "SPK.LS",
+      "SPK.RS",
+      "SPK.LRS",
+      "SPK.RRS",
+      "SPK.TFL",
+      "SPK.TFR",
+      "SPK.TRL",
+      "SPK.TRR"
+    ],
+    "downmix_policy_id": null,
+    "family": "immersive",
+    "gates_policy_id": null,
+    "has_lfe": true,
+    "target_layout_id": "LAYOUT.7_2_4"
+  },
+  "resolved_layouts": [
+    {
+      "channel_count": 13,
+      "channel_order": [
+        "SPK.L",
+        "SPK.R",
+        "SPK.C",
+        "SPK.LFE",
+        "SPK.LFE2",
+        "SPK.LS",
+        "SPK.RS",
+        "SPK.LRS",
+        "SPK.RRS",
+        "SPK.TFL",
+        "SPK.TFR",
+        "SPK.TRL",
+        "SPK.TRR"
+      ],
+      "downmix_policy_id": null,
+      "family": "immersive",
+      "gates_policy_id": null,
+      "has_lfe": true,
+      "target_layout_id": "LAYOUT.7_2_4"
+    }
+  ],
+  "scene_path": "scenes/fixtures/dual_lfe_scene.json",
+  "schema_version": "0.1.0",
+  "targets": [
+    "TARGET.IMMERSIVE.7_2_4"
+  ]
+}

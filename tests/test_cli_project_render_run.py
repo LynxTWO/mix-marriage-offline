@@ -676,6 +676,7 @@ class TestProjectRenderRunRecallSheet(unittest.TestCase):
             "target_scope", "target_id", "evidence_summary", "action_ids",
             "scene_id", "scene_object_count", "target_layout_ids",
             "profile_id", "preflight_status",
+            "render_channel_orders", "render_export_warnings",
         ):
             self.assertIn(col, header, msg=f"Column '{col}' missing from recall_sheet.csv header")
 

@@ -4,6 +4,77 @@ from __future__ import annotations
 
 from typing import Any
 
+from mmo.core.layout_export import (
+    dual_lfe_wav_export_warnings,
+    ffmpeg_layout_string_from_channel_order,
+)
+
+
+def _coerce_str(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    return ""
+
+
+def _coerce_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    return None
+
+
+def _coerce_channel_order(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [
+        item.strip()
+        for item in value
+        if isinstance(item, str) and item.strip()
+    ]
+
+
+def _resolved_layout_rows(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    raw_rows = plan.get("resolved_layouts")
+    if isinstance(raw_rows, list):
+        rows.extend(row for row in raw_rows if isinstance(row, dict))
+    if not rows:
+        single = plan.get("resolved")
+        if isinstance(single, dict):
+            rows.append(single)
+    return rows
+
+
+def _resolved_layout_index(plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    index: dict[str, dict[str, Any]] = {}
+    for row in _resolved_layout_rows(plan):
+        layout_id = _coerce_str(row.get("target_layout_id")).strip()
+        channel_order = _coerce_channel_order(row.get("channel_order"))
+        if not layout_id or not channel_order:
+            continue
+        channel_count = _coerce_int(row.get("channel_count"))
+        if channel_count is None or channel_count <= 0:
+            channel_count = len(channel_order)
+        index.setdefault(
+            layout_id,
+            {
+                "channel_count": channel_count,
+                "channel_order": list(channel_order),
+            },
+        )
+    return index
+
+
+def _job_writes_wav(plan_job: dict[str, Any]) -> bool:
+    output_formats = plan_job.get("output_formats")
+    if not isinstance(output_formats, list):
+        return True
+    return any(
+        _coerce_str(item).strip().lower() == "wav"
+        for item in output_formats
+    )
+
 
 def build_render_report_from_plan(
     plan: dict[str, Any],
@@ -53,17 +124,40 @@ def build_render_report_from_plan(
     if not isinstance(plan_jobs, list):
         plan_jobs = []
 
+    resolved_by_layout = _resolved_layout_index(plan)
     report_jobs: list[dict[str, Any]] = []
     for plan_job in plan_jobs:
         if not isinstance(plan_job, dict):
             continue
-        job_id = plan_job.get("job_id", "")
+        job_id = _coerce_str(plan_job.get("job_id")).strip()
+        target_layout_id = _coerce_str(plan_job.get("target_layout_id")).strip()
         report_job: dict[str, Any] = {
             "job_id": job_id,
             "notes": [f"reason: {reason}"],
             "output_files": [],
             "status": status,
         }
+        if target_layout_id:
+            report_job["target_layout_id"] = target_layout_id
+
+        resolved_layout = resolved_by_layout.get(target_layout_id)
+        if resolved_layout is not None:
+            channel_order = list(resolved_layout.get("channel_order") or [])
+            channel_count = int(resolved_layout.get("channel_count") or len(channel_order))
+            if channel_order and channel_count > 0:
+                report_job["channel_order"] = channel_order
+                report_job["channel_count"] = channel_count
+                ffmpeg_layout = ffmpeg_layout_string_from_channel_order(channel_order)
+                if ffmpeg_layout:
+                    report_job["ffmpeg_channel_layout"] = ffmpeg_layout
+                if _job_writes_wav(plan_job):
+                    warnings = dual_lfe_wav_export_warnings(
+                        channel_order=channel_order,
+                        ffmpeg_layout_string=ffmpeg_layout,
+                    )
+                    if warnings:
+                        report_job["warnings"] = warnings
+                        report_job["notes"].extend(warnings)
         report_jobs.append(report_job)
 
     # ── policies_applied ─────────────────────────────────────────

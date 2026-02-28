@@ -1633,6 +1633,7 @@ def _run_project_render_run(
 
         # Load request payload for target_layout_ids.
         request_payload_for_recall = _load_json_object_if_exists(request_path)
+        render_report_payload_for_recall = _load_json_object_if_exists(report_out_path)
 
         # Load preflight if it was produced this run.
         preflight_payload: dict[str, Any] | None = None
@@ -1645,6 +1646,7 @@ def _run_project_render_run(
             scene=scene_payload,
             preflight=preflight_payload,
             request=request_payload_for_recall,
+            render_report=render_report_payload_for_recall,
         )
         paths_written.append(recall_sheet_out_path.resolve().as_posix())
 

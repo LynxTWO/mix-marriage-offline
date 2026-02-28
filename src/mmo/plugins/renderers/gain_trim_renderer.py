@@ -7,6 +7,11 @@ import wave
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Sequence
 
+from mmo.core.layout_export import (
+    dual_lfe_wav_export_warnings,
+    ffmpeg_layout_string_from_channel_order,
+)
+from mmo.core.layout_negotiation import get_layout_channel_order
 from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.io import read_wav_metadata, sha256_file
@@ -206,6 +211,20 @@ def _route_notes(route: Dict[str, Any]) -> List[str]:
         if isinstance(note, str) and note:
             notes.append(note)
     return notes
+
+
+def _layout_channel_order(layout_id: str) -> List[str]:
+    normalized_layout_id = _coerce_str(layout_id).strip()
+    if not normalized_layout_id:
+        return []
+    channel_order = get_layout_channel_order(normalized_layout_id)
+    if not isinstance(channel_order, list):
+        return []
+    return [
+        item.strip()
+        for item in channel_order
+        if isinstance(item, str) and item.strip()
+    ]
 
 
 def _route_mapping_entries(
@@ -460,6 +479,7 @@ class GainTrimRenderer(RendererPlugin):
             if isinstance(routing_plan, dict)
             else ""
         )
+        session_source_layout_id = _coerce_str(session.get("source_layout_id")).strip()
         ffmpeg_cmd: Sequence[str] | None = None
 
         grouped_by_stem: Dict[str, List[Dict[str, Any]]] = {}
@@ -625,22 +645,52 @@ class GainTrimRenderer(RendererPlugin):
                 if route_notes:
                     metadata["routing_notes"] = route_notes
 
-            outputs.append(
-                {
-                    "output_id": f"OUTPUT.GAIN_TRIM.{stem_id}.{output_sha256[:12]}",
-                    "file_path": output_relative_path.as_posix(),
-                    "action_id": representative["action_id"],
-                    "recommendation_id": representative["recommendation_id"],
-                    "target_stem_id": stem_id,
-                    "format": "wav",
-                    "sample_rate_hz": sample_rate_hz,
-                    "bit_depth": bits_per_sample,
-                    "channel_count": output_channels,
-                    "sha256": output_sha256,
-                    "notes": notes,
-                    "metadata": metadata,
-                }
+            output_layout_id = (
+                routing_target_layout_id.strip()
+                if routing_applied and routing_target_layout_id.strip()
+                else session_source_layout_id
             )
+            output_channel_order = _layout_channel_order(output_layout_id)
+            if len(output_channel_order) != output_channels:
+                output_layout_id = ""
+                output_channel_order = []
+
+            ffmpeg_channel_layout = ffmpeg_layout_string_from_channel_order(
+                output_channel_order
+            )
+            dual_lfe_warnings = dual_lfe_wav_export_warnings(
+                channel_order=output_channel_order,
+                ffmpeg_layout_string=ffmpeg_channel_layout,
+            )
+            if output_layout_id:
+                metadata["layout_id"] = output_layout_id
+            if output_channel_order:
+                metadata["channel_order"] = output_channel_order
+            if ffmpeg_channel_layout:
+                metadata["ffmpeg_channel_layout"] = ffmpeg_channel_layout
+            if dual_lfe_warnings:
+                metadata["wav_channel_mask_strategy"] = "DIRECTOUT_MASK_0"
+                metadata["warnings"] = dual_lfe_warnings
+                warning_note = " | ".join(dual_lfe_warnings)
+                notes = f"{notes} | {warning_note}" if notes else warning_note
+
+            output_row: Dict[str, Any] = {
+                "output_id": f"OUTPUT.GAIN_TRIM.{stem_id}.{output_sha256[:12]}",
+                "file_path": output_relative_path.as_posix(),
+                "action_id": representative["action_id"],
+                "recommendation_id": representative["recommendation_id"],
+                "target_stem_id": stem_id,
+                "format": "wav",
+                "sample_rate_hz": sample_rate_hz,
+                "bit_depth": bits_per_sample,
+                "channel_count": output_channels,
+                "sha256": output_sha256,
+                "notes": notes,
+                "metadata": metadata,
+            }
+            if output_layout_id:
+                output_row["layout_id"] = output_layout_id
+            outputs.append(output_row)
 
         outputs.sort(key=lambda item: (item.get("target_stem_id", ""), item.get("output_id", "")))
         manifest["outputs"] = outputs

@@ -86,6 +86,21 @@ Every render job note and receipt includes the active standard:
 `"using SMPTE channel order (SMPTE/ITU-R default)"` or
 `"using FILM channel order (Film/Cinema/Pro Tools)"`.
 
+### Dual-LFE export contract (x.2 layouts)
+
+For layouts with two LFE channels (`SPK.LFE`, `SPK.LFE2`), MMO export contracts
+must remain explicit even when container metadata is lossy:
+
+- Render reports always carry canonical SPK channel order (`channel_order`) and
+  channel count from the resolved layout contract.
+- Recall-sheet context includes the same channel-order contract text.
+- WAV export uses a conservative `WAVEFORMATEXTENSIBLE` strategy:
+  direct-out style channel mask (`mask=0`) to avoid false single-LFE semantics.
+- If FFmpeg is used and supports `LFE2`, MMO passes explicit layout strings
+  (`FL+FR+FC+LFE+LFE2+...`) instead of relying on implicit defaults.
+- Reports include warnings + validation instructions when external players/DAWs
+  may collapse or relabel `LFE2`.
+
 ### run_config override
 
 ```json

@@ -9,9 +9,16 @@ from mmo.core.deliverables import (
     build_deliverables_from_outputs,
     collect_outputs_from_renderer_manifests,
 )
+from mmo.core.layout_export import ffmpeg_layout_string_from_channel_order
+from mmo.core.layout_negotiation import get_layout_channel_order
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.io import sha256_file
-from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS, supported_output_formats, transcode_wav_to_format
+from mmo.dsp.transcode import (
+    LOSSLESS_OUTPUT_FORMATS,
+    ffmpeg_supports_lfe2_layout_strings,
+    supported_output_formats,
+    transcode_wav_to_format,
+)
 from mmo.plugins.interfaces import (
     PLUGIN_SUPPORTED_CONTEXTS,
     PluginCapabilities,
@@ -556,6 +563,44 @@ def _append_transcode_skip(
     )
 
 
+def _output_channel_order(output: Dict[str, Any]) -> list[str]:
+    metadata = output.get("metadata")
+    if isinstance(metadata, dict):
+        channel_order = metadata.get("channel_order")
+        if isinstance(channel_order, list):
+            normalized = [
+                item.strip()
+                for item in channel_order
+                if isinstance(item, str) and item.strip()
+            ]
+            if normalized:
+                return normalized
+
+    layout_id = _coerce_str(output.get("layout_id")).strip()
+    if not layout_id and isinstance(metadata, dict):
+        layout_id = _coerce_str(metadata.get("layout_id")).strip()
+    if not layout_id:
+        return []
+
+    resolved = get_layout_channel_order(layout_id)
+    if not isinstance(resolved, list):
+        return []
+    return [
+        item.strip()
+        for item in resolved
+        if isinstance(item, str) and item.strip()
+    ]
+
+
+def _output_ffmpeg_layout_string(output: Dict[str, Any]) -> str | None:
+    metadata = output.get("metadata")
+    if isinstance(metadata, dict):
+        raw_layout = _coerce_str(metadata.get("ffmpeg_channel_layout")).strip()
+        if raw_layout:
+            return raw_layout
+    return ffmpeg_layout_string_from_channel_order(_output_channel_order(output))
+
+
 def _apply_output_formats_to_manifest(
     manifest: Dict[str, Any],
     *,
@@ -566,6 +611,11 @@ def _apply_output_formats_to_manifest(
     outputs = _coerce_list(manifest.get("outputs"))
     non_wav_formats = tuple(fmt for fmt in desired_formats if fmt != "wav")
     keep_wav = "wav" in desired_formats
+    supports_lfe2_layout = (
+        ffmpeg_supports_lfe2_layout_strings(ffmpeg_cmd)
+        if ffmpeg_cmd is not None
+        else False
+    )
 
     rewritten_outputs: List[Dict[str, Any]] = []
     transcode_skipped: List[Dict[str, Any]] = []
@@ -611,12 +661,16 @@ def _apply_output_formats_to_manifest(
                         reason="missing_source_artifact",
                     )
                     continue
+                channel_layout = _output_ffmpeg_layout_string(output)
+                if channel_layout and "LFE2" in channel_layout and not supports_lfe2_layout:
+                    channel_layout = None
                 try:
                     transcode_wav_to_format(
                         ffmpeg_cmd,
                         source_path,
                         target_path,
                         target_format,
+                        channel_layout=channel_layout,
                     )
                 except (OSError, ValueError):
                     _append_transcode_skip(

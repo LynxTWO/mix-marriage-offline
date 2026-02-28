@@ -1,0 +1,66 @@
+{
+  "jobs": [
+    {
+      "contexts": [
+        "render"
+      ],
+      "job_id": "JOB.001",
+      "notes": [
+        "Dual-LFE fixture job."
+      ],
+      "output_formats": [
+        "wav",
+        "flac"
+      ],
+      "target_id": "TARGET.SURROUND.5_2",
+      "target_layout_id": "LAYOUT.5_2"
+    }
+  ],
+  "plan_id": "PLAN.fixture.dual_lfe_5_2.abcdef01",
+  "policies": {},
+  "request": {
+    "scene_path": "scenes/fixtures/dual_lfe_scene.json",
+    "target_layout_id": "LAYOUT.5_2"
+  },
+  "resolved": {
+    "channel_count": 7,
+    "channel_order": [
+      "SPK.L",
+      "SPK.R",
+      "SPK.C",
+      "SPK.LFE",
+      "SPK.LFE2",
+      "SPK.LS",
+      "SPK.RS"
+    ],
+    "downmix_policy_id": null,
+    "family": "surround",
+    "gates_policy_id": null,
+    "has_lfe": true,
+    "target_layout_id": "LAYOUT.5_2"
+  },
+  "resolved_layouts": [
+    {
+      "channel_count": 7,
+      "channel_order": [
+        "SPK.L",
+        "SPK.R",
+        "SPK.C",
+        "SPK.LFE",
+        "SPK.LFE2",
+        "SPK.LS",
+        "SPK.RS"
+      ],
+      "downmix_policy_id": null,
+      "family": "surround",
+      "gates_policy_id": null,
+      "has_lfe": true,
+      "target_layout_id": "LAYOUT.5_2"
+    }
+  ],
+  "scene_path": "scenes/fixtures/dual_lfe_scene.json",
+  "schema_version": "0.1.0",
+  "targets": [
+    "TARGET.SURROUND.5_2"
+  ]
+}

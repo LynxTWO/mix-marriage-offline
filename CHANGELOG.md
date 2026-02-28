@@ -21,6 +21,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Implemented deterministic downmix `source_pre_filters` execution (`lowpass`/`highpass`, slope-aware), applied pre-matrix on declared source channels only.
   - Updated downmix QA/receipts to reflect filtered fold-down paths and report applied source pre-filters.
   - Added regression tests for multi-LFE loudness exclusion, per-channel LFE audit rows, source pre-filter behavior, and deterministic output tolerance.
+- Dual-LFE Phase 3 export-contract and documentation completion:
+  - Render-report jobs now include canonical contract fields (`target_layout_id`, `channel_count`, `channel_order`, `ffmpeg_channel_layout`) sourced from resolved layout contracts.
+  - Dual-LFE WAV jobs emit explicit warnings for `WAVEFORMATEXTENSIBLE` single-LFE-mask limits and include deterministic validation instructions.
+  - Recall-sheet export now carries render channel-order and export-warning context columns for x.2 traceability.
+  - FFmpeg transcoding now forwards explicit channel layout strings (including `LFE2` when supported) for layout-preserving non-WAV exports.
+  - Added deterministic dual-LFE render fixtures for `5.2`, `7.2`, and `7.2.4`, plus regression tests covering channel order/count contracts and WAV warning behavior.
 - Artistic headphone preview UX polish in `mmo-gui`:
   - Added a dedicated `Preview on Headphones` control in the Audition panel.
   - Added deterministic pulsing waveform visualization and warm analog L/R metering
