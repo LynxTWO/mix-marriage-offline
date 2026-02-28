@@ -21,6 +21,11 @@ from mmo.core.cache_store import (
     save_cached_report,
     try_load_cached_report,
 )
+from mmo.core.binaural_target import (
+    build_binaural_target_manifests,
+    choose_binaural_source_layout,
+    is_binaural_layout,
+)
 from mmo.core.downmix_qa import run_downmix_qa
 from mmo.core.gates import apply_gates_to_report
 from mmo.core.lockfile import build_lockfile
@@ -1205,14 +1210,41 @@ def run_variant_plan(
                     / "policies"
                     / "authority_profiles.yaml",
                 )
+                source_layout_id, target_layout_id = _layout_ids_from_variant_and_run_config(
+                    variant,
+                    effective_run_config or {},
+                )
+                binaural_target_requested = is_binaural_layout(target_layout_id)
+                renderer_output_formats = (
+                    ["wav"] if binaural_target_requested else render_output_formats
+                )
                 renderer_manifests = run_renderers(
                     render_report,
                     plugins,
                     output_dir=render_root,
                     eligibility_field="eligible_render",
                     context="render",
-                    output_formats=render_output_formats,
+                    output_formats=renderer_output_formats,
                 )
+                if binaural_target_requested:
+                    render_cfg = _coerce_dict(
+                        _coerce_dict(render_report.get("run_config")).get("render")
+                    )
+                    layout_standard = (
+                        _coerce_str(render_cfg.get("layout_standard")).strip().upper()
+                        or "SMPTE"
+                    )
+                    source_selection = choose_binaural_source_layout(
+                        report=render_report,
+                        source_layout_id_hint=source_layout_id,
+                    )
+                    renderer_manifests, _ = build_binaural_target_manifests(
+                        renderer_manifests=renderer_manifests,
+                        output_dir=render_root,
+                        layout_standard=layout_standard,
+                        source_layout_id=source_selection.source_layout_id,
+                        output_formats=render_output_formats,
+                    )
                 render_deliverables = build_deliverables_for_renderer_manifests(
                     renderer_manifests
                 )

@@ -460,10 +460,24 @@ class TestLayoutNormalisation(unittest.TestCase):
         receipt = evaluate_preflight({}, {}, "LAYOUT.7_1", {})
         self.assertEqual(receipt["target_layout_id"], "LAYOUT.7_1")
 
-    def test_binaural_shorthand_is_gated_until_layout_exists(self) -> None:
-        with self.assertRaises(ValueError) as ctx:
-            evaluate_preflight({}, {}, "binaural", {})
-        self.assertIn("LAYOUT.BINAURAL is not defined", str(ctx.exception))
+    def test_binaural_shorthand_resolves_and_uses_virtualization_path(self) -> None:
+        receipt = evaluate_preflight({}, {}, "binaural", {})
+        self.assertEqual(receipt["target_layout_id"], "LAYOUT.BINAURAL")
+        gate = next(
+            (
+                row
+                for row in receipt.get("gates_evaluated", [])
+                if isinstance(row, dict)
+                and row.get("gate_id") == "GATE.LAYOUT_NEGOTIATION"
+            ),
+            None,
+        )
+        self.assertIsNotNone(gate)
+        if isinstance(gate, dict):
+            self.assertEqual(gate.get("outcome"), "pass")
+            details = gate.get("details")
+            if isinstance(details, dict):
+                self.assertEqual(details.get("virtualization"), "binaural")
 
 
 # ---------------------------------------------------------------------------

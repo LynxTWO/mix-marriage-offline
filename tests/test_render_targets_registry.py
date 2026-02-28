@@ -31,6 +31,13 @@ class TestRenderTargetsRegistry(unittest.TestCase):
         self.assertEqual(target_ids, sorted(target_ids))
         self.assertEqual(target_ids, ["TARGET.SURROUND.5_1"])
 
+    def test_binaural_target_present_and_maps_to_binaural_layout(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        registry = load_render_targets_registry(repo_root / "ontology" / "render_targets.yaml")
+        target = registry.get_target("TARGET.HEADPHONES.BINAURAL")
+        self.assertEqual(target.get("layout_id"), "LAYOUT.BINAURAL")
+        self.assertEqual(target.get("container"), "wav")
+
     def test_find_stereo_target_variants_for_layout_is_sorted(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         registry = load_render_targets_registry(repo_root / "ontology" / "render_targets.yaml")

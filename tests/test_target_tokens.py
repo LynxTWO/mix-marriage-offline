@@ -73,10 +73,11 @@ class TestTargetTokenResolver(unittest.TestCase):
         self.assertEqual(immersive.layout_id, "LAYOUT.7_1_4")
         self.assertEqual(immersive.source, "shorthand")
 
-    def test_binaural_shorthand_is_gated_until_layout_exists(self) -> None:
-        with self.assertRaises(ValueError) as ctx:
-            resolve_target_token("binaural")
-        self.assertIn("LAYOUT.BINAURAL is not defined", str(ctx.exception))
+    def test_binaural_shorthand_resolves_to_headphone_target(self) -> None:
+        resolved = resolve_target_token("binaural")
+        self.assertEqual(resolved.target_id, "TARGET.HEADPHONES.BINAURAL")
+        self.assertEqual(resolved.layout_id, "LAYOUT.BINAURAL")
+        self.assertEqual(resolved.source, "shorthand")
 
     def test_alias_matching_supports_target_and_layout_aliases(self) -> None:
         target_alias = resolve_target_token("Stereo (streaming)")

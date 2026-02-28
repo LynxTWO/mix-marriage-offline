@@ -131,6 +131,11 @@ def _run_render_command(
     output_formats: list[str] | None = None,
     run_config: dict[str, Any] | None = None,
 ) -> int:
+    from mmo.core.binaural_target import (  # noqa: WPS433
+        build_binaural_target_manifests,
+        choose_binaural_source_layout,
+        is_binaural_layout,
+    )
     from mmo.core.gates import apply_gates_to_report  # noqa: WPS433
     from mmo.core.pipeline import (  # noqa: WPS433
         build_deliverables_for_renderer_manifests,
@@ -139,6 +144,7 @@ def _run_render_command(
     )
 
     report = _load_report(report_path)
+    normalized_run_config: dict[str, Any] | None = None
     if run_config is not None:
         normalized_run_config = normalize_run_config(run_config)
         report["run_config"] = normalized_run_config
@@ -176,12 +182,52 @@ def _run_render_command(
         file=sys.stderr,
     )
 
+    downmix_cfg = (
+        normalized_run_config.get("downmix")
+        if isinstance(normalized_run_config, dict)
+        else None
+    )
+    target_layout_id = (
+        _coerce_str(downmix_cfg.get("target_layout_id")).strip()
+        if isinstance(downmix_cfg, dict)
+        else ""
+    )
+    source_layout_hint = (
+        _coerce_str(downmix_cfg.get("source_layout_id")).strip()
+        if isinstance(downmix_cfg, dict)
+        else ""
+    )
+    binaural_target_requested = is_binaural_layout(target_layout_id)
+    renderer_output_formats = ["wav"] if binaural_target_requested else output_formats
+
     manifests = run_renderers(
         report,
         plugins,
         output_dir=out_dir,
-        output_formats=output_formats,
+        output_formats=renderer_output_formats,
     )
+    if binaural_target_requested:
+        render_cfg = (
+            normalized_run_config.get("render")
+            if isinstance(normalized_run_config, dict)
+            else None
+        )
+        layout_standard = (
+            _coerce_str(render_cfg.get("layout_standard")).strip().upper()
+            if isinstance(render_cfg, dict)
+            else ""
+        ) or "SMPTE"
+        source_selection = choose_binaural_source_layout(
+            report=report,
+            source_layout_id_hint=source_layout_hint or None,
+        )
+        manifests, _ = build_binaural_target_manifests(
+            renderer_manifests=manifests,
+            output_dir=out_dir,
+            layout_standard=layout_standard,
+            source_layout_id=source_selection.source_layout_id,
+            output_formats=output_formats,
+        )
     deliverables = build_deliverables_for_renderer_manifests(manifests)
     render_manifest = {
         "schema_version": "0.1.0",
@@ -887,6 +933,11 @@ def _run_safe_render_command(
     target (stereo + 5.1 + 7.1.4 by default) using parallel jobs.
     """
     from mmo.core.gates import apply_gates_to_report  # noqa: WPS433
+    from mmo.core.binaural_target import (  # noqa: WPS433
+        build_binaural_target_manifests,
+        choose_binaural_source_layout,
+        is_binaural_layout,
+    )
     from mmo.core.pipeline import (  # noqa: WPS433
         build_deliverables_for_renderer_manifests,
         load_plugins,
@@ -935,6 +986,8 @@ def _run_safe_render_command(
     try:
         _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
         resolved_target = resolve_target_token(target)
+        binaural_target_requested = is_binaural_layout(resolved_target.layout_id)
+        binaural_source_selection = None
         progress.emit_log(
             kind="info",
             scope="render",
@@ -1014,6 +1067,16 @@ def _run_safe_render_command(
         else:
             preflight_scene = report
 
+        if binaural_target_requested:
+            hinted_source_layout = _coerce_str(
+                session_for_preflight.get("source_layout_id")
+            ).strip() or None
+            binaural_source_selection = choose_binaural_source_layout(
+                report=report,
+                scene=preflight_scene if isinstance(preflight_scene, dict) else None,
+                source_layout_id_hint=hinted_source_layout,
+            )
+
         _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
         preflight_receipt = evaluate_preflight(
             session=session_for_preflight,
@@ -1081,8 +1144,18 @@ def _run_safe_render_command(
                             f"{layout_standard} (channel ordering: "
                             f"{'SMPTE/ITU-R default' if layout_standard == 'SMPTE' else 'Film/Cinema/Pro Tools'})"
                         ),
+                        (
+                            "binaural_virtualization=true"
+                            if binaural_target_requested
+                            else "binaural_virtualization=false"
+                        ),
                     ],
                 }
+                if binaural_target_requested and binaural_source_selection is not None:
+                    blocked_receipt["notes"].append(
+                        "binaural_source_layout="
+                        f"{binaural_source_selection.source_layout_id}"
+                    )
                 receipt_out_path.parent.mkdir(parents=True, exist_ok=True)
                 _write_json_file(receipt_out_path, blocked_receipt)
             progress.emit_log(
@@ -1227,6 +1300,11 @@ def _run_safe_render_command(
                     f"target={target}",
                     f"profile_id={profile_id}",
                     (
+                        "binaural_virtualization=true"
+                        if binaural_target_requested
+                        else "binaural_virtualization=false"
+                    ),
+                    (
                         "headphone_preview_requested=true"
                         if preview_headphones
                         else "headphone_preview_requested=false"
@@ -1238,6 +1316,15 @@ def _run_safe_render_command(
                     ),
                 ],
             }
+            if binaural_target_requested and binaural_source_selection is not None:
+                receipt["notes"].append(
+                    "binaural_source_layout="
+                    f"{binaural_source_selection.source_layout_id}"
+                )
+                receipt["notes"].append(
+                    "binaural_source_selection_reason="
+                    f"{binaural_source_selection.reason}"
+                )
             if receipt_out_path is not None:
                 receipt_out_path.parent.mkdir(parents=True, exist_ok=True)
                 _write_json_file(receipt_out_path, receipt)
@@ -1283,15 +1370,27 @@ def _run_safe_render_command(
             return 1
 
         _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
-        manifests = run_renderers(
+        renderer_output_formats = ["wav"] if binaural_target_requested else output_formats
+        source_manifests = run_renderers(
             report,
             plugins,
             output_dir=out_dir,
-            output_formats=output_formats,
+            output_formats=renderer_output_formats,
         )
+        manifests = source_manifests
         preview_output_count = 0
         preview_skipped_count = 0
-        if preview_headphones:
+        if binaural_target_requested and binaural_source_selection is not None:
+            manifests, binaural_counts = build_binaural_target_manifests(
+                renderer_manifests=source_manifests,
+                output_dir=out_dir,
+                layout_standard=layout_standard,
+                source_layout_id=binaural_source_selection.source_layout_id,
+                output_formats=output_formats,
+            )
+            preview_output_count = int(binaural_counts.get("outputs", 0))
+            preview_skipped_count = int(binaural_counts.get("skipped", 0))
+        elif preview_headphones:
             from mmo.plugins.subjective.binaural_preview_v0 import (  # noqa: WPS433
                 build_headphone_preview_manifest,
             )
@@ -1412,12 +1511,26 @@ def _run_safe_render_command(
                     else "headphone_preview=disabled"
                 ),
                 (
+                    "binaural_virtualization=true"
+                    if binaural_target_requested
+                    else "binaural_virtualization=false"
+                ),
+                (
                     "layout_standard="
                     f"{layout_standard} (channel ordering: "
                     f"{'SMPTE/ITU-R default' if layout_standard == 'SMPTE' else 'Film/Cinema/Pro Tools'})"
                 ),
             ],
         }
+        if binaural_target_requested and binaural_source_selection is not None:
+            receipt["notes"].append(
+                "binaural_source_layout="
+                f"{binaural_source_selection.source_layout_id}"
+            )
+            receipt["notes"].append(
+                "binaural_source_selection_reason="
+                f"{binaural_source_selection.reason}"
+            )
         if receipt_out_path is not None:
             receipt_out_path.parent.mkdir(parents=True, exist_ok=True)
             _write_json_file(receipt_out_path, receipt)

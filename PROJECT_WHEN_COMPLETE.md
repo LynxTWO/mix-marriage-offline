@@ -117,6 +117,9 @@ The project is “complete enough” when all items below are true.
 
 ### 4.6 Rendering targets are supported (minimum viable set)
 - [ ] Stereo (2.0) render contract is correct and validated.
+- [x] Binaural headphone deliverable is supported as a first-class target
+  (`TARGET.HEADPHONES.BINAURAL` / `LAYOUT.BINAURAL`) using deterministic
+  conservative virtualization with source-layout traceability.
 - [ ] 2.1 and 4.1 layouts are correctly supported when requested (render + meters + downmix QA).
 - [ ] 5.1 render contract is correct and validated (including 5.1 vs 5.1(side) semantic differences).
 - [ ] 7.1 render contract is correct and validated.
@@ -138,7 +141,8 @@ The project is “complete enough” when all items below are true.
 ### 4.8 UX/CLI is usable for real work
 - [ ] CLI can: validate, analyze, generate scene, render, and output reports.
 - [x] Target selection is interchangeable across CLI/GUI flows: `TARGET.*`,
-  `LAYOUT.*`, and musician shorthands (`stereo`, `5.1`, `7.1`, `7.1.4`);
+  `LAYOUT.*`, and musician shorthands (`stereo`, `5.1`, `7.1`, `7.1.4`,
+  `binaural`);
   ambiguous tokens fail deterministically with sorted candidates.
 - [ ] Errors are actionable (tell the user what/why/where/how to fix).
 - [ ] Reports include: issues, actions taken, actions suggested, confidence, and evidence references.

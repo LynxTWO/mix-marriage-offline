@@ -60,6 +60,24 @@ speakers:
     elevation_deg: 0
     aliases: ["R", "FR", "RIGHT", "FRONT_RIGHT", "FRONTR", "CHR"]
 
+  SPK.HL:
+    label: "Headphone Left"
+    description: "Headphone left ear channel."
+    channel_group: "front"
+    bed_or_height: "bed"
+    azimuth_deg: 90
+    elevation_deg: 0
+    aliases: ["HL", "HPL", "HEADPHONE_LEFT", "HP_LEFT"]
+
+  SPK.HR:
+    label: "Headphone Right"
+    description: "Headphone right ear channel."
+    channel_group: "front"
+    bed_or_height: "bed"
+    azimuth_deg: -90
+    elevation_deg: 0
+    aliases: ["HR", "HPR", "HEADPHONE_RIGHT", "HP_RIGHT"]
+
   SPK.C:
     label: "Center"
     description: "Front Center."

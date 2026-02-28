@@ -20,6 +20,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     existing RMS gate behavior and deterministic output.
   - Improved five-standard layout awareness with explicit standard fallback candidates
     (including AAF -> FILM/SMPTE fallback) and preview metadata trace fields.
+- First-class binaural render target:
+  - Added ontology entries for `SPK.HL`/`SPK.HR`, `LAYOUT.BINAURAL`, and
+    `TARGET.HEADPHONES.BINAURAL`.
+  - `safe-render`, `render-many`, and variants now accept binaural via
+    shorthand/`LAYOUT.*`/`TARGET.*` tokens.
+  - Binaural output uses deterministic conservative virtualization from an
+    auto-selected source layout (7.1.4 -> 5.1 -> stereo) and records the
+    source-layout explainability notes in contracts/receipts.
 - Watch-folder cinematic queue telemetry:
   - Added deterministic watch-batch queue snapshots in `src/mmo/core/watch_folder.py`
     with explicit pending/running/succeeded/failed states.

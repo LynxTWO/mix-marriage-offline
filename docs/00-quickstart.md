@@ -274,8 +274,8 @@ python -m mmo safe-render --report report.json --target 5.1 --dry-run
 python -m mmo safe-render --report report.json --target binaural --dry-run
 ```
 
-`binaural` currently returns a clear "not available yet" error until
-`LAYOUT.BINAURAL` is defined in the layout registry.
+`binaural` is now a first-class headphone deliverable token and resolves to
+`TARGET.HEADPHONES.BINAURAL` / `LAYOUT.BINAURAL`.
 
 Nerd-explicit examples:
 

@@ -22,7 +22,7 @@ _SHORTHANDS: dict[str, tuple[str | None, str]] = {
     "7_1": ("TARGET.SURROUND.7_1", "LAYOUT.7_1"),
     "7.1.4": ("TARGET.IMMERSIVE.7_1_4", "LAYOUT.7_1_4"),
     "7_1_4": ("TARGET.IMMERSIVE.7_1_4", "LAYOUT.7_1_4"),
-    "binaural": (None, "LAYOUT.BINAURAL"),
+    "binaural": ("TARGET.HEADPHONES.BINAURAL", "LAYOUT.BINAURAL"),
 }
 
 _SHORTHAND_HELP = "stereo, 2.0, 5.1, 7.1, 7.1.4, binaural"
@@ -205,20 +205,10 @@ def resolve_target_token(token: str) -> ResolvedTarget:
     shorthand_match = _SHORTHANDS.get(normalized_token.casefold())
     if shorthand_match is not None:
         shorthand_target_id, shorthand_layout_id = shorthand_match
-        try:
-            resolved_layout_id = _resolve_layout_id_casefold(
-                shorthand_layout_id,
-                layout_registry=layout_registry,
-            )
-        except ValueError as exc:
-            if normalized_token.casefold() == "binaural":
-                raise ValueError(
-                    (
-                        "Shorthand 'binaural' is not available yet. "
-                        "LAYOUT.BINAURAL is not defined."
-                    )
-                ) from exc
-            raise
+        resolved_layout_id = _resolve_layout_id_casefold(
+            shorthand_layout_id,
+            layout_registry=layout_registry,
+        )
 
         resolved_target_id: str | None = None
         if isinstance(shorthand_target_id, str):

@@ -65,6 +65,26 @@ PYTHONPATH=src python -m mmo safe-render \
   --profile PROFILE.ASSIST
 ```
 
+To include a headphone deliverable, add `binaural` explicitly in
+`--render-many-targets`:
+
+```sh
+PYTHONPATH=src python -m mmo safe-render \
+  --report /path/to/report.json \
+  --plugins plugins \
+  --render-many \
+  --render-many-targets stereo,5.1,7.1.4,binaural \
+  --layout-standard SMPTE \
+  --out-dir rendered \
+  --receipt-out receipt.json \
+  --profile PROFILE.ASSIST
+```
+
+`binaural` (alias of `TARGET.HEADPHONES.BINAURAL` / `LAYOUT.BINAURAL`) is a
+headphone deliverable. MMO renders an internal speaker-layout source first
+(7.1.4, else 5.1, else stereo), then deterministically virtualizes to
+2-channel binaural output.
+
 To render in Film (Pro Tools) channel order:
 
 ```sh

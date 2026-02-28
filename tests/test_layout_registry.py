@@ -21,6 +21,7 @@ class TestLayoutRegistryLoad(unittest.TestCase):
     def test_known_layouts_present(self) -> None:
         reg = load_layout_registry(_LAYOUTS_PATH)
         ids = reg.list_layout_ids()
+        self.assertIn("LAYOUT.BINAURAL", ids)
         self.assertIn("LAYOUT.1_0", ids)
         self.assertIn("LAYOUT.2_0", ids)
         self.assertIn("LAYOUT.5_1", ids)

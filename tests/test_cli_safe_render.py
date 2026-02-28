@@ -163,6 +163,53 @@ class TestSafeRenderDryRun(unittest.TestCase):
                 "status must be dry_run_only or blocked",
             )
 
+    def test_dry_run_binaural_tokens_resolve_and_emit_virtualization_notes(self) -> None:
+        binaural_tokens = (
+            "binaural",
+            "TARGET.HEADPHONES.BINAURAL",
+            "LAYOUT.BINAURAL",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            stems_dir = temp / "stems"
+            stem_path = stems_dir / "kick.wav"
+            _write_16bit_wav(stem_path, channels=1, amplitude=0.45)
+            report = _make_report(stems_dir, "kick.wav", "kick", peak_dbfs=-6.0)
+            report_path = temp / "report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            for token in binaural_tokens:
+                with self.subTest(token=token):
+                    receipt_path = temp / f"receipt.{token.replace('.', '_')}.json"
+                    exit_code, _stdout, _stderr = _run_main(
+                        [
+                            "safe-render",
+                            "--report",
+                            str(report_path),
+                            "--plugins",
+                            str(_PLUGINS_DIR),
+                            "--target",
+                            token,
+                            "--dry-run",
+                            "--receipt-out",
+                            str(receipt_path),
+                        ]
+                    )
+                    self.assertEqual(exit_code, 0)
+                    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+                    notes = receipt.get("notes", [])
+                    self.assertIn("binaural_virtualization=true", notes)
+                    self.assertTrue(
+                        any(
+                            isinstance(note, str)
+                            and note.startswith("binaural_source_layout=")
+                            for note in notes
+                        )
+                    )
+
     def test_dry_run_no_audio_with_low_risk_recs(self) -> None:
         """Low-risk recommendations visible in dry-run receipt but no audio."""
         schema = json.loads(

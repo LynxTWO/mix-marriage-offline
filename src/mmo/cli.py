@@ -696,7 +696,7 @@ def main(argv: list[str] | None = None) -> int:
         default=_BASELINE_RENDER_TARGET_ID,
         help=(
             "Comma-separated target tokens for --render-many "
-            "(TARGET.*, LAYOUT.*, or shorthands like stereo/5.1/7.1/7.1.4; "
+            "(TARGET.*, LAYOUT.*, or shorthands like stereo/5.1/7.1/7.1.4/binaural; "
             "default: TARGET.STEREO.2_0)."
         ),
     )
@@ -797,7 +797,7 @@ def main(argv: list[str] | None = None) -> int:
         default=",".join(DEFAULT_WATCH_TARGET_IDS),
         help=(
             "Comma-separated render-many target tokens "
-            "(TARGET.*, LAYOUT.*, or shorthands like stereo/5.1/7.1/7.1.4; "
+            "(TARGET.*, LAYOUT.*, or shorthands like stereo/5.1/7.1/7.1.4/binaural; "
             "default: TARGET.STEREO.2_0,TARGET.SURROUND.5_1,TARGET.SURROUND.7_1)."
         ),
     )
@@ -1064,7 +1064,7 @@ def main(argv: list[str] | None = None) -> int:
         "--target",
         default="stereo",
         help=(
-            "Render target token (TARGET.*, LAYOUT.*, or shorthand like stereo/5.1/7.1/7.1.4). "
+            "Render target token (TARGET.*, LAYOUT.*, or shorthand like stereo/5.1/7.1/7.1.4/binaural). "
             "Default: stereo."
         ),
     )
@@ -1149,7 +1149,7 @@ def main(argv: list[str] | None = None) -> int:
         dest="render_many_targets",
         help=(
             "Comma-separated target tokens for --render-many "
-            "(TARGET.*, LAYOUT.*, or shorthands) "
+            "(TARGET.*, LAYOUT.*, or shorthands like stereo/5.1/7.1/7.1.4/binaural) "
             "(default: stereo,5.1,7.1.4)."
         ),
     )
@@ -2613,7 +2613,7 @@ def main(argv: list[str] | None = None) -> int:
         default=_BASELINE_RENDER_TARGET_ID,
         help=(
             "Comma-separated target tokens for --render-many "
-            "(TARGET.*, LAYOUT.*, or shorthands like stereo/5.1/7.1/7.1.4; "
+            "(TARGET.*, LAYOUT.*, or shorthands like stereo/5.1/7.1/7.1.4/binaural; "
             "default: TARGET.STEREO.2_0)."
         ),
     )
@@ -3008,7 +3008,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help=(
             "Optional comma-separated target tokens for options.target_ids "
-            "(TARGET.*, LAYOUT.*, or shorthands; e.g. TARGET.STEREO.2_0,LAYOUT.5_1,stereo)."
+            "(TARGET.*, LAYOUT.*, or shorthands; e.g. TARGET.STEREO.2_0,LAYOUT.BINAURAL,binaural)."
         ),
     )
     project_render_init_parser.add_argument(
@@ -3663,7 +3663,7 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Comma-separated target tokens "
             "(TARGET.*, LAYOUT.*, or shorthands; "
-            "e.g., TARGET.STEREO.2_0,LAYOUT.5_1,stereo)."
+            "e.g., TARGET.STEREO.2_0,LAYOUT.BINAURAL,binaural)."
         ),
     )
     render_plan_build_parser.add_argument(

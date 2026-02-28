@@ -13,6 +13,11 @@ except ImportError:  # pragma: no cover - optional dependency
 
 
 _FALLBACK_TARGET_ALIASES_BY_ID: dict[str, tuple[str, ...]] = {
+    "TARGET.HEADPHONES.BINAURAL": (
+        "Binaural",
+        "Binaural (headphones)",
+        "Headphones",
+    ),
     "TARGET.STEREO.2_0": (
         "Stereo (streaming)",
         "Stereo",

@@ -313,6 +313,37 @@ class TestGuiSmoke(unittest.TestCase):
             )
             self.assertIn("--preview-headphones", argv)
 
+    def test_binaural_target_picker_label_resolves_to_binaural_layout(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            temp_root = Path(td)
+            config = GuiRunConfig(
+                stems_dir=temp_root / "stems",
+                out_dir=temp_root / "out",
+                target_id="Binaural (headphones)",
+                render_many=False,
+                render_many_target_ids=(),
+                layout_standard="SMPTE",
+                preview_headphones=False,
+                plugins_dir=_PLUGINS_DIR,
+            )
+            workspace = temp_root / "workspace"
+            paths = GuiPipelinePaths(
+                report_path=workspace / "report.json",
+                dry_receipt_path=workspace / "dry.receipt.json",
+                final_receipt_path=workspace / "final.receipt.json",
+                dry_manifest_path=workspace / "dry.manifest.json",
+                final_manifest_path=workspace / "final.manifest.json",
+                cancel_token_path=workspace / "cancel.token",
+            )
+            argv = build_safe_render_cli_argv(
+                config,
+                paths,
+                dry_run=True,
+                approve=None,
+            )
+            target_idx = argv.index("--target")
+            self.assertEqual(argv[target_idx + 1], "LAYOUT.BINAURAL")
+
     def test_high_risk_detection_helper(self) -> None:
         self.assertTrue(
             has_high_risk_blocked_recommendations(
@@ -328,6 +359,10 @@ class TestGuiSmoke(unittest.TestCase):
 
     def test_render_targets_registry_map_has_core_targets(self) -> None:
         target_layouts = render_target_layout_map()
+        self.assertEqual(
+            target_layouts.get("TARGET.HEADPHONES.BINAURAL"),
+            "LAYOUT.BINAURAL",
+        )
         self.assertEqual(target_layouts.get("TARGET.STEREO.2_0"), "LAYOUT.2_0")
         self.assertEqual(target_layouts.get("TARGET.SURROUND.5_1"), "LAYOUT.5_1")
         self.assertEqual(target_layouts.get("TARGET.SURROUND.7_1"), "LAYOUT.7_1")

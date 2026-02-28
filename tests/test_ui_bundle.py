@@ -594,6 +594,7 @@ class TestUiBundle(unittest.TestCase):
                 self.assertEqual(
                     target_ids,
                     [
+                        "TARGET.HEADPHONES.BINAURAL",
                         "TARGET.IMMERSIVE.5_1_2",
                         "TARGET.IMMERSIVE.5_1_4",
                         "TARGET.IMMERSIVE.7_1_2",
@@ -761,6 +762,7 @@ class TestUiBundle(unittest.TestCase):
                 self.assertEqual(
                     target_ids,
                     [
+                        "TARGET.HEADPHONES.BINAURAL",
                         "TARGET.IMMERSIVE.5_1_2",
                         "TARGET.IMMERSIVE.5_1_4",
                         "TARGET.IMMERSIVE.7_1_2",

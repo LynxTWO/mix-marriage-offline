@@ -278,6 +278,18 @@ def _eval_layout_negotiation(
     gate_id = "GATE.LAYOUT_NEGOTIATION"
     warn_on_composed = bool(options.get("warn_on_composed_path", True))
 
+    if target_layout_id == "LAYOUT.BINAURAL":
+        return _gate_result(
+            gate_id,
+            "pass",
+            "info",
+            "Binaural target uses deterministic virtualization; matrix negotiation bypassed.",
+            {
+                "target_layout_id": target_layout_id,
+                "virtualization": "binaural",
+            },
+        )
+
     if not source_layout_id:
         return _gate_result(
             gate_id,

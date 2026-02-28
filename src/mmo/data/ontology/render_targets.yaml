@@ -1,5 +1,13 @@
 schema_version: "0.1.0"
 targets:
+  - target_id: "TARGET.HEADPHONES.BINAURAL"
+    layout_id: "LAYOUT.BINAURAL"
+    container: "wav"
+    channel_order_layout_id: "LAYOUT.BINAURAL"
+    filename_template: "renders/headphones_binaural/mix.{container}"
+    notes:
+      - "Headphone deliverable rendered via deterministic conservative binaural virtualization."
+      - "Internal source layout is selected deterministically (7.1.4, 5.1, then stereo)."
   - target_id: "TARGET.IMMERSIVE.5_1_2"
     layout_id: "LAYOUT.5_1_2"
     container: "wav"

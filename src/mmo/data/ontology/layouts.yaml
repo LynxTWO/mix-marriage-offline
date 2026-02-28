@@ -112,6 +112,35 @@ layouts:
       default_downmix_treatment: "drop"
     aliases: ["2.1", "2_1", "stereo+lfe", "LRLFE"]
 
+  LAYOUT.BINAURAL:
+    label: "Binaural (headphones)"
+    description: "Two-channel headphone binaural render deliverable."
+    family: "stereo"
+    channel_count: 2
+    ordering_standard: "SMPTE"
+    channel_order: ["SPK.HL", "SPK.HR"]
+    ordering_variants:
+      SMPTE: ["SPK.HL", "SPK.HR"]
+      FILM: ["SPK.HL", "SPK.HR"]
+      LOGIC_PRO: ["SPK.HL", "SPK.HR"]
+      VST3: ["SPK.HL", "SPK.HR"]
+      AAF: ["SPK.HL", "SPK.HR"]
+    channel_groups:
+      front: ["SPK.HL", "SPK.HR"]
+      bed: ["SPK.HL", "SPK.HR"]
+    bed_speakers: ["SPK.HL", "SPK.HR"]
+    height_speakers: []
+    has_lfe: false
+    speaker_positions:
+      - {spk_id: "SPK.HL", azimuth_deg: 90, elevation_deg: 0}
+      - {spk_id: "SPK.HR", azimuth_deg: -90, elevation_deg: 0}
+    lfe_policy:
+      has_lfe: false
+      lfe_channels: []
+      excluded_from_program_loudness: true
+      default_downmix_treatment: "n/a"
+    aliases: ["binaural", "headphones", "headphone", "hp"]
+
   # -------------------------
   # Front stage (LCR)
   # -------------------------

@@ -72,6 +72,9 @@ _DISCOVER_TYPE_GRADIENT: Mapping[str, str] = {
     "resolver": "tide",
     "renderer": "sunset",
 }
+_TARGET_PICKER_LABELS_BY_ID: Mapping[str, str] = {
+    "TARGET.HEADPHONES.BINAURAL": "Binaural (headphones)",
+}
 
 
 @dataclass(frozen=True)
@@ -114,6 +117,30 @@ class PluginDiscoverCard:
 
 def _as_posix(path: Path) -> str:
     return path.resolve().as_posix()
+
+
+def _target_picker_label(target_id: str) -> str:
+    normalized_target_id = target_id.strip()
+    if not normalized_target_id:
+        return ""
+    return _TARGET_PICKER_LABELS_BY_ID.get(normalized_target_id, normalized_target_id)
+
+
+def _build_target_picker_map(target_ids: Sequence[str]) -> dict[str, str]:
+    picker_map: dict[str, str] = {}
+    for target_id in target_ids:
+        normalized_target_id = target_id.strip() if isinstance(target_id, str) else ""
+        if not normalized_target_id:
+            continue
+        label = _target_picker_label(normalized_target_id)
+        if not label:
+            continue
+        if label in picker_map and picker_map[label] != normalized_target_id:
+            # Preserve deterministic and unambiguous selection entries.
+            picker_map[normalized_target_id] = normalized_target_id
+            continue
+        picker_map[label] = normalized_target_id
+    return picker_map
 
 
 def _discover_gradient_for_type(plugin_type: str) -> str:
@@ -510,11 +537,23 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         self._target_ids = tuple(sorted(self._target_layouts))
         if not self._target_ids:
             self._target_ids = ("TARGET.STEREO.2_0",)
+        self._target_picker_map = _build_target_picker_map(self._target_ids)
+        if not self._target_picker_map:
+            self._target_picker_map = {"TARGET.STEREO.2_0": "TARGET.STEREO.2_0"}
+        self._target_picker_values = tuple(sorted(self._target_picker_map))
+        default_target_id = (
+            "TARGET.STEREO.2_0"
+            if "TARGET.STEREO.2_0" in self._target_ids
+            else self._target_ids[0]
+        )
+        default_target_label = _target_picker_label(default_target_id)
+        if default_target_label not in self._target_picker_map:
+            default_target_label = self._target_picker_values[0]
 
         self._stems_var = _ctk.StringVar(value="")
         self._out_var = _ctk.StringVar(value=_as_posix(Path.cwd() / "mmo_gui_out"))
         self._plugins_var = _ctk.StringVar(value=_as_posix(Path("plugins")))
-        self._target_var = _ctk.StringVar(value=self._target_ids[0])
+        self._target_var = _ctk.StringVar(value=default_target_label)
         self._render_many_var = _ctk.BooleanVar(value=True)
         self._render_many_targets_var = _ctk.StringVar(
             value=",".join(_DEFAULT_RENDER_MANY_TARGET_IDS)
@@ -640,7 +679,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
 
         self._target_menu = _ctk.CTkOptionMenu(
             controls,
-            values=list(self._target_ids),
+            values=list(self._target_picker_values),
             variable=self._target_var,
             fg_color="#1B1712",
             button_color=_STUDIO_THEME["accent"],
@@ -1199,11 +1238,13 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             for token in self._render_many_targets_var.get().split(",")
             if token.strip()
         )
+        target_value = self._target_var.get().strip()
+        target_token = self._target_picker_map.get(target_value, target_value)
 
         return GuiRunConfig(
             stems_dir=stems_dir.resolve(),
             out_dir=out_dir.resolve(),
-            target_id=self._target_var.get().strip(),
+            target_id=target_token,
             render_many=bool(self._render_many_var.get()),
             render_many_target_ids=render_many_targets,
             layout_standard=normalize_layout_standard(self._layout_standard_var.get()),

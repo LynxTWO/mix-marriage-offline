@@ -38,13 +38,29 @@ Notes:
 
 - Commands that require concrete render target IDs resolve layout tokens to target IDs only when the mapping is unambiguous.
 - If a layout maps to multiple targets, MMO errors with sorted candidates.
-- `binaural` is gated until `LAYOUT.BINAURAL` exists in the layout registry.
+- `binaural`, `LAYOUT.BINAURAL`, and `TARGET.HEADPHONES.BINAURAL` resolve to the first-class headphone deliverable target.
+
+## Binaural Deliverable Path
+
+MMO treats binaural as a deterministic two-stage render:
+
+1. Render an internal speaker-layout source first:
+   - `LAYOUT.7_1_4` when scene/session signals mention heights.
+   - `LAYOUT.5_1` when the scene is surround-ish but not height-driven.
+   - `LAYOUT.2_0` fallback otherwise.
+2. Virtualize that source render to `LAYOUT.BINAURAL` using conservative
+   ILD/ITD + RMS gating (`binaural_preview_v0`).
+
+Safe-render receipts and render contract/report notes explicitly call out
+that binaural output is virtualization and include the chosen source layout ID.
 
 ## Practical Guidance
 
 - Use `stereo` for quick musician flow.
 - Use `TARGET.*` for explicit engineering control.
 - Use `LAYOUT.*` when you care about speaker layout and want target selection inferred.
+- `safe-render --render-many` defaults remain `stereo,5.1,7.1.4`; add `binaural`
+  explicitly in `--render-many-targets` when a headphone deliverable is required.
 
 ## `mmo targets recommend` Usage
 

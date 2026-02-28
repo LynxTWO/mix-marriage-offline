@@ -43,6 +43,10 @@ RENDER_CONTRACT_SCHEMA_VERSION = "0.1.0"
 
 _OUTPUT_FORMAT_ORDER = ("wav", "flac", "wv", "aiff", "alac")
 _VALID_OUTPUT_FORMATS: frozenset[str] = frozenset(_OUTPUT_FORMAT_ORDER)
+_BINAURAL_LAYOUT_ID = "LAYOUT.BINAURAL"
+_BINAURAL_SOURCE_HEIGHT = "LAYOUT.7_1_4"
+_BINAURAL_SOURCE_SURROUND = "LAYOUT.5_1"
+_BINAURAL_SOURCE_STEREO = "LAYOUT.2_0"
 
 # Module-level layout cache: populated on first use, stable for the process.
 _LAYOUTS_CACHE: dict[str, Any] = {}
@@ -89,6 +93,26 @@ def _normalize_formats(value: Any) -> list[str]:
     if not selected:
         return ["wav"]
     return [fmt for fmt in _OUTPUT_FORMAT_ORDER if fmt in selected]
+
+
+def _select_binaural_source_layout(source_layout_id: str | None) -> str:
+    clean_source = str(source_layout_id).strip() if source_layout_id else ""
+    if not clean_source:
+        return _BINAURAL_SOURCE_STEREO
+    try:
+        layout_entry = _get_layout_entry(clean_source)
+    except ValueError:
+        return _BINAURAL_SOURCE_STEREO
+
+    height_speakers = layout_entry.get("height_speakers")
+    if isinstance(height_speakers, list):
+        if any(isinstance(item, str) and item.strip() for item in height_speakers):
+            return _BINAURAL_SOURCE_HEIGHT
+
+    channel_count = int(layout_entry.get("channel_count") or 0)
+    if channel_count > 2:
+        return _BINAURAL_SOURCE_SURROUND
+    return _BINAURAL_SOURCE_STEREO
 
 
 def build_render_contract(
@@ -173,7 +197,11 @@ def build_render_contract(
     notes: list[str] = []
 
     clean_source = str(source_layout_id).strip() if source_layout_id else ""
-    if clean_source and clean_source != target_layout_id:
+    if (
+        clean_source
+        and clean_source != target_layout_id
+        and target_layout_id != _BINAURAL_LAYOUT_ID
+    ):
         negotiation = layout_negotiation_available(
             clean_source,
             target_layout_id,
@@ -217,6 +245,22 @@ def build_render_contract(
         contract["gates_policy_id"] = str(gates_policy_id).strip()
     if notes:
         contract["notes"] = notes
+
+    if target_layout_id == _BINAURAL_LAYOUT_ID:
+        virtual_source_layout_id = _select_binaural_source_layout(clean_source or None)
+        contract["binaural_virtualization"] = {
+            "enabled": True,
+            "source_layout_id": virtual_source_layout_id,
+            "method": "conservative_ild_itd_rms_gated",
+            "renderer_id": "PLUGIN.RENDERER.BINAURAL_PREVIEW_V0",
+        }
+        contract.setdefault("notes", [])
+        contract["notes"].append(
+            "Binaural virtualization deliverable using conservative ILD/ITD + gating."
+        )
+        contract["notes"].append(
+            f"Binaural virtualization source layout: {virtual_source_layout_id}."
+        )
 
     return contract
 

@@ -209,6 +209,33 @@ class TestRenderContract(unittest.TestCase):
         contract = build_render_contract("TARGET.STEREO.2_0", "LAYOUT.2_0")
         self.assertNotIn("downmix_route", contract)
 
+    def test_binaural_contract_has_virtualization_metadata_and_source_layout(self) -> None:
+        contract = build_render_contract(
+            "TARGET.HEADPHONES.BINAURAL",
+            "LAYOUT.BINAURAL",
+            source_layout_id="LAYOUT.7_1_4",
+        )
+        self.assertNotIn("downmix_route", contract)
+        virtualization = contract.get("binaural_virtualization")
+        self.assertIsInstance(virtualization, dict)
+        if isinstance(virtualization, dict):
+            self.assertTrue(virtualization.get("enabled"))
+            self.assertEqual(virtualization.get("source_layout_id"), "LAYOUT.7_1_4")
+        notes = contract.get("notes", [])
+        self.assertIsInstance(notes, list)
+        self.assertTrue(
+            any(
+                isinstance(note, str) and "Binaural virtualization deliverable" in note
+                for note in notes
+            )
+        )
+        self.assertTrue(
+            any(
+                isinstance(note, str) and "LAYOUT.7_1_4" in note
+                for note in notes
+            )
+        )
+
     def test_unavailable_downmix_path_adds_note(self) -> None:
         # STANDARD_FOLDOWN_V0 does not support 7.1.4 → 5.1.
         contract = build_render_contract(
@@ -529,6 +556,25 @@ class TestRenderEngineJobStructure(unittest.TestCase):
         self.assertIn("job_id", job)
         self.assertIn("status", job)
         self.assertIn("output_files", job)
+
+    def test_binaural_job_notes_include_virtualization_note_and_source_layout(self) -> None:
+        scene = _make_scene(source_layout_id="LAYOUT.7_1_4")
+        contracts = [
+            build_render_contract(
+                "TARGET.HEADPHONES.BINAURAL",
+                "LAYOUT.BINAURAL",
+                source_layout_id="LAYOUT.7_1_4",
+            )
+        ]
+        report = render_scene_to_targets(scene, contracts, {"dry_run": True})
+        self.assertEqual(len(report["jobs"]), 1)
+        notes = report["jobs"][0].get("notes", [])
+        self.assertIsInstance(notes, list)
+        combined_notes = " ".join(
+            note for note in notes if isinstance(note, str)
+        )
+        self.assertIn("Binaural virtualization deliverable", combined_notes)
+        self.assertIn("LAYOUT.7_1_4", combined_notes)
 
     # --- Error cases ---
 
