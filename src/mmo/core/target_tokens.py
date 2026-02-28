@@ -16,6 +16,25 @@ _SHORTHANDS: dict[str, tuple[str | None, str]] = {
     "stereo": ("TARGET.STEREO.2_0", "LAYOUT.2_0"),
     "2.0": ("TARGET.STEREO.2_0", "LAYOUT.2_0"),
     "2_0": ("TARGET.STEREO.2_0", "LAYOUT.2_0"),
+    "2.1": ("TARGET.STEREO.2_1", "LAYOUT.2_1"),
+    "2_1": ("TARGET.STEREO.2_1", "LAYOUT.2_1"),
+    "stereo+lfe": ("TARGET.STEREO.2_1", "LAYOUT.2_1"),
+    "stereo_lfe": ("TARGET.STEREO.2_1", "LAYOUT.2_1"),
+    "3.0": ("TARGET.FRONT.3_0", "LAYOUT.3_0"),
+    "3_0": ("TARGET.FRONT.3_0", "LAYOUT.3_0"),
+    "lcr": ("TARGET.FRONT.3_0", "LAYOUT.3_0"),
+    "lrc": ("TARGET.FRONT.3_0", "LAYOUT.3_0"),
+    "3.1": ("TARGET.FRONT.3_1", "LAYOUT.3_1"),
+    "3_1": ("TARGET.FRONT.3_1", "LAYOUT.3_1"),
+    "lcr+lfe": ("TARGET.FRONT.3_1", "LAYOUT.3_1"),
+    "lrc+lfe": ("TARGET.FRONT.3_1", "LAYOUT.3_1"),
+    "4.0": ("TARGET.SURROUND.4_0", "LAYOUT.4_0"),
+    "4_0": ("TARGET.SURROUND.4_0", "LAYOUT.4_0"),
+    "quad": ("TARGET.SURROUND.4_0", "LAYOUT.4_0"),
+    "4.1": ("TARGET.SURROUND.4_1", "LAYOUT.4_1"),
+    "4_1": ("TARGET.SURROUND.4_1", "LAYOUT.4_1"),
+    "quad+lfe": ("TARGET.SURROUND.4_1", "LAYOUT.4_1"),
+    "quad_lfe": ("TARGET.SURROUND.4_1", "LAYOUT.4_1"),
     "5.1": ("TARGET.SURROUND.5_1", "LAYOUT.5_1"),
     "5_1": ("TARGET.SURROUND.5_1", "LAYOUT.5_1"),
     "7.1": ("TARGET.SURROUND.7_1", "LAYOUT.7_1"),
@@ -25,7 +44,9 @@ _SHORTHANDS: dict[str, tuple[str | None, str]] = {
     "binaural": ("TARGET.HEADPHONES.BINAURAL", "LAYOUT.BINAURAL"),
 }
 
-_SHORTHAND_HELP = "stereo, 2.0, 5.1, 7.1, 7.1.4, binaural"
+_SHORTHAND_HELP = (
+    "stereo, 2.0, 2.1, 3.0, 3.1, 4.0, 4.1, 5.1, 7.1, 7.1.4, quad, lcr, binaural"
+)
 
 
 @dataclass(frozen=True)

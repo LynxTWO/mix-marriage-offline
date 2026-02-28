@@ -47,6 +47,24 @@ layouts:
         name: "C"
         azimuth_deg: 0.0
         elevation_deg: 0.0
+  LAYOUT.3_1:
+    channels:
+      - ch: 0
+        name: "L"
+        azimuth_deg: -30.0
+        elevation_deg: 0.0
+      - ch: 1
+        name: "R"
+        azimuth_deg: 30.0
+        elevation_deg: 0.0
+      - ch: 2
+        name: "C"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
+      - ch: 3
+        name: "LFE"
+        azimuth_deg: 0.0
+        elevation_deg: 0.0
   LAYOUT.4_0:
     channels:
       - ch: 0

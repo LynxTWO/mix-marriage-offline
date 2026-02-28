@@ -99,6 +99,13 @@ class TestDownmixRegistryDefaultPolicy(unittest.TestCase):
 
 
 class TestDownmixRegistryResolve(unittest.TestCase):
+    def test_resolve_direct_2_1_to_2_0(self) -> None:
+        reg = load_downmix_registry(_DOWNMIX_PATH)
+        result = reg.resolve(None, "LAYOUT.2_1", "LAYOUT.2_0")
+        self.assertEqual(result["source_layout_id"], "LAYOUT.2_1")
+        self.assertEqual(result["target_layout_id"], "LAYOUT.2_0")
+        self.assertEqual(result["matrix_id"], "DMX.STD.2_1_TO_2_0.LR_LFE_DROP")
+
     def test_resolve_direct_conversion(self) -> None:
         reg = load_downmix_registry(_DOWNMIX_PATH)
         result = reg.resolve(None, "LAYOUT.5_1", "LAYOUT.2_0")
@@ -118,6 +125,16 @@ class TestDownmixRegistryResolve(unittest.TestCase):
         )
         self.assertEqual(result["matrix_id"], "DMX.STD.5_1_TO_2_0.LO_RO_LFE_DROP")
         self.assertEqual(result["policy_id"], "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0")
+
+    def test_resolve_direct_3_1_to_2_0(self) -> None:
+        reg = load_downmix_registry(_DOWNMIX_PATH)
+        result = reg.resolve(None, "LAYOUT.3_1", "LAYOUT.2_0")
+        self.assertEqual(result["matrix_id"], "DMX.STD.3_1_TO_2_0.LO_RO_LFE_DROP")
+
+    def test_resolve_direct_4_1_to_2_0(self) -> None:
+        reg = load_downmix_registry(_DOWNMIX_PATH)
+        result = reg.resolve(None, "LAYOUT.4_1", "LAYOUT.2_0")
+        self.assertEqual(result["matrix_id"], "DMX.STD.4_1_TO_2_0.QUAD_LFE_DROP")
 
     def test_resolve_composition_path(self) -> None:
         reg = load_downmix_registry(_DOWNMIX_PATH)

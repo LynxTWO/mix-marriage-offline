@@ -13,6 +13,20 @@ except ImportError:  # pragma: no cover - optional dependency
 
 
 _FALLBACK_TARGET_ALIASES_BY_ID: dict[str, tuple[str, ...]] = {
+    "TARGET.FRONT.3_0": (
+        "LCR (3.0)",
+        "3.0",
+        "3_0",
+        "LCR",
+        "LRC",
+    ),
+    "TARGET.FRONT.3_1": (
+        "LCR + LFE (3.1)",
+        "3.1",
+        "3_1",
+        "LCR+LFE",
+        "LRC+LFE",
+    ),
     "TARGET.HEADPHONES.BINAURAL": (
         "Binaural",
         "Binaural (headphones)",
@@ -21,6 +35,24 @@ _FALLBACK_TARGET_ALIASES_BY_ID: dict[str, tuple[str, ...]] = {
     "TARGET.STEREO.2_0": (
         "Stereo (streaming)",
         "Stereo",
+    ),
+    "TARGET.STEREO.2_1": (
+        "Stereo + LFE (2.1)",
+        "2.1",
+        "2_1",
+        "Stereo+LFE",
+    ),
+    "TARGET.SURROUND.4_0": (
+        "Quad (4.0)",
+        "Quad",
+        "4.0",
+        "4_0",
+    ),
+    "TARGET.SURROUND.4_1": (
+        "Quad + LFE (4.1)",
+        "4.1",
+        "4_1",
+        "Quad+LFE",
     ),
     "TARGET.SURROUND.5_1": (
         "5.1 (home theater)",

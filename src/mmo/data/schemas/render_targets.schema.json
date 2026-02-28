@@ -55,6 +55,15 @@
         "target_id": { "$ref": "#/$defs/target_id" },
         "layout_id": { "$ref": "#/$defs/layout_id" },
         "container": { "$ref": "#/$defs/container" },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "aliases": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
         "channel_order": {
           "type": "array",
           "minItems": 1,

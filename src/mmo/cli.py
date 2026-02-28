@@ -696,7 +696,8 @@ def main(argv: list[str] | None = None) -> int:
         default=_BASELINE_RENDER_TARGET_ID,
         help=(
             "Comma-separated target tokens for --render-many "
-            "(TARGET.*, LAYOUT.*, or shorthands like stereo/5.1/7.1/7.1.4/binaural; "
+            "(TARGET.*, LAYOUT.*, or shorthands like "
+            "stereo/2.1/3.0/3.1/4.0/4.1/5.1/7.1/7.1.4/quad/lcr/binaural; "
             "default: TARGET.STEREO.2_0)."
         ),
     )
@@ -797,7 +798,8 @@ def main(argv: list[str] | None = None) -> int:
         default=",".join(DEFAULT_WATCH_TARGET_IDS),
         help=(
             "Comma-separated render-many target tokens "
-            "(TARGET.*, LAYOUT.*, or shorthands like stereo/5.1/7.1/7.1.4/binaural; "
+            "(TARGET.*, LAYOUT.*, or shorthands like "
+            "stereo/2.1/3.0/3.1/4.0/4.1/5.1/7.1/7.1.4/quad/lcr/binaural; "
             "default: TARGET.STEREO.2_0,TARGET.SURROUND.5_1,TARGET.SURROUND.7_1)."
         ),
     )
@@ -1064,7 +1066,8 @@ def main(argv: list[str] | None = None) -> int:
         "--target",
         default="stereo",
         help=(
-            "Render target token (TARGET.*, LAYOUT.*, or shorthand like stereo/5.1/7.1/7.1.4/binaural). "
+            "Render target token (TARGET.*, LAYOUT.*, or shorthand like "
+            "stereo/2.1/3.0/3.1/4.0/4.1/5.1/7.1/7.1.4/quad/lcr/binaural). "
             "Default: stereo."
         ),
     )
@@ -1149,7 +1152,8 @@ def main(argv: list[str] | None = None) -> int:
         dest="render_many_targets",
         help=(
             "Comma-separated target tokens for --render-many "
-            "(TARGET.*, LAYOUT.*, or shorthands like stereo/5.1/7.1/7.1.4/binaural) "
+            "(TARGET.*, LAYOUT.*, or shorthands like "
+            "stereo/2.1/3.0/3.1/4.0/4.1/5.1/7.1/7.1.4/quad/lcr/binaural) "
             "(default: stereo,5.1,7.1.4)."
         ),
     )
@@ -2613,7 +2617,8 @@ def main(argv: list[str] | None = None) -> int:
         default=_BASELINE_RENDER_TARGET_ID,
         help=(
             "Comma-separated target tokens for --render-many "
-            "(TARGET.*, LAYOUT.*, or shorthands like stereo/5.1/7.1/7.1.4/binaural; "
+            "(TARGET.*, LAYOUT.*, or shorthands like "
+            "stereo/2.1/3.0/3.1/4.0/4.1/5.1/7.1/7.1.4/quad/lcr/binaural; "
             "default: TARGET.STEREO.2_0)."
         ),
     )

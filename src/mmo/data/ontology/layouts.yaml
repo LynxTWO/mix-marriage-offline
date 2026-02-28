@@ -94,6 +94,9 @@ layouts:
     ordering_variants:
       SMPTE: ["SPK.L", "SPK.R", "SPK.LFE"]
       FILM: ["SPK.L", "SPK.R", "SPK.LFE"]
+      LOGIC_PRO: ["SPK.L", "SPK.R", "SPK.LFE"]
+      VST3: ["SPK.L", "SPK.R", "SPK.LFE"]
+      AAF: ["SPK.L", "SPK.R", "SPK.LFE"]
     channel_groups:
       front: ["SPK.L", "SPK.R"]
       lfe: ["SPK.LFE"]
@@ -154,6 +157,9 @@ layouts:
     ordering_variants:
       SMPTE: ["SPK.L", "SPK.R", "SPK.C"]
       FILM: ["SPK.L", "SPK.C", "SPK.R"]
+      LOGIC_PRO: ["SPK.L", "SPK.R", "SPK.C"]
+      VST3: ["SPK.L", "SPK.R", "SPK.C"]
+      AAF: ["SPK.L", "SPK.C", "SPK.R"]
     channel_groups:
       front: ["SPK.L", "SPK.R"]
       center: ["SPK.C"]
@@ -172,6 +178,39 @@ layouts:
       default_downmix_treatment: "n/a"
     aliases: ["3.0", "3_0", "lcr", "L C R"]
 
+  LAYOUT.3_1:
+    label: "LCR + LFE (3.1)"
+    description: "Front Left, Center, Front Right plus LFE."
+    family: "surround"
+    channel_count: 4
+    ordering_standard: "SMPTE"
+    channel_order: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE"]
+    ordering_variants:
+      SMPTE: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE"]
+      FILM: ["SPK.L", "SPK.C", "SPK.R", "SPK.LFE"]
+      LOGIC_PRO: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE"]
+      VST3: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE"]
+      AAF: ["SPK.L", "SPK.C", "SPK.R", "SPK.LFE"]
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      center: ["SPK.C"]
+      lfe: ["SPK.LFE"]
+      bed: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE"]
+    height_speakers: []
+    has_lfe: true
+    speaker_positions:
+      - {spk_id: "SPK.L",   azimuth_deg: 30,  elevation_deg: 0}
+      - {spk_id: "SPK.R",   azimuth_deg: -30, elevation_deg: 0}
+      - {spk_id: "SPK.C",   azimuth_deg: 0,   elevation_deg: 0}
+      - {spk_id: "SPK.LFE", azimuth_deg: 0,   elevation_deg: 0}
+    lfe_policy:
+      has_lfe: true
+      lfe_channels: ["SPK.LFE"]
+      excluded_from_program_loudness: true
+      default_downmix_treatment: "drop"
+    aliases: ["3.1", "3_1", "lcr+lfe", "L C R LFE"]
+
   # -------------------------
   # Quad / 4.0
   # -------------------------
@@ -185,6 +224,9 @@ layouts:
     ordering_variants:
       SMPTE: ["SPK.L", "SPK.R", "SPK.LS", "SPK.RS"]
       FILM: ["SPK.L", "SPK.R", "SPK.LS", "SPK.RS"]
+      LOGIC_PRO: ["SPK.L", "SPK.R", "SPK.LS", "SPK.RS"]
+      VST3: ["SPK.L", "SPK.R", "SPK.LS", "SPK.RS"]
+      AAF: ["SPK.L", "SPK.R", "SPK.LS", "SPK.RS"]
     channel_groups:
       front: ["SPK.L", "SPK.R"]
       surround: ["SPK.LS", "SPK.RS"]
@@ -213,6 +255,10 @@ layouts:
     channel_order: ["SPK.L", "SPK.R", "SPK.LFE", "SPK.LS", "SPK.RS"]
     ordering_variants:
       SMPTE: ["SPK.L", "SPK.R", "SPK.LFE", "SPK.LS", "SPK.RS"]
+      FILM: ["SPK.L", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LFE"]
+      LOGIC_PRO: ["SPK.L", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LFE"]
+      VST3: ["SPK.L", "SPK.R", "SPK.LFE", "SPK.LS", "SPK.RS"]
+      AAF: ["SPK.L", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LFE"]
     channel_groups:
       front: ["SPK.L", "SPK.R"]
       lfe: ["SPK.LFE"]

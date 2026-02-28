@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- First-class 2.1/3.x/4.x render targets across ontology, CLI, and GUI:
+  - Added targets `TARGET.STEREO.2_1`, `TARGET.FRONT.3_0`,
+    `TARGET.FRONT.3_1`, `TARGET.SURROUND.4_0`, and
+    `TARGET.SURROUND.4_1` with deterministic token/alias resolution.
+  - Added/extended layout ordering variants for
+    `LAYOUT.2_1`, `LAYOUT.3_0`, `LAYOUT.3_1`, `LAYOUT.4_0`,
+    `LAYOUT.4_1` across SMPTE/FILM/LOGIC_PRO/VST3/AAF (SMPTE canonical).
+  - Added deterministic downmix routes for QA fold-down to stereo:
+    2.1->2.0, 3.0->2.0, 3.1->2.0, 4.0->2.0, 4.1->2.0.
+  - Added regression coverage for target token resolution, render-target
+    registry inclusion, downmix-registry route resolution, and deterministic
+    GUI target picker ordering.
 - Layout-standard roundtrip contract coverage:
   - Added `docs/18-channel-standards.md` to document the five standards
     (SMPTE/FILM/LOGIC_PRO/VST3/AAF), boundary conversion, and internal SMPTE

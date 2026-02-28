@@ -244,6 +244,15 @@ downmix:
       default_matrix_id: "DMX.IMM.7_1_4_TO_1_0.MONO_FROM_COMPOSED"
       lfe_treatment: "drop"
 
+    - id: "DMX.CONV.2_1_TO_2_0"
+      source_layout_id: "LAYOUT.2_1"
+      target_layout_id: "LAYOUT.2_0"
+      policy_pack: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      default_matrix_id: "DMX.STD.2_1_TO_2_0.LR_LFE_DROP"
+      lfe_treatment: "drop"
+      notes:
+        - "Stereo channels are preserved; LFE is dropped."
+
     - id: "DMX.CONV.3_0_TO_2_0"
       source_layout_id: "LAYOUT.3_0"
       target_layout_id: "LAYOUT.2_0"
@@ -251,12 +260,30 @@ downmix:
       default_matrix_id: "DMX.STD.3_0_TO_2_0.LO_RO"
       lfe_treatment: "n/a"
 
+    - id: "DMX.CONV.3_1_TO_2_0"
+      source_layout_id: "LAYOUT.3_1"
+      target_layout_id: "LAYOUT.2_0"
+      policy_pack: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      default_matrix_id: "DMX.STD.3_1_TO_2_0.LO_RO_LFE_DROP"
+      lfe_treatment: "drop"
+      notes:
+        - "Center folds equally to L/R at -3 dB; LFE is dropped."
+
     - id: "DMX.CONV.4_0_TO_2_0"
       source_layout_id: "LAYOUT.4_0"
       target_layout_id: "LAYOUT.2_0"
       policy_pack: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
       default_matrix_id: "DMX.STD.4_0_TO_2_0.QUAD"
       lfe_treatment: "n/a"
+
+    - id: "DMX.CONV.4_1_TO_2_0"
+      source_layout_id: "LAYOUT.4_1"
+      target_layout_id: "LAYOUT.2_0"
+      policy_pack: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      default_matrix_id: "DMX.STD.4_1_TO_2_0.QUAD_LFE_DROP"
+      lfe_treatment: "drop"
+      notes:
+        - "Surrounds fold to front at -3 dB; LFE is dropped."
 
     - id: "DMX.CONV.5_0_TO_2_0"
       source_layout_id: "LAYOUT.5_0"
@@ -273,6 +300,54 @@ downmix:
   # matrix_version: "1.0.0" applies to all entries below.
   matrix_version: "1.0.0"
   matrices:
+
+    DMX.STD.2_1_TO_2_0.LR_LFE_DROP:
+      source_layout_id: "LAYOUT.2_1"
+      target_layout_id: "LAYOUT.2_0"
+      lfe_treatment: "drop"
+      coefficients:
+        SPK.L: {SPK.L: 1.0}
+        SPK.R: {SPK.R: 1.0}
+
+    DMX.STD.3_0_TO_2_0.LO_RO:
+      source_layout_id: "LAYOUT.3_0"
+      target_layout_id: "LAYOUT.2_0"
+      lfe_treatment: "n/a"
+      coefficients:
+        SPK.L: {SPK.L: 1.0, SPK.C: 0.7071}
+        SPK.R: {SPK.R: 1.0, SPK.C: 0.7071}
+
+    DMX.STD.3_1_TO_2_0.LO_RO_LFE_DROP:
+      source_layout_id: "LAYOUT.3_1"
+      target_layout_id: "LAYOUT.2_0"
+      lfe_treatment: "drop"
+      coefficients:
+        SPK.L: {SPK.L: 1.0, SPK.C: 0.7071}
+        SPK.R: {SPK.R: 1.0, SPK.C: 0.7071}
+
+    DMX.STD.4_0_TO_2_0.QUAD:
+      source_layout_id: "LAYOUT.4_0"
+      target_layout_id: "LAYOUT.2_0"
+      lfe_treatment: "n/a"
+      coefficients:
+        SPK.L: {SPK.L: 1.0, SPK.LS: 0.7071}
+        SPK.R: {SPK.R: 1.0, SPK.RS: 0.7071}
+
+    DMX.STD.4_1_TO_2_0.QUAD_LFE_DROP:
+      source_layout_id: "LAYOUT.4_1"
+      target_layout_id: "LAYOUT.2_0"
+      lfe_treatment: "drop"
+      coefficients:
+        SPK.L: {SPK.L: 1.0, SPK.LS: 0.7071}
+        SPK.R: {SPK.R: 1.0, SPK.RS: 0.7071}
+
+    DMX.STD.5_0_TO_2_0.LO_RO:
+      source_layout_id: "LAYOUT.5_0"
+      target_layout_id: "LAYOUT.2_0"
+      lfe_treatment: "n/a"
+      coefficients:
+        SPK.L: {SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071}
+        SPK.R: {SPK.R: 1.0, SPK.C: 0.7071, SPK.RS: 0.7071}
 
     DMX.STD.5_1_TO_2_0.LO_RO_LFE_DROP:
       source_layout_id: "LAYOUT.5_1"

@@ -201,6 +201,22 @@ def load_render_targets_registry(path: Path | None = None) -> RenderTargetsRegis
             "channel_order": list(channel_order),
             "filename_template": row["filename_template"],
         }
+        label = row.get("label")
+        if isinstance(label, str):
+            normalized_label = label.strip()
+            if normalized_label:
+                normalized_row["label"] = normalized_label
+        aliases = row.get("aliases")
+        if isinstance(aliases, list):
+            normalized_aliases = sorted(
+                {
+                    alias.strip()
+                    for alias in aliases
+                    if isinstance(alias, str) and alias.strip()
+                }
+            )
+            if normalized_aliases:
+                normalized_row["aliases"] = normalized_aliases
         if "channel_order_layout_id" in row:
             normalized_row["channel_order_layout_id"] = row["channel_order_layout_id"]
         if normalized_notes:

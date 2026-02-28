@@ -8,13 +8,19 @@ MMO accepts interchangeable target tokens:
 
 - `TARGET.*` IDs from `ontology/render_targets.yaml` (delivery-target entries).
 - `LAYOUT.*` IDs from `ontology/layouts.yaml` (speaker-layout entries).
-- Musician-friendly shorthands: `stereo`, `2.0`, `5.1`, `7.1`, `7.1.4`, `binaural`.
+- Musician-friendly shorthands: `stereo`, `2.0`, `2.1`, `3.0`, `3.1`, `4.0`, `4.1`, `quad`, `lcr`, `5.1`, `7.1`, `7.1.4`, `binaural`.
 
 Examples:
 
 - `TARGET.STEREO.2_0`
+- `TARGET.STEREO.2_1`
+- `TARGET.FRONT.3_0`
+- `TARGET.FRONT.3_1`
+- `TARGET.SURROUND.4_0`
+- `TARGET.SURROUND.4_1`
 - `LAYOUT.5_1`
 - `stereo`
+- `quad`
 - `7.1.4`
 
 ## Deterministic Resolution Order
@@ -23,7 +29,7 @@ MMO resolves tokens with `mmo.core.target_tokens.resolve_target_token` in this o
 
 1. `TARGET.*` ID
 2. `LAYOUT.*` ID
-3. Canonical shorthands (`stereo`, `2.0`, `5.1`, `7.1`, `7.1.4`, `binaural`)
+3. Canonical shorthands (`stereo`, `2.0`, `2.1`, `3.0`, `3.1`, `4.0`, `4.1`, `quad`, `lcr`, `5.1`, `7.1`, `7.1.4`, `binaural`)
 4. Render-target alias matching, then layout-alias matching
 5. Ambiguous matches fail with a deterministic error listing sorted candidates
 
@@ -59,8 +65,10 @@ that binaural output is virtualization and include the chosen source layout ID.
 - Use `stereo` for quick musician flow.
 - Use `TARGET.*` for explicit engineering control.
 - Use `LAYOUT.*` when you care about speaker layout and want target selection inferred.
+- Use `2.1`, `3.0`/`lcr`, `3.1`, `4.0`/`quad`, and `4.1` for first-class front/quad variants.
 - `safe-render --render-many` defaults remain `stereo,5.1,7.1.4`; add `binaural`
   explicitly in `--render-many-targets` when a headphone deliverable is required.
+  Add `2.1`, `3.0`, `3.1`, `4.0`, or `4.1` explicitly when those deliverables are required.
 
 ## `mmo targets recommend` Usage
 

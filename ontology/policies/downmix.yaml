@@ -16,9 +16,9 @@ downmix:
   policies:
     POLICY.DOWNMIX.STANDARD_FOLDOWN_V0:
       label: "Standard fold-down v0"
-      description: "Conservative, broadly compatible Lo/Ro style fold-downs for surround beds (3.0/4.0/5.0/5.1/5.2/7.1/7.2)."
+      description: "Conservative, broadly compatible Lo/Ro style fold-downs for surround beds (2.1/3.0/3.1/4.0/4.1/5.0/5.1/5.2/7.1/7.2)."
       file: "downmix_policies/standard_foldown_v0.yaml"
-      supports_source_layouts: ["LAYOUT.3_0", "LAYOUT.4_0", "LAYOUT.5_0", "LAYOUT.5_1", "LAYOUT.5_2", "LAYOUT.7_0", "LAYOUT.7_1", "LAYOUT.7_2"]
+      supports_source_layouts: ["LAYOUT.2_1", "LAYOUT.3_0", "LAYOUT.3_1", "LAYOUT.4_0", "LAYOUT.4_1", "LAYOUT.5_0", "LAYOUT.5_1", "LAYOUT.5_2", "LAYOUT.7_0", "LAYOUT.7_1", "LAYOUT.7_2"]
       supports_target_layouts: ["LAYOUT.2_0", "LAYOUT.1_0", "LAYOUT.5_1"]
 
     POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0:
@@ -30,8 +30,11 @@ downmix:
 
   # Default policy selection given a source layout.
   default_policy_by_source_layout:
+    LAYOUT.2_1: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
     LAYOUT.3_0: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+    LAYOUT.3_1: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
     LAYOUT.4_0: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+    LAYOUT.4_1: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
     LAYOUT.5_0: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
     LAYOUT.5_1: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
     LAYOUT.5_2: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
@@ -47,6 +50,31 @@ downmix:
   # Preferred matrices for common conversions.
   # If a direct matrix isn't present, composition_paths may be used (source -> ... -> target).
   conversions:
+    - source_layout_id: "LAYOUT.2_1"
+      target_layout_id: "LAYOUT.2_0"
+      policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      matrix_id: "DMX.STD.2_1_TO_2_0.LR_LFE_DROP"
+
+    - source_layout_id: "LAYOUT.3_0"
+      target_layout_id: "LAYOUT.2_0"
+      policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      matrix_id: "DMX.STD.3_0_TO_2_0.LO_RO"
+
+    - source_layout_id: "LAYOUT.3_1"
+      target_layout_id: "LAYOUT.2_0"
+      policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      matrix_id: "DMX.STD.3_1_TO_2_0.LO_RO_LFE_DROP"
+
+    - source_layout_id: "LAYOUT.4_0"
+      target_layout_id: "LAYOUT.2_0"
+      policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      matrix_id: "DMX.STD.4_0_TO_2_0.QUAD"
+
+    - source_layout_id: "LAYOUT.4_1"
+      target_layout_id: "LAYOUT.2_0"
+      policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+      matrix_id: "DMX.STD.4_1_TO_2_0.QUAD_LFE_DROP"
+
     - source_layout_id: "LAYOUT.5_1"
       target_layout_id: "LAYOUT.2_0"
       policy_id: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"

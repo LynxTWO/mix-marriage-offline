@@ -49,6 +49,7 @@ _REQUIRED_LAYOUTS = [
     "LAYOUT.2_0",
     "LAYOUT.2_1",
     "LAYOUT.3_0",
+    "LAYOUT.3_1",
     "LAYOUT.4_0",
     "LAYOUT.4_1",
     "LAYOUT.5_0",
@@ -64,6 +65,7 @@ _REQUIRED_LAYOUTS = [
 # Layouts that MUST have LFE
 _LFE_LAYOUTS = {
     "LAYOUT.2_1",
+    "LAYOUT.3_1",
     "LAYOUT.4_1",
     "LAYOUT.5_1",
     "LAYOUT.7_1",
@@ -89,6 +91,7 @@ _EXPECTED_CHANNEL_COUNTS: Dict[str, int] = {
     "LAYOUT.2_0": 2,
     "LAYOUT.2_1": 3,
     "LAYOUT.3_0": 3,
+    "LAYOUT.3_1": 4,
     "LAYOUT.4_0": 4,
     "LAYOUT.4_1": 5,
     "LAYOUT.5_0": 5,

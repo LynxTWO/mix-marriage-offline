@@ -14,6 +14,7 @@ from pathlib import Path
 
 from mmo.cli import main as cli_main
 from mmo.gui.main import (
+    _build_target_picker_map,
     GuiPipelinePaths,
     GuiRunConfig,
     build_plugin_discover_cards,
@@ -363,9 +364,37 @@ class TestGuiSmoke(unittest.TestCase):
             target_layouts.get("TARGET.HEADPHONES.BINAURAL"),
             "LAYOUT.BINAURAL",
         )
+        self.assertEqual(target_layouts.get("TARGET.STEREO.2_1"), "LAYOUT.2_1")
+        self.assertEqual(target_layouts.get("TARGET.FRONT.3_0"), "LAYOUT.3_0")
+        self.assertEqual(target_layouts.get("TARGET.FRONT.3_1"), "LAYOUT.3_1")
+        self.assertEqual(target_layouts.get("TARGET.SURROUND.4_0"), "LAYOUT.4_0")
+        self.assertEqual(target_layouts.get("TARGET.SURROUND.4_1"), "LAYOUT.4_1")
         self.assertEqual(target_layouts.get("TARGET.STEREO.2_0"), "LAYOUT.2_0")
         self.assertEqual(target_layouts.get("TARGET.SURROUND.5_1"), "LAYOUT.5_1")
         self.assertEqual(target_layouts.get("TARGET.SURROUND.7_1"), "LAYOUT.7_1")
+
+    def test_target_picker_labels_sort_deterministically(self) -> None:
+        picker_map = _build_target_picker_map(
+            (
+                "TARGET.SURROUND.7_1",
+                "TARGET.FRONT.3_1",
+                "TARGET.STEREO.2_1",
+                "TARGET.HEADPHONES.BINAURAL",
+                "TARGET.SURROUND.4_0",
+                "TARGET.STEREO.2_0",
+            )
+        )
+        self.assertEqual(
+            tuple(sorted(picker_map)),
+            (
+                "Binaural (headphones)",
+                "LCR + LFE (3.1)",
+                "Quad (4.0)",
+                "Stereo (2.0)",
+                "Stereo + LFE (2.1)",
+                "Surround (7.1)",
+            ),
+        )
 
 
 if __name__ == "__main__":

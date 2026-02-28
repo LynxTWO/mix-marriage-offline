@@ -73,7 +73,15 @@ _DISCOVER_TYPE_GRADIENT: Mapping[str, str] = {
     "renderer": "sunset",
 }
 _TARGET_PICKER_LABELS_BY_ID: Mapping[str, str] = {
+    "TARGET.FRONT.3_0": "LCR (3.0)",
+    "TARGET.FRONT.3_1": "LCR + LFE (3.1)",
     "TARGET.HEADPHONES.BINAURAL": "Binaural (headphones)",
+    "TARGET.STEREO.2_0": "Stereo (2.0)",
+    "TARGET.STEREO.2_1": "Stereo + LFE (2.1)",
+    "TARGET.SURROUND.4_0": "Quad (4.0)",
+    "TARGET.SURROUND.4_1": "Quad + LFE (4.1)",
+    "TARGET.SURROUND.5_1": "Surround (5.1)",
+    "TARGET.SURROUND.7_1": "Surround (7.1)",
 }
 
 

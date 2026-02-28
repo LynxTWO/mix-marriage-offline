@@ -257,7 +257,7 @@ MMO target inputs are interchangeable across CLI/GUI:
 
 - `TARGET.*` IDs (engineering/nerd explicit)
 - `LAYOUT.*` IDs (layout explicit)
-- shorthands (musician-friendly): `stereo`, `5.1`, `7.1`, `7.1.4`, `binaural`
+- shorthands (musician-friendly): `stereo`, `2.1`, `3.0`, `3.1`, `4.0`, `4.1`, `quad`, `lcr`, `5.1`, `7.1`, `7.1.4`, `binaural`
 
 Inspect available targets:
 
@@ -270,6 +270,9 @@ Musician-friendly safe-render examples:
 
 ```powershell
 python -m mmo safe-render --report report.json --target stereo --dry-run
+python -m mmo safe-render --report report.json --target 2.1 --dry-run
+python -m mmo safe-render --report report.json --target lcr --dry-run
+python -m mmo safe-render --report report.json --target quad --dry-run
 python -m mmo safe-render --report report.json --target 5.1 --dry-run
 python -m mmo safe-render --report report.json --target binaural --dry-run
 ```

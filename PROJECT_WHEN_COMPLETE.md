@@ -128,7 +128,9 @@ What remains: tighten user-intent/lock precedence guarantees across all resolver
 - [x] Binaural headphone deliverable is supported as a first-class target
   (`TARGET.HEADPHONES.BINAURAL` / `LAYOUT.BINAURAL`) using deterministic
   conservative virtualization with source-layout traceability.
-- [ ] 2.1 and 4.1 layouts are correctly supported when requested (render + meters + downmix QA).
+- [x] 2.1 and 4.1 layouts are correctly supported when requested (render + meters + downmix QA).
+- [x] First-class front/quad variants are available as explicit targets:
+  `TARGET.FRONT.3_0`, `TARGET.FRONT.3_1`, `TARGET.SURROUND.4_0`, `TARGET.SURROUND.4_1`.
 - [x] 5.1 render contract is correct and validated (including 5.1 vs 5.1(side) semantic differences).
 - [x] 7.1 render contract is correct and validated.
 - [x] One immersive bed target (example: 7.1.4) is correct and validated.
@@ -139,7 +141,7 @@ What remains: tighten user-intent/lock precedence guarantees across all resolver
 - [x] Dual-LFE export caveat is documented and emitted at runtime: some external tools still collapse/relabel `LFE2`; users must validate with render-report channel order + ffprobe layout output.
 - [x] All render targets support both SMPTE (default) and Film channel ordering; the active standard is recorded in every render contract and receipt.
 - [x] Regression tests verify deterministic channel-order roundtrips across SMPTE/FILM/LOGIC_PRO/VST3/AAF for all valid multichannel `LAYOUT.*` entries.
-What remains: add first-class 2.1/4.1 targets.
+What remains: expand fixture-session coverage for front/quad render variants in end-to-end audio artifacts.
 
 
 ### 4.7 Fixtures and CI prevent regressions

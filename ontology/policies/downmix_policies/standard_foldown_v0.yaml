@@ -8,7 +8,7 @@ downmix_policy_pack:
   created_utc: "2026-01-29T00:00:00Z"
   label: "Standard fold-down v0"
   description: >
-    A conservative set of linear downmix matrices for common surround beds (3.0/4.0/5.0/5.1/5.2/7.1/7.2) to 2.0 and 1.0,
+    A conservative set of linear downmix matrices for common surround beds (2.1/3.0/3.1/4.0/4.1/5.0/5.1/5.2/7.1/7.2) to 2.0 and 1.0,
     plus 7.1 to 5.1 bed fold.
   notes:
     - "Center and surround contributions default to -3 dB (0.7071)."
@@ -28,6 +28,16 @@ downmix_policy_pack:
   # - source_pre_filters: optional per-source filters (hints; implementation-defined)
   matrices:
 
+    DMX.STD.2_1_TO_2_0.LR_LFE_DROP:
+      label: "2.1 -> 2.0 (LFE dropped)"
+      source_layout_id: "LAYOUT.2_1"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L: { SPK.L: 1.0 }
+        SPK.R: { SPK.R: 1.0 }
+      notes:
+        - "LFE is dropped for deterministic translation-safe stereo fold-down."
+
     DMX.STD.3_0_TO_2_0.LO_RO:
       label: "3.0 -> 2.0 Lo/Ro"
       source_layout_id: "LAYOUT.3_0"
@@ -36,6 +46,16 @@ downmix_policy_pack:
         SPK.L: { SPK.L: 1.0, SPK.C: 0.7071 }
         SPK.R: { SPK.R: 1.0, SPK.C: 0.7071 }
 
+    DMX.STD.3_1_TO_2_0.LO_RO_LFE_DROP:
+      label: "3.1 -> 2.0 Lo/Ro (LFE dropped)"
+      source_layout_id: "LAYOUT.3_1"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L: { SPK.L: 1.0, SPK.C: 0.7071 }
+        SPK.R: { SPK.R: 1.0, SPK.C: 0.7071 }
+      notes:
+        - "LFE dropped; center folded equally to left/right at -3 dB."
+
     DMX.STD.4_0_TO_2_0.QUAD:
       label: "4.0 -> 2.0 Quad fold"
       source_layout_id: "LAYOUT.4_0"
@@ -43,6 +63,16 @@ downmix_policy_pack:
       coefficients:
         SPK.L: { SPK.L: 1.0, SPK.LS: 0.7071 }
         SPK.R: { SPK.R: 1.0, SPK.RS: 0.7071 }
+
+    DMX.STD.4_1_TO_2_0.QUAD_LFE_DROP:
+      label: "4.1 -> 2.0 Quad fold (LFE dropped)"
+      source_layout_id: "LAYOUT.4_1"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L: { SPK.L: 1.0, SPK.LS: 0.7071 }
+        SPK.R: { SPK.R: 1.0, SPK.RS: 0.7071 }
+      notes:
+        - "LFE dropped; surrounds folded at -3 dB for stereo compatibility."
 
     DMX.STD.5_0_TO_2_0.LO_RO:
       label: "5.0 -> 2.0 Lo/Ro (no LFE)"

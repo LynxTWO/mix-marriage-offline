@@ -607,6 +607,8 @@ class TestUiBundle(unittest.TestCase):
                 self.assertEqual(
                     target_ids,
                     [
+                        "TARGET.FRONT.3_0",
+                        "TARGET.FRONT.3_1",
                         "TARGET.HEADPHONES.BINAURAL",
                         "TARGET.IMMERSIVE.5_1_2",
                         "TARGET.IMMERSIVE.5_1_4",
@@ -614,6 +616,9 @@ class TestUiBundle(unittest.TestCase):
                         "TARGET.IMMERSIVE.7_1_4",
                         "TARGET.STEREO.2_0",
                         "TARGET.STEREO.2_0_ALT",
+                        "TARGET.STEREO.2_1",
+                        "TARGET.SURROUND.4_0",
+                        "TARGET.SURROUND.4_1",
                         "TARGET.SURROUND.5_1",
                         "TARGET.SURROUND.7_1",
                     ],
@@ -775,6 +780,8 @@ class TestUiBundle(unittest.TestCase):
                 self.assertEqual(
                     target_ids,
                     [
+                        "TARGET.FRONT.3_0",
+                        "TARGET.FRONT.3_1",
                         "TARGET.HEADPHONES.BINAURAL",
                         "TARGET.IMMERSIVE.5_1_2",
                         "TARGET.IMMERSIVE.5_1_4",
@@ -782,6 +789,9 @@ class TestUiBundle(unittest.TestCase):
                         "TARGET.IMMERSIVE.7_1_4",
                         "TARGET.STEREO.2_0",
                         "TARGET.STEREO.2_0_ALT",
+                        "TARGET.STEREO.2_1",
+                        "TARGET.SURROUND.4_0",
+                        "TARGET.SURROUND.4_1",
                         "TARGET.SURROUND.5_1",
                         "TARGET.SURROUND.7_1",
                     ],

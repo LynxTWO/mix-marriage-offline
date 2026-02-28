@@ -63,6 +63,11 @@ class TestRenderTargetsRegistry(unittest.TestCase):
         ]
         self.assertEqual(target_ids, sorted(target_ids))
         self.assertIn("TARGET.STEREO.2_0", target_ids)
+        self.assertIn("TARGET.STEREO.2_1", target_ids)
+        self.assertIn("TARGET.FRONT.3_0", target_ids)
+        self.assertIn("TARGET.FRONT.3_1", target_ids)
+        self.assertIn("TARGET.SURROUND.4_0", target_ids)
+        self.assertIn("TARGET.SURROUND.4_1", target_ids)
 
         stereo = get_render_target("TARGET.STEREO.2_0", targets_path)
         self.assertIsInstance(stereo, dict)

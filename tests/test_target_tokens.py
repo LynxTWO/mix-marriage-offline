@@ -68,6 +68,31 @@ class TestTargetTokenResolver(unittest.TestCase):
         self.assertEqual(stereo.layout_id, "LAYOUT.2_0")
         self.assertEqual(stereo.source, "shorthand")
 
+        stereo_lfe = resolve_target_token("2.1")
+        self.assertEqual(stereo_lfe.target_id, "TARGET.STEREO.2_1")
+        self.assertEqual(stereo_lfe.layout_id, "LAYOUT.2_1")
+        self.assertEqual(stereo_lfe.source, "shorthand")
+
+        lcr = resolve_target_token("lrc")
+        self.assertEqual(lcr.target_id, "TARGET.FRONT.3_0")
+        self.assertEqual(lcr.layout_id, "LAYOUT.3_0")
+        self.assertEqual(lcr.source, "shorthand")
+
+        lcr_lfe = resolve_target_token("3.1")
+        self.assertEqual(lcr_lfe.target_id, "TARGET.FRONT.3_1")
+        self.assertEqual(lcr_lfe.layout_id, "LAYOUT.3_1")
+        self.assertEqual(lcr_lfe.source, "shorthand")
+
+        quad = resolve_target_token("quad")
+        self.assertEqual(quad.target_id, "TARGET.SURROUND.4_0")
+        self.assertEqual(quad.layout_id, "LAYOUT.4_0")
+        self.assertEqual(quad.source, "shorthand")
+
+        quad_lfe = resolve_target_token("4.1")
+        self.assertEqual(quad_lfe.target_id, "TARGET.SURROUND.4_1")
+        self.assertEqual(quad_lfe.layout_id, "LAYOUT.4_1")
+        self.assertEqual(quad_lfe.source, "shorthand")
+
         immersive = resolve_target_token("7.1.4")
         self.assertEqual(immersive.target_id, "TARGET.IMMERSIVE.7_1_4")
         self.assertEqual(immersive.layout_id, "LAYOUT.7_1_4")
