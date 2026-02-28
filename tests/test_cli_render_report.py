@@ -96,6 +96,13 @@ def _render_plan_with_policies(scene_path: str) -> dict:
     }
 
 
+def _render_plan_with_loudness_profile(scene_path: str, profile_id: str) -> dict:
+    payload = _render_plan_with_policies(scene_path)
+    payload["request"]["options"] = {"loudness_profile_id": profile_id}
+    payload["policies"]["loudness_profile_id"] = profile_id
+    return payload
+
+
 class TestRenderReportCli(unittest.TestCase):
     def test_produces_schema_valid_render_report(self) -> None:
         validator = _schema_validator("render_report.schema.json")
@@ -193,6 +200,71 @@ class TestRenderReportCli(unittest.TestCase):
                 payload["policies_applied"]["gates_policy_id"],
                 "POLICY.GATES.CORE_V0",
             )
+
+    def test_report_includes_selected_loudness_profile_receipt(self) -> None:
+        validator = _schema_validator("render_report.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            plan_path = temp_path / "render_plan.json"
+            out_path = temp_path / "render_report.json"
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            _write_json(
+                plan_path,
+                _render_plan_with_loudness_profile(
+                    scene_posix,
+                    "LOUD.ATSC_A85_FIXED_DIALNORM",
+                ),
+            )
+
+            exit_code = main([
+                "render-report",
+                "--plan", str(plan_path),
+                "--out", str(out_path),
+            ])
+            self.assertEqual(exit_code, 0)
+
+            payload = json.loads(out_path.read_text(encoding="utf-8"))
+            validator.validate(payload)
+
+            receipt = payload.get("loudness_profile_receipt")
+            self.assertIsInstance(receipt, dict)
+            if not isinstance(receipt, dict):
+                return
+            self.assertEqual(receipt["loudness_profile_id"], "LOUD.ATSC_A85_FIXED_DIALNORM")
+            self.assertEqual(receipt["target_loudness"], -24.0)
+            self.assertEqual(receipt["target_unit"], "LKFS")
+            self.assertEqual(receipt["tolerance_lu"], 2.0)
+            self.assertEqual(receipt["max_true_peak_dbtp"], -2.0)
+            self.assertEqual(receipt["method_id"], "BS.1770-5")
+
+    def test_report_includes_informational_profile_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            plan_path = temp_path / "render_plan.json"
+            out_path = temp_path / "render_report.json"
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            _write_json(
+                plan_path,
+                _render_plan_with_loudness_profile(
+                    scene_posix,
+                    "LOUD.SPOTIFY_PLAYBACK_NORMALIZATION",
+                ),
+            )
+
+            exit_code = main([
+                "render-report",
+                "--plan", str(plan_path),
+                "--out", str(out_path),
+            ])
+            self.assertEqual(exit_code, 0)
+
+            payload = json.loads(out_path.read_text(encoding="utf-8"))
+            receipt = payload["loudness_profile_receipt"]
+            joined_warnings = " ".join(receipt["warnings"])
+            self.assertIn("informational playback normalization guidance", joined_warnings)
 
 
 class TestRenderReportOverwrite(unittest.TestCase):

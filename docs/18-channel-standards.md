@@ -34,6 +34,11 @@ The versioned loudness method registry lives in:
 
 - `src/mmo/core/loudness_methods.py`
 
+Run-level loudness profile contracts live in:
+
+- `ontology/loudness_profiles.yaml`
+- `docs/21-loudness-profiles.md`
+
 Current implemented method:
 
 - `BS.1770-5`

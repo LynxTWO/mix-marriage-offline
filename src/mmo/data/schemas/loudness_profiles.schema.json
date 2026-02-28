@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/loudness_profiles.schema.json",
+  "title": "MMO Loudness Profiles Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profiles"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "LOUD.EBU_R128_PROGRAM",
+        "LOUD.ATSC_A85_FIXED_DIALNORM",
+        "LOUD.NETFLIX_QC_FULL_PROGRAM",
+        "LOUD.SPOTIFY_PLAYBACK_NORMALIZATION"
+      ],
+      "patternProperties": {
+        "^LOUD\\.[A-Z0-9_.]+$": { "$ref": "#/$defs/loudness_profile" }
+      }
+    }
+  },
+  "$defs": {
+    "scope": {
+      "type": "string",
+      "enum": ["broadcast", "streaming", "game", "film"]
+    },
+    "compliance_mode": {
+      "type": "string",
+      "enum": ["compliance", "informational"]
+    },
+    "target_unit": {
+      "type": "string",
+      "enum": ["LUFS", "LKFS"]
+    },
+    "loudness_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "target_loudness",
+        "target_unit",
+        "tolerance_lu",
+        "max_true_peak_dbtp",
+        "method_id",
+        "scope",
+        "compliance_mode",
+        "notes"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_loudness": {
+          "type": "number",
+          "minimum": -70.0,
+          "maximum": 0.0
+        },
+        "target_unit": {
+          "$ref": "#/$defs/target_unit"
+        },
+        "tolerance_lu": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 24.0
+        },
+        "max_true_peak_dbtp": {
+          "type": "number",
+          "minimum": -20.0,
+          "maximum": 0.0
+        },
+        "method_id": {
+          "type": "string",
+          "pattern": "^BS\\.1770-5(?:-[A-Z0-9-]+)?$"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "compliance_mode": {
+          "$ref": "#/$defs/compliance_mode"
+        },
+        "best_effort": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

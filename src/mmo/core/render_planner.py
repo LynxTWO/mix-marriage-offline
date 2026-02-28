@@ -13,6 +13,7 @@ import json
 from pathlib import PurePosixPath
 from typing import Any
 
+from mmo.core.loudness_profiles import get_loudness_profile
 from mmo.core.registries.render_targets_registry import RenderTargetsRegistry
 from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS
 
@@ -111,6 +112,11 @@ def _build_request_echo(request: dict[str, Any]) -> dict[str, Any]:
     if isinstance(options, dict) and options:
         echo_options: dict[str, Any] = {}
         for key in sorted(options.keys()):
+            if key == "loudness_profile_id":
+                normalized = _coerce_str(options.get(key)).strip()
+                if normalized:
+                    echo_options[key] = normalized
+                continue
             echo_options[key] = options[key]
         echo["options"] = echo_options
 
@@ -507,10 +513,14 @@ def _validate_policies(
     options_dict: dict[str, Any],
     downmix_registry: Any | None,
     gates_policy_ids: list[str] | None,
-) -> tuple[str | None, str | None]:
-    """Extract and validate policy IDs. Returns (downmix_policy_id, gates_policy_id)."""
+) -> tuple[str | None, str | None, str | None]:
+    """Extract and validate policy/profile IDs.
+
+    Returns ``(downmix_policy_id, gates_policy_id, loudness_profile_id)``.
+    """
     downmix_policy_id = _coerce_str(options_dict.get("downmix_policy_id")).strip() or None
     gates_policy_id = _coerce_str(options_dict.get("gates_policy_id")).strip() or None
+    loudness_profile_id = _coerce_str(options_dict.get("loudness_profile_id")).strip() or None
 
     if downmix_policy_id and downmix_registry is not None:
         downmix_registry.get_policy(downmix_policy_id)
@@ -528,7 +538,10 @@ def _validate_policies(
                 f"No gates policies are available."
             )
 
-    return downmix_policy_id, gates_policy_id
+    if loudness_profile_id:
+        get_loudness_profile(loudness_profile_id)
+
+    return downmix_policy_id, gates_policy_id, loudness_profile_id
 
 
 def build_render_plan(
@@ -573,7 +586,7 @@ def build_render_plan(
     options = request.get("options")
     options_dict = options if isinstance(options, dict) else {}
     output_formats = _normalize_output_formats(options_dict.get("output_formats"))
-    downmix_policy_id, gates_policy_id = _validate_policies(
+    downmix_policy_id, gates_policy_id, loudness_profile_id = _validate_policies(
         options_dict, downmix_registry, gates_policy_ids,
     )
     requested_target_ids = _normalize_requested_target_ids(options_dict.get("target_ids"))
@@ -610,6 +623,7 @@ def build_render_plan(
             output_formats=output_formats,
             downmix_policy_id=downmix_policy_id,
             gates_policy_id=gates_policy_id,
+            loudness_profile_id=loudness_profile_id,
             routing_plan_path=routing_plan_path,
             routing_plan=routing_plan,
             layouts=layouts,
@@ -628,6 +642,7 @@ def build_render_plan(
         output_formats=output_formats,
         downmix_policy_id=downmix_policy_id,
         gates_policy_id=gates_policy_id,
+        loudness_profile_id=loudness_profile_id,
         routing_plan_path=routing_plan_path,
         routing_plan=routing_plan,
         layouts=layouts,
@@ -646,6 +661,7 @@ def _build_single_target_plan(
     output_formats: list[str],
     downmix_policy_id: str | None,
     gates_policy_id: str | None,
+    loudness_profile_id: str | None,
     routing_plan_path: str,
     routing_plan: dict[str, Any] | None,
     layouts: dict[str, Any] | None,
@@ -706,6 +722,8 @@ def _build_single_target_plan(
         policies["gates_policy_id"] = gates_policy_id
     if downmix_policy_id:
         policies["downmix_policy_id"] = downmix_policy_id
+    if loudness_profile_id:
+        policies["loudness_profile_id"] = loudness_profile_id
 
     # Assemble the plan (without plan_id first for hashing).
     request_echo = _build_request_echo(request)
@@ -744,6 +762,7 @@ def _build_multi_target_plan(
     output_formats: list[str],
     downmix_policy_id: str | None,
     gates_policy_id: str | None,
+    loudness_profile_id: str | None,
     routing_plan_path: str,
     routing_plan: dict[str, Any] | None,
     layouts: dict[str, Any] | None,
@@ -838,6 +857,8 @@ def _build_multi_target_plan(
         policies["gates_policy_id"] = gates_policy_id
     if downmix_policy_id:
         policies["downmix_policy_id"] = downmix_policy_id
+    if loudness_profile_id:
+        policies["loudness_profile_id"] = loudness_profile_id
 
     # Targets list sorted.
     all_target_ids = sorted(set(all_target_ids))

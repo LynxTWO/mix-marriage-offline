@@ -82,6 +82,10 @@ class TestRenderRequestTemplateHappyPath(unittest.TestCase):
                              "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0")
             self.assertEqual(opts["gates_policy_id"],
                              "POLICY.GATES.CORE_V0")
+            self.assertEqual(
+                opts["loudness_profile_id"],
+                "LOUD.EBU_R128_PROGRAM",
+            )
             self.assertTrue(opts["dry_run"])
 
 

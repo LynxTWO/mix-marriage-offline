@@ -65,6 +65,7 @@ SCHEMA_ANCHORS: tuple[str, ...] = (
     "schemas/render_targets.schema.json",
     "schemas/roles.schema.json",
     "schemas/translation_profiles.schema.json",
+    "schemas/loudness_profiles.schema.json",
     "schemas/render_plan.schema.json",
     "schemas/render_request.schema.json",
     "schemas/render_report.schema.json",
@@ -86,7 +87,7 @@ SCHEMA_ANCHORS: tuple[str, ...] = (
 
 SCENE_REGISTRIES_CHECK_ID = "SCENE.REGISTRIES"
 SCENE_REGISTRIES_TOOL = (
-    "src/mmo/core/{speaker_positions.py,scene_locks.py,scene_templates.py,intent_params.py}"
+    "src/mmo/core/{speaker_positions.py,scene_locks.py,scene_templates.py,intent_params.py,loudness_profiles.py}"
 )
 SCENE_REGISTRY_LOADERS: tuple[tuple[str, str, str], ...] = (
     (
@@ -101,6 +102,11 @@ SCENE_REGISTRY_LOADERS: tuple[tuple[str, str, str], ...] = (
         "ontology/scene_templates.yaml",
     ),
     ("load_intent_params", "mmo.core.intent_params", "ontology/intent_params.yaml"),
+    (
+        "load_loudness_profiles",
+        "mmo.core.loudness_profiles",
+        "ontology/loudness_profiles.yaml",
+    ),
 )
 
 TRANSLATION_REGISTRIES_CHECK_ID = "TRANSLATION.REGISTRIES"
@@ -419,6 +425,8 @@ def _scene_registry_summary(*, loader_name: str, payload: Any) -> dict[str, int]
     if loader_name == "load_intent_params":
         params = payload.get("params") if isinstance(payload, dict) else None
         return {"params": len(params) if isinstance(params, dict) else 0}
+    if loader_name == "load_loudness_profiles":
+        return {"profiles": len(payload) if isinstance(payload, dict) else 0}
     return {}
 
 

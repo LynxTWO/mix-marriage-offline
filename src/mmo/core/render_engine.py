@@ -32,6 +32,10 @@ from typing import Any
 
 from mmo.core.downmix import predict_fold_similarity, resolve_preflight_matrix
 from mmo.core.layout_negotiation import DEFAULT_CHANNEL_STANDARD
+from mmo.core.loudness_profiles import (
+    DEFAULT_LOUDNESS_PROFILE_ID,
+    resolve_loudness_profile_receipt,
+)
 from mmo.core.progress import CancelToken, CancelledError, ProgressTracker
 from mmo.core.render_contract import contracts_to_render_targets
 from mmo.core.render_plan import build_render_plan
@@ -72,6 +76,9 @@ def _normalize_options(options: dict[str, Any] | None) -> dict[str, Any]:
         ),
         "downmix_policy_id": (
             _coerce_str(options.get("downmix_policy_id", "")).strip() or None
+        ),
+        "loudness_profile_id": (
+            _coerce_str(options.get("loudness_profile_id", "")).strip() or None
         ),
         "layout_standard": raw_standard or DEFAULT_CHANNEL_STANDARD,
         "stem_ids": sorted(str(s) for s in (options.get("stem_ids") or [])),
@@ -386,6 +393,21 @@ def _build_render_report(
         "gates": all_gates,
     }
 
+    requested_profile_id = _coerce_str(options.get("loudness_profile_id")).strip() or None
+    try:
+        loudness_profile_receipt = resolve_loudness_profile_receipt(requested_profile_id)
+    except ValueError as exc:
+        loudness_profile_receipt = resolve_loudness_profile_receipt(DEFAULT_LOUDNESS_PROFILE_ID)
+        warnings = list(loudness_profile_receipt.get("warnings") or [])
+        warnings.insert(
+            0,
+            (
+                f"{exc}. Falling back to default loudness_profile_id "
+                f"{DEFAULT_LOUDNESS_PROFILE_ID!r}."
+            ),
+        )
+        loudness_profile_receipt["warnings"] = warnings
+
     # Build report job entries (sorted by job_id; strip internal _qa key).
     sorted_results = sorted(
         job_results, key=lambda r: _coerce_str(r.get("job_id"))
@@ -404,6 +426,7 @@ def _build_render_report(
         "schema_version": RENDER_REPORT_SCHEMA_VERSION,
         "request": request_summary,
         "jobs": report_jobs,
+        "loudness_profile_receipt": loudness_profile_receipt,
         "policies_applied": policies_applied,
         "qa_gates": qa_gates,
     }

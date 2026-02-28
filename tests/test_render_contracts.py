@@ -48,6 +48,7 @@ FULL_RENDER_REQUEST = {
         "output_formats": ["wav", "flac"],
         "downmix_policy_id": "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0",
         "gates_policy_id": "POLICY.GATES.CORE_V0",
+        "loudness_profile_id": "LOUD.EBU_R128_PROGRAM",
         "sample_rate_hz": 48000,
         "bit_depth": 24,
         "dry_run": False,
@@ -105,6 +106,20 @@ FULL_RENDER_REPORT = {
             "notes": ["Gate rejected: clipping detected."],
         },
     ],
+    "loudness_profile_receipt": {
+        "loudness_profile_id": "LOUD.EBU_R128_PROGRAM",
+        "target_loudness": -23.0,
+        "target_unit": "LUFS",
+        "tolerance_lu": 0.5,
+        "max_true_peak_dbtp": -1.0,
+        "method_id": "BS.1770-5",
+        "method_implemented": True,
+        "scope": "broadcast",
+        "compliance_mode": "compliance",
+        "best_effort": False,
+        "notes": ["Broadcast full-program target profile."],
+        "warnings": [],
+    },
     "policies_applied": {
         "downmix_policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
         "gates_policy_id": "POLICY.GATES.CORE_V0",
@@ -392,6 +407,12 @@ class TestRenderRequestSchema(unittest.TestCase):
         errors = list(self.validator.iter_errors(payload))
         self.assertGreater(len(errors), 0)
 
+    def test_invalid_loudness_profile_id_rejected(self) -> None:
+        payload = dict(MINIMAL_RENDER_REQUEST)
+        payload["options"] = {"loudness_profile_id": "bad_profile"}
+        errors = list(self.validator.iter_errors(payload))
+        self.assertGreater(len(errors), 0)
+
     def test_wrong_schema_version_rejected(self) -> None:
         payload = dict(MINIMAL_RENDER_REQUEST)
         payload["schema_version"] = "99.0.0"
@@ -459,6 +480,27 @@ class TestRenderReportSchema(unittest.TestCase):
         }
         errors = list(self.validator.iter_errors(payload))
         self.assertGreater(len(errors), 0)
+
+    def test_loudness_profile_receipt_validates_when_present(self) -> None:
+        payload = json.loads(json.dumps(MINIMAL_RENDER_REPORT))
+        payload["loudness_profile_receipt"] = {
+            "loudness_profile_id": "LOUD.SPOTIFY_PLAYBACK_NORMALIZATION",
+            "target_loudness": -14.0,
+            "target_unit": "LUFS",
+            "tolerance_lu": None,
+            "max_true_peak_dbtp": -1.0,
+            "method_id": "BS.1770-5",
+            "method_implemented": True,
+            "scope": "streaming",
+            "compliance_mode": "informational",
+            "best_effort": False,
+            "notes": ["Playback normalization guidance."],
+            "warnings": [
+                "This loudness profile is informational playback normalization guidance, not a delivery spec.",
+            ],
+        }
+        errors = list(self.validator.iter_errors(payload))
+        self.assertEqual(errors, [])
 
 
 class TestRenderExecuteSchema(unittest.TestCase):

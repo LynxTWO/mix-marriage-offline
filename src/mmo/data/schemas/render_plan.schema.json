@@ -51,6 +51,10 @@
       "type": "string",
       "pattern": "^POLICY\\.DOWNMIX\\.[A-Z0-9_.]+$"
     },
+    "loudness_profile_id": {
+      "type": "string",
+      "pattern": "^LOUD\\.[A-Z0-9_.]+$"
+    },
     "speaker_id": {
       "type": "string",
       "pattern": "^SPK\\.[A-Z0-9_.]+$"
@@ -109,7 +113,8 @@
       "additionalProperties": false,
       "properties": {
         "gates_policy_id": { "type": "string", "minLength": 1 },
-        "downmix_policy_id": { "type": "string", "minLength": 1 }
+        "downmix_policy_id": { "type": "string", "minLength": 1 },
+        "loudness_profile_id": { "$ref": "#/$defs/loudness_profile_id" }
       }
     },
     "request_echo": {
@@ -149,6 +154,7 @@
             },
             "downmix_policy_id": { "type": "string", "minLength": 1 },
             "gates_policy_id": { "type": "string", "minLength": 1 },
+            "loudness_profile_id": { "$ref": "#/$defs/loudness_profile_id" },
             "sample_rate_hz": { "type": "integer", "minimum": 8000 },
             "bit_depth": { "type": "integer", "enum": [16, 24, 32] },
             "dry_run": { "type": "boolean" },

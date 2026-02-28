@@ -21,6 +21,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Extended speaker ontology metadata for immersive readiness (`SPK.TFC`,
     `SPK.TBC`, `SPK.TC`, `SPK.BC`, `SPK.FLC`, `SPK.FRC`) and added
     `LAYOUT.7_1_6` / `LAYOUT.9_1_6` rows to `ontology/speaker_positions.yaml`.
+- Versioned loudness profile registry and render receipts:
+  - Added data-driven loudness profile ontology at
+    `ontology/loudness_profiles.yaml` with broadcast and streaming profiles,
+    including compliance vs informational classification and best-effort notes.
+  - Added strict schema `schemas/loudness_profiles.schema.json` and wired
+    `render_request`/`render_plan` contracts to accept `options.loudness_profile_id`.
+  - Added `src/mmo/core/loudness_profiles.py` loader/validator with
+    deterministic ordering and stable unknown-profile errors.
+  - `render_report` and `render_preflight` now include
+    `loudness_profile_receipt` (target, tolerance, true-peak, method, scope,
+    warnings), including clear non-fatal warnings for informational profiles
+    and not-yet-implemented metering methods.
+  - Added contributor doc `docs/21-loudness-profiles.md` describing profile
+    contract semantics and no-code registry updates.
 - First-class 2.1/3.x/4.x render targets across ontology, CLI, and GUI:
   - Added targets `TARGET.STEREO.2_1`, `TARGET.FRONT.3_0`,
     `TARGET.FRONT.3_1`, `TARGET.SURROUND.4_0`, and

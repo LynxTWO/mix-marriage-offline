@@ -20,6 +20,7 @@
       "type": "array",
       "items": { "$ref": "#/$defs/job_check" }
     },
+    "loudness_profile_receipt": { "$ref": "#/$defs/loudness_profile_receipt" },
     "issues": {
       "type": "array",
       "items": { "$ref": "#/$defs/issue" }
@@ -33,6 +34,75 @@
     "job_id": {
       "type": "string",
       "pattern": "^JOB\\.[0-9]{3}$"
+    },
+    "loudness_profile_id": {
+      "type": "string",
+      "pattern": "^LOUD\\.[A-Z0-9_.]+$"
+    },
+    "target_unit": {
+      "type": "string",
+      "enum": ["LUFS", "LKFS"]
+    },
+    "loudness_scope": {
+      "type": "string",
+      "enum": ["broadcast", "streaming", "game", "film"]
+    },
+    "compliance_mode": {
+      "type": "string",
+      "enum": ["compliance", "informational"]
+    },
+    "loudness_profile_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "loudness_profile_id",
+        "target_loudness",
+        "target_unit",
+        "tolerance_lu",
+        "max_true_peak_dbtp",
+        "method_id",
+        "method_implemented",
+        "scope",
+        "compliance_mode",
+        "best_effort",
+        "notes",
+        "warnings"
+      ],
+      "properties": {
+        "loudness_profile_id": { "$ref": "#/$defs/loudness_profile_id" },
+        "target_loudness": {
+          "type": "number",
+          "minimum": -70.0,
+          "maximum": 0.0
+        },
+        "target_unit": { "$ref": "#/$defs/target_unit" },
+        "tolerance_lu": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 24.0
+        },
+        "max_true_peak_dbtp": {
+          "type": "number",
+          "minimum": -20.0,
+          "maximum": 0.0
+        },
+        "method_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "method_implemented": { "type": "boolean" },
+        "scope": { "$ref": "#/$defs/loudness_scope" },
+        "compliance_mode": { "$ref": "#/$defs/compliance_mode" },
+        "best_effort": { "type": "boolean" },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
     },
     "posix_path": {
       "type": "string",

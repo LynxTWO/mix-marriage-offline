@@ -10,6 +10,7 @@ from mmo.core.registries.layout_registry import LayoutRegistry, load_layout_regi
 _RENDER_REQUEST_SCHEMA_VERSION = "0.1.0"
 _DEFAULT_DOWNMIX_POLICY_ID = "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
 _DEFAULT_GATES_POLICY_ID = "POLICY.GATES.CORE_V0"
+_DEFAULT_LOUDNESS_PROFILE_ID = "LOUD.EBU_R128_PROGRAM"
 
 
 def _to_posix(path_str: str) -> str:
@@ -59,6 +60,7 @@ def build_render_request_template(
             "downmix_policy_id": _DEFAULT_DOWNMIX_POLICY_ID,
             "dry_run": True,
             "gates_policy_id": _DEFAULT_GATES_POLICY_ID,
+            "loudness_profile_id": _DEFAULT_LOUDNESS_PROFILE_ID,
         },
     }
 
@@ -111,6 +113,7 @@ def build_multi_render_request_template(
             "downmix_policy_id": _DEFAULT_DOWNMIX_POLICY_ID,
             "dry_run": True,
             "gates_policy_id": _DEFAULT_GATES_POLICY_ID,
+            "loudness_profile_id": _DEFAULT_LOUDNESS_PROFILE_ID,
         },
     }
 

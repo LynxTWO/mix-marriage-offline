@@ -223,6 +223,14 @@ def build_render_plan(
     if downmix_policy_id:
         policies_payload["downmix_policy_id"] = downmix_policy_id
 
+    loudness_profile_id = _coerce_str(policy_source.get("loudness_profile_id")).strip()
+    if not loudness_profile_id:
+        inferred = _policy_from_targets(rows, "loudness_profile_id")
+        if isinstance(inferred, str):
+            loudness_profile_id = inferred
+    if loudness_profile_id:
+        policies_payload["loudness_profile_id"] = loudness_profile_id
+
     scene_path = _scene_path(scene)
     targets_payload = [row["target_id"] for row in normalized_rows]
 

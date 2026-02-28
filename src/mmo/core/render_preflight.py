@@ -7,6 +7,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from mmo.core.loudness_profiles import (
+    DEFAULT_LOUDNESS_PROFILE_ID,
+    resolve_loudness_profile_receipt,
+)
+
 
 RENDER_PREFLIGHT_SCHEMA_VERSION = "0.1.0"
 _DURATION_PRECISION = 6
@@ -213,6 +218,41 @@ def _issue_sort_key(issue: dict[str, Any]) -> tuple[str, str, str, str, str, str
     )
 
 
+def _requested_loudness_profile_id(plan: dict[str, Any]) -> str | None:
+    request_echo = plan.get("request")
+    if isinstance(request_echo, dict):
+        options = request_echo.get("options")
+        if isinstance(options, dict):
+            profile_id = _coerce_str(options.get("loudness_profile_id")).strip()
+            if profile_id:
+                return profile_id
+
+    policies = plan.get("policies")
+    if isinstance(policies, dict):
+        profile_id = _coerce_str(policies.get("loudness_profile_id")).strip()
+        if profile_id:
+            return profile_id
+    return None
+
+
+def _loudness_profile_receipt(plan: dict[str, Any]) -> dict[str, Any]:
+    requested_profile_id = _requested_loudness_profile_id(plan)
+    try:
+        return resolve_loudness_profile_receipt(requested_profile_id)
+    except ValueError as exc:
+        fallback = resolve_loudness_profile_receipt(DEFAULT_LOUDNESS_PROFILE_ID)
+        warnings = list(fallback.get("warnings") or [])
+        warnings.insert(
+            0,
+            (
+                f"{exc}. Falling back to default loudness_profile_id "
+                f"{DEFAULT_LOUDNESS_PROFILE_ID!r}."
+            ),
+        )
+        fallback["warnings"] = warnings
+        return fallback
+
+
 def build_render_preflight_payload(
     plan: dict[str, Any],
     *,
@@ -331,12 +371,14 @@ def build_render_preflight_payload(
         )
 
     sorted_issues = sorted(issues, key=_issue_sort_key)
+    loudness_profile_receipt = _loudness_profile_receipt(plan)
     return {
         "schema_version": RENDER_PREFLIGHT_SCHEMA_VERSION,
         "plan_path": plan_path.resolve().as_posix(),
         "plan_id": _coerce_str(plan.get("plan_id")).strip(),
         "checks": checks,
         "issues": sorted_issues,
+        "loudness_profile_receipt": loudness_profile_receipt,
     }
 
 

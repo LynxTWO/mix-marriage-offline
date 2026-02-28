@@ -147,6 +147,7 @@ class TestRenderInitHappyPath(unittest.TestCase):
             "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
         )
         self.assertEqual(opts["gates_policy_id"], "POLICY.GATES.CORE_V0")
+        self.assertEqual(opts["loudness_profile_id"], "LOUD.EBU_R128_PROGRAM")
 
     def test_stdout_summary_is_valid_json(self) -> None:
         # Re-run with --force since file already exists from earlier test.

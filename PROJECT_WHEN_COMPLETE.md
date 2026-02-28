@@ -92,6 +92,7 @@ Note: schema contracts use `schemas/*.schema.json` naming (not `schemas/*.json`)
 - [x] Program loudness uses ITU-R BS.1770-5 weighting with explicit, tested channel mapping.
 - [x] LFE is excluded from program loudness (weight 0.0) and is always reported separately.
 - [x] Loudness method selection is versioned via a method registry (`src/mmo/core/loudness_methods.py`) with stable IDs and placeholder forward-compat entries.
+- [x] Render-run loudness target selection is versioned via `LOUD.*` ontology profiles (`ontology/loudness_profiles.yaml`) and emitted as deterministic preflight/report receipts.
 - [x] Common layout naming conventions are mapped correctly, including FFmpeg-style aliases:
   - 5.1 (back surrounds: BL/BR).
   - 5.1(side) (side surrounds: SL/SR).

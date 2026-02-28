@@ -8,6 +8,10 @@ from mmo.core.layout_export import (
     dual_lfe_wav_export_warnings,
     ffmpeg_layout_string_from_channel_order,
 )
+from mmo.core.loudness_profiles import (
+    DEFAULT_LOUDNESS_PROFILE_ID,
+    resolve_loudness_profile_receipt,
+)
 
 
 def _coerce_str(value: Any) -> str:
@@ -74,6 +78,41 @@ def _job_writes_wav(plan_job: dict[str, Any]) -> bool:
         _coerce_str(item).strip().lower() == "wav"
         for item in output_formats
     )
+
+
+def _requested_loudness_profile_id(plan: dict[str, Any]) -> str | None:
+    request_echo = plan.get("request")
+    if isinstance(request_echo, dict):
+        options = request_echo.get("options")
+        if isinstance(options, dict):
+            profile_id = _coerce_str(options.get("loudness_profile_id")).strip()
+            if profile_id:
+                return profile_id
+
+    policies = plan.get("policies")
+    if isinstance(policies, dict):
+        profile_id = _coerce_str(policies.get("loudness_profile_id")).strip()
+        if profile_id:
+            return profile_id
+    return None
+
+
+def _loudness_profile_receipt(plan: dict[str, Any]) -> dict[str, Any]:
+    requested_profile_id = _requested_loudness_profile_id(plan)
+    try:
+        return resolve_loudness_profile_receipt(requested_profile_id)
+    except ValueError as exc:
+        fallback = resolve_loudness_profile_receipt(DEFAULT_LOUDNESS_PROFILE_ID)
+        warnings = list(fallback.get("warnings") or [])
+        warnings.insert(
+            0,
+            (
+                f"{exc}. Falling back to default loudness_profile_id "
+                f"{DEFAULT_LOUDNESS_PROFILE_ID!r}."
+            ),
+        )
+        fallback["warnings"] = warnings
+        return fallback
 
 
 def build_render_report_from_plan(
@@ -177,8 +216,11 @@ def build_render_report_from_plan(
         "status": "not_run",
     }
 
+    loudness_profile_receipt = _loudness_profile_receipt(plan)
+
     return {
         "jobs": report_jobs,
+        "loudness_profile_receipt": loudness_profile_receipt,
         "policies_applied": policies_applied,
         "qa_gates": qa_gates,
         "request": request_summary,

@@ -124,6 +124,10 @@ Minimum set:
 - `ontology/features.yaml`
   Measured feature IDs (meters + signal stats).
 
+- `ontology/loudness_profiles.yaml`
+  Versioned `LOUD.*` profile contracts (target, tolerance, true-peak limit,
+  method, scope, compliance/informational mode) used for render receipts.
+
 - `ontology/issues.yaml`
   Detected problem IDs with definitions and typical evidence.
 

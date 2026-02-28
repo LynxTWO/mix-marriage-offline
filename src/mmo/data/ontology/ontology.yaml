@@ -46,6 +46,7 @@ includes:
     units: "units.yaml"
     roles: "roles.yaml"
     features: "features.yaml"
+    loudness_profiles: "loudness_profiles.yaml"
     issues: "issues.yaml"
     actions: "actions.yaml"
     params: "params.yaml"
@@ -78,6 +79,10 @@ category_specs:
     root_key: "features"
     id_prefix: "FEATURE."
     file_key: "includes.core.features"
+  - category: "loudness_profiles"
+    root_key: "profiles"
+    id_prefix: "LOUD."
+    file_key: "includes.core.loudness_profiles"
   - category: "issues"
     root_key: "issues"
     id_prefix: "ISSUE."
@@ -114,6 +119,14 @@ validation_defaults:
     units: ["label", "symbol"]
     roles: ["label", "description"]
     features: ["label", "description", "unit_id"]
+    loudness_profiles:
+      - "label"
+      - "target_loudness"
+      - "target_unit"
+      - "max_true_peak_dbtp"
+      - "method_id"
+      - "scope"
+      - "compliance_mode"
     issues: ["label", "description"]
     actions: ["label", "description", "required_params"]
     params: ["label", "description", "unit_id", "value_type"]

@@ -2805,6 +2805,23 @@ class TestRenderRunErrorPaths(unittest.TestCase):
             self.assertIn("POLICY.GATES.NONEXISTENT", err)
             self.assertIn("POLICY.GATES.CORE_V0", err)
 
+    def test_unknown_loudness_profile_id_fails_with_sorted_known_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            scene_posix = (tp / "scene.json").resolve().as_posix()
+            rc, _, err, _, _ = _run_render_run(tp, request_payload={
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.5_1",
+                "scene_path": scene_posix,
+                "options": {
+                    "loudness_profile_id": "LOUD.NONEXISTENT_PROFILE",
+                },
+            })
+            self.assertEqual(rc, 1)
+            self.assertIn("Unknown loudness_profile_id", err)
+            self.assertIn("LOUD.NONEXISTENT_PROFILE", err)
+            self.assertIn("LOUD.EBU_R128_PROGRAM", err)
+
     def test_routing_plan_path_mismatch_fails(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tp = Path(td)

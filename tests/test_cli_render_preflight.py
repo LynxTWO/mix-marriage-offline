@@ -55,7 +55,19 @@ def _run_main(args: list[str]) -> tuple[int, str, str]:
     return exit_code, stdout_capture.getvalue(), stderr_capture.getvalue()
 
 
-def _render_plan(scene_path: str, jobs: list[dict[str, object]]) -> dict[str, object]:
+def _render_plan(
+    scene_path: str,
+    jobs: list[dict[str, object]],
+    *,
+    loudness_profile_id: str | None = None,
+) -> dict[str, object]:
+    request_payload: dict[str, object] = {
+        "target_layout_id": "LAYOUT.2_0",
+        "scene_path": scene_path,
+    }
+    if isinstance(loudness_profile_id, str) and loudness_profile_id:
+        request_payload["options"] = {"loudness_profile_id": loudness_profile_id}
+
     return {
         "schema_version": "0.1.0",
         "plan_id": "PLAN.render.preflight.abcdef01",
@@ -63,10 +75,7 @@ def _render_plan(scene_path: str, jobs: list[dict[str, object]]) -> dict[str, ob
         "targets": ["TARGET.STEREO.2_0"],
         "policies": {},
         "jobs": jobs,
-        "request": {
-            "target_layout_id": "LAYOUT.2_0",
-            "scene_path": scene_path,
-        },
+        "request": request_payload,
     }
 
 
@@ -132,6 +141,10 @@ class TestRenderPreflightCli(unittest.TestCase):
             payload = json.loads(out_path.read_text(encoding="utf-8"))
             validator.validate(payload)
             self.assertEqual(payload["issues"], [])
+            self.assertEqual(
+                payload["loudness_profile_receipt"]["loudness_profile_id"],
+                "LOUD.EBU_R128_PROGRAM",
+            )
             self.assertEqual(
                 [row["job_id"] for row in payload["checks"]],
                 ["JOB.001", "JOB.002"],
@@ -379,6 +392,54 @@ class TestRenderPreflightCli(unittest.TestCase):
                     "duration_seconds": 0.5,
                 },
             )
+
+    def test_receipt_uses_selected_loudness_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            input_path = temp_path / "input.wav"
+            _write_tiny_wav(input_path)
+
+            plan_path = temp_path / "render_plan.json"
+            out_path = temp_path / "render_preflight.json"
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            _write_json(
+                plan_path,
+                _render_plan(
+                    scene_posix,
+                    jobs=[
+                        {
+                            "job_id": "JOB.001",
+                            "target_id": "TARGET.STEREO.2_0",
+                            "target_layout_id": "LAYOUT.2_0",
+                            "output_formats": ["wav"],
+                            "contexts": ["render"],
+                            "notes": ["loudness receipt"],
+                            "inputs": [
+                                {"path": input_path.resolve().as_posix(), "role": "ROLE.IN"},
+                            ],
+                        }
+                    ],
+                    loudness_profile_id="LOUD.ATSC_A85_FIXED_DIALNORM",
+                ),
+            )
+
+            with patch("mmo.core.render_preflight._ffprobe_command_from_env", return_value=None):
+                exit_code, _, stderr = _run_main(
+                    [
+                        "render-preflight",
+                        "--plan",
+                        str(plan_path),
+                        "--out",
+                        str(out_path),
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0, msg=stderr)
+            payload = json.loads(out_path.read_text(encoding="utf-8"))
+            receipt = payload["loudness_profile_receipt"]
+            self.assertEqual(receipt["loudness_profile_id"], "LOUD.ATSC_A85_FIXED_DIALNORM")
+            self.assertEqual(receipt["target_loudness"], -24.0)
+            self.assertEqual(receipt["max_true_peak_dbtp"], -2.0)
 
 
 if __name__ == "__main__":

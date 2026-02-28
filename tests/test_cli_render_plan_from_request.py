@@ -79,6 +79,7 @@ def _request_with_options(scene_path: str) -> dict:
             "output_formats": ["wav", "flac"],
             "downmix_policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
             "gates_policy_id": "POLICY.GATES.CORE_V0",
+            "loudness_profile_id": "LOUD.EBU_R128_PROGRAM",
         },
     }
 
@@ -241,6 +242,10 @@ class TestRenderPlanFromRequestCli(unittest.TestCase):
             # Output formats from request options.
             self.assertEqual(
                 payload["jobs"][0]["output_formats"], ["wav", "flac"],
+            )
+            self.assertEqual(
+                payload["request"]["options"]["loudness_profile_id"],
+                "LOUD.EBU_R128_PROGRAM",
             )
             self.assertEqual(
                 payload["jobs"][0]["downmix_routes"],
@@ -486,6 +491,23 @@ class TestRenderPlanFromRequestErrorPaths(unittest.TestCase):
             self.assertIn("Unknown gates_policy_id", err)
             self.assertIn("POLICY.GATES.NONEXISTENT", err)
             self.assertIn("POLICY.GATES.CORE_V0", err)
+
+    def test_unknown_loudness_profile_id_fails_with_sorted_known_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tp = Path(td)
+            scene_posix = (tp / "scene.json").resolve().as_posix()
+            rc, err = self._run_plan(tp, {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.5_1",
+                "scene_path": scene_posix,
+                "options": {
+                    "loudness_profile_id": "LOUD.NONEXISTENT_PROFILE",
+                },
+            })
+            self.assertEqual(rc, 1)
+            self.assertIn("Unknown loudness_profile_id", err)
+            self.assertIn("LOUD.NONEXISTENT_PROFILE", err)
+            self.assertIn("LOUD.EBU_R128_PROGRAM", err)
 
     def test_unknown_target_id_in_options_fails_with_sorted_known_ids(self) -> None:
         with tempfile.TemporaryDirectory() as td:

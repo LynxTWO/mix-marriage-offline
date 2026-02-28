@@ -67,6 +67,10 @@
           "type": "string",
           "minLength": 1
         },
+        "loudness_profile_id": {
+          "type": "string",
+          "pattern": "^LOUD\\.[A-Z0-9_.]+$"
+        },
         "sample_rate_hz": {
           "type": "integer",
           "minimum": 8000

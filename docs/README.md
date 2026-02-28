@@ -71,6 +71,8 @@ The numeric prefixes reflect a recommended reading order. Gaps may exist as docu
   Preview-only scene and routing plan drafts from classified stems.
 - [20-stems-audition.md](20-stems-audition.md)
   Per-bus-group WAV audition pack rendering and manifest format.
+- [21-loudness-profiles.md](21-loudness-profiles.md)
+  Data-driven `LOUD.*` profile contracts for render/preflight receipts.
 
 ## Conventions
 

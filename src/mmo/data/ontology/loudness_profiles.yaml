@@ -1,0 +1,54 @@
+schema_version: "0.1.0"
+profiles:
+  LOUD.ATSC_A85_FIXED_DIALNORM:
+    label: "ATSC A/85 Fixed Dialnorm"
+    target_loudness: -24.0
+    target_unit: "LKFS"
+    tolerance_lu: 2.0
+    max_true_peak_dbtp: -2.0
+    method_id: "BS.1770-5"
+    scope: "broadcast"
+    compliance_mode: "compliance"
+    notes:
+      - "Represents fixed dialnorm full-program loudness alignment."
+      - "Applies the same BS.1770-5 meter across mono through immersive layouts."
+
+  LOUD.EBU_R128_PROGRAM:
+    label: "EBU R128 Program"
+    target_loudness: -23.0
+    target_unit: "LUFS"
+    tolerance_lu: 0.5
+    max_true_peak_dbtp: -1.0
+    method_id: "BS.1770-5"
+    scope: "broadcast"
+    compliance_mode: "compliance"
+    notes:
+      - "Full-program broadcast target with tight tolerance."
+      - "Applies the same BS.1770-5 meter across mono through immersive layouts."
+
+  LOUD.NETFLIX_QC_FULL_PROGRAM:
+    label: "Netflix QC Full Program"
+    target_loudness: -24.0
+    target_unit: "LKFS"
+    tolerance_lu: 3.0
+    max_true_peak_dbtp: -1.0
+    method_id: "BS.1770-5"
+    scope: "streaming"
+    compliance_mode: "compliance"
+    best_effort: true
+    notes:
+      - "Netflix public guidance references older BS.1770 revisions."
+      - "MMO meters with BS.1770-5 and records this as a best-effort mapping."
+
+  LOUD.SPOTIFY_PLAYBACK_NORMALIZATION:
+    label: "Spotify Playback Normalization"
+    target_loudness: -14.0
+    target_unit: "LUFS"
+    tolerance_lu: null
+    max_true_peak_dbtp: -1.0
+    method_id: "BS.1770-5"
+    scope: "streaming"
+    compliance_mode: "informational"
+    notes:
+      - "Playback normalization guidance, not a delivery compliance spec."
+      - "Useful as an informational receipt for translation awareness."
