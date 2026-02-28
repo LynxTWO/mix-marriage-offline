@@ -20,6 +20,14 @@
     }
   },
   "$defs": {
+    "speaker_id": {
+      "type": "string",
+      "pattern": "^SPK\\.[A-Z0-9_]+(?:\\.[A-Z0-9_]+)*$"
+    },
+    "lfe_speaker_id": {
+      "type": "string",
+      "pattern": "^SPK\\.LFE(?:[0-9]+)?$"
+    },
     "layout_meta": {
       "type": "object",
       "description": "Optional _meta block at the top of the layouts map.",
@@ -47,24 +55,24 @@
         "channel_order": {
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string", "pattern": "^SPK\\." }
+          "items": { "$ref": "#/$defs/speaker_id" }
         },
         "ordering_variants": {
           "type": "object",
           "additionalProperties": {
             "type": "array",
-            "items": { "type": "string" }
+            "items": { "$ref": "#/$defs/speaker_id" }
           }
         },
         "channel_groups": {
           "type": "object",
           "additionalProperties": {
             "type": "array",
-            "items": { "type": "string" }
+            "items": { "$ref": "#/$defs/speaker_id" }
           }
         },
-        "bed_speakers": { "type": "array", "items": { "type": "string" } },
-        "height_speakers": { "type": "array", "items": { "type": "string" } },
+        "bed_speakers": { "type": "array", "items": { "$ref": "#/$defs/speaker_id" } },
+        "height_speakers": { "type": "array", "items": { "$ref": "#/$defs/speaker_id" } },
         "has_lfe": { "type": "boolean" },
         "speaker_positions": {
           "type": "array",
@@ -99,15 +107,40 @@
         "has_lfe": { "type": "boolean" },
         "lfe_channels": {
           "type": "array",
-          "items": { "type": "string" }
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/lfe_speaker_id" }
         },
-        "excluded_from_program_loudness": { "type": "boolean" },
+        "excluded_from_program_loudness": { "const": true },
         "default_downmix_treatment": {
           "type": "string",
           "enum": ["drop", "fold_at_minus_10db", "passthrough", "n/a"]
         },
         "fold_at_minus_10db_available": { "type": "boolean" }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "has_lfe": { "const": true } },
+            "required": ["has_lfe"]
+          },
+          "then": {
+            "properties": {
+              "lfe_channels": { "minItems": 1 }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "has_lfe": { "const": false } },
+            "required": ["has_lfe"]
+          },
+          "then": {
+            "properties": {
+              "lfe_channels": { "maxItems": 0 }
+            }
+          }
+        }
+      ]
     }
   }
 }

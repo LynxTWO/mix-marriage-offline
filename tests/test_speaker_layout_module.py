@@ -59,7 +59,7 @@ class TestSpeakerPositionEnum(unittest.TestCase):
     def test_required_positions_exist(self) -> None:
         """All positions required by SMPTE 7.1.4 and Film 7.1.4 must be present."""
         required = {
-            "FL", "FR", "FC", "LFE",
+            "FL", "FR", "FC", "LFE", "LFE2",
             "SL", "SR",     # side surrounds
             "BL", "BR",     # rear/back surrounds
             "TFL", "TFR",   # top front heights
@@ -93,6 +93,7 @@ class TestSpeakerPositionEnum(unittest.TestCase):
         self.assertEqual(SpeakerPosition.FR, "SPK.R")
         self.assertEqual(SpeakerPosition.FC, "SPK.C")
         self.assertEqual(SpeakerPosition.LFE, "SPK.LFE")
+        self.assertEqual(SpeakerPosition.LFE2, "SPK.LFE2")
         self.assertEqual(SpeakerPosition.SL, "SPK.LS")
         self.assertEqual(SpeakerPosition.SR, "SPK.RS")
         self.assertEqual(SpeakerPosition.BL, "SPK.LRS")
@@ -106,6 +107,7 @@ class TestSpeakerPositionEnum(unittest.TestCase):
         """String == enum must also be True."""
         self.assertEqual("SPK.L", SpeakerPosition.FL)
         self.assertEqual("SPK.LFE", SpeakerPosition.LFE)
+        self.assertEqual("SPK.LFE2", SpeakerPosition.LFE2)
 
     def test_no_duplicate_values(self) -> None:
         """No two positions may map to the same SPK.* ID."""
@@ -117,6 +119,10 @@ class TestSpeakerPositionEnum(unittest.TestCase):
         self.assertNotEqual(SpeakerPosition.LFE, SpeakerPosition.FL)
         self.assertNotEqual(SpeakerPosition.LFE, SpeakerPosition.FR)
         self.assertNotEqual(SpeakerPosition.LFE, SpeakerPosition.FC)
+        self.assertNotEqual(SpeakerPosition.LFE2, SpeakerPosition.FL)
+        self.assertNotEqual(SpeakerPosition.LFE2, SpeakerPosition.FR)
+        self.assertNotEqual(SpeakerPosition.LFE2, SpeakerPosition.FC)
+        self.assertNotEqual(SpeakerPosition.LFE2, SpeakerPosition.LFE)
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +188,24 @@ class TestSpeakerLayoutDataclass(unittest.TestCase):
         self.assertEqual(SMPTE_5_1.lfe_slots, [3])
         self.assertEqual(FILM_5_1.lfe_slots, [5])
         self.assertEqual(SMPTE_2_0.lfe_slots, [])
+
+    def test_dual_lfe_slots_include_lfe2(self) -> None:
+        dual = SpeakerLayout(
+            "LAYOUT.TEST.5_2",
+            LayoutStandard.SMPTE,
+            (
+                SpeakerPosition.FL,
+                SpeakerPosition.FR,
+                SpeakerPosition.FC,
+                SpeakerPosition.LFE,
+                SpeakerPosition.LFE2,
+                SpeakerPosition.SL,
+                SpeakerPosition.SR,
+            ),
+        )
+        self.assertEqual(dual.lfe_slots, [3, 4])
+        self.assertTrue(dual.is_lfe_channel(3))
+        self.assertTrue(dual.is_lfe_channel(4))
 
     def test_height_slots_property(self) -> None:
         self.assertEqual(SMPTE_5_1.height_slots, [])

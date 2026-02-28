@@ -235,7 +235,7 @@ layouts:
     aliases: ["4.1", "4_1", "quad+lfe"]
 
   # -------------------------
-  # 5.0 / 5.1
+  # 5.0 / 5.1 / 5.2
   # -------------------------
   LAYOUT.5_0:
     label: "Surround (5.0)"
@@ -306,8 +306,44 @@ layouts:
       fold_at_minus_10db_available: true
     aliases: ["5.1", "5_1", "surround51", "6ch", "L R C LFE Ls Rs"]
 
+  LAYOUT.5_2:
+    label: "Surround (5.2)"
+    description: "5.1 plus a second LFE channel (LFE2)."
+    family: "surround"
+    channel_count: 7
+    ordering_standard: "SMPTE"
+    channel_order: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LFE2", "SPK.LS", "SPK.RS"]
+    ordering_variants:
+      SMPTE: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LFE2", "SPK.LS", "SPK.RS"]
+      FILM: ["SPK.L", "SPK.C", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LFE", "SPK.LFE2"]
+      LOGIC_PRO: ["SPK.L", "SPK.R", "SPK.LS", "SPK.RS", "SPK.C", "SPK.LFE", "SPK.LFE2"]
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      center: ["SPK.C"]
+      lfe: ["SPK.LFE", "SPK.LFE2"]
+      surround: ["SPK.LS", "SPK.RS"]
+      bed: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LFE2", "SPK.LS", "SPK.RS"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LFE2", "SPK.LS", "SPK.RS"]
+    height_speakers: []
+    has_lfe: true
+    speaker_positions:
+      - {spk_id: "SPK.L",    azimuth_deg: 30,   elevation_deg: 0}
+      - {spk_id: "SPK.R",    azimuth_deg: -30,  elevation_deg: 0}
+      - {spk_id: "SPK.C",    azimuth_deg: 0,    elevation_deg: 0}
+      - {spk_id: "SPK.LFE",  azimuth_deg: 0,    elevation_deg: 0}
+      - {spk_id: "SPK.LFE2", azimuth_deg: 0,    elevation_deg: 0}
+      - {spk_id: "SPK.LS",   azimuth_deg: 110,  elevation_deg: 0}
+      - {spk_id: "SPK.RS",   azimuth_deg: -110, elevation_deg: 0}
+    lfe_policy:
+      has_lfe: true
+      lfe_channels: ["SPK.LFE", "SPK.LFE2"]
+      excluded_from_program_loudness: true
+      default_downmix_treatment: "drop"
+      fold_at_minus_10db_available: true
+    aliases: ["5.2", "5_2", "surround52", "dual_lfe_5_2", "L R C LFE LFE2 Ls Rs"]
+
   # -------------------------
-  # 7.0 / 7.1
+  # 7.0 / 7.1 / 7.2
   # -------------------------
   LAYOUT.7_0:
     label: "Surround (7.0)"
@@ -385,8 +421,48 @@ layouts:
       fold_at_minus_10db_available: true
     aliases: ["7.1", "7_1", "surround71", "8ch", "L R C LFE Ls Rs Lrs Rrs"]
 
+  LAYOUT.7_2:
+    label: "Surround (7.2)"
+    description: "7.1 plus a second LFE channel (LFE2)."
+    family: "surround"
+    channel_count: 9
+    ordering_standard: "SMPTE"
+    channel_order: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LFE2", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    ordering_variants:
+      SMPTE: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LFE2", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+      FILM: ["SPK.L", "SPK.C", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS", "SPK.LFE", "SPK.LFE2"]
+      LOGIC_PRO: ["SPK.L", "SPK.R", "SPK.LRS", "SPK.RRS", "SPK.LS", "SPK.RS", "SPK.C", "SPK.LFE", "SPK.LFE2"]
+      VST3: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LFE2", "SPK.LRS", "SPK.RRS", "SPK.LS", "SPK.RS"]
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      center: ["SPK.C"]
+      lfe: ["SPK.LFE", "SPK.LFE2"]
+      surround: ["SPK.LS", "SPK.RS"]
+      rear: ["SPK.LRS", "SPK.RRS"]
+      bed: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LFE2", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LFE2", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    height_speakers: []
+    has_lfe: true
+    speaker_positions:
+      - {spk_id: "SPK.L",    azimuth_deg: 30,   elevation_deg: 0}
+      - {spk_id: "SPK.R",    azimuth_deg: -30,  elevation_deg: 0}
+      - {spk_id: "SPK.C",    azimuth_deg: 0,    elevation_deg: 0}
+      - {spk_id: "SPK.LFE",  azimuth_deg: 0,    elevation_deg: 0}
+      - {spk_id: "SPK.LFE2", azimuth_deg: 0,    elevation_deg: 0}
+      - {spk_id: "SPK.LS",   azimuth_deg: 110,  elevation_deg: 0}
+      - {spk_id: "SPK.RS",   azimuth_deg: -110, elevation_deg: 0}
+      - {spk_id: "SPK.LRS",  azimuth_deg: 150,  elevation_deg: 0}
+      - {spk_id: "SPK.RRS",  azimuth_deg: -150, elevation_deg: 0}
+    lfe_policy:
+      has_lfe: true
+      lfe_channels: ["SPK.LFE", "SPK.LFE2"]
+      excluded_from_program_loudness: true
+      default_downmix_treatment: "drop"
+      fold_at_minus_10db_available: true
+    aliases: ["7.2", "7_2", "surround72", "dual_lfe_7_2", "L R C LFE LFE2 Ls Rs Lrs Rrs"]
+
   # -------------------------
-  # Immersive beds with heights (common ".2" and ".4")
+  # Immersive beds with heights (common ".2", ".4", and dual-LFE ".2.4")
   # -------------------------
   LAYOUT.5_1_2:
     label: "Immersive (5.1.2)"
@@ -592,6 +668,64 @@ layouts:
       fold_at_minus_10db_available: true
     recommended_downmix_targets: ["LAYOUT.7_1", "LAYOUT.5_1", "LAYOUT.2_0", "LAYOUT.1_0"]
     aliases: ["7.1.4", "7_1_4", "immersive714", "atmos_bed_714"]
+
+  LAYOUT.7_2_4:
+    label: "Immersive (7.2.4)"
+    description: "7.1.4 bed plus a second LFE channel (LFE2)."
+    family: "immersive"
+    channel_count: 13
+    ordering_standard: "SMPTE"
+    channel_order:
+      - "SPK.L"
+      - "SPK.R"
+      - "SPK.C"
+      - "SPK.LFE"
+      - "SPK.LFE2"
+      - "SPK.LS"
+      - "SPK.RS"
+      - "SPK.LRS"
+      - "SPK.RRS"
+      - "SPK.TFL"
+      - "SPK.TFR"
+      - "SPK.TRL"
+      - "SPK.TRR"
+    ordering_variants:
+      SMPTE: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LFE2", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS", "SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"]
+      FILM: ["SPK.L", "SPK.C", "SPK.R", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS", "SPK.LFE", "SPK.LFE2", "SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"]
+      VST3: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LFE2", "SPK.LRS", "SPK.RRS", "SPK.LS", "SPK.RS", "SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"]
+    channel_groups:
+      front: ["SPK.L", "SPK.R"]
+      center: ["SPK.C"]
+      lfe: ["SPK.LFE", "SPK.LFE2"]
+      surround: ["SPK.LS", "SPK.RS"]
+      rear: ["SPK.LRS", "SPK.RRS"]
+      height: ["SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"]
+      bed: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LFE2", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    bed_speakers: ["SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LFE2", "SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"]
+    height_speakers: ["SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"]
+    has_lfe: true
+    speaker_positions:
+      - {spk_id: "SPK.L",    azimuth_deg: 30,   elevation_deg: 0}
+      - {spk_id: "SPK.R",    azimuth_deg: -30,  elevation_deg: 0}
+      - {spk_id: "SPK.C",    azimuth_deg: 0,    elevation_deg: 0}
+      - {spk_id: "SPK.LFE",  azimuth_deg: 0,    elevation_deg: 0}
+      - {spk_id: "SPK.LFE2", azimuth_deg: 0,    elevation_deg: 0}
+      - {spk_id: "SPK.LS",   azimuth_deg: 110,  elevation_deg: 0}
+      - {spk_id: "SPK.RS",   azimuth_deg: -110, elevation_deg: 0}
+      - {spk_id: "SPK.LRS",  azimuth_deg: 150,  elevation_deg: 0}
+      - {spk_id: "SPK.RRS",  azimuth_deg: -150, elevation_deg: 0}
+      - {spk_id: "SPK.TFL",  azimuth_deg: 30,   elevation_deg: 45}
+      - {spk_id: "SPK.TFR",  azimuth_deg: -30,  elevation_deg: 45}
+      - {spk_id: "SPK.TRL",  azimuth_deg: 150,  elevation_deg: 45}
+      - {spk_id: "SPK.TRR",  azimuth_deg: -150, elevation_deg: 45}
+    lfe_policy:
+      has_lfe: true
+      lfe_channels: ["SPK.LFE", "SPK.LFE2"]
+      excluded_from_program_loudness: true
+      default_downmix_treatment: "drop"
+      fold_at_minus_10db_available: true
+    recommended_downmix_targets: ["LAYOUT.7_2", "LAYOUT.7_1", "LAYOUT.5_2", "LAYOUT.5_1", "LAYOUT.2_0", "LAYOUT.1_0"]
+    aliases: ["7.2.4", "7_2_4", "immersive724", "dual_lfe_7_2_4"]
 
   # -------------------------
   # Optional: Stereo with Wides (for some cinema/music workflows)

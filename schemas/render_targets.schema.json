@@ -24,7 +24,11 @@
     },
     "speaker_id": {
       "type": "string",
-      "pattern": "^SPK\\.[A-Z0-9_]+(?:\\.[A-Z0-9_]+)*$"
+      "description": "Canonical SPK.* speaker identifier, including dual-LFE IDs (SPK.LFE, SPK.LFE2).",
+      "anyOf": [
+        { "pattern": "^SPK\\.LFE(?:[0-9]+)?$" },
+        { "pattern": "^SPK\\.[A-Z0-9_]+(?:\\.[A-Z0-9_]+)*$" }
+      ]
     },
     "container": {
       "type": "string",

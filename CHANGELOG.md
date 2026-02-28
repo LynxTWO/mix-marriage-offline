@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Dual-LFE Phase 1 contract support:
+  - Added `SPK.LFE2` speaker ontology ID and new x.2 layouts:
+    `LAYOUT.5_2`, `LAYOUT.7_2`, and `LAYOUT.7_2_4`.
+  - Added deterministic ordering variants for SMPTE/FILM (plus LOGIC_PRO/VST3 where applicable) on new x.2 layouts.
+  - Added contract-level loudness-input mapping helper to exclude all declared LFE channels (`SPK.LFE`, `SPK.LFE2`) from program loudness inputs.
+  - Tightened layout/render-target schema validation for dual-LFE identifiers and `lfe_policy` consistency.
 - Artistic headphone preview UX polish in `mmo-gui`:
   - Added a dedicated `Preview on Headphones` control in the Audition panel.
   - Added deterministic pulsing waveform visualization and warm analog L/R metering

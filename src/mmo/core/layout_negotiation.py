@@ -17,6 +17,8 @@ Exported public API
 - ``get_channel_count()`` — channel count for a layout.
 - ``has_lfe()`` — whether a layout has an LFE channel.
 - ``get_lfe_channels()`` — list of LFE channel SPK IDs in a layout.
+- ``get_program_loudness_channels()`` — channel-order subset used for
+  program loudness inputs (LFE removed when policy excludes it).
 
 Dual channel-ordering standard support
 ---------------------------------------
@@ -48,6 +50,8 @@ try:
     import yaml as _yaml
 except ImportError:  # pragma: no cover - environment issue
     _yaml = None  # type: ignore[assignment]
+
+_LFE_SPK_IDS: frozenset[str] = frozenset({"SPK.LFE", "SPK.LFE1", "SPK.LFE2"})
 
 
 # ---------------------------------------------------------------------------
@@ -168,10 +172,40 @@ def get_lfe_channels(
     if not isinstance(policy, dict):
         # Fall back to channel_order scan
         channel_order = entry.get("channel_order", [])
-        _lfe_ids = frozenset({"SPK.LFE", "SPK.LFE1", "SPK.LFE2"})
-        return [ch for ch in channel_order if isinstance(ch, str) and ch in _lfe_ids]
+        return [ch for ch in channel_order if isinstance(ch, str) and ch in _LFE_SPK_IDS]
     lfe_channels = policy.get("lfe_channels", [])
     return [ch for ch in lfe_channels if isinstance(ch, str)]
+
+
+def get_program_loudness_channels(
+    layout_id: str,
+    path: Optional[Path] = None,
+) -> List[str]:
+    """Return ordered non-LFE channels used for program loudness.
+
+    The returned order is derived from the layout's canonical ``channel_order``.
+    When ``lfe_policy.excluded_from_program_loudness`` is true, all declared
+    ``lfe_channels`` are removed.  If ``lfe_channels`` is missing/empty, known
+    LFE IDs found in ``channel_order`` are removed as a fallback.
+    """
+    channel_order = get_layout_channel_order(layout_id, path)
+    if channel_order is None:
+        return []
+
+    policy = get_layout_lfe_policy(layout_id, path) or {}
+    if not bool(policy.get("excluded_from_program_loudness", False)):
+        return list(channel_order)
+
+    raw_lfe_channels = policy.get("lfe_channels", [])
+    declared_lfe = (
+        [ch for ch in raw_lfe_channels if isinstance(ch, str)]
+        if isinstance(raw_lfe_channels, list)
+        else []
+    )
+    lfe_channels = set(declared_lfe)
+    if not lfe_channels:
+        lfe_channels = {ch for ch in channel_order if ch in _LFE_SPK_IDS}
+    return [ch for ch in channel_order if ch not in lfe_channels]
 
 
 def get_layout_lfe_policy(

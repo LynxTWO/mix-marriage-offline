@@ -97,6 +97,16 @@ speakers:
     is_lfe: true
     aliases: ["LFE", "LFE1", "SUB", "SUBWOOFER", "CHLFE"]
 
+  SPK.LFE2:
+    label: "LFE 2"
+    description: "Second Low Frequency Effects channel for dual-LFE layouts."
+    channel_group: "lfe"
+    bed_or_height: "bed"
+    azimuth_deg: 0
+    elevation_deg: 0
+    is_lfe: true
+    aliases: ["LFE2", "SUB2"]
+
   # Optional wides (for 9.x and some cinema layouts)
   SPK.LW:
     label: "Left Wide"

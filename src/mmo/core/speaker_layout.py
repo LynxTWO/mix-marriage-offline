@@ -99,7 +99,8 @@ class SpeakerPosition(str, Enum):
     FC = "SPK.C"        # Front Center
 
     # LFE — low-frequency effects; always excluded from program loudness (ITU-R BS.1770)
-    LFE = "SPK.LFE"     # Low Frequency Effects (subwoofer)
+    LFE = "SPK.LFE"     # Low Frequency Effects (subwoofer 1)
+    LFE2 = "SPK.LFE2"   # Low Frequency Effects (subwoofer 2, dual-LFE layouts)
 
     # Side surrounds — at ear level, approximately 90-110°
     SL = "SPK.LS"       # Side Left Surround
@@ -140,6 +141,11 @@ class SpeakerPosition(str, Enum):
     TFC = "SPK.TFC"     # Top Front Center  (7.1.6 / 9.1.6 height ring)
     TBC = "SPK.TBC"     # Top Back Center   (7.1.6 / 9.1.6 height ring)
     TC = "SPK.TC"       # Top Center        (some 5.1.2 / Auro-3D configs)
+
+
+_LFE_POSITIONS: frozenset[SpeakerPosition] = frozenset(
+    {SpeakerPosition.LFE, SpeakerPosition.LFE2}
+)
 
 
 # ---------------------------------------------------------------------------
@@ -261,13 +267,13 @@ class SpeakerLayout:
     def is_lfe_channel(self, slot: int) -> bool:
         """Return ``True`` if the channel at ``slot`` is an LFE channel."""
         if 0 <= slot < len(self.channel_order):
-            return self.channel_order[slot] == SpeakerPosition.LFE
+            return self.channel_order[slot] in _LFE_POSITIONS
         return False
 
     @property
     def lfe_slots(self) -> list[int]:
         """Return sorted list of all LFE PCM slot indices in this layout."""
-        return [i for i, pos in enumerate(self.channel_order) if pos == SpeakerPosition.LFE]
+        return [i for i, pos in enumerate(self.channel_order) if pos in _LFE_POSITIONS]
 
     @property
     def height_slots(self) -> list[int]:
