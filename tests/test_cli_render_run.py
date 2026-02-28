@@ -550,6 +550,12 @@ class TestRenderRunAudioExecution(unittest.TestCase):
             self.assertEqual(output_file.get("format"), "wav")
             self.assertEqual(output_file.get("channel_count"), 2)
             self.assertEqual(output_file.get("sample_rate_hz"), 48000)
+            metadata_receipt = output_file.get("metadata_receipt")
+            self.assertIsInstance(metadata_receipt, dict)
+            if isinstance(metadata_receipt, dict):
+                self.assertEqual(metadata_receipt.get("container_format"), "wav")
+                self.assertEqual(metadata_receipt.get("embedded_keys"), [])
+                self.assertEqual(metadata_receipt.get("skipped_keys"), [])
 
             rendered_path = Path(str(output_file["file_path"]))
             self.assertTrue(rendered_path.is_file())

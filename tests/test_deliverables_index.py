@@ -292,6 +292,82 @@ class TestDeliverablesIndex(unittest.TestCase):
                 return
             self.assertIn("listen_pack", artifacts)
 
+    def test_build_single_deliverables_index_preserves_metadata_receipt(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "deliverables_index.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out_dir = Path(temp_dir) / "single_out"
+            report_path = out_dir / "report.json"
+            render_manifest_path = out_dir / "render_manifest.json"
+
+            _write_json(
+                report_path,
+                _report_payload(
+                    preset_id="PRESET.SAFE_CLEANUP",
+                    profile_id="PROFILE.ASSIST",
+                ),
+            )
+            _write_json(
+                render_manifest_path,
+                _manifest_payload(
+                    deliverables=[
+                        {
+                            "deliverable_id": "DELIV.A",
+                            "label": "a",
+                            "formats": ["flac"],
+                            "output_ids": ["OUT.A.FLAC"],
+                        }
+                    ],
+                    outputs=[
+                        {
+                            "output_id": "OUT.A.FLAC",
+                            "file_path": "render/a.flac",
+                            "format": "flac",
+                            "sha256": "a" * 16,
+                            "metadata": {
+                                "metadata_receipt": {
+                                    "container_format": "flac",
+                                    "embedded_keys": ["title", "x_custom"],
+                                    "skipped_keys": [],
+                                    "warnings": [],
+                                }
+                            },
+                        }
+                    ],
+                ),
+            )
+
+            payload = build_deliverables_index_single(
+                out_dir=out_dir,
+                report_path=report_path,
+                apply_manifest_path=None,
+                render_manifest_path=render_manifest_path,
+                bundle_path=None,
+                pdf_path=None,
+                csv_path=None,
+            )
+
+            validator.validate(payload)
+            entries = payload.get("entries")
+            self.assertIsInstance(entries, list)
+            if not isinstance(entries, list) or not entries:
+                return
+            deliverables = entries[0].get("deliverables")
+            self.assertIsInstance(deliverables, list)
+            if not isinstance(deliverables, list) or not deliverables:
+                return
+            files = deliverables[0].get("files")
+            self.assertIsInstance(files, list)
+            if not isinstance(files, list) or not files:
+                return
+            metadata_receipt = files[0].get("metadata_receipt")
+            self.assertIsInstance(metadata_receipt, dict)
+            if not isinstance(metadata_receipt, dict):
+                return
+            self.assertEqual(metadata_receipt.get("container_format"), "flac")
+            self.assertEqual(metadata_receipt.get("embedded_keys"), ["title", "x_custom"])
+
     def test_build_variants_deliverables_index_schema_valid_and_deterministic(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         validator = _schema_validator(repo_root / "schemas" / "deliverables_index.schema.json")

@@ -79,6 +79,7 @@ def build_ffmpeg_transcode_command(
     format: str,
     *,
     channel_layout: str | None = None,
+    metadata_args: Sequence[str] | None = None,
 ) -> list[str]:
     """Build deterministic ffmpeg command args for a non-WAV output format."""
     fmt = format.strip().lower()
@@ -97,8 +98,10 @@ def build_ffmpeg_transcode_command(
         "-i",
         _path_arg(wav_path),
         *ffmpeg_determinism_flags(for_wav=False),
-        *encode_args,
     ]
+    if metadata_args is not None:
+        command.extend(str(item) for item in metadata_args)
+    command.extend(encode_args)
     normalized_layout = (channel_layout or "").strip()
     if normalized_layout:
         command.extend(["-channel_layout", normalized_layout])
@@ -113,6 +116,7 @@ def transcode_wav_to_format(
     format: str,
     *,
     channel_layout: str | None = None,
+    metadata_args: Sequence[str] | None = None,
     command_recorder: list[list[str]] | None = None,
 ) -> None:
     fmt = format.strip().lower()
@@ -127,6 +131,7 @@ def transcode_wav_to_format(
         output_path,
         fmt,
         channel_layout=channel_layout,
+        metadata_args=metadata_args,
     )
     if command_recorder is not None:
         command_recorder.append(list(command))

@@ -68,6 +68,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     DSP trait declarations and nonlinear anti-aliasing strategies.
   - Updated renderer/plugin-market manifests and authoring docs to document
     measurable claim contracts and gate-respecting DSP expectations.
+- Best-effort metadata round-trip with receipts:
+  - Added export-side tag application policy (`src/mmo/core/tag_export.py`)
+    for deterministic ffmpeg metadata args and embedded/skipped key tracking.
+  - Render/transcode paths now clear inherited metadata and apply explicit
+    deterministic `-metadata` entries per container policy (FLAC/WV arbitrary
+    fields; WAV conservative INFO subset).
+  - `render_report` output files now include strict `metadata_receipt`
+    sections, and deliverables index file rows preserve receipts when present.
+  - Added FLAC/WV custom-tag fixtures + tests for TagBag preservation and
+    export receipts, plus WAV subset/skipped receipt coverage.
 
 ## [1.1.0] — 2026-02-27
 

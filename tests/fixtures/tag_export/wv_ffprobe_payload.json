@@ -1,0 +1,25 @@
+{
+  "streams": [
+    {
+      "codec_type": "audio",
+      "codec_name": "wavpack",
+      "channels": 2,
+      "sample_rate": "48000",
+      "duration": "1.0",
+      "bits_per_raw_sample": "24",
+      "channel_layout": "stereo",
+      "tags": {
+        "ARTIST": "Fixture Artist",
+        "X_CUSTOM_WV": "beta"
+      }
+    }
+  ],
+  "format": {
+    "duration": "1.0",
+    "format_name": "wv",
+    "tags": {
+      "TITLE": "Fixture WV Song",
+      "MMO_CUSTOM": "wv-custom-value"
+    }
+  }
+}

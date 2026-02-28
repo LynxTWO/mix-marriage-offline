@@ -128,7 +128,34 @@
         "sha256": {
           "type": "string",
           "minLength": 16
+        },
+        "metadata_receipt": {
+          "$ref": "#/$defs/metadata_receipt"
         }
+      }
+    },
+    "metadata_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["container_format", "embedded_keys", "skipped_keys", "warnings"],
+      "properties": {
+        "container_format": {
+          "type": "string",
+          "enum": ["wav", "flac", "wv", "aiff", "alac"]
+        },
+        "embedded_keys": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "skipped_keys": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "sidecar_json_path": { "$ref": "#/$defs/posix_path" }
       }
     },
     "policies_applied": {

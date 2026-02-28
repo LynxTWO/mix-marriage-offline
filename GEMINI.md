@@ -30,3 +30,6 @@ Non-negotiables:
 - Keep dual-LFE (x.2) export contracts explicit: preserve canonical SPK channel
   order in render/recall artifacts, use conservative WAV mask strategy, and
   surface validation guidance for toolchains that may drop `LFE2`.
+- Keep export metadata round-trip deterministic: apply explicit ffmpeg metadata
+  args by container policy and always emit `metadata_receipt` embedded/skipped
+  key summaries in render/export artifacts.

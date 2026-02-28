@@ -63,3 +63,25 @@ MMO does not discard unknown metadata keys:
 
 This model is used in source metadata artifacts (`source_metadata.tags`) so
 UI/reporting can summarize canonical fields while preserving full source tags.
+
+## Export-time tag re-embedding and receipts
+
+When MMO renders/transcodes outputs, it now applies tags from source `TagBag`
+using a deterministic export policy and emits a metadata receipt per output.
+
+- FLAC and WavPack (`.wv`):
+  - MMO emits explicit ffmpeg `-metadata key=value` fields in stable order.
+  - It includes normalized keys and namespaced raw-tag preservation fields.
+- WAV:
+  - MMO uses a conservative RIFF `INFO` subset only (`INAM`, `IART`, `IPRD`,
+    `ICRD`, `IGNR`, `ICMT`, `ITRK` via aliases).
+  - Non-INFO-compatible keys are recorded as skipped in the receipt.
+
+Receipts are attached to rendered/transcoded output descriptors as:
+
+- `metadata_receipt.container_format`
+- `metadata_receipt.embedded_keys`
+- `metadata_receipt.skipped_keys`
+- `metadata_receipt.warnings`
+- optional `metadata_receipt.sidecar_json_path` (for external skipped-tag
+  preservation workflows)

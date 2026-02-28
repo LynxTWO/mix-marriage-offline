@@ -11,6 +11,8 @@ from mmo.core.deliverables import (
 )
 from mmo.core.layout_export import ffmpeg_layout_string_from_channel_order
 from mmo.core.layout_negotiation import get_layout_channel_order
+from mmo.core.media_tags import TagBag, empty_tag_bag, tag_bag_from_mapping
+from mmo.core.tag_export import build_ffmpeg_tag_export_args, metadata_receipt_mapping
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.io import sha256_file
 from mmo.dsp.transcode import (
@@ -501,12 +503,22 @@ def _output_sort_key(output: Dict[str, Any]) -> tuple[str, str, str, str]:
     )
 
 
+def _output_tag_bag(output: Dict[str, Any]) -> TagBag:
+    metadata = output.get("metadata")
+    if isinstance(metadata, dict):
+        if {"raw", "normalized", "warnings"}.issubset(metadata.keys()):
+            return tag_bag_from_mapping(metadata)
+        return tag_bag_from_mapping(metadata.get("tag_bag"))
+    return empty_tag_bag()
+
+
 def _make_transcoded_output(
     source_output: Dict[str, Any],
     *,
     output_format: str,
     file_path: str,
     sha256: str,
+    metadata_receipt: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     transcoded: Dict[str, Any] = {
         "output_id": _transcode_output_id(source_output, output_format, sha256),
@@ -543,6 +555,8 @@ def _make_transcoded_output(
     transcoded_metadata["transcode_from_format"] = _coerce_str(
         source_output.get("format")
     ) or "wav"
+    if isinstance(metadata_receipt, dict):
+        transcoded_metadata["metadata_receipt"] = metadata_receipt
     transcoded["metadata"] = transcoded_metadata
     return transcoded
 
@@ -648,6 +662,7 @@ def _apply_output_formats_to_manifest(
                 )
                 continue
 
+            source_tag_bag = _output_tag_bag(output)
             for target_format in non_wav_formats:
                 target_file_path = _replace_output_extension(
                     source_file_path,
@@ -664,6 +679,18 @@ def _apply_output_formats_to_manifest(
                 channel_layout = _output_ffmpeg_layout_string(output)
                 if channel_layout and "LFE2" in channel_layout and not supports_lfe2_layout:
                     channel_layout = None
+                (
+                    metadata_args,
+                    embedded_keys,
+                    skipped_keys,
+                    metadata_warnings,
+                ) = build_ffmpeg_tag_export_args(source_tag_bag, target_format)
+                metadata_receipt = metadata_receipt_mapping(
+                    output_container_format_id=target_format,
+                    embedded_keys=embedded_keys,
+                    skipped_keys=skipped_keys,
+                    warnings=metadata_warnings,
+                )
                 try:
                     transcode_wav_to_format(
                         ffmpeg_cmd,
@@ -671,6 +698,7 @@ def _apply_output_formats_to_manifest(
                         target_path,
                         target_format,
                         channel_layout=channel_layout,
+                        metadata_args=metadata_args,
                     )
                 except (OSError, ValueError):
                     _append_transcode_skip(
@@ -686,6 +714,7 @@ def _apply_output_formats_to_manifest(
                         output_format=target_format,
                         file_path=target_file_path,
                         sha256=output_sha256,
+                        metadata_receipt=metadata_receipt,
                     )
                 )
             continue

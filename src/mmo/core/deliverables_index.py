@@ -110,12 +110,45 @@ def _file_format(output: dict[str, Any], *, path_value: str) -> str:
     return "unknown"
 
 
+def _coerce_sorted_unique_strings(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return sorted(
+        {
+            _coerce_str(item).strip()
+            for item in value
+            if _coerce_str(item).strip()
+        },
+        key=lambda item: (item.lower(), item),
+    )
+
+
+def _normalize_metadata_receipt(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+
+    container_format = _coerce_str(value.get("container_format")).strip().lower()
+    if not container_format:
+        return None
+
+    payload: dict[str, Any] = {
+        "container_format": container_format,
+        "embedded_keys": _coerce_sorted_unique_strings(value.get("embedded_keys")),
+        "skipped_keys": _coerce_sorted_unique_strings(value.get("skipped_keys")),
+        "warnings": _coerce_sorted_unique_strings(value.get("warnings")),
+    }
+    sidecar_json_path = _to_posix_path(value.get("sidecar_json_path"))
+    if sidecar_json_path is not None:
+        payload["sidecar_json_path"] = sidecar_json_path
+    return payload
+
+
 def _deliverable_files(
     output_ids: list[str],
     outputs_by_id: dict[str, list[dict[str, Any]]],
 ) -> list[dict[str, Any]]:
     files: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, str, str, str]] = set()
 
     for output_id in sorted({item for item in output_ids if item}):
         for output in outputs_by_id.get(output_id, []):
@@ -124,7 +157,19 @@ def _deliverable_files(
                 continue
             output_format = _file_format(output, path_value=file_path)
             sha256 = _optional_string(output.get("sha256"))
-            dedupe_key = (output_format, file_path, sha256 or "")
+            metadata = _coerce_dict(output.get("metadata"))
+            metadata_receipt = _normalize_metadata_receipt(metadata.get("metadata_receipt"))
+            metadata_receipt_key = (
+                json.dumps(metadata_receipt, sort_keys=True)
+                if metadata_receipt is not None
+                else ""
+            )
+            dedupe_key = (
+                output_format,
+                file_path,
+                sha256 or "",
+                metadata_receipt_key,
+            )
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)
@@ -135,6 +180,8 @@ def _deliverable_files(
             }
             if sha256:
                 file_entry["sha256"] = sha256
+            if metadata_receipt is not None:
+                file_entry["metadata_receipt"] = metadata_receipt
             files.append(file_entry)
 
     files.sort(
@@ -142,6 +189,7 @@ def _deliverable_files(
             _coerce_str(item.get("format")),
             _coerce_str(item.get("path")),
             _coerce_str(item.get("sha256")),
+            json.dumps(_coerce_dict(item.get("metadata_receipt")), sort_keys=True),
         )
     )
     return files
@@ -225,6 +273,7 @@ def _merge_deliverables(deliverables: list[dict[str, Any]]) -> list[dict[str, An
                         _coerce_str(item.get("format")),
                         _coerce_str(item.get("path")),
                         _coerce_str(item.get("sha256")),
+                        json.dumps(_coerce_dict(item.get("metadata_receipt")), sort_keys=True),
                     ),
                 ),
             }
@@ -245,17 +294,24 @@ def _merge_deliverables(deliverables: list[dict[str, Any]]) -> list[dict[str, An
         file_rows = _coerce_dict_list(existing.get("files")) + _coerce_dict_list(
             deliverable.get("files")
         )
-        deduped_files: dict[tuple[str, str, str], dict[str, Any]] = {}
+        deduped_files: dict[tuple[str, str, str, str], dict[str, Any]] = {}
         for file_entry in file_rows:
             file_format = _coerce_str(file_entry.get("format")).strip()
             file_path = _coerce_str(file_entry.get("path")).strip()
             sha256 = _coerce_str(file_entry.get("sha256")).strip()
+            metadata_receipt = _normalize_metadata_receipt(file_entry.get("metadata_receipt"))
             if not file_format or not file_path:
                 continue
-            deduped_files[(file_format, file_path, sha256)] = {
+            metadata_receipt_key = (
+                json.dumps(metadata_receipt, sort_keys=True)
+                if metadata_receipt is not None
+                else ""
+            )
+            deduped_files[(file_format, file_path, sha256, metadata_receipt_key)] = {
                 "format": file_format,
                 "path": file_path,
                 **({"sha256": sha256} if sha256 else {}),
+                **({"metadata_receipt": metadata_receipt} if metadata_receipt is not None else {}),
             }
         existing["files"] = sorted(
             deduped_files.values(),
@@ -263,6 +319,7 @@ def _merge_deliverables(deliverables: list[dict[str, Any]]) -> list[dict[str, An
                 _coerce_str(item.get("format")),
                 _coerce_str(item.get("path")),
                 _coerce_str(item.get("sha256")),
+                json.dumps(_coerce_dict(item.get("metadata_receipt")), sort_keys=True),
             ),
         )
 

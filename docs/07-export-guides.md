@@ -157,6 +157,28 @@ M4A (.m4a):
 
 - Ambiguous container (AAC or ALAC). Treated as unsupported until probed.
 
+## Metadata behavior by output container
+
+MMO now does best-effort tag round-trip during render/transcode and records a
+deterministic `metadata_receipt` for each output.
+
+- FLAC (`.flac`):
+  - Arbitrary tag fields are supported.
+  - MMO writes normalized tag keys plus deterministic raw-tag preservation
+    fields via explicit ffmpeg `-metadata` args.
+- WavPack (`.wv`):
+  - Same policy as FLAC (arbitrary fields, normalized + raw preservation).
+- WAV (`.wav`):
+  - Conservative `LIST/INFO` subset only.
+  - MMO maps common keys (title/artist/album/date/etc.) to INFO fields and
+    records all non-INFO keys as skipped.
+
+Receipts are visible in:
+
+- `render_report.jobs[*].output_files[*].metadata_receipt`
+- deliverables index file rows when sourced from render/apply manifests with
+  receipt metadata.
+
 ## Strict mode
 
 Running `scan_session --strict` elevates lossy and unsupported format warnings to higher severity for CI and advanced checks.

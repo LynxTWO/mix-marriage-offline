@@ -326,6 +326,10 @@ What remains: the core DSP path is functional, but formalized fallback sequencin
   - WAV/BWF at minimum.
   - Optional: FLAC and/or WavPack (deterministic encoder settings).
   - Optional: Wave64 for very large multichannel outputs.
+- [x] Export metadata round-trip is best-effort and explainable:
+  - FLAC/WavPack outputs re-embed normalized + raw tag fields deterministically.
+  - WAV outputs embed conservative INFO subsets and emit skipped-key receipts.
+  - `render_report`/deliverables file rows carry `metadata_receipt` entries.
 - [ ] Rendered files embed enough metadata for traceability:
   - tool version, scene hash, render contract version, downmix policy version.
 - [ ] Golden fixtures prove:

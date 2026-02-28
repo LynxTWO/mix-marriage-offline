@@ -12,8 +12,10 @@ import wave
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterator, Sequence
 
+from mmo.core.media_tags import TagBag, empty_tag_bag, merge_tag_bags, tag_bag_from_mapping
 from mmo.core.render_execute import resolve_ffmpeg_version
 from mmo.core.render_reporting import build_render_report_from_plan
+from mmo.core.tag_export import build_ffmpeg_tag_export_args, metadata_receipt_mapping
 from mmo.dsp.backends.ffmpeg_decode import (
     build_ffmpeg_decode_command,
     iter_ffmpeg_float64_samples,
@@ -789,6 +791,7 @@ def build_render_report_with_audio(
     mix_inputs_report_notes: list[str] = []
     source_input_paths: list[Path] = []
     source_bit_depth: int | None = None
+    source_tag_bag: TagBag = empty_tag_bag()
 
     if mix_inputs is None:
         source_path = _resolve_single_source_or_raise(scene_payload)
@@ -796,6 +799,7 @@ def build_render_report_with_audio(
         _validate_source_layout_or_raise(source_metadata)
         source_rate_hz = _coerce_int(source_metadata.get("sample_rate_hz")) or 0
         source_bit_depth = _coerce_int(source_metadata.get("bits_per_sample"))
+        source_tag_bag = tag_bag_from_mapping(source_metadata.get("tags"))
         source_input_paths = [source_path.resolve()]
     else:
         (
@@ -813,6 +817,13 @@ def build_render_report_with_audio(
             for mix_input in resolved_mix_inputs
             if isinstance(mix_input.get("path"), Path)
         ]
+        source_tag_bag = merge_tag_bags(
+            [
+                mix_input.get("tag_bag", empty_tag_bag())
+                for mix_input in resolved_mix_inputs
+                if isinstance(mix_input.get("tag_bag"), TagBag)
+            ]
+        )
         mix_inputs_report_notes = _mix_inputs_report_notes(
             mix_inputs=resolved_mix_inputs,
             headroom_gain=_mix_inputs_headroom_gain(resolved_mix_inputs),
@@ -888,6 +899,20 @@ def build_render_report_with_audio(
         job_id = _coerce_str(job.get("job_id")).strip() or "JOB.001"
         output_formats = _job_output_formats_or_raise(job)
         planned_outputs = _planned_outputs_by_format(job)
+        metadata_plan_by_format: dict[str, dict[str, Any]] = {}
+        for output_format in output_formats:
+            (
+                ffmpeg_metadata_args,
+                embedded_keys,
+                skipped_keys,
+                metadata_warnings,
+            ) = build_ffmpeg_tag_export_args(source_tag_bag, output_format)
+            metadata_plan_by_format[output_format] = {
+                "ffmpeg_metadata_args": ffmpeg_metadata_args,
+                "embedded_keys": embedded_keys,
+                "skipped_keys": skipped_keys,
+                "warnings": metadata_warnings,
+            }
 
         wav_path: Path
         keep_wav_output = "wav" in output_formats
@@ -920,11 +945,23 @@ def build_render_report_with_audio(
             else (source_extension in _FFMPEG_EXTENSIONS)
         )
         needs_ffmpeg_encode = any(fmt != "wav" for fmt in output_formats)
+        wav_metadata_args = list(
+            metadata_plan_by_format.get("wav", {}).get("ffmpeg_metadata_args") or []
+        )
         needs_ffmpeg_for_trace = keep_wav_output and capture_execute_trace
-        if needs_ffmpeg_decode or needs_ffmpeg_encode or needs_ffmpeg_for_trace:
+        needs_ffmpeg_for_wav_metadata = keep_wav_output and bool(wav_metadata_args)
+        if (
+            needs_ffmpeg_decode
+            or needs_ffmpeg_encode
+            or needs_ffmpeg_for_trace
+            or needs_ffmpeg_for_wav_metadata
+        ):
             ffmpeg_cmd_for_decode = resolve_ffmpeg_cmd()
             ffmpeg_cmd_for_encode = ffmpeg_cmd_for_decode
-            if ffmpeg_cmd_for_decode is None:
+            if (
+                ffmpeg_cmd_for_decode is None
+                and (needs_ffmpeg_decode or needs_ffmpeg_encode or needs_ffmpeg_for_trace)
+            ):
                 raise RenderRunRefusalError(
                     issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
                     message=(
@@ -1050,21 +1087,35 @@ def build_render_report_with_audio(
 
         output_files: list[dict[str, Any]] = []
         try:
-            if keep_wav_output and capture_execute_trace:
+            wav_plan = metadata_plan_by_format.get("wav", {})
+            wav_metadata_args = list(wav_plan.get("ffmpeg_metadata_args") or [])
+            wav_embedded_keys = list(wav_plan.get("embedded_keys") or [])
+            wav_skipped_keys = list(wav_plan.get("skipped_keys") or [])
+            wav_warnings = list(wav_plan.get("warnings") or [])
+
+            if keep_wav_output and (capture_execute_trace or wav_metadata_args):
                 if ffmpeg_cmd_for_encode is None:
-                    raise RenderRunRefusalError(
-                        issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
-                        message=(
-                            "ffmpeg is required to normalize WAV output metadata "
-                            "for deterministic execution tracing."
-                        ),
+                    if capture_execute_trace:
+                        raise RenderRunRefusalError(
+                            issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
+                            message=(
+                                "ffmpeg is required to normalize WAV output metadata "
+                                "for deterministic execution tracing."
+                            ),
+                        )
+                    wav_skipped_keys.extend(wav_embedded_keys)
+                    wav_embedded_keys = []
+                    wav_warnings.append(
+                        "WAV metadata embedding skipped: ffmpeg not available."
                     )
-                _normalize_wav_for_determinism(
-                    ffmpeg_cmd=ffmpeg_cmd_for_encode,
-                    wav_path=wav_path,
-                    bit_depth=output_bit_depth,
-                    command_rows=ffmpeg_command_rows,
-                )
+                else:
+                    _normalize_wav_for_determinism(
+                        ffmpeg_cmd=ffmpeg_cmd_for_encode,
+                        wav_path=wav_path,
+                        bit_depth=output_bit_depth,
+                        command_rows=ffmpeg_command_rows,
+                        metadata_args=wav_metadata_args,
+                    )
 
             if keep_wav_output:
                 output_files.append(
@@ -1073,6 +1124,12 @@ def build_render_report_with_audio(
                         output_format="wav",
                         sample_rate_hz=source_rate_hz,
                         bit_depth=output_bit_depth,
+                        metadata_receipt=metadata_receipt_mapping(
+                            output_container_format_id="wav",
+                            embedded_keys=wav_embedded_keys,
+                            skipped_keys=wav_skipped_keys,
+                            warnings=wav_warnings,
+                        ),
                     )
                 )
 
@@ -1095,6 +1152,8 @@ def build_render_report_with_audio(
                             issue_id=ISSUE_RENDER_RUN_FFMPEG_REQUIRED,
                             message="ffmpeg is required to encode non-WAV deliverables.",
                         )
+                    metadata_plan = metadata_plan_by_format.get(output_format, {})
+                    metadata_args = list(metadata_plan.get("ffmpeg_metadata_args") or [])
                     transcode_command_rows: list[list[str]] | None = []
                     if not capture_execute_trace:
                         transcode_command_rows = None
@@ -1103,6 +1162,7 @@ def build_render_report_with_audio(
                         wav_path,
                         target_path,
                         output_format,
+                        metadata_args=metadata_args,
                         command_recorder=transcode_command_rows,
                     )
                     if transcode_command_rows:
@@ -1127,6 +1187,27 @@ def build_render_report_with_audio(
                         output_format=output_format,
                         sample_rate_hz=source_rate_hz,
                         bit_depth=output_bit_depth,
+                        metadata_receipt=metadata_receipt_mapping(
+                            output_container_format_id=output_format,
+                            embedded_keys=list(
+                                metadata_plan_by_format.get(output_format, {}).get(
+                                    "embedded_keys",
+                                )
+                                or []
+                            ),
+                            skipped_keys=list(
+                                metadata_plan_by_format.get(output_format, {}).get(
+                                    "skipped_keys",
+                                )
+                                or []
+                            ),
+                            warnings=list(
+                                metadata_plan_by_format.get(output_format, {}).get(
+                                    "warnings",
+                                )
+                                or []
+                            ),
+                        ),
                     )
                 )
         finally:
@@ -1475,6 +1556,7 @@ def _resolve_mix_inputs_with_metadata_or_raise(
         resolved_input["needs_ffmpeg_decode"] = (
             input_path.suffix.lower() in _FFMPEG_EXTENSIONS
         )
+        resolved_input["tag_bag"] = tag_bag_from_mapping(metadata.get("tags"))
         resolved_inputs.append(resolved_input)
 
     if expected_rate_hz is None:
@@ -2457,6 +2539,7 @@ def _normalize_wav_for_determinism(
     wav_path: Path,
     bit_depth: int,
     command_rows: list[dict[str, Any]],
+    metadata_args: Sequence[str] | None = None,
 ) -> None:
     deterministic_flags = list(ffmpeg_determinism_flags(for_wav=True))
     tmp_path = wav_path.with_suffix(wav_path.suffix + ".tmp")
@@ -2468,6 +2551,7 @@ def _normalize_wav_for_determinism(
         "-i",
         _path_arg(wav_path),
         *deterministic_flags,
+        *(list(metadata_args) if metadata_args is not None else []),
         "-f",
         "wav",
         "-c:a",
@@ -2536,9 +2620,10 @@ def _output_file_payload(
     output_format: str,
     sample_rate_hz: int,
     bit_depth: int,
+    metadata_receipt: dict[str, Any],
 ) -> dict[str, Any]:
     sha256_hex = sha256_file(output_path)
-    return {
+    payload: dict[str, Any] = {
         "file_path": output_path.resolve().as_posix(),
         "format": output_format,
         "channel_count": 2,
@@ -2546,6 +2631,9 @@ def _output_file_payload(
         "bit_depth": bit_depth,
         "sha256": sha256_hex,
     }
+    if metadata_receipt:
+        payload["metadata_receipt"] = metadata_receipt
+    return payload
 
 
 def _output_sort_key(output_format: str) -> tuple[int, str]:

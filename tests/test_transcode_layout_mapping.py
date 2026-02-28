@@ -22,6 +22,24 @@ def test_build_ffmpeg_transcode_command_includes_channel_layout() -> None:
     assert command[idx + 1] == "FL+FR+FC+LFE+LFE2+SL+SR"
 
 
+def test_build_ffmpeg_transcode_command_includes_metadata_args() -> None:
+    command = _transcode.build_ffmpeg_transcode_command(
+        ["ffmpeg"],
+        Path("in.wav"),
+        Path("out.flac"),
+        "flac",
+        metadata_args=[
+            "-metadata",
+            "album=Deterministic Record",
+            "-metadata",
+            "x_custom=42",
+        ],
+    )
+    assert "album=Deterministic Record" in command
+    assert "x_custom=42" in command
+    assert command.index("album=Deterministic Record") < command.index("x_custom=42")
+
+
 def test_ffmpeg_supports_lfe2_layout_strings_detects_support() -> None:
     _transcode._FFMPEG_LFE2_LAYOUT_SUPPORT_CACHE.clear()
     completed = subprocess.CompletedProcess(
