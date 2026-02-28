@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 import math
 import wave
 from pathlib import Path
@@ -9,6 +10,11 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from mmo.core.loudness_methods import (
+    DEFAULT_LOUDNESS_METHOD_ID,
+    require_implemented_loudness_method,
+)
+from mmo.resources import ontology_dir
 from mmo.dsp.float64 import (
     bytes_to_float_samples_ieee,
     bytes_to_int_samples_pcm,
@@ -19,12 +25,65 @@ from mmo.dsp.channel_layout import (
     lufs_weighting_order_and_mode,
 )
 
+try:
+    import yaml
+except ImportError:  # pragma: no cover - optional dependency
+    yaml = None
+
 _EPSILON = 1e-12
 _TRUEPEAK_UPSAMPLE = 4
 _TRUEPEAK_TAPS = 63
 _LOUDNESS_OFFSET = -0.691
 _TRUEPEAK_PHASE_TAPS = 12
 _TRUEPEAK_BLOCK = 262144
+_BS1770_5_METHOD_ID = "BS.1770-5"
+
+_SHORT_LABEL_TO_SPK_ID: dict[str, str] = {
+    "M": "SPK.M",
+    "FL": "SPK.L",
+    "FR": "SPK.R",
+    "FC": "SPK.C",
+    "LFE": "SPK.LFE",
+    "LFE2": "SPK.LFE2",
+    "BL": "SPK.LRS",
+    "BR": "SPK.RRS",
+    # Treat SDDS FLC/FRC as front wides for BS.1770-5 Table 4 weighting.
+    "FLC": "SPK.LW",
+    "FRC": "SPK.RW",
+    "BC": "SPK.BC",
+    "SL": "SPK.LS",
+    "SR": "SPK.RS",
+    "TC": "SPK.TC",
+    "TFL": "SPK.TFL",
+    "TFC": "SPK.TFC",
+    "TFR": "SPK.TFR",
+    "TBL": "SPK.TRL",
+    "TBC": "SPK.TBC",
+    "TBR": "SPK.TRR",
+}
+
+_DEFAULT_SPEAKER_COORDS: dict[str, tuple[float, float]] = {
+    "SPK.M": (0.0, 0.0),
+    "SPK.L": (30.0, 0.0),
+    "SPK.R": (-30.0, 0.0),
+    "SPK.C": (0.0, 0.0),
+    "SPK.LFE": (0.0, 0.0),
+    "SPK.LFE2": (0.0, 0.0),
+    "SPK.LW": (60.0, 0.0),
+    "SPK.RW": (-60.0, 0.0),
+    "SPK.LS": (110.0, 0.0),
+    "SPK.RS": (-110.0, 0.0),
+    "SPK.LRS": (150.0, 0.0),
+    "SPK.RRS": (-150.0, 0.0),
+    "SPK.BC": (180.0, 0.0),
+    "SPK.TC": (0.0, 90.0),
+    "SPK.TFL": (30.0, 45.0),
+    "SPK.TFR": (-30.0, 45.0),
+    "SPK.TRL": (150.0, 45.0),
+    "SPK.TRR": (-150.0, 45.0),
+    "SPK.TFC": (0.0, 45.0),
+    "SPK.TBC": (180.0, 45.0),
+}
 
 
 @dataclass
@@ -34,6 +93,176 @@ class _BiquadState:
     y1: float = 0.0
     y2: float = 0.0
 
+
+@dataclass(frozen=True)
+class LoudnessWeightingReceipt:
+    method_id: str
+    order_csv: str
+    mode_str: str
+    warnings: tuple[str, ...]
+
+
+def _is_lfe_label(position_label: str) -> bool:
+    return str(position_label).upper().startswith("LFE")
+
+
+def _is_lfe_speaker_id(speaker_id: str | None) -> bool:
+    if speaker_id is None:
+        return False
+    return speaker_id.upper().startswith("SPK.LFE")
+
+
+def _bs1770_table4_gain(azimuth_deg: float, elevation_deg: float) -> float:
+    abs_phi = abs(float(elevation_deg))
+    abs_theta = abs(float(azimuth_deg))
+    if abs_phi < 30.0:
+        if abs_theta < 60.0:
+            return 1.0
+        if abs_theta <= 120.0:
+            return 1.41
+        if abs_theta <= 180.0:
+            return 1.0
+    return 1.0
+
+
+@lru_cache(maxsize=1)
+def _speaker_coords_from_ontology() -> dict[str, tuple[float, float]]:
+    coords = dict(_DEFAULT_SPEAKER_COORDS)
+    if yaml is None:
+        return coords
+
+    path = ontology_dir() / "speakers.yaml"
+    try:
+        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return coords
+    if not isinstance(payload, dict):
+        return coords
+
+    speakers = payload.get("speakers")
+    if not isinstance(speakers, dict):
+        return coords
+
+    for speaker_id, value in speakers.items():
+        if not isinstance(speaker_id, str) or not speaker_id.startswith("SPK."):
+            continue
+        if not isinstance(value, dict):
+            continue
+        azimuth = value.get("azimuth_deg")
+        elevation = value.get("elevation_deg")
+        if (
+            isinstance(azimuth, bool)
+            or not isinstance(azimuth, (int, float))
+            or isinstance(elevation, bool)
+            or not isinstance(elevation, (int, float))
+        ):
+            continue
+        coords[speaker_id] = (float(azimuth), float(elevation))
+    return coords
+
+
+def _position_label_to_speaker_id(position_label: str) -> str | None:
+    normalized = str(position_label).strip().upper()
+    if not normalized:
+        return None
+    return _SHORT_LABEL_TO_SPK_ID.get(normalized)
+
+
+def _bs1770_weighting_info_with_receipt(
+    channels: int,
+    wav_channel_mask: int | None,
+    channel_layout: str | None = None,
+) -> tuple[np.ndarray, str, str, LoudnessWeightingReceipt]:
+    weights = np.ones(channels, dtype=np.float64)
+    positions, order_csv, mode_str = lufs_weighting_order_and_mode(
+        channels, wav_channel_mask, channel_layout
+    )
+    warnings: list[str] = []
+    if positions is None:
+        warnings.append(
+            (
+                "Channel positions unavailable from WAV channel mask/layout; "
+                "defaulting all Gi values to 1.0."
+            )
+        )
+        receipt = LoudnessWeightingReceipt(
+            method_id=_BS1770_5_METHOD_ID,
+            order_csv=order_csv,
+            mode_str=mode_str,
+            warnings=tuple(warnings),
+        )
+        return weights, order_csv, mode_str, receipt
+
+    coords_by_speaker = _speaker_coords_from_ontology()
+
+    for idx, pos in enumerate(positions):
+        speaker_id = _position_label_to_speaker_id(pos)
+        if _is_lfe_label(pos) or _is_lfe_speaker_id(speaker_id):
+            weights[idx] = 0.0
+            continue
+
+        if speaker_id is None:
+            warnings.append(
+                (
+                    f"CH{idx}: unknown channel position label {pos!r}; "
+                    "defaulting Gi=1.0."
+                )
+            )
+            continue
+
+        coords = coords_by_speaker.get(speaker_id)
+        if coords is None:
+            warnings.append(
+                (
+                    f"CH{idx}: missing speaker metadata for {speaker_id}; "
+                    "defaulting Gi=1.0."
+                )
+            )
+            continue
+
+        azimuth_deg, elevation_deg = coords
+        weights[idx] = _bs1770_table4_gain(azimuth_deg, elevation_deg)
+
+    receipt = LoudnessWeightingReceipt(
+        method_id=_BS1770_5_METHOD_ID,
+        order_csv=order_csv,
+        mode_str=mode_str,
+        warnings=tuple(warnings),
+    )
+    return weights, order_csv, mode_str, receipt
+
+
+def _weighting_info_with_receipt(
+    channels: int,
+    wav_channel_mask: int | None,
+    channel_layout: str | None,
+    *,
+    method_id: str | None,
+) -> tuple[np.ndarray, str, str, LoudnessWeightingReceipt]:
+    resolved_method_id = require_implemented_loudness_method(method_id)
+    if resolved_method_id == _BS1770_5_METHOD_ID:
+        return _bs1770_weighting_info_with_receipt(
+            channels,
+            wav_channel_mask,
+            channel_layout=channel_layout,
+        )
+    raise RuntimeError(f"Unhandled loudness method_id: {resolved_method_id}")
+
+
+def loudness_weighting_receipt(
+    channels: int,
+    wav_channel_mask: int | None,
+    channel_layout: str | None = None,
+    *,
+    method_id: str | None = DEFAULT_LOUDNESS_METHOD_ID,
+) -> LoudnessWeightingReceipt:
+    _, _, _, receipt = _weighting_info_with_receipt(
+        channels,
+        wav_channel_mask,
+        channel_layout,
+        method_id=method_id,
+    )
+    return receipt
 
 
 def bs1770_weighting_info(
@@ -47,29 +276,12 @@ def bs1770_weighting_info(
     order_csv: inferred positions CSV or "unknown"
     mode_str: deterministic token
     """
-    weights = np.ones(channels, dtype=np.float64)
-    positions, order_csv, mode_str = lufs_weighting_order_and_mode(
-        channels, wav_channel_mask, channel_layout
+    weights, order_csv, mode_str, _ = _weighting_info_with_receipt(
+        channels,
+        wav_channel_mask,
+        channel_layout,
+        method_id=_BS1770_5_METHOD_ID,
     )
-    if positions is None:
-        return weights, order_csv, mode_str
-
-    pos_set = set(positions)
-
-    for idx, pos in enumerate(positions):
-        if str(pos).upper().startswith("LFE"):
-            weights[idx] = 0.0
-
-    has_sl_sr = "SL" in pos_set or "SR" in pos_set
-    if has_sl_sr:
-        for idx, pos in enumerate(positions):
-            if pos in ("SL", "SR"):
-                weights[idx] = 1.41
-    else:
-        for idx, pos in enumerate(positions):
-            if pos in ("BL", "BR"):
-                weights[idx] = 1.41
-
     return weights, order_csv, mode_str
 
 
@@ -77,8 +289,16 @@ def _bs1770_gi_weights(
     channels: int,
     channel_mask: int | None,
     channel_layout: str | None = None,
+    *,
+    method_id: str | None = DEFAULT_LOUDNESS_METHOD_ID,
 ) -> tuple[np.ndarray, str, str]:
-    return bs1770_weighting_info(channels, channel_mask, channel_layout)
+    weights, order_csv, mode_str, _ = _weighting_info_with_receipt(
+        channels,
+        channel_mask,
+        channel_layout,
+        method_id=method_id,
+    )
+    return weights, order_csv, mode_str
 
 
 def _read_wav_float64(path: Path) -> Tuple[np.ndarray, int]:
@@ -261,15 +481,19 @@ class OnlineLufsIntegrated:
         channels: int,
         channel_mask: int | None,
         channel_layout: str | None,
+        *,
+        method_id: str | None = DEFAULT_LOUDNESS_METHOD_ID,
     ) -> None:
         if channels <= 0:
             raise ValueError("channels must be positive")
         self.sample_rate_hz = sample_rate_hz
         self.channels = channels
+        self.method_id = require_implemented_loudness_method(method_id)
         self.weights, _, _ = _bs1770_gi_weights(
             channels,
             channel_mask,
             channel_layout=channel_layout,
+            method_id=self.method_id,
         )
         self.block_size = int(round(0.4 * sample_rate_hz))
         self.hop_size = int(round(0.1 * sample_rate_hz))
@@ -544,7 +768,11 @@ def compute_true_peak_dbtp_from_chunks(
     return float("-inf")
 
 
-def compute_lufs_integrated_wav(path: Path) -> float:
+def compute_lufs_integrated_wav(
+    path: Path,
+    *,
+    method_id: str | None = DEFAULT_LOUDNESS_METHOD_ID,
+) -> float:
     """Compute integrated loudness (LUFS) per ITU-style gating."""
     metadata = read_wav_metadata(path)
     channels = int(metadata["channels"])
@@ -556,10 +784,15 @@ def compute_lufs_integrated_wav(path: Path) -> float:
         channels,
         channel_mask=channel_mask,
         channel_layout=None,
+        method_id=method_id,
     )
 
 
-def compute_lufs_shortterm_wav(path: Path) -> float:
+def compute_lufs_shortterm_wav(
+    path: Path,
+    *,
+    method_id: str | None = DEFAULT_LOUDNESS_METHOD_ID,
+) -> float:
     """Compute short-term loudness (LUFS) over 3s windows."""
     metadata = read_wav_metadata(path)
     channels = int(metadata["channels"])
@@ -571,6 +804,7 @@ def compute_lufs_shortterm_wav(path: Path) -> float:
         channels,
         channel_mask=channel_mask,
         channel_layout=None,
+        method_id=method_id,
     )
 
 
@@ -621,12 +855,14 @@ def compute_lufs_integrated_float64(
     *,
     channel_mask: int | None,
     channel_layout: str | None,
+    method_id: str | None = DEFAULT_LOUDNESS_METHOD_ID,
 ) -> float:
     """Compute integrated loudness (LUFS) from float64 samples."""
     weights, _, _ = _bs1770_gi_weights(
         channels,
         channel_mask,
         channel_layout=channel_layout,
+        method_id=method_id,
     )
     return _compute_lufs_from_samples(
         samples,
@@ -645,12 +881,14 @@ def compute_lufs_integrated_from_chunks(
     *,
     channel_mask: int | None,
     channel_layout: str | None,
+    method_id: str | None = DEFAULT_LOUDNESS_METHOD_ID,
 ) -> float:
     accumulator = OnlineLufsIntegrated(
         sample_rate_hz,
         channels,
         channel_mask=channel_mask,
         channel_layout=channel_layout,
+        method_id=method_id,
     )
     for chunk in chunks:
         accumulator.update(chunk)
@@ -664,12 +902,14 @@ def compute_lufs_shortterm_float64(
     *,
     channel_mask: int | None,
     channel_layout: str | None,
+    method_id: str | None = DEFAULT_LOUDNESS_METHOD_ID,
 ) -> float:
     """Compute short-term loudness (LUFS) from float64 samples."""
     weights, _, _ = _bs1770_gi_weights(
         channels,
         channel_mask,
         channel_layout=channel_layout,
+        method_id=method_id,
     )
     return _compute_lufs_from_samples(
         samples,

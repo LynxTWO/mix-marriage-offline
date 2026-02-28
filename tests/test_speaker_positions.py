@@ -51,6 +51,26 @@ class TestSpeakerPositionsRegistry(unittest.TestCase):
 
         self.assertIsNone(get_layout_positions("LAYOUT.UNKNOWN", registry_path))
 
+    def test_layout_916_has_complete_speaker_metadata(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        registry_path = repo_root / "ontology" / "speaker_positions.yaml"
+
+        layout_positions = get_layout_positions("LAYOUT.9_1_6", registry_path)
+        self.assertIsInstance(layout_positions, list)
+        if not isinstance(layout_positions, list):
+            return
+
+        self.assertEqual(len(layout_positions), 16)
+        names = {
+            str(item.get("name"))
+            for item in layout_positions
+            if isinstance(item, dict)
+        }
+        self.assertIn("TFC", names)
+        self.assertIn("TBC", names)
+        self.assertIn("LW", names)
+        self.assertIn("RW", names)
+
     def test_load_speaker_positions_rejects_unsorted_channels(self) -> None:
         payload = """\
 schema_version: "0.1.0"

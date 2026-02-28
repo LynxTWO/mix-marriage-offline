@@ -83,7 +83,8 @@ class SpeakerPosition(str, Enum):
     - BL/BR  correspond to "rear/back" surrounds at ~135-150° (ontology: SPK.LRS/SPK.RRS).
     - TBL/TBR correspond to top-back/top-rear height speakers (ontology: SPK.TRL/SPK.TRR).
       The two naming conventions (Back vs Rear for heights) are industry aliases.
-    - FLC/FRC are the "front left/right of center" positions used in SDDS cinema.
+    - FLC/FRC are SDDS "front left/right of center" channels and are treated
+      as wide-front positions for BS.1770-5 weighting.
     - TFC/TBC/TC are reserved for 7.1.6 / 9.1.6 and future formats; channels at
       these positions are zeroed gracefully when not present in the input.
     """
@@ -126,9 +127,9 @@ class SpeakerPosition(str, Enum):
     FLW = "SPK.LW"      # Front Left Wide
     FRW = "SPK.RW"      # Front Right Wide
 
-    # Front left/right of center — used in SDDS cinema (8-channel screen)
-    FLC = "SPK.FLC"     # Front Left of Center  (~22.5°)
-    FRC = "SPK.FRC"     # Front Right of Center (~-22.5°)
+    # Front left/right of center — used in SDDS cinema (treated as wides for loudness)
+    FLC = "SPK.FLC"     # Front Left of Center  (~60° weighting behavior)
+    FRC = "SPK.FRC"     # Front Right of Center (~-60° weighting behavior)
 
     # Back center — used in some 6.1 and legacy surround formats
     BC = "SPK.BC"       # Back Center

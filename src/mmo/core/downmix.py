@@ -21,6 +21,7 @@ import math
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from mmo.core.loudness_methods import DEFAULT_LOUDNESS_METHOD_ID
 from mmo.dsp.downmix import (
     resolve_downmix_matrix,
 )
@@ -349,7 +350,10 @@ def measure_downmix_similarity(
     notes: List[str] = []
 
     # --- Spectral: integrated LUFS -------------------------------------------
-    lufs_raw = compute_lufs_integrated_wav(rendered_file)
+    lufs_raw = compute_lufs_integrated_wav(
+        rendered_file,
+        method_id=DEFAULT_LOUDNESS_METHOD_ID,
+    )
     lufs_integrated: Optional[float] = (
         None if math.isinf(lufs_raw) else round(lufs_raw, 3)
     )

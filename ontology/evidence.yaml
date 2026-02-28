@@ -281,6 +281,12 @@ evidence:
     value_type: "string"
     unit_id: "UNIT.NONE"
 
+  EVID.METER.LUFS_WEIGHTING_RECEIPT:
+    label: "LUFS weighting receipt"
+    description: "Structured weighting receipt including method id and position warnings."
+    value_type: "string"
+    unit_id: "UNIT.NONE"
+
   EVID.METER.LUFS_M:
     label: "Momentary loudness"
     description: "Momentary loudness (shorter window)."

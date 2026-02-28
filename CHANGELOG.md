@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Strict BS.1770-5 loudness method registry and advanced-layout weighting:
+  - Added versioned loudness method registry in `src/mmo/core/loudness_methods.py`
+    with implemented `BS.1770-5` plus forward-compat placeholder IDs that fail
+    with explicit `NotImplementedError`.
+  - Updated truth-meter loudness entrypoints to dispatch by `method_id` instead
+    of implicit hard-coded behavior.
+  - Implemented BS.1770-5 Table 4 position-based `Gi` weighting from ontology
+    speaker metadata, with deterministic warning receipts when positions are unknown.
+  - Added `EVID.METER.LUFS_WEIGHTING_RECEIPT` for structured weighting receipts
+    (method/order/mode/warnings) in scan output.
+  - Extended speaker ontology metadata for immersive readiness (`SPK.TFC`,
+    `SPK.TBC`, `SPK.TC`, `SPK.BC`, `SPK.FLC`, `SPK.FRC`) and added
+    `LAYOUT.7_1_6` / `LAYOUT.9_1_6` rows to `ontology/speaker_positions.yaml`.
 - First-class 2.1/3.x/4.x render targets across ontology, CLI, and GUI:
   - Added targets `TARGET.STEREO.2_1`, `TARGET.FRONT.3_0`,
     `TARGET.FRONT.3_1`, `TARGET.SURROUND.4_0`, and

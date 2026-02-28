@@ -8,6 +8,7 @@ import math
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
+from mmo.core.loudness_methods import DEFAULT_LOUDNESS_METHOD_ID
 from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.decoders import detect_format_from_path, read_metadata
@@ -385,6 +386,7 @@ def _short_term_lufs_distribution(
             channels,
             channel_mask=channel_mask,
             channel_layout=channel_layout,
+            method_id=DEFAULT_LOUDNESS_METHOD_ID,
         )
         if math.isfinite(candidate):
             values.append(float(candidate))
@@ -397,6 +399,7 @@ def _short_term_lufs_distribution(
                 channels,
                 channel_mask=channel_mask,
                 channel_layout=channel_layout,
+                method_id=DEFAULT_LOUDNESS_METHOD_ID,
             )
             if math.isfinite(candidate):
                 values.append(float(candidate))
@@ -711,6 +714,7 @@ def _metrics_from_numpy_frames(
             channels,
             channel_mask=channel_mask,
             channel_layout=channel_layout,
+            method_id=DEFAULT_LOUDNESS_METHOD_ID,
         )
         metrics["integrated_lufs"] = _round_or_none(integrated_lufs)
 

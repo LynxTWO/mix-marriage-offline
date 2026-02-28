@@ -126,6 +126,24 @@ speakers:
     elevation_deg: 0
     aliases: ["RW", "WR", "FWR", "WIDE_RIGHT", "FRONT_WIDE_RIGHT"]
 
+  SPK.FLC:
+    label: "Front Left of Center"
+    description: "SDDS Front Left of Center; treated as Left Wide for BS.1770-5."
+    channel_group: "front"
+    bed_or_height: "bed"
+    azimuth_deg: 60
+    elevation_deg: 0
+    aliases: ["FLC", "LEFT_OF_CENTER", "FRONT_LEFT_OF_CENTER", "LC"]
+
+  SPK.FRC:
+    label: "Front Right of Center"
+    description: "SDDS Front Right of Center; treated as Right Wide for BS.1770-5."
+    channel_group: "front"
+    bed_or_height: "bed"
+    azimuth_deg: -60
+    elevation_deg: 0
+    aliases: ["FRC", "RIGHT_OF_CENTER", "FRONT_RIGHT_OF_CENTER", "RC"]
+
   # -------------------------
   # Surrounds (bed)
   # -------------------------
@@ -165,6 +183,15 @@ speakers:
     elevation_deg: 0
     aliases: ["RRS", "BR", "RB", "BACK_RIGHT", "REAR_RIGHT", "SURROUND_BACK_RIGHT", "CHBR"]
 
+  SPK.BC:
+    label: "Back Center"
+    description: "Back Center (legacy 6.1 style center rear)."
+    channel_group: "rear"
+    bed_or_height: "bed"
+    azimuth_deg: 180
+    elevation_deg: 0
+    aliases: ["BC", "BACK_CENTER", "REAR_CENTER", "SURROUND_BACK_CENTER", "CHBC"]
+
   # -------------------------
   # Heights (top layer)
   # -------------------------
@@ -187,6 +214,26 @@ speakers:
     elevation_deg: 45
     is_height: true
     aliases: ["TFR", "HFR", "TOP_FRONT_RIGHT", "HEIGHT_FRONT_RIGHT", "FH_R", "CHTFR"]
+
+  SPK.TFC:
+    label: "Top Front Center"
+    description: "Top/Height Front Center."
+    channel_group: "height"
+    bed_or_height: "height"
+    azimuth_deg: 0
+    elevation_deg: 45
+    is_height: true
+    aliases: ["TFC", "TOP_FRONT_CENTER", "HEIGHT_FRONT_CENTER", "FH_C", "CHTFC"]
+
+  SPK.TC:
+    label: "Top Center"
+    description: "Top/Height Center."
+    channel_group: "height"
+    bed_or_height: "height"
+    azimuth_deg: 0
+    elevation_deg: 90
+    is_height: true
+    aliases: ["TC", "TOP_CENTER", "HEIGHT_CENTER", "CHTC"]
 
   SPK.TML:
     label: "Top Middle Left"
@@ -227,6 +274,16 @@ speakers:
     elevation_deg: 45
     is_height: true
     aliases: ["TRR", "HRR", "TOP_REAR_RIGHT", "HEIGHT_REAR_RIGHT", "RH_R", "CHTRR"]
+
+  SPK.TBC:
+    label: "Top Back Center"
+    description: "Top/Height Back Center."
+    channel_group: "height"
+    bed_or_height: "height"
+    azimuth_deg: 180
+    elevation_deg: 45
+    is_height: true
+    aliases: ["TBC", "TOP_BACK_CENTER", "HEIGHT_BACK_CENTER", "RH_C", "CHTBC"]
 
   # -------------------------
   # Object placeholder (for object-based metadata, not a physical speaker)

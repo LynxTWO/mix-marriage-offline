@@ -21,6 +21,25 @@ MMO processing is always canonical `SMPTE` internally.
 
 This prevents swaps (for example center/surround/LFE slot mistakes) while keeping internal logic deterministic and standard-agnostic.
 
+## BS.1770-5 loudness compliance
+
+Program loudness in MMO follows ITU-R BS.1770-5 with channel-position-aware `Gi` weighting:
+
+- LFE channels are always excluded from loudness summation (`Gi = 0.0` for `SPK.LFE*`).
+- Non-LFE channels use BS.1770-5 Table 4 weighting from azimuth/elevation metadata.
+- If channel position metadata is missing, MMO falls back to `Gi = 1.0` for that channel and records a weighting warning receipt.
+- `FLC`/`FRC` are treated as wide channels for loudness weighting (±60° behavior).
+
+The versioned loudness method registry lives in:
+
+- `src/mmo/core/loudness_methods.py`
+
+Current implemented method:
+
+- `BS.1770-5`
+
+Reserved placeholder method IDs are registered for forward compatibility and raise explicit `NotImplementedError` until implemented.
+
 ## How `--layout-standard` affects I/O
 
 `mmo safe-render --layout-standard <STANDARD>` controls boundary channel ordering for render output contracts.

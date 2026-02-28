@@ -91,10 +91,12 @@ Note: schema contracts use `schemas/*.schema.json` naming (not `schemas/*.json`)
 #### 4.4.1 Loudness and layout mapping (meter contract)
 - [x] Program loudness uses ITU-R BS.1770-5 weighting with explicit, tested channel mapping.
 - [x] LFE is excluded from program loudness (weight 0.0) and is always reported separately.
+- [x] Loudness method selection is versioned via a method registry (`src/mmo/core/loudness_methods.py`) with stable IDs and placeholder forward-compat entries.
 - [x] Common layout naming conventions are mapped correctly, including FFmpeg-style aliases:
   - 5.1 (back surrounds: BL/BR).
   - 5.1(side) (side surrounds: SL/SR).
-- [x] Layout inference treats BL/BR vs SL/SR differently for routing/semantics, while using the same BS.1770 surround weighting rules for loudness.
+- [x] BS.1770-5 Table 4 position weighting is applied for advanced sound-system channels from ontology azimuth/elevation metadata, with deterministic warning receipts for unknown positions.
+- [x] 9.1.6/7.1.6 metadata coverage is complete for loudness weighting inputs, including TFC/TBC and wide channels.
 
 #### 4.4.2 LFE validation and musician-friendly guidance
 - [x] Supports 1+ LFE channels (x.1, x.2, …) with per-LFE and summed reporting.

@@ -19,7 +19,7 @@ class TestTruthMetersFfmpegLayoutWeighting(unittest.TestCase):
         weights, order_csv, mode_str = bs1770_weighting_info(
             6, None, channel_layout="5.1"
         )
-        expected = np.array([1.0, 1.0, 1.0, 0.0, 1.41, 1.41], dtype=np.float64)
+        expected = np.array([1.0, 1.0, 1.0, 0.0, 1.0, 1.0], dtype=np.float64)
         self.assertEqual(order_csv, "FL,FR,FC,LFE,BL,BR")
         self.assertTrue(np.allclose(weights, expected, atol=1e-12, rtol=0.0))
         self.assertIn("ffmpeg_layout_known_51", mode_str)

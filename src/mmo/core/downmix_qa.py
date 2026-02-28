@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional
 
+from mmo.core.loudness_methods import DEFAULT_LOUDNESS_METHOD_ID
 from mmo.resources import ontology_dir
 
 from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples
@@ -170,6 +171,7 @@ def _truth_metrics_from_interleaved(samples: List[float], sample_rate_hz: int) -
         2,
         channel_mask=None,
         channel_layout="stereo",
+        method_id=DEFAULT_LOUDNESS_METHOD_ID,
     )
     true_peak = meters_truth.compute_true_peak_dbtp_float64(array, sample_rate_hz)
     correlation = _compute_stereo_correlation_from_interleaved(clipped)
@@ -693,6 +695,7 @@ def run_downmix_qa(
                 channels=2,
                 channel_mask=None,
                 channel_layout="stereo",
+                method_id=DEFAULT_LOUDNESS_METHOD_ID,
             )
             fold_tp = meters_truth.OnlineTruePeak(src_sample_rate, channels=2)
             fold_corr = OnlineCorrelationAccumulator()
@@ -713,6 +716,7 @@ def run_downmix_qa(
                 channels=2,
                 channel_mask=None,
                 channel_layout="stereo",
+                method_id=DEFAULT_LOUDNESS_METHOD_ID,
             )
             ref_tp = meters_truth.OnlineTruePeak(src_sample_rate, channels=2)
             ref_corr = OnlineCorrelationAccumulator()

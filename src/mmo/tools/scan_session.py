@@ -21,6 +21,7 @@ except ImportError:  # pragma: no cover - environment issue
     jsonschema = None
 
 from mmo import __version__ as engine_version  # noqa: E402
+from mmo.core.loudness_methods import DEFAULT_LOUDNESS_METHOD_ID  # noqa: E402
 from mmo.core.lfe_audit import (  # noqa: E402
     audit_lfe_channels,
     build_lfe_audit_issues,
@@ -398,11 +399,13 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
         compute_lufs_shortterm_wav,
         compute_true_peak_dbtp_float64,
         compute_true_peak_dbtp_wav,
+        loudness_weighting_receipt,
     )
     import numpy as np  # noqa: WPS433
 
     missing_ffmpeg = False
     ffmpeg_cmd = None
+    method_id = DEFAULT_LOUDNESS_METHOD_ID
     stems = session.get("stems", [])
     for stem in stems:
         if not isinstance(stem, dict):
@@ -429,6 +432,12 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
             channel_mask,
             channel_layout=stem.get("channel_layout"),
         )
+        weighting_receipt = loudness_weighting_receipt(
+            channels,
+            channel_mask,
+            channel_layout=stem.get("channel_layout"),
+            method_id=method_id,
+        )
         pairs, pair_meta, skip_reason = _plan_correlation_pairs(
             order_csv, mode_str, channels
         )
@@ -438,8 +447,14 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
         if format_id == "wav":
             try:
                 truepeak_dbtp = compute_true_peak_dbtp_wav(stem_path)
-                lufs_i = compute_lufs_integrated_wav(stem_path)
-                lufs_s = compute_lufs_shortterm_wav(stem_path)
+                lufs_i = compute_lufs_integrated_wav(
+                    stem_path,
+                    method_id=method_id,
+                )
+                lufs_s = compute_lufs_shortterm_wav(
+                    stem_path,
+                    method_id=method_id,
+                )
             except ValueError:
                 continue
             if pairs:
@@ -486,6 +501,7 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
                     channels,
                     channel_mask=stem.get("wav_channel_mask"),
                     channel_layout=stem.get("channel_layout"),
+                    method_id=method_id,
                 )
                 lufs_s = compute_lufs_shortterm_float64(
                     samples_array,
@@ -493,6 +509,7 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
                     channels,
                     channel_mask=stem.get("wav_channel_mask"),
                     channel_layout=stem.get("channel_layout"),
+                    method_id=method_id,
                 )
             except ValueError:
                 continue
@@ -538,6 +555,22 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
             stem,
             evidence_id="EVID.METER.LUFS_WEIGHTING_GI",
             value=gi_csv,
+            unit_id="UNIT.NONE",
+        )
+        receipt_json = json.dumps(
+            {
+                "method_id": weighting_receipt.method_id,
+                "mode": weighting_receipt.mode_str,
+                "order": weighting_receipt.order_csv,
+                "warnings": list(weighting_receipt.warnings),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        upsert_measurement(
+            stem,
+            evidence_id="EVID.METER.LUFS_WEIGHTING_RECEIPT",
+            value=receipt_json,
             unit_id="UNIT.NONE",
         )
 

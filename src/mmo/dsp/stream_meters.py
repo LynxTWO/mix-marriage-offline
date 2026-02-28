@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
+from mmo.core.loudness_methods import DEFAULT_LOUDNESS_METHOD_ID
 from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples
 from mmo.dsp.decoders import read_metadata
 from mmo.dsp.meters import compute_basic_stats_from_float64, iter_wav_float64_samples
@@ -62,7 +63,12 @@ def _integrated_lufs_or_none(
         except (ImportError, ValueError):
             return None
         try:
-            return _dbfs_or_none(compute_lufs_integrated_wav(path))
+            return _dbfs_or_none(
+                compute_lufs_integrated_wav(
+                    path,
+                    method_id=DEFAULT_LOUDNESS_METHOD_ID,
+                )
+            )
         except ValueError:
             return None
 
@@ -98,6 +104,7 @@ def _integrated_lufs_or_none(
             channel_layout=(
                 str(metadata.get("channel_layout", "")).strip().lower() or None
             ),
+            method_id=DEFAULT_LOUDNESS_METHOD_ID,
         )
     except ValueError:
         return None

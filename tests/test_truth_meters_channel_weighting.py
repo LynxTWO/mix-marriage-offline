@@ -19,7 +19,7 @@ class TestTruthMetersChannelWeighting(unittest.TestCase):
         from mmo.dsp.meters_truth import bs1770_weighting_info
 
         weights, order_csv, mode_str = bs1770_weighting_info(6, 0x3F, None)
-        expected = np.array([1.0, 1.0, 1.0, 0.0, 1.41, 1.41], dtype=np.float64)
+        expected = np.array([1.0, 1.0, 1.0, 0.0, 1.0, 1.0], dtype=np.float64)
         self.assertEqual(order_csv, "FL,FR,FC,LFE,BL,BR")
         self.assertTrue(np.allclose(weights, expected, atol=1e-12, rtol=0.0))
         self.assertIn("mask_known_51", mode_str)
@@ -45,6 +45,24 @@ class TestTruthMetersChannelWeighting(unittest.TestCase):
         self.assertEqual(order_csv, "unknown")
         self.assertTrue(np.allclose(weights, expected, atol=1e-12, rtol=0.0))
         self.assertIn("fallback_layout_missing", mode_str)
+
+    def test_layout_wides_are_141(self) -> None:
+        self._skip_if_no_numpy()
+        from mmo.dsp.meters_truth import bs1770_weighting_info
+
+        weights, order_csv, _ = bs1770_weighting_info(8, None, "7.1(wide)")
+        self.assertEqual(order_csv, "FL,FR,FC,LFE,FLC,FRC,SL,SR")
+        self.assertAlmostEqual(float(weights[4]), 1.41, places=12)
+        self.assertAlmostEqual(float(weights[5]), 1.41, places=12)
+        self.assertAlmostEqual(float(weights[3]), 0.0, places=12)
+
+    def test_unknown_positions_emit_warning_receipt(self) -> None:
+        self._skip_if_no_numpy()
+        from mmo.dsp.meters_truth import loudness_weighting_receipt
+
+        receipt = loudness_weighting_receipt(6, None, "unknown")
+        self.assertEqual(receipt.method_id, "BS.1770-5")
+        self.assertTrue(receipt.warnings)
 
 
 if __name__ == "__main__":

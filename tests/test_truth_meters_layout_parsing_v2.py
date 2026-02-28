@@ -21,7 +21,7 @@ class TestTruthMetersLayoutParsingV2(unittest.TestCase):
         weights, order_csv, mode_str = bs1770_weighting_info(
             6, None, "fl+fr+fc+lfe+bl+br"
         )
-        expected = np.array([1.0, 1.0, 1.0, 0.0, 1.41, 1.41], dtype=np.float64)
+        expected = np.array([1.0, 1.0, 1.0, 0.0, 1.0, 1.0], dtype=np.float64)
         self.assertEqual(order_csv, "FL,FR,FC,LFE,BL,BR")
         self.assertTrue(np.allclose(weights, expected, atol=1e-12, rtol=0.0))
         self.assertIn("layout_list_exact", mode_str)
@@ -42,7 +42,7 @@ class TestTruthMetersLayoutParsingV2(unittest.TestCase):
 
         weights, order_csv, mode_str = bs1770_weighting_info(8, None, "7.1(wide)")
         expected = np.array(
-            [1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.41, 1.41], dtype=np.float64
+            [1.0, 1.0, 1.0, 0.0, 1.41, 1.41, 1.41, 1.41], dtype=np.float64
         )
         self.assertEqual(order_csv, "FL,FR,FC,LFE,FLC,FRC,SL,SR")
         self.assertTrue(np.allclose(weights, expected, atol=1e-12, rtol=0.0))
@@ -113,7 +113,7 @@ class TestTruthMetersLayoutParsingV2(unittest.TestCase):
         from mmo.dsp.meters_truth import bs1770_weighting_info
 
         weights, order_csv, mode_str = bs1770_weighting_info(5, None, "5.0")
-        expected = np.array([1.0, 1.0, 1.0, 1.41, 1.41], dtype=np.float64)
+        expected = np.array([1.0, 1.0, 1.0, 1.0, 1.0], dtype=np.float64)
         self.assertEqual(order_csv, "FL,FR,FC,BL,BR")
         self.assertTrue(np.allclose(weights, expected, atol=1e-12, rtol=0.0))
         self.assertIn("ffmpeg_layout_known_50", mode_str)
@@ -143,7 +143,7 @@ class TestTruthMetersLayoutParsingV2(unittest.TestCase):
         from mmo.dsp.meters_truth import bs1770_weighting_info
 
         weights, order_csv, mode_str = bs1770_weighting_info(6, None, "6.0(front)")
-        expected = np.array([1.0, 1.0, 1.0, 1.0, 1.41, 1.41], dtype=np.float64)
+        expected = np.array([1.0, 1.0, 1.41, 1.41, 1.41, 1.41], dtype=np.float64)
         self.assertEqual(order_csv, "FL,FR,FLC,FRC,SL,SR")
         self.assertTrue(np.allclose(weights, expected, atol=1e-12, rtol=0.0))
         self.assertIn("ffmpeg_layout_known_60_front", mode_str)
@@ -166,7 +166,7 @@ class TestTruthMetersLayoutParsingV2(unittest.TestCase):
 
         weights, order_csv, mode_str = bs1770_weighting_info(7, None, "7.0(front)")
         expected = np.array(
-            [1.0, 1.0, 1.0, 1.0, 1.0, 1.41, 1.41], dtype=np.float64
+            [1.0, 1.0, 1.0, 1.41, 1.41, 1.41, 1.41], dtype=np.float64
         )
         self.assertEqual(order_csv, "FL,FR,FC,FLC,FRC,SL,SR")
         self.assertTrue(np.allclose(weights, expected, atol=1e-12, rtol=0.0))
@@ -178,7 +178,7 @@ class TestTruthMetersLayoutParsingV2(unittest.TestCase):
 
         weights, order_csv, mode_str = bs1770_weighting_info(8, None, "7.1(wide-side)")
         expected = np.array(
-            [1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.41, 1.41], dtype=np.float64
+            [1.0, 1.0, 1.0, 0.0, 1.41, 1.41, 1.41, 1.41], dtype=np.float64
         )
         self.assertEqual(order_csv, "FL,FR,FC,LFE,FLC,FRC,SL,SR")
         self.assertTrue(np.allclose(weights, expected, atol=1e-12, rtol=0.0))
@@ -189,7 +189,7 @@ class TestTruthMetersLayoutParsingV2(unittest.TestCase):
         from mmo.dsp.meters_truth import bs1770_weighting_info
 
         weights, order_csv, mode_str = bs1770_weighting_info(4, None, "quad")
-        expected = np.array([1.0, 1.0, 1.41, 1.41], dtype=np.float64)
+        expected = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float64)
         self.assertEqual(order_csv, "FL,FR,BL,BR")
         self.assertTrue(np.allclose(weights, expected, atol=1e-12, rtol=0.0))
         self.assertIn("ffmpeg_layout_known_quad", mode_str)
