@@ -18,6 +18,45 @@
     }
   },
   "$defs": {
+    "raw_tag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "container", "scope", "key", "value", "index"],
+      "properties": {
+        "source": { "type": "string", "enum": ["format", "stream"] },
+        "container": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "minLength": 1 },
+        "key": { "type": "string", "minLength": 1 },
+        "value": { "type": "string" },
+        "index": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "tag_bag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw", "normalized", "warnings"],
+      "properties": {
+        "raw": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/raw_tag" }
+        },
+        "normalized": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
     "renderer_manifest": {
       "type": "object",
       "additionalProperties": false,
@@ -58,7 +97,12 @@
         "channel_count": { "type": "integer", "minimum": 1 },
         "sha256": { "type": "string", "minLength": 16 },
         "notes": { "type": "string" },
-        "metadata": { "type": "object", "additionalProperties": true }
+        "metadata": {
+          "oneOf": [
+            { "$ref": "#/$defs/tag_bag" },
+            { "type": "object", "additionalProperties": true }
+          ]
+        }
       }
     },
     "render_skipped": {

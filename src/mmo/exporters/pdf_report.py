@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from mmo.core.gates import load_gates_policy
+from mmo.core.media_tags import summarize_stem_source_tags
 from mmo.core.speaker_layout import get_preset
 from mmo.exporters.pdf_utils import render_maybe_json, truncate_value
 
@@ -602,6 +603,31 @@ def _vibe_signals_lines(vibe_signals: Dict[str, Any]) -> List[str]:
     return lines
 
 
+def _source_tags_lines(stems: Any) -> List[str]:
+    summary = summarize_stem_source_tags(stems)
+    normalized = summary.get("normalized", {})
+    preserved_count = summary.get("preserved_tag_count")
+    warnings = summary.get("warnings")
+
+    title = _safe_str(normalized.get("title")).strip() or "-"
+    artist = _safe_str(normalized.get("artist")).strip() or "-"
+    album = _safe_str(normalized.get("album")).strip() or "-"
+    date = _safe_str(normalized.get("date")).strip() or "-"
+
+    lines = [
+        f"title: {title}",
+        f"artist: {artist}",
+        f"album: {album}",
+        f"date: {date}",
+        f"preserved_tag_count: {_safe_str(preserved_count)}",
+    ]
+    if isinstance(warnings, list):
+        for warning in warnings:
+            if isinstance(warning, str) and warning.strip():
+                lines.append(f"warning: {warning.strip()}")
+    return lines
+
+
 def _speaker_layout_summary_table(layout_id: str, standard_str: str) -> "Table | None":
     """Build a per-slot channel table for layout_id × standard_str."""
     if not layout_id or not standard_str:
@@ -992,6 +1018,14 @@ def export_report_pdf(
         )
     story.append(Spacer(1, 12))
 
+    session = report.get("session", {})
+    stems = session.get("stems", []) if isinstance(session, dict) else []
+    story.append(Paragraph("Source Tags", styles["Heading2"]))
+    story.append(Spacer(1, 6))
+    for line in _source_tags_lines(stems):
+        story.append(Paragraph(line, styles["Normal"]))
+    story.append(Spacer(1, 12))
+
     # Speaker layout summary table — show channel order for first stem layout × standard.
     session_for_layout = report.get("session", {})
     stems_for_layout = session_for_layout.get("stems", []) if isinstance(session_for_layout, dict) else []
@@ -1063,10 +1097,6 @@ def export_report_pdf(
             )
             story.append(Spacer(1, 12))
 
-    session = report.get("session", {})
-    stems = []
-    if isinstance(session, dict):
-        stems = session.get("stems", [])
     if include_measurements and isinstance(stems, list) and stems:
         story.append(Paragraph("Measurements", styles["Heading2"]))
         story.append(Spacer(1, 6))

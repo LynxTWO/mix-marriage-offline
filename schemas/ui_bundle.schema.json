@@ -202,6 +202,30 @@
         }
       }
     },
+    "source_tags_summary_normalized": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "artist", "album", "date"],
+      "properties": {
+        "title": { "type": ["string", "null"] },
+        "artist": { "type": ["string", "null"] },
+        "album": { "type": ["string", "null"] },
+        "date": { "type": ["string", "null"] }
+      }
+    },
+    "source_tags_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["normalized", "preserved_tag_count", "warnings"],
+      "properties": {
+        "normalized": { "$ref": "#/$defs/source_tags_summary_normalized" },
+        "preserved_tag_count": { "type": "integer", "minimum": 0 },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
     "preset_recommendation_summary": {
       "type": "object",
       "additionalProperties": false,
@@ -671,7 +695,8 @@
         "blocked_counts",
         "extreme_count",
         "downmix_qa",
-        "mix_complexity"
+        "mix_complexity",
+        "source_tags"
       ],
       "properties": {
         "profile_id": { "type": "string" },
@@ -684,6 +709,7 @@
         "extreme_count": { "type": "integer", "minimum": 0 },
         "downmix_qa": { "$ref": "#/$defs/downmix_qa_summary" },
         "mix_complexity": { "$ref": "#/$defs/mix_complexity_summary" },
+        "source_tags": { "$ref": "#/$defs/source_tags_summary" },
         "vibe_signals": { "$ref": "#/$defs/vibe_signals_summary" },
         "preset_recommendations": {
           "type": "array",

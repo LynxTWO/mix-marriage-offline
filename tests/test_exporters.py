@@ -332,6 +332,47 @@ class TestExporters(unittest.TestCase):
             lines,
         )
 
+    def test_source_tags_lines(self) -> None:
+        lines = pdf_report._source_tags_lines(
+            [
+                {
+                    "stem_id": "STEM.001",
+                    "source_metadata": {
+                        "technical": {},
+                        "tags": {
+                            "raw": [
+                                {
+                                    "source": "format",
+                                    "container": "wav",
+                                    "scope": "info",
+                                    "key": "INAM",
+                                    "value": "Song",
+                                    "index": 0,
+                                },
+                                {
+                                    "source": "format",
+                                    "container": "wav",
+                                    "scope": "info",
+                                    "key": "IART",
+                                    "value": "Artist",
+                                    "index": 0,
+                                },
+                            ],
+                            "normalized": {
+                                "inam": ["Song"],
+                                "iart": ["Artist"],
+                            },
+                            "warnings": ["Unknown WAV chunk 'abcd' size=4"],
+                        },
+                    },
+                }
+            ]
+        )
+        self.assertIn("title: Song", lines)
+        self.assertIn("artist: Artist", lines)
+        self.assertIn("preserved_tag_count: 2", lines)
+        self.assertIn("warning: Unknown WAV chunk 'abcd' size=4", lines)
+
 
 class TestRecallSheet(unittest.TestCase):
     def _minimal_report(self) -> dict:

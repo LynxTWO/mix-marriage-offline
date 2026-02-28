@@ -46,6 +46,16 @@
         "density_mean": 1.0,
         "density_peak": 2,
         "top_masking_pairs_count": 0
+      },
+      "source_tags": {
+        "normalized": {
+          "title": null,
+          "artist": null,
+          "album": null,
+          "date": null
+        },
+        "preserved_tag_count": 0,
+        "warnings": []
       }
     },
     "stems_summary": {

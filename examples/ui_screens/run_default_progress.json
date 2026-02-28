@@ -141,7 +141,17 @@
           ],
           "output_count": 1
         }
-      ]
+      ],
+      "source_tags": {
+        "normalized": {
+          "title": null,
+          "artist": null,
+          "album": null,
+          "date": null
+        },
+        "preserved_tag_count": 0,
+        "warnings": []
+      }
     },
     "ui_copy": {
       "locale": "en-US",

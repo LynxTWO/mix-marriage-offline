@@ -14,6 +14,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from mmo.core.media_tags import source_metadata_from_value
+
 SCENE_SCHEMA_VERSION = "0.1.0"
 _CREATED_FROM = "analyze"
 _LOCK_HASH_PREFIX_LEN = 12
@@ -317,14 +319,18 @@ def build_scene_from_session(
         existing_notes = _string_list(stem.get("notes"))
         all_notes = existing_notes + [n for n in infer_notes if n not in existing_notes]
 
-        objects.append({
+        object_payload = {
             "object_id": object_id,
             "stem_id": stem_id,
             "label": _label_from_stem(stem, index=idx),
             "channel_count": _coerce_channel_count(stem.get("channel_count")),
             "intent": intent,
             "notes": all_notes,
-        })
+        }
+        source_metadata = source_metadata_from_value(stem.get("source_metadata"))
+        if source_metadata is not None:
+            object_payload["source_metadata"] = source_metadata
+        objects.append(object_payload)
 
     # Stable sort: stem_id then object_id
     objects.sort(key=lambda o: (o["stem_id"], o["object_id"]))

@@ -71,6 +71,65 @@
     "metering": { "$ref": "#/$defs/metering_summary" }
   },
   "$defs": {
+    "raw_tag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "container", "scope", "key", "value", "index"],
+      "properties": {
+        "source": { "type": "string", "enum": ["format", "stream"] },
+        "container": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "minLength": 1 },
+        "key": { "type": "string", "minLength": 1 },
+        "value": { "type": "string" },
+        "index": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "tag_bag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw", "normalized", "warnings"],
+      "properties": {
+        "raw": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/raw_tag" }
+        },
+        "normalized": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "source_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["technical", "tags"],
+      "properties": {
+        "technical": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "string" },
+              { "type": "boolean" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "tags": { "$ref": "#/$defs/tag_bag" }
+      }
+    },
     "session": {
       "type": "object",
       "additionalProperties": false,
@@ -152,6 +211,7 @@
         "wav_audio_format": { "type": "integer", "minimum": 1 },
         "wav_audio_format_resolved": { "type": "integer", "minimum": 1 },
         "wav_channel_mask": { "type": "integer", "minimum": 0 },
+        "source_metadata": { "$ref": "#/$defs/source_metadata" },
         "metrics": {
           "type": "object",
           "additionalProperties": false,

@@ -30,6 +30,65 @@
     "metadata": { "$ref": "#/$defs/metadata" }
   },
   "$defs": {
+    "raw_tag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "container", "scope", "key", "value", "index"],
+      "properties": {
+        "source": { "type": "string", "enum": ["format", "stream"] },
+        "container": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "minLength": 1 },
+        "key": { "type": "string", "minLength": 1 },
+        "value": { "type": "string" },
+        "index": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "tag_bag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw", "normalized", "warnings"],
+      "properties": {
+        "raw": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/raw_tag" }
+        },
+        "normalized": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "source_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["technical", "tags"],
+      "properties": {
+        "technical": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "string" },
+              { "type": "boolean" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "tags": { "$ref": "#/$defs/tag_bag" }
+      }
+    },
     "posix_abs_path": {
       "type": "string",
       "pattern": "^(?:[A-Za-z]:/|/).+"
@@ -91,6 +150,7 @@
         "stem_id": { "type": "string", "minLength": 1 },
         "label": { "type": "string", "minLength": 1 },
         "channel_count": { "type": "integer", "minimum": 1 },
+        "source_metadata": { "$ref": "#/$defs/source_metadata" },
         "intent": { "$ref": "#/$defs/object_intent" },
         "notes": {
           "type": "array",

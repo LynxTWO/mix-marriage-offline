@@ -4,6 +4,9 @@ import hashlib
 import io
 import struct
 from pathlib import Path
+from typing import Any
+
+from mmo.core.media_tags import RawTag, canonicalize_tag_bag, tag_bag_to_mapping
 
 
 _KSDATAFORMAT_SUBTYPE_PCM = struct.pack(
@@ -12,6 +15,163 @@ _KSDATAFORMAT_SUBTYPE_PCM = struct.pack(
 _KSDATAFORMAT_SUBTYPE_IEEE_FLOAT = struct.pack(
     "<IHH8s", 0x00000003, 0x0000, 0x0010, b"\x80\x00\x00\xaa\x00\x38\x9b\x71"
 )
+
+_KNOWN_WAV_CHUNK_IDS = frozenset({
+    b"fmt ",
+    b"data",
+    b"LIST",
+    b"fact",
+    b"bext",
+    b"iXML",
+    b"JUNK",
+    b"PAD ",
+    b"cue ",
+    b"smpl",
+    b"inst",
+    b"axml",
+    b"cart",
+    b"plst",
+    b"id3 ",
+    b"ID3 ",
+    b"PEAK",
+    b"afsp",
+})
+
+
+def _chunk_id_text(chunk_id: bytes) -> str:
+    return chunk_id.decode("ascii", errors="replace")
+
+
+def _decode_wav_text(value: bytes) -> str:
+    return value.rstrip(b"\x00").decode("utf-8", errors="replace").strip()
+
+
+def _parse_info_tags(
+    payload: bytes,
+    *,
+    tag_index_start: int,
+    raw_tags: list[RawTag],
+    warnings: list[str],
+) -> int:
+    cursor = 0
+    tag_index = tag_index_start
+
+    while cursor + 8 <= len(payload):
+        subchunk_id, subchunk_size = struct.unpack("<4sI", payload[cursor : cursor + 8])
+        cursor += 8
+        end = cursor + subchunk_size
+        if end > len(payload):
+            warnings.append(
+                f"Truncated WAV LIST/INFO subchunk '{_chunk_id_text(subchunk_id)}' size={subchunk_size}"
+            )
+            break
+        value = _decode_wav_text(payload[cursor:end])
+        cursor = end
+        if subchunk_size % 2 == 1 and cursor < len(payload):
+            cursor += 1
+        if not value:
+            continue
+        raw_tags.append(
+            RawTag(
+                source="format",
+                container="wav",
+                scope="info",
+                key=_chunk_id_text(subchunk_id),
+                value=value,
+                index=tag_index,
+            )
+        )
+        tag_index += 1
+
+    if cursor < len(payload):
+        remainder = len(payload) - cursor
+        if remainder > 0:
+            warnings.append(f"Trailing bytes in WAV LIST/INFO payload: {remainder}")
+    return tag_index
+
+
+def _parse_bext_tags(
+    payload: bytes,
+    *,
+    index: int,
+    raw_tags: list[RawTag],
+) -> None:
+    def _add_text_tag(key: str, start: int, end: int) -> None:
+        if len(payload) < end:
+            return
+        value = _decode_wav_text(payload[start:end])
+        if not value:
+            return
+        raw_tags.append(
+            RawTag(
+                source="format",
+                container="wav",
+                scope="bext",
+                key=key,
+                value=value,
+                index=index,
+            )
+        )
+
+    _add_text_tag("description", 0, 256)
+    _add_text_tag("originator", 256, 288)
+    _add_text_tag("originator_reference", 288, 320)
+    _add_text_tag("origination_date", 320, 330)
+    _add_text_tag("origination_time", 330, 338)
+
+    if len(payload) >= 346:
+        time_reference = struct.unpack("<Q", payload[338:346])[0]
+        raw_tags.append(
+            RawTag(
+                source="format",
+                container="wav",
+                scope="bext",
+                key="time_reference",
+                value=str(time_reference),
+                index=index,
+            )
+        )
+    if len(payload) >= 348:
+        version = struct.unpack("<H", payload[346:348])[0]
+        raw_tags.append(
+            RawTag(
+                source="format",
+                container="wav",
+                scope="bext",
+                key="version",
+                value=str(version),
+                index=index,
+            )
+        )
+    if len(payload) > 602:
+        coding_history = _decode_wav_text(payload[602:])
+        if coding_history:
+            raw_tags.append(
+                RawTag(
+                    source="format",
+                    container="wav",
+                    scope="bext",
+                    key="coding_history",
+                    value=coding_history,
+                    index=index,
+                )
+            )
+
+
+def _parse_ixml_tag(payload: bytes, *, index: int, raw_tags: list[RawTag]) -> None:
+    value = _decode_wav_text(payload)
+    if not value:
+        return
+    raw_tags.append(
+        RawTag(
+            source="format",
+            container="wav",
+            scope="ixml",
+            key="xml",
+            value=value,
+            index=index,
+        )
+    )
 
 
 def sha256_file(path: Path) -> str:
@@ -53,6 +213,11 @@ def read_wav_metadata(path: Path) -> dict:
             fmt_fields = None
             fmt_chunk = None
             data_bytes = None
+            raw_tags: list[RawTag] = []
+            tag_warnings: list[str] = []
+            info_tag_index = 0
+            bext_chunk_index = 0
+            ixml_chunk_index = 0
 
             while handle.tell() + 8 <= file_size:
                 chunk_header = handle.read(8)
@@ -79,16 +244,57 @@ def read_wav_metadata(path: Path) -> dict:
                 elif chunk_id == b"data":
                     data_bytes = chunk_size
                     handle.seek(chunk_size, io.SEEK_CUR)
+                elif chunk_id == b"LIST":
+                    chunk_data = handle.read(chunk_size)
+                    if len(chunk_data) != chunk_size:
+                        raise ValueError(f"Truncated LIST chunk in '{path}'")
+                    if chunk_size < 4:
+                        tag_warnings.append("Truncated WAV LIST chunk (missing type marker)")
+                    else:
+                        list_type = chunk_data[:4]
+                        list_payload = chunk_data[4:]
+                        if list_type == b"INFO":
+                            info_tag_index = _parse_info_tags(
+                                list_payload,
+                                tag_index_start=info_tag_index,
+                                raw_tags=raw_tags,
+                                warnings=tag_warnings,
+                            )
+                        else:
+                            tag_warnings.append(
+                                f"Unknown WAV LIST type '{_chunk_id_text(list_type)}' size={chunk_size}"
+                            )
+                elif chunk_id == b"bext":
+                    chunk_data = handle.read(chunk_size)
+                    if len(chunk_data) != chunk_size:
+                        raise ValueError(f"Truncated bext chunk in '{path}'")
+                    _parse_bext_tags(
+                        chunk_data,
+                        index=bext_chunk_index,
+                        raw_tags=raw_tags,
+                    )
+                    bext_chunk_index += 1
+                elif chunk_id == b"iXML":
+                    chunk_data = handle.read(chunk_size)
+                    if len(chunk_data) != chunk_size:
+                        raise ValueError(f"Truncated iXML chunk in '{path}'")
+                    _parse_ixml_tag(
+                        chunk_data,
+                        index=ixml_chunk_index,
+                        raw_tags=raw_tags,
+                    )
+                    ixml_chunk_index += 1
                 else:
                     handle.seek(chunk_size, io.SEEK_CUR)
+                    if chunk_id not in _KNOWN_WAV_CHUNK_IDS:
+                        tag_warnings.append(
+                            f"Unknown WAV chunk '{_chunk_id_text(chunk_id)}' size={chunk_size}"
+                        )
 
                 if chunk_size % 2 == 1:
                     if handle.tell() + 1 > file_size:
                         raise ValueError(f"Truncated padding byte after {chunk_id!r}")
                     handle.seek(1, io.SEEK_CUR)
-
-                if fmt_fields is not None and data_bytes is not None:
-                    break
     except OSError as exc:
         raise ValueError(f"Failed to read WAV file '{path}': {exc}") from exc
 
@@ -148,4 +354,5 @@ def read_wav_metadata(path: Path) -> dict:
         "block_align": block_align,
         "channel_mask": channel_mask,
         "fmt_chunk": fmt_chunk,
+        "tags": tag_bag_to_mapping(canonicalize_tag_bag(raw_tags, tag_warnings)),
     }

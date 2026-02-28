@@ -8,6 +8,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict
 
+from mmo.core.media_tags import RawTag, canonicalize_tag_bag, tag_bag_to_mapping
+
 
 def find_ffprobe() -> Path | None:
     env_path = os.environ.get("MMO_FFPROBE_PATH")
@@ -47,6 +49,76 @@ def _parse_float(value: Any) -> float | None:
         except ValueError:
             return None
     return None
+
+
+def _ffprobe_container(payload: Dict[str, Any], *, path: Path) -> str:
+    fmt = payload.get("format")
+    if isinstance(fmt, dict):
+        format_name = fmt.get("format_name")
+        if isinstance(format_name, str) and format_name.strip():
+            first_name = format_name.split(",", 1)[0].strip().lower()
+            if first_name:
+                return first_name
+    suffix = path.suffix.strip().lower().lstrip(".")
+    return suffix or "unknown"
+
+
+def _extract_ffprobe_tags(payload: Dict[str, Any], *, container: str) -> dict[str, Any]:
+    raw_tags: list[RawTag] = []
+    warnings: list[str] = []
+
+    fmt = payload.get("format")
+    if isinstance(fmt, dict):
+        format_tags = fmt.get("tags")
+        if isinstance(format_tags, dict):
+            for raw_key in sorted(format_tags.keys(), key=lambda value: str(value).lower()):
+                if not isinstance(raw_key, str) or not raw_key.strip():
+                    continue
+                raw_value = format_tags.get(raw_key)
+                if raw_value is None:
+                    continue
+                raw_tags.append(
+                    RawTag(
+                        source="format",
+                        container=container,
+                        scope="format",
+                        key=raw_key,
+                        value=str(raw_value),
+                        index=0,
+                    )
+                )
+        elif format_tags is not None:
+            warnings.append("ffprobe format.tags is not an object")
+
+    streams = payload.get("streams")
+    if isinstance(streams, list):
+        for stream_index, stream in enumerate(streams):
+            if not isinstance(stream, dict):
+                continue
+            stream_tags = stream.get("tags")
+            if stream_tags is None:
+                continue
+            if not isinstance(stream_tags, dict):
+                warnings.append(f"ffprobe stream[{stream_index}] tags is not an object")
+                continue
+            for raw_key in sorted(stream_tags.keys(), key=lambda value: str(value).lower()):
+                if not isinstance(raw_key, str) or not raw_key.strip():
+                    continue
+                raw_value = stream_tags.get(raw_key)
+                if raw_value is None:
+                    continue
+                raw_tags.append(
+                    RawTag(
+                        source="stream",
+                        container=container,
+                        scope=f"stream:{stream_index}",
+                        key=raw_key,
+                        value=str(raw_value),
+                        index=stream_index,
+                    )
+                )
+
+    return tag_bag_to_mapping(canonicalize_tag_bag(raw_tags, warnings))
 
 
 def read_metadata_ffprobe(path: Path) -> Dict[str, Any]:
@@ -126,5 +198,10 @@ def read_metadata_ffprobe(path: Path) -> Dict[str, Any]:
         normalized = channel_layout.strip().lower()
         if normalized:
             metadata["channel_layout"] = normalized
+
+    metadata["tags"] = _extract_ffprobe_tags(
+        payload,
+        container=_ffprobe_container(payload, path=path),
+    )
 
     return metadata

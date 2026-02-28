@@ -5,7 +5,9 @@ import re
 from pathlib import Path
 from typing import Any
 
+from mmo.core.media_tags import source_metadata_from_probe
 from mmo.core.session import discover_stem_files
+from mmo.dsp.decoders import read_metadata
 
 STEMS_INDEX_VERSION = "0.1.0"
 _SET_ID_PREFIX = "STEMSET."
@@ -97,6 +99,21 @@ def _validated_root(root: Path) -> Path:
     if not resolved.is_dir():
         raise ValueError(f"Root path must be a directory: {root}")
     return resolved
+
+
+def _source_metadata_for_file(path: Path) -> dict[str, Any]:
+    try:
+        metadata = read_metadata(path)
+    except (ValueError, NotImplementedError):
+        return {
+            "technical": {},
+            "tags": {
+                "raw": [],
+                "normalized": {},
+                "warnings": ["Source metadata unavailable."],
+            },
+        }
+    return source_metadata_from_probe(metadata)
 
 
 def discover_audio_files(root: Path) -> list[Path]:
@@ -202,6 +219,7 @@ def build_stems_index(root: Path, *, root_dir: str | None = None) -> dict[str, A
                     "ext": file_path.suffix.lower(),
                     "tokens": _tokenize_value(basename),
                     "folder_tokens": folder_tokens,
+                    "source_metadata": _source_metadata_for_file(file_path),
                 }
             )
     files.sort(

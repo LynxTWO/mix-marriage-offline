@@ -59,6 +59,7 @@ Note: schema contracts use `schemas/*.schema.json` naming (not `schemas/*.json`)
 - [x] schemas/render_report.schema.json defines QA + evidence output.
 - [x] schemas/report.schema.json defines human-readable report payload shape.
 - [x] schemas/plugin.schema.json defines plugin capabilities and semantics.
+- [x] Source metadata tag preservation model is implemented (`source_metadata.technical` + canonical `TagBag` with `raw`/`normalized`/`warnings`).
 - [x] Every schema is strict (`additionalProperties: false`) where appropriate.
 - [x] CLI and core reject invalid inputs with clear, actionable errors.
 

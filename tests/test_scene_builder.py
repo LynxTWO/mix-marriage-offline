@@ -145,6 +145,49 @@ class TestSceneBuilderSchemaValid(unittest.TestCase):
             scene = build_scene_from_session(session)
             self._validate(scene)
 
+    def test_object_source_metadata_tags_are_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            session: dict[str, Any] = {
+                "stems_dir": tmp,
+                "stems": [
+                    {
+                        "stem_id": "STEM.TAGS",
+                        "file_path": "tags.wav",
+                        "channel_count": 2,
+                        "source_metadata": {
+                            "technical": {
+                                "channels": 2,
+                                "sample_rate_hz": 48000,
+                            },
+                            "tags": {
+                                "raw": [
+                                    {
+                                        "source": "format",
+                                        "container": "wav",
+                                        "scope": "info",
+                                        "key": "INAM",
+                                        "value": "Song",
+                                        "index": 0,
+                                    }
+                                ],
+                                "normalized": {"inam": ["Song"]},
+                                "warnings": [],
+                            },
+                        },
+                    }
+                ],
+            }
+            scene = build_scene_from_session(session)
+            self._validate(scene)
+            source_metadata = scene["objects"][0].get("source_metadata")
+            self.assertIsInstance(source_metadata, dict)
+            if not isinstance(source_metadata, dict):
+                return
+            self.assertEqual(
+                source_metadata.get("tags", {}).get("normalized", {}).get("inam"),
+                ["Song"],
+            )
+
 
 class TestSceneBuilderConfidenceGating(unittest.TestCase):
     """Without metering, confidence=0 and no hints emitted."""

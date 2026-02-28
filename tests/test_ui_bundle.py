@@ -527,6 +527,19 @@ class TestUiBundle(unittest.TestCase):
             },
         )
         self.assertEqual(
+            dashboard["source_tags"],
+            {
+                "normalized": {
+                    "title": None,
+                    "artist": None,
+                    "album": None,
+                    "date": None,
+                },
+                "preserved_tag_count": 0,
+                "warnings": [],
+            },
+        )
+        self.assertEqual(
             dashboard["vibe_signals"],
             {
                 "density_level": "low",
@@ -1619,6 +1632,101 @@ class TestUiBundle(unittest.TestCase):
         self.assertEqual(
             stems_summary.get("stems_map_path"),
             stems_map_path.resolve().as_posix(),
+        )
+
+    def test_build_ui_bundle_dashboard_source_tags_summary(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report()
+        report["session"]["stems"] = [
+            {
+                "stem_id": "STEM.001",
+                "file_path": "stems/001.wav",
+                "source_metadata": {
+                    "technical": {
+                        "channels": 2,
+                        "sample_rate_hz": 48000,
+                    },
+                    "tags": {
+                        "raw": [
+                            {
+                                "source": "format",
+                                "container": "wav",
+                                "scope": "info",
+                                "key": "INAM",
+                                "value": "My Song",
+                                "index": 0,
+                            },
+                            {
+                                "source": "format",
+                                "container": "wav",
+                                "scope": "info",
+                                "key": "IART",
+                                "value": "The Artist",
+                                "index": 0,
+                            },
+                        ],
+                        "normalized": {
+                            "inam": ["My Song"],
+                            "iart": ["The Artist"],
+                        },
+                        "warnings": ["Unknown WAV chunk 'zzzz' size=2"],
+                    },
+                },
+            },
+            {
+                "stem_id": "STEM.002",
+                "file_path": "stems/002.flac",
+                "source_metadata": {
+                    "technical": {
+                        "channels": 2,
+                        "sample_rate_hz": 48000,
+                    },
+                    "tags": {
+                        "raw": [
+                            {
+                                "source": "format",
+                                "container": "flac",
+                                "scope": "format",
+                                "key": "ALBUM",
+                                "value": "Best Album",
+                                "index": 0,
+                            },
+                            {
+                                "source": "stream",
+                                "container": "flac",
+                                "scope": "stream:0",
+                                "key": "DATE",
+                                "value": "2026",
+                                "index": 0,
+                            },
+                        ],
+                        "normalized": {
+                            "album": ["Best Album"],
+                            "date": ["2026"],
+                        },
+                        "warnings": [],
+                    },
+                },
+            },
+        ]
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        bundle = build_ui_bundle(report, None, help_registry_path=help_registry_path)
+        validator.validate(bundle)
+
+        self.assertEqual(
+            bundle["dashboard"]["source_tags"],
+            {
+                "normalized": {
+                    "title": "My Song",
+                    "artist": "The Artist",
+                    "album": "Best Album",
+                    "date": "2026",
+                },
+                "preserved_tag_count": 4,
+                "warnings": ["Unknown WAV chunk 'zzzz' size=2"],
+            },
         )
 
     def test_build_ui_bundle_missing_stems_artifacts_omits_stems_summary(self) -> None:

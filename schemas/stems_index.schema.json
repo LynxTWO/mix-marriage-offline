@@ -22,6 +22,68 @@
       "type": "string",
       "pattern": "^[^\\\\]+$"
     },
+    "raw_tag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "container", "scope", "key", "value", "index"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": ["format", "stream"]
+        },
+        "container": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "minLength": 1 },
+        "key": { "type": "string", "minLength": 1 },
+        "value": { "type": "string" },
+        "index": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "tag_bag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw", "normalized", "warnings"],
+      "properties": {
+        "raw": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/raw_tag" }
+        },
+        "normalized": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "source_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["technical", "tags"],
+      "properties": {
+        "technical": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              { "type": "integer" },
+              { "type": "number" },
+              { "type": "string" },
+              { "type": "boolean" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "tags": { "$ref": "#/$defs/tag_bag" }
+      }
+    },
     "stem_set": {
       "type": "object",
       "additionalProperties": false,
@@ -71,6 +133,9 @@
         "folder_tokens": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
+        },
+        "source_metadata": {
+          "$ref": "#/$defs/source_metadata"
         }
       }
     }

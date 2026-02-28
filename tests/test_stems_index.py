@@ -99,6 +99,17 @@ class TestStemsIndex(unittest.TestCase):
                 return
             expected_file_id = "STEMFILE." + hashlib.sha1(kick_rel.encode("utf-8")).hexdigest()[:10]
             self.assertEqual(kick_entry.get("file_id"), expected_file_id)
+            source_metadata = kick_entry.get("source_metadata")
+            self.assertIsInstance(source_metadata, dict)
+            if not isinstance(source_metadata, dict):
+                return
+            technical = source_metadata.get("technical")
+            self.assertIsInstance(technical, dict)
+            if isinstance(technical, dict):
+                self.assertEqual(technical.get("channels"), 1)
+                self.assertEqual(technical.get("sample_rate_hz"), 8000)
+            tags = source_metadata.get("tags")
+            self.assertEqual(tags, {"raw": [], "normalized": {}, "warnings": []})
 
     def test_tokenization_handles_numeric_prefixes_and_lr_markers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

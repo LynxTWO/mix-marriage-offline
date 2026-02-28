@@ -22,6 +22,7 @@ _UNKNOWN_LOCK_DESCRIPTION = "Unknown lock ID; definition not found in the scene 
 
 
 from mmo.resources import ontology_dir, presets_dir as _presets_dir, schemas_dir
+from mmo.core.media_tags import summarize_stem_source_tags
 
 
 def _numeric_value(value: Any) -> float | None:
@@ -1075,6 +1076,12 @@ def _vibe_signals_summary(report: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _source_tags_summary(report: dict[str, Any]) -> dict[str, Any]:
+    session = report.get("session")
+    stems = session.get("stems") if isinstance(session, dict) else []
+    return summarize_stem_source_tags(stems)
+
+
 def _apply_summary(report: dict[str, Any], apply_manifest: dict[str, Any]) -> dict[str, int]:
     recommendations = _recommendations(report)
     renderer_manifests = _renderer_manifests(apply_manifest)
@@ -1546,6 +1553,7 @@ def build_ui_bundle(
         "extreme_count": _count_if_true(recommendations, "extreme"),
         "downmix_qa": _downmix_qa_summary(report),
         "mix_complexity": _mix_complexity_summary(report),
+        "source_tags": _source_tags_summary(report),
     }
     vibe_signals_summary = _vibe_signals_summary(report)
     if vibe_signals_summary is not None:

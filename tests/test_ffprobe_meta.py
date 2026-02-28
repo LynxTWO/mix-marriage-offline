@@ -23,20 +23,38 @@ def main() -> None:
     path = sys.argv[-1]
     suffix = os.path.splitext(path)[1].lower()
     if suffix == ".flac":
-        payload = {
-            "streams": [
-                {
-                    "codec_type": "audio",
-                    "codec_name": "flac",
-                    "channels": 2,
-                    "sample_rate": "48000",
-                    "duration": "2.5",
-                    "bits_per_raw_sample": "24",
-                    "channel_layout": "stereo",
+                payload = {
+                    "streams": [
+                        {
+                            "codec_type": "audio",
+                            "codec_name": "flac",
+                            "channels": 2,
+                            "sample_rate": "48000",
+                            "duration": "2.5",
+                            "bits_per_raw_sample": "24",
+                            "channel_layout": "stereo",
+                            "tags": {
+                                "ALBUM": "Record One",
+                                "DATE": "2024",
+                            },
+                        },
+                        {
+                            "codec_type": "video",
+                            "tags": {
+                                "COMMENT": "ignored_non_audio_stream_ok",
+                            },
+                        }
+                    ],
+                    "format": {
+                        "duration": "2.5",
+                        "format_name": "flac",
+                        "tags": {
+                            "TITLE": "Mix Song",
+                            "title": "Mix Song (Alt)",
+                            "ARTIST": "MMO Band",
+                        },
+                    },
                 }
-            ],
-            "format": {"duration": "2.5"},
-        }
     elif suffix == ".m4a":
         payload = {
             "streams": [
@@ -82,11 +100,24 @@ if __name__ == "__main__":
             self.assertEqual(flac_meta["bits_per_sample"], 24)
             self.assertEqual(flac_meta["codec_name"], "flac")
             self.assertEqual(flac_meta["channel_layout"], "stereo")
+            self.assertEqual(
+                flac_meta["tags"]["normalized"]["title"],
+                ["Mix Song", "Mix Song (Alt)"],
+            )
+            self.assertEqual(flac_meta["tags"]["normalized"]["artist"], ["MMO Band"])
+            self.assertEqual(flac_meta["tags"]["normalized"]["album"], ["Record One"])
+            self.assertEqual(flac_meta["tags"]["normalized"]["date"], ["2024"])
+            self.assertEqual(flac_meta["tags"]["warnings"], [])
+            self.assertGreaterEqual(len(flac_meta["tags"]["raw"]), 5)
 
             self.assertEqual(m4a_meta["channels"], 1)
             self.assertEqual(m4a_meta["sample_rate_hz"], 44100)
             self.assertAlmostEqual(m4a_meta["duration_s"], 1.25, places=6)
             self.assertEqual(m4a_meta["codec_name"], "aac")
+            self.assertEqual(
+                m4a_meta["tags"],
+                {"raw": [], "normalized": {}, "warnings": []},
+            )
 
 
 if __name__ == "__main__":

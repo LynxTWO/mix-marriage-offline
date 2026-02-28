@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from mmo.core.media_tags import source_metadata_from_probe
 from mmo.dsp.decoders import detect_format_from_path, read_metadata
 from mmo.dsp.io import sha256_file
 
@@ -64,6 +65,7 @@ def build_session_from_stems_dir(stems_dir: Path) -> dict:
         except (ValueError, NotImplementedError):
             metadata = None
         if metadata:
+            source_metadata = source_metadata_from_probe(metadata)
             stem_entry.update(
                 {
                     "channel_count": metadata["channels"],
@@ -71,6 +73,7 @@ def build_session_from_stems_dir(stems_dir: Path) -> dict:
                     "duration_s": metadata["duration_s"],
                 }
             )
+            stem_entry["source_metadata"] = source_metadata
             bits_per_sample = metadata.get("bits_per_sample")
             if isinstance(bits_per_sample, int):
                 stem_entry["bits_per_sample"] = bits_per_sample
