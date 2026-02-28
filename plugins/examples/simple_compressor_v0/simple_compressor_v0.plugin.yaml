@@ -10,9 +10,26 @@ entrypoint: "mmo.plugins.renderers.safe_renderer:SafeRenderer"
 numeric_precision: "float64"
 capabilities:
   max_channels: 32
+  deterministic_seed_policy: "none"
   supported_contexts:
     - "render"
     - "auto_apply"
+  dsp_traits:
+    tier: "controlled_nonlinear"
+    linearity: "nonlinear"
+    phase_behavior: "mixed"
+    adds_noise: false
+    introduces_harmonics: true
+    anti_aliasing: "bandlimited"
+    measurable_claims:
+      - metric_id: "METER.DYNAMIC_RANGE_DB"
+        expected_direction: "down"
+        threshold: 0.5
+        note: "Compression should reduce crest/dynamic range in a measurable way."
+      - metric_id: "METER.TRUE_PEAK_DBTP"
+        expected_direction: "within"
+        threshold: 1.0
+        note: "Nonlinear stage must stay within peak safety budgets."
   notes:
     - "Deterministic feed-forward compression with envelope follower."
 ui_layout: "ui/layout.json"

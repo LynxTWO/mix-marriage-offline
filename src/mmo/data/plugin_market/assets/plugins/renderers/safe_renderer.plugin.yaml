@@ -9,9 +9,26 @@ ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.renderers.safe_renderer:SafeRenderer"
 capabilities:
   max_channels: 32
+  deterministic_seed_policy: "none"
   supported_contexts:
     - "render"
     - "auto_apply"
+  dsp_traits:
+    tier: "information_preserving"
+    linearity: "linear"
+    phase_behavior: "linear_phase"
+    adds_noise: false
+    introduces_harmonics: false
+    anti_aliasing: "na"
+    measurable_claims:
+      - metric_id: "METER.TRUE_PEAK_DBTP"
+        expected_direction: "within"
+        threshold: 0.1
+        note: "Keeps output true-peak delta within a conservative bound."
+      - metric_id: "METER.INTEGRATED_LUFS_DELTA"
+        expected_direction: "within"
+        threshold: 0.5
+        note: "Preserves integrated loudness unless explicit user trim is requested."
   scene:
     supports_objects: true
     supports_beds: true

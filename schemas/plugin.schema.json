@@ -116,6 +116,10 @@
           "enum": ["none", "seed_required", "seed_optional"],
           "description": "Plugin's determinism contract for internal randomness."
         },
+        "dsp_traits": {
+          "$ref": "#/$defs/plugin_dsp_traits",
+          "description": "Digital-first DSP traits and measurable truth-contract claims."
+        },
         "bed_only": {
           "type": "boolean",
           "description": "If true, plugin operates only on bed audio; cannot be applied to objects."
@@ -171,6 +175,84 @@
           "type": "integer",
           "minimum": 0,
           "description": "Latency in samples. Required when type is fixed."
+        }
+      }
+    },
+    "plugin_measurable_claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric_id", "expected_direction"],
+      "properties": {
+        "metric_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expected_direction": {
+          "type": "string",
+          "enum": ["up", "down", "within"]
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "plugin_dsp_traits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tier",
+        "linearity",
+        "phase_behavior",
+        "adds_noise",
+        "introduces_harmonics",
+        "anti_aliasing",
+        "measurable_claims"
+      ],
+      "properties": {
+        "tier": {
+          "type": "string",
+          "enum": [
+            "information_preserving",
+            "controlled_nonlinear",
+            "creative_color"
+          ]
+        },
+        "linearity": {
+          "type": "string",
+          "enum": ["linear", "nonlinear"]
+        },
+        "phase_behavior": {
+          "type": "string",
+          "enum": [
+            "linear_phase",
+            "minimum_phase",
+            "mixed",
+            "unknown"
+          ]
+        },
+        "adds_noise": {
+          "type": "boolean"
+        },
+        "introduces_harmonics": {
+          "type": "boolean"
+        },
+        "anti_aliasing": {
+          "type": "string",
+          "enum": ["none", "oversampling", "bandlimited", "na"]
+        },
+        "oversampling_factor": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "measurable_claims": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/plugin_measurable_claim"
+          },
+          "minItems": 1
         }
       }
     },

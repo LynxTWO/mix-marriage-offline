@@ -82,6 +82,21 @@ These must remain untracked/ignored:
 
 If you need to use local scan outputs, treat them as *inputs only* and do not stage them.
 
+## Audio quality + digital-first DSP mandates
+
+All plugin work must preserve MMO's digital-native quality bar and objective QA model.
+
+- Prefer information-preserving DSP by default.
+  Only use controlled or creative coloration when explicitly declared in manifest DSP traits.
+- Nonlinearity must be declared.
+  If `capabilities.dsp_traits.linearity` is `nonlinear`, declare a non-`none` anti-aliasing strategy.
+- Determinism must be explicit.
+  Every renderer manifest must declare `capabilities.deterministic_seed_policy`.
+- Every plugin must declare a truth contract with measurable claims.
+  Use `capabilities.dsp_traits.measurable_claims` to define measurable outcome expectations.
+- Plugins must not bypass gates.
+  Plugins may propose or render within contract, but must respect gate outcomes and gate feedback.
+
 ## Running tests safely (Windows)
 Prefer the repo runners that force temp locations into the repo:
 - `tools\run_pytest.cmd -q`

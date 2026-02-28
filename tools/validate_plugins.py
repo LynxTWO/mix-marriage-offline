@@ -28,6 +28,14 @@ ISSUE_PLUGIN_ID_DUPLICATE = "ISSUE.VALIDATION.PLUGIN_ID_DUPLICATE"
 ISSUE_PLUGIN_CAPABILITIES_INVALID = "ISSUE.VALIDATION.PLUGIN_CAPABILITIES_INVALID"
 ISSUE_PLUGIN_LAYOUT_ID_UNKNOWN = "ISSUE.VALIDATION.PLUGIN_LAYOUT_ID_UNKNOWN"
 ISSUE_PLUGIN_TARGET_ID_UNKNOWN = "ISSUE.VALIDATION.PLUGIN_TARGET_ID_UNKNOWN"
+ISSUE_PLUGIN_DSP_TRAITS_INVALID = "ISSUE.VALIDATION.PLUGIN_DSP_TRAITS_INVALID"
+ISSUE_PLUGIN_DSP_TRAITS_REQUIRED = "ISSUE.VALIDATION.PLUGIN_DSP_TRAITS_REQUIRED"
+ISSUE_PLUGIN_DETERMINISM_POLICY_REQUIRED = (
+    "ISSUE.VALIDATION.PLUGIN_DETERMINISM_POLICY_REQUIRED"
+)
+ISSUE_PLUGIN_TRUTH_CONTRACT_REQUIRED = (
+    "ISSUE.VALIDATION.PLUGIN_TRUTH_CONTRACT_REQUIRED"
+)
 
 PLUGIN_PREFIX_BY_TYPE = {
     "detector": "PLUGIN.DETECTOR.",
@@ -285,6 +293,7 @@ def _validate_capabilities(
         "supported_contexts",
         "scene",
         "notes",
+        "dsp_traits",
     }
     for field_name in sorted(capabilities.keys()):
         if field_name not in allowed_capability_fields:
@@ -507,6 +516,124 @@ def _validate_capabilities(
                         {"file_path": str(manifest_path)},
                     )
 
+    dsp_traits = capabilities.get("dsp_traits")
+    if dsp_traits is not None:
+        if not isinstance(dsp_traits, dict):
+            _add_issue(
+                issues,
+                ISSUE_PLUGIN_DSP_TRAITS_INVALID,
+                "error",
+                "capabilities.dsp_traits must be an object when provided.",
+                {"file_path": str(manifest_path)},
+            )
+        else:
+            linearity = dsp_traits.get("linearity")
+            anti_aliasing = dsp_traits.get("anti_aliasing")
+            if linearity == "nonlinear" and anti_aliasing in {None, "none"}:
+                _add_issue(
+                    issues,
+                    ISSUE_PLUGIN_DSP_TRAITS_INVALID,
+                    "error",
+                    (
+                        "capabilities.dsp_traits.linearity='nonlinear' requires "
+                        "capabilities.dsp_traits.anti_aliasing to be "
+                        "'oversampling' or 'bandlimited' (not 'none')."
+                    ),
+                    {
+                        "file_path": str(manifest_path),
+                        "linearity": linearity,
+                        "anti_aliasing": anti_aliasing,
+                    },
+                )
+
+
+def _validate_renderer_dsp_contract(
+    *,
+    plugin_id: str,
+    capabilities: Any,
+    manifest_path: Path,
+    issues: List[Dict[str, Any]],
+) -> None:
+    if not isinstance(capabilities, dict):
+        _add_issue(
+            issues,
+            ISSUE_PLUGIN_DSP_TRAITS_REQUIRED,
+            "error",
+            (
+                "Renderer plugins must declare capabilities as an object with "
+                "deterministic_seed_policy and dsp_traits."
+            ),
+            {"file_path": str(manifest_path), "plugin_id": plugin_id},
+        )
+        return
+
+    seed_policy = capabilities.get("deterministic_seed_policy")
+    if not isinstance(seed_policy, str) or not seed_policy:
+        _add_issue(
+            issues,
+            ISSUE_PLUGIN_DETERMINISM_POLICY_REQUIRED,
+            "error",
+            (
+                "Renderer plugins must declare capabilities.deterministic_seed_policy "
+                "('none', 'seed_required', or 'seed_optional')."
+            ),
+            {"file_path": str(manifest_path), "plugin_id": plugin_id},
+        )
+
+    dsp_traits = capabilities.get("dsp_traits")
+    if not isinstance(dsp_traits, dict):
+        _add_issue(
+            issues,
+            ISSUE_PLUGIN_DSP_TRAITS_REQUIRED,
+            "error",
+            (
+                "Renderer plugins must declare capabilities.dsp_traits with tier, "
+                "linearity, and measurable_claims."
+            ),
+            {"file_path": str(manifest_path), "plugin_id": plugin_id},
+        )
+        return
+
+    tier = dsp_traits.get("tier")
+    if not isinstance(tier, str) or not tier:
+        _add_issue(
+            issues,
+            ISSUE_PLUGIN_DSP_TRAITS_REQUIRED,
+            "error",
+            (
+                "Renderer plugins must declare capabilities.dsp_traits.tier "
+                "('information_preserving', 'controlled_nonlinear', or "
+                "'creative_color')."
+            ),
+            {"file_path": str(manifest_path), "plugin_id": plugin_id},
+        )
+
+    linearity = dsp_traits.get("linearity")
+    if not isinstance(linearity, str) or not linearity:
+        _add_issue(
+            issues,
+            ISSUE_PLUGIN_DSP_TRAITS_REQUIRED,
+            "error",
+            (
+                "Renderer plugins must declare capabilities.dsp_traits.linearity "
+                "('linear' or 'nonlinear')."
+            ),
+            {"file_path": str(manifest_path), "plugin_id": plugin_id},
+        )
+
+    measurable_claims = dsp_traits.get("measurable_claims")
+    if not isinstance(measurable_claims, list) or len(measurable_claims) == 0:
+        _add_issue(
+            issues,
+            ISSUE_PLUGIN_TRUTH_CONTRACT_REQUIRED,
+            "error",
+            (
+                "Renderer plugins must declare a measurable truth contract via "
+                "capabilities.dsp_traits.measurable_claims (at least one claim)."
+            ),
+            {"file_path": str(manifest_path), "plugin_id": plugin_id},
+        )
+
 
 def validate_plugins(plugins_dir: Path, schema_path: Path) -> Dict[str, Any]:
     issues: List[Dict[str, Any]] = []
@@ -567,6 +694,14 @@ def validate_plugins(plugins_dir: Path, schema_path: Path) -> Dict[str, Any]:
                     layout_ids,
                     target_layouts,
                     issues,
+                )
+
+            if plugin_type == "renderer" and isinstance(plugin_id, str):
+                _validate_renderer_dsp_contract(
+                    plugin_id=plugin_id,
+                    capabilities=capabilities,
+                    manifest_path=manifest_path,
+                    issues=issues,
                 )
 
     for plugin_id, paths in sorted(plugin_id_index.items()):

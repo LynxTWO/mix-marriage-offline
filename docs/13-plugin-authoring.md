@@ -34,8 +34,16 @@ rejected deterministically; built-in packaged manifests are fallback-only.
   (for renderer: `PLUGIN.RENDERER.*`).
 - `entrypoint` imports successfully.
 - `capabilities` uses supported fields (`max_channels`, `channel_mode`, `link_groups`,
-  `latency`, `deterministic_seed_policy`, `bed_only`, `supported_standards`,
-  `preferred_standard`, `supported_layout_ids`, `supported_contexts`, `scene`, `notes`).
+  `latency`, `deterministic_seed_policy`, `dsp_traits`, `bed_only`,
+  `supported_standards`, `preferred_standard`, `supported_layout_ids`,
+  `supported_contexts`, `scene`, `notes`).
+- Renderer manifests must declare `capabilities.deterministic_seed_policy`.
+- Renderer manifests must declare `capabilities.dsp_traits.tier` and
+  `capabilities.dsp_traits.linearity`.
+- If `capabilities.dsp_traits.linearity` is `nonlinear`, `anti_aliasing` must be
+  `oversampling` or `bandlimited` (not `none`).
+- Treat `capabilities.dsp_traits.measurable_claims` as the plugin truth contract.
+  Include at least one measurable claim with `metric_id` and expected direction.
 - If `channel_mode` is `linked_group` or `true_multichannel`, declare `supported_standards`
   (at minimum `["SMPTE"]`). Omit if the plugin is truly channel-position-agnostic.
 - Never hard-code channel indices. Use `ProcessContext.channel_order` (list of `SPK.*` IDs)
@@ -84,3 +92,6 @@ Expected outcomes:
   - `ui_layout_snapshot.violations_count: 0`
   - `ui_hints.present: True`
 - `plugins ui-lint` exits cleanly with no errors for the plugin.
+
+See [docs/16-audio-quality-mandates.md](./16-audio-quality-mandates.md) for
+digital-first DSP policy, truth-contract guidance, and measurable-claim examples.

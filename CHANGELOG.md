@@ -61,6 +61,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     one-click install actions.
   - Extended `ontology/plugin_index.yaml` with preview metadata and
     install asset root contract for bundled offline installs.
+- Digital-first plugin quality mandates:
+  - Extended `schemas/plugin.schema.json` with `capabilities.dsp_traits`
+    and `measurable_claims` truth-contract shape.
+  - Tightened `tools/validate_plugins.py` to require renderer seed-policy +
+    DSP trait declarations and nonlinear anti-aliasing strategies.
+  - Updated renderer/plugin-market manifests and authoring docs to document
+    measurable claim contracts and gate-respecting DSP expectations.
 
 ## [1.1.0] — 2026-02-27
 

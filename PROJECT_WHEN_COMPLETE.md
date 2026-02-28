@@ -277,6 +277,11 @@ What remains: the core DSP path is functional, but formalized fallback sequencin
   - latency: fixed or dynamic (and exact reporting method)
   - deterministic_seed_usage: yes/no + seed inputs
   - requirements: needs speaker positions? bed-only? objects-capable?
+- [x] Renderer manifests include digital-first DSP traits (`capabilities.dsp_traits`)
+  with explicit `tier` + `linearity`.
+- [x] Nonlinear renderer manifests declare anti-aliasing strategy (not `none`).
+- [x] Renderer manifests include measurable truth contracts via
+  `capabilities.dsp_traits.measurable_claims`.
 - [ ] Plugins operate on typed buffers with explicit channel semantics (not “raw arrays”).
 - [ ] Plugins must be pure with respect to determinism:
   - [ ] No internal randomness unless seeded from the provided seed.

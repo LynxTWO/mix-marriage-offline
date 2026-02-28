@@ -5,6 +5,8 @@ from pathlib import Path
 from mmo.core.pipeline import load_plugins
 from tools.validate_plugins import (
     ISSUE_PLUGIN_CAPABILITIES_INVALID,
+    ISSUE_PLUGIN_DSP_TRAITS_INVALID,
+    ISSUE_PLUGIN_DSP_TRAITS_REQUIRED,
     ISSUE_PLUGIN_LAYOUT_ID_UNKNOWN,
     ISSUE_PLUGIN_SCHEMA_INVALID,
     ISSUE_PLUGIN_TARGET_ID_UNKNOWN,
@@ -115,6 +117,18 @@ class TestPluginCapabilities(unittest.TestCase):
                 capabilities_block="\n".join(
                     [
                         "  max_channels: 8",
+                        '  deterministic_seed_policy: "none"',
+                        "  dsp_traits:",
+                        '    tier: "information_preserving"',
+                        '    linearity: "linear"',
+                        '    phase_behavior: "linear_phase"',
+                        "    adds_noise: false",
+                        "    introduces_harmonics: false",
+                        '    anti_aliasing: "na"',
+                        "    measurable_claims:",
+                        '      - metric_id: "METER.TRUE_PEAK_DBTP"',
+                        '        expected_direction: "within"',
+                        "        threshold: 0.2",
                         "  scene:",
                         "    supports_objects: true",
                         "    supports_beds: true",
@@ -139,6 +153,18 @@ class TestPluginCapabilities(unittest.TestCase):
                 capabilities_block="\n".join(
                     [
                         "  max_channels: 2",
+                        '  deterministic_seed_policy: "none"',
+                        "  dsp_traits:",
+                        '    tier: "information_preserving"',
+                        '    linearity: "linear"',
+                        '    phase_behavior: "linear_phase"',
+                        "    adds_noise: false",
+                        "    introduces_harmonics: false",
+                        '    anti_aliasing: "na"',
+                        "    measurable_claims:",
+                        '      - metric_id: "METER.TRUE_PEAK_DBTP"',
+                        '        expected_direction: "within"',
+                        "        threshold: 0.2",
                         "  supported_layout_ids:",
                         '    - "LAYOUT.NOT_REAL"',
                         "  supported_contexts:",
@@ -166,6 +192,18 @@ class TestPluginCapabilities(unittest.TestCase):
                 capabilities_block="\n".join(
                     [
                         "  max_channels: 2",
+                        '  deterministic_seed_policy: "none"',
+                        "  dsp_traits:",
+                        '    tier: "information_preserving"',
+                        '    linearity: "linear"',
+                        '    phase_behavior: "linear_phase"',
+                        "    adds_noise: false",
+                        "    introduces_harmonics: false",
+                        '    anti_aliasing: "na"',
+                        "    measurable_claims:",
+                        '      - metric_id: "METER.TRUE_PEAK_DBTP"',
+                        '        expected_direction: "within"',
+                        "        threshold: 0.2",
                         "  supported_contexts:",
                         '    - "render"',
                         '    - "ship_it"',
@@ -195,6 +233,18 @@ class TestPluginCapabilities(unittest.TestCase):
                 capabilities_block="\n".join(
                     [
                         "  max_channels: 8",
+                        '  deterministic_seed_policy: "none"',
+                        "  dsp_traits:",
+                        '    tier: "information_preserving"',
+                        '    linearity: "linear"',
+                        '    phase_behavior: "linear_phase"',
+                        "    adds_noise: false",
+                        "    introduces_harmonics: false",
+                        '    anti_aliasing: "na"',
+                        "    measurable_claims:",
+                        '      - metric_id: "METER.TRUE_PEAK_DBTP"',
+                        '        expected_direction: "within"',
+                        "        threshold: 0.2",
                         "  scene:",
                         "    supports_objects: true",
                         "    requires_speaker_positions: true",
@@ -213,6 +263,65 @@ class TestPluginCapabilities(unittest.TestCase):
             if isinstance(issue, dict)
         ]
         self.assertIn(ISSUE_PLUGIN_TARGET_ID_UNKNOWN, issue_ids)
+
+    def test_validate_plugins_rejects_nonlinear_without_anti_aliasing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            plugins_dir = Path(temp_dir)
+            _write_manifest(
+                plugins_dir,
+                plugin_id="PLUGIN.RENDERER.TEMP_NONLINEAR_NO_AA",
+                capabilities_block="\n".join(
+                    [
+                        "  max_channels: 2",
+                        '  deterministic_seed_policy: "none"',
+                        "  dsp_traits:",
+                        '    tier: "controlled_nonlinear"',
+                        '    linearity: "nonlinear"',
+                        '    phase_behavior: "mixed"',
+                        "    adds_noise: false",
+                        "    introduces_harmonics: true",
+                        '    anti_aliasing: "none"',
+                        "    measurable_claims:",
+                        '      - metric_id: "METER.TRUE_PEAK_DBTP"',
+                        '        expected_direction: "within"',
+                        "        threshold: 1.0",
+                    ]
+                ),
+            )
+
+            result = validate_plugins(plugins_dir, Path("schemas/plugin.schema.json"))
+
+        self.assertFalse(result["ok"])
+        issue_ids = [
+            issue.get("issue_id")
+            for issue in result.get("issues", [])
+            if isinstance(issue, dict)
+        ]
+        self.assertIn(ISSUE_PLUGIN_DSP_TRAITS_INVALID, issue_ids)
+
+    def test_validate_plugins_rejects_renderer_without_dsp_traits(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            plugins_dir = Path(temp_dir)
+            _write_manifest(
+                plugins_dir,
+                plugin_id="PLUGIN.RENDERER.TEMP_MISSING_DSP_TRAITS",
+                capabilities_block="\n".join(
+                    [
+                        "  max_channels: 2",
+                        '  deterministic_seed_policy: "none"',
+                    ]
+                ),
+            )
+
+            result = validate_plugins(plugins_dir, Path("schemas/plugin.schema.json"))
+
+        self.assertFalse(result["ok"])
+        issue_ids = [
+            issue.get("issue_id")
+            for issue in result.get("issues", [])
+            if isinstance(issue, dict)
+        ]
+        self.assertIn(ISSUE_PLUGIN_DSP_TRAITS_REQUIRED, issue_ids)
 
 
 if __name__ == "__main__":

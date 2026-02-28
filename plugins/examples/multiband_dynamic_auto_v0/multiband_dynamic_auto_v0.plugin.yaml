@@ -10,9 +10,27 @@ entrypoint: "mmo.plugins.renderers.safe_renderer:SafeRenderer"
 numeric_precision: "float64"
 capabilities:
   max_channels: 2
+  deterministic_seed_policy: "none"
   supported_contexts:
     - "render"
     - "auto_apply"
+  dsp_traits:
+    tier: "controlled_nonlinear"
+    linearity: "nonlinear"
+    phase_behavior: "mixed"
+    adds_noise: false
+    introduces_harmonics: true
+    anti_aliasing: "oversampling"
+    oversampling_factor: 2
+    measurable_claims:
+      - metric_id: "METER.DYNAMIC_RANGE_DB"
+        expected_direction: "within"
+        threshold: 2.0
+        note: "Auto mode keeps dynamic movement inside bounded guardrails."
+      - metric_id: "METER.TRUE_PEAK_DBTP"
+        expected_direction: "within"
+        threshold: 1.0
+        note: "Nonlinear dynamics stage remains under peak safety limits."
   notes:
     - "Deterministic slope-driven multiband dynamics; stereo only."
 ui_layout: "ui/layout.json"
