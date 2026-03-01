@@ -8,10 +8,9 @@ Entry point::
 Each scenario launches a CustomTkinter window in a deterministic state, waits for the
 first stable render, captures the window to a PNG, and exits cleanly.
 
-Supersampling: by default the window is rendered at 4× the target output dimensions
-and then downsampled with Lanczos filtering before the PNG is written.  This produces
-sharp, antialiased screenshots even under Xvfb (which has no compositor).  Override
-with --supersample if needed.
+Supersampling: --supersample N renders the window at N× target dimensions then
+Lanczos-downsamples.  Default is 1 (native capture) because CTK canvas widgets use
+absolute pixel coordinates and do not reflow to fill a larger window.
 
 Linux headless CI: run under xvfb-run::
 
@@ -53,8 +52,9 @@ KNOWN_SCENARIOS: frozenset[str] = frozenset(
 # ---------------------------------------------------------------------------
 
 #: Render at this multiple of the target resolution, then Lanczos-downsample.
-#: 4× gives sharp, compositor-quality results even under Xvfb.
-_SUPERSAMPLE = 4
+#: Kept at 1 (native) because CTK canvas widgets use absolute pixel coordinates
+#: and do not reflow to fill an enlarged window.
+_SUPERSAMPLE = 1
 
 # ---------------------------------------------------------------------------
 # Optional dependency guards (tested without launching Tk or mss)
@@ -133,7 +133,7 @@ def _do_capture(
 
         size_note = (
             f", downsampled {w}×{h} → {target_size[0]}×{target_size[1]}"
-            if target_size else ""
+            if target_size and (target_size[0] != w or target_size[1] != h) else ""
         )
         print(f"[capture] Saved: {out_path} ({out_path.stat().st_size} bytes{size_note})")
         return True
@@ -287,7 +287,7 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         metavar="N",
         help=(
             f"Render at N× the output resolution then Lanczos-downsample "
-            f"(default: {_SUPERSAMPLE}). Use 1 to disable supersampling."
+            f"(default: {_SUPERSAMPLE})."
         ),
     )
     parser.add_argument(
