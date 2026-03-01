@@ -8,6 +8,11 @@ Entry point::
 Each scenario launches a CustomTkinter window in a deterministic state, waits for the
 first stable render, captures the window to a PNG, and exits cleanly.
 
+Supersampling: by default the window is rendered at 4× the target output dimensions
+and then downsampled with Lanczos filtering before the PNG is written.  This produces
+sharp, antialiased screenshots even under Xvfb (which has no compositor).  Override
+with --supersample if needed.
+
 Linux headless CI: run under xvfb-run::
 
     xvfb-run -a python -m mmo.gui.capture --scenario GUI.CAPTURE.RUN_READY --out rr.png
@@ -44,6 +49,14 @@ KNOWN_SCENARIOS: frozenset[str] = frozenset(
 )
 
 # ---------------------------------------------------------------------------
+# Supersampling factor
+# ---------------------------------------------------------------------------
+
+#: Render at this multiple of the target resolution, then Lanczos-downsample.
+#: 4× gives sharp, compositor-quality results even under Xvfb.
+_SUPERSAMPLE = 4
+
+# ---------------------------------------------------------------------------
 # Optional dependency guards (tested without launching Tk or mss)
 # ---------------------------------------------------------------------------
 
@@ -64,8 +77,15 @@ except Exception:  # pragma: no cover
 # Internal capture helper
 # ---------------------------------------------------------------------------
 
-def _do_capture(root: Any, out_path: Path) -> bool:
+def _do_capture(
+    root: Any,
+    out_path: Path,
+    target_size: tuple[int, int] | None = None,
+) -> bool:
     """Capture the window identified by *root* to *out_path* (PNG).
+
+    If *target_size* is given the raw capture is Lanczos-downsampled to that
+    size before writing, producing antialiased output from a supersampled render.
 
     Returns True on success, False on failure (prints error to stderr).
     """
@@ -90,21 +110,32 @@ def _do_capture(root: Any, out_path: Path) -> bool:
         # Prefer PIL.ImageGrab (uses xwd under X11/Xvfb; works where mss/XGetImage fails).
         # Fall back to mss if ImageGrab is unavailable.
         try:
-            from PIL import ImageGrab  # noqa: PLC0415
+            from PIL import Image, ImageGrab  # noqa: PLC0415
             bbox = (x, y, x + max(w, 1), y + max(h, 1))
             img = ImageGrab.grab(bbox=bbox)
+            if target_size is not None:
+                img = img.resize(target_size, Image.LANCZOS)
             img.save(str(out_path), format="PNG")
         except Exception:  # noqa: BLE001
             with _mss.mss() as sct:  # type: ignore[union-attr]
                 monitor = {"top": y, "left": x, "width": max(w, 1), "height": max(h, 1)}
                 screenshot = sct.grab(monitor)
                 _mss_tools.to_png(screenshot.rgb, screenshot.size, output=str(out_path))
+            if target_size is not None:
+                from PIL import Image  # noqa: PLC0415
+                img = Image.open(out_path)
+                img = img.resize(target_size, Image.LANCZOS)
+                img.save(str(out_path), format="PNG")
 
         if not out_path.is_file() or out_path.stat().st_size == 0:
             print(f"[capture] Error: output file is empty: {out_path}", file=sys.stderr)
             return False
 
-        print(f"[capture] Saved: {out_path} ({out_path.stat().st_size} bytes)")
+        size_note = (
+            f", downsampled {w}×{h} → {target_size[0]}×{target_size[1]}"
+            if target_size else ""
+        )
+        print(f"[capture] Saved: {out_path} ({out_path.stat().st_size} bytes{size_note})")
         return True
 
     except Exception as exc:  # noqa: BLE001
@@ -112,9 +143,14 @@ def _do_capture(root: Any, out_path: Path) -> bool:
         return False
 
 
-def _capture_and_exit(root: Any, out_path: Path, state: dict[str, Any]) -> None:
+def _capture_and_exit(
+    root: Any,
+    out_path: Path,
+    state: dict[str, Any],
+    target_size: tuple[int, int] | None = None,
+) -> None:
     """Capture then destroy the window; record result in *state*."""
-    success = _do_capture(root, out_path)
+    success = _do_capture(root, out_path, target_size=target_size)
     state["ok"] = success
     if not success:
         state["error"] = "capture failed — see stderr"
@@ -128,23 +164,28 @@ def _capture_and_exit(root: Any, out_path: Path, state: dict[str, Any]) -> None:
 # Scenario: RUN_READY — full _MMOGuiApp in default state
 # ---------------------------------------------------------------------------
 
-def _capture_run_ready(out_path: Path, width: int, height: int) -> bool:
-    """Launch the real _MMOGuiApp, capture after first stable frame, exit."""
+def _capture_run_ready(out_path: Path, width: int, height: int, supersample: int = _SUPERSAMPLE) -> bool:
+    """Launch the real _MMOGuiApp, capture after first stable frame, exit.
+
+    The window is rendered at *supersample* × the target dimensions and
+    Lanczos-downsampled to *width* × *height* for antialiased output.
+    """
     from mmo.gui.main import _MMOGuiApp  # noqa: PLC0415 - intentional lazy import
 
     state: dict[str, Any] = {"ok": False}
+    cap_w, cap_h = width * supersample, height * supersample
 
     _ctk.set_appearance_mode("dark")
     _ctk.set_default_color_theme("dark-blue")
 
     app = _MMOGuiApp()
-    app.geometry(f"{width}x{height}")
-    app.minsize(width, height)
+    app.geometry(f"{cap_w}x{cap_h}")
+    app.minsize(cap_w, cap_h)
     app.update()
     app.update_idletasks()
 
     delay_ms = 600
-    app.after(delay_ms, lambda: _capture_and_exit(app, out_path, state))
+    app.after(delay_ms, lambda: _capture_and_exit(app, out_path, state, target_size=(width, height)))
     app.mainloop()
 
     return state.get("ok", False)
@@ -160,8 +201,13 @@ def _capture_dashboard(
     height: int,
     *,
     extreme: bool,
+    supersample: int = _SUPERSAMPLE,
 ) -> bool:
-    """Create a minimal CTk window with the dashboard panel and capture it."""
+    """Create a minimal CTk window with the dashboard panel and capture it.
+
+    The window is rendered at *supersample* × the target dimensions and
+    Lanczos-downsampled to *width* × *height* for antialiased output.
+    """
     from mmo.gui.dashboard import VisualizationDashboardPanel  # noqa: PLC0415
     from mmo.gui.fixtures.telemetry import (  # noqa: PLC0415
         extreme_dashboard_telemetry,
@@ -170,13 +216,14 @@ def _capture_dashboard(
 
     state: dict[str, Any] = {"ok": False}
     telemetry = extreme_dashboard_telemetry() if extreme else safe_dashboard_telemetry()
+    cap_w, cap_h = width * supersample, height * supersample
 
     _ctk.set_appearance_mode("dark")
     _ctk.set_default_color_theme("dark-blue")
 
     root = _ctk.CTk()
     root.title("MMO Dashboard Capture")
-    root.geometry(f"{width}x{height}")
+    root.geometry(f"{cap_w}x{cap_h}")
     root.configure(fg_color="#0A0A09")
     root.resizable(False, False)
     root.update()
@@ -194,7 +241,7 @@ def _capture_dashboard(
     root.update_idletasks()
 
     delay_ms = 500
-    root.after(delay_ms, lambda: _capture_and_exit(root, out_path, state))
+    root.after(delay_ms, lambda: _capture_and_exit(root, out_path, state, target_size=(width, height)))
     root.mainloop()
 
     return state.get("ok", False)
@@ -232,6 +279,16 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         type=int,
         default=840,
         help="Capture window height in pixels (default: 840).",
+    )
+    parser.add_argument(
+        "--supersample",
+        type=int,
+        default=_SUPERSAMPLE,
+        metavar="N",
+        help=(
+            f"Render at N× the output resolution then Lanczos-downsample "
+            f"(default: {_SUPERSAMPLE}). Use 1 to disable supersampling."
+        ),
     )
     parser.add_argument(
         "--strict",
@@ -318,11 +375,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     # -- Dispatch to scenario -------------------------------------------------
     try:
         if scenario == SCENARIO_RUN_READY:
-            ok = _capture_run_ready(out_path, args.width, args.height)
+            ok = _capture_run_ready(out_path, args.width, args.height, supersample=args.supersample)
         elif scenario == SCENARIO_DASHBOARD_SAFE:
-            ok = _capture_dashboard(out_path, args.width, args.height, extreme=False)
+            ok = _capture_dashboard(out_path, args.width, args.height, extreme=False, supersample=args.supersample)
         else:  # SCENARIO_DASHBOARD_EXTREME
-            ok = _capture_dashboard(out_path, args.width, args.height, extreme=True)
+            ok = _capture_dashboard(out_path, args.width, args.height, extreme=True, supersample=args.supersample)
     except Exception as exc:  # noqa: BLE001
         result["error"] = str(exc)
         if args.emit_json:
