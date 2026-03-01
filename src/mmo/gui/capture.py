@@ -87,10 +87,18 @@ def _do_capture(root: Any, out_path: Path) -> bool:
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with _mss.mss() as sct:  # type: ignore[union-attr]
-            monitor = {"top": y, "left": x, "width": max(w, 1), "height": max(h, 1)}
-            screenshot = sct.grab(monitor)
-            _mss_tools.to_png(screenshot.rgb, screenshot.size, output=str(out_path))
+        # Prefer PIL.ImageGrab (uses xwd under X11/Xvfb; works where mss/XGetImage fails).
+        # Fall back to mss if ImageGrab is unavailable.
+        try:
+            from PIL import ImageGrab  # noqa: PLC0415
+            bbox = (x, y, x + max(w, 1), y + max(h, 1))
+            img = ImageGrab.grab(bbox=bbox)
+            img.save(str(out_path), format="PNG")
+        except Exception:  # noqa: BLE001
+            with _mss.mss() as sct:  # type: ignore[union-attr]
+                monitor = {"top": y, "left": x, "width": max(w, 1), "height": max(h, 1)}
+                screenshot = sct.grab(monitor)
+                _mss_tools.to_png(screenshot.rgb, screenshot.size, output=str(out_path))
 
         if not out_path.is_file() or out_path.stat().st_size == 0:
             print(f"[capture] Error: output file is empty: {out_path}", file=sys.stderr)
