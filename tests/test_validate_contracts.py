@@ -18,6 +18,7 @@ REQUIRED_CHECK_IDS = [
     "PLUGINS.UI",
     "PKG.MIRROR",
     "DOCS.MILESTONES",
+    "DOCS.USER_MANUAL",
     "SCENE.REGISTRIES",
     "TRANSLATION.REGISTRIES",
     "ROLES.REGISTRIES",
@@ -35,6 +36,7 @@ REQUIRED_TOOL_SCRIPTS = [
     "validate_plugins_ui.py",
     "validate_packaged_data_mirror.py",
     "validate_milestones.py",
+    "validate_user_manual.py",
 ]
 
 REQUIRED_REPO_DIRS = [
