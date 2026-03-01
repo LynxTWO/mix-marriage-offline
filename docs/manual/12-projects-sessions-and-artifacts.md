@@ -9,10 +9,10 @@ mmo project refresh --project-dir ./project --stems-root ./stems
 
 Session persistence.
 Save a session (scene + history + receipts):
-mmo project save --out out/session.json
+mmo project save ./project --session out/session.json
 
 Reload it later:
-mmo project load --session out/session.json
+mmo project load ./project --session out/session.json
 
 Bundles.
 A ui_bundle.json is a “pointer payload” that the GUI can consume.

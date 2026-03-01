@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- User manual source added under `docs/manual/`:
+  - 15 chapters (`00-manual-overview.md` through `14-glossary.md`) covering install,
+    stems prep, the four main workflows, reports, safe-render, translation QA,
+    presets/locks, watch-folder automation, GUI walkthrough, plugins, projects,
+    and troubleshooting.
+  - `docs/manual/manual.yaml` — ordered chapter manifest (single source of chapter order).
+  - `docs/manual/glossary.yaml` — structured glossary source with terms, definitions,
+    and see-also links.
+  - Fixed command flags in `docs/manual/12-projects-sessions-and-artifacts.md`:
+    `project save` and `project load` now include the required positional `project_dir`.
+- Doc accuracy fixes:
+  - `docs/user_guide.md` corrected: `scan --out-report` → `scan --out`;
+    `report --csv` → `export --csv`; `watch --out-dir` → `watch --out`;
+    `project save`/`project load` now include required positional `project_dir`.
+    File is now a short quickstart pointer that links to the User Manual.
+  - `docs/README.md`: User Manual listed first in "Start here" with links to
+    `manual/manual.yaml`; `user_guide.md` re-described as a quickstart pointer.
 - Strict BS.1770-5 loudness method registry and advanced-layout weighting:
   - Added versioned loudness method registry in `src/mmo/core/loudness_methods.py`
     with implemented `BS.1770-5` plus forward-compat placeholder IDs that fail

@@ -1,0 +1,149 @@
+---
+# docs/manual/glossary.yaml
+# Canonical glossary source for the MMO User Manual.
+# Terms are kept in alphabetical order.
+# Each entry: term, definition, and optional pro_note and see_also.
+
+terms:
+  - term: "Artifact"
+    definition: >
+      A file MMO writes that has a strict schema
+      (report.json, scene.json, render_plan.json, receipt.json).
+      Artifacts are deterministic and can be diffed between runs.
+
+  - term: "Authority mode"
+    definition: >
+      A policy level that decides what can be auto-applied:
+      Guide (no auto-apply), Assist (conservative default),
+      Full Send (more permissive), Turbo (fast and aggressive).
+    see_also:
+      - "Profile"
+      - "Gate"
+
+  - term: "Bounded authority"
+    definition: >
+      MMO can recommend anything, but only auto-applies low-risk actions
+      unless you explicitly approve more.
+      High-risk actions are blocked until you use --approve.
+
+  - term: "Deliverables"
+    definition: >
+      Output files intended for delivery, often produced in multiple
+      layouts and channel-ordering standards from a single analysis pass
+      (render-many).
+    see_also:
+      - "Render-many"
+      - "Layout standard"
+
+  - term: "Deterministic"
+    definition: >
+      Same inputs plus same settings produce the same outputs.
+      MMO uses stable sorting, no timestamps, and content-hash-keyed
+      caching to guarantee this.
+
+  - term: "Downmix"
+    definition: >
+      A deterministic fold-down from one layout to another using a
+      known policy (e.g., 5.1 → 2.0). MMO includes a downmix matrix
+      inventory and a QA flow.
+    see_also:
+      - "Layout standard"
+      - "Translation"
+
+  - term: "Gate"
+    definition: >
+      A safety rule that can warn, block, or force fallback behavior
+      when a recommendation would exceed the current authority mode
+      or violate a lock.
+    see_also:
+      - "Authority mode"
+      - "Lock"
+
+  - term: "Issue"
+    definition: >
+      A detected problem in the stems, described with
+      what/why/where/confidence fields.
+      Issues drive recommendations; they are not mandatory actions.
+
+  - term: "Layout standard"
+    definition: >
+      A named channel ordering convention: SMPTE (canonical internal),
+      FILM, LOGIC_PRO, VST3, or AAF.
+      MMO always processes internally in SMPTE and remaps at export.
+    see_also:
+      - "Render-many"
+
+  - term: "Lock"
+    definition: >
+      A "do not violate this intent" constraint stored in scene intent
+      (e.g., LOCK.PRESERVE_DYNAMICS).
+      Locks block automation from crossing defined creative boundaries.
+    see_also:
+      - "Scene"
+      - "Gate"
+
+  - term: "Preset"
+    definition: >
+      A curated run_config patch that bundles a workflow goal or vibe
+      direction (e.g., PRESET.VIBE.TRANSLATION_SAFE).
+      Presets are additive; they do not override locks.
+    see_also:
+      - "Profile"
+
+  - term: "Profile"
+    definition: >
+      A user style and safety profile that tunes thresholds and
+      tolerances for a delivery context (separate from authority mode).
+    see_also:
+      - "Authority mode"
+      - "Preset"
+
+  - term: "Receipt"
+    definition: >
+      A JSON log of what happened in a run, including what changed,
+      what was blocked, and why.
+      Receipts are your audit trail and should be kept with deliverables.
+
+  - term: "Recommendation"
+    definition: >
+      An actionable suggestion produced from an issue.
+      Recommendations have a risk level that determines whether
+      auto-apply is allowed under the current authority mode.
+    see_also:
+      - "Authority mode"
+      - "Gate"
+
+  - term: "Render-many"
+    definition: >
+      Analyze once, then render multiple targets and layout standards
+      from the same source truth.
+      Analysis artifacts are content-hash-keyed so repeat runs skip
+      the scan phase.
+    see_also:
+      - "Deliverables"
+      - "Scene"
+
+  - term: "Scene"
+    definition: >
+      A layout-agnostic intent artifact (scene.json) that captures
+      creative intent, locks, and routing topology.
+      A single scene can be rendered to multiple targets.
+    see_also:
+      - "Render-many"
+      - "Lock"
+
+  - term: "Stem"
+    definition: >
+      An exported audio file representing one component of a mix,
+      aligned in time with all other stems in the set.
+      MMO requires all stems to start at 0:00 and share sample rate
+      and bit depth.
+
+  - term: "Translation"
+    definition: >
+      A set of checks that estimate how the mix behaves on real
+      playback systems: phone, earbuds, car, small speaker, mono collapse.
+      Translation failures do not block renders by default;
+      they produce warnings and recall notes.
+    see_also:
+      - "Downmix"
