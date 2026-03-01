@@ -118,6 +118,12 @@ Before committing:
 - Confirm nothing under `corpus/` or `private/` is staged.
 - If `.git/index.lock` exists, stop and fix the lock (often OneDrive or a crashed git process).
 
+## Docs Contract
+
+Any PR that changes CLI flags, GUI labels, default targets, profiles, locks, gates, or output
+artifact shapes must also update `docs/manual/` and must still pass `DOCS.USER_MANUAL` in
+`tools/validate_contracts.py`.
+
 ## PR finish requirements
 Each PR must include:
 - A GitHub-ready Change Summary (title + bullets + files touched).

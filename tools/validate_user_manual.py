@@ -26,10 +26,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any
+
+_IMAGE_REF_RE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 
 # --- insert src/ so the module works both as a repo script and installed ---
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -56,14 +59,16 @@ def validate_user_manual(
     """Run all manual source checks and optionally build the PDF.
 
     Returns a dict with keys: ok, chapter_count, glossary_term_count,
-    missing_chapters, pdf_built, pdf_bytes, reportlab_available,
-    errors, warnings.
+    missing_chapters, image_refs_checked, missing_assets,
+    pdf_built, pdf_bytes, reportlab_available, errors, warnings.
     """
     errors: list[str] = []
     warnings: list[str] = []
     chapter_count = 0
     glossary_term_count = 0
     missing_chapters: list[str] = []
+    image_refs_checked = 0
+    missing_assets: list[str] = []
     pdf_built = False
     pdf_bytes = 0
     reportlab_available = False
@@ -170,7 +175,33 @@ def validate_user_manual(
             errors.append(f"Failed to parse {glossary_file}: {exc}")
 
     # ------------------------------------------------------------------
-    # 4. PDF build smoke-test
+    # 4. Image asset references
+    # ------------------------------------------------------------------
+    for entry in chapters:
+        if not isinstance(entry, dict):
+            continue
+        chapter_file = entry.get("file", "")
+        if not chapter_file:
+            continue
+        chapter_path = chapters_dir / chapter_file
+        if not chapter_path.is_file():
+            continue
+        try:
+            text = chapter_path.read_text(encoding="utf-8")
+        except Exception:  # noqa: BLE001
+            continue
+        for m in _IMAGE_REF_RE.finditer(text):
+            img_ref = m.group(2).strip()
+            if img_ref.startswith(("http://", "https://")):
+                continue  # remote refs are not validated
+            image_refs_checked += 1
+            asset_path = (chapters_dir / img_ref).resolve()
+            if not asset_path.is_file():
+                missing_assets.append(img_ref)
+                errors.append(f"Missing image asset referenced in {chapter_file}: {img_ref}")
+
+    # ------------------------------------------------------------------
+    # 5. PDF build smoke-test
     # ------------------------------------------------------------------
     try:
         import reportlab  # noqa: F401
@@ -204,6 +235,8 @@ def validate_user_manual(
         chapter_count=chapter_count,
         glossary_term_count=glossary_term_count,
         missing_chapters=missing_chapters,
+        image_refs_checked=image_refs_checked,
+        missing_assets=sorted(missing_assets),
         pdf_built=pdf_built,
         pdf_bytes=pdf_bytes,
         reportlab_available=reportlab_available,

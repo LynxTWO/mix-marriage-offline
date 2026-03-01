@@ -42,6 +42,7 @@ dependencies = [
 pdf = ["reportlab>=4"]
 truth = ["numpy>=2.0"]
 gui = ["customtkinter>=5.2.2"]
+screenshots = ["mss>=9", "Pillow>=10"]
 watch = ["watchdog>=4.0"]
 dev = ["pytest>=7.0", "pytest-xdist>=3.6.1"]
 

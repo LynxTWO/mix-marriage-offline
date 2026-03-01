@@ -90,6 +90,37 @@ jobs:
       - name: Run tests (serial)
         run: tools/run_pytest.sh -q
 
+  screenshots-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          allow-prereleases: true
+
+      - name: Install GUI + screenshot deps
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y xvfb python3-tk
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[gui,screenshots,pdf]"
+
+      - name: Regenerate screenshots
+        run: >
+          xvfb-run -a python tools/capture_gui_screenshots.py
+          --out-dir docs/manual/assets/screenshots
+
+      - name: Upload screenshots for debugging
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmo-gui-screenshots
+          path: docs/manual/assets/screenshots/
+
+      - name: Enforce committed screenshots match generated
+        run: git diff --exit-code docs/manual/assets/screenshots/
+
   docs-manual:
     runs-on: ubuntu-latest
     steps:

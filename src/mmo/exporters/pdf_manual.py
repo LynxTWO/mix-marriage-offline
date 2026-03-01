@@ -516,7 +516,16 @@ def _divider(styles: dict[str, Any]) -> list[Any]:
 # Minimal Markdown parser
 # ---------------------------------------------------------------------------
 
-def _parse_markdown(text: str, styles: dict[str, Any]) -> list[Any]:
+_IMG_RE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+
+
+def _parse_markdown(
+    text: str,
+    styles: dict[str, Any],
+    *,
+    chapters_dir: Path | None = None,
+    usable_width: float | None = None,
+) -> list[Any]:
     """Parse a minimal Markdown subset into ReportLab flowables.
 
     Supported:
@@ -525,6 +534,8 @@ def _parse_markdown(text: str, styles: dict[str, Any]) -> list[Any]:
     - Bullet lists (``- `` / ``* ``)
     - Blank-line-separated paragraphs
     - Inline ``**bold**`` and `` `code` ``
+    - Images: ``![alt](relative/path.png)`` — embedded if file exists,
+      otherwise rendered as a ``[IMAGE: alt]`` placeholder paragraph.
     """
     flowables: list[Any] = []
     lines = text.splitlines()
@@ -569,6 +580,41 @@ def _parse_markdown(text: str, styles: dict[str, Any]) -> list[Any]:
                 i += 1
             i += 1  # skip closing fence
             flowables.append(_make_code_block("\n".join(code_lines), styles))
+            continue
+
+        # Image reference: ![alt](path)
+        img_match = _IMG_RE.fullmatch(line.strip())
+        if img_match:
+            _flush_para()
+            _flush_bullets()
+            alt_text = img_match.group(1)
+            img_ref = img_match.group(2).strip()
+            img_embedded = False
+            if (
+                _REPORTLAB
+                and chapters_dir is not None
+                and not img_ref.startswith(("http://", "https://"))
+            ):
+                img_path = (chapters_dir / img_ref).resolve()
+                if img_path.is_file():
+                    try:
+                        from PIL import Image as _PILImage  # noqa: PLC0415
+                        from reportlab.platypus import Image as _RLImage  # noqa: PLC0415
+                        max_w = usable_width if usable_width is not None else 14.0 * _cm
+                        with _PILImage.open(img_path) as _pil:
+                            orig_w, orig_h = _pil.size
+                        embed_h = max_w * orig_h / orig_w if orig_w > 0 else max_w
+                        flowables.append(
+                            _RLImage(str(img_path), width=max_w, height=embed_h)
+                        )
+                        flowables.append(_Spacer(1, 0.3 * _cm))
+                        img_embedded = True
+                    except Exception:  # noqa: BLE001
+                        pass
+            if not img_embedded:
+                placeholder = f"[IMAGE: {_esc(alt_text or img_ref)}]"
+                flowables.append(_Paragraph(placeholder, styles["body"]))
+            i += 1
             continue
 
         # ATX headings
@@ -831,10 +877,11 @@ class _ManualBuilder:
         )
         doc.addPageTemplates([_PageTemplate(id="main", frames=[frame])])
 
-        story = self._build_story(toc)
+        usable_width = page_w - margin_l - margin_r
+        story = self._build_story(toc, usable_width=usable_width)
         doc.multiBuild(story, canvasmaker=canvas_factory)
 
-    def _build_story(self, toc: Any) -> list[Any]:
+    def _build_story(self, toc: Any, *, usable_width: float | None = None) -> list[Any]:
         s = self._styles
         story: list[Any] = []
 
@@ -869,7 +916,14 @@ class _ManualBuilder:
                 continue
 
             text = chapter_path.read_text(encoding="utf-8")
-            story.extend(_parse_markdown(text, s))
+            story.extend(
+                _parse_markdown(
+                    text,
+                    s,
+                    chapters_dir=self._chapters_dir,
+                    usable_width=usable_width,
+                )
+            )
             story.append(_PageBreak())
 
         # ---- Glossary ----
