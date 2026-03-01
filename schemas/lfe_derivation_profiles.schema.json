@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/lfe_derivation_profiles.schema.json",
+  "title": "MMO LFE Derivation Profiles Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profiles"],
+  "properties": {
+    "schema_version": { "const": "0.1.0" },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "LFE_DERIVE.DOLBY_120_LR24_TRIM_10",
+        "LFE_DERIVE.MUSIC_80_LR24_TRIM_10"
+      ],
+      "patternProperties": {
+        "^LFE_DERIVE\\.[A-Z0-9_.]+$": { "$ref": "#/$defs/lfe_derivation_profile" }
+      }
+    }
+  },
+  "$defs": {
+    "lfe_derivation_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "lowpass_hz",
+        "slope_db_per_oct",
+        "gain_trim_db",
+        "notes"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lowpass_hz": {
+          "type": "number",
+          "minimum": 20.0,
+          "maximum": 300.0
+        },
+        "slope_db_per_oct": {
+          "type": "integer",
+          "enum": [12, 24, 36, 48]
+        },
+        "gain_trim_db": {
+          "type": "number",
+          "minimum": -36.0,
+          "maximum": 0.0
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

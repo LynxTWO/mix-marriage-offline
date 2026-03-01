@@ -41,6 +41,14 @@
       "type": "string",
       "pattern": "^LOUD\\.[A-Z0-9_.]+$"
     },
+    "lfe_derivation_profile_id": {
+      "type": "string",
+      "pattern": "^LFE_DERIVE\\.[A-Z0-9_.]+$"
+    },
+    "lfe_mode": {
+      "type": "string",
+      "enum": ["mono", "stereo"]
+    },
     "target_unit": {
       "type": "string",
       "enum": ["LUFS", "LKFS"]
@@ -163,6 +171,7 @@
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
         },
+        "lfe_receipt": { "$ref": "#/$defs/lfe_derivation_receipt" },
         "output_files": {
           "type": "array",
           "items": { "$ref": "#/$defs/output_file" }
@@ -238,9 +247,58 @@
         "gates_policy_id": {
           "type": ["string", "null"]
         },
+        "lfe_derivation_profile_id": {
+          "type": ["string", "null"]
+        },
         "matrix_id": {
           "type": ["string", "null"]
         }
+      }
+    },
+    "lfe_derivation_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "derivation_applied",
+        "derivation_ran",
+        "derivation_reason",
+        "profile_id",
+        "profile_lowpass_hz",
+        "profile_slope_db_per_oct",
+        "profile_trim_db",
+        "lfe_mode",
+        "target_lfe_channel_count",
+        "chosen_sum_mode",
+        "delta_db",
+        "delta_threshold_db"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["not_applicable", "passthrough", "derived", "empty"]
+        },
+        "derivation_applied": { "type": "boolean" },
+        "derivation_ran": { "type": "boolean" },
+        "derivation_reason": { "type": "string", "minLength": 1 },
+        "profile_id": { "type": ["string", "null"] },
+        "profile_lowpass_hz": { "type": ["number", "null"] },
+        "profile_slope_db_per_oct": { "type": ["integer", "null"] },
+        "profile_trim_db": { "type": ["number", "null"] },
+        "lfe_mode": { "$ref": "#/$defs/lfe_mode" },
+        "target_lfe_channel_count": { "type": "integer", "minimum": 0 },
+        "chosen_sum_mode": {
+          "type": "string",
+          "enum": [
+            "not_applicable",
+            "passthrough",
+            "L+R",
+            "L-R",
+            "flipped R"
+          ]
+        },
+        "delta_db": { "type": "number", "minimum": 0.0 },
+        "delta_threshold_db": { "type": "number", "minimum": 0.0 }
       }
     },
     "qa_gates": {

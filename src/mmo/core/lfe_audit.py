@@ -206,6 +206,25 @@ def _linear_to_db(value_linear: float) -> float:
     return 10.0 * math.log10(value_linear)
 
 
+def classify_lfe_program_state(
+    *,
+    target_has_lfe: bool,
+    source_has_lfe_program_content: bool,
+    lfe_receipt: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Classify LFE state for audits/reports: passthrough, derived, or empty."""
+    if isinstance(lfe_receipt, dict):
+        status = str(lfe_receipt.get("status") or "").strip().lower()
+        if status in {"passthrough", "derived", "empty"}:
+            return status
+
+    if not target_has_lfe:
+        return "not_applicable"
+    if source_has_lfe_program_content:
+        return "passthrough"
+    return "empty"
+
+
 def audit_lfe_channels(
     interleaved: List[float],
     *,

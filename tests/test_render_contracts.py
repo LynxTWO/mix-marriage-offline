@@ -49,6 +49,8 @@ FULL_RENDER_REQUEST = {
         "downmix_policy_id": "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0",
         "gates_policy_id": "POLICY.GATES.CORE_V0",
         "loudness_profile_id": "LOUD.EBU_R128_PROGRAM",
+        "lfe_derivation_profile_id": "LFE_DERIVE.DOLBY_120_LR24_TRIM_10",
+        "lfe_mode": "mono",
         "sample_rate_hz": 48000,
         "bit_depth": 24,
         "dry_run": False,
@@ -123,6 +125,7 @@ FULL_RENDER_REPORT = {
     "policies_applied": {
         "downmix_policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
         "gates_policy_id": "POLICY.GATES.CORE_V0",
+        "lfe_derivation_profile_id": "LFE_DERIVE.DOLBY_120_LR24_TRIM_10",
         "matrix_id": "DMX.STD.5_1_TO_2_0.LO_RO_LFE_DROP",
     },
     "qa_gates": {
@@ -410,6 +413,18 @@ class TestRenderRequestSchema(unittest.TestCase):
     def test_invalid_loudness_profile_id_rejected(self) -> None:
         payload = dict(MINIMAL_RENDER_REQUEST)
         payload["options"] = {"loudness_profile_id": "bad_profile"}
+        errors = list(self.validator.iter_errors(payload))
+        self.assertGreater(len(errors), 0)
+
+    def test_invalid_lfe_derivation_profile_id_rejected(self) -> None:
+        payload = dict(MINIMAL_RENDER_REQUEST)
+        payload["options"] = {"lfe_derivation_profile_id": "bad_profile"}
+        errors = list(self.validator.iter_errors(payload))
+        self.assertGreater(len(errors), 0)
+
+    def test_invalid_lfe_mode_rejected(self) -> None:
+        payload = dict(MINIMAL_RENDER_REQUEST)
+        payload["options"] = {"lfe_mode": "quad"}
         errors = list(self.validator.iter_errors(payload))
         self.assertGreater(len(errors), 0)
 

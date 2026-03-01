@@ -111,6 +111,8 @@ _PROJECT_SHOW_SCHEMA_BY_ARTIFACT["listen_pack.json"] = "listen_pack.schema.json"
 _PROJECT_RENDER_REQUEST_EDITABLE_FIELDS: frozenset[str] = frozenset(
     {
         "dry_run",
+        "lfe_derivation_profile_id",
+        "lfe_mode",
         "max_theoretical_quality",
         "plugin_chain",
         "policies",
@@ -1037,6 +1039,24 @@ def _normalize_write_render_request_target_ids(raw_value: Any) -> list[str]:
     return _parse_target_ids_csv(",".join(target_ids))
 
 
+def _normalize_write_render_request_lfe_derivation_profile_id(raw_value: Any) -> str:
+    profile_id = _coerce_str(raw_value).strip()
+    if not profile_id:
+        raise ValueError("lfe_derivation_profile_id must be a non-empty string.")
+
+    from mmo.core.lfe_derivation_profiles import get_lfe_derivation_profile  # noqa: WPS433
+
+    get_lfe_derivation_profile(profile_id)
+    return profile_id
+
+
+def _normalize_write_render_request_lfe_mode(raw_value: Any) -> str:
+    mode = _coerce_str(raw_value).strip().lower()
+    if mode not in {"mono", "stereo"}:
+        raise ValueError("lfe_mode must be 'mono' or 'stereo'.")
+    return mode
+
+
 def _normalize_write_render_request_policies(
     raw_value: Any,
 ) -> dict[str, str]:
@@ -1161,6 +1181,16 @@ def _normalize_write_render_request_updates(
             raw_updates.get("dry_run"),
             field_name="dry_run",
         )
+    if "lfe_derivation_profile_id" in raw_updates:
+        normalized["lfe_derivation_profile_id"] = (
+            _normalize_write_render_request_lfe_derivation_profile_id(
+                raw_updates.get("lfe_derivation_profile_id"),
+            )
+        )
+    if "lfe_mode" in raw_updates:
+        normalized["lfe_mode"] = _normalize_write_render_request_lfe_mode(
+            raw_updates.get("lfe_mode"),
+        )
     if "max_theoretical_quality" in raw_updates:
         normalized["max_theoretical_quality"] = _parse_write_render_request_bool(
             raw_updates.get("max_theoretical_quality"),
@@ -1255,6 +1285,12 @@ def _run_project_write_render_request(
     if "dry_run" in normalized_updates:
         options["dry_run"] = normalized_updates["dry_run"]
         updated_fields.append("dry_run")
+    if "lfe_derivation_profile_id" in normalized_updates:
+        options["lfe_derivation_profile_id"] = normalized_updates["lfe_derivation_profile_id"]
+        updated_fields.append("lfe_derivation_profile_id")
+    if "lfe_mode" in normalized_updates:
+        options["lfe_mode"] = normalized_updates["lfe_mode"]
+        updated_fields.append("lfe_mode")
     if "max_theoretical_quality" in normalized_updates:
         options["max_theoretical_quality"] = normalized_updates["max_theoretical_quality"]
         updated_fields.append("max_theoretical_quality")
@@ -1314,6 +1350,8 @@ def _run_project_write_render_request(
     }
     for key in (
         "dry_run",
+        "lfe_derivation_profile_id",
+        "lfe_mode",
         "max_theoretical_quality",
         "target_ids",
         "target_layout_ids",

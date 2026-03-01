@@ -74,6 +74,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Recall-sheet export now carries render channel-order and export-warning context columns for x.2 traceability.
   - FFmpeg transcoding now forwards explicit channel layout strings (including `LFE2` when supported) for layout-preserving non-WAV exports.
   - Added deterministic dual-LFE render fixtures for `5.2`, `7.2`, and `7.2.4`, plus regression tests covering channel order/count contracts and WAV warning behavior.
+- Missing-LFE derivation as a deterministic policy primitive:
+  - Added `ontology/lfe_derivation_profiles.yaml` + strict schema
+    `schemas/lfe_derivation_profiles.schema.json` with default
+    `LFE_DERIVE.DOLBY_120_LR24_TRIM_10` and alternate
+    `LFE_DERIVE.MUSIC_80_LR24_TRIM_10`.
+  - Extended render request/plan/report contracts with
+    `lfe_derivation_profile_id`, `lfe_mode`, and structured `lfe_receipt`
+    payloads.
+  - Added `src/mmo/dsp/lfe_derive.py` deterministic low-pass + phase-max test
+    primitive (`L+R` vs `L-R`, `0.1 dB` threshold) with mono and stereo-LFE
+    behavior for dual-LFE targets.
+  - Planner/report integration now records whether LFE is passthrough vs
+    derived (and why), including profile/mode/threshold/delta receipts in
+    dry-run contracts.
+  - Added unit/integration coverage for in-phase/out-of-phase selection,
+    below-threshold default behavior, dual-LFE mirroring, stereo-LFE flip
+    decisions, and schema-valid deterministic receipts.
 - Artistic headphone preview UX polish in `mmo-gui`:
   - Added a dedicated `Preview on Headphones` control in the Audition panel.
   - Added deterministic pulsing waveform visualization and warm analog L/R metering

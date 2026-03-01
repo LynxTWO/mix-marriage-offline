@@ -179,8 +179,9 @@ class TestProjectWriteRenderRequest(unittest.TestCase):
         self.assertIn("Unknown editable field(s): scene_path.", stderr_a)
         self.assertIn(
             (
-                "Allowed keys: dry_run, max_theoretical_quality, plugin_chain, "
-                "policies, target_ids, target_layout_ids."
+                "Allowed keys: dry_run, lfe_derivation_profile_id, lfe_mode, "
+                "max_theoretical_quality, plugin_chain, policies, target_ids, "
+                "target_layout_ids."
             ),
             stderr_a,
         )
@@ -274,6 +275,39 @@ class TestProjectWriteRenderRequest(unittest.TestCase):
                 }
             ],
         )
+
+    def test_writes_lfe_profile_and_mode(self) -> None:
+        args = [
+            "project",
+            "write-render-request",
+            str(self.project_dir),
+            "--set",
+            "lfe_derivation_profile_id=LFE_DERIVE.MUSIC_80_LR24_TRIM_10",
+            "--set",
+            "lfe_mode=stereo",
+        ]
+        exit_code, stdout, stderr = _run_main(args)
+        self.assertEqual(exit_code, 0, msg=stderr)
+        self.assertEqual(stderr, "")
+
+        summary = json.loads(stdout)
+        self.assertEqual(
+            summary["updated_fields"],
+            ["lfe_derivation_profile_id", "lfe_mode"],
+        )
+        self.assertEqual(
+            summary["lfe_derivation_profile_id"],
+            "LFE_DERIVE.MUSIC_80_LR24_TRIM_10",
+        )
+        self.assertEqual(summary["lfe_mode"], "stereo")
+
+        request_path = self.project_dir / "renders" / "render_request.json"
+        payload = json.loads(request_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            payload["options"]["lfe_derivation_profile_id"],
+            "LFE_DERIVE.MUSIC_80_LR24_TRIM_10",
+        )
+        self.assertEqual(payload["options"]["lfe_mode"], "stereo")
 
 
 if __name__ == "__main__":

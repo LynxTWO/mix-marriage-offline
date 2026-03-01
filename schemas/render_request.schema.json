@@ -40,6 +40,14 @@
       "type": "string",
       "pattern": "^TARGET\\.[A-Z0-9_.]+$"
     },
+    "lfe_derivation_profile_id": {
+      "type": "string",
+      "pattern": "^LFE_DERIVE\\.[A-Z0-9_.]+$"
+    },
+    "lfe_mode": {
+      "type": "string",
+      "enum": ["mono", "stereo"]
+    },
     "render_options": {
       "type": "object",
       "additionalProperties": false,
@@ -71,6 +79,8 @@
           "type": "string",
           "pattern": "^LOUD\\.[A-Z0-9_.]+$"
         },
+        "lfe_derivation_profile_id": { "$ref": "#/$defs/lfe_derivation_profile_id" },
+        "lfe_mode": { "$ref": "#/$defs/lfe_mode" },
         "sample_rate_hz": {
           "type": "integer",
           "minimum": 8000

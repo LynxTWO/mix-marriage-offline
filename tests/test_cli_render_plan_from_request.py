@@ -80,6 +80,8 @@ def _request_with_options(scene_path: str) -> dict:
             "downmix_policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0",
             "gates_policy_id": "POLICY.GATES.CORE_V0",
             "loudness_profile_id": "LOUD.EBU_R128_PROGRAM",
+            "lfe_derivation_profile_id": "LFE_DERIVE.MUSIC_80_LR24_TRIM_10",
+            "lfe_mode": "stereo",
         },
     }
 
@@ -238,6 +240,11 @@ class TestRenderPlanFromRequestCli(unittest.TestCase):
                 payload["resolved"]["gates_policy_id"],
                 "POLICY.GATES.CORE_V0",
             )
+            self.assertEqual(
+                payload["resolved"]["lfe_derivation_profile_id"],
+                "LFE_DERIVE.MUSIC_80_LR24_TRIM_10",
+            )
+            self.assertEqual(payload["resolved"]["lfe_mode"], "stereo")
 
             # Output formats from request options.
             self.assertEqual(
@@ -257,6 +264,10 @@ class TestRenderPlanFromRequestCli(unittest.TestCase):
                         "to_layout_id": "LAYOUT.2_0",
                     }
                 ],
+            )
+            self.assertEqual(
+                payload["policies"]["lfe_derivation_profile_id"],
+                "LFE_DERIVE.MUSIC_80_LR24_TRIM_10",
             )
 
     def test_overwrite_refusal_without_force(self) -> None:

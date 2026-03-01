@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from mmo.core.layout_export import (
@@ -179,6 +180,10 @@ def build_render_report_from_plan(
         if target_layout_id:
             report_job["target_layout_id"] = target_layout_id
 
+        lfe_receipt = plan_job.get("lfe_receipt")
+        if isinstance(lfe_receipt, dict):
+            report_job["lfe_receipt"] = json.loads(json.dumps(lfe_receipt))
+
         resolved_layout = resolved_by_layout.get(target_layout_id)
         if resolved_layout is not None:
             channel_order = list(resolved_layout.get("channel_order") or [])
@@ -207,6 +212,7 @@ def build_render_report_from_plan(
     policies_applied: dict[str, Any] = {
         "downmix_policy_id": plan_policies.get("downmix_policy_id") or None,
         "gates_policy_id": plan_policies.get("gates_policy_id") or None,
+        "lfe_derivation_profile_id": plan_policies.get("lfe_derivation_profile_id") or None,
         "matrix_id": None,
     }
 

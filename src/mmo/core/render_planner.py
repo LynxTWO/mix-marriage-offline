@@ -13,14 +13,21 @@ import json
 from pathlib import PurePosixPath
 from typing import Any
 
+from mmo.core.lfe_derivation_profiles import (
+    DEFAULT_LFE_DERIVATION_PROFILE_ID,
+    get_lfe_derivation_profile,
+)
 from mmo.core.loudness_profiles import get_loudness_profile
 from mmo.core.registries.render_targets_registry import RenderTargetsRegistry
+from mmo.dsp.lfe_derive import PHASE_DELTA_THRESHOLD_DB, derive_missing_lfe
 from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS
 
 RENDER_PLAN_SCHEMA_VERSION = "0.1.0"
 _OUTPUT_FORMAT_ORDER = tuple(LOSSLESS_OUTPUT_FORMATS)
 _STEREO_LAYOUT_ID = "LAYOUT.2_0"
 _DEFAULT_DOWNMIX_POLICY_ID = "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
+_DEFAULT_LFE_MODE = "mono"
+_LFE_SPEAKER_IDS: frozenset[str] = frozenset({"SPK.LFE", "SPK.LFE1", "SPK.LFE2"})
 
 
 def _coerce_str(value: Any) -> str:
@@ -48,6 +55,159 @@ def _hash8(payload: dict[str, Any]) -> str:
 
 def _to_posix(path_str: str) -> str:
     return path_str.replace("\\", "/")
+
+
+def _normalize_lfe_mode(value: Any) -> str:
+    normalized = _coerce_str(value).strip().lower()
+    if normalized in {"mono", "stereo"}:
+        return normalized
+    return _DEFAULT_LFE_MODE
+
+
+def _is_lfe_speaker_id(speaker_id: str) -> bool:
+    token = _coerce_str(speaker_id).strip().upper()
+    if token in _LFE_SPEAKER_IDS:
+        return True
+    return token.startswith("SPK.LFE")
+
+
+def _lfe_speakers(channel_order: list[str]) -> list[str]:
+    return [speaker_id for speaker_id in channel_order if _is_lfe_speaker_id(speaker_id)]
+
+
+def _layout_has_lfe(layout_id: str, layouts: dict[str, Any] | None) -> bool | None:
+    if not layout_id or not isinstance(layouts, dict):
+        return None
+    layout = layouts.get(layout_id)
+    if not isinstance(layout, dict):
+        return None
+
+    has_lfe = layout.get("has_lfe")
+    if isinstance(has_lfe, bool):
+        return has_lfe
+
+    lfe_policy = layout.get("lfe_policy")
+    if isinstance(lfe_policy, dict):
+        lfe_channels = lfe_policy.get("lfe_channels")
+        if isinstance(lfe_channels, list):
+            return bool(lfe_channels)
+
+    channel_order = layout.get("channel_order")
+    if isinstance(channel_order, list):
+        return any(_is_lfe_speaker_id(str(speaker_id)) for speaker_id in channel_order)
+    return None
+
+
+def _scene_source_layout_id(scene: dict[str, Any]) -> str | None:
+    source = scene.get("source")
+    if isinstance(source, dict):
+        candidate = _coerce_str(source.get("layout_id")).strip()
+        if candidate:
+            return candidate
+    metadata = scene.get("metadata")
+    if isinstance(metadata, dict):
+        for key in ("source_layout_id", "layout_id"):
+            candidate = _coerce_str(metadata.get(key)).strip()
+            if candidate:
+                return candidate
+    return None
+
+
+def _scene_has_explicit_lfe_content(scene: dict[str, Any]) -> bool | None:
+    metadata = scene.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    for key in ("source_has_lfe_program_content", "has_lfe_program_content"):
+        value = metadata.get(key)
+        if isinstance(value, bool):
+            return value
+    return None
+
+
+def _source_has_lfe_program_content(
+    *,
+    scene: dict[str, Any],
+    layouts: dict[str, Any] | None,
+) -> tuple[bool, str]:
+    explicit = _scene_has_explicit_lfe_content(scene)
+    if isinstance(explicit, bool):
+        if explicit:
+            return True, "scene_metadata_declares_lfe_program_content"
+        return False, "scene_metadata_declares_missing_lfe_program_content"
+
+    source_layout_id = _scene_source_layout_id(scene)
+    if source_layout_id:
+        layout_has_lfe = _layout_has_lfe(source_layout_id, layouts)
+        if layout_has_lfe is True:
+            return True, f"source_layout_has_lfe:{source_layout_id}"
+        if layout_has_lfe is False:
+            return False, f"source_layout_has_no_lfe:{source_layout_id}"
+
+    return False, "source_lfe_program_content_unknown_assumed_missing"
+
+
+def _passthrough_lfe_receipt(
+    *,
+    profile_id: str,
+    lfe_mode: str,
+    target_lfe_channel_count: int,
+    reason: str,
+) -> dict[str, Any]:
+    return {
+        "status": "passthrough",
+        "derivation_applied": False,
+        "derivation_ran": False,
+        "derivation_reason": reason,
+        "profile_id": profile_id,
+        "profile_lowpass_hz": None,
+        "profile_slope_db_per_oct": None,
+        "profile_trim_db": None,
+        "lfe_mode": lfe_mode,
+        "target_lfe_channel_count": target_lfe_channel_count,
+        "chosen_sum_mode": "passthrough",
+        "delta_db": 0.0,
+        "delta_threshold_db": float(PHASE_DELTA_THRESHOLD_DB),
+    }
+
+
+def _build_lfe_receipt_for_target(
+    *,
+    target_layout_id: str,
+    channel_order: list[str],
+    scene: dict[str, Any],
+    layouts: dict[str, Any] | None,
+    lfe_derivation_profile_id: str,
+    lfe_mode: str,
+) -> dict[str, Any] | None:
+    lfe_speakers = _lfe_speakers(channel_order)
+    if not lfe_speakers:
+        return None
+
+    normalized_mode = _normalize_lfe_mode(lfe_mode)
+    profile = get_lfe_derivation_profile(lfe_derivation_profile_id)
+    source_has_lfe, source_reason = _source_has_lfe_program_content(
+        scene=scene,
+        layouts=layouts,
+    )
+    if source_has_lfe:
+        return _passthrough_lfe_receipt(
+            profile_id=profile["lfe_derivation_profile_id"],
+            lfe_mode=normalized_mode,
+            target_lfe_channel_count=len(lfe_speakers),
+            reason=f"target_has_lfe_and_{source_reason}",
+        )
+
+    _, receipt = derive_missing_lfe(
+        left=[],
+        right=[],
+        sample_rate_hz=48000,
+        target_lfe_channel_count=len(lfe_speakers),
+        profile=profile,
+        lfe_mode=normalized_mode,
+        delta_threshold_db=PHASE_DELTA_THRESHOLD_DB,
+    )
+    receipt["derivation_reason"] = f"target_has_lfe_and_{source_reason}"
+    return receipt
 
 
 def _resolve_layout(
@@ -88,6 +248,8 @@ def _resolve_layout(
     has_lfe = entry.get("has_lfe")
     if isinstance(has_lfe, bool):
         resolved["has_lfe"] = has_lfe
+    else:
+        resolved["has_lfe"] = bool(_lfe_speakers(list(channel_order)))
 
     return resolved
 
@@ -513,14 +675,19 @@ def _validate_policies(
     options_dict: dict[str, Any],
     downmix_registry: Any | None,
     gates_policy_ids: list[str] | None,
-) -> tuple[str | None, str | None, str | None]:
+) -> tuple[str | None, str | None, str | None, str, str]:
     """Extract and validate policy/profile IDs.
 
-    Returns ``(downmix_policy_id, gates_policy_id, loudness_profile_id)``.
+    Returns ``(downmix_policy_id, gates_policy_id, loudness_profile_id, lfe_derivation_profile_id, lfe_mode)``.
     """
     downmix_policy_id = _coerce_str(options_dict.get("downmix_policy_id")).strip() or None
     gates_policy_id = _coerce_str(options_dict.get("gates_policy_id")).strip() or None
     loudness_profile_id = _coerce_str(options_dict.get("loudness_profile_id")).strip() or None
+    lfe_derivation_profile_id = (
+        _coerce_str(options_dict.get("lfe_derivation_profile_id")).strip()
+        or DEFAULT_LFE_DERIVATION_PROFILE_ID
+    )
+    lfe_mode = _normalize_lfe_mode(options_dict.get("lfe_mode"))
 
     if downmix_policy_id and downmix_registry is not None:
         downmix_registry.get_policy(downmix_policy_id)
@@ -541,7 +708,16 @@ def _validate_policies(
     if loudness_profile_id:
         get_loudness_profile(loudness_profile_id)
 
-    return downmix_policy_id, gates_policy_id, loudness_profile_id
+    # Always validate selected LFE derivation profile for deterministic errors.
+    get_lfe_derivation_profile(lfe_derivation_profile_id)
+
+    return (
+        downmix_policy_id,
+        gates_policy_id,
+        loudness_profile_id,
+        lfe_derivation_profile_id,
+        lfe_mode,
+    )
 
 
 def build_render_plan(
@@ -586,7 +762,13 @@ def build_render_plan(
     options = request.get("options")
     options_dict = options if isinstance(options, dict) else {}
     output_formats = _normalize_output_formats(options_dict.get("output_formats"))
-    downmix_policy_id, gates_policy_id, loudness_profile_id = _validate_policies(
+    (
+        downmix_policy_id,
+        gates_policy_id,
+        loudness_profile_id,
+        lfe_derivation_profile_id,
+        lfe_mode,
+    ) = _validate_policies(
         options_dict, downmix_registry, gates_policy_ids,
     )
     requested_target_ids = _normalize_requested_target_ids(options_dict.get("target_ids"))
@@ -624,6 +806,8 @@ def build_render_plan(
             downmix_policy_id=downmix_policy_id,
             gates_policy_id=gates_policy_id,
             loudness_profile_id=loudness_profile_id,
+            lfe_derivation_profile_id=lfe_derivation_profile_id,
+            lfe_mode=lfe_mode,
             routing_plan_path=routing_plan_path,
             routing_plan=routing_plan,
             layouts=layouts,
@@ -643,6 +827,8 @@ def build_render_plan(
         downmix_policy_id=downmix_policy_id,
         gates_policy_id=gates_policy_id,
         loudness_profile_id=loudness_profile_id,
+        lfe_derivation_profile_id=lfe_derivation_profile_id,
+        lfe_mode=lfe_mode,
         routing_plan_path=routing_plan_path,
         routing_plan=routing_plan,
         layouts=layouts,
@@ -662,6 +848,8 @@ def _build_single_target_plan(
     downmix_policy_id: str | None,
     gates_policy_id: str | None,
     loudness_profile_id: str | None,
+    lfe_derivation_profile_id: str,
+    lfe_mode: str,
     routing_plan_path: str,
     routing_plan: dict[str, Any] | None,
     layouts: dict[str, Any] | None,
@@ -688,6 +876,8 @@ def _build_single_target_plan(
 
     resolved["downmix_policy_id"] = downmix_policy_id
     resolved["gates_policy_id"] = gates_policy_id
+    resolved["lfe_derivation_profile_id"] = lfe_derivation_profile_id
+    resolved["lfe_mode"] = _normalize_lfe_mode(lfe_mode)
 
     # Build the single job.
     job_inputs = _build_job_inputs(scene, routing_plan)
@@ -711,6 +901,16 @@ def _build_single_target_plan(
         "outputs": job_outputs,
         "notes": notes,
     }
+    lfe_receipt = _build_lfe_receipt_for_target(
+        target_layout_id=layout_id,
+        channel_order=list(resolved.get("channel_order") or []),
+        scene=scene,
+        layouts=layouts,
+        lfe_derivation_profile_id=lfe_derivation_profile_id,
+        lfe_mode=lfe_mode,
+    )
+    if isinstance(lfe_receipt, dict):
+        job["lfe_receipt"] = lfe_receipt
     if resolved_target_id is not None:
         job["resolved_target_id"] = resolved_target_id
     if routing_plan_path:
@@ -724,6 +924,7 @@ def _build_single_target_plan(
         policies["downmix_policy_id"] = downmix_policy_id
     if loudness_profile_id:
         policies["loudness_profile_id"] = loudness_profile_id
+    policies["lfe_derivation_profile_id"] = lfe_derivation_profile_id
 
     # Assemble the plan (without plan_id first for hashing).
     request_echo = _build_request_echo(request)
@@ -763,6 +964,8 @@ def _build_multi_target_plan(
     downmix_policy_id: str | None,
     gates_policy_id: str | None,
     loudness_profile_id: str | None,
+    lfe_derivation_profile_id: str,
+    lfe_mode: str,
     routing_plan_path: str,
     routing_plan: dict[str, Any] | None,
     layouts: dict[str, Any] | None,
@@ -814,6 +1017,8 @@ def _build_multi_target_plan(
                 }
             resolved["downmix_policy_id"] = downmix_policy_id
             resolved["gates_policy_id"] = gates_policy_id
+            resolved["lfe_derivation_profile_id"] = lfe_derivation_profile_id
+            resolved["lfe_mode"] = _normalize_lfe_mode(lfe_mode)
             resolved_layouts_by_id[layout_id] = resolved
 
         # Build job.
@@ -845,6 +1050,16 @@ def _build_multi_target_plan(
             "outputs": job_outputs,
             "notes": notes,
         }
+        lfe_receipt = _build_lfe_receipt_for_target(
+            target_layout_id=layout_id,
+            channel_order=list(resolved_layouts_by_id[layout_id].get("channel_order") or []),
+            scene=scene,
+            layouts=layouts,
+            lfe_derivation_profile_id=lfe_derivation_profile_id,
+            lfe_mode=lfe_mode,
+        )
+        if isinstance(lfe_receipt, dict):
+            job["lfe_receipt"] = lfe_receipt
         if resolved_target_id is not None and _coerce_str(resolved_target_id).strip():
             job["resolved_target_id"] = resolved_target_id
         if routing_plan_path:
@@ -859,6 +1074,7 @@ def _build_multi_target_plan(
         policies["downmix_policy_id"] = downmix_policy_id
     if loudness_profile_id:
         policies["loudness_profile_id"] = loudness_profile_id
+    policies["lfe_derivation_profile_id"] = lfe_derivation_profile_id
 
     # Targets list sorted.
     all_target_ids = sorted(set(all_target_ids))

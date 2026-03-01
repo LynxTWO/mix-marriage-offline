@@ -1,0 +1,19 @@
+schema_version: "0.1.0"
+profiles:
+  LFE_DERIVE.DOLBY_120_LR24_TRIM_10:
+    label: "Cinema-safe 120 Hz LR24, trim -10 dB"
+    lowpass_hz: 120.0
+    slope_db_per_oct: 24
+    gain_trim_db: -10.0
+    notes:
+      - "Deterministic mono LFE derivation profile for film/home-theater compatibility."
+      - "Uses 120 Hz low-pass and 24 dB/oct cascade with -10 dB trim."
+
+  LFE_DERIVE.MUSIC_80_LR24_TRIM_10:
+    label: "Music-safe 80 Hz LR24, trim -10 dB"
+    lowpass_hz: 80.0
+    slope_db_per_oct: 24
+    gain_trim_db: -10.0
+    notes:
+      - "Conservative bass-management-safe rolloff for music-forward monitoring chains."
+      - "Uses 80 Hz low-pass and 24 dB/oct cascade with -10 dB trim."

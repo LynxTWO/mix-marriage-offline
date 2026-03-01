@@ -86,6 +86,11 @@ class TestRenderRequestTemplateHappyPath(unittest.TestCase):
                 opts["loudness_profile_id"],
                 "LOUD.EBU_R128_PROGRAM",
             )
+            self.assertEqual(
+                opts["lfe_derivation_profile_id"],
+                "LFE_DERIVE.DOLBY_120_LR24_TRIM_10",
+            )
+            self.assertEqual(opts["lfe_mode"], "mono")
             self.assertTrue(opts["dry_run"])
 
 

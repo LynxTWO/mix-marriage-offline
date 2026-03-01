@@ -108,6 +108,12 @@ Note: schema contracts use `schemas/*.schema.json` naming (not `schemas/*.json`)
 - [x] Detects out-of-band LFE content and flags it with evidence:
   - significant energy above the configured low-pass cutoff (default 120 Hz),
   - problematic infrasonic rumble below the configured high-pass cutoff (default 20 Hz).
+- [x] Missing-LFE derivation is policy-driven and deterministic when targets require LFE but source program LFE is absent:
+  - default profile `LFE_DERIVE.DOLBY_120_LR24_TRIM_10` (120 Hz / LR24 / -10 dB),
+  - alternate profile `LFE_DERIVE.MUSIC_80_LR24_TRIM_10` (80 Hz / LR24 / -10 dB, conservative bass-management-safe rolloff),
+  - phase-max test (`L+R` vs `L-R`) with stable `0.1 dB` threshold,
+  - dual-LFE default mirrored mono with optional explicit stereo-LFE mode,
+  - structured receipts in render plan/report (`status`, selected mode/profile, measured delta, threshold, and reason).
 - [ ] If a corrective filter is recommended, the system must:
   - explain what/why in musician language,
   - require explicit approval before applying,

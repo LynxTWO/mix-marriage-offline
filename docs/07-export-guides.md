@@ -314,6 +314,35 @@ Validation workflow:
 ffprobe -v error -select_streams a:0 -show_entries stream=channels,channel_layout -of json out.wav
 ```
 
+### Missing-LFE derivation (policy-driven, deterministic)
+
+When a target layout includes LFE channels but source program content has no LFE,
+MMO records a deterministic derivation receipt in plan/report contracts.
+
+Defaults:
+
+- profile: `LFE_DERIVE.DOLBY_120_LR24_TRIM_10` (120 Hz low-pass, LR24, -10 dB trim)
+- alternate profile: `LFE_DERIVE.MUSIC_80_LR24_TRIM_10` (80 Hz low-pass, LR24, -10 dB trim; conservative bass-management-safe rolloff)
+- mode: `mono`
+
+Phase-maximization rule for derived LFE:
+
+- candidate A: `lowpass(L) + lowpass(R)` (`L+R`)
+- candidate B: `lowpass(L) + lowpass(-R)` (`L-R`)
+- if loudness/energy delta is `>= 0.1 dB`, MMO selects the stronger candidate
+
+Dual-LFE targets:
+
+- default behavior is mirrored mono (`LFE1 = LFE2`)
+- if `lfe_mode=stereo`, MMO derives `lowpass(L)` / `lowpass(R)` and can flip R (`flipped R`) when mono-sum loudness improves by `>= 0.1 dB`
+
+Receipt fields include:
+
+- selected profile and mode
+- chosen sum mode (`L+R`, `L-R`, or `flipped R`)
+- measured `delta_db` and threshold
+- whether derivation ran and why (derived, passthrough, or not run for dry contract planning)
+
 Avoid:
 
 - mixing interleaved and split-mono formats in the same folder

@@ -47,6 +47,7 @@ includes:
     roles: "roles.yaml"
     features: "features.yaml"
     loudness_profiles: "loudness_profiles.yaml"
+    lfe_derivation_profiles: "lfe_derivation_profiles.yaml"
     issues: "issues.yaml"
     actions: "actions.yaml"
     params: "params.yaml"
@@ -83,6 +84,10 @@ category_specs:
     root_key: "profiles"
     id_prefix: "LOUD."
     file_key: "includes.core.loudness_profiles"
+  - category: "lfe_derivation_profiles"
+    root_key: "profiles"
+    id_prefix: "LFE_DERIVE."
+    file_key: "includes.core.lfe_derivation_profiles"
   - category: "issues"
     root_key: "issues"
     id_prefix: "ISSUE."
@@ -127,6 +132,11 @@ validation_defaults:
       - "method_id"
       - "scope"
       - "compliance_mode"
+    lfe_derivation_profiles:
+      - "label"
+      - "lowpass_hz"
+      - "slope_db_per_oct"
+      - "gain_trim_db"
     issues: ["label", "description"]
     actions: ["label", "description", "required_params"]
     params: ["label", "description", "unit_id", "value_type"]

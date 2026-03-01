@@ -194,8 +194,9 @@ class TestGuiRpcStableErrors(unittest.TestCase):
                         "code": "RPC.INVALID_PARAMS",
                         "message": (
                             "project.write_render_request param 'set' received unknown keys: "
-                            "scene_path. Allowed keys: dry_run, max_theoretical_quality, "
-                            "plugin_chain, policies, target_ids, target_layout_ids"
+                            "scene_path. Allowed keys: dry_run, lfe_derivation_profile_id, "
+                            "lfe_mode, max_theoretical_quality, plugin_chain, policies, "
+                            "target_ids, target_layout_ids"
                         ),
                     },
                     "id": "req-write-invalid",
@@ -650,6 +651,8 @@ class TestGuiRpcDiscover(unittest.TestCase):
             "result_shape"
         ]
         write_optional_keys = project_write_render_request_shape.get("optional_keys", [])
+        self.assertIn("lfe_derivation_profile_id", write_optional_keys)
+        self.assertIn("lfe_mode", write_optional_keys)
         self.assertIn("max_theoretical_quality", write_optional_keys)
 
     def test_unknown_method_behavior_unchanged_after_rpc_discover(self) -> None:

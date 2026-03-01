@@ -30,6 +30,16 @@ Program loudness in MMO follows ITU-R BS.1770-5 with channel-position-aware `Gi`
 - If channel position metadata is missing, MMO falls back to `Gi = 1.0` for that channel and records a weighting warning receipt.
 - `FLC`/`FRC` are treated as wide channels for loudness weighting (±60° behavior).
 
+## Missing-LFE derivation contract
+
+When a target layout includes LFE but source program content does not, MMO applies
+policy-driven deterministic derivation and records a receipt. Core rules:
+
+- passthrough when source LFE is present
+- derived from low-passed `L/R` when source LFE is missing
+- phase-maximization check between `L+R` and `L-R` using a deterministic `0.1 dB` threshold
+- dual-LFE defaults to mirrored mono unless explicitly requested as stereo-LFE
+
 The versioned loudness method registry lives in:
 
 - `src/mmo/core/loudness_methods.py`

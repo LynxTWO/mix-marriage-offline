@@ -11,6 +11,8 @@ _RENDER_REQUEST_SCHEMA_VERSION = "0.1.0"
 _DEFAULT_DOWNMIX_POLICY_ID = "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
 _DEFAULT_GATES_POLICY_ID = "POLICY.GATES.CORE_V0"
 _DEFAULT_LOUDNESS_PROFILE_ID = "LOUD.EBU_R128_PROGRAM"
+_DEFAULT_LFE_DERIVATION_PROFILE_ID = "LFE_DERIVE.DOLBY_120_LR24_TRIM_10"
+_DEFAULT_LFE_MODE = "mono"
 
 
 def _to_posix(path_str: str) -> str:
@@ -60,6 +62,8 @@ def build_render_request_template(
             "downmix_policy_id": _DEFAULT_DOWNMIX_POLICY_ID,
             "dry_run": True,
             "gates_policy_id": _DEFAULT_GATES_POLICY_ID,
+            "lfe_derivation_profile_id": _DEFAULT_LFE_DERIVATION_PROFILE_ID,
+            "lfe_mode": _DEFAULT_LFE_MODE,
             "loudness_profile_id": _DEFAULT_LOUDNESS_PROFILE_ID,
         },
     }
@@ -113,6 +117,8 @@ def build_multi_render_request_template(
             "downmix_policy_id": _DEFAULT_DOWNMIX_POLICY_ID,
             "dry_run": True,
             "gates_policy_id": _DEFAULT_GATES_POLICY_ID,
+            "lfe_derivation_profile_id": _DEFAULT_LFE_DERIVATION_PROFILE_ID,
+            "lfe_mode": _DEFAULT_LFE_MODE,
             "loudness_profile_id": _DEFAULT_LOUDNESS_PROFILE_ID,
         },
     }

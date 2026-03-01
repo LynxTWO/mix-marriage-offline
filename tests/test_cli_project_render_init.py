@@ -148,6 +148,11 @@ class TestRenderInitHappyPath(unittest.TestCase):
         )
         self.assertEqual(opts["gates_policy_id"], "POLICY.GATES.CORE_V0")
         self.assertEqual(opts["loudness_profile_id"], "LOUD.EBU_R128_PROGRAM")
+        self.assertEqual(
+            opts["lfe_derivation_profile_id"],
+            "LFE_DERIVE.DOLBY_120_LR24_TRIM_10",
+        )
+        self.assertEqual(opts["lfe_mode"], "mono")
 
     def test_stdout_summary_is_valid_json(self) -> None:
         # Re-run with --force since file already exists from earlier test.
