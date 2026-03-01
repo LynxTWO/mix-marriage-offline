@@ -121,7 +121,59 @@ PYTHONPATH=src python3 benchmarks/suite.py --out sandbox_tmp/benchmarks/v1.1.0.j
 
 See `benchmarks/README.md` for case IDs and run tuning options.
 
-## 9. Troubleshooting
+## 9. Headphone binaural preview (v1.1)
+
+Render a deterministic binaural audition file alongside any safe-render run:
+
+```bash
+python -m mmo safe-render \
+  --report out/report.json \
+  --render-many \
+  --render-many-targets stereo,5.1,7.1.4 \
+  --out-dir out/deliverables \
+  --preview-headphones
+```
+
+Each target produces a companion `.headphones.wav` with explainable metadata
+linking it back to its source render.
+
+## 10. Variant runner (v1.1)
+
+Render multiple output variants while reusing cached analysis:
+
+```bash
+python -m mmo safe-render \
+  --report out/report.json \
+  --render-many \
+  --render-many-targets stereo,5.1,7.1,7.1.4 \
+  --layout-standard SMPTE \
+  --out-dir out/variants/smpte
+
+python -m mmo safe-render \
+  --report out/report.json \
+  --render-many \
+  --render-many-targets stereo,5.1,7.1,7.1.4 \
+  --layout-standard FILM \
+  --out-dir out/variants/film
+```
+
+Analysis artifacts are content-hash-keyed so the second run skips the scan phase.
+
+## 11. Project session persistence (v1.1)
+
+Save and restore the full scene + history + receipts:
+
+```bash
+# Save session after a render run
+python -m mmo project save --out out/session.json
+
+# Reload and continue from that state
+python -m mmo project load --session out/session.json
+```
+
+Session files are strict-schema JSON with deterministic, sorted keys.
+
+## 12. Troubleshooting (v1.1)
 
 - `python -m mmo env doctor` verifies optional runtime tools (for example ffprobe).
 - If truth metering fails, reinstall with `pip install .[truth]`.
