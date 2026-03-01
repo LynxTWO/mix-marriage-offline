@@ -33,6 +33,31 @@ jobs:
       - name: Run tests
         run: tools/run_pytest.sh -q
 
+  build-manual:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PDF dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[pdf]"
+
+      - name: Build User Manual PDF
+        run: >
+          python tools/build_user_manual.py
+          --manifest docs/manual/manual.yaml
+          --out sandbox_tmp/manual/MMO_User_Manual.pdf
+
+      - name: Upload manual artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmo-user-manual-pdf
+          path: sandbox_tmp/manual/MMO_User_Manual.pdf
+
   build-python-dist:
     needs: validate
     runs-on: ubuntu-latest
@@ -56,7 +81,7 @@ jobs:
           path: dist/
 
   build-binaries:
-    needs: validate
+    needs: [validate, build-manual]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -88,6 +113,12 @@ jobs:
           chmod +x /tmp/appimagetool.AppImage
           echo "APPIMAGETOOL=/tmp/appimagetool.AppImage" >> "$GITHUB_ENV"
 
+      - name: Download manual PDF
+        uses: actions/download-artifact@v4
+        with:
+          name: mmo-user-manual-pdf
+          path: dist/manual/
+
       - name: Build standalone binary (PyInstaller + Nuitka fallback)
         run: python tools/build_binaries.py --output-dir dist --with-gui
 
@@ -98,7 +129,7 @@ jobs:
           MMO_WINDOWS_TIMESTAMP_URL: ${{ secrets.MMO_WINDOWS_TIMESTAMP_URL }}
           MMO_MACOS_SIGN_IDENTITY: ${{ secrets.MMO_MACOS_SIGN_IDENTITY }}
           MMO_LINUX_GPG_KEY_ID: ${{ secrets.MMO_LINUX_GPG_KEY_ID }}
-        run: python tools/build_installers.py --input-dir dist --output-dir dist/installers --version "${{ env.RELEASE_TAG }}"
+        run: python tools/build_installers.py --input-dir dist --output-dir dist/installers --version "${{ env.RELEASE_TAG }}" --manual-pdf dist/manual/MMO_User_Manual.pdf
 
       - name: Upload binary artifacts
         uses: actions/upload-artifact@v4
@@ -115,7 +146,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: [build-python-dist, build-binaries]
+    needs: [build-python-dist, build-binaries, build-manual]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -133,6 +164,12 @@ jobs:
         with:
           pattern: mmo-binaries-*
           merge-multiple: true
+          path: dist/
+
+      - name: Download manual PDF
+        uses: actions/download-artifact@v4
+        with:
+          name: mmo-user-manual-pdf
           path: dist/
 
       - name: Create GitHub Release

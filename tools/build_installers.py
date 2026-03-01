@@ -262,6 +262,7 @@ def _build_windows_installer(
     gui_name: str,
     signing_enabled: bool,
     strict_signing: bool,
+    manual_pdf: Path | None = None,
 ) -> list[Path]:
     cli_binary = _resolve_binary(
         input_dir=input_dir,
@@ -285,6 +286,10 @@ def _build_windows_installer(
     gui_stage = stage_dir / "mmo-gui.exe"
     _copy_executable(cli_binary, cli_stage)
     _copy_executable(gui_binary, gui_stage)
+    manual_stage: Path | None = None
+    if manual_pdf is not None and manual_pdf.exists():
+        manual_stage = stage_dir / "MMO_User_Manual.pdf"
+        shutil.copy2(manual_pdf, manual_stage)
     _sign_windows_executable(
         cli_stage, signing_enabled=signing_enabled, strict_signing=strict_signing
     )
@@ -326,6 +331,11 @@ def _build_windows_installer(
                 "[Files]",
                 f'Source: "{cli_stage}"; DestDir: "{{app}}"; Flags: ignoreversion',
                 f'Source: "{gui_stage}"; DestDir: "{{app}}"; Flags: ignoreversion',
+                *(
+                    [f'Source: "{manual_stage}"; DestDir: "{{app}}"; DestName: "MMO_User_Manual.pdf"; Flags: ignoreversion']
+                    if manual_stage is not None
+                    else []
+                ),
                 "",
                 "[Icons]",
                 'Name: "{group}\\Mix Marriage Offline"; Filename: "{app}\\mmo-gui.exe"',
@@ -360,6 +370,7 @@ def _build_macos_app_bundle(
     gui_name: str,
     signing_enabled: bool,
     strict_signing: bool,
+    manual_pdf: Path | None = None,
 ) -> list[Path]:
     cli_binary = _resolve_binary(
         input_dir=input_dir,
@@ -392,6 +403,8 @@ def _build_macos_app_bundle(
 
     _copy_executable(gui_binary, gui_target)
     _copy_executable(cli_binary, cli_target)
+    if manual_pdf is not None and manual_pdf.exists():
+        shutil.copy2(manual_pdf, resources_dir / "MMO_User_Manual.pdf")
     launcher_target.write_text(
         "\n".join(
             [
@@ -465,6 +478,7 @@ def _build_linux_appimage(
     gui_name: str,
     signing_enabled: bool,
     strict_signing: bool,
+    manual_pdf: Path | None = None,
 ) -> list[Path]:
     cli_binary = _resolve_binary(
         input_dir=input_dir,
@@ -528,6 +542,11 @@ def _build_linux_appimage(
     icon_bytes = base64.b64decode(_APP_ICON_BASE64)
     (app_dir / "mmo.png").write_bytes(icon_bytes)
     (icon_dir / "mmo.png").write_bytes(icon_bytes)
+
+    if manual_pdf is not None and manual_pdf.exists():
+        doc_dir = app_dir / "usr" / "share" / "doc" / "mmo"
+        doc_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(manual_pdf, doc_dir / "MMO_User_Manual.pdf")
 
     appimage_tool_raw = os.getenv("APPIMAGETOOL", "").strip()
     appimage_tool = Path(appimage_tool_raw) if appimage_tool_raw else None
@@ -614,6 +633,11 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Fail when signing is configured but required tools are unavailable.",
     )
+    parser.add_argument(
+        "--manual-pdf",
+        default="",
+        help="Path to a pre-built User Manual PDF to bundle inside each installer.",
+    )
     return parser.parse_args()
 
 
@@ -639,6 +663,18 @@ def main() -> int:
     arch_tag = _arch_tag()
     signing_enabled = not args.no_sign
 
+    manual_pdf_raw = args.manual_pdf.strip() if args.manual_pdf else ""
+    manual_pdf: Path | None = None
+    if manual_pdf_raw:
+        manual_pdf = Path(manual_pdf_raw)
+        if not manual_pdf.is_absolute():
+            manual_pdf = (repo_root / manual_pdf).resolve()
+        if not manual_pdf.exists():
+            print(f"[manual] Warning: --manual-pdf not found, skipping bundle: {manual_pdf}", file=sys.stderr)
+            manual_pdf = None
+        else:
+            print(f"[manual] Bundling: {manual_pdf}")
+
     print(f"Preparing installers for version {version} on {platform_tag}/{arch_tag}.")
 
     try:
@@ -652,6 +688,7 @@ def main() -> int:
                 gui_name=args.gui_name,
                 signing_enabled=signing_enabled,
                 strict_signing=bool(args.strict_signing),
+                manual_pdf=manual_pdf,
             )
         elif platform_tag == "macos":
             artifacts = _build_macos_app_bundle(
@@ -663,6 +700,7 @@ def main() -> int:
                 gui_name=args.gui_name,
                 signing_enabled=signing_enabled,
                 strict_signing=bool(args.strict_signing),
+                manual_pdf=manual_pdf,
             )
         elif platform_tag == "linux":
             artifacts = _build_linux_appimage(
@@ -674,6 +712,7 @@ def main() -> int:
                 gui_name=args.gui_name,
                 signing_enabled=signing_enabled,
                 strict_signing=bool(args.strict_signing),
+                manual_pdf=manual_pdf,
             )
         else:
             print(f"error: unsupported platform: {platform_tag}", file=sys.stderr)
