@@ -239,6 +239,61 @@ def _project_3d(x: float, y: float, z: float) -> tuple[float, float, float]:
     return (0.5 + (x_rot * 0.22), 0.54 - (y_proj * 0.18), z_proj)
 
 
+def _resolve_label_positions(
+    labels: list[tuple[float, float, float, float]],
+    *,
+    iterations: int = 18,
+    repulsion: float = 1.4,
+    canvas_w: float = 0.0,
+    canvas_h: float = 0.0,
+) -> list[tuple[float, float]]:
+    """Force-directed nudge: push overlapping label bounding boxes apart.
+
+    Each label is described as (cx, cy, w, h) — centre and full size.
+    Returns final (cx, cy) positions in the same order as *labels*.
+
+    Deterministic: no randomness; pairs are iterated in ascending index
+    order so identical inputs always produce identical outputs.
+    O(n²) per iteration — negligible for n ≤ 12 (max speakers per layout).
+    """
+    if not labels:
+        return []
+    positions: list[list[float]] = [[cx, cy] for cx, cy, _, _ in labels]
+    sizes: list[tuple[float, float]] = [(w, h) for _, _, w, h in labels]
+    n = len(positions)
+    for _ in range(iterations):
+        disp: list[list[float]] = [[0.0, 0.0] for _ in range(n)]
+        for i in range(n):
+            for j in range(i + 1, n):
+                dx = positions[j][0] - positions[i][0]
+                dy = positions[j][1] - positions[i][1]
+                min_dx = (sizes[i][0] + sizes[j][0]) * 0.5
+                min_dy = (sizes[i][1] + sizes[j][1]) * 0.5
+                ov_x = min_dx - abs(dx)
+                ov_y = min_dy - abs(dy)
+                if ov_x > 0.0 and ov_y > 0.0:
+                    if ov_x <= ov_y:
+                        push = ov_x * repulsion * 0.5
+                        sign = 1.0 if dx >= 0.0 else -1.0
+                        disp[i][0] -= sign * push
+                        disp[j][0] += sign * push
+                    else:
+                        push = ov_y * repulsion * 0.5
+                        sign = 1.0 if dy >= 0.0 else -1.0
+                        disp[i][1] -= sign * push
+                        disp[j][1] += sign * push
+        for k in range(n):
+            positions[k][0] += disp[k][0]
+            positions[k][1] += disp[k][1]
+    if canvas_w > 0.0 and canvas_h > 0.0:
+        for k in range(n):
+            hw = sizes[k][0] * 0.5
+            hh = sizes[k][1] * 0.5
+            positions[k][0] = max(hw, min(canvas_w - hw, positions[k][0]))
+            positions[k][1] = max(hh, min(canvas_h - hh, positions[k][1]))
+    return [(p[0], p[1]) for p in positions]
+
+
 def _fallback_world(slot_index: int, count: int) -> tuple[float, float, float]:
     ring = max(1, count)
     theta = (2.0 * math.pi * slot_index) / float(ring)
@@ -1448,6 +1503,8 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             orbit_speakers.append((odepth, row, ox, oy))
         orbit_speakers.sort(key=lambda t: t[0])
 
+        # --- Pass 1: draw all speaker dots; collect data for label resolve ---
+        speaker_dot_data: list[tuple[Any, float, float, float]] = []
         for odepth, row, ox, oy in orbit_speakers:
             fill = self._active_theme["accent_warm"]
             if row.is_lfe:
@@ -1470,39 +1527,65 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
                         width=1,
                     )
             canvas.create_oval(cx - radius, cy - radius, cx + radius, cy + radius, fill=fill, outline="")
+            speaker_dot_data.append((row, cx, cy, radius))
+
+        # --- Resolve speaker ID label positions and draw with hairlines ---
+        _ID_W, _ID_H = 52.0, 13.0
+        id_anchors = [
+            (cx, cy - (radius + 7.0), _ID_W, _ID_H)
+            for _, cx, cy, radius in speaker_dot_data
+        ]
+        id_positions = _resolve_label_positions(
+            id_anchors, canvas_w=float(width), canvas_h=float(height)
+        )
+        for k, (row, cx, cy, radius) in enumerate(speaker_dot_data):
+            lx, ly = id_positions[k]
+            if abs(lx - cx) > 4.0 or abs(ly - (cy - radius - 7.0)) > 4.0:
+                canvas.create_line(cx, cy - radius, lx, ly, fill="#3D3126", width=1)
             canvas.create_text(
-                cx,
-                cy - (radius + 7),
+                lx,
+                ly,
                 text=f"{row.speaker_id}:{row.slot_index}",
                 fill=self._active_theme["text_muted"],
                 font=("Space Grotesk", 9),
             )
 
+        # --- Pass 1: draw object point dots; collect badge data ---
+        obj_spk_badge_data: list[tuple[Any, float, float]] = []
         for row in frame.object_points:
             x = sx(row.x)
             y = sy(row.y)
             color = _lerp_color(self._active_theme["accent_cool"], self._active_theme["accent_hot"], row.confidence)
             canvas.create_line(width * 0.5, height * 0.58, x, y, fill="#413223", width=1)
             canvas.create_oval(x - 3, y - 3, x + 3, y + 3, fill=color, outline="")
-            badge_w = 46
-            badge_h = 15
-            bx0 = x + 6
-            by0 = y - 20
-            canvas.create_rectangle(
-                bx0,
-                by0,
-                bx0 + badge_w,
-                by0 + badge_h,
-                fill="#16120D",
-                outline="#4D3A28",
-            )
+            obj_spk_badge_data.append((row, x, y))
+
+        # --- Resolve object badge positions and draw with hairlines ---
+        _OBJ_BW, _OBJ_BH = 46.0, 15.0
+        obj_spk_anchors = [
+            (x + 6.0 + _OBJ_BW * 0.5, y - 20.0 + _OBJ_BH * 0.5, _OBJ_BW, _OBJ_BH)
+            for _, x, y in obj_spk_badge_data
+        ]
+        obj_spk_positions = _resolve_label_positions(
+            obj_spk_anchors, canvas_w=float(width), canvas_h=float(height)
+        )
+        for k, (row, x, y) in enumerate(obj_spk_badge_data):
+            bcx, bcy = obj_spk_positions[k]
+            bx0 = bcx - _OBJ_BW * 0.5
+            by0 = bcy - _OBJ_BH * 0.5
+            anc_cx = x + 6.0 + _OBJ_BW * 0.5
+            anc_cy = y - 20.0 + _OBJ_BH * 0.5
+            if abs(bcx - anc_cx) > 4.0 or abs(bcy - anc_cy) > 4.0:
+                canvas.create_line(x, y, bcx, bcy, fill="#3D3126", width=1)
+            canvas.create_rectangle(bx0, by0, bx0 + _OBJ_BW, by0 + _OBJ_BH, fill="#16120D", outline="#4D3A28")
             canvas.create_text(
-                bx0 + (badge_w / 2.0),
-                by0 + (badge_h / 2.0),
+                bcx,
+                bcy,
                 text=f"{int(round(row.confidence * 100.0))}%",
                 fill="#EADDC8",
                 font=("JetBrains Mono", 8),
             )
+
         canvas.create_text(
             width - 6,
             height - 6,
@@ -1544,6 +1627,8 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             y = sy(speaker.y)
             canvas.create_oval(x - 2, y - 2, x + 2, y + 2, fill="#3B2F21", outline="")
 
+        # --- Pass 1: draw all object dots; collect badge anchor data ---
+        obj_data: list[tuple[Any, float, float, float]] = []
         for row in frame.object_points:
             x = sx(row.x)
             y = sy(row.y)
@@ -1560,21 +1645,28 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
                     width=1,
                 )
             canvas.create_oval(x - radius, y - radius, x + radius, y + radius, fill=color, outline="")
-            badge_width = 120
-            badge_height = 16
-            bx0 = x - (badge_width / 2.0)
-            by0 = y - (radius + 24)
-            canvas.create_rectangle(
-                bx0,
-                by0,
-                bx0 + badge_width,
-                by0 + badge_height,
-                fill="#17120D",
-                outline="#4E3B28",
-            )
+            obj_data.append((row, x, y, radius))
+
+        # --- Resolve badge positions and draw with hairlines ---
+        _BW, _BH = 120.0, 16.0
+        badge_anchors = [
+            (x, y - (radius + 24.0) + _BH * 0.5, _BW, _BH)
+            for _, x, y, radius in obj_data
+        ]
+        badge_positions = _resolve_label_positions(
+            badge_anchors, canvas_w=float(width), canvas_h=float(height)
+        )
+        for k, (row, x, y, radius) in enumerate(obj_data):
+            bcx, bcy = badge_positions[k]
+            bx0 = bcx - _BW * 0.5
+            by0 = bcy - _BH * 0.5
+            anc_cy = y - (radius + 24.0) + _BH * 0.5
+            if abs(bcx - x) > 4.0 or abs(bcy - anc_cy) > 4.0:
+                canvas.create_line(x, y - radius, bcx, bcy, fill="#3D3126", width=1)
+            canvas.create_rectangle(bx0, by0, bx0 + _BW, by0 + _BH, fill="#17120D", outline="#4E3B28")
             canvas.create_text(
-                bx0 + (badge_width / 2.0),
-                by0 + (badge_height / 2.0),
+                bcx,
+                bcy,
                 text=f"{_trim_text(row.object_id, 14)} · {int(round(row.confidence * 100.0))}%",
                 fill=self._active_theme["text_muted"],
                 font=("Space Grotesk", 9),
