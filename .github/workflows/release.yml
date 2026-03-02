@@ -122,6 +122,25 @@ jobs:
       - name: Build standalone binary (PyInstaller + Nuitka fallback)
         run: python tools/build_binaries.py --output-dir dist --with-gui
 
+      - name: Smoke test Windows GUI passthrough modules
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $guiExe = Get-ChildItem -Path dist -Filter "mmo-gui-windows-*.exe" | Sort-Object Name | Select-Object -First 1
+          if (-not $guiExe) {
+            throw "Could not find built mmo-gui Windows binary under dist/."
+          }
+
+          & $guiExe.FullName -m mmo --help
+          if ($LASTEXITCODE -ne 0) {
+            throw "Passthrough smoke failed: '$($guiExe.Name) -m mmo --help' exited $LASTEXITCODE."
+          }
+
+          & $guiExe.FullName -m mmo.tools.analyze_stems --help
+          if ($LASTEXITCODE -ne 0) {
+            throw "Passthrough smoke failed: '$($guiExe.Name) -m mmo.tools.analyze_stems --help' exited $LASTEXITCODE."
+          }
+
       - name: Build one-click installers
         env:
           MMO_WINDOWS_PFX_PATH: ${{ secrets.MMO_WINDOWS_PFX_PATH }}

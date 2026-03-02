@@ -4,7 +4,29 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.1.2] — 2026-03-02
+## [1.1.3] — 2026-03-02
+
+### Fixed
+
+- **Windows packaged GUI `-m mmo` regression (critical hotfix):**
+  GUI passthrough now maps `-m mmo` to `mmo.__main__` for module execution while
+  preserving `sys.argv[0]` as `mmo`, so frozen builds execute the CLI entrypoint
+  correctly.
+  (`src/mmo/gui/main.py`)
+- **Frozen GUI module inclusion for passthrough:** PyInstaller GUI builds now add
+  explicit hidden imports for `mmo.__main__` and `mmo.cli` so
+  `mmo-gui.exe -m mmo ...` and nested CLI execution paths are available in the
+  bundled binary.
+  (`tools/build_binaries.py`)
+- **Release CI regression lock:** Windows release workflow now smoke-tests:
+  `mmo-gui.exe -m mmo --help` and
+  `mmo-gui.exe -m mmo.tools.analyze_stems --help`.
+  (`.github/workflows/release.yml`)
+- **Passthrough mapping unit coverage:** added helper-level test coverage for
+  `mmo -> mmo.__main__` mapping without executing module help output.
+  (`tests/test_gui_smoke.py`)
+
+## [1.1.2] — 2026-03-02 (broken on Windows packaged GUI)
 
 ### Fixed
 
@@ -25,8 +47,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- **Release status:** `1.1.1` is now marked as a broken release for packaged GUI
-  nested tool subprocesses (`-m mmo.tools.*`) and is superseded by `1.1.2`.
+- **Release status:** `1.1.1` is marked as a broken release for packaged GUI nested
+  tool subprocesses (`-m mmo.tools.*`) and is superseded by `1.1.2`.
+- **Release status update:** `1.1.2` is now marked as broken for Windows packaged GUI
+  `-m mmo` execution due to missing `mmo.__main__` in frozen bundles and is
+  superseded by `1.1.3`.
 
 ## [1.1.1] — 2026-03-01 (broken)
 

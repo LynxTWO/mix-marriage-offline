@@ -1576,6 +1576,12 @@ def launch_gui() -> int:
     return 0
 
 
+def _passthrough_module_to_run(module: str) -> str:
+    if module == "mmo":
+        return "mmo.__main__"
+    return module
+
+
 def _try_cli_passthrough(argv: Sequence[str] | None) -> int | None:
     """If argv starts with ['-m', 'mmo*', ...], dispatch via ``runpy``.
 
@@ -1588,11 +1594,12 @@ def _try_cli_passthrough(argv: Sequence[str] | None) -> int | None:
     effective: list[str] = list(argv) if argv is not None else list(sys.argv[1:])
     if len(effective) >= 2 and effective[0] == "-m" and effective[1].startswith("mmo"):
         module = effective[1]
+        module_to_run = _passthrough_module_to_run(module)
         module_args = effective[2:]
         original_argv = list(sys.argv)
         try:
             sys.argv = [module, *module_args]
-            runpy.run_module(module, run_name="__main__", alter_sys=True)
+            runpy.run_module(module_to_run, run_name="__main__", alter_sys=True)
             return 0
         except SystemExit as exc:
             code = exc.code
@@ -1608,7 +1615,23 @@ def _try_cli_passthrough(argv: Sequence[str] | None) -> int | None:
             except (TypeError, ValueError):
                 return 1
         except ImportError as exc:
-            print(f"error: unable to import module '{module}': {exc}", file=sys.stderr)
+            missing_mmo_main = (
+                module == "mmo"
+                and (
+                    getattr(exc, "name", "") == "mmo.__main__"
+                    or "mmo.__main__" in str(exc)
+                )
+            )
+            if missing_mmo_main:
+                print(
+                    (
+                        "This build is missing mmo.__main__. Packaging bug: "
+                        "ensure PyInstaller includes hidden-import mmo.__main__."
+                    ),
+                    file=sys.stderr,
+                )
+                return 2
+            print(f"error: unable to import module '{module_to_run}': {exc}", file=sys.stderr)
             return 2
         finally:
             sys.argv = original_argv

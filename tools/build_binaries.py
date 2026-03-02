@@ -100,6 +100,7 @@ def _build_with_pyinstaller(
     build_dir: Path,
     binary_stem: str,
     binary_name: str,
+    hidden_imports: tuple[str, ...] = (),
 ) -> Path:
     if importlib.util.find_spec("PyInstaller") is None:
         raise BuildError("PyInstaller is not installed.")
@@ -130,14 +131,20 @@ def _build_with_pyinstaller(
         "mmo.tools",
         "--collect-submodules",
         "mmo.plugins",
-        "--distpath",
-        str(dist_dir),
-        "--workpath",
-        str(work_dir),
-        "--specpath",
-        str(spec_dir),
-        str(entrypoint),
     ]
+    for hidden_import in hidden_imports:
+        command.extend(["--hidden-import", hidden_import])
+    command.extend(
+        [
+            "--distpath",
+            str(dist_dir),
+            "--workpath",
+            str(work_dir),
+            "--specpath",
+            str(spec_dir),
+            str(entrypoint),
+        ]
+    )
     _run_command(command, cwd=repo_root, label="pyinstaller")
     return _resolve_built_binary(
         output_dir=dist_dir,
@@ -273,6 +280,7 @@ def _build_artifact(
     build_dir: Path,
     entrypoint: Path,
     artifact_name: str,
+    hidden_imports: tuple[str, ...],
     backend_order: list[str],
     no_archive: bool,
 ) -> int:
@@ -295,6 +303,7 @@ def _build_artifact(
                     build_dir=artifact_build_dir,
                     binary_stem=binary_stem,
                     binary_name=binary_name,
+                    hidden_imports=hidden_imports,
                 )
             else:
                 built_binary = _build_with_nuitka(
@@ -376,11 +385,19 @@ def main() -> int:
     if args.prefer == "nuitka":
         backend_order.reverse()
 
-    build_specs: list[tuple[str, Path]] = [(args.name, entrypoint)]
+    build_specs: list[tuple[str, Path, tuple[str, ...]]] = [
+        (args.name, entrypoint, ())
+    ]
     if gui_entrypoint is not None:
-        build_specs.append((args.gui_name, gui_entrypoint))
+        build_specs.append(
+            (
+                args.gui_name,
+                gui_entrypoint,
+                ("mmo.__main__", "mmo.cli"),
+            )
+        )
 
-    for artifact_name, artifact_entrypoint in build_specs:
+    for artifact_name, artifact_entrypoint, hidden_imports in build_specs:
         rc = _build_artifact(
             repo_root=repo_root,
             src_dir=src_dir,
@@ -388,6 +405,7 @@ def main() -> int:
             build_dir=build_dir,
             entrypoint=artifact_entrypoint,
             artifact_name=artifact_name,
+            hidden_imports=hidden_imports,
             backend_order=backend_order,
             no_archive=bool(args.no_archive),
         )

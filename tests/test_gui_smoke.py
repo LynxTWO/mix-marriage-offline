@@ -15,6 +15,7 @@ from pathlib import Path
 from mmo.cli import main as cli_main
 from mmo.gui.main import (
     _build_target_picker_map,
+    _passthrough_module_to_run,
     _try_cli_passthrough,
     GuiPipelinePaths,
     GuiRunConfig,
@@ -399,6 +400,13 @@ class TestGuiSmoke(unittest.TestCase):
 
 
 class TestGuiCliPassthrough(unittest.TestCase):
+    def test_passthrough_module_mapping_uses_mmo_dunder_main_for_root_module(self) -> None:
+        self.assertEqual(_passthrough_module_to_run("mmo"), "mmo.__main__")
+        self.assertEqual(
+            _passthrough_module_to_run("mmo.tools.analyze_stems"),
+            "mmo.tools.analyze_stems",
+        )
+
     def test_passthrough_dispatches_help_and_returns_zero(self) -> None:
         rc = _try_cli_passthrough(["-m", "mmo", "--help"])
         self.assertEqual(rc, 0)
