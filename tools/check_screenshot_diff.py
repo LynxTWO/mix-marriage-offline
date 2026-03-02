@@ -63,7 +63,8 @@ def _mean_abs_diff(path_a: Path, path_b: Path) -> float:
     except ImportError as exc:
         print(
             f"[screenshot-diff] Missing dependency: {exc}\n"
-            "Install with: pip install pillow numpy",
+            "Install with: pip install -e \".[screenshots]\"\n"
+            "Fallback: pip install pillow numpy",
             file=sys.stderr,
         )
         sys.exit(1)
