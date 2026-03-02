@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import runpy
 import shlex
 import subprocess
 import sys
@@ -1576,22 +1577,41 @@ def launch_gui() -> int:
 
 
 def _try_cli_passthrough(argv: Sequence[str] | None) -> int | None:
-    """If argv starts with ['-m', 'mmo', ...], dispatch to the real CLI entrypoint.
+    """If argv starts with ['-m', 'mmo*', ...], dispatch via ``runpy``.
 
     This allows a frozen GUI executable to also act as a Python module runner, so
-    that ``sys.executable -m mmo <subcmd>`` works even in PyInstaller/packaged builds
-    where ``python -m mmo`` is not available separately.
+    that ``sys.executable -m mmo ...`` and ``sys.executable -m mmo.tools...`` both
+    work in PyInstaller/packaged builds where ``python -m`` is not available separately.
 
     Returns the CLI exit code when dispatched, or None if not a passthrough call.
     """
     effective: list[str] = list(argv) if argv is not None else list(sys.argv[1:])
-    if len(effective) >= 2 and effective[0] == "-m" and effective[1] == "mmo":
-        from mmo.cli import main as _cli_main  # noqa: PLC0415
-
+    if len(effective) >= 2 and effective[0] == "-m" and effective[1].startswith("mmo"):
+        module = effective[1]
+        module_args = effective[2:]
+        original_argv = list(sys.argv)
         try:
-            return _cli_main(effective[2:])
+            sys.argv = [module, *module_args]
+            runpy.run_module(module, run_name="__main__", alter_sys=True)
+            return 0
         except SystemExit as exc:
-            return int(exc.code) if exc.code is not None else 0
+            code = exc.code
+            if code is None:
+                return 0
+            if isinstance(code, int):
+                return code
+            if isinstance(code, str):
+                print(code, file=sys.stderr)
+                return 1
+            try:
+                return int(code)
+            except (TypeError, ValueError):
+                return 1
+        except ImportError as exc:
+            print(f"error: unable to import module '{module}': {exc}", file=sys.stderr)
+            return 2
+        finally:
+            sys.argv = original_argv
     return None
 
 

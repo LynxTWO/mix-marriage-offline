@@ -127,6 +127,8 @@ def _build_with_pyinstaller(
         "--collect-submodules",
         "mmo.cli_commands",
         "--collect-submodules",
+        "mmo.tools",
+        "--collect-submodules",
         "mmo.plugins",
         "--distpath",
         str(dist_dir),

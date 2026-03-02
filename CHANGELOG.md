@@ -4,7 +4,31 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.1.1] — 2026-03-01
+## [1.1.2] — 2026-03-02
+
+### Fixed
+
+- **Packaged GUI `-m mmo*` passthrough (critical hotfix):**
+  `mmo-gui` now dispatches any `-m mmo...` module via `runpy` (not only `-m mmo`),
+  so nested frozen subprocess calls like
+  `sys.executable -m mmo.tools.analyze_stems ...` and
+  `sys.executable -m mmo.tools.scan_session ...` execute correctly.
+  (`src/mmo/gui/main.py` — `_try_cli_passthrough`)
+- **Passthrough regression coverage:** added GUI passthrough tests for
+  `mmo`, `mmo.tools.analyze_stems`, `mmo.tools.scan_session`, and
+  `mmo.tools.export_report` with `--help` dispatch paths.
+  (`tests/test_gui_smoke.py`)
+- **PyInstaller module collection:** binary builds now explicitly collect
+  `mmo.tools` submodules so packaged GUI passthrough supports current and
+  future `mmo.tools.*` invocations.
+  (`tools/build_binaries.py`)
+
+### Changed
+
+- **Release status:** `1.1.1` is now marked as a broken release for packaged GUI
+  nested tool subprocesses (`-m mmo.tools.*`) and is superseded by `1.1.2`.
+
+## [1.1.1] — 2026-03-01 (broken)
 
 ### Fixed
 

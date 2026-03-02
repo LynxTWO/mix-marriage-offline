@@ -403,6 +403,16 @@ class TestGuiCliPassthrough(unittest.TestCase):
         rc = _try_cli_passthrough(["-m", "mmo", "--help"])
         self.assertEqual(rc, 0)
 
+    def test_passthrough_dispatches_tool_help_and_returns_zero(self) -> None:
+        for module in (
+            "mmo.tools.analyze_stems",
+            "mmo.tools.scan_session",
+            "mmo.tools.export_report",
+        ):
+            with self.subTest(module=module):
+                rc = _try_cli_passthrough(["-m", module, "--help"])
+                self.assertEqual(rc, 0)
+
     def test_passthrough_returns_none_for_smoke_flag(self) -> None:
         self.assertIsNone(_try_cli_passthrough(["--smoke"]))
 
@@ -411,6 +421,18 @@ class TestGuiCliPassthrough(unittest.TestCase):
 
     def test_passthrough_returns_none_when_m_without_mmo(self) -> None:
         self.assertIsNone(_try_cli_passthrough(["-m", "other"]))
+
+    def test_main_passthrough_dispatches_mmo_help_and_returns_zero(self) -> None:
+        self.assertEqual(gui_main(["-m", "mmo", "--help"]), 0)
+
+    def test_main_passthrough_dispatches_tools_help_and_returns_zero(self) -> None:
+        for module in (
+            "mmo.tools.analyze_stems",
+            "mmo.tools.scan_session",
+            "mmo.tools.export_report",
+        ):
+            with self.subTest(module=module):
+                self.assertEqual(gui_main(["-m", module, "--help"]), 0)
 
     def test_main_smoke_is_unaffected_by_passthrough(self) -> None:
         # --smoke must still exit 0 without launching Tk or dispatching CLI.
