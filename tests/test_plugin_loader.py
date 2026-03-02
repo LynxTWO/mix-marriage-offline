@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -57,34 +58,38 @@ def _write_renderer_plugin(
     )
 
 
+def _minimal_env(tmp_root: Path, home_root: Path) -> dict[str, str]:
+    """Minimal env dict for deterministic default_user_plugins_dir() resolution.
+
+    On Windows set LOCALAPPDATA so the conventional dir lands inside tmp_root.
+    On other platforms set HOME so XDG / Library paths land inside home_root.
+    """
+    if sys.platform == "win32":
+        return {"LOCALAPPDATA": str(tmp_root / "localappdata")}
+    return {"HOME": home_root.as_posix()}
+
+
 class TestPluginLoader(unittest.TestCase):
     def test_loads_default_user_plugins_dir(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_root = Path(tmp)
             base_plugins = tmp_root / "base_plugins"
             home_root = tmp_root / "home"
-            user_plugins = home_root / ".mmo" / "plugins"
 
             _write_renderer_plugin(
                 root=base_plugins,
                 plugin_id="PLUGIN.RENDERER.BASE_PLUGIN",
                 module_name="base_plugin_renderer",
             )
-            _write_renderer_plugin(
-                root=user_plugins,
-                plugin_id="PLUGIN.RENDERER.USER_PLUGIN",
-                module_name="user_plugin_renderer",
-            )
 
-            with patch.dict(
-                os.environ,
-                {
-                    "HOME": home_root.as_posix(),
-                    "USERPROFILE": (tmp_root / "different_windows_home").as_posix(),
-                },
-                clear=False,
-            ):
-                os.environ.pop(PLUGIN_DIR_ENV_VAR, None)
+            env = _minimal_env(tmp_root, home_root)
+            with patch.dict(os.environ, env, clear=True):
+                user_plugins = default_user_plugins_dir()
+                _write_renderer_plugin(
+                    root=user_plugins,
+                    plugin_id="PLUGIN.RENDERER.USER_PLUGIN",
+                    module_name="user_plugin_renderer",
+                )
                 plugins = load_registered_plugins(base_plugins)
 
             plugin_ids = [entry.plugin_id for entry in plugins]
@@ -98,24 +103,21 @@ class TestPluginLoader(unittest.TestCase):
             tmp_root = Path(tmp)
             base_plugins = tmp_root / "base_plugins"
             home_root = tmp_root / "home"
-            user_plugins = home_root / ".mmo" / "plugins"
 
             _write_renderer_plugin(
                 root=base_plugins,
                 plugin_id="PLUGIN.RENDERER.BASE_PLUGIN",
                 module_name="base_plugin_renderer",
             )
-            _write_renderer_plugin(
-                root=user_plugins,
-                plugin_id="PLUGIN.RENDERER.USER_PLUGIN",
-                module_name="user_plugin_renderer",
-            )
 
-            with patch.dict(
-                os.environ,
-                {PLUGIN_DIR_ENV_VAR: "", "HOME": home_root.as_posix()},
-                clear=False,
-            ):
+            env = {PLUGIN_DIR_ENV_VAR: "", **_minimal_env(tmp_root, home_root)}
+            with patch.dict(os.environ, env, clear=True):
+                user_plugins = default_user_plugins_dir()
+                _write_renderer_plugin(
+                    root=user_plugins,
+                    plugin_id="PLUGIN.RENDERER.USER_PLUGIN",
+                    module_name="user_plugin_renderer",
+                )
                 plugins = load_registered_plugins(base_plugins)
 
             plugin_ids = [entry.plugin_id for entry in plugins]
@@ -136,12 +138,8 @@ class TestPluginLoader(unittest.TestCase):
                 module_name="base_plugin_renderer",
             )
 
-            with patch.dict(
-                os.environ,
-                {"HOME": home_root.as_posix()},
-                clear=False,
-            ):
-                os.environ.pop(PLUGIN_DIR_ENV_VAR, None)
+            env = _minimal_env(tmp_root / "empty_home", home_root)
+            with patch.dict(os.environ, env, clear=True):
                 plugins = load_registered_plugins(base_plugins)
 
             plugin_ids = [entry.plugin_id for entry in plugins]
@@ -152,7 +150,6 @@ class TestPluginLoader(unittest.TestCase):
             tmp_root = Path(tmp)
             base_plugins = tmp_root / "base_plugins"
             home_root = tmp_root / "home"
-            default_user_plugins = home_root / ".mmo" / "plugins"
             override_plugins = tmp_root / "override_plugins"
 
             _write_renderer_plugin(
@@ -161,22 +158,21 @@ class TestPluginLoader(unittest.TestCase):
                 module_name="base_override_renderer",
             )
             _write_renderer_plugin(
-                root=default_user_plugins,
-                plugin_id="PLUGIN.RENDERER.DEFAULT_USER_PLUGIN",
-                module_name="default_user_renderer",
-            )
-            _write_renderer_plugin(
                 root=override_plugins,
                 plugin_id="PLUGIN.RENDERER.OVERRIDE_PLUGIN",
                 module_name="override_renderer",
             )
 
-            with patch.dict(
-                os.environ,
-                {"HOME": home_root.as_posix()},
-                clear=False,
-            ):
-                os.environ.pop(PLUGIN_DIR_ENV_VAR, None)
+            env = _minimal_env(tmp_root, home_root)
+            with patch.dict(os.environ, env, clear=True):
+                # Write a user plugin into the OS-conventional default dir so we can
+                # verify it is NOT loaded when an explicit override is active.
+                default_user_plugins = default_user_plugins_dir()
+                _write_renderer_plugin(
+                    root=default_user_plugins,
+                    plugin_id="PLUGIN.RENDERER.DEFAULT_USER_PLUGIN",
+                    module_name="default_user_renderer",
+                )
                 plugins = load_registered_plugins(
                     base_plugins,
                     plugin_dir=override_plugins,
@@ -208,7 +204,7 @@ class TestPluginLoader(unittest.TestCase):
             with patch.dict(
                 os.environ,
                 {PLUGIN_DIR_ENV_VAR: env_plugins.as_posix()},
-                clear=False,
+                clear=True,
             ):
                 plugins = load_registered_plugins(base_plugins)
 
@@ -268,11 +264,8 @@ class TestPluginLoader(unittest.TestCase):
                 module_name="packaged_plugin_renderer",
             )
 
-            with patch.dict(
-                os.environ,
-                {"HOME": home_root.as_posix(), PLUGIN_DIR_ENV_VAR: ""},
-                clear=False,
-            ):
+            env = {PLUGIN_DIR_ENV_VAR: "", **_minimal_env(tmp_root / "empty_home", home_root)}
+            with patch.dict(os.environ, env, clear=True):
                 with patch(
                     "mmo.core.plugin_loader.packaged_plugins_dir",
                     return_value=packaged_plugins.resolve(),
@@ -300,11 +293,8 @@ class TestPluginLoader(unittest.TestCase):
                 module_name="packaged_plugin_renderer",
             )
 
-            with patch.dict(
-                os.environ,
-                {"HOME": home_root.as_posix(), PLUGIN_DIR_ENV_VAR: ""},
-                clear=False,
-            ):
+            env = {PLUGIN_DIR_ENV_VAR: "", **_minimal_env(tmp_root / "empty_home", home_root)}
+            with patch.dict(os.environ, env, clear=True):
                 with patch(
                     "mmo.core.plugin_loader.packaged_plugins_dir",
                     return_value=packaged_plugins.resolve(),
@@ -319,14 +309,13 @@ class TestDefaultUserPluginsDir(unittest.TestCase):
     """Platform-path logic for default_user_plugins_dir()."""
 
     def _call_as_platform(self, platform: str, env: dict[str, str]) -> Path:
-        """Invoke default_user_plugins_dir() with a patched sys.platform and env."""
-        import sys
+        """Invoke default_user_plugins_dir() with a patched sys.platform and env.
 
-        clean_env = {k: v for k, v in os.environ.items() if k not in env}
-        clean_env.update(env)
+        Uses only the provided env (clear=True) so runner env vars cannot leak in.
+        """
         with (
             patch("sys.platform", platform),
-            patch.dict(os.environ, clean_env, clear=True),
+            patch.dict(os.environ, env, clear=True),
         ):
             return default_user_plugins_dir()
 
@@ -369,14 +358,10 @@ class TestDefaultUserPluginsDir(unittest.TestCase):
         self.assertTrue(str(path).endswith(os.path.join("mmo", "plugins")))
 
     def test_linux_uses_xdg_data_home_when_set(self) -> None:
-        path = self._call_as_platform(
-            "linux",
-            {"XDG_DATA_HOME": "/custom/xdg", "HOME": "/home/test"},
-        )
-        self.assertTrue(
-            str(path).startswith("/custom/xdg"),
-            msg=f"Expected XDG_DATA_HOME root, got: {path}",
-        )
+        env = {"XDG_DATA_HOME": "/custom/xdg", "HOME": "/home/test"}
+        path = self._call_as_platform("linux", env)
+        expected = Path(env["XDG_DATA_HOME"]) / "mmo" / "plugins"
+        self.assertEqual(path, expected)
         self.assertTrue(str(path).endswith(os.path.join("mmo", "plugins")))
 
     def test_linux_falls_back_to_local_share_without_xdg(self) -> None:
