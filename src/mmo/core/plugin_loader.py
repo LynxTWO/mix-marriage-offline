@@ -13,11 +13,30 @@ PLUGIN_DIR_ENV_VAR = "MMO_PLUGIN_DIR"
 
 
 def default_user_plugins_dir() -> Path:
-    """Return the default per-user external plugin directory."""
-    raw_home = os.environ.get("HOME", "").strip()
-    if raw_home:
-        return Path(raw_home).expanduser() / ".mmo" / "plugins"
-    return Path(os.path.expanduser("~")) / ".mmo" / "plugins"
+    """Return the default per-user external plugin directory.
+
+    Platform conventions:
+      Windows: %LOCALAPPDATA%\\mmo\\plugins  (fallback: APPDATA, USERPROFILE, ~)
+      macOS:   ~/Library/Application Support/mmo/plugins
+      Linux:   $XDG_DATA_HOME/mmo/plugins  (fallback: ~/.local/share/mmo/plugins)
+    """
+    if sys.platform == "win32":
+        base_str = (
+            os.environ.get("LOCALAPPDATA")
+            or os.environ.get("APPDATA")
+            or os.environ.get("USERPROFILE")
+            or os.path.expanduser("~")
+        )
+        return Path(base_str) / "mmo" / "plugins"
+    if sys.platform == "darwin":
+        home = os.environ.get("HOME") or os.path.expanduser("~")
+        return Path(home) / "Library" / "Application Support" / "mmo" / "plugins"
+    # Linux / other POSIX
+    xdg = os.environ.get("XDG_DATA_HOME", "").strip()
+    if xdg:
+        return Path(xdg) / "mmo" / "plugins"
+    home = os.environ.get("HOME") or os.path.expanduser("~")
+    return Path(home) / ".local" / "share" / "mmo" / "plugins"
 
 
 def _resolved_external_plugin_dir(

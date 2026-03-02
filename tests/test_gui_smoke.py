@@ -15,6 +15,7 @@ from pathlib import Path
 from mmo.cli import main as cli_main
 from mmo.gui.main import (
     _build_target_picker_map,
+    _try_cli_passthrough,
     GuiPipelinePaths,
     GuiRunConfig,
     build_plugin_discover_cards,
@@ -395,6 +396,25 @@ class TestGuiSmoke(unittest.TestCase):
                 "Surround (7.1)",
             ),
         )
+
+
+class TestGuiCliPassthrough(unittest.TestCase):
+    def test_passthrough_dispatches_help_and_returns_zero(self) -> None:
+        rc = _try_cli_passthrough(["-m", "mmo", "--help"])
+        self.assertEqual(rc, 0)
+
+    def test_passthrough_returns_none_for_smoke_flag(self) -> None:
+        self.assertIsNone(_try_cli_passthrough(["--smoke"]))
+
+    def test_passthrough_returns_none_for_empty_argv(self) -> None:
+        self.assertIsNone(_try_cli_passthrough([]))
+
+    def test_passthrough_returns_none_when_m_without_mmo(self) -> None:
+        self.assertIsNone(_try_cli_passthrough(["-m", "other"]))
+
+    def test_main_smoke_is_unaffected_by_passthrough(self) -> None:
+        # --smoke must still exit 0 without launching Tk or dispatching CLI.
+        self.assertEqual(gui_main(["--smoke"]), 0)
 
 
 if __name__ == "__main__":

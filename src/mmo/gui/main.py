@@ -1389,30 +1389,56 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             return True
         return False
 
-    def _run_command(self, cli_argv: Sequence[str]) -> int:
+    def _run_command(self, cli_argv: Sequence[str], *, stage: str = "command") -> int:
         command = build_python_command(cli_argv)
+        self._append_log_threadsafe(f"[GUI.STAGE] {stage} starting.")
         self._append_log_threadsafe(f"$ {shlex.join(command)}")
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+        try:
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._append_log_threadsafe(
+                f"[GUI.E2001] spawn_failed | stage={stage} | {exc}"
+            )
+            self._append_log_threadsafe(
+                "  Hint: ensure the mmo package is installed and the executable path is correct."
+            )
+            return 1
         with self._process_lock:
             self._active_process = process
         assert process.stdout is not None
+        first_error_line: str | None = None
         try:
             for line in process.stdout:
                 stripped = line.rstrip("\n")
                 if self._consume_live_progress_line(stripped):
                     continue
                 self._append_log_threadsafe(stripped)
-            return process.wait()
+                if first_error_line is None and (
+                    "error:" in stripped.lower() or "traceback" in stripped.lower()
+                ):
+                    first_error_line = stripped
+            rc = process.wait()
         finally:
             with self._process_lock:
                 self._active_process = None
+        if rc != 0:
+            self._append_log_threadsafe(
+                f"[GUI.E2000] stage_failed | stage={stage} | rc={rc}"
+            )
+            if first_error_line is not None:
+                self._append_log_threadsafe(
+                    f"[GUI.E2000] first_error_line | stage={stage} | {first_error_line}"
+                )
+        else:
+            self._append_log_threadsafe(f"[GUI.STAGE] {stage} completed ok.")
+        return rc
 
     def _approve_high_risk_prompt(self, receipt_payload: Mapping[str, Any]) -> bool:
         from tkinter import messagebox
@@ -1464,7 +1490,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
                 approve=None,
             )
 
-            analyze_rc = self._run_command(analyze_argv)
+            analyze_rc = self._run_command(analyze_argv, stage="analyze")
             if analyze_rc != 0 and self._cancel_requested():
                 self._set_status_threadsafe("Cancelled during analysis.")
                 return
@@ -1473,7 +1499,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
                 return
             self._set_progress_threadsafe(0.15)
 
-            dry_rc = self._run_command(dry_run_argv)
+            dry_rc = self._run_command(dry_run_argv, stage="safe-render(dry)")
             if dry_rc != 0 and self._cancel_requested():
                 self._set_status_threadsafe("Cancelled during dry-run safety preview.")
                 return
@@ -1511,7 +1537,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
                 approve=approve_value,
             )
             self._set_status_threadsafe("Rendering...")
-            final_rc = self._run_command(final_argv)
+            final_rc = self._run_command(final_argv, stage="safe-render(final)")
             if final_rc != 0 and self._cancel_requested():
                 self._set_status_threadsafe("Render cancelled.")
                 return
@@ -1549,6 +1575,26 @@ def launch_gui() -> int:
     return 0
 
 
+def _try_cli_passthrough(argv: Sequence[str] | None) -> int | None:
+    """If argv starts with ['-m', 'mmo', ...], dispatch to the real CLI entrypoint.
+
+    This allows a frozen GUI executable to also act as a Python module runner, so
+    that ``sys.executable -m mmo <subcmd>`` works even in PyInstaller/packaged builds
+    where ``python -m mmo`` is not available separately.
+
+    Returns the CLI exit code when dispatched, or None if not a passthrough call.
+    """
+    effective: list[str] = list(argv) if argv is not None else list(sys.argv[1:])
+    if len(effective) >= 2 and effective[0] == "-m" and effective[1] == "mmo":
+        from mmo.cli import main as _cli_main  # noqa: PLC0415
+
+        try:
+            return _cli_main(effective[2:])
+        except SystemExit as exc:
+            return int(exc.code) if exc.code is not None else 0
+    return None
+
+
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="MMO CustomTkinter desktop GUI.")
     parser.add_argument(
@@ -1560,6 +1606,9 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    rc = _try_cli_passthrough(argv)
+    if rc is not None:
+        return rc
     args = _parse_args(argv)
     if args.smoke:
         return 0

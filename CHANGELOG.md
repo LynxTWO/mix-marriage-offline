@@ -4,6 +4,33 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.1] — 2026-03-01
+
+### Fixed
+
+- **Windows GUI passthrough (critical):** The packaged GUI executable now dispatches
+  `sys.executable -m mmo <subcommand>` to the real CLI entrypoint before any argparse
+  processing, so frozen builds no longer abort with `unrecognized arguments: -m mmo ...`.
+  (`src/mmo/gui/main.py` — `_try_cli_passthrough`)
+- **Windows default plugins directory:** `default_user_plugins_dir()` on Windows now
+  resolves to `%LOCALAPPDATA%\mmo\plugins` (with `APPDATA` / `USERPROFILE` fallbacks)
+  instead of incorrectly falling back to `C:\Windows\System32\plugins` in frozen builds.
+  (`src/mmo/core/plugin_loader.py`)
+- **macOS / Linux plugin directories:** macOS resolves to
+  `~/Library/Application Support/mmo/plugins`; Linux honours `$XDG_DATA_HOME/mmo/plugins`
+  with fallback to `~/.local/share/mmo/plugins`.
+
+### Changed
+
+- **GUI live-log error codes:** `_run_command` now emits structured anchor lines:
+  `[GUI.E2001] spawn_failed` on subprocess launch failure,
+  `[GUI.E2000] stage_failed` on nonzero exit (with stage name and return code),
+  `[GUI.E2000] first_error_line` with the first meaningful error line from output,
+  `[GUI.STAGE] <stage> starting.` and `[GUI.STAGE] <stage> completed ok.` for orientation.
+- **Docs — Chapter 13 (Troubleshooting):** Documents GUI error codes, the Windows
+  `-m mmo` broken-build note, and the corrected Windows default plugin folder path.
+- **Docs — Chapter 11 (Plugins):** Lists platform-specific default plugin directories.
+
 ## [Unreleased]
 
 ### Added

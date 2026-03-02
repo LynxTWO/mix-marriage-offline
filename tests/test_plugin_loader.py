@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from mmo.core.plugin_loader import (
     PLUGIN_DIR_ENV_VAR,
+    default_user_plugins_dir,
     load_registered_plugins,
 )
 from mmo.core.plugin_registry import PluginRegistryError
@@ -312,3 +313,77 @@ class TestPluginLoader(unittest.TestCase):
 
             plugin_ids = [entry.plugin_id for entry in plugins]
             self.assertEqual(plugin_ids, ["PLUGIN.RENDERER.BASE_PLUGIN"])
+
+
+class TestDefaultUserPluginsDir(unittest.TestCase):
+    """Platform-path logic for default_user_plugins_dir()."""
+
+    def _call_as_platform(self, platform: str, env: dict[str, str]) -> Path:
+        """Invoke default_user_plugins_dir() with a patched sys.platform and env."""
+        import sys
+
+        clean_env = {k: v for k, v in os.environ.items() if k not in env}
+        clean_env.update(env)
+        with (
+            patch("sys.platform", platform),
+            patch.dict(os.environ, clean_env, clear=True),
+        ):
+            return default_user_plugins_dir()
+
+    def test_windows_uses_localappdata(self) -> None:
+        path = self._call_as_platform(
+            "win32",
+            {"LOCALAPPDATA": "C:\\Users\\test\\AppData\\Local"},
+        )
+        self.assertTrue(
+            str(path).startswith("C:\\Users\\test\\AppData\\Local"),
+            msg=f"Expected LOCALAPPDATA root, got: {path}",
+        )
+        self.assertTrue(str(path).endswith(os.path.join("mmo", "plugins")))
+
+    def test_windows_falls_back_to_appdata_when_localappdata_absent(self) -> None:
+        path = self._call_as_platform(
+            "win32",
+            {"APPDATA": "C:\\Users\\test\\AppData\\Roaming"},
+        )
+        self.assertTrue(
+            str(path).startswith("C:\\Users\\test\\AppData\\Roaming"),
+            msg=f"Expected APPDATA root, got: {path}",
+        )
+
+    def test_windows_never_resolves_to_system32(self) -> None:
+        path = self._call_as_platform(
+            "win32",
+            {"LOCALAPPDATA": "C:\\Users\\test\\AppData\\Local"},
+        )
+        self.assertNotIn("System32", str(path))
+        self.assertNotIn("system32", str(path).lower())
+
+    def test_macos_uses_library_application_support(self) -> None:
+        path = self._call_as_platform(
+            "darwin",
+            {"HOME": "/Users/test"},
+        )
+        self.assertIn("Library", str(path))
+        self.assertIn("Application Support", str(path))
+        self.assertTrue(str(path).endswith(os.path.join("mmo", "plugins")))
+
+    def test_linux_uses_xdg_data_home_when_set(self) -> None:
+        path = self._call_as_platform(
+            "linux",
+            {"XDG_DATA_HOME": "/custom/xdg", "HOME": "/home/test"},
+        )
+        self.assertTrue(
+            str(path).startswith("/custom/xdg"),
+            msg=f"Expected XDG_DATA_HOME root, got: {path}",
+        )
+        self.assertTrue(str(path).endswith(os.path.join("mmo", "plugins")))
+
+    def test_linux_falls_back_to_local_share_without_xdg(self) -> None:
+        path = self._call_as_platform(
+            "linux",
+            {"HOME": "/home/test"},
+        )
+        self.assertIn(".local", str(path))
+        self.assertIn("share", str(path))
+        self.assertTrue(str(path).endswith(os.path.join("mmo", "plugins")))
