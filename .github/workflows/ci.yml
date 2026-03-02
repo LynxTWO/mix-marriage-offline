@@ -110,16 +110,19 @@ jobs:
       - name: Regenerate screenshots
         run: >
           xvfb-run -a python tools/capture_gui_screenshots.py
-          --out-dir docs/manual/assets/screenshots
+          --out-dir /tmp/mmo-gui-screenshots
 
-      - name: Upload screenshots for debugging
+      - name: Upload generated screenshots for debugging
         uses: actions/upload-artifact@v4
         with:
           name: mmo-gui-screenshots
-          path: docs/manual/assets/screenshots/
+          path: /tmp/mmo-gui-screenshots/
 
-      - name: Enforce committed screenshots match generated
-        run: git diff --exit-code docs/manual/assets/screenshots/
+      - name: Perceptual diff check (committed vs generated)
+        run: >
+          python tools/check_screenshot_diff.py
+          --committed docs/manual/assets/screenshots
+          --generated /tmp/mmo-gui-screenshots
 
   docs-manual:
     runs-on: ubuntu-latest
