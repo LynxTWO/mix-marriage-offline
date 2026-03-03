@@ -1011,13 +1011,17 @@ def _run_safe_render_command(
                 return 1
 
         report = _load_report(report_path)
+        session_payload = report.get("session")
+        if not isinstance(session_payload, dict):
+            session_payload = {}
+            report["session"] = session_payload
+        session_payload["target_layout_id"] = resolved_target.layout_id
         if run_config is not None:
             normalized_run_config = normalize_run_config(run_config)
             report["run_config"] = normalized_run_config
             if routing_layout_ids_from_run_config(normalized_run_config) is not None:
                 apply_routing_plan_to_report(report, normalized_run_config)
 
-        session_payload = report.get("session")
         session_for_preflight: dict[str, Any] = {"profile_id": profile_id}
         if isinstance(session_payload, dict):
             src_layout = session_payload.get("source_layout_id")

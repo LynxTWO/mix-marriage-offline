@@ -14,6 +14,9 @@ mmo safe-render --report out/report.json --target stereo --out-dir out/render --
 Render-many (mix-once, render-many).
 mmo safe-render --report out/report.json --render-many --render-many-targets stereo,5.1,7.1.4 --out-dir out/deliverables --receipt-out out/receipt.json
 
+Baseline outputs are always produced.
+Even when zero recommendations are render-eligible, safe-render writes a conservative baseline WAV master for supported layout targets.
+
 Channel-ordering standards.
 MMO processes internally using SMPTE ordering.
 MMO can export in SMPTE, FILM, LOGIC_PRO, VST3, or AAF ordering.

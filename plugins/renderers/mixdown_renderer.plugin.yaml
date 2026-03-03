@@ -1,0 +1,43 @@
+plugin_id: "PLUGIN.RENDERER.MIXDOWN_BASELINE"
+plugin_type: "renderer"
+name: "Baseline Mixdown Renderer"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Render deterministic baseline masters for 2.0/5.1/7.1 even with zero eligible recommendations."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "mmo.plugins.renderers.mixdown_renderer:MixdownRenderer"
+capabilities:
+  max_channels: 8
+  channel_mode: "true_multichannel"
+  deterministic_seed_policy: "none"
+  supported_contexts:
+    - "render"
+    - "auto_apply"
+  scene:
+    supports_objects: false
+    supports_beds: true
+    supports_locks: true
+    requires_speaker_positions: false
+    supported_target_ids:
+      - "TARGET.STEREO.2_0"
+      - "TARGET.SURROUND.5_1"
+      - "TARGET.SURROUND.7_1"
+  dsp_traits:
+    tier: "information_preserving"
+    linearity: "linear"
+    phase_behavior: "linear_phase"
+    adds_noise: false
+    introduces_harmonics: false
+    anti_aliasing: "na"
+    measurable_claims:
+      - metric_id: "METER.TRUE_PEAK_DBTP"
+        expected_direction: "within"
+        threshold: 0.5
+        note: "Applies deterministic global trim to keep summed peaks below -1 dBFS."
+      - metric_id: "METER.INTEGRATED_LUFS_DELTA"
+        expected_direction: "within"
+        threshold: 3.0
+        note: "Conservative baseline fold keeps program loudness movement bounded."
+  notes:
+    - "Always writes a baseline master for supported target layouts."

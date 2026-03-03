@@ -48,7 +48,11 @@ class TestPluginCapabilities(unittest.TestCase):
         plugins = load_plugins(Path("plugins"))
         by_id = {plugin.plugin_id: plugin for plugin in plugins}
 
-        for plugin_id in ("PLUGIN.RENDERER.SAFE", "PLUGIN.RENDERER.GAIN_TRIM"):
+        for plugin_id in (
+            "PLUGIN.RENDERER.SAFE",
+            "PLUGIN.RENDERER.GAIN_TRIM",
+            "PLUGIN.RENDERER.MIXDOWN_BASELINE",
+        ):
             plugin = by_id.get(plugin_id)
             self.assertIsNotNone(plugin)
             if plugin is None:
@@ -59,12 +63,19 @@ class TestPluginCapabilities(unittest.TestCase):
             if capabilities is None:
                 return
 
-            self.assertEqual(capabilities.max_channels, 32)
+            expected_max_channels = 8 if plugin_id == "PLUGIN.RENDERER.MIXDOWN_BASELINE" else 32
+            self.assertEqual(capabilities.max_channels, expected_max_channels)
             self.assertEqual(capabilities.supported_contexts, ("render", "auto_apply"))
-            self.assertEqual(
-                capabilities.notes,
-                ("Deterministic gain/trim rendering; no boosts.",),
-            )
+            if plugin_id == "PLUGIN.RENDERER.MIXDOWN_BASELINE":
+                self.assertEqual(
+                    capabilities.notes,
+                    ("Always writes a baseline master for supported target layouts.",),
+                )
+            else:
+                self.assertEqual(
+                    capabilities.notes,
+                    ("Deterministic gain/trim rendering; no boosts.",),
+                )
             if plugin_id == "PLUGIN.RENDERER.SAFE":
                 self.assertIsNotNone(capabilities.scene)
                 if capabilities.scene is None:
@@ -76,6 +87,22 @@ class TestPluginCapabilities(unittest.TestCase):
                 self.assertEqual(
                     capabilities.scene.supported_target_ids,
                     ("TARGET.STEREO.2_0", "TARGET.SURROUND.5_1"),
+                )
+            elif plugin_id == "PLUGIN.RENDERER.MIXDOWN_BASELINE":
+                self.assertIsNotNone(capabilities.scene)
+                if capabilities.scene is None:
+                    return
+                self.assertFalse(capabilities.scene.supports_objects)
+                self.assertTrue(capabilities.scene.supports_beds)
+                self.assertTrue(capabilities.scene.supports_locks)
+                self.assertFalse(capabilities.scene.requires_speaker_positions)
+                self.assertEqual(
+                    capabilities.scene.supported_target_ids,
+                    (
+                        "TARGET.STEREO.2_0",
+                        "TARGET.SURROUND.5_1",
+                        "TARGET.SURROUND.7_1",
+                    ),
                 )
             else:
                 self.assertIsNone(capabilities.scene)

@@ -174,6 +174,8 @@ What remains: expand fixture corpus with dedicated 5.1/7.1 session sets and an e
 - [x] A “dry-run” mode exists for suggestions without applying changes.
 - [x] `safe-render` supports live explainable progress logging (`what/why/where/confidence`)
   and cooperative cancellation (`--cancel-file`) for CLI/GUI runs.
+- [x] `safe-render` always produces baseline WAV outputs for supported
+  2.0/5.1/7.1 layout targets, even when no recommendations are render-eligible.
 - [x] `safe-render` supports deterministic headphone preview rendering via
   `--preview-headphones`, writing explainable binaural preview outputs that
   reference their source render artifacts.

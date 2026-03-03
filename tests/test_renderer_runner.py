@@ -82,6 +82,7 @@ class TestRendererRunner(unittest.TestCase):
         }
         self.assertIn("PLUGIN.RENDERER.SAFE", manifests_by_id)
         self.assertIn("PLUGIN.RENDERER.GAIN_TRIM", manifests_by_id)
+        self.assertIn("PLUGIN.RENDERER.MIXDOWN_BASELINE", manifests_by_id)
 
         for manifest in manifests:
             skipped = manifest.get("skipped")

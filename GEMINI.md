@@ -22,6 +22,9 @@ Non-negotiables:
   render-many batches.
 - Keep watch-folder visual queue telemetry deterministic (stable ordering,
   explicit state transitions, and install-safe CLI wiring).
+- Keep safe-render baseline mixdown deterministic: supported 2.0/5.1/7.1
+  targets must still emit conservative WAV masters when recommendations are
+  not render-eligible.
 - Keep offline plugin marketplace discovery install-safe via bundled
   `ontology/plugin_index.yaml` and deterministic CLI/GUI listing paths.
 - Keep offline plugin hub installs deterministic and install-safe by sourcing

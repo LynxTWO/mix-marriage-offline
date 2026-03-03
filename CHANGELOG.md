@@ -84,6 +84,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Baseline mixdown renderer for safe-render zero-recommendation runs:
+  - Added `PLUGIN.RENDERER.MIXDOWN_BASELINE` with `true_multichannel`
+    capability metadata (`max_channels: 8`) and deterministic headroom
+    policy (`worst_case_peak_sum -> -1 dBFS`, fallback `-12 dB` trim).
+  - Added `src/mmo/plugins/renderers/mixdown_renderer.py` to write
+    conservative layout masters:
+    `LAYOUT_2_0/master.wav`, `LAYOUT_5_1/master.wav`, `LAYOUT_7_1/master.wav`
+    (per-target, with immersive-to-bed fallback where needed).
+  - Safe-render now injects `session.target_layout_id` before renderer
+    execution so baseline layout selection is deterministic even when
+    `eligible_render == 0`.
+  - Added fixture-driven safe-render coverage for baseline output existence
+    and deterministic output hashes.
 - Deterministic stems bus-plan artifact generator:
   - Added `mmo stems bus-plan --map <stems_map.json> --out <bus_plan.json> [--csv <bus_plan.csv>]`
     to build a schema-validated `mmo.bus_plan.v1` artifact from classified stems.

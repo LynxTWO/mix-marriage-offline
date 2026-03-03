@@ -11,6 +11,7 @@ Covers:
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import math
@@ -28,6 +29,7 @@ from mmo.cli import main
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCHEMAS_DIR = _REPO_ROOT / "schemas"
 _PLUGINS_DIR = _REPO_ROOT / "plugins"
+_BASELINE_STEMS_DIR = _REPO_ROOT / "tests" / "fixtures" / "safe_render_baseline_stems"
 _SANDBOX = (
     _REPO_ROOT / "sandbox_tmp" / "test_cli_safe_render" / str(os.getpid())
 )
@@ -114,6 +116,50 @@ def _make_report(
         "features": {},
     }
     return report
+
+
+def _make_baseline_fixture_report() -> dict:
+    stem_rows: list[dict] = []
+    for stem_path in sorted(_BASELINE_STEMS_DIR.glob("*.wav")):
+        with wave.open(str(stem_path), "rb") as handle:
+            channels = handle.getnchannels()
+            sample_rate_hz = handle.getframerate()
+            frame_count = handle.getnframes()
+        stem_rows.append(
+            {
+                "stem_id": stem_path.stem,
+                "file_path": stem_path.name,
+                "channel_count": channels,
+                "sample_rate_hz": sample_rate_hz,
+                "frame_count": frame_count,
+                "measurements": [
+                    {
+                        "evidence_id": "EVID.METER.CLIP_SAMPLE_COUNT",
+                        "value": 0,
+                    },
+                    {
+                        "evidence_id": "EVID.METER.PEAK_DBFS",
+                        "value": -12.0,
+                    },
+                ],
+            }
+        )
+
+    return {
+        "schema_version": "0.1.0",
+        "report_id": "REPORT.SAFE_RENDER.BASELINE_FIXTURE",
+        "project_id": "PROJECT.BASELINE_FIXTURE",
+        "generated_at": "2000-01-01T00:00:00Z",
+        "engine_version": "0.1.0",
+        "ontology_version": "0.1.0",
+        "session": {
+            "stems_dir": _BASELINE_STEMS_DIR.resolve().as_posix(),
+            "stems": stem_rows,
+        },
+        "issues": [],
+        "recommendations": [],
+        "features": {},
+    }
 
 
 class TestSafeRenderDryRun(unittest.TestCase):
@@ -486,6 +532,117 @@ class TestSafeRenderFullRender(unittest.TestCase):
             rec_ids = [b.get("recommendation_id") for b in blocked]
             self.assertIn("REC.TEST.HIGH.001", rec_ids)
             self.assertGreater(receipt["recommendations_summary"]["blocked"], 0)
+
+
+class TestSafeRenderBaselineMixdown(unittest.TestCase):
+    def test_safe_render_zero_recommendations_writes_stereo_master(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            report = _make_baseline_fixture_report()
+            report_path = temp / "report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            out_dir = temp / "renders"
+            qa_path = temp / "qa.json"
+            receipt_path = temp / "receipt.json"
+            exit_code, _stdout, stderr = _run_main(
+                [
+                    "safe-render",
+                    "--report",
+                    str(report_path),
+                    "--plugins",
+                    str(_PLUGINS_DIR),
+                    "--target",
+                    "LAYOUT.2_0",
+                    "--out-dir",
+                    str(out_dir),
+                    "--qa-out",
+                    str(qa_path),
+                    "--receipt-out",
+                    str(receipt_path),
+                ]
+            )
+            self.assertEqual(exit_code, 0, msg=stderr)
+
+            master_path = out_dir / "LAYOUT_2_0" / "master.wav"
+            self.assertTrue(master_path.exists(), f"missing baseline output: {master_path}")
+            self.assertGreater(master_path.stat().st_size, 44)
+
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            manifests = receipt.get("renderer_manifests", [])
+            baseline_manifest = next(
+                (
+                    item
+                    for item in manifests
+                    if isinstance(item, dict)
+                    and item.get("renderer_id") == "PLUGIN.RENDERER.MIXDOWN_BASELINE"
+                ),
+                None,
+            )
+            self.assertIsNotNone(baseline_manifest)
+            if baseline_manifest is None:
+                return
+            outputs = baseline_manifest.get("outputs")
+            self.assertIsInstance(outputs, list)
+            self.assertGreater(len(outputs), 0)
+
+            qa = json.loads(qa_path.read_text(encoding="utf-8"))
+            qa_outputs = qa.get("outputs")
+            self.assertIsInstance(qa_outputs, list)
+            self.assertGreater(len(qa_outputs), 0)
+
+    def test_safe_render_baseline_render_many_hashes_are_deterministic(self) -> None:
+        targets = ("LAYOUT.2_0", "LAYOUT.5_1", "LAYOUT.7_1")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            report = _make_baseline_fixture_report()
+            report_path = temp / "report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            hashes_by_run: list[dict[str, str]] = []
+            for run_index in (1, 2):
+                out_dir = temp / f"renders_{run_index}"
+                receipt_path = temp / f"receipt_{run_index}.json"
+                exit_code, _stdout, stderr = _run_main(
+                    [
+                        "safe-render",
+                        "--report",
+                        str(report_path),
+                        "--plugins",
+                        str(_PLUGINS_DIR),
+                        "--render-many",
+                        "--render-many-targets",
+                        ",".join(targets),
+                        "--out-dir",
+                        str(out_dir),
+                        "--receipt-out",
+                        str(receipt_path),
+                        "--force",
+                    ]
+                )
+                self.assertEqual(exit_code, 0, msg=stderr)
+
+                run_hashes: dict[str, str] = {}
+                for layout_id in targets:
+                    layout_slug = layout_id.replace(".", "_")
+                    master_path = out_dir / layout_slug / "master.wav"
+                    self.assertTrue(
+                        master_path.exists(),
+                        f"missing baseline output for {layout_id}: {master_path}",
+                    )
+                    self.assertGreater(master_path.stat().st_size, 44)
+                    run_hashes[layout_id] = hashlib.sha256(
+                        master_path.read_bytes()
+                    ).hexdigest()
+                hashes_by_run.append(run_hashes)
+
+            self.assertEqual(hashes_by_run[0], hashes_by_run[1])
 
 
 class TestSafeRenderApprove(unittest.TestCase):
