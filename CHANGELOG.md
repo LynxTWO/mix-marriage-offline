@@ -97,6 +97,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Downmix similarity gate framework for rendered surround vs stereo reference:
+  - Added deterministic rendered-audio gate metrics for
+    `loudness delta`, `correlation over time`, `coarse-band spectral distance`,
+    `peak delta`, and `true-peak delta`.
+  - Added one-shot bounded fallback for `LAYOUT.5_1`/`LAYOUT.7_1` that reduces
+    surround channel sends and re-runs similarity once.
+  - Wired render-many workflow to run these checks when stereo + surround
+    outputs are both available and to persist results in `report.downmix_qa`.
+  - Added version annotations for canonical `5.1 -> 2.0` and `7.1 -> 2.0`
+    downmix policies in ontology contract + packaged mirror.
+
 - Baseline mixdown renderer for safe-render zero-recommendation runs:
   - Added `PLUGIN.RENDERER.MIXDOWN_BASELINE` with `true_multichannel`
     capability metadata (`max_channels: 8`) and deterministic headroom

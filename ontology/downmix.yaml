@@ -98,6 +98,10 @@ downmix:
       target_layout_id: "LAYOUT.2_0"
       policy_pack: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
       default_matrix_id: "DMX.STD.5_1_TO_2_0.LO_RO_LFE_DROP"
+      policy_version: "1.0.0"
+      center_handling: "fold_to_lr_minus_3db"
+      surround_handling: "ls_rs_fold_to_lr_minus_3db"
+      surround_attenuation_db: -3.0
       lfe_treatment: "drop"
       notes:
         - "Default Lo/Ro fold-down. LFE dropped."
@@ -138,6 +142,11 @@ downmix:
       target_layout_id: "LAYOUT.2_0"
       policy_pack: "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"
       default_matrix_id: "DMX.STD.7_1_TO_2_0.LO_RO_COMPOSED"
+      policy_version: "1.0.0"
+      center_handling: "fold_to_lr_minus_3db"
+      surround_handling: "ls_rs_minus_3db_lrs_rrs_minus_6db"
+      surround_attenuation_db: -3.0
+      rear_surround_attenuation_db: -6.0
       lfe_treatment: "drop"
       notes:
         - "Equivalent to 7.1->5.1 then 5.1->2.0 using -3 dB coefficients."
@@ -352,6 +361,10 @@ downmix:
     DMX.STD.5_1_TO_2_0.LO_RO_LFE_DROP:
       source_layout_id: "LAYOUT.5_1"
       target_layout_id: "LAYOUT.2_0"
+      policy_version: "1.0.0"
+      center_handling: "fold_to_lr_minus_3db"
+      surround_handling: "ls_rs_fold_to_lr_minus_3db"
+      surround_attenuation_db: -3.0
       lfe_treatment: "drop"
       coefficients:
         SPK.L: {SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071}
@@ -412,6 +425,11 @@ downmix:
     DMX.STD.7_1_TO_2_0.LO_RO_COMPOSED:
       source_layout_id: "LAYOUT.7_1"
       target_layout_id: "LAYOUT.2_0"
+      policy_version: "1.0.0"
+      center_handling: "fold_to_lr_minus_3db"
+      surround_handling: "ls_rs_minus_3db_lrs_rrs_minus_6db"
+      surround_attenuation_db: -3.0
+      rear_surround_attenuation_db: -6.0
       lfe_treatment: "drop"
       coefficients:
         SPK.L: {SPK.L: 1.0, SPK.C: 0.7071, SPK.LS: 0.7071, SPK.LRS: 0.5}

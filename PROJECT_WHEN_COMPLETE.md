@@ -334,6 +334,9 @@ What remains: the core DSP path is functional, but formalized fallback sequencin
 
 ### 4.9.6 Downmix QA and fallback behaviors (DSP-level)
 - [x] Render outputs must pass downmix similarity gates (minimum: stereo).
+- [x] Render-many includes a deterministic one-shot surround fallback:
+  compare `stereo` vs `downmix(rendered 5.1/7.1)`, then attenuate surround
+  sends and retry once when the similarity gate fails.
 - [ ] If a gate fails, the system applies a documented fallback strategy:
   - reduce surround/height aggressiveness
   - reduce decorrelation

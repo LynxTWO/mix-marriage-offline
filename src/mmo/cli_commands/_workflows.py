@@ -88,6 +88,7 @@ from mmo.core.cache_store import (
     save_cached_report,
     try_load_cached_report,
 )
+from mmo.core.downmix import enforce_rendered_surround_similarity_gate
 from mmo.core.listen_pack import index_stems_auditions
 from mmo.core.presets import list_presets
 from mmo.core.project_file import (
@@ -146,6 +147,8 @@ __all__ = [
     "_resolve_wav_output_path",
     "_wav_output_path_from_manifest",
     "_resolve_render_many_stereo_audio_path",
+    "_resolve_render_many_surround_audio_paths",
+    "_run_render_many_downmix_similarity_gates",
     "_resolve_render_many_translation_cache_dir",
     "_run_render_many_translation_checks",
     "_coerce_float",
@@ -427,6 +430,431 @@ def _resolve_render_many_stereo_audio_path(
         if resolved is not None:
             return resolved
     return None
+
+
+def _resolve_wav_output_path_for_channel_count(
+    *,
+    output: dict[str, Any],
+    candidate_roots: list[Path],
+    expected_channel_count: int,
+) -> Path | None:
+    output_format = _coerce_str(output.get("format")).strip().lower()
+    file_path = _coerce_str(output.get("file_path")).strip()
+    if not file_path:
+        return None
+    if output_format and output_format != "wav":
+        return None
+    if not output_format and Path(file_path).suffix.lower() not in {".wav", ".wave"}:
+        return None
+
+    channel_count = output.get("channel_count")
+    if (
+        not isinstance(channel_count, int)
+        or isinstance(channel_count, bool)
+        or int(channel_count) != int(expected_channel_count)
+    ):
+        return None
+
+    file_candidate = Path(file_path)
+    if file_candidate.is_absolute():
+        if file_candidate.exists() and file_candidate.is_file():
+            return file_candidate.resolve()
+        return None
+
+    for root in candidate_roots:
+        candidate = (root / file_candidate).resolve()
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
+
+
+def _wav_output_path_from_manifest_for_channel_count(
+    *,
+    render_manifest: dict[str, Any],
+    target_layout_id: str,
+    candidate_roots: list[Path],
+    expected_channel_count: int,
+) -> Path | None:
+    outputs_by_id: dict[str, list[dict[str, Any]]] = {}
+    outputs_all: list[dict[str, Any]] = []
+    for renderer_manifest in _dict_list(render_manifest.get("renderer_manifests")):
+        for output in _dict_list(renderer_manifest.get("outputs")):
+            output_id = _coerce_str(output.get("output_id")).strip()
+            if output_id:
+                outputs_by_id.setdefault(output_id, []).append(output)
+            outputs_all.append(output)
+
+    for output_id in list(outputs_by_id.keys()):
+        outputs_by_id[output_id] = sorted(
+            outputs_by_id[output_id],
+            key=_render_output_sort_key,
+        )
+    outputs_all = sorted(outputs_all, key=_render_output_sort_key)
+
+    preferred_output_ids: list[str] = []
+    for deliverable in sorted(
+        _dict_list(render_manifest.get("deliverables")),
+        key=lambda item: _coerce_str(item.get("deliverable_id")).strip(),
+    ):
+        deliverable_layout_id = _coerce_str(deliverable.get("target_layout_id")).strip()
+        if deliverable_layout_id != target_layout_id:
+            continue
+        for output_id in sorted(
+            {
+                _coerce_str(output_id).strip()
+                for output_id in deliverable.get("output_ids", [])
+                if isinstance(output_id, str) and _coerce_str(output_id).strip()
+            }
+        ):
+            preferred_output_ids.append(output_id)
+
+    for output_id in preferred_output_ids:
+        for output in outputs_by_id.get(output_id, []):
+            resolved = _resolve_wav_output_path_for_channel_count(
+                output=output,
+                candidate_roots=candidate_roots,
+                expected_channel_count=expected_channel_count,
+            )
+            if resolved is not None:
+                return resolved
+
+    for output in outputs_all:
+        resolved = _resolve_wav_output_path_for_channel_count(
+            output=output,
+            candidate_roots=candidate_roots,
+            expected_channel_count=expected_channel_count,
+        )
+        if resolved is not None:
+            return resolved
+    return None
+
+
+def _resolve_render_many_surround_audio_paths(
+    *,
+    variant_artifacts: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    expected_channels_by_layout: dict[str, int] = {
+        "LAYOUT.5_1": 6,
+        "LAYOUT.7_1": 8,
+    }
+    rows: list[dict[str, Any]] = []
+    for artifact in variant_artifacts:
+        target_layout_id = _coerce_str(artifact.get("target_layout_id")).strip()
+        expected_channels = expected_channels_by_layout.get(target_layout_id)
+        if expected_channels is None:
+            continue
+
+        render_manifest_path = artifact.get("render_manifest_path")
+        if not isinstance(render_manifest_path, Path) or not render_manifest_path.exists():
+            continue
+        if render_manifest_path.is_dir():
+            continue
+
+        try:
+            render_manifest = _load_json_object(
+                render_manifest_path,
+                label=f"Render manifest ({artifact.get('variant_id')})",
+            )
+        except ValueError:
+            continue
+
+        candidate_roots: list[Path] = []
+        out_dir = artifact.get("out_dir")
+        if isinstance(out_dir, Path):
+            candidate_roots.append((out_dir / "render").resolve())
+            candidate_roots.append(out_dir.resolve())
+        candidate_roots.append((render_manifest_path.parent / "render").resolve())
+        candidate_roots.append(render_manifest_path.parent.resolve())
+        deduped_roots: list[Path] = []
+        seen_roots: set[str] = set()
+        for root in candidate_roots:
+            token = root.as_posix()
+            if token in seen_roots:
+                continue
+            seen_roots.add(token)
+            deduped_roots.append(root)
+
+        resolved = _wav_output_path_from_manifest_for_channel_count(
+            render_manifest=render_manifest,
+            target_layout_id=target_layout_id,
+            candidate_roots=deduped_roots,
+            expected_channel_count=expected_channels,
+        )
+        if resolved is None:
+            continue
+        rows.append(
+            {
+                "variant_id": _coerce_str(artifact.get("variant_id")).strip(),
+                "target_id": _coerce_str(artifact.get("target_id")).strip(),
+                "target_layout_id": target_layout_id,
+                "audio_path": resolved,
+                "report_path": artifact.get("report_path"),
+            }
+        )
+    rows.sort(
+        key=lambda item: (
+            _coerce_str(item.get("target_layout_id")).strip(),
+            _coerce_str(item.get("target_id")).strip(),
+            _coerce_str(item.get("variant_id")).strip(),
+            item.get("audio_path").as_posix()
+            if isinstance(item.get("audio_path"), Path)
+            else "",
+        )
+    )
+    return rows
+
+
+def _ensure_downmix_qa_payload(report_payload: dict[str, Any]) -> dict[str, Any]:
+    downmix_qa = report_payload.get("downmix_qa")
+    if not isinstance(downmix_qa, dict):
+        downmix_qa = {}
+    downmix_qa["src_path"] = _coerce_str(downmix_qa.get("src_path")).strip()
+    downmix_qa["ref_path"] = _coerce_str(downmix_qa.get("ref_path")).strip()
+    measurements = downmix_qa.get("measurements")
+    downmix_qa["measurements"] = (
+        [item for item in measurements if isinstance(item, dict)]
+        if isinstance(measurements, list)
+        else []
+    )
+    issues = downmix_qa.get("issues")
+    downmix_qa["issues"] = (
+        [item for item in issues if isinstance(item, dict)]
+        if isinstance(issues, list)
+        else []
+    )
+    downmix_qa["log"] = _coerce_str(downmix_qa.get("log"))
+    return downmix_qa
+
+
+def _apply_similarity_gate_rows_to_report(
+    *,
+    report_path: Path,
+    stereo_audio_path: Path,
+    rows: list[dict[str, Any]],
+) -> None:
+    if not rows:
+        return
+    try:
+        report_payload = _load_report(report_path)
+    except ValueError:
+        return
+
+    downmix_qa = _ensure_downmix_qa_payload(report_payload)
+    if not downmix_qa.get("ref_path"):
+        downmix_qa["ref_path"] = stereo_audio_path.resolve().as_posix()
+
+    existing_measurements = [
+        item
+        for item in downmix_qa["measurements"]
+        if _coerce_str(item.get("evidence_id")).strip()
+        not in {
+            "EVID.DOWNMIX.QA.SIMILARITY_GATE",
+            "EVID.DOWNMIX.QA.SIMILARITY_GATE.LOG",
+        }
+    ]
+    existing_issues = [
+        item
+        for item in downmix_qa["issues"]
+        if _coerce_str(item.get("issue_id")).strip()
+        != "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED"
+    ]
+
+    similarity_rows = sorted(
+        [dict(row) for row in rows if isinstance(row, dict)],
+        key=lambda row: (
+            _coerce_str(row.get("source_layout_id")).strip(),
+            _coerce_str(row.get("target_id")).strip(),
+            _coerce_str(row.get("variant_id")).strip(),
+        ),
+    )
+    if similarity_rows:
+        first_src = similarity_rows[0].get("surround_audio_path")
+        if isinstance(first_src, str):
+            downmix_qa["src_path"] = first_src
+
+    new_measurements = [
+        {
+            "evidence_id": "EVID.DOWNMIX.QA.SIMILARITY_GATE",
+            "value": similarity_rows,
+            "unit_id": "UNIT.NONE",
+        }
+    ]
+
+    for row in similarity_rows:
+        if row.get("passed") is True:
+            continue
+        source_layout_id = _coerce_str(row.get("source_layout_id")).strip()
+        evidence = [
+            {
+                "evidence_id": "EVID.DOWNMIX.QA.REF_PATH",
+                "value": row.get("stereo_audio_path"),
+            },
+            {
+                "evidence_id": "EVID.DOWNMIX.QA.SRC_PATH",
+                "value": row.get("surround_audio_path"),
+            },
+            {
+                "evidence_id": "EVID.DOWNMIX.MATRIX_ID",
+                "value": row.get("matrix_id"),
+            },
+            {
+                "evidence_id": "EVID.SESSION.LAYOUT_ID",
+                "value": source_layout_id,
+            },
+        ]
+        metrics = row.get("metrics")
+        if isinstance(metrics, dict):
+            metric_map = {
+                "loudness_delta_lufs": ("EVID.DOWNMIX.QA.LUFS_DELTA", "UNIT.LUFS"),
+                "correlation_over_time_min": (
+                    "EVID.DOWNMIX.QA.CORR_DELTA",
+                    "UNIT.CORRELATION",
+                ),
+                "spectral_distance_db": ("EVID.DOWNMIX.QA.SPECTRAL_DISTANCE", "UNIT.DB"),
+                "peak_delta_dbfs": ("EVID.DOWNMIX.QA.PEAK_DELTA", "UNIT.DB"),
+                "true_peak_delta_dbtp": (
+                    "EVID.DOWNMIX.QA.TRUE_PEAK_DELTA",
+                    "UNIT.DBTP",
+                ),
+            }
+            for metric_key in sorted(metric_map.keys()):
+                evidence_id, unit_id = metric_map[metric_key]
+                value = metrics.get(metric_key)
+                if isinstance(value, (int, float)):
+                    evidence.append(
+                        {
+                            "evidence_id": evidence_id,
+                            "value": float(value),
+                            "unit_id": unit_id,
+                        }
+                    )
+
+        existing_issues.append(
+            {
+                "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
+                "severity": 70,
+                "confidence": 1.0,
+                "target": {"scope": "session"},
+                "evidence": evidence,
+                "message": (
+                    "Rendered surround similarity gate failed against stereo reference "
+                    f"for {source_layout_id}."
+                ),
+            }
+        )
+
+    log_payload = {
+        "schema_version": "0.1.0",
+        "stereo_audio_path": stereo_audio_path.resolve().as_posix(),
+        "rows": similarity_rows,
+    }
+    new_measurements.append(
+        {
+            "evidence_id": "EVID.DOWNMIX.QA.SIMILARITY_GATE.LOG",
+            "value": json.dumps(log_payload, sort_keys=True, separators=(",", ":")),
+            "unit_id": "UNIT.NONE",
+        }
+    )
+
+    downmix_qa["measurements"] = existing_measurements + new_measurements
+    downmix_qa["issues"] = existing_issues
+    downmix_qa["log"] = json.dumps(log_payload, sort_keys=True, separators=(",", ":"))
+    report_payload["downmix_qa"] = downmix_qa
+
+    try:
+        _validate_json_payload(
+            report_payload,
+            schema_path=schemas_dir() / "report.schema.json",
+            payload_name="Report",
+        )
+    except SystemExit:
+        return
+    _write_json_file(report_path, report_payload)
+
+
+def _run_render_many_downmix_similarity_gates(
+    *,
+    root_out_dir: Path,
+    report_path: Path,
+    variant_result: dict[str, Any],
+) -> None:
+    variant_artifacts = _render_many_variant_artifacts(
+        variant_result=variant_result,
+        root_out_dir=root_out_dir,
+    )
+    stereo_audio_path = _resolve_render_many_stereo_audio_path(
+        variant_artifacts=variant_artifacts,
+        stereo_layout_id="LAYOUT.2_0",
+    )
+    if stereo_audio_path is None:
+        return
+
+    surround_rows = _resolve_render_many_surround_audio_paths(
+        variant_artifacts=variant_artifacts,
+    )
+    if not surround_rows:
+        return
+
+    results_by_variant_id: dict[str, dict[str, Any]] = {}
+    aggregate_rows: list[dict[str, Any]] = []
+    for row in surround_rows:
+        surround_audio_path = row.get("audio_path")
+        source_layout_id = _coerce_str(row.get("target_layout_id")).strip()
+        if not isinstance(surround_audio_path, Path) or not source_layout_id:
+            continue
+        try:
+            gate_result = enforce_rendered_surround_similarity_gate(
+                stereo_render_file=stereo_audio_path,
+                surround_render_file=surround_audio_path,
+                source_layout_id=source_layout_id,
+            )
+        except (RuntimeError, ValueError):
+            continue
+
+        enriched = {
+            "variant_id": _coerce_str(row.get("variant_id")).strip(),
+            "target_id": _coerce_str(row.get("target_id")).strip(),
+            "source_layout_id": source_layout_id,
+            "stereo_audio_path": stereo_audio_path.resolve().as_posix(),
+            "surround_audio_path": surround_audio_path.resolve().as_posix(),
+            "matrix_id": _coerce_str(gate_result.get("matrix_id")).strip(),
+            "passed": gate_result.get("passed") is True,
+            "risk_level": _coerce_str(gate_result.get("risk_level")).strip(),
+            "fallback_applied": gate_result.get("fallback_applied") is True,
+            "surround_backoff_db": gate_result.get("surround_backoff_db"),
+            "metrics": gate_result.get("metrics"),
+            "thresholds": gate_result.get("thresholds"),
+            "attempts": gate_result.get("attempts"),
+        }
+        variant_id = _coerce_str(row.get("variant_id")).strip()
+        if variant_id:
+            results_by_variant_id[variant_id] = enriched
+        aggregate_rows.append(enriched)
+
+    if not aggregate_rows:
+        return
+
+    _apply_similarity_gate_rows_to_report(
+        report_path=report_path,
+        stereo_audio_path=stereo_audio_path,
+        rows=aggregate_rows,
+    )
+    for artifact in variant_artifacts:
+        variant_id = _coerce_str(artifact.get("variant_id")).strip()
+        report_candidate = artifact.get("report_path")
+        if (
+            not variant_id
+            or variant_id not in results_by_variant_id
+            or not isinstance(report_candidate, Path)
+            or not report_candidate.exists()
+            or report_candidate.is_dir()
+        ):
+            continue
+        _apply_similarity_gate_rows_to_report(
+            report_path=report_candidate,
+            stereo_audio_path=stereo_audio_path,
+            rows=[results_by_variant_id[variant_id]],
+        )
 
 
 def _resolve_render_many_translation_cache_dir(
@@ -1931,6 +2359,12 @@ def _run_render_many_workflow(
     except SystemExit as exc:
         return int(exc.code) if isinstance(exc.code, int) else 1
     _write_json_file(variant_result_path, variant_result)
+
+    _run_render_many_downmix_similarity_gates(
+        root_out_dir=out_dir,
+        report_path=report_path,
+        variant_result=variant_result,
+    )
 
     if listen_pack:
         try:

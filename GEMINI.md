@@ -25,6 +25,9 @@ Non-negotiables:
 - Keep safe-render baseline mixdown deterministic: supported 2.0/5.1/7.1
   targets must still emit conservative WAV masters when recommendations are
   not render-eligible.
+- Keep render-many surround similarity gating deterministic: compare stereo
+  renders against downmix(rendered 5.1/7.1), and if gates fail, allow only a
+  single bounded surround-send reduction retry before final pass/fail logging.
 - Keep safe-render zero-output behavior fail-safe: emit
   `ISSUE.RENDER.NO_OUTPUTS` and return non-zero by default unless
   `--allow-empty-outputs` is explicitly set.

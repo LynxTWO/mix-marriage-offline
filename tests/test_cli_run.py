@@ -1,6 +1,7 @@
 import json
 import contextlib
 import io
+import inspect
 import math
 import os
 import struct
@@ -655,6 +656,59 @@ class TestCliRun(unittest.TestCase):
                 second_exit = main(command)
             self.assertEqual(second_exit, 0)
             self.assertIn("analysis cache: hit", stdout_second.getvalue())
+
+    def test_run_render_many_records_similarity_gate_for_surround_outputs(self) -> None:
+        if "registry" not in inspect.signature(jsonschema.Draft202012Validator).parameters:
+            self.skipTest("jsonschema Draft202012Validator(registry=...) is unavailable")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            out_dir = temp_path / "out"
+            _write_wav_16bit(stems_dir / "drums" / "kick.wav")
+
+            command = [
+                "run",
+                "--stems",
+                str(stems_dir),
+                "--out",
+                str(out_dir),
+                "--preset",
+                "PRESET.SAFE_CLEANUP",
+                "--render-many",
+                "--targets",
+                "Stereo (streaming),5.1 (home theater)",
+                "--cache",
+                "off",
+            ]
+            with mock.patch(
+                "mmo.cli_commands._workflows.run_variant_plan",
+                side_effect=_mock_render_many_run_variant_plan(
+                    out_dir=out_dir,
+                    include_stereo_deliverable=True,
+                    surround_target_ids={"TARGET.SURROUND.5_1"},
+                ),
+            ):
+                exit_code = main(command)
+            self.assertEqual(exit_code, 0)
+
+            report_path = out_dir / "report.json"
+            report_payload = json.loads(report_path.read_text(encoding="utf-8"))
+
+            downmix_qa = report_payload.get("downmix_qa")
+            self.assertIsInstance(downmix_qa, dict)
+            if not isinstance(downmix_qa, dict):
+                return
+            measurements = downmix_qa.get("measurements")
+            self.assertIsInstance(measurements, list)
+            if not isinstance(measurements, list):
+                return
+            evidence_ids = {
+                item.get("evidence_id")
+                for item in measurements
+                if isinstance(item, dict)
+            }
+            self.assertIn("EVID.DOWNMIX.QA.SIMILARITY_GATE", evidence_ids)
 
     def test_run_render_many_translation_patches_report_and_bundle_deterministically(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
