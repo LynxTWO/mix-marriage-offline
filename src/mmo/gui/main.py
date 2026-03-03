@@ -42,6 +42,10 @@ _DEFAULT_RENDER_MANY_TARGET_IDS: tuple[str, ...] = (
     "TARGET.SURROUND.5_1",
     "TARGET.SURROUND.7_1",
 )
+_ISSUE_RENDER_NO_OUTPUTS = "ISSUE.RENDER.NO_OUTPUTS"
+_NO_OUTPUTS_BANNER_TEXT = (
+    "No audio outputs were written. This build may not include a mixdown renderer yet."
+)
 _STUDIO_THEME: Mapping[str, str] = {
     "bg": "#0A0A09",
     "hero": "#13110E",
@@ -513,6 +517,30 @@ def has_high_risk_blocked_recommendations(receipt_payload: Mapping[str, Any]) ->
     return False
 
 
+def has_issue_in_receipt_qa(
+    receipt_payload: Mapping[str, Any],
+    *,
+    issue_id: str,
+) -> bool:
+    qa_issues = receipt_payload.get("qa_issues")
+    if not isinstance(qa_issues, list):
+        return False
+    for issue in qa_issues:
+        if not isinstance(issue, Mapping):
+            continue
+        current_issue_id = issue.get("issue_id")
+        if isinstance(current_issue_id, str) and current_issue_id.strip() == issue_id:
+            return True
+    return False
+
+
+def has_no_outputs_issue(receipt_payload: Mapping[str, Any]) -> bool:
+    return has_issue_in_receipt_qa(
+        receipt_payload,
+        issue_id=_ISSUE_RENDER_NO_OUTPUTS,
+    )
+
+
 if _ctk is not None and TkinterDnD is not None and hasattr(TkinterDnD, "DnDWrapper"):
 
     class _DropEnabledCTk(_ctk.CTk, TkinterDnD.DnDWrapper):  # type: ignore[misc]
@@ -541,6 +569,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         self._discover_status_var = _ctk.StringVar(value="Offline plugin hub ready.")
         self._discover_install_buttons: dict[str, Any] = {}
         self._discover_installing_ids: set[str] = set()
+        self._warning_receipt_path: Path | None = None
 
         self._target_layouts = render_target_layout_map()
         self._target_ids = tuple(sorted(self._target_layouts))
@@ -798,6 +827,37 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             justify="left",
             wraplength=520,
         ).grid(row=18, column=0, padx=16, pady=(0, 14), sticky="w")
+
+        self._warning_banner = _ctk.CTkFrame(
+            controls,
+            fg_color="#3A2611",
+            border_width=1,
+            border_color="#D79B48",
+            corner_radius=10,
+        )
+        self._warning_banner.grid(row=19, column=0, padx=16, pady=(0, 14), sticky="ew")
+        self._warning_banner.grid_columnconfigure(0, weight=1)
+        self._warning_banner_message = _ctk.CTkLabel(
+            self._warning_banner,
+            text=_NO_OUTPUTS_BANNER_TEXT,
+            font=(_FONT_UI, 13, "bold"),
+            text_color="#F6DDC0",
+            justify="left",
+            wraplength=500,
+        )
+        self._warning_banner_message.grid(row=0, column=0, padx=10, pady=(8, 4), sticky="w")
+        self._warning_banner_link = _ctk.CTkButton(
+            self._warning_banner,
+            text="",
+            command=self._copy_warning_receipt_path,
+            fg_color="transparent",
+            hover_color="#4B3520",
+            text_color="#8ED1CA",
+            font=(_FONT_MONO, 11),
+            anchor="w",
+        )
+        self._warning_banner_link.grid(row=1, column=0, padx=10, pady=(0, 8), sticky="ew")
+        self._warning_banner.grid_remove()
 
         log_panel = _ctk.CTkFrame(
             self,
@@ -1207,6 +1267,49 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
 
         self.after(0, _apply)
 
+    def _set_warning_banner_threadsafe(
+        self,
+        *,
+        show: bool,
+        receipt_path: Path | None = None,
+    ) -> None:
+        def _apply() -> None:
+            if not hasattr(self, "_warning_banner"):
+                return
+            if not show:
+                self._warning_receipt_path = None
+                self._warning_banner_link.configure(text="", state="disabled")
+                self._warning_banner.grid_remove()
+                return
+            self._warning_receipt_path = receipt_path
+            if receipt_path is None:
+                self._warning_banner_link.configure(
+                    text="Receipt path unavailable.",
+                    state="disabled",
+                )
+            else:
+                self._warning_banner_link.configure(
+                    text=_as_posix(receipt_path),
+                    state="normal",
+                )
+            self._warning_banner.grid()
+
+        self.after(0, _apply)
+
+    def _copy_warning_receipt_path(self) -> None:
+        path = self._warning_receipt_path
+        if path is None:
+            return
+        path_text = _as_posix(path)
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(path_text)
+        except Exception:  # noqa: BLE001
+            self._append_log(f"Receipt path: {path_text}")
+            return
+        self._append_log(f"Receipt path copied: {path_text}")
+        self._status_var.set("Warning receipt path copied to clipboard.")
+
     def _show_error_threadsafe(self, title: str, message: str) -> None:
         from tkinter import messagebox
 
@@ -1296,6 +1399,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         self._set_running_threadsafe(True)
         self._set_status_threadsafe(status_text)
         self._set_progress_threadsafe(0.0)
+        self._set_warning_banner_threadsafe(show=False)
         workspace_dir = config.out_dir / _DEFAULT_GUI_WORKSPACE
         workspace_dir.mkdir(parents=True, exist_ok=True)
         self._cancel_file_path = build_pipeline_paths(workspace_dir).cancel_token_path
@@ -1539,6 +1643,24 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             )
             self._set_status_threadsafe("Rendering...")
             final_rc = self._run_command(final_argv, stage="safe-render(final)")
+            final_receipt_payload: Mapping[str, Any] | None = None
+            final_receipt_path: Path | None = paths.final_receipt_path
+            if final_receipt_path.exists():
+                try:
+                    loaded = json.loads(paths.final_receipt_path.read_text(encoding="utf-8"))
+                    if isinstance(loaded, Mapping):
+                        final_receipt_payload = loaded
+                except (OSError, json.JSONDecodeError):
+                    final_receipt_payload = None
+
+            has_no_outputs = bool(
+                isinstance(final_receipt_payload, Mapping)
+                and has_no_outputs_issue(final_receipt_payload)
+            )
+            self._set_warning_banner_threadsafe(
+                show=(has_no_outputs or final_rc != 0),
+                receipt_path=final_receipt_path,
+            )
             if final_rc != 0 and self._cancel_requested():
                 self._set_status_threadsafe("Render cancelled.")
                 return
@@ -1546,7 +1668,14 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
                 self._set_status_threadsafe("Render cancelled.")
                 return
             if final_rc != 0:
-                self._set_status_threadsafe("Render failed. Check live log.")
+                if has_no_outputs:
+                    self._set_status_threadsafe(_NO_OUTPUTS_BANNER_TEXT)
+                else:
+                    self._set_status_threadsafe("Render failed. Check live log.")
+                return
+            if has_no_outputs:
+                self._set_progress_threadsafe(1.0)
+                self._set_status_threadsafe(_NO_OUTPUTS_BANNER_TEXT)
                 return
 
             self._set_progress_threadsafe(1.0)

@@ -1205,6 +1205,15 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     safe_render_parser.add_argument(
+        "--allow-empty-outputs",
+        action="store_true",
+        default=False,
+        help=(
+            "Allow exit code 0 when renderer stage emits zero outputs. "
+            "Default behavior is to fail and emit ISSUE.RENDER.NO_OUTPUTS."
+        ),
+    )
+    safe_render_parser.add_argument(
         "--live-progress",
         action="store_true",
         default=False,
@@ -5953,6 +5962,7 @@ def main(argv: list[str] | None = None) -> int:
                 render_many_targets=_render_many_targets,
                 layout_standard=_safe_render_layout_standard,
                 preview_headphones=bool(getattr(args, "preview_headphones", False)),
+                allow_empty_outputs=bool(getattr(args, "allow_empty_outputs", False)),
                 live_progress=bool(getattr(args, "live_progress", False)),
                 cancel_file=(
                     Path(args.cancel_file)

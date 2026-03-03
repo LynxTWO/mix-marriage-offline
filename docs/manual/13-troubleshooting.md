@@ -29,6 +29,11 @@ That means your current authority profile or locks stopped a risky action.
 Use `--dry-run` to inspect what would happen.
 Use `--approve` only when you intentionally accept the change.
 
+Safe-render reports `ISSUE.RENDER.NO_OUTPUTS`.
+No audio outputs were written.
+If you see NO_OUTPUTS, install/enable MIXDOWN_BASELINE renderer.
+Use `--allow-empty-outputs` only if you intentionally want a no-output pass.
+
 GUI live-log error codes.
 [GUI.E2000] stage_failed — a pipeline stage exited with a nonzero return code.
   The log line includes `stage=<name>` and `rc=<code>` to identify which stage failed.

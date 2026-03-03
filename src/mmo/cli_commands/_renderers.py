@@ -51,6 +51,11 @@ __all__ = [
     "_run_deliverables_index_command",
 ]
 
+ISSUE_RENDER_NO_OUTPUTS = "ISSUE.RENDER.NO_OUTPUTS"
+_NO_OUTPUTS_WARNING_MESSAGE = (
+    "No audio outputs were written. This build may not include a mixdown renderer yet."
+)
+
 
 def _collect_stem_artifacts(
     renderer_manifests: list[dict[str, Any]],
@@ -658,6 +663,7 @@ def _run_render_many_targets(
     user_profile: dict[str, Any] | None = None,
     layout_standard: str = "SMPTE",
     preview_headphones: bool = False,
+    allow_empty_outputs: bool = False,
     live_progress: bool = False,
     cancel_file: Path | None = None,
     cancel_token: CancelToken | None = None,
@@ -727,6 +733,7 @@ def _run_render_many_targets(
             render_many_targets=None,  # do not recurse
             layout_standard=layout_standard,
             preview_headphones=preview_headphones,
+            allow_empty_outputs=allow_empty_outputs,
             live_progress=live_progress,
             cancel_file=cancel_file,
             cancel_token=token,
@@ -866,6 +873,35 @@ def _collect_output_entries_from_manifests(
     return entries
 
 
+def _count_manifest_outputs(manifests: list[dict[str, Any]]) -> int:
+    output_count = 0
+    for manifest in manifests:
+        if not isinstance(manifest, dict):
+            continue
+        outputs = manifest.get("outputs")
+        if not isinstance(outputs, list):
+            continue
+        output_count += sum(1 for output in outputs if isinstance(output, dict))
+    return output_count
+
+
+def _build_no_outputs_issue(
+    *,
+    out_dir: Path | None,
+) -> dict[str, Any]:
+    issue: dict[str, Any] = {
+        "issue_id": ISSUE_RENDER_NO_OUTPUTS,
+        "severity": "warn",
+        "message": _NO_OUTPUTS_WARNING_MESSAGE,
+        "metric": "output_count",
+        "value": 0,
+        "threshold": 1,
+    }
+    if out_dir is not None:
+        issue["output_path"] = out_dir.resolve().as_posix()
+    return issue
+
+
 def _build_blocked_rec_summaries(recs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     blocked = [
         rec for rec in recs
@@ -916,6 +952,7 @@ def _run_safe_render_command(
     render_many_targets: list[str] | None = None,
     layout_standard: str = "SMPTE",
     preview_headphones: bool = False,
+    allow_empty_outputs: bool = False,
     live_progress: bool = False,
     cancel_file: Path | None = None,
     cancel_token: CancelToken | None = None,
@@ -975,6 +1012,7 @@ def _run_safe_render_command(
                 user_profile=user_profile,
                 layout_standard=layout_standard,
                 preview_headphones=preview_headphones,
+                allow_empty_outputs=allow_empty_outputs,
                 live_progress=live_progress,
                 cancel_file=cancel_file,
                 cancel_token=token,
@@ -1427,11 +1465,28 @@ def _run_safe_render_command(
                 json.dumps(render_manifest, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
-        output_count = sum(
-            len(m.get("outputs", []))
-            for m in manifests
-            if isinstance(m, dict)
-        )
+        output_count = _count_manifest_outputs(manifests)
+        no_outputs_issue: dict[str, Any] | None = None
+        if output_count == 0:
+            no_outputs_issue = _build_no_outputs_issue(out_dir=out_dir)
+            print(
+                f"safe-render: {ISSUE_RENDER_NO_OUTPUTS}"
+                f" message={_NO_OUTPUTS_WARNING_MESSAGE}",
+                file=sys.stderr,
+            )
+            progress.emit_log(
+                kind="warn",
+                scope="render",
+                what="safe-render wrote zero outputs",
+                why="Renderer stage completed with no audio files emitted.",
+                where=[out_dir.resolve().as_posix()],
+                confidence=1.0,
+                evidence={
+                    "codes": ["SAFE_RENDER.NO_OUTPUTS"],
+                    "ids": [ISSUE_RENDER_NO_OUTPUTS],
+                    "metrics": [{"name": "output_count", "value": 0.0}],
+                },
+            )
         progress.advance(
             phase="render",
             what="renderers completed",
@@ -1459,6 +1514,11 @@ def _run_safe_render_command(
                     "issues": [],
                     "thresholds": {},
                 }
+        if no_outputs_issue is not None:
+            qa_issues.append(dict(no_outputs_issue))
+            qa_payload_issues = qa_payload.get("issues")
+            if isinstance(qa_payload_issues, list):
+                qa_payload_issues.append(dict(no_outputs_issue))
         if qa_out_path is not None:
             qa_out_path.parent.mkdir(parents=True, exist_ok=True)
             _write_json_file(qa_out_path, qa_payload)
@@ -1486,11 +1546,16 @@ def _run_safe_render_command(
             },
         )
 
+        render_status = (
+            "blocked"
+            if no_outputs_issue is not None and not allow_empty_outputs
+            else "completed"
+        )
         receipt = {
             "schema_version": "0.1.0",
             "receipt_id": receipt_id,
             "context": "safe_render",
-            "status": "completed",
+            "status": render_status,
             "dry_run": False,
             "target": target,
             "profile_id": profile_id,
@@ -1508,6 +1573,8 @@ def _run_safe_render_command(
                 f"target={target}",
                 f"profile_id={profile_id}",
                 f"renderers={','.join(renderer_ids) if renderer_ids else '<none>'}",
+                f"outputs={output_count}",
+                f"allow_empty_outputs={'true' if allow_empty_outputs else 'false'}",
                 (
                     "headphone_preview="
                     f"enabled(outputs={preview_output_count},skipped={preview_skipped_count})"
@@ -1526,6 +1593,8 @@ def _run_safe_render_command(
                 ),
             ],
         }
+        if no_outputs_issue is not None:
+            receipt["notes"].append(f"{ISSUE_RENDER_NO_OUTPUTS}: {_NO_OUTPUTS_WARNING_MESSAGE}")
         if binaural_target_requested and binaural_source_selection is not None:
             receipt["notes"].append(
                 "binaural_source_layout="
@@ -1551,6 +1620,20 @@ def _run_safe_render_command(
             evidence={"codes": ["SAFE_RENDER.RECEIPT.WRITTEN"]},
         )
 
+        exit_code = 0
+        if no_outputs_issue is not None and not allow_empty_outputs:
+            print(
+                "safe-render: failing because outputs=0"
+                " (override with --allow-empty-outputs).",
+                file=sys.stderr,
+            )
+            exit_code = 1
+        elif no_outputs_issue is not None and allow_empty_outputs:
+            print(
+                "safe-render: outputs=0 allowed by --allow-empty-outputs.",
+                file=sys.stderr,
+            )
+
         print(
             f"safe-render: completed"
             f" outputs={output_count}"
@@ -1558,7 +1641,7 @@ def _run_safe_render_command(
             f" qa_warns={len(qa_issues) - qa_error_count}",
             file=sys.stderr,
         )
-        return 0
+        return exit_code
     except CancelledError as exc:
         print(f"safe-render: cancelled ({exc})", file=sys.stderr)
         return 130

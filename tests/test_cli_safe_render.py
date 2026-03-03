@@ -162,6 +162,17 @@ def _make_baseline_fixture_report() -> dict:
     }
 
 
+def _write_stub_only_plugins_dir(path: Path) -> Path:
+    renderers_dir = path / "renderers"
+    renderers_dir.mkdir(parents=True, exist_ok=True)
+    source_manifest = _PLUGINS_DIR / "renderers" / "safe_renderer.plugin.yaml"
+    renderers_dir.joinpath(source_manifest.name).write_text(
+        source_manifest.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    return path
+
+
 class TestSafeRenderDryRun(unittest.TestCase):
     """Dry-run: receipt written, no audio produced."""
 
@@ -532,6 +543,89 @@ class TestSafeRenderFullRender(unittest.TestCase):
             rec_ids = [b.get("recommendation_id") for b in blocked]
             self.assertIn("REC.TEST.HIGH.001", rec_ids)
             self.assertGreater(receipt["recommendations_summary"]["blocked"], 0)
+
+    def test_stub_renderer_only_fails_and_emits_no_outputs_issue(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            stems_dir = temp / "stems"
+            _write_16bit_wav(stems_dir / "kick.wav", amplitude=0.45)
+            report = _make_report(
+                stems_dir, "kick.wav", "kick",
+                clip_count=0, peak_dbfs=-6.0,
+                recommendations=[],
+            )
+            report_path = temp / "report.json"
+            report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+            plugins_dir = _write_stub_only_plugins_dir(temp / "plugins")
+            out_dir = temp / "renders"
+            receipt_path = temp / "receipt.json"
+            exit_code, _stdout, stderr = _run_main(
+                [
+                    "safe-render",
+                    "--report",
+                    str(report_path),
+                    "--plugins",
+                    str(plugins_dir),
+                    "--target",
+                    "stereo",
+                    "--out-dir",
+                    str(out_dir),
+                    "--receipt-out",
+                    str(receipt_path),
+                ]
+            )
+            self.assertNotEqual(exit_code, 0, msg=stderr)
+            self.assertTrue(receipt_path.exists(), "receipt should be written on no-output failure")
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            issue_ids = [
+                issue.get("issue_id")
+                for issue in receipt.get("qa_issues", [])
+                if isinstance(issue, dict)
+            ]
+            self.assertIn("ISSUE.RENDER.NO_OUTPUTS", issue_ids)
+            self.assertIn("ISSUE.RENDER.NO_OUTPUTS", stderr)
+
+    def test_allow_empty_outputs_keeps_warning_but_exits_zero(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            stems_dir = temp / "stems"
+            _write_16bit_wav(stems_dir / "kick.wav", amplitude=0.45)
+            report = _make_report(
+                stems_dir, "kick.wav", "kick",
+                clip_count=0, peak_dbfs=-6.0,
+                recommendations=[],
+            )
+            report_path = temp / "report.json"
+            report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+            plugins_dir = _write_stub_only_plugins_dir(temp / "plugins")
+            out_dir = temp / "renders"
+            receipt_path = temp / "receipt.json"
+            exit_code, _stdout, stderr = _run_main(
+                [
+                    "safe-render",
+                    "--report",
+                    str(report_path),
+                    "--plugins",
+                    str(plugins_dir),
+                    "--target",
+                    "stereo",
+                    "--out-dir",
+                    str(out_dir),
+                    "--receipt-out",
+                    str(receipt_path),
+                    "--allow-empty-outputs",
+                ]
+            )
+            self.assertEqual(exit_code, 0, msg=stderr)
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            issue_ids = [
+                issue.get("issue_id")
+                for issue in receipt.get("qa_issues", [])
+                if isinstance(issue, dict)
+            ]
+            self.assertIn("ISSUE.RENDER.NO_OUTPUTS", issue_ids)
 
 
 class TestSafeRenderBaselineMixdown(unittest.TestCase):

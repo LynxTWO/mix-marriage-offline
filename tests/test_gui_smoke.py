@@ -24,6 +24,7 @@ from mmo.gui.main import (
     build_safe_render_cli_argv,
     build_watch_cli_argv,
     has_high_risk_blocked_recommendations,
+    has_no_outputs_issue,
     main as gui_main,
     normalize_render_many_layout_ids,
     render_target_layout_map,
@@ -359,6 +360,21 @@ class TestGuiSmoke(unittest.TestCase):
             )
         )
         self.assertFalse(has_high_risk_blocked_recommendations({}))
+
+    def test_no_outputs_issue_detection_helper(self) -> None:
+        self.assertTrue(
+            has_no_outputs_issue(
+                {
+                    "qa_issues": [
+                        {
+                            "issue_id": "ISSUE.RENDER.NO_OUTPUTS",
+                            "severity": "warn",
+                        }
+                    ]
+                }
+            )
+        )
+        self.assertFalse(has_no_outputs_issue({"qa_issues": []}))
 
     def test_render_targets_registry_map_has_core_targets(self) -> None:
         target_layouts = render_target_layout_map()

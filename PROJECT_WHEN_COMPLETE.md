@@ -176,6 +176,9 @@ What remains: expand fixture corpus with dedicated 5.1/7.1 session sets and an e
   and cooperative cancellation (`--cancel-file`) for CLI/GUI runs.
 - [x] `safe-render` always produces baseline WAV outputs for supported
   2.0/5.1/7.1 layout targets, even when no recommendations are render-eligible.
+- [x] `safe-render` never reports zero-output renderer stages as success:
+  it emits `ISSUE.RENDER.NO_OUTPUTS` and exits non-zero by default unless
+  `--allow-empty-outputs` is explicitly set.
 - [x] `safe-render` supports deterministic headphone preview rendering via
   `--preview-headphones`, writing explainable binaural preview outputs that
   reference their source render artifacts.

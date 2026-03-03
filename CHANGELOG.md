@@ -82,6 +82,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Safe-render zero-output contract is now explicit and fail-safe:
+  - Added `ISSUE.RENDER.NO_OUTPUTS` emission when full safe-render renderer
+    stage writes zero outputs.
+  - Full safe-render now exits non-zero by default on `outputs=0`, with
+    explicit override via `--allow-empty-outputs`.
+  - Desktop GUI now surfaces a persistent warning banner with receipt-path
+    link behavior whenever final safe-render returns non-zero or emits
+    `ISSUE.RENDER.NO_OUTPUTS`.
+  - Added regression coverage for stub-only renderer runs to assert
+    non-zero exit and receipt issue presence.
+
 ### Added
 
 - Baseline mixdown renderer for safe-render zero-recommendation runs:

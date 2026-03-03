@@ -25,6 +25,9 @@ Non-negotiables:
 - Keep safe-render baseline mixdown deterministic: supported 2.0/5.1/7.1
   targets must still emit conservative WAV masters when recommendations are
   not render-eligible.
+- Keep safe-render zero-output behavior fail-safe: emit
+  `ISSUE.RENDER.NO_OUTPUTS` and return non-zero by default unless
+  `--allow-empty-outputs` is explicitly set.
 - Keep offline plugin marketplace discovery install-safe via bundled
   `ontology/plugin_index.yaml` and deterministic CLI/GUI listing paths.
 - Keep offline plugin hub installs deterministic and install-safe by sourcing

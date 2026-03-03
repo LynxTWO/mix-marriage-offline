@@ -961,6 +961,23 @@ issues:
       - "EVID.FILE.PATH"
 
   # -------------------------
+  # Render workflow
+  # -------------------------
+  ISSUE.RENDER.NO_OUTPUTS:
+    label: "Render produced no outputs"
+    description: "Renderer stage completed but no audio files were written."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+    suggested_actions:
+      - "ACTION.DOWNMIX.RENDER"
+    notes:
+      - "Safe-render treats this as a failed run by default unless --allow-empty-outputs is set."
+      - "Install or enable PLUGIN.RENDERER.MIXDOWN_BASELINE for baseline output coverage."
+
+  # -------------------------
   # LFE audit (per-channel content analysis)
   # -------------------------
   ISSUE.LFE.OUT_OF_BAND_HIGH:
