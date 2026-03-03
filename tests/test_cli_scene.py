@@ -364,6 +364,98 @@ class TestCliScene(unittest.TestCase):
                 scene_path_b.read_text(encoding="utf-8"),
             )
 
+    def test_scene_cli_build_from_stems_map_bus_plan_with_locks(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "scene.schema.json")
+        stems_map_path = repo_root / "tests" / "fixtures" / "scene_intent" / "tiny_stems_map.json"
+        bus_plan_path = repo_root / "tests" / "fixtures" / "scene_intent" / "tiny_bus_plan.json"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            locks_path = temp_path / "scene_locks.yaml"
+            scene_path = temp_path / "scene.locked.json"
+            locks_path.write_text(
+                "\n".join(
+                    [
+                        'version: "0.1.0"',
+                        "overrides:",
+                        "  STEMFILE.5555555555:",
+                        '    role_id: "ROLE.VOCAL.LEAD"',
+                        '    bus_id: "BUS.VOX.LEAD"',
+                        "    placement:",
+                        "      azimuth_deg: 0.0",
+                        "      width: 0.1",
+                        "    surround_send_caps:",
+                        "      side_max_gain: 0.03",
+                        "      rear_max_gain: 0.02",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            build_exit = main(
+                [
+                    "scene",
+                    "build",
+                    "--map",
+                    str(stems_map_path),
+                    "--bus",
+                    str(bus_plan_path),
+                    "--profile",
+                    "PROFILE.ASSIST",
+                    "--locks",
+                    str(locks_path),
+                    "--out",
+                    str(scene_path),
+                ]
+            )
+            self.assertEqual(build_exit, 0)
+            payload = json.loads(scene_path.read_text(encoding="utf-8"))
+            validator.validate(payload)
+
+            objects = payload.get("objects")
+            self.assertIsInstance(objects, list)
+            if not isinstance(objects, list):
+                return
+            by_stem = {
+                row.get("stem_id"): row
+                for row in objects
+                if isinstance(row, dict) and isinstance(row.get("stem_id"), str)
+            }
+            locked = by_stem["STEMFILE.5555555555"]
+            self.assertEqual(locked.get("role_id"), "ROLE.VOCAL.LEAD")
+            self.assertEqual(locked.get("group_bus"), "BUS.VOX")
+            self.assertEqual(locked.get("azimuth_hint"), 0.0)
+            self.assertEqual(locked.get("width_hint"), 0.1)
+            self.assertEqual(locked["intent"].get("position"), {"azimuth_deg": 0.0})
+            self.assertEqual(locked["intent"].get("width"), 0.1)
+            self.assertEqual(
+                locked["intent"].get("surround_send_caps"),
+                {"side_max_gain": 0.03, "rear_max_gain": 0.02},
+            )
+            self.assertTrue(locked["locks"]["azimuth_hint"])
+            self.assertTrue(locked["locks"]["width_hint"])
+
+            receipt = payload.get("metadata", {}).get("locks_receipt")
+            self.assertIsInstance(receipt, dict)
+            if not isinstance(receipt, dict):
+                return
+            receipt_rows = receipt.get("objects")
+            self.assertIsInstance(receipt_rows, list)
+            if not isinstance(receipt_rows, list):
+                return
+            row = next(
+                item
+                for item in receipt_rows
+                if isinstance(item, dict) and item.get("stem_id") == "STEMFILE.5555555555"
+            )
+            self.assertEqual(row.get("role_source"), "locked")
+            self.assertEqual(row.get("bus_source"), "locked")
+            self.assertEqual(row.get("azimuth_source"), "locked")
+            self.assertEqual(row.get("width_source"), "locked")
+            self.assertEqual(row.get("surround_send_caps_source"), "locked")
+
     def test_scene_cli_build_unknown_templates_error_is_sorted_and_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

@@ -1,20 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://mix-marriage-offline.dev/schemas/scene_locks.schema.json",
-  "title": "MMO Scene Locks Registry",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["schema_version", "locks"],
-  "properties": {
-    "schema_version": { "const": "0.1.0" },
-    "locks": {
-      "type": "object",
-      "patternProperties": {
-        "^LOCK\\.[A-Z0-9_.]+$": { "$ref": "#/$defs/scene_lock" }
-      },
-      "additionalProperties": false
-    }
-  },
+  "title": "MMO Scene Locks",
+  "oneOf": [
+    { "$ref": "#/$defs/scene_locks_registry" },
+    { "$ref": "#/$defs/scene_build_overrides" }
+  ],
   "$defs": {
     "scene_lock": {
       "type": "object",
@@ -60,6 +51,101 @@
             "type": "string",
             "minLength": 1
           }
+        }
+      }
+    },
+    "scene_locks_registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "locks"],
+      "properties": {
+        "schema_version": { "const": "0.1.0" },
+        "locks": {
+          "type": "object",
+          "patternProperties": {
+            "^LOCK\\.[A-Z0-9_.]+$": { "$ref": "#/$defs/scene_lock" }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "stem_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+$",
+      "minLength": 1
+    },
+    "role_id": {
+      "type": "string",
+      "pattern": "^ROLE\\.[A-Z0-9_.]+$"
+    },
+    "bus_id": {
+      "type": "string",
+      "pattern": "^BUS\\.[A-Z0-9_]+(?:\\.[A-Z0-9_]+)?$"
+    },
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "azimuth_deg": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "width": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "minProperties": 1
+    },
+    "surround_send_caps": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "side_max_gain": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "rear_max_gain": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "minProperties": 1
+    },
+    "stem_override": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role_id": { "$ref": "#/$defs/role_id" },
+        "bus_id": { "$ref": "#/$defs/bus_id" },
+        "placement": { "$ref": "#/$defs/placement" },
+        "surround_send_caps": { "$ref": "#/$defs/surround_send_caps" },
+        "note": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "anyOf": [
+        { "required": ["role_id"] },
+        { "required": ["bus_id"] },
+        { "required": ["placement"] },
+        { "required": ["surround_send_caps"] }
+      ]
+    },
+    "scene_build_overrides": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "overrides"],
+      "properties": {
+        "version": { "const": "0.1.0" },
+        "overrides": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/stem_id" },
+          "additionalProperties": { "$ref": "#/$defs/stem_override" }
         }
       }
     }

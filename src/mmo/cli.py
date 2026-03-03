@@ -3456,6 +3456,11 @@ def main(argv: list[str] | None = None) -> int:
         help="When used with --templates, overwrite existing intent fields (hard locks still apply).",
     )
     scene_build_parser.add_argument(
+        "--locks",
+        default=None,
+        help="Optional path to scene build locks/overrides YAML.",
+    )
+    scene_build_parser.add_argument(
         "--profile",
         default="PROFILE.ASSIST",
         help="Authority profile ID recorded in scene metadata for map+bus build mode.",
@@ -7204,6 +7209,7 @@ def main(argv: list[str] | None = None) -> int:
                         timeline_path=Path(args.timeline) if args.timeline else None,
                         template_ids=template_ids,
                         force_templates=bool(args.force_templates),
+                        locks_path=Path(args.locks) if args.locks else None,
                     )
 
                 if has_map or has_bus:
@@ -7223,6 +7229,7 @@ def main(argv: list[str] | None = None) -> int:
                         bus_plan_path=Path(args.bus),
                         out_path=Path(args.out),
                         profile_id=args.profile,
+                        locks_path=Path(args.locks) if args.locks else None,
                     )
 
                 raise ValueError(

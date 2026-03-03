@@ -229,6 +229,52 @@ class TestPlacementPolicy(unittest.TestCase):
         self.assertIn("BUS.FX.AMBIENCE", trims)
         self.assertIn("BUS.MUSIC.SYNTH", trims)
 
+    def test_surround_send_caps_and_source_receipt_notes(self) -> None:
+        scene = _load_fixture_scene()
+        for obj in scene.get("objects", []):
+            if not isinstance(obj, dict) or obj.get("stem_id") != "STEM.AMB":
+                continue
+            intent = obj.get("intent")
+            if not isinstance(intent, dict):
+                continue
+            intent["surround_send_caps"] = {
+                "side_max_gain": 0.01,
+                "rear_max_gain": 0.005,
+            }
+            break
+
+        scene["metadata"] = {
+            "locks_receipt": {
+                "version": "0.1.0",
+                "objects": [
+                    {
+                        "stem_id": "STEM.AMB",
+                        "role_source": "locked",
+                        "bus_source": "explicit_metadata",
+                        "azimuth_source": "inferred",
+                        "width_source": "locked",
+                        "surround_send_caps_source": "locked",
+                    }
+                ],
+                "unmatched_stem_ids": [],
+            }
+        }
+
+        render_intent = build_render_intent(scene, "LAYOUT.5_1")
+        self.assertIsInstance(render_intent, dict)
+        if not isinstance(render_intent, dict):
+            return
+
+        amb = _stem_by_id(render_intent)["STEM.AMB"]
+        gains = amb["gains"]
+        self.assertLessEqual(gains["SPK.LS"], 0.01)
+        self.assertLessEqual(gains["SPK.RS"], 0.01)
+        self.assertIn("surround_send_caps_present", amb["notes"])
+        self.assertIn("surround_side_send_capped_by_lock", amb["notes"])
+        self.assertIn("surround_rear_send_capped_by_lock", amb["notes"])
+        self.assertIn("role_source:locked", amb["notes"])
+        self.assertIn("width_source:locked", amb["notes"])
+
 
 if __name__ == "__main__":
     unittest.main()

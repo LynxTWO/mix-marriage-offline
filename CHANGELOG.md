@@ -97,6 +97,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Scene build lock/override contract for intent steering:
+  - Added `mmo scene build --locks <scene_locks.yaml>` support for both
+    `--report` and `--map/--bus` build paths.
+  - Added `src/mmo/core/locks.py` with deterministic override loading and
+    precedence resolution (`locks > explicit metadata > inference`) for
+    per-stem `role_id`, `bus_id`, placement (`azimuth_deg`, `width`), and
+    surround send caps.
+  - Extended `scene.schema.json` (plus packaged mirror) with
+    `intent.surround_send_caps` and `metadata.locks_receipt` so scene artifacts
+    record `locked` vs `explicit_metadata` vs `inferred` provenance.
+  - Placement policy now enforces locked surround send caps and carries lock
+    provenance markers into render-intent notes for downstream receipts.
+  - Added coverage in `tests/test_locks.py`, `tests/test_cli_scene.py`, and
+    `tests/test_placement_policy.py`.
+
 - DSP pipeline hook scaffold with strict bounded authority:
   - Added strict `schemas/plugin_manifest.json` (plus packaged mirror) for DSP
     hook plugin manifests (`schema_version`, `stage_scope`, authority,

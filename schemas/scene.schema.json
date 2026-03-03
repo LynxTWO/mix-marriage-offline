@@ -142,6 +142,15 @@
         "elevation_deg": { "type": "number" }
       }
     },
+    "surround_send_caps": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "side_max_gain": { "type": "number", "minimum": 0, "maximum": 1 },
+        "rear_max_gain": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "minProperties": 1
+    },
     "object_intent": {
       "type": "object",
       "additionalProperties": false,
@@ -150,6 +159,7 @@
         "position": { "$ref": "#/$defs/position_intent" },
         "width": { "type": "number", "minimum": 0, "maximum": 1 },
         "depth": { "type": "number", "minimum": 0, "maximum": 1 },
+        "surround_send_caps": { "$ref": "#/$defs/surround_send_caps" },
         "loudness_bias": {
           "type": "string",
           "enum": ["forward", "neutral", "back"]
@@ -258,6 +268,56 @@
         }
       }
     },
+    "locks_receipt_source": {
+      "type": "string",
+      "enum": ["locked", "explicit_metadata", "inferred"]
+    },
+    "locks_receipt_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_id",
+        "stem_id",
+        "role_source",
+        "bus_source",
+        "azimuth_source",
+        "width_source",
+        "surround_send_caps_source",
+        "azimuth_deg",
+        "width"
+      ],
+      "properties": {
+        "object_id": { "type": "string", "minLength": 1 },
+        "stem_id": { "type": "string", "minLength": 1 },
+        "role_id": { "type": "string", "pattern": "^ROLE\\.[A-Z0-9_.]+$" },
+        "group_bus": { "type": "string", "pattern": "^BUS\\.[A-Z0-9_]+$" },
+        "role_source": { "$ref": "#/$defs/locks_receipt_source" },
+        "bus_source": { "$ref": "#/$defs/locks_receipt_source" },
+        "azimuth_source": { "$ref": "#/$defs/locks_receipt_source" },
+        "width_source": { "$ref": "#/$defs/locks_receipt_source" },
+        "surround_send_caps_source": { "$ref": "#/$defs/locks_receipt_source" },
+        "azimuth_deg": { "type": ["number", "null"] },
+        "width": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "surround_send_caps": { "$ref": "#/$defs/surround_send_caps" }
+      }
+    },
+    "locks_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "objects", "unmatched_stem_ids"],
+      "properties": {
+        "version": { "const": "0.1.0" },
+        "locks_path": { "type": "string", "pattern": "^[^\\\\]+$", "minLength": 1 },
+        "objects": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/locks_receipt_row" }
+        },
+        "unmatched_stem_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "metadata": {
       "type": "object",
       "additionalProperties": false,
@@ -265,7 +325,8 @@
         "profile_id": { "type": "string", "minLength": 1 },
         "preset_id": { "type": "string", "minLength": 1 },
         "vibe": { "$ref": "#/$defs/vibe_snapshot" },
-        "metering": { "$ref": "#/$defs/scene_metering" }
+        "metering": { "$ref": "#/$defs/scene_metering" },
+        "locks_receipt": { "$ref": "#/$defs/locks_receipt" }
       }
     },
     "layout_safety_defaults": {

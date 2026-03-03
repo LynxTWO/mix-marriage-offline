@@ -86,6 +86,17 @@ def _clamp_unit(value: Any, *, default: float) -> float:
     return round(numeric, 3)
 
 
+def _clamp_optional_unit(value: Any) -> float | None:
+    numeric = _coerce_float(value)
+    if numeric is None:
+        return None
+    if numeric < 0.0:
+        return 0.0
+    if numeric > 1.0:
+        return 1.0
+    return round(numeric, 3)
+
+
 def _string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -159,6 +170,38 @@ def _object_lock_ids(obj: dict[str, Any]) -> set[str]:
         for lock_id in _string_list(intent.get("locks"))
         if lock_id.strip()
     }
+
+
+def _scene_locks_receipt_index(scene: dict[str, Any]) -> dict[str, dict[str, str]]:
+    metadata = scene.get("metadata")
+    if not isinstance(metadata, dict):
+        return {}
+    locks_receipt = metadata.get("locks_receipt")
+    if not isinstance(locks_receipt, dict):
+        return {}
+    objects = locks_receipt.get("objects")
+    if not isinstance(objects, list):
+        return {}
+
+    index: dict[str, dict[str, str]] = {}
+    for row in objects:
+        if not isinstance(row, dict):
+            continue
+        stem_id = _coerce_str(row.get("stem_id")).strip()
+        if not stem_id:
+            continue
+        index[stem_id] = {
+            key: _coerce_str(row.get(key)).strip()
+            for key in (
+                "role_source",
+                "bus_source",
+                "azimuth_source",
+                "width_source",
+                "surround_send_caps_source",
+            )
+            if _coerce_str(row.get(key)).strip()
+        }
+    return index
 
 
 def _tokenize_text(value: str) -> set[str]:
@@ -373,6 +416,7 @@ def _stem_send(
     channel_order: list[str],
     scene_locks: set[str],
     scene_intent: dict[str, Any],
+    source_receipt_row: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     stem_id = _coerce_str(obj.get("stem_id")).strip()
     role_id = _coerce_str(obj.get("role_id")).strip().upper() or _ROLE_UNKNOWN
@@ -484,6 +528,33 @@ def _stem_send(
             front_gain = min(front_gain, 0.52)
             notes.append("center_anchor_strengthened_by_lock")
 
+    surround_send_caps = intent_payload.get("surround_send_caps")
+    surround_send_caps_payload = (
+        surround_send_caps if isinstance(surround_send_caps, dict) else {}
+    )
+    side_max_gain = _clamp_optional_unit(surround_send_caps_payload.get("side_max_gain"))
+    rear_max_gain = _clamp_optional_unit(surround_send_caps_payload.get("rear_max_gain"))
+    if side_max_gain is not None or rear_max_gain is not None:
+        notes.append("surround_send_caps_present")
+    if side_max_gain is not None and side_gain > side_max_gain:
+        side_gain = side_max_gain
+        notes.append("surround_side_send_capped_by_lock")
+    if rear_max_gain is not None and rear_gain > rear_max_gain:
+        rear_gain = rear_max_gain
+        notes.append("surround_rear_send_capped_by_lock")
+
+    if isinstance(source_receipt_row, dict):
+        for key in (
+            "role_source",
+            "bus_source",
+            "azimuth_source",
+            "width_source",
+            "surround_send_caps_source",
+        ):
+            value = _coerce_str(source_receipt_row.get(key)).strip()
+            if value:
+                notes.append(f"{key}:{value}")
+
     gains = _empty_gains(channel_order)
     _set_front(gains, front_gain)
     _set_center(gains, center_gain)
@@ -580,12 +651,16 @@ def build_render_intent(
 
     scene_locks = _scene_lock_ids(scene)
     scene_intent = _scene_intent_payload(scene)
+    source_receipt_index = _scene_locks_receipt_index(scene)
     stem_sends = [
         _stem_send(
             obj=obj,
             channel_order=channel_order,
             scene_locks=scene_locks,
             scene_intent=scene_intent,
+            source_receipt_row=source_receipt_index.get(
+                _coerce_str(obj.get("stem_id")).strip()
+            ),
         )
         for obj in objects
     ]

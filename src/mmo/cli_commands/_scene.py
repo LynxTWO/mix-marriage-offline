@@ -18,6 +18,7 @@ from mmo.cli_commands._helpers import (
 )
 from mmo.core.intent_params import load_intent_params, validate_scene_intent
 from mmo.core.event_log import new_event_id, write_event_log
+from mmo.core.locks import load_and_apply_scene_build_locks
 from mmo.core.registries.render_targets_registry import load_render_targets_registry
 from mmo.core.render_plan import build_render_plan
 from mmo.core.render_plan_bridge import render_plan_to_variant_plan
@@ -183,6 +184,7 @@ def _run_scene_build_command(
     timeline_path: Path | None,
     template_ids: list[str] | None = None,
     force_templates: bool = False,
+    locks_path: Path | None = None,
 ) -> int:
     report = _load_report(report_path)
     _validate_json_payload(
@@ -204,6 +206,13 @@ def _run_scene_build_command(
         template_ids=template_ids or [],
         force=force_templates,
     )
+    if isinstance(locks_path, Path):
+        scene_payload = load_and_apply_scene_build_locks(
+            scene_payload,
+            locks_path=locks_path,
+        )
+        _validate_scene_schema(repo_root=None, scene_payload=scene_payload)
+        _validate_scene_intent_rules(repo_root=None, scene_payload=scene_payload)
     _write_json_file(out_path, scene_payload)
     return 0
 
@@ -215,6 +224,7 @@ def _run_scene_build_from_bus_plan_command(
     bus_plan_path: Path,
     out_path: Path,
     profile_id: str,
+    locks_path: Path | None = None,
 ) -> int:
     stems_map_payload = _load_json_object(stems_map_path, label="Stems map")
     _validate_json_payload(
@@ -235,6 +245,11 @@ def _run_scene_build_from_bus_plan_command(
         stems_map_ref=stems_map_path.resolve().as_posix(),
         bus_plan_ref=bus_plan_path.resolve().as_posix(),
     )
+    if isinstance(locks_path, Path):
+        scene_payload = load_and_apply_scene_build_locks(
+            scene_payload,
+            locks_path=locks_path,
+        )
     _validate_json_payload(
         scene_payload,
         schema_path=schemas_dir() / "scene.schema.json",
