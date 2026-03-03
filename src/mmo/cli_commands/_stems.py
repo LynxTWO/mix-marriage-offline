@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,8 @@ __all__ = [
     "_render_stems_map_text",
     "_build_stem_explain_payload",
     "_render_stem_explain_text",
+    "_render_bus_plan_text",
+    "_write_bus_plan_csv",
 ]
 
 
@@ -330,3 +333,59 @@ def _render_stem_explain_text(payload: dict[str, Any]) -> str:
             f"- {role_id}  score={score}  kind={kind}  bus_group={bus_label}  reasons={reason_label}"
         )
     return "\n".join(lines)
+
+
+def _render_bus_plan_text(bus_plan: dict[str, Any]) -> str:
+    buses = bus_plan.get("buses")
+    assignments = bus_plan.get("assignments")
+    summary = bus_plan.get("summary")
+
+    bus_count = len(buses) if isinstance(buses, list) else 0
+    assignment_count = len(assignments) if isinstance(assignments, list) else 0
+    role_counts = (
+        summary.get("role_counts")
+        if isinstance(summary, dict) and isinstance(summary.get("role_counts"), dict)
+        else {}
+    )
+    bus_counts = (
+        summary.get("bus_counts")
+        if isinstance(summary, dict) and isinstance(summary.get("bus_counts"), dict)
+        else {}
+    )
+
+    lines = [
+        f"schema: {bus_plan.get('schema', '')}",
+        f"generated_utc: {bus_plan.get('generated_utc', '')}",
+        f"buses: {bus_count}",
+        f"assignments: {assignment_count}",
+        f"role_counts: {len(role_counts)}",
+        f"bus_counts: {len(bus_counts)}",
+    ]
+    return "\n".join(lines)
+
+
+def _write_bus_plan_csv(csv_path: Path, bus_plan: dict[str, Any]) -> None:
+    assignments = (
+        bus_plan.get("assignments")
+        if isinstance(bus_plan.get("assignments"), list)
+        else []
+    )
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    with csv_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            ["stem_id", "file_path", "role_id", "confidence", "bus_id", "bus_path"]
+        )
+        for item in assignments:
+            if not isinstance(item, dict):
+                continue
+            writer.writerow(
+                [
+                    item.get("stem_id", ""),
+                    item.get("file_path", ""),
+                    item.get("role_id", ""),
+                    item.get("confidence", 0.0),
+                    item.get("bus_id", ""),
+                    item.get("bus_path", ""),
+                ]
+            )

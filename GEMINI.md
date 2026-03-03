@@ -27,6 +27,9 @@ Non-negotiables:
 - Keep offline plugin hub installs deterministic and install-safe by sourcing
   plugin assets from packaged data (no repo-root assumptions) and writing
   stable manifest/module outputs in one-click install flows.
+- Keep stems artifact progression deterministic: `stems_map` (role identity)
+  and `bus_plan` (bus-path identity) must preserve stable sorting and
+  schema-valid contracts across repeated runs.
 - Keep dual-LFE (x.2) export contracts explicit: preserve canonical SPK channel
   order in render/recall artifacts, use conservative WAV mask strategy, and
   surface validation guidance for toolchains that may drop `LFE2`.

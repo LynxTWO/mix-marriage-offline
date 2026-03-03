@@ -99,6 +99,7 @@ try:
     )
     from mmo.core.roles import list_roles, load_roles, resolve_role
     from mmo.core.stems_classifier import classify_stems, classify_stems_with_evidence
+    from mmo.core.bus_plan import build_bus_plan
     from mmo.core.stems_audition import render_audition_pack
     from mmo.core.stems_draft import build_draft_routing_plan, build_draft_scene
     from mmo.core.translation_profiles import (
@@ -364,6 +365,31 @@ def main(argv: list[str] | None = None) -> int:
         help="Disable built-in common role lexicon baseline.",
     )
     stems_classify_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for stdout summary.",
+    )
+    stems_bus_plan_parser = stems_subparsers.add_parser(
+        "bus-plan",
+        help="Build a deterministic bus_plan artifact from an existing stems_map JSON.",
+    )
+    stems_bus_plan_parser.add_argument(
+        "--map",
+        required=True,
+        help="Path to an existing stems_map JSON.",
+    )
+    stems_bus_plan_parser.add_argument(
+        "--out",
+        required=True,
+        help="Path to output bus_plan JSON.",
+    )
+    stems_bus_plan_parser.add_argument(
+        "--csv",
+        default=None,
+        help="Optional path to write bus_plan assignment CSV.",
+    )
+    stems_bus_plan_parser.add_argument(
         "--format",
         choices=["json", "text"],
         default="text",
@@ -4361,6 +4387,40 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(payload, indent=2, sort_keys=True))
             else:
                 print(_render_stems_map_text(payload))
+            return 0
+
+        if args.stems_command == "bus-plan":
+            roles_path = ontology / "roles.yaml"
+            try:
+                stems_map_payload = _load_stems_map(
+                    repo_root=None,
+                    map_path=Path(args.map),
+                )
+                roles_payload = load_roles(roles_path)
+                bus_plan_payload = build_bus_plan(stems_map_payload, roles_payload)
+                source_payload = bus_plan_payload.get("source")
+                if isinstance(source_payload, dict):
+                    source_payload["stems_map_ref"] = _path_ref(args.map)
+                    source_payload["roles_ref"] = "ontology/roles.yaml"
+                _validate_json_payload(
+                    bus_plan_payload,
+                    schema_path=schemas / "bus_plan.schema.json",
+                    payload_name="Bus plan",
+                )
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+
+            _write_json_file(Path(args.out), bus_plan_payload)
+            if isinstance(getattr(args, "csv", None), str) and args.csv.strip():
+                _write_bus_plan_csv(Path(args.csv), bus_plan_payload)
+
+            if args.format == "json":
+                print(json.dumps(bus_plan_payload, indent=2, sort_keys=True))
+            else:
+                print(_render_bus_plan_text(bus_plan_payload))
             return 0
 
         if args.stems_command == "explain":

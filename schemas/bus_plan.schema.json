@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/bus_plan.schema.json",
+  "title": "MMO Bus Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "generated_utc",
+    "source",
+    "buses",
+    "assignments",
+    "summary"
+  ],
+  "properties": {
+    "schema": {
+      "const": "mmo.bus_plan.v1"
+    },
+    "generated_utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "buses": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/bus"
+      }
+    },
+    "assignments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/assignment"
+      }
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    }
+  },
+  "$defs": {
+    "counts_object": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "bus_id": {
+      "type": "string",
+      "pattern": "^BUS\\.[A-Z0-9_]+(?:\\.[A-Z0-9_]+)?$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stems_map_ref",
+        "roles_ref"
+      ],
+      "properties": {
+        "stems_map_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "roles_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "bus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bus_id",
+        "label",
+        "parent_id",
+        "children_ids",
+        "stem_ids"
+      ],
+      "properties": {
+        "bus_id": {
+          "$ref": "#/$defs/bus_id"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parent_id": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/bus_id"
+            }
+          ]
+        },
+        "children_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/bus_id"
+          }
+        },
+        "stem_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^STEMFILE\\.[0-9a-f]{10}$"
+          }
+        }
+      }
+    },
+    "assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stem_id",
+        "file_path",
+        "role_id",
+        "confidence",
+        "bus_id",
+        "bus_path"
+      ],
+      "properties": {
+        "stem_id": {
+          "type": "string",
+          "pattern": "^STEMFILE\\.[0-9a-f]{10}$"
+        },
+        "file_path": {
+          "type": "string",
+          "pattern": "^[^\\\\]+$",
+          "minLength": 1
+        },
+        "role_id": {
+          "type": "string",
+          "pattern": "^ROLE\\.[A-Z0-9_.]+$"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "bus_id": {
+          "$ref": "#/$defs/bus_id"
+        },
+        "bus_path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role_counts",
+        "bus_counts"
+      ],
+      "properties": {
+        "role_counts": {
+          "$ref": "#/$defs/counts_object"
+        },
+        "bus_counts": {
+          "$ref": "#/$defs/counts_object"
+        }
+      }
+    }
+  }
+}

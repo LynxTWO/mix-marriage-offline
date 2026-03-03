@@ -163,6 +163,8 @@ What remains: expand fixture corpus with dedicated 5.1/7.1 session sets and an e
 
 ### 4.8 UX/CLI is usable for real work
 - [x] CLI can: validate, analyze, generate scene, render, and output reports.
+- [x] CLI can generate deterministic bus planning artifacts from classified stems
+  (`mmo stems bus-plan` from `stems_map.json`).
 - [x] Target selection is interchangeable across CLI/GUI flows: `TARGET.*`,
   `LAYOUT.*`, and musician shorthands (`stereo`, `5.1`, `7.1`, `7.1.4`,
   `binaural`);

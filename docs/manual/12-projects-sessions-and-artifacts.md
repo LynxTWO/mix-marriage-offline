@@ -24,6 +24,14 @@ MMO can build a scene intent file and a render plan.
 Those exist to support mix-once, render-many pipelines.
 If you are not doing advanced delivery, you can ignore them.
 
+Stems map vs bus plan.
+`stems_map.json` answers "what role is each file?"
+`bus_plan.json` answers "which deterministic bus path does each file feed?"
+Build it from an existing stems map:
+mmo stems bus-plan --map out/stems_map.json --out out/bus_plan.json --csv out/bus_plan.csv
+The bus plan is deterministic by design: stable stem ordering, stable bus-group ordering,
+and fixed consolidation rules (for example kick/snare/toms/perc/cyms under drums).
+
 Pro notes.
 Schema validation is a feature.
 If an artifact fails validation, that is MMO preventing silent drift.

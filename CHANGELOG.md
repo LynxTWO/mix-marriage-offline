@@ -84,6 +84,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Deterministic stems bus-plan artifact generator:
+  - Added `mmo stems bus-plan --map <stems_map.json> --out <bus_plan.json> [--csv <bus_plan.csv>]`
+    to build a schema-validated `mmo.bus_plan.v1` artifact from classified stems.
+  - Added `src/mmo/core/bus_plan.py` with deterministic stem ordering, fixed main-bus group
+    ordering (`DRUMS`, `BASS`, `MUSIC`, `VOX`, `FX`, `OTHER`), and drum consolidation rules
+    (`KICK`, `SNARE`, `TOMS`, `PERC`, `CYMS`).
+  - Added `schemas/bus_plan.schema.json` and packaged mirror
+    `src/mmo/data/schemas/bus_plan.schema.json`.
+  - Added end-to-end CLI coverage in `tests/test_cli_stems_bus_plan.py` validating schema
+    compliance and expected bus assignments for kick/snare/synth/SFX stems.
 - User manual source added under `docs/manual/`:
   - 15 chapters (`00-manual-overview.md` through `14-glossary.md`) covering install,
     stems prep, the four main workflows, reports, safe-render, translation QA,
