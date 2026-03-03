@@ -1,0 +1,1629 @@
+{
+  "schema_version": "0.1.0",
+  "sessions": {
+    "immersive_7_1_4_catalog": {
+      "assignments": [
+        {
+          "bus_id": "BUS.DRUMS.KICK",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.KICK",
+          "confidence": 0.333,
+          "file_path": "01_KickIn.wav",
+          "role_id": "ROLE.DRUM.KICK",
+          "stem_id": "STEMFILE.9611db9952"
+        },
+        {
+          "bus_id": "BUS.DRUMS.KICK",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.KICK",
+          "confidence": 0.333,
+          "file_path": "02_KickOut.wav",
+          "role_id": "ROLE.DRUM.KICK",
+          "stem_id": "STEMFILE.f2f00ff00e"
+        },
+        {
+          "bus_id": "BUS.DRUMS.SNARE",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.SNARE",
+          "confidence": 0.333,
+          "file_path": "03_Snare.wav",
+          "role_id": "ROLE.DRUM.SNARE",
+          "stem_id": "STEMFILE.e88dc2674b"
+        },
+        {
+          "bus_id": "BUS.DRUMS.ROOM",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.ROOM",
+          "confidence": 1.0,
+          "file_path": "04_DrumsRoom.wav",
+          "role_id": "ROLE.DRUM.ROOM",
+          "stem_id": "STEMFILE.71137a5646"
+        },
+        {
+          "bus_id": "BUS.MUSIC.ELECTRIC",
+          "bus_path": "BUS.MUSIC/BUS.MUSIC.ELECTRIC",
+          "confidence": 1.0,
+          "file_path": "10_ElecGtr5.wav",
+          "role_id": "ROLE.GTR.ELECTRIC",
+          "stem_id": "STEMFILE.43dd9da4f8"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "11_ElecGtr6DI.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.ec7c54c44a"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "12_AcousticGtr.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.29c8cd551b"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "20_BassSynth.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.dba2b8b81b"
+        },
+        {
+          "bus_id": "BUS.MUSIC.SYNTH",
+          "bus_path": "BUS.MUSIC/BUS.MUSIC.SYNTH",
+          "confidence": 0.333,
+          "file_path": "21_Synth1_Unmodulated.wav",
+          "role_id": "ROLE.SYNTH.OTHER",
+          "stem_id": "STEMFILE.35a9c26907"
+        },
+        {
+          "bus_id": "BUS.MUSIC.SYNTH",
+          "bus_path": "BUS.MUSIC/BUS.MUSIC.SYNTH",
+          "confidence": 0.333,
+          "file_path": "22_Synth2_PitchModulated.wav",
+          "role_id": "ROLE.SYNTH.OTHER",
+          "stem_id": "STEMFILE.23a3d8a363"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "23_SynthSFX2.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.4076b72368"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "24_ArpSeq1.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.e7daecc2bc"
+        },
+        {
+          "bus_id": "BUS.FX.SFX",
+          "bus_path": "BUS.FX/BUS.FX.SFX",
+          "confidence": 0.333,
+          "file_path": "30_SFX3.wav",
+          "role_id": "ROLE.SFX.HARD",
+          "stem_id": "STEMFILE.76fefb19cf"
+        },
+        {
+          "bus_id": "BUS.VOX.HARMONY",
+          "bus_path": "BUS.VOX/BUS.VOX.HARMONY",
+          "confidence": 0.833,
+          "file_path": "31_BackingVox5.wav",
+          "role_id": "ROLE.VOCAL.HARMONY",
+          "stem_id": "STEMFILE.82a81025dc"
+        },
+        {
+          "bus_id": "BUS.VOX.LEAD",
+          "bus_path": "BUS.VOX/BUS.VOX.LEAD",
+          "confidence": 0.833,
+          "file_path": "32_LeadVox.wav",
+          "role_id": "ROLE.VOCAL.LEAD",
+          "stem_id": "STEMFILE.e29d76096f"
+        }
+      ],
+      "buses": [
+        {
+          "bus_id": "BUS.DRUMS",
+          "children_ids": [
+            "BUS.DRUMS.KICK",
+            "BUS.DRUMS.ROOM",
+            "BUS.DRUMS.SNARE"
+          ],
+          "label": "Drums",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.9611db9952",
+            "STEMFILE.f2f00ff00e",
+            "STEMFILE.e88dc2674b",
+            "STEMFILE.71137a5646"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.KICK",
+          "children_ids": [],
+          "label": "Drums Kick",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.9611db9952",
+            "STEMFILE.f2f00ff00e"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.ROOM",
+          "children_ids": [],
+          "label": "Drums Room",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.71137a5646"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.SNARE",
+          "children_ids": [],
+          "label": "Drums Snare",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.e88dc2674b"
+          ]
+        },
+        {
+          "bus_id": "BUS.MUSIC",
+          "children_ids": [
+            "BUS.MUSIC.ELECTRIC",
+            "BUS.MUSIC.SYNTH"
+          ],
+          "label": "Music",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.43dd9da4f8",
+            "STEMFILE.35a9c26907",
+            "STEMFILE.23a3d8a363"
+          ]
+        },
+        {
+          "bus_id": "BUS.MUSIC.ELECTRIC",
+          "children_ids": [],
+          "label": "Music Electric",
+          "parent_id": "BUS.MUSIC",
+          "stem_ids": [
+            "STEMFILE.43dd9da4f8"
+          ]
+        },
+        {
+          "bus_id": "BUS.MUSIC.SYNTH",
+          "children_ids": [],
+          "label": "Music Synth",
+          "parent_id": "BUS.MUSIC",
+          "stem_ids": [
+            "STEMFILE.35a9c26907",
+            "STEMFILE.23a3d8a363"
+          ]
+        },
+        {
+          "bus_id": "BUS.VOX",
+          "children_ids": [
+            "BUS.VOX.HARMONY",
+            "BUS.VOX.LEAD"
+          ],
+          "label": "Vox",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.82a81025dc",
+            "STEMFILE.e29d76096f"
+          ]
+        },
+        {
+          "bus_id": "BUS.VOX.HARMONY",
+          "children_ids": [],
+          "label": "Vox Harmony",
+          "parent_id": "BUS.VOX",
+          "stem_ids": [
+            "STEMFILE.82a81025dc"
+          ]
+        },
+        {
+          "bus_id": "BUS.VOX.LEAD",
+          "children_ids": [],
+          "label": "Vox Lead",
+          "parent_id": "BUS.VOX",
+          "stem_ids": [
+            "STEMFILE.e29d76096f"
+          ]
+        },
+        {
+          "bus_id": "BUS.FX",
+          "children_ids": [
+            "BUS.FX.SFX"
+          ],
+          "label": "Fx",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.76fefb19cf"
+          ]
+        },
+        {
+          "bus_id": "BUS.FX.SFX",
+          "children_ids": [],
+          "label": "Fx Sfx",
+          "parent_id": "BUS.FX",
+          "stem_ids": [
+            "STEMFILE.76fefb19cf"
+          ]
+        },
+        {
+          "bus_id": "BUS.OTHER",
+          "children_ids": [
+            "BUS.OTHER.UNKNOWN"
+          ],
+          "label": "Other",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.ec7c54c44a",
+            "STEMFILE.29c8cd551b",
+            "STEMFILE.dba2b8b81b",
+            "STEMFILE.4076b72368",
+            "STEMFILE.e7daecc2bc"
+          ]
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "children_ids": [],
+          "label": "Other Unknown",
+          "parent_id": "BUS.OTHER",
+          "stem_ids": [
+            "STEMFILE.ec7c54c44a",
+            "STEMFILE.29c8cd551b",
+            "STEMFILE.dba2b8b81b",
+            "STEMFILE.4076b72368",
+            "STEMFILE.e7daecc2bc"
+          ]
+        }
+      ],
+      "generated_utc": "1970-01-01T00:00:00Z",
+      "schema": "mmo.bus_plan.v1",
+      "source": {
+        "roles_ref": "ontology/roles.yaml",
+        "stems_map_ref": "fixtures/stems_small/immersive_7_1_4_catalog/stems_map.json"
+      },
+      "summary": {
+        "bus_counts": {
+          "BUS.DRUMS.KICK": 2,
+          "BUS.DRUMS.ROOM": 1,
+          "BUS.DRUMS.SNARE": 1,
+          "BUS.FX.SFX": 1,
+          "BUS.MUSIC.ELECTRIC": 1,
+          "BUS.MUSIC.SYNTH": 2,
+          "BUS.OTHER.UNKNOWN": 5,
+          "BUS.VOX.HARMONY": 1,
+          "BUS.VOX.LEAD": 1
+        },
+        "role_counts": {
+          "ROLE.DRUM.KICK": 2,
+          "ROLE.DRUM.ROOM": 1,
+          "ROLE.DRUM.SNARE": 1,
+          "ROLE.GTR.ELECTRIC": 1,
+          "ROLE.OTHER.UNKNOWN": 5,
+          "ROLE.SFX.HARD": 1,
+          "ROLE.SYNTH.OTHER": 2,
+          "ROLE.VOCAL.HARMONY": 1,
+          "ROLE.VOCAL.LEAD": 1
+        }
+      }
+    },
+    "immersive_9_1_6_catalog": {
+      "assignments": [
+        {
+          "bus_id": "BUS.DRUMS.KICK",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.KICK",
+          "confidence": 0.333,
+          "file_path": "01_Kick.wav",
+          "role_id": "ROLE.DRUM.KICK",
+          "stem_id": "STEMFILE.380625e2c1"
+        },
+        {
+          "bus_id": "BUS.DRUMS.SNARE",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.SNARE",
+          "confidence": 0.333,
+          "file_path": "02_SnareUp.wav",
+          "role_id": "ROLE.DRUM.SNARE",
+          "stem_id": "STEMFILE.0360a1d0de"
+        },
+        {
+          "bus_id": "BUS.DRUMS.SNARE",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.SNARE",
+          "confidence": 0.333,
+          "file_path": "03_SnareDown.wav",
+          "role_id": "ROLE.DRUM.SNARE",
+          "stem_id": "STEMFILE.51662a0f7c"
+        },
+        {
+          "bus_id": "BUS.DRUMS.TOMS",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.TOMS",
+          "confidence": 0.333,
+          "file_path": "04_Tom3.wav",
+          "role_id": "ROLE.DRUM.TOMS",
+          "stem_id": "STEMFILE.6baa4e1bec"
+        },
+        {
+          "bus_id": "BUS.DRUMS.CYMS",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.CYMS",
+          "confidence": 0.333,
+          "file_path": "05_Overheads.wav",
+          "role_id": "ROLE.DRUM.OVERHEADS",
+          "stem_id": "STEMFILE.088e7caa1e"
+        },
+        {
+          "bus_id": "BUS.DRUMS.ROOM",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.ROOM",
+          "confidence": 1.0,
+          "file_path": "06_DrumsRoom.wav",
+          "role_id": "ROLE.DRUM.ROOM",
+          "stem_id": "STEMFILE.92e165dec4"
+        },
+        {
+          "bus_id": "BUS.MUSIC.ELECTRIC",
+          "bus_path": "BUS.MUSIC/BUS.MUSIC.ELECTRIC",
+          "confidence": 1.0,
+          "file_path": "10_ElecGtr7.wav",
+          "role_id": "ROLE.GTR.ELECTRIC",
+          "stem_id": "STEMFILE.cba1d647d0"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "11_ElecGtr8DI.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.ed3837a954"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "12_ElecGtr8DTDI.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.797e9aa85e"
+        },
+        {
+          "bus_id": "BUS.BASS.DI",
+          "bus_path": "BUS.BASS/BUS.BASS.DI",
+          "confidence": 0.833,
+          "file_path": "20_BassDI.wav",
+          "role_id": "ROLE.BASS.DI",
+          "stem_id": "STEMFILE.0cac6ea4d2"
+        },
+        {
+          "bus_id": "BUS.BASS.AMP",
+          "bus_path": "BUS.BASS/BUS.BASS.AMP",
+          "confidence": 0.333,
+          "file_path": "21_BassAmp.wav",
+          "role_id": "ROLE.BASS.AMP",
+          "stem_id": "STEMFILE.d723e2dd48"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "22_BassSynth.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.23a21861cb"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "30_SynthBells.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.68dce3a805"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "31_SynthFX3.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.7f20da6cdf"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "32_SynthLead2.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.57137145cf"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "40_VocalSFX2.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.6f245fdc9b"
+        },
+        {
+          "bus_id": "BUS.VOX.HARMONY",
+          "bus_path": "BUS.VOX/BUS.VOX.HARMONY",
+          "confidence": 0.833,
+          "file_path": "41_BackingVox6.wav",
+          "role_id": "ROLE.VOCAL.HARMONY",
+          "stem_id": "STEMFILE.b656c9b4af"
+        },
+        {
+          "bus_id": "BUS.VOX.LEAD",
+          "bus_path": "BUS.VOX/BUS.VOX.LEAD",
+          "confidence": 0.833,
+          "file_path": "42_LeadVox.wav",
+          "role_id": "ROLE.VOCAL.LEAD",
+          "stem_id": "STEMFILE.6f5833e0d6"
+        },
+        {
+          "bus_id": "BUS.FX.SFX",
+          "bus_path": "BUS.FX/BUS.FX.SFX",
+          "confidence": 0.333,
+          "file_path": "43_SFX4.wav",
+          "role_id": "ROLE.SFX.HARD",
+          "stem_id": "STEMFILE.646b83cbdf"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "44_PianoSFX.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.9d46229243"
+        }
+      ],
+      "buses": [
+        {
+          "bus_id": "BUS.DRUMS",
+          "children_ids": [
+            "BUS.DRUMS.CYMS",
+            "BUS.DRUMS.KICK",
+            "BUS.DRUMS.ROOM",
+            "BUS.DRUMS.SNARE",
+            "BUS.DRUMS.TOMS"
+          ],
+          "label": "Drums",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.380625e2c1",
+            "STEMFILE.0360a1d0de",
+            "STEMFILE.51662a0f7c",
+            "STEMFILE.6baa4e1bec",
+            "STEMFILE.088e7caa1e",
+            "STEMFILE.92e165dec4"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.CYMS",
+          "children_ids": [],
+          "label": "Drums Cyms",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.088e7caa1e"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.KICK",
+          "children_ids": [],
+          "label": "Drums Kick",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.380625e2c1"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.ROOM",
+          "children_ids": [],
+          "label": "Drums Room",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.92e165dec4"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.SNARE",
+          "children_ids": [],
+          "label": "Drums Snare",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.0360a1d0de",
+            "STEMFILE.51662a0f7c"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.TOMS",
+          "children_ids": [],
+          "label": "Drums Toms",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.6baa4e1bec"
+          ]
+        },
+        {
+          "bus_id": "BUS.BASS",
+          "children_ids": [
+            "BUS.BASS.AMP",
+            "BUS.BASS.DI"
+          ],
+          "label": "Bass",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.0cac6ea4d2",
+            "STEMFILE.d723e2dd48"
+          ]
+        },
+        {
+          "bus_id": "BUS.BASS.AMP",
+          "children_ids": [],
+          "label": "Bass Amp",
+          "parent_id": "BUS.BASS",
+          "stem_ids": [
+            "STEMFILE.d723e2dd48"
+          ]
+        },
+        {
+          "bus_id": "BUS.BASS.DI",
+          "children_ids": [],
+          "label": "Bass Di",
+          "parent_id": "BUS.BASS",
+          "stem_ids": [
+            "STEMFILE.0cac6ea4d2"
+          ]
+        },
+        {
+          "bus_id": "BUS.MUSIC",
+          "children_ids": [
+            "BUS.MUSIC.ELECTRIC"
+          ],
+          "label": "Music",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.cba1d647d0"
+          ]
+        },
+        {
+          "bus_id": "BUS.MUSIC.ELECTRIC",
+          "children_ids": [],
+          "label": "Music Electric",
+          "parent_id": "BUS.MUSIC",
+          "stem_ids": [
+            "STEMFILE.cba1d647d0"
+          ]
+        },
+        {
+          "bus_id": "BUS.VOX",
+          "children_ids": [
+            "BUS.VOX.HARMONY",
+            "BUS.VOX.LEAD"
+          ],
+          "label": "Vox",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.b656c9b4af",
+            "STEMFILE.6f5833e0d6"
+          ]
+        },
+        {
+          "bus_id": "BUS.VOX.HARMONY",
+          "children_ids": [],
+          "label": "Vox Harmony",
+          "parent_id": "BUS.VOX",
+          "stem_ids": [
+            "STEMFILE.b656c9b4af"
+          ]
+        },
+        {
+          "bus_id": "BUS.VOX.LEAD",
+          "children_ids": [],
+          "label": "Vox Lead",
+          "parent_id": "BUS.VOX",
+          "stem_ids": [
+            "STEMFILE.6f5833e0d6"
+          ]
+        },
+        {
+          "bus_id": "BUS.FX",
+          "children_ids": [
+            "BUS.FX.SFX"
+          ],
+          "label": "Fx",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.646b83cbdf"
+          ]
+        },
+        {
+          "bus_id": "BUS.FX.SFX",
+          "children_ids": [],
+          "label": "Fx Sfx",
+          "parent_id": "BUS.FX",
+          "stem_ids": [
+            "STEMFILE.646b83cbdf"
+          ]
+        },
+        {
+          "bus_id": "BUS.OTHER",
+          "children_ids": [
+            "BUS.OTHER.UNKNOWN"
+          ],
+          "label": "Other",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.ed3837a954",
+            "STEMFILE.797e9aa85e",
+            "STEMFILE.23a21861cb",
+            "STEMFILE.68dce3a805",
+            "STEMFILE.7f20da6cdf",
+            "STEMFILE.57137145cf",
+            "STEMFILE.6f245fdc9b",
+            "STEMFILE.9d46229243"
+          ]
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "children_ids": [],
+          "label": "Other Unknown",
+          "parent_id": "BUS.OTHER",
+          "stem_ids": [
+            "STEMFILE.ed3837a954",
+            "STEMFILE.797e9aa85e",
+            "STEMFILE.23a21861cb",
+            "STEMFILE.68dce3a805",
+            "STEMFILE.7f20da6cdf",
+            "STEMFILE.57137145cf",
+            "STEMFILE.6f245fdc9b",
+            "STEMFILE.9d46229243"
+          ]
+        }
+      ],
+      "generated_utc": "1970-01-01T00:00:00Z",
+      "schema": "mmo.bus_plan.v1",
+      "source": {
+        "roles_ref": "ontology/roles.yaml",
+        "stems_map_ref": "fixtures/stems_small/immersive_9_1_6_catalog/stems_map.json"
+      },
+      "summary": {
+        "bus_counts": {
+          "BUS.BASS.AMP": 1,
+          "BUS.BASS.DI": 1,
+          "BUS.DRUMS.CYMS": 1,
+          "BUS.DRUMS.KICK": 1,
+          "BUS.DRUMS.ROOM": 1,
+          "BUS.DRUMS.SNARE": 2,
+          "BUS.DRUMS.TOMS": 1,
+          "BUS.FX.SFX": 1,
+          "BUS.MUSIC.ELECTRIC": 1,
+          "BUS.OTHER.UNKNOWN": 8,
+          "BUS.VOX.HARMONY": 1,
+          "BUS.VOX.LEAD": 1
+        },
+        "role_counts": {
+          "ROLE.BASS.AMP": 1,
+          "ROLE.BASS.DI": 1,
+          "ROLE.DRUM.KICK": 1,
+          "ROLE.DRUM.OVERHEADS": 1,
+          "ROLE.DRUM.ROOM": 1,
+          "ROLE.DRUM.SNARE": 2,
+          "ROLE.DRUM.TOMS": 1,
+          "ROLE.GTR.ELECTRIC": 1,
+          "ROLE.OTHER.UNKNOWN": 8,
+          "ROLE.SFX.HARD": 1,
+          "ROLE.VOCAL.HARMONY": 1,
+          "ROLE.VOCAL.LEAD": 1
+        }
+      }
+    },
+    "stereo_catalog": {
+      "assignments": [
+        {
+          "bus_id": "BUS.DRUMS.KICK",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.KICK",
+          "confidence": 0.333,
+          "file_path": "01_KickIn.wav",
+          "role_id": "ROLE.DRUM.KICK",
+          "stem_id": "STEMFILE.9611db9952"
+        },
+        {
+          "bus_id": "BUS.DRUMS.SNARE",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.SNARE",
+          "confidence": 0.333,
+          "file_path": "02_SnareUp.wav",
+          "role_id": "ROLE.DRUM.SNARE",
+          "stem_id": "STEMFILE.0360a1d0de"
+        },
+        {
+          "bus_id": "BUS.BASS.DI",
+          "bus_path": "BUS.BASS/BUS.BASS.DI",
+          "confidence": 0.833,
+          "file_path": "03_BassDI.wav",
+          "role_id": "ROLE.BASS.DI",
+          "stem_id": "STEMFILE.3d3356e050"
+        },
+        {
+          "bus_id": "BUS.MUSIC.ELECTRIC",
+          "bus_path": "BUS.MUSIC/BUS.MUSIC.ELECTRIC",
+          "confidence": 1.0,
+          "file_path": "10_ElecGtr1.wav",
+          "role_id": "ROLE.GTR.ELECTRIC",
+          "stem_id": "STEMFILE.df1cb4ee21"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "11_ElecGtr2DI.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.bf572c7d3c"
+        },
+        {
+          "bus_id": "BUS.VOX.HARMONY",
+          "bus_path": "BUS.VOX/BUS.VOX.HARMONY",
+          "confidence": 0.833,
+          "file_path": "20_BackingVox1.wav",
+          "role_id": "ROLE.VOCAL.HARMONY",
+          "stem_id": "STEMFILE.696255c043"
+        },
+        {
+          "bus_id": "BUS.VOX.HARMONY",
+          "bus_path": "BUS.VOX/BUS.VOX.HARMONY",
+          "confidence": 0.833,
+          "file_path": "21_BackingVox2.wav",
+          "role_id": "ROLE.VOCAL.HARMONY",
+          "stem_id": "STEMFILE.f47f058031"
+        },
+        {
+          "bus_id": "BUS.MUSIC.SYNTH",
+          "bus_path": "BUS.MUSIC/BUS.MUSIC.SYNTH",
+          "confidence": 0.333,
+          "file_path": "30_Synth1.wav",
+          "role_id": "ROLE.SYNTH.OTHER",
+          "stem_id": "STEMFILE.c22ffb12a1"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "31_SynthSFX1.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.9c140a0dee"
+        },
+        {
+          "bus_id": "BUS.VOX.LEAD",
+          "bus_path": "BUS.VOX/BUS.VOX.LEAD",
+          "confidence": 0.833,
+          "file_path": "40_LeadVox.wav",
+          "role_id": "ROLE.VOCAL.LEAD",
+          "stem_id": "STEMFILE.40d300689f"
+        },
+        {
+          "bus_id": "BUS.FX.SFX",
+          "bus_path": "BUS.FX/BUS.FX.SFX",
+          "confidence": 0.333,
+          "file_path": "41_SFX1.wav",
+          "role_id": "ROLE.SFX.HARD",
+          "stem_id": "STEMFILE.963582a009"
+        }
+      ],
+      "buses": [
+        {
+          "bus_id": "BUS.DRUMS",
+          "children_ids": [
+            "BUS.DRUMS.KICK",
+            "BUS.DRUMS.SNARE"
+          ],
+          "label": "Drums",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.9611db9952",
+            "STEMFILE.0360a1d0de"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.KICK",
+          "children_ids": [],
+          "label": "Drums Kick",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.9611db9952"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.SNARE",
+          "children_ids": [],
+          "label": "Drums Snare",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.0360a1d0de"
+          ]
+        },
+        {
+          "bus_id": "BUS.BASS",
+          "children_ids": [
+            "BUS.BASS.DI"
+          ],
+          "label": "Bass",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.3d3356e050"
+          ]
+        },
+        {
+          "bus_id": "BUS.BASS.DI",
+          "children_ids": [],
+          "label": "Bass Di",
+          "parent_id": "BUS.BASS",
+          "stem_ids": [
+            "STEMFILE.3d3356e050"
+          ]
+        },
+        {
+          "bus_id": "BUS.MUSIC",
+          "children_ids": [
+            "BUS.MUSIC.ELECTRIC",
+            "BUS.MUSIC.SYNTH"
+          ],
+          "label": "Music",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.df1cb4ee21",
+            "STEMFILE.c22ffb12a1"
+          ]
+        },
+        {
+          "bus_id": "BUS.MUSIC.ELECTRIC",
+          "children_ids": [],
+          "label": "Music Electric",
+          "parent_id": "BUS.MUSIC",
+          "stem_ids": [
+            "STEMFILE.df1cb4ee21"
+          ]
+        },
+        {
+          "bus_id": "BUS.MUSIC.SYNTH",
+          "children_ids": [],
+          "label": "Music Synth",
+          "parent_id": "BUS.MUSIC",
+          "stem_ids": [
+            "STEMFILE.c22ffb12a1"
+          ]
+        },
+        {
+          "bus_id": "BUS.VOX",
+          "children_ids": [
+            "BUS.VOX.HARMONY",
+            "BUS.VOX.LEAD"
+          ],
+          "label": "Vox",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.696255c043",
+            "STEMFILE.f47f058031",
+            "STEMFILE.40d300689f"
+          ]
+        },
+        {
+          "bus_id": "BUS.VOX.HARMONY",
+          "children_ids": [],
+          "label": "Vox Harmony",
+          "parent_id": "BUS.VOX",
+          "stem_ids": [
+            "STEMFILE.696255c043",
+            "STEMFILE.f47f058031"
+          ]
+        },
+        {
+          "bus_id": "BUS.VOX.LEAD",
+          "children_ids": [],
+          "label": "Vox Lead",
+          "parent_id": "BUS.VOX",
+          "stem_ids": [
+            "STEMFILE.40d300689f"
+          ]
+        },
+        {
+          "bus_id": "BUS.FX",
+          "children_ids": [
+            "BUS.FX.SFX"
+          ],
+          "label": "Fx",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.963582a009"
+          ]
+        },
+        {
+          "bus_id": "BUS.FX.SFX",
+          "children_ids": [],
+          "label": "Fx Sfx",
+          "parent_id": "BUS.FX",
+          "stem_ids": [
+            "STEMFILE.963582a009"
+          ]
+        },
+        {
+          "bus_id": "BUS.OTHER",
+          "children_ids": [
+            "BUS.OTHER.UNKNOWN"
+          ],
+          "label": "Other",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.bf572c7d3c",
+            "STEMFILE.9c140a0dee"
+          ]
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "children_ids": [],
+          "label": "Other Unknown",
+          "parent_id": "BUS.OTHER",
+          "stem_ids": [
+            "STEMFILE.bf572c7d3c",
+            "STEMFILE.9c140a0dee"
+          ]
+        }
+      ],
+      "generated_utc": "1970-01-01T00:00:00Z",
+      "schema": "mmo.bus_plan.v1",
+      "source": {
+        "roles_ref": "ontology/roles.yaml",
+        "stems_map_ref": "fixtures/stems_small/stereo_catalog/stems_map.json"
+      },
+      "summary": {
+        "bus_counts": {
+          "BUS.BASS.DI": 1,
+          "BUS.DRUMS.KICK": 1,
+          "BUS.DRUMS.SNARE": 1,
+          "BUS.FX.SFX": 1,
+          "BUS.MUSIC.ELECTRIC": 1,
+          "BUS.MUSIC.SYNTH": 1,
+          "BUS.OTHER.UNKNOWN": 2,
+          "BUS.VOX.HARMONY": 2,
+          "BUS.VOX.LEAD": 1
+        },
+        "role_counts": {
+          "ROLE.BASS.DI": 1,
+          "ROLE.DRUM.KICK": 1,
+          "ROLE.DRUM.SNARE": 1,
+          "ROLE.GTR.ELECTRIC": 1,
+          "ROLE.OTHER.UNKNOWN": 2,
+          "ROLE.SFX.HARD": 1,
+          "ROLE.SYNTH.OTHER": 1,
+          "ROLE.VOCAL.HARMONY": 2,
+          "ROLE.VOCAL.LEAD": 1
+        }
+      }
+    },
+    "surround_5_1_catalog": {
+      "assignments": [
+        {
+          "bus_id": "BUS.DRUMS.KICK",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.KICK",
+          "confidence": 0.333,
+          "file_path": "01_KickOut.wav",
+          "role_id": "ROLE.DRUM.KICK",
+          "stem_id": "STEMFILE.42d0725602"
+        },
+        {
+          "bus_id": "BUS.DRUMS.SNARE",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.SNARE",
+          "confidence": 0.333,
+          "file_path": "02_SnareDown.wav",
+          "role_id": "ROLE.DRUM.SNARE",
+          "stem_id": "STEMFILE.2208c1167a"
+        },
+        {
+          "bus_id": "BUS.DRUMS.PERC",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.PERC",
+          "confidence": 0.333,
+          "file_path": "03_HiHat.wav",
+          "role_id": "ROLE.DRUM.HIHAT",
+          "stem_id": "STEMFILE.ed50c20cc9"
+        },
+        {
+          "bus_id": "BUS.DRUMS.TOMS",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.TOMS",
+          "confidence": 0.333,
+          "file_path": "04_Tom1.wav",
+          "role_id": "ROLE.DRUM.TOMS",
+          "stem_id": "STEMFILE.6cf91537c1"
+        },
+        {
+          "bus_id": "BUS.DRUMS.CYMS",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.CYMS",
+          "confidence": 0.333,
+          "file_path": "05_Overheads.wav",
+          "role_id": "ROLE.DRUM.OVERHEADS",
+          "stem_id": "STEMFILE.088e7caa1e"
+        },
+        {
+          "bus_id": "BUS.DRUMS.ROOM",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.ROOM",
+          "confidence": 1.0,
+          "file_path": "10_DrumsRoom.wav",
+          "role_id": "ROLE.DRUM.ROOM",
+          "stem_id": "STEMFILE.bbc8967097"
+        },
+        {
+          "bus_id": "BUS.BASS.AMP",
+          "bus_path": "BUS.BASS/BUS.BASS.AMP",
+          "confidence": 0.333,
+          "file_path": "11_BassAmp.wav",
+          "role_id": "ROLE.BASS.AMP",
+          "stem_id": "STEMFILE.bb76654ab4"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "20_AcousticGtr1.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.b4a1c6f6af"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "21_AcousticGtr2.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.7defb06d63"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "30_SynthPad1.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.60f193a189"
+        },
+        {
+          "bus_id": "BUS.FX.SFX",
+          "bus_path": "BUS.FX/BUS.FX.SFX",
+          "confidence": 0.333,
+          "file_path": "31_SFX2.wav",
+          "role_id": "ROLE.SFX.HARD",
+          "stem_id": "STEMFILE.5442acfcbb"
+        },
+        {
+          "bus_id": "BUS.VOX.HARMONY",
+          "bus_path": "BUS.VOX/BUS.VOX.HARMONY",
+          "confidence": 0.833,
+          "file_path": "40_BackingVox3.wav",
+          "role_id": "ROLE.VOCAL.HARMONY",
+          "stem_id": "STEMFILE.ec464973a9"
+        },
+        {
+          "bus_id": "BUS.VOX.LEAD",
+          "bus_path": "BUS.VOX/BUS.VOX.LEAD",
+          "confidence": 0.833,
+          "file_path": "41_LeadVox.wav",
+          "role_id": "ROLE.VOCAL.LEAD",
+          "stem_id": "STEMFILE.78156fe85f"
+        }
+      ],
+      "buses": [
+        {
+          "bus_id": "BUS.DRUMS",
+          "children_ids": [
+            "BUS.DRUMS.CYMS",
+            "BUS.DRUMS.KICK",
+            "BUS.DRUMS.PERC",
+            "BUS.DRUMS.ROOM",
+            "BUS.DRUMS.SNARE",
+            "BUS.DRUMS.TOMS"
+          ],
+          "label": "Drums",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.42d0725602",
+            "STEMFILE.2208c1167a",
+            "STEMFILE.ed50c20cc9",
+            "STEMFILE.6cf91537c1",
+            "STEMFILE.088e7caa1e",
+            "STEMFILE.bbc8967097"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.CYMS",
+          "children_ids": [],
+          "label": "Drums Cyms",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.088e7caa1e"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.KICK",
+          "children_ids": [],
+          "label": "Drums Kick",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.42d0725602"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.PERC",
+          "children_ids": [],
+          "label": "Drums Perc",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.ed50c20cc9"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.ROOM",
+          "children_ids": [],
+          "label": "Drums Room",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.bbc8967097"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.SNARE",
+          "children_ids": [],
+          "label": "Drums Snare",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.2208c1167a"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.TOMS",
+          "children_ids": [],
+          "label": "Drums Toms",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.6cf91537c1"
+          ]
+        },
+        {
+          "bus_id": "BUS.BASS",
+          "children_ids": [
+            "BUS.BASS.AMP"
+          ],
+          "label": "Bass",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.bb76654ab4"
+          ]
+        },
+        {
+          "bus_id": "BUS.BASS.AMP",
+          "children_ids": [],
+          "label": "Bass Amp",
+          "parent_id": "BUS.BASS",
+          "stem_ids": [
+            "STEMFILE.bb76654ab4"
+          ]
+        },
+        {
+          "bus_id": "BUS.VOX",
+          "children_ids": [
+            "BUS.VOX.HARMONY",
+            "BUS.VOX.LEAD"
+          ],
+          "label": "Vox",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.ec464973a9",
+            "STEMFILE.78156fe85f"
+          ]
+        },
+        {
+          "bus_id": "BUS.VOX.HARMONY",
+          "children_ids": [],
+          "label": "Vox Harmony",
+          "parent_id": "BUS.VOX",
+          "stem_ids": [
+            "STEMFILE.ec464973a9"
+          ]
+        },
+        {
+          "bus_id": "BUS.VOX.LEAD",
+          "children_ids": [],
+          "label": "Vox Lead",
+          "parent_id": "BUS.VOX",
+          "stem_ids": [
+            "STEMFILE.78156fe85f"
+          ]
+        },
+        {
+          "bus_id": "BUS.FX",
+          "children_ids": [
+            "BUS.FX.SFX"
+          ],
+          "label": "Fx",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.5442acfcbb"
+          ]
+        },
+        {
+          "bus_id": "BUS.FX.SFX",
+          "children_ids": [],
+          "label": "Fx Sfx",
+          "parent_id": "BUS.FX",
+          "stem_ids": [
+            "STEMFILE.5442acfcbb"
+          ]
+        },
+        {
+          "bus_id": "BUS.OTHER",
+          "children_ids": [
+            "BUS.OTHER.UNKNOWN"
+          ],
+          "label": "Other",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.b4a1c6f6af",
+            "STEMFILE.7defb06d63",
+            "STEMFILE.60f193a189"
+          ]
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "children_ids": [],
+          "label": "Other Unknown",
+          "parent_id": "BUS.OTHER",
+          "stem_ids": [
+            "STEMFILE.b4a1c6f6af",
+            "STEMFILE.7defb06d63",
+            "STEMFILE.60f193a189"
+          ]
+        }
+      ],
+      "generated_utc": "1970-01-01T00:00:00Z",
+      "schema": "mmo.bus_plan.v1",
+      "source": {
+        "roles_ref": "ontology/roles.yaml",
+        "stems_map_ref": "fixtures/stems_small/surround_5_1_catalog/stems_map.json"
+      },
+      "summary": {
+        "bus_counts": {
+          "BUS.BASS.AMP": 1,
+          "BUS.DRUMS.CYMS": 1,
+          "BUS.DRUMS.KICK": 1,
+          "BUS.DRUMS.PERC": 1,
+          "BUS.DRUMS.ROOM": 1,
+          "BUS.DRUMS.SNARE": 1,
+          "BUS.DRUMS.TOMS": 1,
+          "BUS.FX.SFX": 1,
+          "BUS.OTHER.UNKNOWN": 3,
+          "BUS.VOX.HARMONY": 1,
+          "BUS.VOX.LEAD": 1
+        },
+        "role_counts": {
+          "ROLE.BASS.AMP": 1,
+          "ROLE.DRUM.HIHAT": 1,
+          "ROLE.DRUM.KICK": 1,
+          "ROLE.DRUM.OVERHEADS": 1,
+          "ROLE.DRUM.ROOM": 1,
+          "ROLE.DRUM.SNARE": 1,
+          "ROLE.DRUM.TOMS": 1,
+          "ROLE.OTHER.UNKNOWN": 3,
+          "ROLE.SFX.HARD": 1,
+          "ROLE.VOCAL.HARMONY": 1,
+          "ROLE.VOCAL.LEAD": 1
+        }
+      }
+    },
+    "surround_7_1_catalog": {
+      "assignments": [
+        {
+          "bus_id": "BUS.DRUMS.KICK",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.KICK",
+          "confidence": 0.333,
+          "file_path": "01_Kick.wav",
+          "role_id": "ROLE.DRUM.KICK",
+          "stem_id": "STEMFILE.380625e2c1"
+        },
+        {
+          "bus_id": "BUS.DRUMS.SNARE",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.SNARE",
+          "confidence": 0.333,
+          "file_path": "02_SnareTop.wav",
+          "role_id": "ROLE.DRUM.SNARE",
+          "stem_id": "STEMFILE.9805cae54b"
+        },
+        {
+          "bus_id": "BUS.DRUMS.TOMS",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.TOMS",
+          "confidence": 0.333,
+          "file_path": "03_Tom2.wav",
+          "role_id": "ROLE.DRUM.TOMS",
+          "stem_id": "STEMFILE.14402d74af"
+        },
+        {
+          "bus_id": "BUS.DRUMS.PERC",
+          "bus_path": "BUS.DRUMS/BUS.DRUMS.PERC",
+          "confidence": 0.333,
+          "file_path": "04_Percussion.wav",
+          "role_id": "ROLE.DRUM.PERCUSSION",
+          "stem_id": "STEMFILE.72062322a3"
+        },
+        {
+          "bus_id": "BUS.MUSIC.ELECTRIC",
+          "bus_path": "BUS.MUSIC/BUS.MUSIC.ELECTRIC",
+          "confidence": 1.0,
+          "file_path": "10_ElecGtr3.wav",
+          "role_id": "ROLE.GTR.ELECTRIC",
+          "stem_id": "STEMFILE.5dd66e1fe4"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "11_ElecGtr4DT.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.eb9b14308b"
+        },
+        {
+          "bus_id": "BUS.BASS.DI",
+          "bus_path": "BUS.BASS/BUS.BASS.DI",
+          "confidence": 0.833,
+          "file_path": "12_BassDI.wav",
+          "role_id": "ROLE.BASS.DI",
+          "stem_id": "STEMFILE.f609b288e8"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "20_SynthArp1.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.0a6c1fae7c"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "21_SynthLead1.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.9331dc5309"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "22_SynthFX1.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.c6241a8ea3"
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+          "confidence": 0.0,
+          "file_path": "30_VocalSFX1.wav",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "STEMFILE.65f5dbd24f"
+        },
+        {
+          "bus_id": "BUS.VOX.HARMONY",
+          "bus_path": "BUS.VOX/BUS.VOX.HARMONY",
+          "confidence": 0.833,
+          "file_path": "31_BackingVox4.wav",
+          "role_id": "ROLE.VOCAL.HARMONY",
+          "stem_id": "STEMFILE.14cd524813"
+        },
+        {
+          "bus_id": "BUS.VOX.LEAD",
+          "bus_path": "BUS.VOX/BUS.VOX.LEAD",
+          "confidence": 0.833,
+          "file_path": "32_LeadVox.wav",
+          "role_id": "ROLE.VOCAL.LEAD",
+          "stem_id": "STEMFILE.e29d76096f"
+        },
+        {
+          "bus_id": "BUS.MUSIC.PIANO",
+          "bus_path": "BUS.MUSIC/BUS.MUSIC.PIANO",
+          "confidence": 0.333,
+          "file_path": "33_Piano.wav",
+          "role_id": "ROLE.KEYS.PIANO",
+          "stem_id": "STEMFILE.90145cb964"
+        }
+      ],
+      "buses": [
+        {
+          "bus_id": "BUS.DRUMS",
+          "children_ids": [
+            "BUS.DRUMS.KICK",
+            "BUS.DRUMS.PERC",
+            "BUS.DRUMS.SNARE",
+            "BUS.DRUMS.TOMS"
+          ],
+          "label": "Drums",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.380625e2c1",
+            "STEMFILE.9805cae54b",
+            "STEMFILE.14402d74af",
+            "STEMFILE.72062322a3"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.KICK",
+          "children_ids": [],
+          "label": "Drums Kick",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.380625e2c1"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.PERC",
+          "children_ids": [],
+          "label": "Drums Perc",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.72062322a3"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.SNARE",
+          "children_ids": [],
+          "label": "Drums Snare",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.9805cae54b"
+          ]
+        },
+        {
+          "bus_id": "BUS.DRUMS.TOMS",
+          "children_ids": [],
+          "label": "Drums Toms",
+          "parent_id": "BUS.DRUMS",
+          "stem_ids": [
+            "STEMFILE.14402d74af"
+          ]
+        },
+        {
+          "bus_id": "BUS.BASS",
+          "children_ids": [
+            "BUS.BASS.DI"
+          ],
+          "label": "Bass",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.f609b288e8"
+          ]
+        },
+        {
+          "bus_id": "BUS.BASS.DI",
+          "children_ids": [],
+          "label": "Bass Di",
+          "parent_id": "BUS.BASS",
+          "stem_ids": [
+            "STEMFILE.f609b288e8"
+          ]
+        },
+        {
+          "bus_id": "BUS.MUSIC",
+          "children_ids": [
+            "BUS.MUSIC.ELECTRIC",
+            "BUS.MUSIC.PIANO"
+          ],
+          "label": "Music",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.5dd66e1fe4",
+            "STEMFILE.90145cb964"
+          ]
+        },
+        {
+          "bus_id": "BUS.MUSIC.ELECTRIC",
+          "children_ids": [],
+          "label": "Music Electric",
+          "parent_id": "BUS.MUSIC",
+          "stem_ids": [
+            "STEMFILE.5dd66e1fe4"
+          ]
+        },
+        {
+          "bus_id": "BUS.MUSIC.PIANO",
+          "children_ids": [],
+          "label": "Music Piano",
+          "parent_id": "BUS.MUSIC",
+          "stem_ids": [
+            "STEMFILE.90145cb964"
+          ]
+        },
+        {
+          "bus_id": "BUS.VOX",
+          "children_ids": [
+            "BUS.VOX.HARMONY",
+            "BUS.VOX.LEAD"
+          ],
+          "label": "Vox",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.14cd524813",
+            "STEMFILE.e29d76096f"
+          ]
+        },
+        {
+          "bus_id": "BUS.VOX.HARMONY",
+          "children_ids": [],
+          "label": "Vox Harmony",
+          "parent_id": "BUS.VOX",
+          "stem_ids": [
+            "STEMFILE.14cd524813"
+          ]
+        },
+        {
+          "bus_id": "BUS.VOX.LEAD",
+          "children_ids": [],
+          "label": "Vox Lead",
+          "parent_id": "BUS.VOX",
+          "stem_ids": [
+            "STEMFILE.e29d76096f"
+          ]
+        },
+        {
+          "bus_id": "BUS.OTHER",
+          "children_ids": [
+            "BUS.OTHER.UNKNOWN"
+          ],
+          "label": "Other",
+          "parent_id": null,
+          "stem_ids": [
+            "STEMFILE.eb9b14308b",
+            "STEMFILE.0a6c1fae7c",
+            "STEMFILE.9331dc5309",
+            "STEMFILE.c6241a8ea3",
+            "STEMFILE.65f5dbd24f"
+          ]
+        },
+        {
+          "bus_id": "BUS.OTHER.UNKNOWN",
+          "children_ids": [],
+          "label": "Other Unknown",
+          "parent_id": "BUS.OTHER",
+          "stem_ids": [
+            "STEMFILE.eb9b14308b",
+            "STEMFILE.0a6c1fae7c",
+            "STEMFILE.9331dc5309",
+            "STEMFILE.c6241a8ea3",
+            "STEMFILE.65f5dbd24f"
+          ]
+        }
+      ],
+      "generated_utc": "1970-01-01T00:00:00Z",
+      "schema": "mmo.bus_plan.v1",
+      "source": {
+        "roles_ref": "ontology/roles.yaml",
+        "stems_map_ref": "fixtures/stems_small/surround_7_1_catalog/stems_map.json"
+      },
+      "summary": {
+        "bus_counts": {
+          "BUS.BASS.DI": 1,
+          "BUS.DRUMS.KICK": 1,
+          "BUS.DRUMS.PERC": 1,
+          "BUS.DRUMS.SNARE": 1,
+          "BUS.DRUMS.TOMS": 1,
+          "BUS.MUSIC.ELECTRIC": 1,
+          "BUS.MUSIC.PIANO": 1,
+          "BUS.OTHER.UNKNOWN": 5,
+          "BUS.VOX.HARMONY": 1,
+          "BUS.VOX.LEAD": 1
+        },
+        "role_counts": {
+          "ROLE.BASS.DI": 1,
+          "ROLE.DRUM.KICK": 1,
+          "ROLE.DRUM.PERCUSSION": 1,
+          "ROLE.DRUM.SNARE": 1,
+          "ROLE.DRUM.TOMS": 1,
+          "ROLE.GTR.ELECTRIC": 1,
+          "ROLE.KEYS.PIANO": 1,
+          "ROLE.OTHER.UNKNOWN": 5,
+          "ROLE.VOCAL.HARMONY": 1,
+          "ROLE.VOCAL.LEAD": 1
+        }
+      }
+    }
+  }
+}

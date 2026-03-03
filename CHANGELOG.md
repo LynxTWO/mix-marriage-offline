@@ -97,6 +97,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Stems-small real-world naming regression fixture chain:
+  - Added compact redistributable fixture sessions under
+    `fixtures/stems_small/` covering numeric suffixes and compound naming
+    patterns observed in real inventories (`ElecGtr`, `BackingVox`,
+    `Synth*`, `SFX`, `BassDI`, drum mic variants).
+  - Added deterministic expected snapshots:
+    `fixtures/expected_bus_plan.json` and `fixtures/expected_scene.json`.
+  - Added CI regression coverage in `tests/test_stems_small_regression.py`
+    for stems->bus-plan->scene snapshots, SHA-256 output hashing, target-chain
+    render-plan determinism (`2.0/5.1/7.1/7.1.4/9.1.6`), and passing downmix
+    gate checks for downmix targets.
+
 - Conservative immersive height render targets and strict fallback routing:
   - Added `TARGET.IMMERSIVE.9_1_6` plus bed-first fallback notes for `TARGET.IMMERSIVE.7_1_4` / `TARGET.IMMERSIVE.9_1_6` in render target registries.
   - Added `LAYOUT.9_1_6` downmix conversions (`-> 7.1.4`, `-> 7.1`, `-> 5.1`, `-> 2.0`) and conservative immersive matrices in the fold-down policy pack, including a bed-first `9.1.6 -> 7.1.4` path.

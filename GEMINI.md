@@ -39,6 +39,9 @@ Non-negotiables:
 - Keep stems artifact progression deterministic: `stems_map` (role identity)
   and `bus_plan` (bus-path identity) must preserve stable sorting and
   schema-valid contracts across repeated runs.
+- Keep `fixtures/stems_small/` regression fixtures aligned with
+  `fixtures/expected_bus_plan.json`, `fixtures/expected_scene.json`, and
+  `tests/test_stems_small_regression.py` hash expectations.
 - Keep scene intent scaffolding deterministic when built from stems artifacts:
   `mmo scene build --map ... --bus ...` must emit stable object-vs-bed
   classification with conservative low-confidence fallback behavior.
