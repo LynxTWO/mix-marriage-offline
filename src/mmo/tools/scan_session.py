@@ -30,6 +30,7 @@ from mmo.core.lfe_audit import (  # noqa: E402
 )
 from mmo.core.preset_recommendations import derive_preset_recommendations  # noqa: E402
 from mmo.core.session import build_session_from_stems_dir  # noqa: E402
+from mmo.core.stems_classifier import derive_role_name_tokens  # noqa: E402
 from mmo.core.validators import validate_session  # noqa: E402
 from mmo.core.vibe_signals import derive_vibe_signals  # noqa: E402
 from mmo.dsp.decoders import detect_format_from_path  # noqa: E402
@@ -1189,9 +1190,6 @@ def _validate_role_names(
     if not known_keywords:
         return
 
-    import re  # noqa: WPS433
-    _token_re = re.compile(r"[\s_.\-\[\]\(\)\{\}]+")
-
     stems = session.get("stems", [])
     for stem in stems:
         if not isinstance(stem, dict):
@@ -1199,8 +1197,7 @@ def _validate_role_names(
         stem_id = stem.get("stem_id", "")
         file_path = stem.get("file_path", "")
         name = Path(file_path).stem if file_path else stem_id
-        tokens = {t.lower() for t in _token_re.split(name) if t}
-        # Strip leading track numbers (e.g. "01_kick" → tokens {"01", "kick"})
+        tokens = derive_role_name_tokens(name)
         if tokens & known_keywords:
             continue  # At least one recognizable role token
 

@@ -351,8 +351,12 @@ roles:
       - hit
       - slam
       - boom
+      - subdrop
+      - sub drop
       regex:
       - (?i)\b(impact|hit|slam|boom)\b
+      - (?i)\bsub\s*drop\b
+      - (?i)\bsubdrop\d*\b
   ROLE.FX.RISER:
     label: Riser
     description: Risers and build-ups.
@@ -655,6 +659,17 @@ roles:
       regex:
       - (?i)\blead\s*synth\b
       - (?i)\bsynth\s*lead\b
+  ROLE.SYNTH.OTHER:
+    label: Synth
+    description: Generic synth part not otherwise classified.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - synth
+      - synths
+      regex:
+      - (?i)\bsynth\d*\b
   ROLE.SYNTH.PAD:
     label: Synth pad
     description: Sustained pad textures.

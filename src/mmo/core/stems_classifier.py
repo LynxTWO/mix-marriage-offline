@@ -177,6 +177,15 @@ def _derive_scoring_tokens(token: str) -> list[_ScoringToken]:
     return derived
 
 
+def derive_role_name_tokens(value: str) -> set[str]:
+    """Return classifier-derived role tokens for a stem/file name."""
+    tokens: set[str] = set()
+    for base_token in _tokenize_value(value):
+        for scoring_token in _derive_scoring_tokens(base_token):
+            tokens.add(scoring_token.token)
+    return tokens
+
+
 def _build_scoring_tokens(values: Any) -> list[_ScoringToken]:
     if not isinstance(values, list):
         return []

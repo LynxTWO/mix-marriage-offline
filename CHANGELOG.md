@@ -236,6 +236,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Added FLAC/WV custom-tag fixtures + tests for TagBag preservation and
     export receipts, plus WAV subset/skipped receipt coverage.
 
+### Fixed
+
+- Role-name validation now uses classifier-derived tokens to handle numeric
+  suffixes and common compounds (for example `Kick1`, `ElecGtr1`,
+  `BackingVox2`, `SFX5`) and avoid `ISSUE.VALIDATION.UNKNOWN_ROLE` false
+  positives. Added generic synth recognition via `ROLE.SYNTH.OTHER`
+  (`synth`/`synth01`) and `SubDrop` recognition under `ROLE.FX.IMPACT`.
+
 ## [1.1.0] — 2026-02-27
 
 ### Added

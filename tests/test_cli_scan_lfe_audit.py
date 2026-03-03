@@ -456,11 +456,20 @@ class TestRoleNamingValidation(unittest.TestCase):
     """Tests for ISSUE.VALIDATION.UNKNOWN_ROLE emitted for unrecognised names."""
 
     def test_recognised_role_name_no_issue(self) -> None:
-        """A stem named 'kick.wav' should NOT get an UNKNOWN_ROLE issue."""
+        """Common role-name compounds and numeric suffixes should be recognised."""
         with tempfile.TemporaryDirectory() as tmp:
             stems_dir = Path(tmp) / "stems"
             stems_dir.mkdir()
-            _write_wav(stems_dir / "kick.wav", 2, 48000, 16, 1024)
+            recognised_names = [
+                "01_Kick1.wav",
+                "ElecGtr1.wav",
+                "BackingVox2.wav",
+                "SFX5.wav",
+                "Synth01.wav",
+                "SubDrop.wav",
+            ]
+            for name in recognised_names:
+                _write_wav(stems_dir / name, 2, 48000, 16, 1024)
             rc, stdout, _stderr = _run_scan_session(stems_dir)
             self.assertEqual(rc, 0)
             report = json.loads(stdout)
@@ -471,7 +480,7 @@ class TestRoleNamingValidation(unittest.TestCase):
             self.assertEqual(
                 unknown_role_issues,
                 [],
-                "kick.wav should not trigger UNKNOWN_ROLE",
+                "Recognised names should not trigger UNKNOWN_ROLE",
             )
 
     def test_unrecognised_role_name_emits_issue(self) -> None:
