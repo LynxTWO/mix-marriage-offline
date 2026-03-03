@@ -80,6 +80,8 @@ downmix:
           description: "Reduce or bypass mid/side wideners on bus outputs."
         - id: "move_energy_forward"
           description: "Increase front L/R contribution relative to surrounds."
+        - id: "collapse_heights_to_bed"
+          description: "For immersive targets, collapse height channels to conservative bed/front routing."
     failure_policy: "report_and_halt"
     failure_description: >
       If all fallback steps are exhausted and gates still fail, the render is halted.
@@ -245,6 +247,26 @@ downmix:
       notes:
         - "Default immersive dual-LFE fold-down drops both LFEs."
         - "Alternate DMX.IMM.7_2_4_TO_2_0.LFE_MIX_DUAL_SAFE keeps summed LFE equivalent to single-LFE -10 dB."
+
+    - id: "DMX.CONV.9_1_6_TO_7_1_4"
+      source_layout_id: "LAYOUT.9_1_6"
+      target_layout_id: "LAYOUT.7_1_4"
+      policy_pack: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+      default_matrix_id: "DMX.IMM.9_1_6_TO_7_1_4.BED_FIRST"
+      lfe_treatment: "passthrough"
+      notes:
+        - "Bed-first reduction from 9.1.6 to 7.1.4 with conservative wide/top-center collapse."
+        - "Designed as strict fallback before stereo/front delivery fold-down checks."
+
+    - id: "DMX.CONV.9_1_6_TO_2_0"
+      source_layout_id: "LAYOUT.9_1_6"
+      target_layout_id: "LAYOUT.2_0"
+      policy_pack: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+      default_matrix_id: "DMX.IMM.9_1_6_TO_2_0.COMPOSED"
+      lfe_treatment: "drop"
+      notes:
+        - "Composed fallback path: 9.1.6 -> 7.1.4 (bed-first) -> 2.0."
+        - "Heights are treated as optional polish; fallback prioritizes stable front/bed translation."
 
     - id: "DMX.CONV.7_1_4_TO_1_0"
       source_layout_id: "LAYOUT.7_1_4"
@@ -517,6 +539,24 @@ downmix:
           SPK.RRS: 0.5
           SPK.TFR: 0.5
           SPK.TRR: 0.25
+
+    DMX.IMM.9_1_6_TO_7_1_4.BED_FIRST:
+      source_layout_id: "LAYOUT.9_1_6"
+      target_layout_id: "LAYOUT.7_1_4"
+      lfe_treatment: "passthrough"
+      coefficients:
+        SPK.L:   {SPK.L: 1.0, SPK.LW: 0.5}
+        SPK.R:   {SPK.R: 1.0, SPK.RW: 0.5}
+        SPK.C:   {SPK.C: 1.0}
+        SPK.LFE: {SPK.LFE: 1.0}
+        SPK.LS:  {SPK.LS: 1.0}
+        SPK.RS:  {SPK.RS: 1.0}
+        SPK.LRS: {SPK.LRS: 1.0, SPK.TBC: 0.3536}
+        SPK.RRS: {SPK.RRS: 1.0, SPK.TBC: 0.3536}
+        SPK.TFL: {SPK.TFL: 0.75, SPK.TFC: 0.3536}
+        SPK.TFR: {SPK.TFR: 0.75, SPK.TFC: 0.3536}
+        SPK.TRL: {SPK.TRL: 0.75}
+        SPK.TRR: {SPK.TRR: 0.75}
 
     DMX.IMM.7_2_4_TO_2_0.COMPOSED:
       source_layout_id: "LAYOUT.7_2_4"

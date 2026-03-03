@@ -98,6 +98,11 @@ class TestTargetTokenResolver(unittest.TestCase):
         self.assertEqual(immersive.layout_id, "LAYOUT.7_1_4")
         self.assertEqual(immersive.source, "shorthand")
 
+        immersive_916 = resolve_target_token("9.1.6")
+        self.assertEqual(immersive_916.target_id, "TARGET.IMMERSIVE.9_1_6")
+        self.assertEqual(immersive_916.layout_id, "LAYOUT.9_1_6")
+        self.assertEqual(immersive_916.source, "shorthand")
+
     def test_binaural_shorthand_resolves_to_headphone_target(self) -> None:
         resolved = resolve_target_token("binaural")
         self.assertEqual(resolved.target_id, "TARGET.HEADPHONES.BINAURAL")

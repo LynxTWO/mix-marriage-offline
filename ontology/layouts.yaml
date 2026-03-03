@@ -918,16 +918,18 @@ layouts:
     aliases: ["7.1.6", "7_1_6", "immersive716"]
 
   # -------------------------
-  # Future / placeholder: 9.1.6
+  # Bed-first optional immersive: 9.1.6
   # 9.1 bed (7.1 + Left Wide + Right Wide) + 6 heights.
-  # No ratified standard as of 2025; treat as provisional.
+  # Heights are optional polish; bed translation remains primary.
   # -------------------------
   LAYOUT.9_1_6:
-    label: "Immersive (9.1.6) — Placeholder"
+    label: "Immersive (9.1.6)"
     description: >
       9.1 bed (7.1 + Left Wide LW + Right Wide RW) plus 6 height channels.
-      Channel order is provisional.  LW/RW are at approximately ±60°.
-      Extra channels zero gracefully on any render target that lacks them.
+      Channel order follows SMPTE-style ordering used by this project.
+      LW/RW are at approximately ±60°.  Heights are optional polish only:
+      keep bed translation primary, and collapse to 7.1.4/7.1/5.1/2.0 when
+      immersive downmix QA indicates unsafe translation.
     family: "immersive"
     channel_count: 16
     ordering_standard: "SMPTE"
@@ -981,5 +983,5 @@ layouts:
       lfe_channels: ["SPK.LFE"]
       excluded_from_program_loudness: true
       default_downmix_treatment: "drop"
-    recommended_downmix_targets: ["LAYOUT.7_1_6", "LAYOUT.7_1_4", "LAYOUT.7_1", "LAYOUT.5_1", "LAYOUT.2_0"]
+    recommended_downmix_targets: ["LAYOUT.7_1_4", "LAYOUT.7_1", "LAYOUT.5_1", "LAYOUT.2_0"]
     aliases: ["9.1.6", "9_1_6", "immersive916"]

@@ -7,7 +7,8 @@ downmix_policy_pack:
   created_utc: "2026-01-29T00:00:00Z"
   label: "Immersive fold-down v0"
   description: >
-    Deterministic, transparent fold-down matrices for common immersive beds (5.1.2/5.1.4/7.1.2/7.1.4).
+    Deterministic, transparent fold-down matrices for common immersive beds
+    (5.1.2/5.1.4/7.1.2/7.1.4/9.1.6).
     Heights fold into the nearest bed speakers at -6 dB (0.5) by default.
   notes:
     - "Heights are folded at -6 dB to reduce front-stage overload and preserve intent."
@@ -77,9 +78,88 @@ downmix_policy_pack:
         SPK.LRS: { SPK.LRS: 1.0, SPK.TRL: 0.5 }
         SPK.RRS: { SPK.RRS: 1.0, SPK.TRR: 0.5 }
 
+    DMX.IMM.9_1_6_TO_7_1_4.BED_FIRST:
+      label: "9.1.6 -> 7.1.4 (bed-first conservative collapse)"
+      source_layout_id: "LAYOUT.9_1_6"
+      target_layout_id: "LAYOUT.7_1_4"
+      coefficients:
+        SPK.L:   { SPK.L: 1.0, SPK.LW: 0.5 }
+        SPK.R:   { SPK.R: 1.0, SPK.RW: 0.5 }
+        SPK.C:   { SPK.C: 1.0 }
+        SPK.LFE: { SPK.LFE: 1.0 }
+        SPK.LS:  { SPK.LS: 1.0 }
+        SPK.RS:  { SPK.RS: 1.0 }
+        SPK.LRS: { SPK.LRS: 1.0, SPK.TBC: 0.3536 }
+        SPK.RRS: { SPK.RRS: 1.0, SPK.TBC: 0.3536 }
+        SPK.TFL: { SPK.TFL: 0.75, SPK.TFC: 0.3536 }
+        SPK.TFR: { SPK.TFR: 0.75, SPK.TFC: 0.3536 }
+        SPK.TRL: { SPK.TRL: 0.75 }
+        SPK.TRR: { SPK.TRR: 0.75 }
+      notes:
+        - "Bed-first fallback: wide and top-center channels collapse conservatively toward 7.1.4-compatible speakers."
+        - "Retains conservative height detail while keeping front/bed translation primary."
+
     # -------------------------
     # Composed convenience matrices (so the renderer doesn't need to multiply matrices on day 1)
     # -------------------------
+    DMX.IMM.9_1_6_TO_7_1.COMPOSED:
+      label: "9.1.6 -> 7.1 (composed via bed-first 7.1.4)"
+      source_layout_id: "LAYOUT.9_1_6"
+      target_layout_id: "LAYOUT.7_1"
+      coefficients:
+        SPK.L:   { SPK.L: 1.0, SPK.LW: 0.5, SPK.TFL: 0.375, SPK.TFC: 0.1768 }
+        SPK.R:   { SPK.R: 1.0, SPK.RW: 0.5, SPK.TFR: 0.375, SPK.TFC: 0.1768 }
+        SPK.C:   { SPK.C: 1.0 }
+        SPK.LFE: { SPK.LFE: 1.0 }
+        SPK.LS:  { SPK.LS: 1.0 }
+        SPK.RS:  { SPK.RS: 1.0 }
+        SPK.LRS: { SPK.LRS: 1.0, SPK.TRL: 0.375, SPK.TBC: 0.3536 }
+        SPK.RRS: { SPK.RRS: 1.0, SPK.TRR: 0.375, SPK.TBC: 0.3536 }
+      notes:
+        - "Composed from 9.1.6 -> 7.1.4 bed-first then 7.1.4 -> 7.1 height-to-bed."
+
+    DMX.IMM.9_1_6_TO_5_1.COMPOSED:
+      label: "9.1.6 -> 5.1 (composed via bed-first 7.1.4)"
+      source_layout_id: "LAYOUT.9_1_6"
+      target_layout_id: "LAYOUT.5_1"
+      coefficients:
+        SPK.L:   { SPK.L: 1.0, SPK.LW: 0.5, SPK.TFL: 0.375, SPK.TFC: 0.1768 }
+        SPK.R:   { SPK.R: 1.0, SPK.RW: 0.5, SPK.TFR: 0.375, SPK.TFC: 0.1768 }
+        SPK.C:   { SPK.C: 1.0 }
+        SPK.LFE: { SPK.LFE: 1.0 }
+        SPK.LS:  { SPK.LS: 1.0, SPK.LRS: 0.7071, SPK.TRL: 0.2652, SPK.TBC: 0.25 }
+        SPK.RS:  { SPK.RS: 1.0, SPK.RRS: 0.7071, SPK.TRR: 0.2652, SPK.TBC: 0.25 }
+      notes:
+        - "Composed from 9.1.6 -> 7.1.4 bed-first then 7.1.4 -> 5.1."
+
+    DMX.IMM.9_1_6_TO_2_0.COMPOSED:
+      label: "9.1.6 -> 2.0 (composed via bed-first 7.1.4)"
+      source_layout_id: "LAYOUT.9_1_6"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L:
+          SPK.L: 1.0
+          SPK.LW: 0.35
+          SPK.C: 0.7071
+          SPK.LS: 0.6
+          SPK.LRS: 0.4
+          SPK.TFL: 0.3
+          SPK.TFC: 0.125
+          SPK.TRL: 0.15
+          SPK.TBC: 0.1
+        SPK.R:
+          SPK.R: 1.0
+          SPK.RW: 0.35
+          SPK.C: 0.7071
+          SPK.RS: 0.6
+          SPK.RRS: 0.4
+          SPK.TFR: 0.3
+          SPK.TFC: 0.125
+          SPK.TRR: 0.15
+          SPK.TBC: 0.1
+      notes:
+        - "Composed from 9.1.6 -> 7.1.4 bed-first then 7.1.4 -> 2.0."
+
     DMX.IMM.5_1_4_TO_2_0.COMPOSED:
       label: "5.1.4 -> 2.0 (composed)"
       source_layout_id: "LAYOUT.5_1_4"

@@ -41,11 +41,13 @@ _SHORTHANDS: dict[str, tuple[str | None, str]] = {
     "7_1": ("TARGET.SURROUND.7_1", "LAYOUT.7_1"),
     "7.1.4": ("TARGET.IMMERSIVE.7_1_4", "LAYOUT.7_1_4"),
     "7_1_4": ("TARGET.IMMERSIVE.7_1_4", "LAYOUT.7_1_4"),
+    "9.1.6": ("TARGET.IMMERSIVE.9_1_6", "LAYOUT.9_1_6"),
+    "9_1_6": ("TARGET.IMMERSIVE.9_1_6", "LAYOUT.9_1_6"),
     "binaural": ("TARGET.HEADPHONES.BINAURAL", "LAYOUT.BINAURAL"),
 }
 
 _SHORTHAND_HELP = (
-    "stereo, 2.0, 2.1, 3.0, 3.1, 4.0, 4.1, 5.1, 7.1, 7.1.4, quad, lcr, binaural"
+    "stereo, 2.0, 2.1, 3.0, 3.1, 4.0, 4.1, 5.1, 7.1, 7.1.4, 9.1.6, quad, lcr, binaural"
 )
 
 

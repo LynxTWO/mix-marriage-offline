@@ -1,7 +1,7 @@
-"""Tests for immersive render targets (7.1.4 beds) + height scene_builder notes.
+"""Tests for immersive render targets (7.1.4/9.1.6 beds) + height scene_builder notes.
 
 Covers:
-- All four immersive TARGET.IMMERSIVE.* entries are registered and loadable.
+- All five immersive TARGET.IMMERSIVE.* entries are registered and loadable.
 - Each immersive target maps to the correct LAYOUT.* and has the right channel count.
 - scene_builder emits height_bed_714_candidate note for 12-channel stems.
 - scene_builder emits height_bed_10ch_candidate note for 10-channel stems.
@@ -115,7 +115,7 @@ def _write_fake_ffmpeg_714(directory: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 class TestImmersiveRenderTargetsRegistry(unittest.TestCase):
-    """Verify all four immersive targets are registered and structurally correct."""
+    """Verify all five immersive targets are registered and structurally correct."""
 
     def setUp(self) -> None:
         from mmo.core.registries.render_targets_registry import load_render_targets_registry
@@ -124,13 +124,14 @@ class TestImmersiveRenderTargetsRegistry(unittest.TestCase):
     def _target(self, target_id: str) -> dict:
         return self._registry.get_target(target_id)
 
-    def test_all_four_immersive_targets_present(self) -> None:
+    def test_all_five_immersive_targets_present(self) -> None:
         ids = set(self._registry.list_target_ids())
         for expected_id in (
             "TARGET.IMMERSIVE.5_1_2",
             "TARGET.IMMERSIVE.5_1_4",
             "TARGET.IMMERSIVE.7_1_2",
             "TARGET.IMMERSIVE.7_1_4",
+            "TARGET.IMMERSIVE.9_1_6",
         ):
             self.assertIn(expected_id, ids, f"Missing target: {expected_id}")
 
@@ -141,6 +142,20 @@ class TestImmersiveRenderTargetsRegistry(unittest.TestCase):
     def test_714_target_channel_count(self) -> None:
         t = self._target("TARGET.IMMERSIVE.7_1_4")
         self.assertEqual(len(t["channel_order"]), 12)
+
+    def test_916_target_layout_id(self) -> None:
+        t = self._target("TARGET.IMMERSIVE.9_1_6")
+        self.assertEqual(t["layout_id"], "LAYOUT.9_1_6")
+
+    def test_916_target_channel_count(self) -> None:
+        t = self._target("TARGET.IMMERSIVE.9_1_6")
+        self.assertEqual(len(t["channel_order"]), 16)
+
+    def test_916_notes_require_bed_first_fallback(self) -> None:
+        t = self._target("TARGET.IMMERSIVE.9_1_6")
+        notes = " ".join(t.get("notes", [])).lower()
+        self.assertIn("bed-first", notes)
+        self.assertIn("fallback", notes)
 
     def test_712_target_channel_count(self) -> None:
         t = self._target("TARGET.IMMERSIVE.7_1_2")

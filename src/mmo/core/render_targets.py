@@ -62,6 +62,16 @@ _FALLBACK_TARGET_ALIASES_BY_ID: dict[str, tuple[str, ...]] = {
         "7.1 (cinematic)",
         "7.1",
     ),
+    "TARGET.IMMERSIVE.7_1_4": (
+        "7.1.4",
+        "7_1_4",
+        "Immersive 7.1.4",
+    ),
+    "TARGET.IMMERSIVE.9_1_6": (
+        "9.1.6",
+        "9_1_6",
+        "Immersive 9.1.6",
+    ),
 }
 
 

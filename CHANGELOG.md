@@ -97,6 +97,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Conservative immersive height render targets and strict fallback routing:
+  - Added `TARGET.IMMERSIVE.9_1_6` plus bed-first fallback notes for `TARGET.IMMERSIVE.7_1_4` / `TARGET.IMMERSIVE.9_1_6` in render target registries.
+  - Added `LAYOUT.9_1_6` downmix conversions (`-> 7.1.4`, `-> 7.1`, `-> 5.1`, `-> 2.0`) and conservative immersive matrices in the fold-down policy pack, including a bed-first `9.1.6 -> 7.1.4` path.
+  - Added regression coverage for immersive target registration, `9.1.6` shorthand token resolution, and downmix conversion inventory/fallback path assertions.
+
 - Scene build lock/override contract for intent steering:
   - Added `mmo scene build --locks <scene_locks.yaml>` support for both
     `--report` and `--map/--bus` build paths.
