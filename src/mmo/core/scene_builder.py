@@ -11,7 +11,9 @@ Key principles:
 """
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
+from re import split as re_split
 from typing import Any
 
 from mmo.core.media_tags import source_metadata_from_value
@@ -27,6 +29,29 @@ _ADVISORY_STEREO_CONF_CAP = 0.35  # max confidence for stereo-stem advisory infe
 # Height bed channel counts (advisory; channel count alone cannot disambiguate all layouts)
 _IMMERSIVE_714_CHANNELS = 12   # 7.1.4: 8-ch bed + 4 height speakers
 _IMMERSIVE_10CH_CHANNELS = 10  # 5.1.4 or 7.1.2: 6/8-ch bed + 4/2 height speakers (ambiguous)
+
+_SCENE_INTENT_DEFAULT_GENERATED_UTC = "1970-01-01T00:00:00Z"
+_SCENE_INTENT_DEFAULT_PROFILE_ID = "PROFILE.ASSIST"
+_SCENE_INTENT_CREATED_FROM = "draft"
+_SCENE_INTENT_STEMS_DIR = "/SCENE/INTENT"
+_SCENE_INTENT_DEFAULT_STEMS_MAP_REF = "stems_map.json"
+_SCENE_INTENT_DEFAULT_BUS_PLAN_REF = "bus_plan.json"
+_SCENE_INTENT_UNKNOWN_ROLE_ID = "ROLE.OTHER.UNKNOWN"
+_SCENE_INTENT_UNKNOWN_BUS_ID = "BUS.OTHER.UNKNOWN"
+_SCENE_INTENT_UNKNOWN_GROUP_BUS = "BUS.OTHER"
+_SCENE_INTENT_UNKNOWN_CONTENT_HINT = "fx_bed"
+_SCENE_INTENT_BED_HINTS = {
+    "RETURN",
+    "RETURNS",
+    "REVERB",
+    "ROOM",
+    "AMBIENCE",
+    "AMBIENT",
+    "PAD",
+    "PADS",
+    "CROWD",
+    "AUDIENCE",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -389,4 +414,472 @@ def build_scene_from_session(
         "beds": beds,
         "routing_intent": routing_intent,
         "metadata": metadata,
+    }
+
+
+def _clamp_unit(value: Any, *, default: float) -> float:
+    numeric = _safe_float(value)
+    if numeric is None:
+        return default
+    if numeric < 0.0:
+        return 0.0
+    if numeric > 1.0:
+        return 1.0
+    return round(numeric, 3)
+
+
+def _scene_intent_tokens(*values: str) -> set[str]:
+    tokens: set[str] = set()
+    for value in values:
+        normalized = _coerce_str(value).strip().upper()
+        if not normalized:
+            continue
+        for token in re_split(r"[^A-Z0-9]+", normalized):
+            if token:
+                tokens.add(token)
+    return tokens
+
+
+def _scene_intent_group_bus(bus_id: str) -> str:
+    normalized = _coerce_str(bus_id).strip().upper()
+    parts = [part for part in normalized.split(".") if part]
+    if len(parts) >= 2 and parts[0] == "BUS":
+        return f"BUS.{parts[1]}"
+    if len(parts) == 1 and parts[0].startswith("BUS"):
+        return normalized
+    return _SCENE_INTENT_UNKNOWN_GROUP_BUS
+
+
+def _scene_intent_label(file_path: str, stem_id: str, *, index: int) -> str:
+    file_name = Path(file_path).name if file_path else ""
+    if file_name:
+        stem = Path(file_name).stem
+        if stem:
+            return stem
+        return file_name
+    if stem_id:
+        return stem_id
+    return f"stem_{index:03d}"
+
+
+def _scene_intent_content_hint(tokens: set[str]) -> str:
+    if "REVERB" in tokens or "RETURN" in tokens or "RETURNS" in tokens:
+        return "reverb_return"
+    if "ROOM" in tokens or "AMBIENCE" in tokens or "AMBIENT" in tokens:
+        return "ambience"
+    if "PAD" in tokens or "PADS" in tokens:
+        return "pad_texture"
+    if "CROWD" in tokens or "AUDIENCE" in tokens:
+        return "crowd"
+    return _SCENE_INTENT_UNKNOWN_CONTENT_HINT
+
+
+def _scene_intent_bed_width_hint(content_hint: str) -> float:
+    if content_hint in {"reverb_return", "ambience", "crowd"}:
+        return 1.0
+    if content_hint == "pad_texture":
+        return 0.85
+    return 0.75
+
+
+def _scene_intent_object_hints(
+    role_id: str,
+    assignment_confidence: float,
+    *,
+    uncertain: bool,
+) -> dict[str, Any]:
+    role_upper = role_id.upper()
+    is_bass = role_upper.startswith("ROLE.BASS.")
+    is_drum = role_upper.startswith("ROLE.DRUM.")
+    is_lead_vox = role_upper in {
+        "ROLE.VOCAL.LEAD",
+        "ROLE.DIALOGUE.LEAD",
+    } or role_upper.startswith("ROLE.VOCAL.LEAD.")
+    is_center_anchor = is_bass or is_lead_vox or role_upper in {
+        "ROLE.DRUM.KICK",
+        "ROLE.DRUM.SNARE",
+    }
+
+    if uncertain:
+        return {
+            "width_hint": 0.4,
+            "depth_hint": 0.5,
+            "confidence": min(0.35, max(0.2, assignment_confidence)),
+            "azimuth_hint": None,
+            "classification_note": "object_low_confidence",
+        }
+
+    if is_center_anchor:
+        return {
+            "width_hint": 0.2,
+            "depth_hint": 0.25,
+            "confidence": max(0.8, assignment_confidence),
+            "azimuth_hint": 0.0,
+            "classification_note": "close_miked_anchor_object",
+        }
+
+    if is_drum:
+        return {
+            "width_hint": 0.3,
+            "depth_hint": 0.3,
+            "confidence": max(0.75, assignment_confidence),
+            "azimuth_hint": None,
+            "classification_note": "close_miked_drum_object",
+        }
+
+    return {
+        "width_hint": 0.35,
+        "depth_hint": 0.4,
+        "confidence": max(0.7, assignment_confidence),
+        "azimuth_hint": None,
+        "classification_note": "default_object",
+    }
+
+
+def _scene_intent_scene_id(rows: list[dict[str, str]]) -> str:
+    if not rows:
+        return "SCENE.BUS.UNKNOWN"
+    digest_input = "|".join(
+        f"{row['stem_id']}::{row['role_id']}::{row['bus_id']}"
+        for row in rows
+    )
+    digest = hashlib.sha1(digest_input.encode("utf-8")).hexdigest()[:12].upper()
+    return f"SCENE.BUS.{digest}"
+
+
+def _scene_intent_source_refs(
+    stems_map: dict[str, Any],
+    bus_plan: dict[str, Any],
+    *,
+    stems_map_ref: str | None,
+    bus_plan_ref: str | None,
+) -> dict[str, Any]:
+    bus_plan_source = bus_plan.get("source")
+    bus_plan_source_obj = bus_plan_source if isinstance(bus_plan_source, dict) else {}
+
+    resolved_stems_map_ref = (
+        _coerce_str(stems_map_ref).strip()
+        or _coerce_str(stems_map.get("stems_map_ref")).strip()
+        or _coerce_str(bus_plan_source_obj.get("stems_map_ref")).strip()
+        or _SCENE_INTENT_DEFAULT_STEMS_MAP_REF
+    )
+    resolved_bus_plan_ref = (
+        _coerce_str(bus_plan_ref).strip()
+        or _SCENE_INTENT_DEFAULT_BUS_PLAN_REF
+    )
+
+    refs: dict[str, Any] = {
+        "stems_map_ref": resolved_stems_map_ref,
+        "bus_plan_ref": resolved_bus_plan_ref,
+    }
+
+    roles_ref = (
+        _coerce_str(stems_map.get("roles_ref")).strip()
+        or _coerce_str(bus_plan_source_obj.get("roles_ref")).strip()
+    )
+    if roles_ref:
+        refs["roles_ref"] = roles_ref
+
+    stems_index_ref = _coerce_str(stems_map.get("stems_index_ref")).strip()
+    if stems_index_ref:
+        refs["stems_index_ref"] = stems_index_ref
+
+    return refs
+
+
+def build_scene_from_bus_plan(
+    stems_map: dict[str, Any],
+    bus_plan: dict[str, Any],
+    *,
+    profile_id: str = _SCENE_INTENT_DEFAULT_PROFILE_ID,
+    stems_map_ref: str | None = None,
+    bus_plan_ref: str | None = None,
+) -> dict[str, Any]:
+    """Build scene intent scaffolding from stems_map + bus_plan.
+
+    This path is deliberately conservative:
+    - `objects` contain close-miked anchors and uncertain sources.
+    - `beds` aggregate ambience/fx-style sources.
+    - Uncertain assignments remain objects with low confidence and no azimuth hint.
+    """
+    if not isinstance(stems_map, dict):
+        raise ValueError("stems_map must be an object.")
+    if not isinstance(bus_plan, dict):
+        raise ValueError("bus_plan must be an object.")
+
+    map_assignments_raw = stems_map.get("assignments")
+    if not isinstance(map_assignments_raw, list):
+        raise ValueError("stems_map.assignments must be an array.")
+    bus_assignments_raw = bus_plan.get("assignments")
+    if not isinstance(bus_assignments_raw, list):
+        raise ValueError("bus_plan.assignments must be an array.")
+
+    map_assignments: dict[str, dict[str, Any]] = {}
+    for item in map_assignments_raw:
+        if not isinstance(item, dict):
+            continue
+        file_id = _coerce_str(item.get("file_id")).strip()
+        if file_id:
+            map_assignments[file_id] = item
+
+    merged_rows: list[dict[str, str | float]] = []
+    seen_stem_ids: set[str] = set()
+    for item in bus_assignments_raw:
+        if not isinstance(item, dict):
+            continue
+        stem_id = _coerce_str(item.get("stem_id")).strip()
+        if not stem_id:
+            continue
+        map_entry = map_assignments.get(stem_id, {})
+        file_path = (
+            _coerce_str(item.get("file_path")).strip()
+            or _coerce_str(map_entry.get("rel_path")).strip()
+        )
+        role_id = (
+            _coerce_str(item.get("role_id")).strip()
+            or _coerce_str(map_entry.get("role_id")).strip()
+            or _SCENE_INTENT_UNKNOWN_ROLE_ID
+        )
+        bus_id = _coerce_str(item.get("bus_id")).strip() or _SCENE_INTENT_UNKNOWN_BUS_ID
+        confidence = _clamp_unit(
+            item.get("confidence", map_entry.get("confidence")),
+            default=0.0,
+        )
+        merged_rows.append(
+            {
+                "stem_id": stem_id,
+                "file_path": file_path,
+                "role_id": role_id,
+                "bus_id": bus_id,
+                "confidence": confidence,
+            }
+        )
+        seen_stem_ids.add(stem_id)
+
+    for item in sorted(
+        [entry for entry in map_assignments_raw if isinstance(entry, dict)],
+        key=lambda entry: (
+            _coerce_str(entry.get("rel_path")).strip(),
+            _coerce_str(entry.get("file_id")).strip(),
+        ),
+    ):
+        stem_id = _coerce_str(item.get("file_id")).strip()
+        if not stem_id or stem_id in seen_stem_ids:
+            continue
+        merged_rows.append(
+            {
+                "stem_id": stem_id,
+                "file_path": _coerce_str(item.get("rel_path")).strip(),
+                "role_id": _coerce_str(item.get("role_id")).strip() or _SCENE_INTENT_UNKNOWN_ROLE_ID,
+                "bus_id": _SCENE_INTENT_UNKNOWN_BUS_ID,
+                "confidence": _clamp_unit(item.get("confidence"), default=0.0),
+            }
+        )
+
+    sorted_rows = sorted(
+        merged_rows,
+        key=lambda row: (
+            _coerce_str(row.get("file_path")).strip(),
+            _coerce_str(row.get("stem_id")).strip(),
+            _coerce_str(row.get("role_id")).strip(),
+            _coerce_str(row.get("bus_id")).strip(),
+        ),
+    )
+
+    object_rows: list[dict[str, Any]] = []
+    bed_buckets: dict[str, list[dict[str, Any]]] = {}
+
+    for row in sorted_rows:
+        stem_id = _coerce_str(row.get("stem_id")).strip()
+        file_path = _coerce_str(row.get("file_path")).strip()
+        role_id = _coerce_str(row.get("role_id")).strip() or _SCENE_INTENT_UNKNOWN_ROLE_ID
+        bus_id = _coerce_str(row.get("bus_id")).strip() or _SCENE_INTENT_UNKNOWN_BUS_ID
+        group_bus = _scene_intent_group_bus(bus_id)
+        assignment_confidence = _clamp_unit(row.get("confidence"), default=0.0)
+        tokens = _scene_intent_tokens(role_id, file_path, bus_id)
+
+        is_bed_candidate = any(token in _SCENE_INTENT_BED_HINTS for token in tokens)
+        is_anchor_object = (
+            role_id.startswith("ROLE.DRUM.")
+            or role_id.startswith("ROLE.BASS.")
+            or role_id.startswith("ROLE.VOCAL.LEAD")
+            or role_id.startswith("ROLE.DIALOGUE.LEAD")
+        )
+
+        if is_bed_candidate:
+            content_hint = _scene_intent_content_hint(tokens)
+            bed_bucket = bed_buckets.setdefault(bus_id, [])
+            bed_bucket.append(
+                {
+                    "content_hint": content_hint,
+                    "width_hint": _scene_intent_bed_width_hint(content_hint),
+                    "confidence": max(0.65, assignment_confidence),
+                }
+            )
+            continue
+
+        hints = _scene_intent_object_hints(
+            role_id,
+            assignment_confidence,
+            uncertain=not is_anchor_object,
+        )
+        object_rows.append(
+            {
+                "stem_id": stem_id,
+                "role_id": role_id,
+                "group_bus": group_bus,
+                "file_path": file_path,
+                "width_hint": hints["width_hint"],
+                "depth_hint": hints["depth_hint"],
+                "confidence": round(_clamp_unit(hints["confidence"], default=0.0), 3),
+                "azimuth_hint": hints["azimuth_hint"],
+                "classification_note": hints["classification_note"],
+            }
+        )
+
+    objects: list[dict[str, Any]] = []
+    for index, row in enumerate(
+        sorted(
+            object_rows,
+            key=lambda item: (
+                item["group_bus"],
+                item["stem_id"],
+                item["role_id"],
+            ),
+        )
+    ):
+        confidence = _clamp_unit(row.get("confidence"), default=0.0)
+        width_hint = _clamp_unit(row.get("width_hint"), default=0.4)
+        depth_hint = _clamp_unit(row.get("depth_hint"), default=0.5)
+
+        object_intent: dict[str, Any] = {
+            "confidence": confidence,
+            "locks": [],
+            "width": width_hint,
+            "depth": depth_hint,
+        }
+
+        azimuth_hint_value = row.get("azimuth_hint")
+        if isinstance(azimuth_hint_value, (int, float)):
+            object_intent["position"] = {"azimuth_deg": float(azimuth_hint_value)}
+
+        object_payload: dict[str, Any] = {
+            "object_id": f"OBJ.{row['stem_id']}",
+            "stem_id": row["stem_id"],
+            "role_id": row["role_id"],
+            "group_bus": row["group_bus"],
+            "label": _scene_intent_label(
+                _coerce_str(row.get("file_path")).strip(),
+                row["stem_id"],
+                index=index,
+            ),
+            "channel_count": 1,
+            "azimuth_hint": azimuth_hint_value if isinstance(azimuth_hint_value, (int, float)) else None,
+            "width_hint": width_hint,
+            "depth_hint": depth_hint,
+            "confidence": confidence,
+            "locks": {
+                "azimuth_hint": False,
+                "width_hint": False,
+                "depth_hint": False,
+            },
+            "intent": object_intent,
+            "notes": [
+                f"role_id: {row['role_id']}",
+                f"group_bus: {row['group_bus']}",
+                f"classification: {row['classification_note']}",
+            ],
+        }
+        if object_payload["azimuth_hint"] is None:
+            object_payload.pop("azimuth_hint")
+        objects.append(object_payload)
+
+    beds: list[dict[str, Any]] = []
+    for bus_id in sorted(bed_buckets.keys()):
+        bucket = bed_buckets[bus_id]
+        content_counts: dict[str, int] = {}
+        for item in bucket:
+            hint = _coerce_str(item.get("content_hint")).strip() or _SCENE_INTENT_UNKNOWN_CONTENT_HINT
+            content_counts[hint] = content_counts.get(hint, 0) + 1
+        content_hint = sorted(
+            content_counts.keys(),
+            key=lambda hint: (-content_counts[hint], hint),
+        )[0]
+        width_hint = round(
+            max(
+                (_clamp_unit(item.get("width_hint"), default=0.75) for item in bucket),
+                default=0.75,
+            ),
+            3,
+        )
+        confidence = round(
+            sum(_clamp_unit(item.get("confidence"), default=0.0) for item in bucket) / len(bucket),
+            3,
+        )
+        bed_id = f"BED.{bus_id.replace('BUS.', '').replace('.', '_')}"
+        beds.append(
+            {
+                "bed_id": bed_id,
+                "label": bus_id.replace("BUS.", "").replace(".", " ").title(),
+                "kind": "bed",
+                "bus_id": bus_id,
+                "content_hint": content_hint,
+                "width_hint": width_hint,
+                "confidence": confidence,
+                "intent": {
+                    "diffuse": width_hint,
+                    "confidence": confidence,
+                    "locks": [],
+                },
+                "notes": [f"content_hint: {content_hint}"],
+            }
+        )
+
+    normalized_profile_id = (
+        _coerce_str(profile_id).strip() or _SCENE_INTENT_DEFAULT_PROFILE_ID
+    )
+    scene_rows_for_id = [
+        {
+            "stem_id": _coerce_str(row.get("stem_id")).strip(),
+            "role_id": _coerce_str(row.get("role_id")).strip() or _SCENE_INTENT_UNKNOWN_ROLE_ID,
+            "bus_id": _coerce_str(row.get("bus_id")).strip() or _SCENE_INTENT_UNKNOWN_BUS_ID,
+        }
+        for row in sorted_rows
+    ]
+    source_refs = _scene_intent_source_refs(
+        stems_map,
+        bus_plan,
+        stems_map_ref=stems_map_ref,
+        bus_plan_ref=bus_plan_ref,
+    )
+    generated_utc = (
+        _coerce_str(bus_plan.get("generated_utc")).strip()
+        or _SCENE_INTENT_DEFAULT_GENERATED_UTC
+    )
+
+    return {
+        "schema_version": SCENE_SCHEMA_VERSION,
+        "scene_id": _scene_intent_scene_id(scene_rows_for_id),
+        "generated_utc": generated_utc,
+        "source": {
+            "stems_dir": _SCENE_INTENT_STEMS_DIR,
+            "created_from": _SCENE_INTENT_CREATED_FROM,
+        },
+        "source_refs": source_refs,
+        "objects": objects,
+        "beds": beds,
+        "rules": {
+            "layout_safety_defaults": {
+                "unknown_role_strategy": "object_low_confidence",
+                "default_azimuth_mode": "none",
+                "prefer_bed_for_ambient": True,
+            },
+            "lfe_policy_defaults": {
+                "allow_inferred_lfe_send": False,
+                "mode": "manual_only",
+            },
+        },
+        "metadata": {
+            "profile_id": normalized_profile_id,
+        },
     }

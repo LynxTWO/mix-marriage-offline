@@ -3418,12 +3418,22 @@ def main(argv: list[str] | None = None) -> int:
     )
     scene_build_parser = scene_subparsers.add_parser(
         "build",
-        help="Build a deterministic scene JSON from a report and optional timeline.",
+        help="Build a deterministic scene JSON from report or stems map + bus plan inputs.",
     )
     scene_build_parser.add_argument(
         "--report",
-        required=True,
+        default=None,
         help="Path to report JSON.",
+    )
+    scene_build_parser.add_argument(
+        "--map",
+        default=None,
+        help="Path to stems_map JSON (for bus-plan-driven scene intent scaffolding).",
+    )
+    scene_build_parser.add_argument(
+        "--bus",
+        default=None,
+        help="Path to bus_plan JSON (for bus-plan-driven scene intent scaffolding).",
     )
     scene_build_parser.add_argument(
         "--timeline",
@@ -3444,6 +3454,11 @@ def main(argv: list[str] | None = None) -> int:
         "--force-templates",
         action="store_true",
         help="When used with --templates, overwrite existing intent fields (hard locks still apply).",
+    )
+    scene_build_parser.add_argument(
+        "--profile",
+        default="PROFILE.ASSIST",
+        help="Authority profile ID recorded in scene metadata for map+bus build mode.",
     )
     scene_show_parser = scene_subparsers.add_parser(
         "show",
@@ -7169,16 +7184,49 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "scene":
         if args.scene_command == "build":
             try:
-                template_ids: list[str] = []
-                if isinstance(args.templates, str) and args.templates.strip():
-                    template_ids = _parse_scene_template_ids_csv(args.templates)
-                return _run_scene_build_command(
-                    repo_root=None,
-                    report_path=Path(args.report),
-                    out_path=Path(args.out),
-                    timeline_path=Path(args.timeline) if args.timeline else None,
-                    template_ids=template_ids,
-                    force_templates=bool(args.force_templates),
+                has_report = isinstance(args.report, str) and bool(args.report.strip())
+                has_map = isinstance(args.map, str) and bool(args.map.strip())
+                has_bus = isinstance(args.bus, str) and bool(args.bus.strip())
+
+                if has_report and (has_map or has_bus):
+                    raise ValueError(
+                        "scene build accepts either --report or --map/--bus inputs, not both.",
+                    )
+
+                if has_report:
+                    template_ids: list[str] = []
+                    if isinstance(args.templates, str) and args.templates.strip():
+                        template_ids = _parse_scene_template_ids_csv(args.templates)
+                    return _run_scene_build_command(
+                        repo_root=None,
+                        report_path=Path(args.report),
+                        out_path=Path(args.out),
+                        timeline_path=Path(args.timeline) if args.timeline else None,
+                        template_ids=template_ids,
+                        force_templates=bool(args.force_templates),
+                    )
+
+                if has_map or has_bus:
+                    if not (has_map and has_bus):
+                        raise ValueError(
+                            "scene build from stems artifacts requires both --map and --bus.",
+                        )
+                    if isinstance(args.timeline, str) and args.timeline.strip():
+                        raise ValueError("--timeline is only supported with --report.")
+                    if isinstance(args.templates, str) and args.templates.strip():
+                        raise ValueError("--templates is only supported with --report.")
+                    if bool(args.force_templates):
+                        raise ValueError("--force-templates is only supported with --report.")
+                    return _run_scene_build_from_bus_plan_command(
+                        repo_root=None,
+                        stems_map_path=Path(args.map),
+                        bus_plan_path=Path(args.bus),
+                        out_path=Path(args.out),
+                        profile_id=args.profile,
+                    )
+
+                raise ValueError(
+                    "scene build requires either --report or --map with --bus.",
                 )
             except (RuntimeError, ValueError) as exc:
                 print(str(exc), file=sys.stderr)

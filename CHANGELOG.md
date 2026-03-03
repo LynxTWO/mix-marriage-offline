@@ -120,6 +120,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `src/mmo/data/schemas/bus_plan.schema.json`.
   - Added end-to-end CLI coverage in `tests/test_cli_stems_bus_plan.py` validating schema
     compliance and expected bus assignments for kick/snare/synth/SFX stems.
+- Scene intent scaffolding from stems artifacts:
+  - Added `mmo scene build --map <stems_map.json> --bus <bus_plan.json> --out <scene.json> [--profile PROFILE.ASSIST]`
+    to generate deterministic scene intent scaffolding from bus-plan inputs.
+  - Extended `src/mmo/core/scene_builder.py` with conservative object-vs-bed classification
+    (FX/reverbs/rooms/ambience/pads/crowd -> beds; close-miked drums/bass/lead vocals -> objects;
+    unknowns remain low-confidence objects with no azimuth hint).
+  - Extended `schemas/scene.schema.json` (+ packaged mirror) with optional scene-intent
+    scaffolding fields: `generated_utc`, `source_refs`, object placement hints, bed content hints,
+    and conservative `rules` defaults.
+  - Added fixture-driven and CLI coverage in `tests/test_scene_builder_bus_plan.py` and
+    `tests/test_cli_scene.py` for schema validity, deterministic output, and conservative fallback behavior.
 - User manual source added under `docs/manual/`:
   - 15 chapters (`00-manual-overview.md` through `14-glossary.md`) covering install,
     stems prep, the four main workflows, reports, safe-render, translation QA,

@@ -32,6 +32,13 @@ mmo stems bus-plan --map out/stems_map.json --out out/bus_plan.json --csv out/bu
 The bus plan is deterministic by design: stable stem ordering, stable bus-group ordering,
 and fixed consolidation rules (for example kick/snare/toms/perc/cyms under drums).
 
+Scene intent scaffolding from stems artifacts.
+When you have `stems_map.json` + `bus_plan.json`, you can scaffold a conservative scene intent:
+mmo scene build --map out/stems_map.json --bus out/bus_plan.json --out out/scene.json --profile PROFILE.ASSIST
+This pass classifies likely objects vs beds, adds width/depth proxies, and records
+layout-safety defaults.
+Important: `scene.json` is intent metadata, not an audio bounce. It does not render audio by itself.
+
 Pro notes.
 Schema validation is a feature.
 If an artifact fails validation, that is MMO preventing silent drift.

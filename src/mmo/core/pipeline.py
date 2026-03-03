@@ -47,6 +47,9 @@ _FILE_SUFFIX_BY_FORMAT = {
     "aiff": "aiff",
     "alac": "m4a",
 }
+_BASELINE_RENDERER_ID = "PLUGIN.RENDERER.MIXDOWN_BASELINE"
+_SYSTEM_TRANSCODE_RECOMMENDATION_ID = "REC.SYSTEM.TRANSCODE"
+_SYSTEM_TRANSCODE_ACTION_ID = "ACTION.DOWNMIX.RENDER"
 
 
 @dataclass(frozen=True)
@@ -567,10 +570,27 @@ def _append_transcode_skip(
     *,
     reason: str,
 ) -> None:
+    recommendation_id = _coerce_str(output.get("recommendation_id")).strip()
+    action_id = _coerce_str(output.get("action_id")).strip()
+    if not recommendation_id:
+        metadata = output.get("metadata")
+        if isinstance(metadata, dict):
+            contributing = metadata.get("contributing_recommendation_ids")
+            if isinstance(contributing, list):
+                for item in contributing:
+                    candidate = _coerce_str(item).strip()
+                    if candidate:
+                        recommendation_id = candidate
+                        break
+    if not recommendation_id:
+        recommendation_id = _SYSTEM_TRANSCODE_RECOMMENDATION_ID
+    if not action_id:
+        action_id = _SYSTEM_TRANSCODE_ACTION_ID
+
     skipped.append(
         {
-            "recommendation_id": _coerce_str(output.get("recommendation_id")),
-            "action_id": _coerce_str(output.get("action_id")),
+            "recommendation_id": recommendation_id,
+            "action_id": action_id,
             "reason": reason,
             "gate_summary": "",
         }
@@ -806,8 +826,32 @@ def run_renderers(
     ffmpeg_cmd = resolve_ffmpeg_cmd() if needs_encode else None
 
     manifests: List[Dict[str, Any]] = []
+    non_baseline_outputs_written = False
     for plugin in plugins:
         if plugin.plugin_type != "renderer":
+            continue
+
+        if (
+            plugin.plugin_id == _BASELINE_RENDERER_ID
+            and eligible
+            and non_baseline_outputs_written
+        ):
+            manifests.append(
+                {
+                    "renderer_id": plugin.plugin_id,
+                    "outputs": [],
+                    "received_recommendation_ids": sorted(
+                        {
+                            rec_id
+                            for rec in eligible
+                            for rec_id in [_coerce_str(rec.get("recommendation_id"))]
+                            if rec_id
+                        }
+                    ),
+                    "notes": "skipped_baseline_due_eligible_recommendations",
+                    "skipped": _merge_skipped_entries(blocked_skipped),
+                }
+            )
             continue
 
         plugin_max_channels = None
@@ -868,5 +912,41 @@ def run_renderers(
             transcode_skipped,
         )
         manifests.append(manifest)
+
+        if plugin.plugin_id != _BASELINE_RENDERER_ID:
+            manifest_outputs = manifest.get("outputs")
+            if isinstance(manifest_outputs, list) and any(
+                isinstance(output, dict) for output in manifest_outputs
+            ):
+                non_baseline_outputs_written = True
+
+    # If baseline ran before other output-producing renderers, suppress its
+    # outputs to avoid duplicate deliverables in recommendation-driven runs.
+    if eligible:
+        has_non_baseline_outputs = any(
+            isinstance(manifest, dict)
+            and _coerce_str(manifest.get("renderer_id")) != _BASELINE_RENDERER_ID
+            and isinstance(manifest.get("outputs"), list)
+            and any(isinstance(output, dict) for output in manifest.get("outputs", []))
+            for manifest in manifests
+        )
+        if has_non_baseline_outputs:
+            for manifest in manifests:
+                if not isinstance(manifest, dict):
+                    continue
+                if _coerce_str(manifest.get("renderer_id")) != _BASELINE_RENDERER_ID:
+                    continue
+                manifest_outputs = manifest.get("outputs")
+                if not isinstance(manifest_outputs, list):
+                    continue
+                if not any(isinstance(output, dict) for output in manifest_outputs):
+                    continue
+                manifest["outputs"] = []
+                existing_notes = _coerce_str(manifest.get("notes")).strip()
+                baseline_note = "skipped_baseline_due_eligible_recommendations"
+                if not existing_notes:
+                    manifest["notes"] = baseline_note
+                elif baseline_note not in existing_notes:
+                    manifest["notes"] = f"{existing_notes};{baseline_note}"
 
     return manifests

@@ -165,6 +165,8 @@ What remains: expand fixture corpus with dedicated 5.1/7.1 session sets and an e
 - [x] CLI can: validate, analyze, generate scene, render, and output reports.
 - [x] CLI can generate deterministic bus planning artifacts from classified stems
   (`mmo stems bus-plan` from `stems_map.json`).
+- [x] CLI can scaffold deterministic scene intent from stems artifacts
+  (`mmo scene build --map <stems_map.json> --bus <bus_plan.json>`).
 - [x] Target selection is interchangeable across CLI/GUI flows: `TARGET.*`,
   `LAYOUT.*`, and musician shorthands (`stereo`, `5.1`, `7.1`, `7.1.4`,
   `binaural`);

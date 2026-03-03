@@ -295,6 +295,75 @@ class TestCliScene(unittest.TestCase):
             self.assertEqual(forced_gtr.get("loudness_bias"), "back")
             self.assertEqual(forced_gtr.get("locks"), [])
 
+    def test_scene_cli_build_from_stems_map_and_bus_plan(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "scene.schema.json")
+        stems_map_path = repo_root / "tests" / "fixtures" / "scene_intent" / "tiny_stems_map.json"
+        bus_plan_path = repo_root / "tests" / "fixtures" / "scene_intent" / "tiny_bus_plan.json"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            scene_path_a = temp_path / "scene.a.json"
+            scene_path_b = temp_path / "scene.b.json"
+
+            build_exit_a = main(
+                [
+                    "scene",
+                    "build",
+                    "--map",
+                    str(stems_map_path),
+                    "--bus",
+                    str(bus_plan_path),
+                    "--profile",
+                    "PROFILE.ASSIST",
+                    "--out",
+                    str(scene_path_a),
+                ]
+            )
+            self.assertEqual(build_exit_a, 0)
+            self.assertTrue(scene_path_a.exists())
+
+            payload_a = json.loads(scene_path_a.read_text(encoding="utf-8"))
+            validator.validate(payload_a)
+            self.assertIn("generated_utc", payload_a)
+            self.assertEqual(payload_a.get("metadata", {}).get("profile_id"), "PROFILE.ASSIST")
+            self.assertEqual(
+                [row.get("stem_id") for row in payload_a.get("objects", []) if isinstance(row, dict)],
+                [
+                    "STEMFILE.1111111111",
+                    "STEMFILE.5555555555",
+                    "STEMFILE.2222222222",
+                ],
+            )
+            self.assertEqual(
+                payload_a.get("source_refs", {}).get("stems_map_ref"),
+                stems_map_path.resolve().as_posix(),
+            )
+            self.assertEqual(
+                payload_a.get("source_refs", {}).get("bus_plan_ref"),
+                bus_plan_path.resolve().as_posix(),
+            )
+
+            build_exit_b = main(
+                [
+                    "scene",
+                    "build",
+                    "--map",
+                    str(stems_map_path),
+                    "--bus",
+                    str(bus_plan_path),
+                    "--profile",
+                    "PROFILE.ASSIST",
+                    "--out",
+                    str(scene_path_b),
+                ]
+            )
+            self.assertEqual(build_exit_b, 0)
+            self.assertEqual(
+                scene_path_a.read_text(encoding="utf-8"),
+                scene_path_b.read_text(encoding="utf-8"),
+            )
+
     def test_scene_cli_build_unknown_templates_error_is_sorted_and_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

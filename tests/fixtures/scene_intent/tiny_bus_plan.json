@@ -1,0 +1,168 @@
+{
+  "assignments": [
+    {
+      "bus_id": "BUS.DRUMS.KICK",
+      "bus_path": "BUS.DRUMS/BUS.DRUMS.KICK",
+      "confidence": 0.99,
+      "file_path": "stems/Kick.wav",
+      "role_id": "ROLE.DRUM.KICK",
+      "stem_id": "STEMFILE.1111111111"
+    },
+    {
+      "bus_id": "BUS.VOX.LEAD",
+      "bus_path": "BUS.VOX/BUS.VOX.LEAD",
+      "confidence": 0.95,
+      "file_path": "stems/LeadVox.wav",
+      "role_id": "ROLE.VOCAL.LEAD",
+      "stem_id": "STEMFILE.2222222222"
+    },
+    {
+      "bus_id": "BUS.FX.REVERB",
+      "bus_path": "BUS.FX/BUS.FX.REVERB",
+      "confidence": 0.8,
+      "file_path": "stems/HallVerbReturn.wav",
+      "role_id": "ROLE.FX.REVERB",
+      "stem_id": "STEMFILE.3333333333"
+    },
+    {
+      "bus_id": "BUS.MUSIC.SYNTH",
+      "bus_path": "BUS.MUSIC/BUS.MUSIC.SYNTH",
+      "confidence": 0.74,
+      "file_path": "stems/PadWide.wav",
+      "role_id": "ROLE.SYNTH.PAD",
+      "stem_id": "STEMFILE.4444444444"
+    },
+    {
+      "bus_id": "BUS.OTHER.UNKNOWN",
+      "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+      "confidence": 0.2,
+      "file_path": "stems/Mystery.wav",
+      "role_id": "ROLE.OTHER.UNKNOWN",
+      "stem_id": "STEMFILE.5555555555"
+    }
+  ],
+  "buses": [
+    {
+      "bus_id": "BUS.DRUMS",
+      "children_ids": [
+        "BUS.DRUMS.KICK"
+      ],
+      "label": "Drums",
+      "parent_id": null,
+      "stem_ids": [
+        "STEMFILE.1111111111"
+      ]
+    },
+    {
+      "bus_id": "BUS.DRUMS.KICK",
+      "children_ids": [],
+      "label": "Drums Kick",
+      "parent_id": "BUS.DRUMS",
+      "stem_ids": [
+        "STEMFILE.1111111111"
+      ]
+    },
+    {
+      "bus_id": "BUS.VOX",
+      "children_ids": [
+        "BUS.VOX.LEAD"
+      ],
+      "label": "Vox",
+      "parent_id": null,
+      "stem_ids": [
+        "STEMFILE.2222222222"
+      ]
+    },
+    {
+      "bus_id": "BUS.VOX.LEAD",
+      "children_ids": [],
+      "label": "Vox Lead",
+      "parent_id": "BUS.VOX",
+      "stem_ids": [
+        "STEMFILE.2222222222"
+      ]
+    },
+    {
+      "bus_id": "BUS.FX",
+      "children_ids": [
+        "BUS.FX.REVERB"
+      ],
+      "label": "Fx",
+      "parent_id": null,
+      "stem_ids": [
+        "STEMFILE.3333333333"
+      ]
+    },
+    {
+      "bus_id": "BUS.FX.REVERB",
+      "children_ids": [],
+      "label": "Fx Reverb",
+      "parent_id": "BUS.FX",
+      "stem_ids": [
+        "STEMFILE.3333333333"
+      ]
+    },
+    {
+      "bus_id": "BUS.MUSIC",
+      "children_ids": [
+        "BUS.MUSIC.SYNTH"
+      ],
+      "label": "Music",
+      "parent_id": null,
+      "stem_ids": [
+        "STEMFILE.4444444444"
+      ]
+    },
+    {
+      "bus_id": "BUS.MUSIC.SYNTH",
+      "children_ids": [],
+      "label": "Music Synth",
+      "parent_id": "BUS.MUSIC",
+      "stem_ids": [
+        "STEMFILE.4444444444"
+      ]
+    },
+    {
+      "bus_id": "BUS.OTHER",
+      "children_ids": [
+        "BUS.OTHER.UNKNOWN"
+      ],
+      "label": "Other",
+      "parent_id": null,
+      "stem_ids": [
+        "STEMFILE.5555555555"
+      ]
+    },
+    {
+      "bus_id": "BUS.OTHER.UNKNOWN",
+      "children_ids": [],
+      "label": "Other Unknown",
+      "parent_id": "BUS.OTHER",
+      "stem_ids": [
+        "STEMFILE.5555555555"
+      ]
+    }
+  ],
+  "generated_utc": "1970-01-01T00:00:00Z",
+  "schema": "mmo.bus_plan.v1",
+  "source": {
+    "roles_ref": "ontology/roles.yaml",
+    "stems_map_ref": "tests/fixtures/scene_intent/tiny_stems_map.json"
+  },
+  "summary": {
+    "bus_counts": {
+      "BUS.DRUMS.KICK": 1,
+      "BUS.FX.REVERB": 1,
+      "BUS.MUSIC.SYNTH": 1,
+      "BUS.OTHER.UNKNOWN": 1,
+      "BUS.VOX.LEAD": 1
+    },
+    "role_counts": {
+      "ROLE.DRUM.KICK": 1,
+      "ROLE.FX.REVERB": 1,
+      "ROLE.OTHER.UNKNOWN": 1,
+      "ROLE.SYNTH.PAD": 1,
+      "ROLE.VOCAL.LEAD": 1
+    }
+  }
+}

@@ -42,6 +42,7 @@ from mmo.core.scene_templates import (
     list_scene_templates,
     preview_scene_templates,
 )
+from mmo.core.scene_builder import build_scene_from_bus_plan
 from mmo.core.variants import run_variant_plan
 
 __all__ = [
@@ -49,6 +50,7 @@ __all__ = [
     "_render_render_plan_text",
     "_build_validated_scene_payload",
     "_run_scene_build_command",
+    "_run_scene_build_from_bus_plan_command",
     "_validate_scene_schema",
     "_scene_intent_failure_payload",
     "_validate_scene_intent_rules",
@@ -106,12 +108,22 @@ def _load_gates_policy_ids() -> list[str] | None:
 def _render_scene_text(scene: dict[str, Any]) -> str:
     source = scene.get("source")
     source_payload = source if isinstance(source, dict) else {}
+    source_refs = scene.get("source_refs")
+    source_refs_payload = source_refs if isinstance(source_refs, dict) else {}
     lines = [
         f"schema_version: {scene.get('schema_version', '')}",
         f"scene_id: {scene.get('scene_id', '')}",
         f"created_from: {source_payload.get('created_from', '')}",
         f"stems_dir: {source_payload.get('stems_dir', '')}",
     ]
+    generated_utc = _coerce_str(scene.get("generated_utc")).strip()
+    if generated_utc:
+        lines.append(f"generated_utc: {generated_utc}")
+    stems_map_ref = _coerce_str(source_refs_payload.get("stems_map_ref")).strip()
+    bus_plan_ref = _coerce_str(source_refs_payload.get("bus_plan_ref")).strip()
+    if stems_map_ref or bus_plan_ref:
+        lines.append(f"stems_map_ref: {stems_map_ref}")
+        lines.append(f"bus_plan_ref: {bus_plan_ref}")
 
     objects = scene.get("objects")
     object_count = len(objects) if isinstance(objects, list) else 0
@@ -191,6 +203,42 @@ def _run_scene_build_command(
         scene_payload=scene_payload,
         template_ids=template_ids or [],
         force=force_templates,
+    )
+    _write_json_file(out_path, scene_payload)
+    return 0
+
+
+def _run_scene_build_from_bus_plan_command(
+    *,
+    repo_root: Path,
+    stems_map_path: Path,
+    bus_plan_path: Path,
+    out_path: Path,
+    profile_id: str,
+) -> int:
+    stems_map_payload = _load_json_object(stems_map_path, label="Stems map")
+    _validate_json_payload(
+        stems_map_payload,
+        schema_path=schemas_dir() / "stems_map.schema.json",
+        payload_name="Stems map",
+    )
+    bus_plan_payload = _load_json_object(bus_plan_path, label="Bus plan")
+    _validate_json_payload(
+        bus_plan_payload,
+        schema_path=schemas_dir() / "bus_plan.schema.json",
+        payload_name="Bus plan",
+    )
+    scene_payload = build_scene_from_bus_plan(
+        stems_map_payload,
+        bus_plan_payload,
+        profile_id=profile_id,
+        stems_map_ref=stems_map_path.resolve().as_posix(),
+        bus_plan_ref=bus_plan_path.resolve().as_posix(),
+    )
+    _validate_json_payload(
+        scene_payload,
+        schema_path=schemas_dir() / "scene.schema.json",
+        payload_name="Scene",
     )
     _write_json_file(out_path, scene_payload)
     return 0

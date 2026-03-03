@@ -1,0 +1,79 @@
+{
+  "assignments": [
+    {
+      "bus_group": "DRUMS",
+      "confidence": 0.99,
+      "file_id": "STEMFILE.1111111111",
+      "link_group_id": null,
+      "reasons": [
+        "filename token kick"
+      ],
+      "rel_path": "stems/Kick.wav",
+      "role_id": "ROLE.DRUM.KICK"
+    },
+    {
+      "bus_group": "VOX",
+      "confidence": 0.95,
+      "file_id": "STEMFILE.2222222222",
+      "link_group_id": null,
+      "reasons": [
+        "filename token leadvox"
+      ],
+      "rel_path": "stems/LeadVox.wav",
+      "role_id": "ROLE.VOCAL.LEAD"
+    },
+    {
+      "bus_group": "FX",
+      "confidence": 0.8,
+      "file_id": "STEMFILE.3333333333",
+      "link_group_id": null,
+      "reasons": [
+        "filename token reverb"
+      ],
+      "rel_path": "stems/HallVerbReturn.wav",
+      "role_id": "ROLE.FX.REVERB"
+    },
+    {
+      "bus_group": "MUSIC",
+      "confidence": 0.74,
+      "file_id": "STEMFILE.4444444444",
+      "link_group_id": null,
+      "reasons": [
+        "filename token pad"
+      ],
+      "rel_path": "stems/PadWide.wav",
+      "role_id": "ROLE.SYNTH.PAD"
+    },
+    {
+      "bus_group": "OTHER",
+      "confidence": 0.2,
+      "file_id": "STEMFILE.5555555555",
+      "link_group_id": null,
+      "reasons": [
+        "no strong match"
+      ],
+      "rel_path": "stems/Mystery.wav",
+      "role_id": "ROLE.OTHER.UNKNOWN"
+    }
+  ],
+  "roles_ref": "ontology/roles.yaml",
+  "stems_index_ref": "stems_index.json",
+  "summary": {
+    "counts_by_bus_group": {
+      "DRUMS": 1,
+      "FX": 1,
+      "MUSIC": 1,
+      "OTHER": 1,
+      "VOX": 1
+    },
+    "counts_by_role": {
+      "ROLE.DRUM.KICK": 1,
+      "ROLE.FX.REVERB": 1,
+      "ROLE.OTHER.UNKNOWN": 1,
+      "ROLE.SYNTH.PAD": 1,
+      "ROLE.VOCAL.LEAD": 1
+    },
+    "unknown_files": 0
+  },
+  "version": "0.1.0"
+}

@@ -15,7 +15,12 @@
   "properties": {
     "schema_version": { "const": "0.1.0" },
     "scene_id": { "type": "string", "minLength": 1 },
+    "generated_utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+    },
     "source": { "$ref": "#/$defs/source" },
+    "source_refs": { "$ref": "#/$defs/source_refs" },
     "intent": { "$ref": "#/$defs/object_intent" },
     "timeline": { "$ref": "timeline.schema.json" },
     "objects": {
@@ -26,6 +31,7 @@
       "type": "array",
       "items": { "$ref": "#/$defs/bed_entry" }
     },
+    "rules": { "$ref": "#/$defs/scene_rules" },
     "routing_intent": { "$ref": "#/$defs/routing_intent" },
     "metadata": { "$ref": "#/$defs/metadata" }
   },
@@ -107,6 +113,27 @@
         }
       }
     },
+    "source_refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stems_map_ref", "bus_plan_ref"],
+      "properties": {
+        "stems_map_ref": { "type": "string", "minLength": 1 },
+        "bus_plan_ref": { "type": "string", "minLength": 1 },
+        "roles_ref": { "type": "string", "minLength": 1 },
+        "stems_index_ref": { "type": "string", "minLength": 1 }
+      }
+    },
+    "scene_hint_locks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["azimuth_hint", "width_hint", "depth_hint"],
+      "properties": {
+        "azimuth_hint": { "type": "boolean" },
+        "width_hint": { "type": "boolean" },
+        "depth_hint": { "type": "boolean" }
+      }
+    },
     "position_intent": {
       "type": "object",
       "additionalProperties": false,
@@ -148,8 +175,21 @@
       "properties": {
         "object_id": { "type": "string", "minLength": 1 },
         "stem_id": { "type": "string", "minLength": 1 },
+        "role_id": {
+          "type": "string",
+          "pattern": "^ROLE\\.[A-Z0-9_.]+$"
+        },
+        "group_bus": {
+          "type": "string",
+          "pattern": "^BUS\\.[A-Z0-9_]+$"
+        },
         "label": { "type": "string", "minLength": 1 },
         "channel_count": { "type": "integer", "minimum": 1 },
+        "azimuth_hint": { "type": "number", "minimum": -180, "maximum": 180 },
+        "width_hint": { "type": "number", "minimum": 0, "maximum": 1 },
+        "depth_hint": { "type": "number", "minimum": 0, "maximum": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "locks": { "$ref": "#/$defs/scene_hint_locks" },
         "source_metadata": { "$ref": "#/$defs/source_metadata" },
         "intent": { "$ref": "#/$defs/object_intent" },
         "notes": {
@@ -177,6 +217,13 @@
       "required": ["bed_id", "label", "kind", "intent", "notes"],
       "properties": {
         "bed_id": { "type": "string", "minLength": 1 },
+        "bus_id": {
+          "type": "string",
+          "pattern": "^BUS\\.[A-Z0-9_]+(?:\\.[A-Z0-9_]+)?$"
+        },
+        "content_hint": { "type": "string", "minLength": 1 },
+        "width_hint": { "type": "number", "minimum": 0, "maximum": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
         "label": { "type": "string", "minLength": 1 },
         "kind": {
           "type": "string",
@@ -219,6 +266,47 @@
         "preset_id": { "type": "string", "minLength": 1 },
         "vibe": { "$ref": "#/$defs/vibe_snapshot" },
         "metering": { "$ref": "#/$defs/scene_metering" }
+      }
+    },
+    "layout_safety_defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unknown_role_strategy",
+        "default_azimuth_mode",
+        "prefer_bed_for_ambient"
+      ],
+      "properties": {
+        "unknown_role_strategy": {
+          "type": "string",
+          "enum": ["object_low_confidence"]
+        },
+        "default_azimuth_mode": {
+          "type": "string",
+          "enum": ["none", "center"]
+        },
+        "prefer_bed_for_ambient": { "type": "boolean" }
+      }
+    },
+    "lfe_policy_defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allow_inferred_lfe_send", "mode"],
+      "properties": {
+        "allow_inferred_lfe_send": { "type": "boolean" },
+        "mode": {
+          "type": "string",
+          "enum": ["manual_only", "derive_if_requested"]
+        }
+      }
+    },
+    "scene_rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["layout_safety_defaults", "lfe_policy_defaults"],
+      "properties": {
+        "layout_safety_defaults": { "$ref": "#/$defs/layout_safety_defaults" },
+        "lfe_policy_defaults": { "$ref": "#/$defs/lfe_policy_defaults" }
       }
     },
     "scene_object_meter": {

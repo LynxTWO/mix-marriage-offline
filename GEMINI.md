@@ -36,6 +36,9 @@ Non-negotiables:
 - Keep stems artifact progression deterministic: `stems_map` (role identity)
   and `bus_plan` (bus-path identity) must preserve stable sorting and
   schema-valid contracts across repeated runs.
+- Keep scene intent scaffolding deterministic when built from stems artifacts:
+  `mmo scene build --map ... --bus ...` must emit stable object-vs-bed
+  classification with conservative low-confidence fallback behavior.
 - Keep dual-LFE (x.2) export contracts explicit: preserve canonical SPK channel
   order in render/recall artifacts, use conservative WAV mask strategy, and
   surface validation guidance for toolchains that may drop `LFE2`.
