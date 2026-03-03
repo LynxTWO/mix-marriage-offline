@@ -97,6 +97,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- DSP pipeline hook scaffold with strict bounded authority:
+  - Added strict `schemas/plugin_manifest.json` (plus packaged mirror) for DSP
+    hook plugin manifests (`schema_version`, `stage_scope`, authority,
+    evidence contract, and parameter bounds).
+  - Added deterministic bus-aware hook runner at
+    `src/mmo/core/dsp_pipeline_hooks.py` with three canonical stages:
+    `pre_bus_stem`, `bus`, and `post_master`, including authority refusal
+    paths and explainable `what/why/where/confidence` events.
+  - Added one low-risk default plugin:
+    `DSP.PLUGIN.HPF_RUMBLE_GUARD_V0` (conservative high-pass planning only for
+    non-bass roles when rumble evidence confidence is high).
+  - Wired render-engine stem dispatch flow to execute DSP hooks and emit DSP
+    explainability events through `ProgressTracker` logs.
+  - Added deterministic coverage in
+    `tests/test_dsp_pipeline_hooks.py` and
+    `tests/test_render_engine_dsp_hooks.py`.
+
 - Downmix similarity gate framework for rendered surround vs stereo reference:
   - Added deterministic rendered-audio gate metrics for
     `loudness delta`, `correlation over time`, `coarse-band spectral distance`,

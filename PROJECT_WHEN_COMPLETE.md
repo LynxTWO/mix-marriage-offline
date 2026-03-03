@@ -288,6 +288,9 @@ What remains: the core DSP path is functional, but formalized fallback sequencin
   5) Render pass (scene → target layout) with routing + downmix policy.
   6) Post-render QA pass (gates, downmix similarity, correlation/phase-risk).
   7) Export pass (format, dither policy, loudness/true-peak constraints).
+- [x] Deterministic DSP hook scaffold exists for the corrective-pass boundary:
+  `pre_bus_stem` (per-stem), `bus` (per-bus group), and `post_master`
+  stage hooks with bounded-authority enforcement and explainable event output.
 - [ ] Each stage emits evidence and timing into the render report.
 
 ### 4.9.3 Plugin API: audio processing contract

@@ -31,6 +31,10 @@ import concurrent.futures
 from typing import Any
 
 from mmo.core.downmix import predict_fold_similarity, resolve_preflight_matrix
+from mmo.core.dsp_pipeline_hooks import (
+    normalize_dsp_stem_specs,
+    run_dsp_pipeline_hooks,
+)
 from mmo.core.layout_negotiation import DEFAULT_CHANNEL_STANDARD
 from mmo.core.loudness_profiles import (
     DEFAULT_LOUDNESS_PROFILE_ID,
@@ -57,11 +61,24 @@ def _coerce_str(value: Any) -> str:
     return ""
 
 
+def _coerce_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
 def _normalize_options(options: dict[str, Any] | None) -> dict[str, Any]:
     """Return a normalised engine-options dict with safe defaults."""
     if not isinstance(options, dict):
         options = {}
     raw_standard = _coerce_str(options.get("layout_standard", "")).strip().upper()
+    normalized_dsp_stems = normalize_dsp_stem_specs(options.get("dsp_stems"))
+    raw_stem_ids = sorted(str(s) for s in (options.get("stem_ids") or []))
+    if not raw_stem_ids and normalized_dsp_stems:
+        raw_stem_ids = [spec.stem_id for spec in normalized_dsp_stems]
+    stem_ids = sorted(set(raw_stem_ids))
     return {
         "dry_run": bool(options.get("dry_run", False)),
         "max_workers": max(1, int(options.get("max_workers", _DEFAULT_MAX_WORKERS))),
@@ -81,8 +98,11 @@ def _normalize_options(options: dict[str, Any] | None) -> dict[str, Any]:
             _coerce_str(options.get("loudness_profile_id", "")).strip() or None
         ),
         "layout_standard": raw_standard or DEFAULT_CHANNEL_STANDARD,
-        "stem_ids": sorted(str(s) for s in (options.get("stem_ids") or [])),
+        "stem_ids": stem_ids,
         "stem_max_workers": max(1, int(options.get("stem_max_workers") or 2)),
+        "dsp_stems": normalized_dsp_stems,
+        "enable_bus_dsp": bool(options.get("enable_bus_dsp", False)),
+        "enable_post_master_dsp": bool(options.get("enable_post_master_dsp", False)),
         "progress_listener": options.get("progress_listener"),
         "log_listener": options.get("log_listener"),
         "cancel_token": options.get("cancel_token"),
@@ -239,6 +259,8 @@ def _execute_job(
 
     output_files: list[dict[str, Any]] = []
     notes: list[str] = list(contract.get("notes") or [])
+    dsp_receipt: dict[str, Any] | None = None
+    dsp_events: list[dict[str, Any]] = []
 
     # Explainability: record which channel ordering standard was used.
     contract_standard = _coerce_str(contract.get("layout_standard")).strip()
@@ -273,6 +295,30 @@ def _execute_job(
             stem_results = dispatch_stems(stem_jobs, max_workers=stem_workers)
             notes.append(
                 f"stem_dispatch: {len(stem_results)} stem(s) ({active_standard})."
+            )
+            dsp_receipt = run_dsp_pipeline_hooks(
+                stem_results=stem_results,
+                stem_specs=list(options.get("dsp_stems") or []),
+                enable_bus_stage=bool(options.get("enable_bus_dsp", False)),
+                enable_post_master_stage=bool(options.get("enable_post_master_dsp", False)),
+            )
+            dsp_events = list(dsp_receipt.get("events") or [])
+            stages = dsp_receipt.get("stages") if isinstance(dsp_receipt, dict) else {}
+            pre_actions = 0
+            bus_actions = 0
+            post_actions = 0
+            if isinstance(stages, dict):
+                pre_actions = int(
+                    ((stages.get("pre_bus_stem") or {}).get("action_count") or 0)
+                )
+                bus_actions = int(((stages.get("bus") or {}).get("action_count") or 0))
+                post_actions = int(
+                    ((stages.get("post_master") or {}).get("action_count") or 0)
+                )
+            notes.append(
+                "dsp_hooks: "
+                f"actions={len(dsp_receipt.get('actions') or [])}, "
+                f"pre_bus={pre_actions}, bus={bus_actions}, post_master={post_actions}."
             )
         except (ValueError, ImportError) as exc:
             notes.append(f"stem_dispatch skipped: {exc}")
@@ -311,6 +357,8 @@ def _execute_job(
         "notes": notes,
         # Internal key — stripped before writing the final report.
         "_qa": job_qa,
+        "_dsp_receipt": dsp_receipt or {},
+        "_dsp_events": dsp_events,
     }
 
 
@@ -475,6 +523,12 @@ def render_scene_to_targets(
         - ``stem_ids`` (list[str]): Stem IDs to dispatch through the layout-aware
           plugin chain (stems → plugins phase).  Empty list skips stem dispatch.
         - ``stem_max_workers`` (int, default 2): Thread pool size for stem dispatch.
+        - ``dsp_stems`` (list[dict]): Optional per-stem role/bus/evidence rows for
+          DSP hook planning. Each row supports ``stem_id``, ``role_id``, ``bus_id``,
+          and ``evidence`` object.
+        - ``enable_bus_dsp`` (bool, default False): Enable bus-stage DSP hook actions.
+        - ``enable_post_master_dsp`` (bool, default False): Enable post-master DSP
+          hook actions.
 
     Returns
     -------
@@ -585,6 +639,30 @@ def render_scene_to_targets(
             options=opts,
             cancel_token=cancel_token,
         )
+        raw_dsp_events = result.get("_dsp_events")
+        if isinstance(raw_dsp_events, list):
+            for raw_event in raw_dsp_events:
+                if not isinstance(raw_event, dict):
+                    continue
+                what = _coerce_str(raw_event.get("what")).strip()
+                why = _coerce_str(raw_event.get("why")).strip()
+                if not what or not why:
+                    continue
+                where_raw = raw_event.get("where")
+                where = where_raw if isinstance(where_raw, list) else [job_id]
+                confidence = _coerce_float(raw_event.get("confidence"))
+                if confidence is not None:
+                    confidence = max(0.0, min(1.0, confidence))
+                evidence = raw_event.get("evidence")
+                progress.emit_log(
+                    kind="action",
+                    scope="dsp",
+                    what=what,
+                    why=why,
+                    where=where,
+                    confidence=confidence,
+                    evidence=evidence if isinstance(evidence, dict) else {},
+                )
         status = _coerce_str(result.get("status")).strip() or "unknown"
         confidence = 1.0 if status in {"completed", "skipped"} else 0.0
         progress.advance(
