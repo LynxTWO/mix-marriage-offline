@@ -39,6 +39,10 @@ def _coerce_channel_order(value: Any) -> list[str]:
     ]
 
 
+def _json_clone(value: Any) -> Any:
+    return json.loads(json.dumps(value))
+
+
 def _resolved_layout_rows(plan: dict[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     raw_rows = plan.get("resolved_layouts")
@@ -180,9 +184,13 @@ def build_render_report_from_plan(
         if target_layout_id:
             report_job["target_layout_id"] = target_layout_id
 
+        render_intent = plan_job.get("render_intent")
+        if isinstance(render_intent, dict):
+            report_job["render_intent"] = _json_clone(render_intent)
+
         lfe_receipt = plan_job.get("lfe_receipt")
         if isinstance(lfe_receipt, dict):
-            report_job["lfe_receipt"] = json.loads(json.dumps(lfe_receipt))
+            report_job["lfe_receipt"] = _json_clone(lfe_receipt)
 
         resolved_layout = resolved_by_layout.get(target_layout_id)
         if resolved_layout is not None:

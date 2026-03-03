@@ -103,6 +103,42 @@ def _render_plan_with_loudness_profile(scene_path: str, profile_id: str) -> dict
     return payload
 
 
+def _render_plan_with_render_intent(scene_path: str) -> dict:
+    payload = _minimal_render_plan(scene_path)
+    payload["jobs"][0]["render_intent"] = {
+        "schema_version": "0.1.0",
+        "policy_id": "POLICY.PLACEMENT.CONSERVATIVE_SURROUND_V1",
+        "target_layout_id": "LAYOUT.2_0",
+        "channel_order": ["SPK.L", "SPK.R"],
+        "bus_gain_staging": {
+            "master_gain_db": 0.0,
+            "group_trims_db": {
+                "BUS.DRUMS": 0.0,
+            },
+        },
+        "stem_sends": [
+            {
+                "stem_id": "STEM.KICK",
+                "role_id": "ROLE.DRUM.KICK",
+                "group_bus": "BUS.DRUMS",
+                "policy_class": "ANCHOR.TRANSIENT_FRONT_ONLY",
+                "confidence": 0.95,
+                "width_hint": 0.2,
+                "depth_hint": 0.25,
+                "locks": [],
+                "bus_trim_db": 0.0,
+                "gains": {"SPK.L": 0.86, "SPK.R": 0.86},
+                "nonzero_channels": ["SPK.L", "SPK.R"],
+                "notes": [],
+            }
+        ],
+        "notes": [
+            "Conservative front-heavy placement policy.",
+        ],
+    }
+    return payload
+
+
 class TestRenderReportCli(unittest.TestCase):
     def test_produces_schema_valid_render_report(self) -> None:
         validator = _schema_validator("render_report.schema.json")
@@ -199,6 +235,33 @@ class TestRenderReportCli(unittest.TestCase):
             self.assertEqual(
                 payload["policies_applied"]["gates_policy_id"],
                 "POLICY.GATES.CORE_V0",
+            )
+
+    def test_report_carries_render_intent_receipt(self) -> None:
+        validator = _schema_validator("render_report.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            plan_path = temp_path / "render_plan.json"
+            out_path = temp_path / "render_report.json"
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            _write_json(plan_path, _render_plan_with_render_intent(scene_posix))
+
+            exit_code = main([
+                "render-report",
+                "--plan", str(plan_path),
+                "--out", str(out_path),
+            ])
+            self.assertEqual(exit_code, 0)
+
+            payload = json.loads(out_path.read_text(encoding="utf-8"))
+            validator.validate(payload)
+            job = payload["jobs"][0]
+            self.assertIn("render_intent", job)
+            self.assertEqual(
+                job["render_intent"]["policy_id"],
+                "POLICY.PLACEMENT.CONSERVATIVE_SURROUND_V1",
             )
 
     def test_report_includes_selected_loudness_profile_receipt(self) -> None:

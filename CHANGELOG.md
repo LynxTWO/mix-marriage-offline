@@ -131,6 +131,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     and conservative `rules` defaults.
   - Added fixture-driven and CLI coverage in `tests/test_scene_builder_bus_plan.py` and
     `tests/test_cli_scene.py` for schema validity, deterministic output, and conservative fallback behavior.
+- Conservative surround placement policy (scene -> layout mapping):
+  - Added `src/mmo/core/placement_policy.py` with deterministic, safety-first channel-send mapping for
+    `LAYOUT.2_0`, `LAYOUT.5_1`, and `LAYOUT.7_1`.
+  - Rules keep kick/snare/bass front-safe by default, optionally anchor lead/dialogue to center,
+    apply modest surround sends for pads/ambience/long FX, and gate percussion/hihat surround sends
+    behind width/confidence thresholds.
+  - Added a transient-anchor surround-wrap exception only when both explicit immersive intent
+    (for example `intent.loudness_bias=back` / “you are there” markers) and high
+    width/depth/confidence evidence agree, with lock-aware safety overrides
+    (`LOCK.NO_STEREO_WIDENING`, `LOCK.PRESERVE_CENTER_IMAGE`, `LOCK.PRESERVE_TRANSIENTS`).
+  - `render_plan` jobs now optionally carry `render_intent` payloads, and `render_report` mirrors them
+    so placement policy can be inspected in receipts.
+  - Added fixture-driven policy coverage in `tests/test_placement_policy.py` plus integration checks in
+    `tests/test_cli_render_plan_from_request.py` and `tests/test_cli_render_report.py`.
 - User manual source added under `docs/manual/`:
   - 15 chapters (`00-manual-overview.md` through `14-glossary.md`) covering install,
     stems prep, the four main workflows, reports, safe-render, translation QA,

@@ -5,6 +5,7 @@ import json
 from typing import Any
 
 from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS
+from mmo.core.placement_policy import build_render_intent
 
 
 RENDER_PLAN_SCHEMA_VERSION = "0.1.0"
@@ -184,6 +185,7 @@ def build_render_plan(
         if routing_needed and not resolved_routing_plan_path:
             resolved_routing_plan_path = "routing_plan.json"
         include_routing_plan = bool(resolved_routing_plan_path)
+        render_intent = build_render_intent(scene, target_layout_id)
 
         job: dict[str, Any] = {
             "job_id": f"JOB.{index:03d}",
@@ -197,6 +199,8 @@ def build_render_plan(
                 has_routing_plan=include_routing_plan,
             ),
         }
+        if isinstance(render_intent, dict):
+            job["render_intent"] = render_intent
         if include_routing_plan:
             job["routing_plan_path"] = resolved_routing_plan_path
         jobs.append(job)

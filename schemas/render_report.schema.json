@@ -37,6 +37,109 @@
       "type": "string",
       "pattern": "^SPK\\.[A-Z0-9_.]+$"
     },
+    "bus_id": {
+      "type": "string",
+      "pattern": "^BUS\\.[A-Z0-9_]+(?:\\.[A-Z0-9_]+)?$"
+    },
+    "channel_gains": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/speaker_id" },
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0.0
+      }
+    },
+    "stem_send": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stem_id",
+        "role_id",
+        "group_bus",
+        "policy_class",
+        "confidence",
+        "width_hint",
+        "depth_hint",
+        "locks",
+        "bus_trim_db",
+        "gains",
+        "nonzero_channels",
+        "notes"
+      ],
+      "properties": {
+        "stem_id": { "type": "string", "minLength": 1 },
+        "role_id": {
+          "type": "string",
+          "pattern": "^ROLE\\.[A-Z0-9_.]+$"
+        },
+        "group_bus": { "$ref": "#/$defs/bus_id" },
+        "policy_class": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "width_hint": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "depth_hint": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "locks": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "bus_trim_db": { "type": "number" },
+        "gains": { "$ref": "#/$defs/channel_gains" },
+        "nonzero_channels": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/speaker_id" }
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "render_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "policy_id",
+        "target_layout_id",
+        "channel_order",
+        "bus_gain_staging",
+        "stem_sends",
+        "notes"
+      ],
+      "properties": {
+        "schema_version": { "const": "0.1.0" },
+        "policy_id": {
+          "type": "string",
+          "pattern": "^POLICY\\.PLACEMENT\\.[A-Z0-9_.]+$"
+        },
+        "target_layout_id": { "$ref": "#/$defs/layout_id" },
+        "channel_order": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/speaker_id" }
+        },
+        "bus_gain_staging": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["master_gain_db", "group_trims_db"],
+          "properties": {
+            "master_gain_db": { "type": "number" },
+            "group_trims_db": {
+              "type": "object",
+              "propertyNames": { "$ref": "#/$defs/bus_id" },
+              "additionalProperties": { "type": "number" }
+            }
+          }
+        },
+        "stem_sends": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stem_send" }
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "loudness_profile_id": {
       "type": "string",
       "pattern": "^LOUD\\.[A-Z0-9_.]+$"
@@ -171,6 +274,7 @@
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
         },
+        "render_intent": { "$ref": "#/$defs/render_intent" },
         "lfe_receipt": { "$ref": "#/$defs/lfe_derivation_receipt" },
         "output_files": {
           "type": "array",

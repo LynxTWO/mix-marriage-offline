@@ -62,6 +62,69 @@ def _minimal_scene(stems_dir: str) -> dict:
     }
 
 
+def _scene_with_policy_signals(stems_dir: str) -> dict:
+    return {
+        "schema_version": "0.1.0",
+        "scene_id": "SCENE.RENDER.PLANNER.PLACEMENT.TEST",
+        "source": {
+            "stems_dir": stems_dir,
+            "created_from": "draft",
+        },
+        "objects": [
+            {
+                "object_id": "OBJ.STEM.KICK",
+                "stem_id": "STEM.KICK",
+                "role_id": "ROLE.DRUM.KICK",
+                "group_bus": "BUS.DRUMS",
+                "label": "Kick",
+                "channel_count": 1,
+                "width_hint": 0.2,
+                "depth_hint": 0.25,
+                "confidence": 0.95,
+                "intent": {
+                    "confidence": 0.95,
+                    "width": 0.2,
+                    "depth": 0.25,
+                    "locks": [],
+                },
+                "notes": [],
+            },
+            {
+                "object_id": "OBJ.STEM.PAD",
+                "stem_id": "STEM.PAD",
+                "role_id": "ROLE.SYNTH.PAD",
+                "group_bus": "BUS.MUSIC",
+                "label": "Pad",
+                "channel_count": 1,
+                "width_hint": 0.9,
+                "depth_hint": 0.6,
+                "confidence": 0.86,
+                "intent": {
+                    "confidence": 0.86,
+                    "width": 0.9,
+                    "depth": 0.6,
+                    "locks": [],
+                },
+                "notes": ["long texture"],
+            },
+        ],
+        "beds": [
+            {
+                "bed_id": "BED.FIELD.001",
+                "label": "Field",
+                "kind": "field",
+                "intent": {
+                    "diffuse": 0.5,
+                    "confidence": 0.0,
+                    "locks": [],
+                },
+                "notes": [],
+            }
+        ],
+        "metadata": {},
+    }
+
+
 def _minimal_request(scene_path: str) -> dict:
     return {
         "schema_version": "0.1.0",
@@ -199,6 +262,54 @@ class TestRenderPlanFromRequestCli(unittest.TestCase):
                 jobs[0]["downmix_routes"][0]["kind"],
                 "direct",
             )
+
+    def test_happy_path_includes_render_intent_when_scene_has_policy_signals(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            stems_dir.mkdir()
+
+            scene_path = temp_path / "scene.json"
+            request_path = temp_path / "render_request.json"
+            out_path = temp_path / "render_plan.json"
+
+            scene_posix = scene_path.resolve().as_posix()
+            _write_json(scene_path, _scene_with_policy_signals(stems_dir.resolve().as_posix()))
+            _write_json(request_path, _minimal_request(scene_posix))
+
+            exit_code = main([
+                "render-plan", "plan",
+                "--request", str(request_path),
+                "--scene", str(scene_path),
+                "--out", str(out_path),
+            ])
+            self.assertEqual(exit_code, 0)
+
+            payload = json.loads(out_path.read_text(encoding="utf-8"))
+            jobs = payload.get("jobs")
+            self.assertIsInstance(jobs, list)
+            if not isinstance(jobs, list) or not jobs:
+                return
+            render_intent = jobs[0].get("render_intent")
+            self.assertIsInstance(render_intent, dict)
+            if not isinstance(render_intent, dict):
+                return
+            self.assertEqual(
+                render_intent.get("policy_id"),
+                "POLICY.PLACEMENT.CONSERVATIVE_SURROUND_V1",
+            )
+            self.assertEqual(render_intent.get("target_layout_id"), "LAYOUT.2_0")
+            stem_sends = render_intent.get("stem_sends")
+            self.assertIsInstance(stem_sends, list)
+            if not isinstance(stem_sends, list):
+                return
+            self.assertGreaterEqual(len(stem_sends), 2)
+            kick_rows = [
+                row
+                for row in stem_sends
+                if isinstance(row, dict) and row.get("stem_id") == "STEM.KICK"
+            ]
+            self.assertEqual(len(kick_rows), 1)
 
     def test_happy_path_with_options_and_routing_plan(self) -> None:
         validator = _schema_validator("render_plan.schema.json")

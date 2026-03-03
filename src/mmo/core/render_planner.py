@@ -18,6 +18,7 @@ from mmo.core.lfe_derivation_profiles import (
     get_lfe_derivation_profile,
 )
 from mmo.core.loudness_profiles import get_loudness_profile
+from mmo.core.placement_policy import build_render_intent
 from mmo.core.registries.render_targets_registry import RenderTargetsRegistry
 from mmo.dsp.lfe_derive import PHASE_DELTA_THRESHOLD_DB, derive_missing_lfe
 from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS
@@ -883,6 +884,7 @@ def _build_single_target_plan(
     job_inputs = _build_job_inputs(scene, routing_plan)
     job_outputs = _build_job_outputs(output_formats, layout_id, scene_path)
     notes = _build_job_notes(layout_id, routing_plan_path, downmix_policy_id)
+    render_intent = build_render_intent(scene, layout_id, layouts=layouts)
 
     job: dict[str, Any] = {
         "job_id": "JOB.001",
@@ -901,6 +903,8 @@ def _build_single_target_plan(
         "outputs": job_outputs,
         "notes": notes,
     }
+    if isinstance(render_intent, dict):
+        job["render_intent"] = render_intent
     lfe_receipt = _build_lfe_receipt_for_target(
         target_layout_id=layout_id,
         channel_order=list(resolved.get("channel_order") or []),
@@ -978,6 +982,7 @@ def _build_multi_target_plan(
     all_target_ids: list[str] = []
     jobs: list[dict[str, Any]] = []
     resolved_layouts_by_id: dict[str, dict[str, Any]] = {}
+    render_intent_by_layout: dict[str, dict[str, Any]] = {}
 
     target_specs: list[tuple[str, str, str | None]] = []
     if requested_target_ids:
@@ -1032,6 +1037,10 @@ def _build_multi_target_plan(
             ),
         )
         notes = _build_job_notes(layout_id, routing_plan_path, downmix_policy_id)
+        if layout_id not in render_intent_by_layout:
+            render_intent = build_render_intent(scene, layout_id, layouts=layouts)
+            if isinstance(render_intent, dict):
+                render_intent_by_layout[layout_id] = render_intent
 
         job: dict[str, Any] = {
             "job_id": f"JOB.{idx + 1:03d}",
@@ -1050,6 +1059,8 @@ def _build_multi_target_plan(
             "outputs": job_outputs,
             "notes": notes,
         }
+        if layout_id in render_intent_by_layout:
+            job["render_intent"] = dict(render_intent_by_layout[layout_id])
         lfe_receipt = _build_lfe_receipt_for_target(
             target_layout_id=layout_id,
             channel_order=list(resolved_layouts_by_id[layout_id].get("channel_order") or []),

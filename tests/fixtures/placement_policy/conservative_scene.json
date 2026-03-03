@@ -1,0 +1,221 @@
+{
+  "schema_version": "0.1.0",
+  "scene_id": "SCENE.PLACEMENT.POLICY.FIXTURE",
+  "source": {
+    "stems_dir": "/tmp/placement_policy_scene",
+    "created_from": "draft"
+  },
+  "intent": {
+    "confidence": 0.0,
+    "locks": []
+  },
+  "objects": [
+    {
+      "object_id": "OBJ.STEM.KICK",
+      "stem_id": "STEM.KICK",
+      "role_id": "ROLE.DRUM.KICK",
+      "group_bus": "BUS.DRUMS",
+      "label": "Kick",
+      "channel_count": 1,
+      "width_hint": 0.2,
+      "depth_hint": 0.25,
+      "confidence": 0.95,
+      "intent": {
+        "confidence": 0.95,
+        "width": 0.2,
+        "depth": 0.25,
+        "locks": []
+      },
+      "notes": []
+    },
+    {
+      "object_id": "OBJ.STEM.SNARE",
+      "stem_id": "STEM.SNARE",
+      "role_id": "ROLE.DRUM.SNARE",
+      "group_bus": "BUS.DRUMS",
+      "label": "Snare",
+      "channel_count": 1,
+      "width_hint": 0.24,
+      "depth_hint": 0.28,
+      "confidence": 0.93,
+      "intent": {
+        "confidence": 0.93,
+        "width": 0.24,
+        "depth": 0.28,
+        "locks": []
+      },
+      "notes": []
+    },
+    {
+      "object_id": "OBJ.STEM.BASS",
+      "stem_id": "STEM.BASS",
+      "role_id": "ROLE.BASS.SYNTH",
+      "group_bus": "BUS.BASS",
+      "label": "Bass",
+      "channel_count": 1,
+      "width_hint": 0.2,
+      "depth_hint": 0.3,
+      "confidence": 0.9,
+      "intent": {
+        "confidence": 0.9,
+        "width": 0.2,
+        "depth": 0.3,
+        "locks": []
+      },
+      "notes": []
+    },
+    {
+      "object_id": "OBJ.STEM.LEAD",
+      "stem_id": "STEM.LEAD",
+      "role_id": "ROLE.VOCAL.LEAD",
+      "group_bus": "BUS.VOX.LEAD",
+      "label": "Lead Vocal",
+      "channel_count": 1,
+      "width_hint": 0.25,
+      "depth_hint": 0.3,
+      "confidence": 0.9,
+      "intent": {
+        "confidence": 0.9,
+        "width": 0.25,
+        "depth": 0.3,
+        "locks": [
+          "LOCK.PRESERVE_CENTER_IMAGE"
+        ]
+      },
+      "notes": []
+    },
+    {
+      "object_id": "OBJ.STEM.PAD",
+      "stem_id": "STEM.PAD",
+      "role_id": "ROLE.SYNTH.PAD",
+      "group_bus": "BUS.MUSIC.SYNTH",
+      "label": "Pad Wide",
+      "channel_count": 1,
+      "width_hint": 0.9,
+      "depth_hint": 0.6,
+      "confidence": 0.86,
+      "intent": {
+        "confidence": 0.86,
+        "width": 0.9,
+        "depth": 0.6,
+        "locks": []
+      },
+      "notes": [
+        "long texture"
+      ]
+    },
+    {
+      "object_id": "OBJ.STEM.AMB",
+      "stem_id": "STEM.AMB",
+      "role_id": "ROLE.FX.AMBIENCE",
+      "group_bus": "BUS.FX.AMBIENCE",
+      "label": "Room Ambience",
+      "channel_count": 1,
+      "width_hint": 0.95,
+      "depth_hint": 0.8,
+      "confidence": 0.88,
+      "intent": {
+        "confidence": 0.88,
+        "width": 0.95,
+        "depth": 0.8,
+        "locks": []
+      },
+      "notes": [
+        "long tail"
+      ]
+    },
+    {
+      "object_id": "OBJ.STEM.HAT",
+      "stem_id": "STEM.HAT",
+      "role_id": "ROLE.DRUM.HIHAT",
+      "group_bus": "BUS.DRUMS.PERC",
+      "label": "HiHat",
+      "channel_count": 1,
+      "width_hint": 0.84,
+      "depth_hint": 0.35,
+      "confidence": 0.82,
+      "intent": {
+        "confidence": 0.82,
+        "width": 0.84,
+        "depth": 0.35,
+        "locks": []
+      },
+      "notes": []
+    },
+    {
+      "object_id": "OBJ.STEM.PERC_LOW",
+      "stem_id": "STEM.PERC_LOW",
+      "role_id": "ROLE.DRUM.PERCUSSION",
+      "group_bus": "BUS.DRUMS.PERC",
+      "label": "Perc Low Confidence",
+      "channel_count": 1,
+      "width_hint": 0.85,
+      "depth_hint": 0.4,
+      "confidence": 0.55,
+      "intent": {
+        "confidence": 0.55,
+        "width": 0.85,
+        "depth": 0.4,
+        "locks": []
+      },
+      "notes": []
+    },
+    {
+      "object_id": "OBJ.STEM.HAT_LOCKED",
+      "stem_id": "STEM.HAT_LOCKED",
+      "role_id": "ROLE.DRUM.HIHAT",
+      "group_bus": "BUS.DRUMS.PERC",
+      "label": "HiHat Locked",
+      "channel_count": 1,
+      "width_hint": 0.9,
+      "depth_hint": 0.4,
+      "confidence": 0.9,
+      "intent": {
+        "confidence": 0.9,
+        "width": 0.9,
+        "depth": 0.4,
+        "locks": [
+          "LOCK.NO_STEREO_WIDENING"
+        ]
+      },
+      "notes": []
+    },
+    {
+      "object_id": "OBJ.STEM.KICK_WRAP",
+      "stem_id": "STEM.KICK_WRAP",
+      "role_id": "ROLE.DRUM.KICK",
+      "group_bus": "BUS.DRUMS",
+      "label": "Kick Wrap Candidate",
+      "channel_count": 1,
+      "width_hint": 0.95,
+      "depth_hint": 0.86,
+      "confidence": 0.97,
+      "intent": {
+        "confidence": 0.97,
+        "width": 0.95,
+        "depth": 0.86,
+        "loudness_bias": "back",
+        "locks": []
+      },
+      "notes": [
+        "you_are_there"
+      ]
+    }
+  ],
+  "beds": [
+    {
+      "bed_id": "BED.FIELD.001",
+      "label": "Field",
+      "kind": "field",
+      "intent": {
+        "diffuse": 0.5,
+        "confidence": 0.0,
+        "locks": []
+      },
+      "notes": []
+    }
+  ],
+  "metadata": {
+    "profile_id": "PROFILE.ASSIST"
+  }
+}
