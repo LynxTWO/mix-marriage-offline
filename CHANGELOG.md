@@ -163,13 +163,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `--report` and `--map/--bus` build paths.
   - Added `src/mmo/core/locks.py` with deterministic override loading and
     precedence resolution (`locks > explicit metadata > inference`) for
-    per-stem `role_id`, `bus_id`, placement (`azimuth_deg`, `width`), and
-    surround send caps.
+    per-stem `role_id`, `bus_id`, placement (`azimuth_deg`, `width`, `depth`),
+    surround send caps, and height send caps.
   - Extended `scene.schema.json` (plus packaged mirror) with
-    `intent.surround_send_caps` and `metadata.locks_receipt` so scene artifacts
-    record `locked` vs `explicit_metadata` vs `inferred` provenance.
-  - Placement policy now enforces locked surround send caps and carries lock
-    provenance markers into render-intent notes for downstream receipts.
+    `intent.surround_send_caps` / `intent.height_send_caps` /
+    `intent.perspective` and richer `metadata.locks_receipt` sources so scene
+    artifacts record `locked` vs `explicit_metadata` vs `inferred` provenance
+    across azimuth/width/depth/surround/height.
+  - Placement policy now enforces `LOCK.NO_HEIGHT_SEND`, applies
+    `intent.height_send_caps` to immersive top channels, and carries expanded
+    lock provenance markers into render-intent notes for downstream receipts.
+  - Added explicit immersive perspective intent (`INTENT.PERSPECTIVE`) with
+    deterministic scene-level markers (`in_band`, `in_orchestra`) in placement
+    render-intent notes.
   - Added coverage in `tests/test_locks.py`, `tests/test_cli_scene.py`, and
     `tests/test_placement_policy.py`.
 

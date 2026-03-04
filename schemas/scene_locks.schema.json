@@ -95,6 +95,11 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1
+        },
+        "depth": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
         }
       },
       "minProperties": 1
@@ -116,6 +121,28 @@
       },
       "minProperties": 1
     },
+    "height_send_caps": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "top_max_gain": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "top_front_max_gain": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "top_rear_max_gain": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "minProperties": 1
+    },
     "stem_override": {
       "type": "object",
       "additionalProperties": false,
@@ -124,6 +151,7 @@
         "bus_id": { "$ref": "#/$defs/bus_id" },
         "placement": { "$ref": "#/$defs/placement" },
         "surround_send_caps": { "$ref": "#/$defs/surround_send_caps" },
+        "height_send_caps": { "$ref": "#/$defs/height_send_caps" },
         "note": {
           "type": "string",
           "minLength": 1
@@ -133,7 +161,8 @@
         { "required": ["role_id"] },
         { "required": ["bus_id"] },
         { "required": ["placement"] },
-        { "required": ["surround_send_caps"] }
+        { "required": ["surround_send_caps"] },
+        { "required": ["height_send_caps"] }
       ]
     },
     "scene_build_overrides": {

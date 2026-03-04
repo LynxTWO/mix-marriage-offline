@@ -158,6 +158,33 @@ class TestSceneEditor(unittest.TestCase):
             self.assertEqual(target.get("object_id"), "OBJ.A")
             self.assertEqual(target.get("param_id"), "INTENT.LOUDNESS_BIAS")
 
+    def test_set_scene_perspective_is_allowed_and_object_scope_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            stems_dir = Path(temp_dir) / "stems"
+            stems_dir.mkdir(parents=True, exist_ok=True)
+            scene = _sample_scene(stems_dir=stems_dir)
+            edited = set_intent(
+                scene,
+                scope="scene",
+                target_id=None,
+                param_key="perspective",
+                value="in_band",
+            )
+
+            scene_intent = edited.get("intent")
+            self.assertIsInstance(scene_intent, dict)
+            if isinstance(scene_intent, dict):
+                self.assertEqual(scene_intent.get("perspective"), "in_band")
+
+            with self.assertRaisesRegex(ValueError, "not supported for scope object"):
+                set_intent(
+                    scene,
+                    scope="object",
+                    target_id="OBJ.A",
+                    param_key="perspective",
+                    value="in_band",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

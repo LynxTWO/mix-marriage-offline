@@ -38,6 +38,48 @@ mmo scene locks add --scene out/scene.json --scope scene --lock LOCK.PRESERVE_DY
 Example: remove a lock.
 mmo scene locks remove --scene out/scene.json --scope scene --lock LOCK.PRESERVE_DYNAMICS --out out/scene.json
 
+Locks cookbook.
+
+Force role and bus for one stem during scene build.
+```yaml
+# scene_locks.yaml
+version: "0.1.0"
+overrides:
+  STEM.KICK:
+    role_id: "ROLE.DRUM.KICK"
+    bus_id: "BUS.DRUMS.KICK"
+```
+
+Then apply:
+mmo scene build --map stems_map.json --bus bus_plan.json --profile PROFILE.ASSIST --locks scene_locks.yaml --out out/scene.json
+
+Force front-only safety for a stem (surround caps 0).
+```yaml
+# scene_locks.yaml
+version: "0.1.0"
+overrides:
+  STEM.KICK:
+    surround_send_caps:
+      side_max_gain: 0.0
+      rear_max_gain: 0.0
+```
+
+Force no heights globally (scene lock).
+mmo scene locks add --scene out/scene.json --scope scene --lock LOCK.NO_HEIGHT_SEND --out out/scene.json
+
+Force no heights for one stem (height caps 0 in overrides).
+```yaml
+# scene_locks.yaml
+version: "0.1.0"
+overrides:
+  STEM.KICK:
+    height_send_caps:
+      top_max_gain: 0.0
+```
+
+Request “in band” perspective (machine-readable).
+mmo scene intent set --scene out/scene.json --scope scene --key perspective --value in_band --out out/scene.json
+
 Pro notes.
 Locks exist because “taste” changes are high-risk in automation.
 If you know a boundary is non-negotiable, make it explicit as a lock.

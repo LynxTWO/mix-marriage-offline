@@ -21,6 +21,10 @@ params:
     type: "enum"
     values: ["forward", "neutral", "back"]
     default: "neutral"
+  INTENT.PERSPECTIVE:
+    type: "enum"
+    values: ["audience", "on_stage", "in_band", "in_orchestra"]
+    default: "audience"
   INTENT.CONFIDENCE:
     type: "number"
     min: 0

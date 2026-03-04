@@ -14,6 +14,20 @@ entries:
     watch_out_for:
       - "Too much restraint can make the mix feel thin on larger systems."
       - "Re-check Deliverables on earbuds and speakers before final export."
+  HELP.LOCK.NO_HEIGHT_SEND:
+    title: "No height sends"
+    short: "Force all immersive top channels to stay silent."
+    long: |
+      Use this lock when translation policy or delivery specs require strict
+      front/surround-only routing with no overhead content. It is a hard stop
+      for all top-front/top-rear/top-center sends.
+    cues:
+      - "If your target release is non-immersive and tops must remain unused."
+      - "If immersive downmix checks flag overhead leakage risk."
+      - "If you need deterministic 'no heights' safety for every layout."
+    watch_out_for:
+      - "Removing heights can reduce space and envelopment."
+      - "Re-check front/rear balance after disabling top energy."
   HELP.LOCK.NO_STEREO_WIDENING:
     title: "No stereo widening"
     short: "Keep width natural and avoid side inflation tricks."

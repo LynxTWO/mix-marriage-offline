@@ -10,6 +10,16 @@ locks:
     hint_long: "If the mix gets thick or tubby, pull back low-end boosts and saturation before anything else."
     affected_actions: ["ACTION.EQ.LOW_SHELF", "ACTION.DSP.SATURATION", "ACTION.DSP.COMPRESS"]
     tags: ["bass", "balance"]
+  LOCK.NO_HEIGHT_SEND:
+    label: "No height sends"
+    description: "Disable all overhead/height sends so immersive tops stay silent."
+    applies_to: ["object", "bed", "scene"]
+    severity: "hard"
+    help_id: "HELP.LOCK.NO_HEIGHT_SEND"
+    hint_short: "No height sends: keep all top speakers silent for this scope."
+    hint_long: "Use this when translation safety or deliverable rules require strict bed-level only playback."
+    affected_actions: ["ACTION.UTILITY.PAN"]
+    tags: ["immersive", "height", "translation"]
   LOCK.NO_STEREO_WIDENING:
     label: "No stereo widening"
     description: "Avoid artificial width expansion or side-boost tricks."

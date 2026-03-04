@@ -47,6 +47,7 @@ _SCENE_INTENT_KEYS: tuple[str, ...] = (
     "depth",
     "azimuth_deg",
     "loudness_bias",
+    "perspective",
     "confidence",
 )
 _DEFAULT_RENDER_MANY_TRANSLATION_PROFILE_IDS: tuple[str, ...] = (

@@ -209,6 +209,8 @@ class TestPlacementPolicy(unittest.TestCase):
                         "azimuth_source": "inferred",
                         "width_source": "locked",
                         "surround_send_caps_source": "locked",
+                        "depth_source": "locked",
+                        "height_send_caps_source": "locked",
                     }
                 ],
                 "unmatched_stem_ids": [],
@@ -222,6 +224,93 @@ class TestPlacementPolicy(unittest.TestCase):
         kick = _stem_by_id(render_intent)["STEM.KICK"]
         self.assertIn("role_source:locked", kick["notes"])
         self.assertIn("width_source:locked", kick["notes"])
+        self.assertIn("depth_source:locked", kick["notes"])
+
+    def test_scene_lock_no_height_send_disables_height_channels_in_immersive_layouts(self) -> None:
+        scene = _load_fixture_scene()
+        scene["intent"] = {"confidence": 0.0, "locks": ["LOCK.NO_HEIGHT_SEND"]}
+
+        for layout_id in ("LAYOUT.7_1_4", "LAYOUT.9_1_6"):
+            render_intent = build_render_intent(scene, layout_id)
+            self.assertIsInstance(render_intent, dict)
+            if not isinstance(render_intent, dict):
+                continue
+
+            amb = _stem_by_id(render_intent)["STEM.AMB"]["gains"]
+            for speaker_id in ("SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"):
+                self.assertEqual(amb[speaker_id], 0.0)
+            if layout_id == "LAYOUT.9_1_6":
+                self.assertEqual(amb["SPK.TFC"], 0.0)
+                self.assertEqual(amb["SPK.TBC"], 0.0)
+
+    def test_bed_height_send_caps_can_force_no_heights_in_immersive_layouts(self) -> None:
+        scene = _load_fixture_scene()
+        beds = scene.get("beds")
+        self.assertIsInstance(beds, list)
+        if not isinstance(beds, list):
+            return
+        for bed in beds:
+            if not isinstance(bed, dict):
+                continue
+            stem_ids = bed.get("stem_ids")
+            if not isinstance(stem_ids, list) or "STEM.AMB" not in stem_ids:
+                continue
+            intent = bed.get("intent")
+            if not isinstance(intent, dict):
+                intent = {}
+                bed["intent"] = intent
+            intent["height_send_caps"] = {"top_max_gain": 0.0}
+
+        for layout_id in ("LAYOUT.7_1_4", "LAYOUT.9_1_6"):
+            render_intent = build_render_intent(scene, layout_id)
+            self.assertIsInstance(render_intent, dict)
+            if not isinstance(render_intent, dict):
+                continue
+
+            amb = _stem_by_id(render_intent)["STEM.AMB"]["gains"]
+            for speaker_id in ("SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"):
+                self.assertEqual(amb[speaker_id], 0.0)
+            if layout_id == "LAYOUT.9_1_6":
+                self.assertEqual(amb["SPK.TFC"], 0.0)
+                self.assertEqual(amb["SPK.TBC"], 0.0)
+
+    def test_scene_perspective_marks_immersive_intent(self) -> None:
+        scene = _load_fixture_scene()
+        scene["intent"] = {
+            "confidence": 0.0,
+            "locks": [],
+            "perspective": "in_band",
+            "notes": [],
+        }
+        render_intent = build_render_intent(scene, "LAYOUT.7_1_4")
+        self.assertIsInstance(render_intent, dict)
+        if not isinstance(render_intent, dict):
+            return
+        notes = render_intent.get("notes")
+        self.assertIsInstance(notes, list)
+        if not isinstance(notes, list):
+            return
+        self.assertIn("immersive_perspective:in_band", notes)
+        self.assertIn("immersive_perspective_source:scene.intent.perspective", notes)
+
+        scene["intent"] = {
+            "confidence": 0.0,
+            "locks": [],
+            "notes": ["perspective: in_orchestra"],
+        }
+        render_intent_notes = build_render_intent(scene, "LAYOUT.7_1_4")
+        self.assertIsInstance(render_intent_notes, dict)
+        if not isinstance(render_intent_notes, dict):
+            return
+        notes_from_scene_note = render_intent_notes.get("notes")
+        self.assertIsInstance(notes_from_scene_note, list)
+        if not isinstance(notes_from_scene_note, list):
+            return
+        self.assertIn("immersive_perspective:in_orchestra", notes_from_scene_note)
+        self.assertIn(
+            "immersive_perspective_source:scene.intent.notes",
+            notes_from_scene_note,
+        )
 
 
 if __name__ == "__main__":

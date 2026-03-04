@@ -37,6 +37,7 @@ _TOP_FRONT_CENTER = "SPK.TFC"
 _TOP_BACK_CENTER = "SPK.TBC"
 
 _LOCK_NO_STEREO_WIDENING = "LOCK.NO_STEREO_WIDENING"
+_LOCK_NO_HEIGHT_SEND = "LOCK.NO_HEIGHT_SEND"
 _LOCK_PRESERVE_CENTER_IMAGE = "LOCK.PRESERVE_CENTER_IMAGE"
 
 _ROLE_UNKNOWN = "ROLE.OTHER.UNKNOWN"
@@ -45,6 +46,7 @@ _BUS_UNKNOWN = "BUS.OTHER"
 _BED_SURROUND_RELATIVE_DB = -12.0
 _BED_SURROUND_SEND_CAP = 0.2
 _BED_SURROUND_CONFIDENCE_MIN = 0.6
+_IMMERSIVE_PERSPECTIVES: frozenset[str] = frozenset({"in_band", "in_orchestra"})
 
 
 def _coerce_str(value: Any) -> str:
@@ -162,6 +164,17 @@ def _object_lock_ids(obj: dict[str, Any]) -> set[str]:
     }
 
 
+def _bed_lock_ids(bed: dict[str, Any]) -> set[str]:
+    intent = bed.get("intent")
+    if not isinstance(intent, dict):
+        return set()
+    return {
+        lock_id.strip()
+        for lock_id in _string_list(intent.get("locks"))
+        if lock_id.strip()
+    }
+
+
 def _scene_locks_receipt_index(scene: dict[str, Any]) -> dict[str, dict[str, str]]:
     metadata = scene.get("metadata")
     if not isinstance(metadata, dict):
@@ -188,10 +201,27 @@ def _scene_locks_receipt_index(scene: dict[str, Any]) -> dict[str, dict[str, str
                 "azimuth_source",
                 "width_source",
                 "surround_send_caps_source",
+                "depth_source",
+                "height_send_caps_source",
             )
             if _coerce_str(row.get(key)).strip()
         }
     return index
+
+
+def _scene_immersive_perspective(scene: dict[str, Any]) -> tuple[str, str] | None:
+    scene_intent = _scene_intent_payload(scene)
+    perspective = _coerce_str(scene_intent.get("perspective")).strip().lower()
+    if perspective in _IMMERSIVE_PERSPECTIVES:
+        return perspective, "scene.intent.perspective"
+
+    for note in _string_list(scene_intent.get("notes")):
+        normalized_note = note.strip().lower().replace("-", "_").replace(" ", "_")
+        if "in_orchestra" in normalized_note:
+            return "in_orchestra", "scene.intent.notes"
+        if "in_band" in normalized_note:
+            return "in_band", "scene.intent.notes"
+    return None
 
 
 def _group_bus_from_object(obj: dict[str, Any], role_id: str) -> str:
@@ -322,10 +352,64 @@ def _append_source_notes(
         "azimuth_source",
         "width_source",
         "surround_send_caps_source",
+        "depth_source",
+        "height_send_caps_source",
     ):
         value = _coerce_str(source_receipt_row.get(key)).strip()
         if value:
             notes.append(f"{key}:{value}")
+
+
+def _height_send_caps(value: Any) -> dict[str, float] | None:
+    if not isinstance(value, dict):
+        return None
+    normalized: dict[str, float] = {}
+    for key in ("top_max_gain", "top_front_max_gain", "top_rear_max_gain"):
+        raw = _coerce_float(value.get(key))
+        if raw is not None:
+            normalized[key] = _clamp_unit(raw, default=1.0)
+    return normalized or None
+
+
+def _cap_height_gains(
+    *,
+    top_front_gain: float,
+    top_rear_gain: float,
+    top_center_gains: tuple[float, float] | None,
+    height_send_caps: dict[str, float] | None,
+) -> tuple[float, float, tuple[float, float] | None]:
+    if not isinstance(height_send_caps, dict):
+        return top_front_gain, top_rear_gain, top_center_gains
+
+    top_max = _coerce_float(height_send_caps.get("top_max_gain"))
+    top_front_max = _coerce_float(height_send_caps.get("top_front_max_gain"))
+    top_rear_max = _coerce_float(height_send_caps.get("top_rear_max_gain"))
+
+    front_caps = [
+        cap for cap in (top_max, top_front_max)
+        if isinstance(cap, (int, float))
+    ]
+    rear_caps = [
+        cap for cap in (top_max, top_rear_max)
+        if isinstance(cap, (int, float))
+    ]
+    front_cap = min(front_caps) if front_caps else None
+    rear_cap = min(rear_caps) if rear_caps else None
+
+    if front_cap is not None:
+        top_front_gain = min(top_front_gain, front_cap)
+    if rear_cap is not None:
+        top_rear_gain = min(top_rear_gain, rear_cap)
+
+    if top_center_gains is not None:
+        top_front_center, top_back_center = top_center_gains
+        if front_cap is not None:
+            top_front_center = min(top_front_center, front_cap)
+        if rear_cap is not None:
+            top_back_center = min(top_back_center, rear_cap)
+        top_center_gains = (top_front_center, top_back_center)
+
+    return top_front_gain, top_rear_gain, top_center_gains
 
 
 def _object_send(
@@ -334,6 +418,7 @@ def _object_send(
     channel_order: list[str],
     scene_locks: set[str],
     source_receipt_row: dict[str, str] | None = None,
+    immersive_perspective: str | None = None,
 ) -> dict[str, Any]:
     stem_id = _coerce_str(obj.get("stem_id")).strip()
     role_id = _coerce_str(obj.get("role_id")).strip().upper() or _ROLE_UNKNOWN
@@ -372,6 +457,9 @@ def _object_send(
             center_gain = max(center_gain, 0.86)
             front_gain = min(front_gain, 0.52)
             notes.append("center_anchor_strengthened_by_lock")
+
+    if immersive_perspective:
+        notes.append(f"immersive_perspective:{immersive_perspective}")
 
     _append_source_notes(notes, source_receipt_row)
 
@@ -431,6 +519,7 @@ def _bed_send(
     stem_id: str,
     channel_order: list[str],
     scene_locks: set[str],
+    immersive_perspective: str | None = None,
 ) -> dict[str, Any]:
     bed_id = _coerce_str(bed.get("bed_id")).strip()
     bus_id = _coerce_str(bed.get("bus_id")).strip().upper() or _BUS_UNKNOWN
@@ -446,8 +535,9 @@ def _bed_send(
         default=0.75,
     )
     depth_hint = 0.7
-    locks = set(scene_locks)
+    locks = set(scene_locks) | _bed_lock_ids(bed)
     role_id = _bed_role_from_content_hint(content_hint)
+    height_send_caps = _height_send_caps(intent_payload.get("height_send_caps"))
 
     front_gain = 0.68
     side_gain = 0.0
@@ -483,6 +573,24 @@ def _bed_send(
         notes.append("surround_send_enabled")
         if top_front_gain > 0.0:
             notes.append("overhead_send_enabled")
+
+    if _LOCK_NO_HEIGHT_SEND in locks:
+        top_front_gain = 0.0
+        top_rear_gain = 0.0
+        if top_center_gains is not None:
+            top_center_gains = (0.0, 0.0)
+        notes.append("height_send_disabled_by_lock_no_height_send")
+    elif height_send_caps is not None:
+        top_front_gain, top_rear_gain, top_center_gains = _cap_height_gains(
+            top_front_gain=top_front_gain,
+            top_rear_gain=top_rear_gain,
+            top_center_gains=top_center_gains,
+            height_send_caps=height_send_caps,
+        )
+        notes.append("height_send_capped_by_intent")
+
+    if immersive_perspective:
+        notes.append(f"immersive_perspective:{immersive_perspective}")
 
     gains = _empty_gains(channel_order)
     _set_front(gains, front_gain)
@@ -575,6 +683,12 @@ def build_render_intent(
 
     scene_locks = _scene_lock_ids(scene)
     source_receipt_index = _scene_locks_receipt_index(scene)
+    immersive_perspective_marker = _scene_immersive_perspective(scene)
+    immersive_perspective = (
+        immersive_perspective_marker[0]
+        if isinstance(immersive_perspective_marker, tuple)
+        else None
+    )
 
     object_rows = [
         _object_send(
@@ -584,6 +698,7 @@ def build_render_intent(
             source_receipt_row=source_receipt_index.get(
                 _coerce_str(obj.get("stem_id")).strip()
             ),
+            immersive_perspective=immersive_perspective,
         )
         for obj in objects
     ]
@@ -597,6 +712,7 @@ def build_render_intent(
                     stem_id=stem_id,
                     channel_order=channel_order,
                     scene_locks=scene_locks,
+                    immersive_perspective=immersive_perspective,
                 )
             )
 
@@ -623,6 +739,20 @@ def build_render_intent(
     if not stem_sends:
         return None
 
+    notes = [
+        "Objects are front-only by default in conservative placement v1.",
+        (
+            "Bed stems may receive subtle deterministic surround/height sends "
+            "at approximately -12 dB relative, capped for translation safety."
+        ),
+        "Bed surround sends are disabled when confidence is below threshold.",
+        "LFE sends remain zero by default (manual/explicit only).",
+    ]
+    if isinstance(immersive_perspective_marker, tuple):
+        perspective_value, source_label = immersive_perspective_marker
+        notes.append(f"immersive_perspective:{perspective_value}")
+        notes.append(f"immersive_perspective_source:{source_label}")
+
     return {
         "schema_version": PLACEMENT_POLICY_SCHEMA_VERSION,
         "policy_id": PLACEMENT_POLICY_ID,
@@ -633,13 +763,5 @@ def build_render_intent(
             stem_sends=stem_sends,
         ),
         "stem_sends": stem_sends,
-        "notes": [
-            "Objects are front-only by default in conservative placement v1.",
-            (
-                "Bed stems may receive subtle deterministic surround/height sends "
-                "at approximately -12 dB relative, capped for translation safety."
-            ),
-            "Bed surround sends are disabled when confidence is below threshold.",
-            "LFE sends remain zero by default (manual/explicit only).",
-        ],
+        "notes": notes,
     }

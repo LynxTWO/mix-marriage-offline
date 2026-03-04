@@ -424,9 +424,12 @@ class TestCliScene(unittest.TestCase):
                         "    placement:",
                         "      azimuth_deg: 0.0",
                         "      width: 0.1",
+                        "      depth: 0.2",
                         "    surround_send_caps:",
                         "      side_max_gain: 0.03",
                         "      rear_max_gain: 0.02",
+                        "    height_send_caps:",
+                        "      top_max_gain: 0.0",
                         "",
                     ]
                 ),
@@ -470,12 +473,19 @@ class TestCliScene(unittest.TestCase):
             self.assertEqual(locked.get("width_hint"), 0.1)
             self.assertEqual(locked["intent"].get("position"), {"azimuth_deg": 0.0})
             self.assertEqual(locked["intent"].get("width"), 0.1)
+            self.assertEqual(locked["intent"].get("depth"), 0.2)
+            self.assertEqual(locked.get("depth_hint"), 0.2)
             self.assertEqual(
                 locked["intent"].get("surround_send_caps"),
                 {"side_max_gain": 0.03, "rear_max_gain": 0.02},
             )
+            self.assertEqual(
+                locked["intent"].get("height_send_caps"),
+                {"top_max_gain": 0.0},
+            )
             self.assertTrue(locked["locks"]["azimuth_hint"])
             self.assertTrue(locked["locks"]["width_hint"])
+            self.assertTrue(locked["locks"]["depth_hint"])
 
             receipt = payload.get("metadata", {}).get("locks_receipt")
             self.assertIsInstance(receipt, dict)
@@ -495,7 +505,9 @@ class TestCliScene(unittest.TestCase):
             self.assertEqual(row.get("bus_id"), "BUS.DRUMS.KICK")
             self.assertEqual(row.get("azimuth_source"), "locked")
             self.assertEqual(row.get("width_source"), "locked")
+            self.assertEqual(row.get("depth_source"), "locked")
             self.assertEqual(row.get("surround_send_caps_source"), "locked")
+            self.assertEqual(row.get("height_send_caps_source"), "locked")
 
     def test_scene_cli_build_unknown_templates_error_is_sorted_and_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

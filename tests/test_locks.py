@@ -110,8 +110,11 @@ class TestSceneBuildLocks(unittest.TestCase):
                         "    placement:",
                         "      azimuth_deg: 0.0",
                         "      width: 0.15",
+                        "      depth: 0.35",
                         "    surround_send_caps:",
                         "      side_max_gain: 0.05",
+                        "    height_send_caps:",
+                        "      top_max_gain: 0.04",
                         "",
                     ]
                 ),
@@ -127,6 +130,14 @@ class TestSceneBuildLocks(unittest.TestCase):
             if not isinstance(overrides, dict):
                 return
             self.assertEqual(list(overrides.keys()), ["STEM.A", "STEM.B"])
+            self.assertEqual(
+                overrides["STEM.B"].get("placement"),
+                {"azimuth_deg": 0.0, "width": 0.15, "depth": 0.35},
+            )
+            self.assertEqual(
+                overrides["STEM.B"].get("height_send_caps"),
+                {"top_max_gain": 0.04},
+            )
 
     def test_load_scene_build_locks_rejects_unsorted_stem_ids(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -160,10 +171,13 @@ class TestSceneBuildLocks(unittest.TestCase):
                 "STEM.B": {
                     "role_id": "ROLE.DRUM.KICK",
                     "bus_id": "BUS.DRUMS.KICK",
-                    "placement": {"azimuth_deg": 0.0, "width": 0.1},
+                    "placement": {"azimuth_deg": 0.0, "width": 0.1, "depth": 0.22},
                     "surround_send_caps": {
                         "side_max_gain": 0.05,
                         "rear_max_gain": 0.03,
+                    },
+                    "height_send_caps": {
+                        "top_max_gain": 0.0,
                     },
                 }
             },
@@ -184,6 +198,8 @@ class TestSceneBuildLocks(unittest.TestCase):
         self.assertEqual(stem_a["width_hint"], 0.2)
         self.assertEqual(stem_a["intent"]["position"]["azimuth_deg"], 15.0)
         self.assertEqual(stem_a["azimuth_hint"], 15.0)
+        self.assertEqual(stem_a["intent"]["depth"], 0.5)
+        self.assertEqual(stem_a["depth_hint"], 0.5)
 
         stem_b = objects["STEM.B"]
         self.assertEqual(stem_b["role_id"], "ROLE.DRUM.KICK")
@@ -193,6 +209,8 @@ class TestSceneBuildLocks(unittest.TestCase):
         self.assertEqual(stem_b["width_hint"], 0.1)
         self.assertEqual(stem_b["intent"]["position"]["azimuth_deg"], 0.0)
         self.assertEqual(stem_b["azimuth_hint"], 0.0)
+        self.assertEqual(stem_b["intent"]["depth"], 0.22)
+        self.assertEqual(stem_b["depth_hint"], 0.22)
         self.assertEqual(
             stem_b["intent"].get("surround_send_caps"),
             {
@@ -200,8 +218,13 @@ class TestSceneBuildLocks(unittest.TestCase):
                 "rear_max_gain": 0.03,
             },
         )
+        self.assertEqual(
+            stem_b["intent"].get("height_send_caps"),
+            {"top_max_gain": 0.0},
+        )
         self.assertTrue(stem_b["locks"]["azimuth_hint"])
         self.assertTrue(stem_b["locks"]["width_hint"])
+        self.assertTrue(stem_b["locks"]["depth_hint"])
 
         receipt = patched.get("metadata", {}).get("locks_receipt")
         self.assertIsInstance(receipt, dict)
@@ -218,12 +241,18 @@ class TestSceneBuildLocks(unittest.TestCase):
         }
         self.assertEqual(by_stem["STEM.A"].get("width_source"), "explicit_metadata")
         self.assertEqual(by_stem["STEM.A"].get("azimuth_source"), "explicit_metadata")
+        self.assertEqual(by_stem["STEM.A"].get("depth_source"), "explicit_metadata")
+        self.assertEqual(by_stem["STEM.A"].get("height_send_caps_source"), "inferred")
         self.assertEqual(by_stem["STEM.B"].get("role_source"), "locked")
         self.assertEqual(by_stem["STEM.B"].get("bus_source"), "locked")
         self.assertEqual(by_stem["STEM.B"].get("bus_id"), "BUS.DRUMS.KICK")
         self.assertEqual(by_stem["STEM.B"].get("width_source"), "locked")
         self.assertEqual(by_stem["STEM.B"].get("azimuth_source"), "locked")
+        self.assertEqual(by_stem["STEM.B"].get("depth_source"), "locked")
         self.assertEqual(by_stem["STEM.B"].get("surround_send_caps_source"), "locked")
+        self.assertEqual(by_stem["STEM.B"].get("height_send_caps_source"), "locked")
+        self.assertEqual(by_stem["STEM.B"].get("depth"), 0.22)
+        self.assertEqual(by_stem["STEM.B"].get("height_send_caps"), {"top_max_gain": 0.0})
 
 
 if __name__ == "__main__":

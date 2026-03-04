@@ -12,11 +12,12 @@ INTENT_PARAM_KEY_TO_ID: dict[str, str] = {
     "width": "INTENT.WIDTH",
     "depth": "INTENT.DEPTH",
     "loudness_bias": "INTENT.LOUDNESS_BIAS",
+    "perspective": "INTENT.PERSPECTIVE",
     "confidence": "INTENT.CONFIDENCE",
 }
 _SCOPE_ALLOWED_INTENT_KEYS: dict[str, set[str]] = {
-    "scene": set(INTENT_PARAM_KEY_TO_ID.keys()),
-    "object": set(INTENT_PARAM_KEY_TO_ID.keys()),
+    "scene": {"azimuth_deg", "width", "depth", "loudness_bias", "perspective", "confidence"},
+    "object": {"azimuth_deg", "width", "depth", "loudness_bias", "confidence"},
     "bed": {"confidence"},
 }
 

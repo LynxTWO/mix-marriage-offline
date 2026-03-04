@@ -33,6 +33,7 @@ class TestIntentParams(unittest.TestCase):
         self.assertIn("INTENT.WIDTH", params)
         self.assertIn("INTENT.DEPTH", params)
         self.assertIn("INTENT.LOUDNESS_BIAS", params)
+        self.assertIn("INTENT.PERSPECTIVE", params)
         self.assertIn("INTENT.CONFIDENCE", params)
 
     def test_validate_scene_intent_out_of_range_width_is_deterministic(self) -> None:

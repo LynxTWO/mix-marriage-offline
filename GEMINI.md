@@ -52,8 +52,9 @@ Non-negotiables:
   classification with conservative low-confidence fallback behavior.
 - Keep scene-build locks deterministic and precedence-safe:
   `mmo scene build --locks ...` must apply per-stem overrides with
-  `locks > explicit metadata > inference`, and emit stable locked-vs-inferred
-  provenance receipts in scene metadata.
+  `locks > explicit metadata > inference`, including role/bus/placement
+  (`azimuth_deg`/`width`/`depth`) and surround/height send caps, and emit
+  stable locked-vs-inferred provenance receipts in scene metadata.
 - Keep dual-LFE (x.2) export contracts explicit: preserve canonical SPK channel
   order in render/recall artifacts, use conservative WAV mask strategy, and
   surface validation guidance for toolchains that may drop `LFE2`.

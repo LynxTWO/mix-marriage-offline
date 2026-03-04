@@ -150,6 +150,51 @@ class TestCliSceneEdit(unittest.TestCase):
             if isinstance(width, float):
                 self.assertEqual(width, 0.25)
 
+    def test_scene_intent_set_scene_perspective_writes_expected_scene(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            stems_dir.mkdir(parents=True, exist_ok=True)
+            scene_path = temp_path / "scene.json"
+            out_path = temp_path / "scene.perspective.json"
+            _write_json(scene_path, _sample_scene(stems_dir=stems_dir))
+
+            result = subprocess.run(
+                [
+                    self._python_cmd(),
+                    "-m",
+                    "mmo",
+                    "scene",
+                    "intent",
+                    "set",
+                    "--scene",
+                    os.fspath(scene_path),
+                    "--scope",
+                    "scene",
+                    "--key",
+                    "perspective",
+                    "--value",
+                    "in_orchestra",
+                    "--out",
+                    os.fspath(out_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                cwd=repo_root,
+                env=self._env(repo_root),
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertTrue(out_path.exists())
+
+            payload = json.loads(out_path.read_text(encoding="utf-8"))
+            scene_intent = payload.get("intent")
+            self.assertIsInstance(scene_intent, dict)
+            if not isinstance(scene_intent, dict):
+                return
+            self.assertEqual(scene_intent.get("perspective"), "in_orchestra")
+
     def test_scene_intent_set_invalid_value_exits_nonzero_with_deterministic_payload(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -132,6 +132,22 @@ def _normalize_surround_send_caps(value: Any) -> dict[str, float] | None:
     return normalized or None
 
 
+def _normalize_height_send_caps(value: Any) -> dict[str, float] | None:
+    if not isinstance(value, dict):
+        return None
+    normalized: dict[str, float] = {}
+    top_max_gain = _coerce_float(value.get("top_max_gain"))
+    if top_max_gain is not None:
+        normalized["top_max_gain"] = _round_unit(top_max_gain)
+    top_front_max_gain = _coerce_float(value.get("top_front_max_gain"))
+    if top_front_max_gain is not None:
+        normalized["top_front_max_gain"] = _round_unit(top_front_max_gain)
+    top_rear_max_gain = _coerce_float(value.get("top_rear_max_gain"))
+    if top_rear_max_gain is not None:
+        normalized["top_rear_max_gain"] = _round_unit(top_rear_max_gain)
+    return normalized or None
+
+
 def _normalize_override(stem_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     normalized: dict[str, Any] = {}
 
@@ -152,12 +168,19 @@ def _normalize_override(stem_id: str, payload: dict[str, Any]) -> dict[str, Any]
         width = _coerce_float(placement.get("width"))
         if width is not None:
             normalized_placement["width"] = _round_unit(width)
+        depth = _coerce_float(placement.get("depth"))
+        if depth is not None:
+            normalized_placement["depth"] = _round_unit(depth)
         if normalized_placement:
             normalized["placement"] = normalized_placement
 
     surround_send_caps = _normalize_surround_send_caps(payload.get("surround_send_caps"))
     if surround_send_caps is not None:
         normalized["surround_send_caps"] = surround_send_caps
+
+    height_send_caps = _normalize_height_send_caps(payload.get("height_send_caps"))
+    if height_send_caps is not None:
+        normalized["height_send_caps"] = height_send_caps
 
     note = _coerce_str(payload.get("note")).strip()
     if note:
@@ -380,6 +403,25 @@ def apply_scene_build_locks(
             hint_locks = _ensure_hint_locks(obj)
             hint_locks["azimuth_hint"] = True
 
+        # depth lock + precedence
+        locked_depth = _coerce_float(placement_payload.get("depth"))
+        explicit_depth = _coerce_float(intent.get("depth"))
+        inferred_depth = _coerce_float(obj.get("depth_hint"))
+        resolved_depth, depth_source = _resolve_number_value(
+            locked=locked_depth,
+            explicit=explicit_depth,
+            inferred=inferred_depth,
+        )
+        if resolved_depth is not None:
+            depth_value = _round_unit(resolved_depth)
+            obj["depth_hint"] = depth_value
+            intent["depth"] = depth_value
+        else:
+            depth_value = None
+        if locked_depth is not None:
+            hint_locks = _ensure_hint_locks(obj)
+            hint_locks["depth_hint"] = True
+
         # surround send caps
         locked_caps = _normalize_surround_send_caps(override_payload.get("surround_send_caps"))
         explicit_caps = _normalize_surround_send_caps(intent.get("surround_send_caps"))
@@ -396,6 +438,22 @@ def apply_scene_build_locks(
             surround_send_caps = None
             surround_send_caps_source = _SOURCE_INFERRED
 
+        # height send caps
+        locked_height_caps = _normalize_height_send_caps(override_payload.get("height_send_caps"))
+        explicit_height_caps = _normalize_height_send_caps(intent.get("height_send_caps"))
+        if locked_height_caps is not None:
+            intent["height_send_caps"] = locked_height_caps
+            height_send_caps = locked_height_caps
+            height_send_caps_source = _SOURCE_LOCKED
+        elif explicit_height_caps is not None:
+            intent["height_send_caps"] = explicit_height_caps
+            height_send_caps = explicit_height_caps
+            height_send_caps_source = _SOURCE_EXPLICIT
+        else:
+            intent.pop("height_send_caps", None)
+            height_send_caps = None
+            height_send_caps_source = _SOURCE_INFERRED
+
         receipt_row: dict[str, Any] = {
             "object_id": object_id,
             "stem_id": stem_id,
@@ -404,8 +462,11 @@ def apply_scene_build_locks(
             "azimuth_source": azimuth_source,
             "width_source": width_source,
             "surround_send_caps_source": surround_send_caps_source,
+            "depth_source": depth_source,
+            "height_send_caps_source": height_send_caps_source,
             "azimuth_deg": azimuth_value,
             "width": width_value,
+            "depth": depth_value,
         }
         if role_id:
             receipt_row["role_id"] = role_id
@@ -415,6 +476,8 @@ def apply_scene_build_locks(
             receipt_row["group_bus"] = group_bus
         if surround_send_caps is not None:
             receipt_row["surround_send_caps"] = surround_send_caps
+        if height_send_caps is not None:
+            receipt_row["height_send_caps"] = height_send_caps
         receipt_rows.append(receipt_row)
 
     receipt_rows.sort(key=lambda row: (row.get("stem_id", ""), row.get("object_id", "")))

@@ -168,11 +168,12 @@ What remains: add the explicit baked-pan/baked-width stereo fixture that validat
 - [x] CLI can scaffold deterministic scene intent from stems artifacts
   (`mmo scene build --map <stems_map.json> --bus <bus_plan.json>`).
 - [x] `mmo scene build --locks <scene_locks.yaml>` applies deterministic
-  per-stem user overrides (role/bus/placement/surround caps), preserves full
+  per-stem user overrides (role/bus/placement depth/surround caps/height caps), preserves full
   locked `bus_id` identity (for example `BUS.DRUMS.KICK`) plus derived
   `group_bus`, with precedence
   `locks > explicit metadata > inference`, and records locked-vs-inferred
-  provenance in scene metadata receipts.
+  provenance in scene metadata receipts (including azimuth/width/depth and
+  surround/height source tracking).
 - [x] Target selection is interchangeable across CLI/GUI flows: `TARGET.*`,
   `LAYOUT.*`, and musician shorthands (`stereo`, `5.1`, `7.1`, `7.1.4`,
   `binaural`);

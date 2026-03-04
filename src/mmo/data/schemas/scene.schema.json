@@ -151,6 +151,16 @@
       },
       "minProperties": 1
     },
+    "height_send_caps": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "top_max_gain": { "type": "number", "minimum": 0, "maximum": 1 },
+        "top_front_max_gain": { "type": "number", "minimum": 0, "maximum": 1 },
+        "top_rear_max_gain": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "minProperties": 1
+    },
     "object_intent": {
       "type": "object",
       "additionalProperties": false,
@@ -160,12 +170,21 @@
         "width": { "type": "number", "minimum": 0, "maximum": 1 },
         "depth": { "type": "number", "minimum": 0, "maximum": 1 },
         "surround_send_caps": { "$ref": "#/$defs/surround_send_caps" },
+        "height_send_caps": { "$ref": "#/$defs/height_send_caps" },
+        "perspective": {
+          "type": "string",
+          "enum": ["audience", "on_stage", "in_band", "in_orchestra"]
+        },
         "loudness_bias": {
           "type": "string",
           "enum": ["forward", "neutral", "back"]
         },
         "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
         "locks": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "notes": {
           "type": "array",
           "items": { "type": "string" }
         }
@@ -218,6 +237,7 @@
       "required": ["confidence", "locks"],
       "properties": {
         "diffuse": { "type": "number", "minimum": 0, "maximum": 1 },
+        "height_send_caps": { "$ref": "#/$defs/height_send_caps" },
         "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
         "locks": {
           "type": "array",
@@ -291,8 +311,11 @@
         "azimuth_source",
         "width_source",
         "surround_send_caps_source",
+        "depth_source",
+        "height_send_caps_source",
         "azimuth_deg",
-        "width"
+        "width",
+        "depth"
       ],
       "properties": {
         "object_id": { "type": "string", "minLength": 1 },
@@ -305,9 +328,13 @@
         "azimuth_source": { "$ref": "#/$defs/locks_receipt_source" },
         "width_source": { "$ref": "#/$defs/locks_receipt_source" },
         "surround_send_caps_source": { "$ref": "#/$defs/locks_receipt_source" },
+        "depth_source": { "$ref": "#/$defs/locks_receipt_source" },
+        "height_send_caps_source": { "$ref": "#/$defs/locks_receipt_source" },
         "azimuth_deg": { "type": ["number", "null"] },
         "width": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
-        "surround_send_caps": { "$ref": "#/$defs/surround_send_caps" }
+        "depth": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "surround_send_caps": { "$ref": "#/$defs/surround_send_caps" },
+        "height_send_caps": { "$ref": "#/$defs/height_send_caps" }
       }
     },
     "locks_receipt": {
