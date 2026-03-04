@@ -215,6 +215,9 @@ What remains: make loudness-matched A/B compensation visible in report artifacts
   binaural audition files.
 - [x] Web GUI Audition panel includes deterministic headphone preview visuals:
   pulsing waveform display and warm analog L/R metering driven by live playback.
+- [x] Web GUI includes a deterministic scene-intent top-down preview (5.1/7.1/7.1.4/9.1.6)
+  showing labeled object dots with confidence, bed halo energy, and warnings for
+  low-confidence intent rows or missing lock coverage.
 - [ ] A GUI exists (local web app is fine) that exposes the same workflow as the CLI: validate → analyze → scene → render → results → compare.
 - [ ] GUI copy and structure follow the design system in ontology/gui_design.yaml (theme tokens, screen templates, and progressive disclosure).
 - [x] Any plugin/config UI is generated from JSON Schema with optional UI hints (example: x_mmo_ui or a dedicated ui_hints registry) so agents do not hand-build one-off forms.

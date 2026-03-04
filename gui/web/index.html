@@ -107,6 +107,20 @@
         <pre id="chain-output" class="code-block"></pre>
         <p class="subtle">Hydrated render_request intent (read on open, no write).</p>
         <pre id="intent-output" class="code-block"></pre>
+        <h3>Scene Preview</h3>
+        <p class="subtle">
+          Top-down object vs bed plan preview from scene intent. Confidence and lock warnings are
+          shown before audition.
+        </p>
+        <div class="row align-end">
+          <label class="inline-field">
+            Scene layout
+            <select id="scene-layout-select"></select>
+          </label>
+        </div>
+        <div id="scene-preview-warnings" class="scene-preview-warnings"></div>
+        <div id="scene-preview-stage" class="scene-preview-stage"></div>
+        <pre id="scene-preview-output" class="code-block"></pre>
       </section>
 
       <section class="panel">

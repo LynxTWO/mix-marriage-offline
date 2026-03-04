@@ -32,6 +32,10 @@ const pluginMarketOutput = document.getElementById("plugin-market-output");
 const chainContainer = document.getElementById("chain-container");
 const chainOutput = document.getElementById("chain-output");
 const intentOutput = document.getElementById("intent-output");
+const sceneLayoutSelect = document.getElementById("scene-layout-select");
+const scenePreviewWarnings = document.getElementById("scene-preview-warnings");
+const scenePreviewStage = document.getElementById("scene-preview-stage");
+const scenePreviewOutput = document.getElementById("scene-preview-output");
 const renderSummaryOutput = document.getElementById("render-summary-output");
 const determinismOutput = document.getElementById("determinism-output");
 const safeRunReceiptOutput = document.getElementById("safe-run-receipt-output");
@@ -70,6 +74,8 @@ const fineModeIndicator = document.getElementById("fine-mode-indicator");
 
 const state = {
   projectShow: null,
+  sceneLayoutId: "",
+  scenePreview: null,
   pluginMarket: null,
   pluginMarketUpdate: null,
   pluginsById: new Map(),
@@ -283,8 +289,11 @@ async function loadUiBundle(uiBundlePath) {
     throw new Error(payload.error || `HTTP ${response.status}`);
   }
   const plugins = Array.isArray(payload.plugins) ? payload.plugins : [];
+  const bundle = _isObject(payload.ui_bundle) ? payload.ui_bundle : {};
+  state.scenePreview = _isObject(bundle.scene_preview) ? _deepClone(bundle.scene_preview) : null;
   renderPluginForms(plugins);
   _setEditablePlugins(plugins);
+  _renderScenePreview();
 }
 
 async function loadRenderRequest(renderRequestPath) {
@@ -2001,6 +2010,336 @@ async function refreshRenderArtifactsFromProjectShow(projectShow) {
   renderRenderArtifactsViewer();
 }
 
+function _scenePreviewLayoutOptions(preview) {
+  const rawRows = Array.isArray(preview?.layout_options) ? preview.layout_options : [];
+  const rows = rawRows
+    .filter((item) => _isObject(item))
+    .map((item) => ({
+      label: typeof item.label === "string" && item.label.trim()
+        ? item.label.trim()
+        : (typeof item.layout_id === "string" ? item.layout_id : ""),
+      layout_id: typeof item.layout_id === "string" ? item.layout_id.trim() : "",
+      speakers: Array.isArray(item.speakers)
+        ? item.speakers.filter((speaker) => _isObject(speaker))
+        : [],
+    }))
+    .filter((item) => item.layout_id && item.speakers.length > 0);
+  rows.sort((left, right) => left.layout_id.localeCompare(right.layout_id));
+  return rows;
+}
+
+function _scenePreviewPreferredLayoutId(layoutRows, preview) {
+  const available = new Set(layoutRows.map((row) => row.layout_id));
+  for (const layoutId of state.renderRequestIntent.target_layout_ids) {
+    if (available.has(layoutId)) {
+      return layoutId;
+    }
+  }
+  const defaultLayoutId = typeof preview?.default_layout_id === "string"
+    ? preview.default_layout_id.trim()
+    : "";
+  if (defaultLayoutId && available.has(defaultLayoutId)) {
+    return defaultLayoutId;
+  }
+  return layoutRows.length > 0 ? layoutRows[0].layout_id : "";
+}
+
+function _ensureSceneLayoutSelection(layoutRows, preview) {
+  if (layoutRows.length === 0) {
+    state.sceneLayoutId = "";
+    return "";
+  }
+  if (layoutRows.some((row) => row.layout_id === state.sceneLayoutId)) {
+    return state.sceneLayoutId;
+  }
+  const preferred = _scenePreviewPreferredLayoutId(layoutRows, preview);
+  state.sceneLayoutId = preferred;
+  return preferred;
+}
+
+function _svgNode(tagName, attributes = {}) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tagName);
+  for (const [key, value] of Object.entries(attributes)) {
+    node.setAttribute(key, String(value));
+  }
+  return node;
+}
+
+function _pointFromAzimuth(azimuthDeg, radius, centerX, centerY) {
+  const radians = (Number.isFinite(azimuthDeg) ? azimuthDeg : 0) * (Math.PI / 180);
+  const x = centerX + (Math.sin(radians) * radius);
+  const y = centerY - (Math.cos(radians) * radius);
+  return { x, y };
+}
+
+function _sceneObjectPoint(row, centerX, centerY) {
+  const azimuth = Number(row.azimuth_deg);
+  const depth = Number(row.depth);
+  const safeDepth = Number.isFinite(depth) ? Math.max(0, Math.min(1, depth)) : 0.5;
+  const radius = 58 + (safeDepth * 185);
+  return _pointFromAzimuth(azimuth, radius, centerX, centerY);
+}
+
+function _sceneConfidenceColor(confidence) {
+  const safe = Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0;
+  const hue = 12 + (safe * 128);
+  return `hsl(${hue.toFixed(1)} 72% 42%)`;
+}
+
+function _renderScenePreviewWarnings(preview) {
+  if (!scenePreviewWarnings) {
+    return;
+  }
+  scenePreviewWarnings.innerHTML = "";
+  const warnings = Array.isArray(preview?.warnings)
+    ? preview.warnings.filter((item) => _isObject(item))
+    : [];
+  if (warnings.length === 0) {
+    const okChip = document.createElement("div");
+    okChip.className = "scene-preview-warning";
+    okChip.textContent = "No confidence or lock warnings in scene intent.";
+    scenePreviewWarnings.appendChild(okChip);
+    return;
+  }
+  warnings.sort((left, right) => {
+    const leftId = typeof left.warning_id === "string" ? left.warning_id : "";
+    const rightId = typeof right.warning_id === "string" ? right.warning_id : "";
+    return leftId.localeCompare(rightId);
+  });
+  for (const warning of warnings) {
+    const warningId = typeof warning.warning_id === "string" ? warning.warning_id : "WARN";
+    const count = Number.isFinite(warning.count) ? Number(warning.count) : 0;
+    const message = typeof warning.message === "string" ? warning.message : "";
+    const chip = document.createElement("div");
+    chip.className = "scene-preview-warning";
+    chip.textContent = `${warningId} (${count}) · ${message}`;
+    scenePreviewWarnings.appendChild(chip);
+  }
+}
+
+function _renderScenePreviewStage(preview, selectedLayout) {
+  if (!scenePreviewStage) {
+    return;
+  }
+  scenePreviewStage.innerHTML = "";
+  if (!_isObject(preview) || !_isObject(selectedLayout)) {
+    const empty = document.createElement("p");
+    empty.className = "scene-preview-stage-empty";
+    empty.textContent = "Scene preview is not available for the current project state.";
+    scenePreviewStage.appendChild(empty);
+    return;
+  }
+
+  const svg = _svgNode("svg", {
+    class: "scene-preview-svg",
+    role: "img",
+    viewBox: "0 0 900 520",
+    "aria-label": `Scene preview top-down layout ${selectedLayout.layout_id}`,
+  });
+  const centerX = 450;
+  const centerY = 280;
+  const speakerRadius = 228;
+
+  svg.appendChild(
+    _svgNode("rect", {
+      x: 1,
+      y: 1,
+      width: 898,
+      height: 518,
+      fill: "#f5f9fc",
+      stroke: "#d5e1e8",
+      "stroke-width": 1,
+      rx: 16,
+    }),
+  );
+
+  svg.appendChild(_svgNode("circle", {
+    cx: centerX,
+    cy: centerY,
+    r: speakerRadius,
+    fill: "none",
+    stroke: "#b8c8d6",
+    "stroke-width": 2,
+    "stroke-dasharray": "8 8",
+  }));
+  svg.appendChild(_svgNode("line", {
+    x1: centerX,
+    y1: centerY - speakerRadius - 20,
+    x2: centerX,
+    y2: centerY + speakerRadius + 20,
+    stroke: "#d1dde6",
+    "stroke-width": 1,
+  }));
+  svg.appendChild(_svgNode("line", {
+    x1: centerX - speakerRadius - 20,
+    y1: centerY,
+    x2: centerX + speakerRadius + 20,
+    y2: centerY,
+    stroke: "#d1dde6",
+    "stroke-width": 1,
+  }));
+
+  const bedEnergy = Number(preview.bed_energy);
+  const safeBedEnergy = Number.isFinite(bedEnergy) ? Math.max(0, Math.min(1, bedEnergy)) : 0;
+  const bedRingRadius = 96 + (safeBedEnergy * 118);
+  svg.appendChild(_svgNode("circle", {
+    cx: centerX,
+    cy: centerY,
+    r: bedRingRadius,
+    fill: "none",
+    stroke: "#c28332",
+    "stroke-opacity": (0.2 + (safeBedEnergy * 0.65)).toFixed(3),
+    "stroke-width": (10 + (safeBedEnergy * 11)).toFixed(1),
+  }));
+  svg.appendChild(_svgNode("text", {
+    x: centerX,
+    y: centerY + 5,
+    "text-anchor": "middle",
+    "font-size": 13,
+    "font-weight": 700,
+    fill: "#8a4a17",
+  })).textContent = `Bed halo ${(safeBedEnergy * 100).toFixed(0)}%`;
+
+  const speakers = Array.isArray(selectedLayout.speakers) ? selectedLayout.speakers : [];
+  for (const speaker of speakers) {
+    const azimuth = Number(speaker.azimuth_deg);
+    const elevation = Number(speaker.elevation_deg);
+    const isHeight = Number.isFinite(elevation) && elevation > 0;
+    const name = typeof speaker.name === "string" ? speaker.name : "?";
+    const point = _pointFromAzimuth(azimuth, speakerRadius, centerX, centerY);
+    const fill = name === "LFE"
+      ? "#b94a34"
+      : (isHeight ? "#2e7f9f" : "#4f6574");
+    svg.appendChild(_svgNode("circle", {
+      cx: point.x.toFixed(2),
+      cy: point.y.toFixed(2),
+      r: isHeight ? 5 : 4.4,
+      fill,
+      stroke: "#ffffff",
+      "stroke-width": 1.3,
+    }));
+    const label = _svgNode("text", {
+      x: point.x.toFixed(2),
+      y: (point.y - 10).toFixed(2),
+      "text-anchor": "middle",
+      "font-size": 10.5,
+      fill: "#50606e",
+    });
+    label.textContent = name;
+    svg.appendChild(label);
+  }
+
+  const objectRows = Array.isArray(preview.objects) ? preview.objects : [];
+  for (const row of objectRows) {
+    if (!_isObject(row)) {
+      continue;
+    }
+    const point = _sceneObjectPoint(row, centerX, centerY);
+    const confidence = Number(row.confidence);
+    const safeConfidence = Number.isFinite(confidence)
+      ? Math.max(0, Math.min(1, confidence))
+      : 0;
+    const dotRadius = 4.5 + (safeConfidence * 4.5);
+    const color = _sceneConfidenceColor(safeConfidence);
+    svg.appendChild(_svgNode("line", {
+      x1: centerX,
+      y1: centerY,
+      x2: point.x.toFixed(2),
+      y2: point.y.toFixed(2),
+      stroke: "#d4dee6",
+      "stroke-width": 1,
+    }));
+    svg.appendChild(_svgNode("circle", {
+      cx: point.x.toFixed(2),
+      cy: point.y.toFixed(2),
+      r: dotRadius.toFixed(2),
+      fill: color,
+      stroke: "#ffffff",
+      "stroke-width": 1.5,
+      "stroke-dasharray": row.inferred_position === true ? "2 2" : "",
+    }));
+    const labelRaw = typeof row.label === "string" && row.label.trim()
+      ? row.label.trim()
+      : (typeof row.object_id === "string" ? row.object_id : "Object");
+    const label = labelRaw.length > 16 ? `${labelRaw.slice(0, 13)}...` : labelRaw;
+    const text = _svgNode("text", {
+      x: (point.x + 8).toFixed(2),
+      y: (point.y - 8).toFixed(2),
+      "font-size": 11,
+      fill: "#33424f",
+    });
+    text.textContent = `${label} ${(safeConfidence * 100).toFixed(0)}%`;
+    svg.appendChild(text);
+  }
+
+  const header = _svgNode("text", {
+    x: 18,
+    y: 28,
+    "font-size": 15,
+    "font-weight": 700,
+    fill: "#2a3a47",
+  });
+  header.textContent = `Top-down plan · ${selectedLayout.label} (${selectedLayout.layout_id})`;
+  svg.appendChild(header);
+
+  scenePreviewStage.appendChild(svg);
+}
+
+function _renderScenePreview() {
+  const preview = _isObject(state.scenePreview) ? state.scenePreview : null;
+  const layoutRows = _scenePreviewLayoutOptions(preview);
+  const selectedLayoutId = _ensureSceneLayoutSelection(layoutRows, preview);
+
+  if (sceneLayoutSelect) {
+    if (layoutRows.length === 0) {
+      _setSelectOptions(sceneLayoutSelect, [{ value: "", label: "No scene preview" }], "");
+      sceneLayoutSelect.disabled = true;
+    } else {
+      _setSelectOptions(
+        sceneLayoutSelect,
+        layoutRows.map((row) => ({
+          value: row.layout_id,
+          label: `${row.label} (${row.layout_id})`,
+        })),
+        selectedLayoutId,
+      );
+      sceneLayoutSelect.disabled = false;
+    }
+  }
+
+  const selectedLayout = layoutRows.find((row) => row.layout_id === selectedLayoutId) || null;
+  _renderScenePreviewWarnings(preview);
+  _renderScenePreviewStage(preview, selectedLayout);
+
+  if (!scenePreviewOutput) {
+    return;
+  }
+  if (!_isObject(preview)) {
+    scenePreviewOutput.textContent = "Scene preview unavailable. Build GUI payload with a scene.json pointer.";
+    return;
+  }
+  const totals = _isObject(preview.totals) ? preview.totals : {};
+  const warningIds = Array.isArray(preview.warnings)
+    ? preview.warnings
+      .filter((item) => _isObject(item) && typeof item.warning_id === "string")
+      .map((item) => item.warning_id)
+      .sort()
+    : [];
+  scenePreviewOutput.textContent = JSON.stringify(
+    {
+      bed_energy: preview.bed_energy ?? null,
+      layout_id: selectedLayoutId || null,
+      object_count: Number.isFinite(totals.object_count) ? totals.object_count : 0,
+      bed_count: Number.isFinite(totals.bed_count) ? totals.bed_count : 0,
+      scene_lock_count: Number.isFinite(totals.scene_lock_count) ? totals.scene_lock_count : 0,
+      total_lock_count: Number.isFinite(totals.total_lock_count) ? totals.total_lock_count : 0,
+      warning_ids: warningIds,
+    },
+    null,
+    2,
+  );
+}
+
 function _renderIntentPreview() {
   const pluginChain = _pluginChainPayload();
   intentOutput.textContent = JSON.stringify(
@@ -2012,6 +2351,7 @@ function _renderIntentPreview() {
     null,
     2,
   );
+  _renderScenePreview();
 }
 
 function _syncMaxTheoreticalQualityToggle() {
@@ -2643,8 +2983,10 @@ async function refreshProjectShow() {
     await loadUiBundle(uiBundlePath);
     setStatus("ui_bundle loaded. Reading render_request...");
   } else {
+    state.scenePreview = null;
     renderPluginForms([]);
     _setEditablePlugins([]);
+    _renderScenePreview();
     setStatus("ui_bundle missing. Reading render_request...");
   }
 
@@ -2810,6 +3152,13 @@ timelineStageFilter.addEventListener("change", () => {
   _renderTimelineEntries();
 });
 
+if (sceneLayoutSelect) {
+  sceneLayoutSelect.addEventListener("change", () => {
+    state.sceneLayoutId = sceneLayoutSelect.value;
+    _renderScenePreview();
+  });
+}
+
 if (auditionJobSelect) {
   auditionJobSelect.addEventListener("change", () => {
     state.audition.jobId = auditionJobSelect.value;
@@ -2936,5 +3285,6 @@ renderRenderArtifactsViewer();
 _syncMaxTheoreticalQualityToggle();
 _renderFineModeIndicator();
 _refreshFineSteps();
+_renderScenePreview();
 _renderHeadphonePreviewIdle();
 setStatus("Ready. Start with rpc.discover.");

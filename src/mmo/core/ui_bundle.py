@@ -19,6 +19,19 @@ _BASELINE_RENDER_TARGET_ID = "TARGET.STEREO.2_0"
 _SCENE_LOCK_SEVERITIES = {"hard", "taste"}
 _SCENE_LOCK_APPLIES_TO = {"object", "bed", "scene"}
 _UNKNOWN_LOCK_DESCRIPTION = "Unknown lock ID; definition not found in the scene lock registry."
+_SCENE_PREVIEW_LAYOUT_IDS: tuple[str, ...] = (
+    "LAYOUT.5_1",
+    "LAYOUT.7_1",
+    "LAYOUT.7_1_4",
+    "LAYOUT.9_1_6",
+)
+_SCENE_PREVIEW_LAYOUT_LABELS: dict[str, str] = {
+    "LAYOUT.5_1": "5.1",
+    "LAYOUT.7_1": "7.1",
+    "LAYOUT.7_1_4": "7.1.4",
+    "LAYOUT.9_1_6": "9.1.6",
+}
+_SCENE_PREVIEW_LOW_CONFIDENCE_BELOW = 0.6
 
 
 from mmo.resources import ontology_dir, presets_dir as _presets_dir, schemas_dir
@@ -843,6 +856,266 @@ def _scene_meta_payload(
     return payload
 
 
+def _clamp_float(value: float, *, lo: float, hi: float) -> float:
+    return max(lo, min(hi, float(value)))
+
+
+def _scene_preview_stable_fraction(seed: str) -> float:
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) / float(0xFFFFFFFF)
+
+
+def _scene_preview_layout_options() -> list[dict[str, Any]]:
+    from mmo.core.speaker_positions import get_layout_positions  # noqa: WPS433
+
+    options: list[dict[str, Any]] = []
+    for layout_id in _SCENE_PREVIEW_LAYOUT_IDS:
+        try:
+            positions = get_layout_positions(layout_id)
+        except (RuntimeError, ValueError):
+            positions = None
+        if not positions:
+            continue
+
+        speakers: list[dict[str, Any]] = []
+        for row in positions:
+            ch = row.get("ch")
+            name = row.get("name")
+            azimuth_deg = _numeric_value(row.get("azimuth_deg"))
+            elevation_deg = _numeric_value(row.get("elevation_deg"))
+            if (
+                isinstance(ch, int)
+                and not isinstance(ch, bool)
+                and isinstance(name, str)
+                and name.strip()
+                and azimuth_deg is not None
+                and elevation_deg is not None
+            ):
+                speakers.append(
+                    {
+                        "ch": ch,
+                        "name": name.strip(),
+                        "azimuth_deg": float(azimuth_deg),
+                        "elevation_deg": float(elevation_deg),
+                    }
+                )
+
+        if not speakers:
+            continue
+
+        speakers.sort(key=lambda item: int(item["ch"]))
+        options.append(
+            {
+                "layout_id": layout_id,
+                "label": _SCENE_PREVIEW_LAYOUT_LABELS.get(layout_id, layout_id),
+                "speakers": speakers,
+            }
+        )
+    return options
+
+
+def _scene_preview_object_row(object_payload: dict[str, Any]) -> dict[str, Any] | None:
+    object_id = _coerce_str(object_payload.get("object_id")).strip()
+    if not object_id:
+        return None
+
+    intent_payload = (
+        object_payload.get("intent")
+        if isinstance(object_payload.get("intent"), dict)
+        else {}
+    )
+    lock_count = len(_intent_lock_ids(intent_payload))
+    confidence = _numeric_value(intent_payload.get("confidence"))
+    if confidence is None:
+        confidence = _numeric_value(object_payload.get("confidence"))
+    if confidence is None:
+        confidence = 0.0
+    confidence = _clamp_float(confidence, lo=0.0, hi=1.0)
+
+    position_payload = (
+        intent_payload.get("position")
+        if isinstance(intent_payload.get("position"), dict)
+        else {}
+    )
+    azimuth_deg = _numeric_value(position_payload.get("azimuth_deg"))
+    if azimuth_deg is None:
+        azimuth_deg = _numeric_value(object_payload.get("azimuth_hint"))
+    inferred_position = False
+    if azimuth_deg is None:
+        inferred_position = True
+        azimuth_deg = -150.0 + (300.0 * _scene_preview_stable_fraction(object_id))
+
+    elevation_deg = _numeric_value(position_payload.get("elevation_deg"))
+    if elevation_deg is None:
+        elevation_deg = 0.0
+
+    depth = _numeric_value(intent_payload.get("depth"))
+    if depth is None:
+        depth = _numeric_value(object_payload.get("depth_hint"))
+    if depth is None:
+        depth = 0.5
+    depth = _clamp_float(depth, lo=0.0, hi=1.0)
+
+    label = _coerce_str(object_payload.get("label")).strip() or object_id
+    return {
+        "object_id": object_id,
+        "label": label,
+        "confidence": confidence,
+        "azimuth_deg": float(azimuth_deg),
+        "elevation_deg": float(elevation_deg),
+        "depth": depth,
+        "lock_count": lock_count,
+        "inferred_position": inferred_position,
+    }
+
+
+def _scene_preview_bed_row(bed_payload: dict[str, Any]) -> dict[str, Any] | None:
+    bed_id = _coerce_str(bed_payload.get("bed_id")).strip()
+    if not bed_id:
+        return None
+
+    intent_payload = (
+        bed_payload.get("intent")
+        if isinstance(bed_payload.get("intent"), dict)
+        else {}
+    )
+    lock_count = len(_intent_lock_ids(intent_payload))
+    confidence = _numeric_value(intent_payload.get("confidence"))
+    if confidence is None:
+        confidence = _numeric_value(bed_payload.get("confidence"))
+    if confidence is None:
+        confidence = 0.0
+    confidence = _clamp_float(confidence, lo=0.0, hi=1.0)
+
+    diffuse = _numeric_value(intent_payload.get("diffuse"))
+    if diffuse is None:
+        diffuse = _numeric_value(bed_payload.get("width_hint"))
+    if diffuse is None:
+        diffuse = 0.5
+    diffuse = _clamp_float(diffuse, lo=0.0, hi=1.0)
+
+    label = _coerce_str(bed_payload.get("label")).strip() or bed_id
+    return {
+        "bed_id": bed_id,
+        "label": label,
+        "confidence": confidence,
+        "diffuse": diffuse,
+        "lock_count": lock_count,
+    }
+
+
+def _scene_preview_warning_rows(
+    *,
+    object_rows: list[dict[str, Any]],
+    bed_rows: list[dict[str, Any]],
+    scene_lock_count: int,
+) -> list[dict[str, Any]]:
+    warnings: list[dict[str, Any]] = []
+    low_confidence_count = sum(
+        1
+        for row in [*object_rows, *bed_rows]
+        if (
+            isinstance(row.get("confidence"), (int, float))
+            and float(row["confidence"]) < _SCENE_PREVIEW_LOW_CONFIDENCE_BELOW
+        )
+    )
+    if low_confidence_count > 0:
+        warnings.append(
+            {
+                "warning_id": "WARN.SCENE_PREVIEW.LOW_CONFIDENCE",
+                "severity": "warning",
+                "message": (
+                    f"{low_confidence_count} scene items are below confidence "
+                    f"{_SCENE_PREVIEW_LOW_CONFIDENCE_BELOW:.2f}."
+                ),
+                "count": low_confidence_count,
+            }
+        )
+
+    missing_locks_count = 0
+    if scene_lock_count == 0:
+        missing_locks_count = sum(
+            1
+            for row in [*object_rows, *bed_rows]
+            if int(row.get("lock_count", 0)) == 0
+        )
+    if missing_locks_count > 0:
+        warnings.append(
+            {
+                "warning_id": "WARN.SCENE_PREVIEW.MISSING_LOCKS",
+                "severity": "warning",
+                "message": (
+                    "No lock coverage is set for "
+                    f"{missing_locks_count} scene items."
+                ),
+                "count": missing_locks_count,
+            }
+        )
+    return warnings
+
+
+def _scene_preview_payload(scene_payload: dict[str, Any]) -> dict[str, Any] | None:
+    layout_options = _scene_preview_layout_options()
+    if not layout_options:
+        return None
+
+    object_rows = [
+        row
+        for row in (
+            _scene_preview_object_row(item)
+            for item in _iter_dict_list(scene_payload.get("objects"))
+        )
+        if row is not None
+    ]
+    object_rows.sort(key=lambda item: _coerce_str(item.get("object_id")).strip())
+
+    bed_rows = [
+        row
+        for row in (
+            _scene_preview_bed_row(item)
+            for item in _iter_dict_list(scene_payload.get("beds"))
+        )
+        if row is not None
+    ]
+    bed_rows.sort(key=lambda item: _coerce_str(item.get("bed_id")).strip())
+
+    scene_lock_count = len(_intent_lock_ids(scene_payload.get("intent")))
+    total_lock_count = scene_lock_count + sum(
+        int(row.get("lock_count", 0))
+        for row in [*object_rows, *bed_rows]
+    )
+
+    bed_energy = 0.0
+    if bed_rows:
+        bed_energy = sum(
+            ((0.6 * float(row["diffuse"])) + (0.4 * float(row["confidence"])))
+            for row in bed_rows
+        ) / float(len(bed_rows))
+    bed_energy = _clamp_float(bed_energy, lo=0.0, hi=1.0)
+
+    return {
+        "layout_options": layout_options,
+        "default_layout_id": _coerce_str(layout_options[0].get("layout_id")).strip(),
+        "objects": object_rows,
+        "beds": bed_rows,
+        "bed_energy": bed_energy,
+        "warnings": _scene_preview_warning_rows(
+            object_rows=object_rows,
+            bed_rows=bed_rows,
+            scene_lock_count=scene_lock_count,
+        ),
+        "totals": {
+            "object_count": len(object_rows),
+            "bed_count": len(bed_rows),
+            "scene_lock_count": scene_lock_count,
+            "total_lock_count": total_lock_count,
+        },
+        "thresholds": {
+            "low_confidence_below": _SCENE_PREVIEW_LOW_CONFIDENCE_BELOW,
+        },
+    }
+
+
 def _recommendation_overlays_payload(
     report: dict[str, Any],
     scene_payload: dict[str, Any],
@@ -1602,6 +1875,9 @@ def build_ui_bundle(
             intent_params_registry,
             scene_templates_payload,
         )
+        scene_preview = _scene_preview_payload(scene_payload)
+        if scene_preview is not None:
+            payload["scene_preview"] = scene_preview
         recommendation_overlays = _recommendation_overlays_payload(
             report,
             scene_payload,

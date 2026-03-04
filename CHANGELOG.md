@@ -97,6 +97,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- GUI scene-intent preview contract + web rendering:
+  - Added deterministic `scene_preview` payload in `ui_bundle.json` with
+    layout options for `LAYOUT.5_1`, `LAYOUT.7_1`, `LAYOUT.7_1_4`, and
+    `LAYOUT.9_1_6`, plus per-object confidence/position rows and bed energy.
+  - Added scene-preview warnings for low confidence and missing lock coverage.
+  - Web GUI now renders a top-down scene view with layout selector, labeled
+    object dots (confidence), and bed halo visualization before audition.
+
 - Stems-small real-world naming regression fixture chain:
   - Added compact redistributable fixture sessions under
     `fixtures/stems_small/` covering numeric suffixes and compound naming

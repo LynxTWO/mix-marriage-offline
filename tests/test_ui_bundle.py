@@ -1125,6 +1125,134 @@ class TestUiBundle(unittest.TestCase):
             ],
         )
 
+    def test_build_ui_bundle_scene_preview_payload(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report_for_scene_overlay_tests()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            scene_path = temp_path / "scene.json"
+            scene_path.write_text(
+                json.dumps(_sample_scene(), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                scene_path=scene_path,
+            )
+
+        validator.validate(bundle)
+
+        scene_preview = bundle.get("scene_preview")
+        self.assertIsInstance(scene_preview, dict)
+        if not isinstance(scene_preview, dict):
+            return
+
+        self.assertEqual(scene_preview.get("default_layout_id"), "LAYOUT.5_1")
+        layout_options = scene_preview.get("layout_options")
+        self.assertIsInstance(layout_options, list)
+        if not isinstance(layout_options, list):
+            return
+        layout_ids = [
+            item.get("layout_id")
+            for item in layout_options
+            if isinstance(item, dict) and isinstance(item.get("layout_id"), str)
+        ]
+        self.assertEqual(
+            layout_ids,
+            ["LAYOUT.5_1", "LAYOUT.7_1", "LAYOUT.7_1_4", "LAYOUT.9_1_6"],
+        )
+
+        objects = scene_preview.get("objects")
+        self.assertIsInstance(objects, list)
+        if not isinstance(objects, list):
+            return
+        object_ids = [
+            item.get("object_id")
+            for item in objects
+            if isinstance(item, dict) and isinstance(item.get("object_id"), str)
+        ]
+        self.assertEqual(object_ids, ["OBJ.BASS", "OBJ.VOX"])
+        inferred_flags = {
+            item.get("object_id"): item.get("inferred_position")
+            for item in objects
+            if isinstance(item, dict)
+        }
+        self.assertEqual(inferred_flags.get("OBJ.BASS"), True)
+        self.assertEqual(inferred_flags.get("OBJ.VOX"), True)
+
+        self.assertEqual(scene_preview.get("bed_energy"), 0.3)
+        self.assertEqual(
+            scene_preview.get("totals"),
+            {
+                "object_count": 2,
+                "bed_count": 1,
+                "scene_lock_count": 1,
+                "total_lock_count": 2,
+            },
+        )
+
+        warnings = scene_preview.get("warnings")
+        self.assertIsInstance(warnings, list)
+        if not isinstance(warnings, list):
+            return
+        warning_ids = [
+            item.get("warning_id")
+            for item in warnings
+            if isinstance(item, dict) and isinstance(item.get("warning_id"), str)
+        ]
+        self.assertEqual(warning_ids, ["WARN.SCENE_PREVIEW.LOW_CONFIDENCE"])
+
+    def test_build_ui_bundle_scene_preview_warns_when_locks_missing(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
+        report = _sample_report_for_scene_overlay_tests()
+        help_registry_path = repo_root / "ontology" / "help.yaml"
+        scene_payload = _sample_scene()
+        scene_payload["intent"]["locks"] = []
+        scene_payload["objects"][0]["intent"]["locks"] = []
+        scene_payload["objects"][1]["intent"]["locks"] = []
+        scene_payload["beds"][0]["intent"]["locks"] = []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            scene_path = temp_path / "scene.json"
+            scene_path.write_text(
+                json.dumps(scene_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            bundle = build_ui_bundle(
+                report,
+                None,
+                help_registry_path=help_registry_path,
+                scene_path=scene_path,
+            )
+
+        validator.validate(bundle)
+
+        scene_preview = bundle.get("scene_preview")
+        self.assertIsInstance(scene_preview, dict)
+        if not isinstance(scene_preview, dict):
+            return
+        warnings = scene_preview.get("warnings")
+        self.assertIsInstance(warnings, list)
+        if not isinstance(warnings, list):
+            return
+        warnings_by_id = {
+            item.get("warning_id"): item
+            for item in warnings
+            if isinstance(item, dict) and isinstance(item.get("warning_id"), str)
+        }
+        missing_lock_warning = warnings_by_id.get("WARN.SCENE_PREVIEW.MISSING_LOCKS")
+        self.assertIsInstance(missing_lock_warning, dict)
+        if not isinstance(missing_lock_warning, dict):
+            return
+        self.assertEqual(missing_lock_warning.get("count"), 3)
+
     def test_build_ui_bundle_scene_overlay_lock_notes_action_filter(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         validator = _schema_validator(repo_root / "schemas" / "ui_bundle.schema.json")
