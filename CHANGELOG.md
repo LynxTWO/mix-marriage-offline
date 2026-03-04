@@ -95,6 +95,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Added regression coverage for stub-only renderer runs to assert
     non-zero exit and receipt issue presence.
 
+- Scene build locks now preserve full per-stem `bus_id` identity in scene
+  objects/receipts (for example `BUS.DRUMS.KICK`) while still deriving
+  deterministic `group_bus` for routing safety.
+  - Updated lock application to persist locked `bus_id` with precedence
+    `locks > explicit metadata > inference`.
+  - Extended scene schema (root + packaged mirror) to allow optional
+    object/receipt `bus_id`.
+  - Added regression assertions in lock + CLI scene lock tests for
+    `ROLE.DRUM.KICK` + `BUS.DRUMS.KICK` overrides.
+
 ### Added
 
 - Scene builder + conservative surround bed routing contract hardening:

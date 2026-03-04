@@ -34,6 +34,10 @@ def _coerce_str(value: Any) -> str:
     return ""
 
 
+def _normalize_bus_id(value: Any) -> str:
+    return _coerce_str(value).strip().upper()
+
+
 def _coerce_float(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
@@ -135,7 +139,7 @@ def _normalize_override(stem_id: str, payload: dict[str, Any]) -> dict[str, Any]
     if role_id:
         normalized["role_id"] = role_id
 
-    bus_id = _coerce_str(payload.get("bus_id")).strip()
+    bus_id = _normalize_bus_id(payload.get("bus_id"))
     if bus_id:
         normalized["bus_id"] = bus_id
 
@@ -303,18 +307,32 @@ def apply_scene_build_locks(
             role_id = ""
             role_source = _SOURCE_INFERRED
 
-        # group_bus (from bus_id override)
-        locked_bus_id = _coerce_str(override_payload.get("bus_id")).strip()
-        current_group_bus = _coerce_str(obj.get("group_bus")).strip()
+        # bus routing identity (bus_id + derived group_bus)
+        locked_bus_id = _normalize_bus_id(override_payload.get("bus_id"))
+        current_bus_id = _normalize_bus_id(obj.get("bus_id"))
+        current_group_bus = _coerce_str(obj.get("group_bus")).strip().upper()
         if locked_bus_id:
+            bus_id = locked_bus_id
+            obj["bus_id"] = bus_id
             group_bus = _resolve_group_bus(locked_bus_id)
             if group_bus:
                 obj["group_bus"] = group_bus
             bus_source = _SOURCE_LOCKED
+        elif current_bus_id:
+            bus_id = current_bus_id
+            obj["bus_id"] = bus_id
+            group_bus = _resolve_group_bus(current_bus_id)
+            if group_bus:
+                obj["group_bus"] = group_bus
+            elif current_group_bus:
+                group_bus = current_group_bus
+            bus_source = _SOURCE_EXPLICIT
         elif current_group_bus:
+            bus_id = ""
             group_bus = current_group_bus
             bus_source = _SOURCE_EXPLICIT
         else:
+            bus_id = ""
             group_bus = ""
             bus_source = _SOURCE_INFERRED
 
@@ -391,6 +409,8 @@ def apply_scene_build_locks(
         }
         if role_id:
             receipt_row["role_id"] = role_id
+        if bus_id:
+            receipt_row["bus_id"] = bus_id
         if group_bus:
             receipt_row["group_bus"] = group_bus
         if surround_send_caps is not None:

@@ -158,8 +158,8 @@ class TestSceneBuildLocks(unittest.TestCase):
             "version": "0.1.0",
             "overrides": {
                 "STEM.B": {
-                    "role_id": "ROLE.VOCAL.LEAD",
-                    "bus_id": "BUS.VOX.LEAD",
+                    "role_id": "ROLE.DRUM.KICK",
+                    "bus_id": "BUS.DRUMS.KICK",
                     "placement": {"azimuth_deg": 0.0, "width": 0.1},
                     "surround_send_caps": {
                         "side_max_gain": 0.05,
@@ -186,8 +186,9 @@ class TestSceneBuildLocks(unittest.TestCase):
         self.assertEqual(stem_a["azimuth_hint"], 15.0)
 
         stem_b = objects["STEM.B"]
-        self.assertEqual(stem_b["role_id"], "ROLE.VOCAL.LEAD")
-        self.assertEqual(stem_b["group_bus"], "BUS.VOX")
+        self.assertEqual(stem_b["role_id"], "ROLE.DRUM.KICK")
+        self.assertEqual(stem_b["bus_id"], "BUS.DRUMS.KICK")
+        self.assertEqual(stem_b["group_bus"], "BUS.DRUMS")
         self.assertEqual(stem_b["intent"]["width"], 0.1)
         self.assertEqual(stem_b["width_hint"], 0.1)
         self.assertEqual(stem_b["intent"]["position"]["azimuth_deg"], 0.0)
@@ -219,6 +220,7 @@ class TestSceneBuildLocks(unittest.TestCase):
         self.assertEqual(by_stem["STEM.A"].get("azimuth_source"), "explicit_metadata")
         self.assertEqual(by_stem["STEM.B"].get("role_source"), "locked")
         self.assertEqual(by_stem["STEM.B"].get("bus_source"), "locked")
+        self.assertEqual(by_stem["STEM.B"].get("bus_id"), "BUS.DRUMS.KICK")
         self.assertEqual(by_stem["STEM.B"].get("width_source"), "locked")
         self.assertEqual(by_stem["STEM.B"].get("azimuth_source"), "locked")
         self.assertEqual(by_stem["STEM.B"].get("surround_send_caps_source"), "locked")

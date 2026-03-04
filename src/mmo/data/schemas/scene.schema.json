@@ -189,6 +189,10 @@
           "type": "string",
           "pattern": "^ROLE\\.[A-Z0-9_.]+$"
         },
+        "bus_id": {
+          "type": "string",
+          "pattern": "^BUS\\.[A-Z0-9_]+(?:\\.[A-Z0-9_]+)?$"
+        },
         "group_bus": {
           "type": "string",
           "pattern": "^BUS\\.[A-Z0-9_]+$"
@@ -294,6 +298,7 @@
         "object_id": { "type": "string", "minLength": 1 },
         "stem_id": { "type": "string", "minLength": 1 },
         "role_id": { "type": "string", "pattern": "^ROLE\\.[A-Z0-9_.]+$" },
+        "bus_id": { "type": "string", "pattern": "^BUS\\.[A-Z0-9_]+(?:\\.[A-Z0-9_]+)?$" },
         "group_bus": { "type": "string", "pattern": "^BUS\\.[A-Z0-9_]+$" },
         "role_source": { "$ref": "#/$defs/locks_receipt_source" },
         "bus_source": { "$ref": "#/$defs/locks_receipt_source" },
