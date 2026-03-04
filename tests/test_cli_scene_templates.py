@@ -97,6 +97,9 @@ class TestCliSceneTemplates(unittest.TestCase):
                 "TEMPLATE.SCENE.LIVE.YOU_ARE_THERE",
                 "TEMPLATE.SCENE.STEREO.BAND_WIDE_VOCAL_CENTER",
                 "TEMPLATE.SCENE.SURROUND.FRONT_STAGE_CLEAR_REAR_FIELD",
+                "TEMPLATE.SEATING.BAND.IN_BAND",
+                "TEMPLATE.SEATING.ORCHESTRA.IN_ORCHESTRA",
+                "TEMPLATE.SEATING.ORCHESTRA_AUDIENCE",
             ],
         )
 

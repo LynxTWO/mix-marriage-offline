@@ -82,8 +82,61 @@ class TestSceneTemplates(unittest.TestCase):
                 "TEMPLATE.SCENE.LIVE.YOU_ARE_THERE",
                 "TEMPLATE.SCENE.STEREO.BAND_WIDE_VOCAL_CENTER",
                 "TEMPLATE.SCENE.SURROUND.FRONT_STAGE_CLEAR_REAR_FIELD",
+                "TEMPLATE.SEATING.BAND.IN_BAND",
+                "TEMPLATE.SEATING.ORCHESTRA.IN_ORCHESTRA",
+                "TEMPLATE.SEATING.ORCHESTRA_AUDIENCE",
             ],
         )
+
+    def test_apply_scene_templates_role_regex_matches_role_id_for_seating_templates(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            stems_dir = Path(temp_dir) / "stems"
+            stems_dir.mkdir(parents=True, exist_ok=True)
+            scene = _sample_scene(stems_dir=stems_dir)
+            scene["objects"] = [
+                {
+                    "object_id": "OBJ.VIOLIN",
+                    "stem_id": "STEM.VIOLIN",
+                    "role_id": "ROLE.STRINGS.VIOLIN",
+                    "label": "Section A",
+                    "channel_count": 1,
+                    "intent": {"confidence": 0.4, "locks": []},
+                    "notes": [],
+                },
+                {
+                    "object_id": "OBJ.BRASS",
+                    "stem_id": "STEM.BRASS",
+                    "role_id": "ROLE.BRASS.HORN",
+                    "label": "Section B",
+                    "channel_count": 1,
+                    "intent": {"confidence": 0.4, "locks": []},
+                    "notes": [],
+                },
+            ]
+
+            edited = apply_scene_templates(
+                scene,
+                ["TEMPLATE.SEATING.ORCHESTRA_AUDIENCE"],
+                scene_templates_path=repo_root / "ontology" / "scene_templates.yaml",
+                scene_locks_path=repo_root / "ontology" / "scene_locks.yaml",
+            )
+
+        objects = edited.get("objects")
+        self.assertIsInstance(objects, list)
+        if not isinstance(objects, list):
+            return
+        by_id = {
+            item.get("object_id"): item
+            for item in objects
+            if isinstance(item, dict) and isinstance(item.get("object_id"), str)
+        }
+        violin_intent = by_id["OBJ.VIOLIN"]["intent"]
+        self.assertEqual(violin_intent.get("position"), {"azimuth_deg": 45.0})
+        self.assertEqual(violin_intent.get("width"), 0.64)
+        brass_intent = by_id["OBJ.BRASS"]["intent"]
+        self.assertEqual(brass_intent.get("position"), {"azimuth_deg": 170.0})
+        self.assertEqual(brass_intent.get("loudness_bias"), "back")
 
     def test_load_scene_templates_rejects_unsorted_template_ids(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

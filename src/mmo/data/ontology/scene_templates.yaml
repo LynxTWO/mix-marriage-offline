@@ -52,3 +52,372 @@ templates:
         set:
           depth: 0.35
           loudness_bias: "neutral"
+  TEMPLATE.SEATING.BAND.IN_BAND:
+    label: "Band seating: in-band perspective"
+    description: "Deterministic role-driven stage seating for modern band stems."
+    notes:
+      - "Role-driven seat map with deterministic spread for duplicate section roles."
+      - "Rear energy remains conservative unless perspective is in_orchestra."
+    patches:
+      - scope: "scene"
+        match: {}
+        set:
+          perspective: "in_band"
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.(VOCAL\\.LEAD|DIALOGUE\\.LEAD|VOX\\.LEAD)(\\.|$)"
+        set:
+          position:
+            azimuth_deg: 0.0
+          width: 0.18
+          depth: 0.2
+          loudness_bias: "forward"
+          confidence: 0.9
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.(VOCAL\\.(HARMONY|BGV|DOUBLE|AD_LIB|CHOPS)|VOX\\.BGV)(\\.|$)"
+        set:
+          position:
+            azimuth_deg: 0.0
+          width: 0.75
+          depth: 0.38
+          loudness_bias: "neutral"
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.GTR\\..*_L(\\.|$)"
+        set:
+          position:
+            azimuth_deg: 42.0
+          width: 0.58
+          depth: 0.32
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.GTR\\..*_R(\\.|$)"
+        set:
+          position:
+            azimuth_deg: -42.0
+          width: 0.58
+          depth: 0.32
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.GTR\\.(ELECTRIC|ACOUSTIC|LEAD|RHYTHM)(\\.|$)"
+        set:
+          position:
+            azimuth_deg: 28.0
+          width: 0.52
+          depth: 0.34
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.KEYS\\."
+        set:
+          position:
+            azimuth_deg: -26.0
+          width: 0.46
+          depth: 0.36
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.(BASS\\.|STRINGS\\.BASS)(\\.|$)"
+        set:
+          position:
+            azimuth_deg: -18.0
+          width: 0.24
+          depth: 0.28
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.DRUM\\.(KICK|SNARE)(\\.|$)"
+        set:
+          position:
+            azimuth_deg: 0.0
+          width: 0.24
+          depth: 0.26
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.DRUM\\.(PERCUSSION|CYMBALS|OVERHEADS|ROOM|TOMS)(\\.|$)"
+        set:
+          position:
+            azimuth_deg: 148.0
+          width: 0.66
+          depth: 0.7
+          loudness_bias: "back"
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.(WW\\.|WINDS\\.|BRASS\\.)"
+        set:
+          position:
+            azimuth_deg: 12.0
+          width: 0.5
+          depth: 0.52
+      - scope: "object"
+        match:
+          label_regex: ".*"
+        set:
+          width: 0.45
+          depth: 0.38
+          loudness_bias: "neutral"
+      - scope: "bed"
+        match:
+          bed_kind: "field"
+        set:
+          diffuse: 0.72
+      - scope: "bed"
+        match:
+          content_hint: "reverb_return"
+        set:
+          diffuse: 0.92
+          height_send_caps:
+            top_max_gain: 0.12
+            top_front_max_gain: 0.12
+            top_rear_max_gain: 0.1
+      - scope: "bed"
+        match:
+          content_hint: "ambience"
+        set:
+          diffuse: 0.94
+          height_send_caps:
+            top_max_gain: 0.12
+            top_front_max_gain: 0.12
+            top_rear_max_gain: 0.1
+      - scope: "bed"
+        match:
+          content_hint: "crowd"
+        set:
+          diffuse: 0.96
+          height_send_caps:
+            top_max_gain: 0.12
+            top_front_max_gain: 0.11
+            top_rear_max_gain: 0.12
+  TEMPLATE.SEATING.ORCHESTRA.IN_ORCHESTRA:
+    label: "Orchestra seating: in orchestra"
+    description: "Role-driven orchestral seating with immersive in-orchestra perspective."
+    notes:
+      - "Strings arc around listener; brass and percussion may route rear in immersive layouts."
+      - "Bed heights stay capped and hall/room focused."
+    patches:
+      - scope: "scene"
+        match: {}
+        set:
+          perspective: "in_orchestra"
+      - scope: "object"
+        match:
+          role_id: "ROLE.STRINGS.VIOLIN"
+        set:
+          position:
+            azimuth_deg: 62.0
+          width: 0.72
+          depth: 0.24
+      - scope: "object"
+        match:
+          role_id: "ROLE.STRINGS.VIOLA"
+        set:
+          position:
+            azimuth_deg: 28.0
+          width: 0.58
+          depth: 0.3
+      - scope: "object"
+        match:
+          role_id: "ROLE.STRINGS.CELLO"
+        set:
+          position:
+            azimuth_deg: -28.0
+          width: 0.58
+          depth: 0.34
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.(STRINGS\\.BASS|BASS\\.)(\\.|$)"
+        set:
+          position:
+            azimuth_deg: -68.0
+          width: 0.42
+          depth: 0.4
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.STRINGS\\.(SECTION|OTHER)(\\.|$)"
+        set:
+          position:
+            azimuth_deg: 44.0
+          width: 0.86
+          depth: 0.34
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.(WW\\.|WINDS\\.)"
+        set:
+          position:
+            azimuth_deg: 4.0
+          width: 0.46
+          depth: 0.52
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.BRASS\\."
+        set:
+          position:
+            azimuth_deg: 176.0
+          width: 0.5
+          depth: 0.82
+          loudness_bias: "back"
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.DRUM\\.(PERCUSSION|CYMBALS|OVERHEADS|ROOM|TOMS)(\\.|$)"
+        set:
+          position:
+            azimuth_deg: 170.0
+          width: 0.72
+          depth: 0.86
+          loudness_bias: "back"
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.(VOCAL\\.LEAD|DIALOGUE\\.LEAD|VOX\\.LEAD)(\\.|$)"
+        set:
+          position:
+            azimuth_deg: 0.0
+          width: 0.2
+          depth: 0.22
+          loudness_bias: "forward"
+      - scope: "bed"
+        match:
+          bed_kind: "field"
+        set:
+          diffuse: 0.9
+      - scope: "bed"
+        match:
+          content_hint: "reverb_return"
+        set:
+          diffuse: 0.98
+          height_send_caps:
+            top_max_gain: 0.14
+            top_front_max_gain: 0.14
+            top_rear_max_gain: 0.12
+      - scope: "bed"
+        match:
+          content_hint: "ambience"
+        set:
+          diffuse: 1.0
+          height_send_caps:
+            top_max_gain: 0.14
+            top_front_max_gain: 0.13
+            top_rear_max_gain: 0.14
+      - scope: "bed"
+        match:
+          content_hint: "crowd"
+        set:
+          diffuse: 0.98
+          height_send_caps:
+            top_max_gain: 0.14
+            top_front_max_gain: 0.12
+            top_rear_max_gain: 0.14
+  TEMPLATE.SEATING.ORCHESTRA_AUDIENCE:
+    label: "Orchestra seating: audience"
+    description: "Role-driven orchestral stage map with audience perspective translation safety."
+    notes:
+      - "Brass/percussion positions are rear-biased semantically but stay front-biased unless in_orchestra perspective."
+    patches:
+      - scope: "scene"
+        match: {}
+        set:
+          perspective: "audience"
+      - scope: "object"
+        match:
+          role_id: "ROLE.STRINGS.VIOLIN"
+        set:
+          position:
+            azimuth_deg: 45.0
+          width: 0.64
+          depth: 0.28
+      - scope: "object"
+        match:
+          role_id: "ROLE.STRINGS.VIOLA"
+        set:
+          position:
+            azimuth_deg: 20.0
+          width: 0.54
+          depth: 0.34
+      - scope: "object"
+        match:
+          role_id: "ROLE.STRINGS.CELLO"
+        set:
+          position:
+            azimuth_deg: -20.0
+          width: 0.54
+          depth: 0.38
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.(STRINGS\\.BASS|BASS\\.)(\\.|$)"
+        set:
+          position:
+            azimuth_deg: -52.0
+          width: 0.38
+          depth: 0.42
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.STRINGS\\.(SECTION|OTHER)(\\.|$)"
+        set:
+          position:
+            azimuth_deg: 36.0
+          width: 0.8
+          depth: 0.36
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.(WW\\.|WINDS\\.)"
+        set:
+          position:
+            azimuth_deg: 0.0
+          width: 0.42
+          depth: 0.48
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.BRASS\\."
+        set:
+          position:
+            azimuth_deg: 170.0
+          width: 0.45
+          depth: 0.72
+          loudness_bias: "back"
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.DRUM\\.(PERCUSSION|CYMBALS|OVERHEADS|ROOM|TOMS)(\\.|$)"
+        set:
+          position:
+            azimuth_deg: 152.0
+          width: 0.66
+          depth: 0.74
+          loudness_bias: "back"
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.(VOCAL\\.LEAD|DIALOGUE\\.LEAD|VOX\\.LEAD)(\\.|$)"
+        set:
+          position:
+            azimuth_deg: 0.0
+          width: 0.22
+          depth: 0.22
+          loudness_bias: "forward"
+      - scope: "bed"
+        match:
+          bed_kind: "field"
+        set:
+          diffuse: 0.82
+      - scope: "bed"
+        match:
+          content_hint: "reverb_return"
+        set:
+          diffuse: 0.96
+          height_send_caps:
+            top_max_gain: 0.12
+            top_front_max_gain: 0.12
+            top_rear_max_gain: 0.1
+      - scope: "bed"
+        match:
+          content_hint: "ambience"
+        set:
+          diffuse: 0.96
+          height_send_caps:
+            top_max_gain: 0.12
+            top_front_max_gain: 0.11
+            top_rear_max_gain: 0.12
+      - scope: "bed"
+        match:
+          content_hint: "crowd"
+        set:
+          diffuse: 0.98
+          height_send_caps:
+            top_max_gain: 0.12
+            top_front_max_gain: 0.1
+            top_rear_max_gain: 0.12

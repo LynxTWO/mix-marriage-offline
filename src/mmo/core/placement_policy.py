@@ -45,8 +45,19 @@ _BUS_UNKNOWN = "BUS.OTHER"
 
 _BED_SURROUND_RELATIVE_DB = -12.0
 _BED_SURROUND_SEND_CAP = 0.2
+_BED_HEIGHT_SEND_CAP = 0.14
 _BED_SURROUND_CONFIDENCE_MIN = 0.6
 _IMMERSIVE_PERSPECTIVES: frozenset[str] = frozenset({"in_band", "in_orchestra"})
+_HALL_ROOM_CONTENT_HINTS: frozenset[str] = frozenset(
+    {"ambience", "reverb_return", "crowd"}
+)
+
+_AZIMUTH_CENTER_DEG = 12.0
+_AZIMUTH_WIDE_MIN_DEG = 35.0
+_AZIMUTH_WIDE_MAX_DEG = 70.0
+_AZIMUTH_FRONT_EDGE_DEG = 75.0
+_AZIMUTH_SIDE_EDGE_DEG = 125.0
+_AZIMUTH_REAR_EDGE_DEG = 165.0
 
 
 def _coerce_str(value: Any) -> str:
@@ -248,8 +259,37 @@ def _round_gain(value: float) -> float:
     return rounded
 
 
+def _clamp_gain(value: float) -> float:
+    if value < 0.0:
+        return 0.0
+    if value > 1.0:
+        return 1.0
+    return value
+
+
 def _empty_gains(channel_order: list[str]) -> dict[str, float]:
     return {speaker_id: 0.0 for speaker_id in channel_order}
+
+
+def _add_gain(gains: dict[str, float], speaker_id: str, gain: float) -> None:
+    if speaker_id not in gains:
+        return
+    gains[speaker_id] = _clamp_gain(gains.get(speaker_id, 0.0) + gain)
+
+
+def _add_pair_with_pan(
+    gains: dict[str, float],
+    *,
+    left_speaker: str,
+    right_speaker: str,
+    base_gain: float,
+    pan: float,
+) -> None:
+    pan_clamped = max(-1.0, min(1.0, pan))
+    left_gain = _clamp_gain(base_gain * (1.0 + (0.5 * pan_clamped)))
+    right_gain = _clamp_gain(base_gain * (1.0 - (0.5 * pan_clamped)))
+    _add_gain(gains, left_speaker, left_gain)
+    _add_gain(gains, right_speaker, right_gain)
 
 
 def _set_front(gains: dict[str, float], front_gain: float) -> None:
@@ -340,6 +380,280 @@ def _is_lead_center_role(role_id: str) -> bool:
     )
 
 
+def _is_backing_vocal_role(role_id: str) -> bool:
+    return role_id.startswith(
+        (
+            "ROLE.VOCAL.BGV",
+            "ROLE.VOCAL.HARMONY",
+            "ROLE.VOCAL.DOUBLE",
+            "ROLE.VOCAL.AD_LIB",
+            "ROLE.VOCAL.CHOPS",
+            "ROLE.VOX.BGV",
+        )
+    )
+
+
+def _is_strings_role(role_id: str) -> bool:
+    return role_id.startswith("ROLE.STRINGS.")
+
+
+def _is_winds_role(role_id: str) -> bool:
+    return role_id.startswith("ROLE.WW.") or role_id.startswith("ROLE.WINDS.")
+
+
+def _is_brass_role(role_id: str) -> bool:
+    return role_id.startswith("ROLE.BRASS.")
+
+
+def _is_percussion_role(role_id: str) -> bool:
+    return role_id.startswith(
+        (
+            "ROLE.DRUM.PERCUSSION",
+            "ROLE.DRUM.CYMBALS",
+            "ROLE.DRUM.OVERHEADS",
+            "ROLE.DRUM.ROOM",
+            "ROLE.DRUM.TOMS",
+        )
+    )
+
+
+def _is_broad_strings_role(role_id: str, *, width_hint: float) -> bool:
+    if not _is_strings_role(role_id):
+        return False
+    return width_hint >= 0.5 or role_id.startswith("ROLE.STRINGS.SECTION")
+
+
+def _role_slot_group_key(role_id: str, group_bus: str) -> str:
+    if _is_lead_center_role(role_id):
+        return "SECTION.VOCAL.LEAD"
+    if _is_backing_vocal_role(role_id):
+        return "SECTION.VOCAL.BACKING"
+    if role_id.startswith(("ROLE.BASS.", "ROLE.STRINGS.BASS")):
+        return "SECTION.BASS"
+    if role_id.startswith("ROLE.DRUM."):
+        return "SECTION.DRUMS"
+    if _is_strings_role(role_id):
+        if role_id.startswith("ROLE.STRINGS.VIOLIN"):
+            return "SECTION.STRINGS.VIOLIN"
+        if role_id.startswith("ROLE.STRINGS.VIOLA"):
+            return "SECTION.STRINGS.VIOLA"
+        if role_id.startswith("ROLE.STRINGS.CELLO"):
+            return "SECTION.STRINGS.CELLO"
+        return "SECTION.STRINGS.OTHER"
+    if _is_winds_role(role_id):
+        return "SECTION.WINDS"
+    if _is_brass_role(role_id):
+        return "SECTION.BRASS"
+    if role_id.startswith("ROLE.GTR."):
+        return "SECTION.GTR"
+    if role_id.startswith("ROLE.KEYS."):
+        return "SECTION.KEYS"
+    if role_id.startswith("ROLE.SYNTH."):
+        return "SECTION.SYNTH"
+    if group_bus:
+        return f"SECTION.{group_bus}"
+    return f"SECTION.{role_id or _ROLE_UNKNOWN}"
+
+
+def _role_default_azimuth(
+    role_id: str,
+    *,
+    perspective: str | None,
+) -> float:
+    if _is_lead_center_role(role_id):
+        return 0.0
+    if _is_backing_vocal_role(role_id):
+        return 0.0
+
+    if role_id.startswith("ROLE.STRINGS.VIOLIN"):
+        return 45.0
+    if role_id.startswith("ROLE.STRINGS.VIOLA"):
+        return 20.0
+    if role_id.startswith("ROLE.STRINGS.CELLO"):
+        return -20.0
+    if role_id.startswith(("ROLE.STRINGS.BASS", "ROLE.BASS.")):
+        return -52.0
+    if role_id.startswith("ROLE.STRINGS."):
+        return 34.0
+
+    if _is_winds_role(role_id):
+        if role_id.startswith("ROLE.WINDS.BAGPIPE"):
+            return 14.0
+        if role_id.startswith("ROLE.WINDS.DIDGERIDOO"):
+            return -12.0
+        if role_id.startswith("ROLE.WINDS.DUDUK"):
+            return -8.0
+        if role_id.startswith("ROLE.WINDS.PAN_FLUTE"):
+            return 10.0
+        if role_id.startswith("ROLE.WINDS.SHAKUHACHI"):
+            return 8.0
+        if role_id.startswith("ROLE.WW.BASSOON"):
+            return -10.0
+        if role_id.startswith("ROLE.WW.OBOE"):
+            return 6.0
+        if role_id.startswith("ROLE.WW.PICCOLO"):
+            return 12.0
+        return 0.0
+
+    if _is_brass_role(role_id):
+        if role_id.startswith("ROLE.BRASS.TUBA"):
+            if perspective == "in_orchestra":
+                return -168.0
+            return -140.0
+        if perspective == "in_orchestra":
+            return 176.0
+        return 150.0
+
+    if _is_percussion_role(role_id):
+        if perspective == "in_orchestra":
+            return 170.0
+        return 138.0
+
+    if role_id.startswith("ROLE.DRUM."):
+        return 0.0
+    if role_id.startswith("ROLE.GTR.") and role_id.endswith("_L"):
+        return 42.0
+    if role_id.startswith("ROLE.GTR.") and role_id.endswith("_R"):
+        return -42.0
+    if role_id.startswith("ROLE.GTR."):
+        return 28.0
+    if role_id.startswith("ROLE.KEYS."):
+        return -26.0
+    if role_id.startswith("ROLE.SYNTH."):
+        return 18.0
+    return 0.0
+
+
+def _object_azimuth_hint(
+    obj: dict[str, Any],
+    *,
+    intent_payload: dict[str, Any],
+) -> tuple[float | None, str | None]:
+    direct_hint = _coerce_float(obj.get("azimuth_hint"))
+    if direct_hint is not None:
+        return max(-180.0, min(180.0, direct_hint)), "object.azimuth_hint"
+
+    position = intent_payload.get("position")
+    if isinstance(position, dict):
+        intent_azimuth = _coerce_float(position.get("azimuth_deg"))
+        if intent_azimuth is not None:
+            return max(-180.0, min(180.0, intent_azimuth)), "intent.position.azimuth_deg"
+
+    intent_hint = _coerce_float(intent_payload.get("azimuth_hint"))
+    if intent_hint is not None:
+        return max(-180.0, min(180.0, intent_hint)), "intent.azimuth_hint"
+    return None, None
+
+
+def _section_spread_span_deg(role_id: str, *, width_hint: float, slot_count: int) -> float:
+    if slot_count <= 1:
+        return 0.0
+
+    if _is_lead_center_role(role_id):
+        base_span = 16.0
+    elif _is_backing_vocal_role(role_id):
+        base_span = 58.0
+    elif _is_strings_role(role_id):
+        base_span = 46.0
+    elif _is_winds_role(role_id) or _is_brass_role(role_id):
+        base_span = 32.0
+    elif role_id.startswith(("ROLE.GTR.", "ROLE.KEYS.", "ROLE.SYNTH.")):
+        base_span = 34.0
+    else:
+        base_span = 24.0
+
+    width_influence = 26.0 * width_hint
+    density_influence = 6.0 * max(0, slot_count - 2)
+    return min(120.0, base_span + width_influence + density_influence)
+
+
+def _spread_azimuth_for_section(
+    azimuth_deg: float,
+    *,
+    role_id: str,
+    width_hint: float,
+    slot_index: int,
+    slot_count: int,
+) -> float:
+    if slot_count <= 1:
+        return azimuth_deg
+
+    span = _section_spread_span_deg(role_id, width_hint=width_hint, slot_count=slot_count)
+    if span <= 0.0:
+        return azimuth_deg
+    step = span / float(max(1, slot_count - 1))
+    offset = (-span * 0.5) + (step * slot_index)
+    return max(-179.0, min(179.0, azimuth_deg + offset))
+
+
+def _azimuth_region(azimuth_deg: float | None, *, has_wides: bool) -> str:
+    if azimuth_deg is None:
+        return "front"
+    absolute = abs(float(azimuth_deg))
+    if absolute <= _AZIMUTH_CENTER_DEG:
+        return "center"
+    if has_wides and _AZIMUTH_WIDE_MIN_DEG <= absolute <= _AZIMUTH_WIDE_MAX_DEG:
+        return "wide"
+    if absolute <= _AZIMUTH_FRONT_EDGE_DEG:
+        return "front"
+    if absolute <= _AZIMUTH_SIDE_EDGE_DEG:
+        return "side"
+    if absolute <= _AZIMUTH_REAR_EDGE_DEG:
+        return "rear"
+    return "rear_center"
+
+
+def _pair_pan(azimuth_deg: float | None, *, edge_deg: float) -> float:
+    if azimuth_deg is None or edge_deg <= 0.0:
+        return 0.0
+    return max(-1.0, min(1.0, float(azimuth_deg) / edge_deg))
+
+
+def _region_pair_speakers(
+    gains: dict[str, float],
+    *,
+    region: str,
+) -> tuple[str, str]:
+    if region == "wide":
+        if _WIDE_LEFT in gains and _WIDE_RIGHT in gains:
+            return _WIDE_LEFT, _WIDE_RIGHT
+        if _SIDE_LEFT in gains and _SIDE_RIGHT in gains:
+            return _SIDE_LEFT, _SIDE_RIGHT
+        return _FRONT_LEFT, _FRONT_RIGHT
+    if region == "side":
+        if _SIDE_LEFT in gains and _SIDE_RIGHT in gains:
+            return _SIDE_LEFT, _SIDE_RIGHT
+        if _REAR_LEFT in gains and _REAR_RIGHT in gains:
+            return _REAR_LEFT, _REAR_RIGHT
+        return _FRONT_LEFT, _FRONT_RIGHT
+    if region == "rear":
+        if _REAR_LEFT in gains and _REAR_RIGHT in gains:
+            return _REAR_LEFT, _REAR_RIGHT
+        if _SIDE_LEFT in gains and _SIDE_RIGHT in gains:
+            return _SIDE_LEFT, _SIDE_RIGHT
+        return _FRONT_LEFT, _FRONT_RIGHT
+    return _FRONT_LEFT, _FRONT_RIGHT
+
+
+def _bed_is_hall_room(
+    *,
+    bed: dict[str, Any],
+    content_hint: str,
+) -> bool:
+    if content_hint.strip().lower() in _HALL_ROOM_CONTENT_HINTS:
+        return True
+
+    label = _coerce_str(bed.get("label")).strip().lower()
+    if any(token in label for token in ("hall", "room", "ambience", "reverb", "audience", "crowd")):
+        return True
+
+    for note in _string_list(bed.get("notes")):
+        normalized = note.strip().lower()
+        if any(token in normalized for token in ("hall", "room", "ambience", "reverb", "audience", "crowd")):
+            return True
+    return False
+
+
 def _append_source_notes(
     notes: list[str],
     source_receipt_row: dict[str, str] | None,
@@ -419,6 +733,9 @@ def _object_send(
     scene_locks: set[str],
     source_receipt_row: dict[str, str] | None = None,
     immersive_perspective: str | None = None,
+    role_slot_group: str = "",
+    role_slot_index: int = 0,
+    role_slot_count: int = 1,
 ) -> dict[str, Any]:
     stem_id = _coerce_str(obj.get("stem_id")).strip()
     role_id = _coerce_str(obj.get("role_id")).strip().upper() or _ROLE_UNKNOWN
@@ -441,14 +758,14 @@ def _object_send(
 
     front_gain = 0.74
     center_gain = 0.0
-    policy_class = "OBJECT.FRONT_ONLY"
-    notes = ["object_front_only_v1"]
+    policy_class = "OBJECT.AZIMUTH_STAGE_V1"
+    notes = ["object_stage_azimuth_policy_v2"]
 
     if _is_anchor_role(role_id):
-        policy_class = "OBJECT.ANCHOR_FRONT_ONLY"
+        policy_class = "OBJECT.ANCHOR_STAGE_V1"
         front_gain = 0.86
     elif _is_lead_center_role(role_id):
-        policy_class = "OBJECT.LEAD_FRONT_ONLY"
+        policy_class = "OBJECT.LEAD_STAGE_V1"
         front_gain = 0.58
         center_gain = 0.72
 
@@ -458,14 +775,140 @@ def _object_send(
             front_gain = min(front_gain, 0.52)
             notes.append("center_anchor_strengthened_by_lock")
 
+    azimuth_hint, azimuth_source = _object_azimuth_hint(
+        obj,
+        intent_payload=intent_payload,
+    )
+    if azimuth_hint is None:
+        azimuth_hint = _role_default_azimuth(
+            role_id,
+            perspective=immersive_perspective,
+        )
+        azimuth_source = "role_stage_default"
+
+    azimuth_hint = _spread_azimuth_for_section(
+        float(azimuth_hint),
+        role_id=role_id,
+        width_hint=width_hint,
+        slot_index=max(0, role_slot_index),
+        slot_count=max(1, role_slot_count),
+    )
+
+    has_wides = _WIDE_LEFT in channel_order and _WIDE_RIGHT in channel_order
+    region = _azimuth_region(azimuth_hint, has_wides=has_wides)
+    immersive_enabled = immersive_perspective in _IMMERSIVE_PERSPECTIVES
+
+    front_pair_base = front_gain
+    side_pair_base = 0.0
+    rear_pair_base = 0.0
+    wide_pair_base = 0.0
+
+    if region == "center":
+        front_pair_base *= 0.78
+        if _CENTER in channel_order:
+            center_gain = max(center_gain, front_gain * 0.5)
+    elif region == "wide":
+        front_pair_base *= 0.78
+        wide_pair_base = front_gain * 0.38
+
+    if immersive_enabled:
+        if region == "side":
+            front_pair_base *= 0.62
+            side_pair_base = front_gain * (0.56 if immersive_perspective == "in_orchestra" else 0.42)
+            rear_pair_base = front_gain * (0.2 if immersive_perspective == "in_orchestra" else 0.1)
+        elif region == "rear":
+            front_pair_base *= 0.48 if immersive_perspective == "in_orchestra" else 0.66
+            side_pair_base = front_gain * (0.26 if immersive_perspective == "in_orchestra" else 0.18)
+            rear_pair_base = front_gain * (0.62 if immersive_perspective == "in_orchestra" else 0.3)
+        elif region == "rear_center":
+            front_pair_base *= 0.42 if immersive_perspective == "in_orchestra" else 0.7
+            side_pair_base = front_gain * (0.22 if immersive_perspective == "in_orchestra" else 0.14)
+            rear_pair_base = front_gain * (0.64 if immersive_perspective == "in_orchestra" else 0.24)
+
+    if has_wides and _is_broad_strings_role(role_id, width_hint=width_hint):
+        if region in {"front", "wide"}:
+            wide_pair_base = max(
+                wide_pair_base,
+                front_gain * (0.32 if immersive_enabled else 0.24),
+            )
+            front_pair_base *= 0.88
+            notes.append("strings_section_wide_support")
+
+    if (_is_brass_role(role_id) or _is_percussion_role(role_id)) and immersive_perspective != "in_orchestra":
+        if rear_pair_base > 0.0 or side_pair_base > 0.0:
+            notes.append("rear_bias_softened_for_translation")
+        rear_pair_base = 0.0
+        if side_pair_base > 0.0:
+            side_pair_base *= 0.35 if immersive_perspective == "in_band" else 0.0
+        front_pair_base = max(front_pair_base, front_gain * 0.82)
+
     if immersive_perspective:
         notes.append(f"immersive_perspective:{immersive_perspective}")
+    notes.append(f"azimuth_source:{azimuth_source or 'none'}")
+    notes.append(f"azimuth_deg:{round(float(azimuth_hint), 3):.3f}")
+    notes.append(f"azimuth_region:{region}")
+    if role_slot_count > 1:
+        notes.append(f"section_slot:{role_slot_index + 1}/{role_slot_count}")
+    if role_slot_group:
+        notes.append(f"section_group:{role_slot_group}")
 
     _append_source_notes(notes, source_receipt_row)
 
     gains = _empty_gains(channel_order)
-    _set_front(gains, front_gain)
-    _set_center(gains, center_gain)
+    front_pan = _pair_pan(azimuth_hint, edge_deg=_AZIMUTH_FRONT_EDGE_DEG)
+    side_pan = _pair_pan(azimuth_hint, edge_deg=_AZIMUTH_SIDE_EDGE_DEG)
+    rear_pan = _pair_pan(azimuth_hint, edge_deg=180.0)
+    wide_pan = _pair_pan(azimuth_hint, edge_deg=_AZIMUTH_WIDE_MAX_DEG)
+    if region == "rear_center":
+        rear_pan = 0.0
+
+    front_left, front_right = _region_pair_speakers(gains, region="front")
+    side_left, side_right = _region_pair_speakers(gains, region="side")
+    rear_left, rear_right = _region_pair_speakers(gains, region="rear")
+    wide_left, wide_right = _region_pair_speakers(gains, region="wide")
+
+    _add_pair_with_pan(
+        gains,
+        left_speaker=front_left,
+        right_speaker=front_right,
+        base_gain=front_pair_base,
+        pan=front_pan,
+    )
+    if side_pair_base > 0.0:
+        _add_pair_with_pan(
+            gains,
+            left_speaker=side_left,
+            right_speaker=side_right,
+            base_gain=side_pair_base,
+            pan=side_pan,
+        )
+    if rear_pair_base > 0.0:
+        _add_pair_with_pan(
+            gains,
+            left_speaker=rear_left,
+            right_speaker=rear_right,
+            base_gain=rear_pair_base,
+            pan=rear_pan,
+        )
+    if wide_pair_base > 0.0:
+        _add_pair_with_pan(
+            gains,
+            left_speaker=wide_left,
+            right_speaker=wide_right,
+            base_gain=wide_pair_base,
+            pan=wide_pan,
+        )
+
+    if _CENTER in gains:
+        gains[_CENTER] = _clamp_gain(gains.get(_CENTER, 0.0) + center_gain)
+    elif center_gain > 0.0:
+        _add_pair_with_pan(
+            gains,
+            left_speaker=front_left,
+            right_speaker=front_right,
+            base_gain=center_gain * 0.35,
+            pan=0.0,
+        )
 
     return {
         "stem_id": stem_id,
@@ -538,6 +981,10 @@ def _bed_send(
     locks = set(scene_locks) | _bed_lock_ids(bed)
     role_id = _bed_role_from_content_hint(content_hint)
     height_send_caps = _height_send_caps(intent_payload.get("height_send_caps"))
+    height_eligible = _bed_is_hall_room(
+        bed=bed,
+        content_hint=content_hint,
+    )
 
     front_gain = 0.68
     side_gain = 0.0
@@ -564,15 +1011,17 @@ def _bed_send(
         side_gain = min(_BED_SURROUND_SEND_CAP, base * spatial_scale)
         rear_gain = min(_BED_SURROUND_SEND_CAP, side_gain * 0.85)
         wide_gain = min(_BED_SURROUND_SEND_CAP, side_gain * 0.75)
-        top_front_gain = min(_BED_SURROUND_SEND_CAP, side_gain * 0.65)
-        top_rear_gain = min(_BED_SURROUND_SEND_CAP, side_gain * 0.55)
-        top_center_gains = (
-            min(_BED_SURROUND_SEND_CAP, top_front_gain * 0.7),
-            min(_BED_SURROUND_SEND_CAP, top_rear_gain * 0.7),
-        )
         notes.append("surround_send_enabled")
-        if top_front_gain > 0.0:
+        if height_eligible:
+            top_front_gain = min(_BED_HEIGHT_SEND_CAP, side_gain * 0.65)
+            top_rear_gain = min(_BED_HEIGHT_SEND_CAP, side_gain * 0.55)
+            top_center_gains = (
+                min(_BED_HEIGHT_SEND_CAP, top_front_gain * 0.7),
+                min(_BED_HEIGHT_SEND_CAP, top_rear_gain * 0.7),
+            )
             notes.append("overhead_send_enabled")
+        else:
+            notes.append("overhead_send_disabled_non_hall_room_bed")
 
     if _LOCK_NO_HEIGHT_SEND in locks:
         top_front_gain = 0.0
@@ -690,18 +1139,34 @@ def build_render_intent(
         else None
     )
 
-    object_rows = [
-        _object_send(
-            obj=obj,
-            channel_order=channel_order,
-            scene_locks=scene_locks,
-            source_receipt_row=source_receipt_index.get(
-                _coerce_str(obj.get("stem_id")).strip()
-            ),
-            immersive_perspective=immersive_perspective,
+    group_counts: dict[str, int] = {}
+    object_group_keys: list[str] = []
+    for obj in objects:
+        role_id = _coerce_str(obj.get("role_id")).strip().upper() or _ROLE_UNKNOWN
+        group_bus = _group_bus_from_object(obj, role_id)
+        group_key = _role_slot_group_key(role_id, group_bus)
+        object_group_keys.append(group_key)
+        group_counts[group_key] = group_counts.get(group_key, 0) + 1
+
+    group_offsets: dict[str, int] = {}
+    object_rows: list[dict[str, Any]] = []
+    for obj, group_key in zip(objects, object_group_keys):
+        slot_index = group_offsets.get(group_key, 0)
+        group_offsets[group_key] = slot_index + 1
+        object_rows.append(
+            _object_send(
+                obj=obj,
+                channel_order=channel_order,
+                scene_locks=scene_locks,
+                source_receipt_row=source_receipt_index.get(
+                    _coerce_str(obj.get("stem_id")).strip()
+                ),
+                immersive_perspective=immersive_perspective,
+                role_slot_group=group_key,
+                role_slot_index=slot_index,
+                role_slot_count=group_counts.get(group_key, 1),
+            )
         )
-        for obj in objects
-    ]
 
     bed_rows: list[dict[str, Any]] = []
     for bed in beds:
@@ -740,10 +1205,14 @@ def build_render_intent(
         return None
 
     notes = [
-        "Objects are front-only by default in conservative placement v1.",
+        "Objects use deterministic stage seating from azimuth hints and role defaults.",
+        (
+            "Immersive perspectives (in_band/in_orchestra) may route objects to side/rear/wide "
+            "pairs while keeping anchor roles translation-safe."
+        ),
         (
             "Bed stems may receive subtle deterministic surround/height sends "
-            "at approximately -12 dB relative, capped for translation safety."
+            "at approximately -12 dB relative, with hall/room-only overhead routing and caps."
         ),
         "Bed surround sends are disabled when confidence is below threshold.",
         "LFE sends remain zero by default (manual/explicit only).",

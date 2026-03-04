@@ -510,7 +510,7 @@
       "properties": {
         "template_id": {
           "type": "string",
-          "pattern": "^TEMPLATE\\.SCENE\\.[A-Z0-9_.]+$"
+          "pattern": "^TEMPLATE\\.[A-Z0-9_.]+$"
         },
         "label": { "type": "string", "minLength": 1 },
         "description": { "type": "string", "minLength": 1 },

@@ -10,12 +10,22 @@
     "templates": {
       "type": "object",
       "patternProperties": {
-        "^TEMPLATE\\.SCENE\\.[A-Z0-9_.]+$": { "$ref": "#/$defs/scene_template" }
+        "^TEMPLATE\\.[A-Z0-9_.]+$": { "$ref": "#/$defs/scene_template" }
       },
       "additionalProperties": false
     }
   },
   "$defs": {
+    "height_send_caps": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "top_max_gain": { "type": "number", "minimum": 0, "maximum": 1 },
+        "top_front_max_gain": { "type": "number", "minimum": 0, "maximum": 1 },
+        "top_rear_max_gain": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "minProperties": 1
+    },
     "position_patch": {
       "type": "object",
       "additionalProperties": false,
@@ -32,6 +42,10 @@
         "position": { "$ref": "#/$defs/position_patch" },
         "width": { "type": "number", "minimum": 0, "maximum": 1 },
         "depth": { "type": "number", "minimum": 0, "maximum": 1 },
+        "perspective": {
+          "type": "string",
+          "enum": ["audience", "on_stage", "in_band", "in_orchestra"]
+        },
         "loudness_bias": {
           "type": "string",
           "enum": ["forward", "neutral", "back"]
@@ -45,6 +59,7 @@
       "additionalProperties": false,
       "properties": {
         "diffuse": { "type": "number", "minimum": 0, "maximum": 1 },
+        "height_send_caps": { "$ref": "#/$defs/height_send_caps" },
         "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
       },
       "minProperties": 1
@@ -52,13 +67,19 @@
     "scene_match": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {}
+      "properties": {
+        "scene_id": { "type": "string", "minLength": 1 }
+      }
     },
     "object_match": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "object_id": { "type": "string", "minLength": 1 },
+        "stem_id": { "type": "string", "minLength": 1 },
+        "role_id": { "type": "string", "pattern": "^ROLE\\.[A-Z0-9_.]+$" },
+        "group_bus": { "type": "string", "pattern": "^BUS\\.[A-Z0-9_]+$" },
+        "role_regex": { "type": "string", "minLength": 1 },
         "label_regex": { "type": "string", "minLength": 1 }
       }
     },
@@ -67,6 +88,12 @@
       "additionalProperties": false,
       "properties": {
         "bed_id": { "type": "string", "minLength": 1 },
+        "bus_id": {
+          "type": "string",
+          "pattern": "^BUS\\.[A-Z0-9_]+(?:\\.[A-Z0-9_]+)?$"
+        },
+        "content_hint": { "type": "string", "minLength": 1 },
+        "label_regex": { "type": "string", "minLength": 1 },
         "bed_kind": {
           "type": "string",
           "enum": ["field", "bed"]

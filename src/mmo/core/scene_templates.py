@@ -111,16 +111,21 @@ def _validate_patch_regexes(templates: dict[str, dict[str, Any]], *, path: Path)
             match = patch.get("match")
             if not isinstance(match, dict):
                 continue
-            label_regex = match.get("label_regex")
-            if not isinstance(label_regex, str) or not label_regex:
-                continue
-            try:
-                re.compile(label_regex)
-            except re.error as exc:
-                raise ValueError(
-                    "Scene template label_regex failed to compile: "
-                    f"{template_id} patch[{index}] ({path}): {exc}"
-                ) from exc
+            for field_name, pattern in match.items():
+                if not (
+                    isinstance(field_name, str)
+                    and field_name.endswith("_regex")
+                    and isinstance(pattern, str)
+                    and pattern
+                ):
+                    continue
+                try:
+                    re.compile(pattern)
+                except re.error as exc:
+                    raise ValueError(
+                        "Scene template regex failed to compile: "
+                        f"{template_id} patch[{index}] field={field_name} ({path}): {exc}"
+                    ) from exc
 
 
 def load_scene_templates(path: Path | None = None) -> dict[str, Any]:
@@ -416,10 +421,29 @@ def _match_object_patch(entry: dict[str, Any], match_payload: dict[str, Any]) ->
     if object_id and _coerce_str(entry.get("object_id")).strip() != object_id:
         return False
 
+    stem_id = _coerce_str(match_payload.get("stem_id")).strip()
+    if stem_id and _coerce_str(entry.get("stem_id")).strip() != stem_id:
+        return False
+
+    role_id = _coerce_str(match_payload.get("role_id")).strip().upper()
+    entry_role_id = _coerce_str(entry.get("role_id")).strip().upper()
+    if role_id and entry_role_id != role_id:
+        return False
+
+    group_bus = _coerce_str(match_payload.get("group_bus")).strip().upper()
+    if group_bus and _coerce_str(entry.get("group_bus")).strip().upper() != group_bus:
+        return False
+
+    role_regex = match_payload.get("role_regex")
+    if isinstance(role_regex, str) and role_regex:
+        if re.search(role_regex, _coerce_str(entry.get("role_id")).strip()) is None:
+            return False
+
     label_regex = match_payload.get("label_regex")
     if isinstance(label_regex, str) and label_regex:
         label = _coerce_str(entry.get("label"))
-        return re.search(label_regex, label) is not None
+        if re.search(label_regex, label) is None:
+            return False
     return True
 
 
@@ -431,6 +455,21 @@ def _match_bed_patch(entry: dict[str, Any], match_payload: dict[str, Any]) -> bo
     bed_kind = _coerce_str(match_payload.get("bed_kind")).strip()
     if bed_kind and _coerce_str(entry.get("kind")).strip() != bed_kind:
         return False
+
+    bus_id = _coerce_str(match_payload.get("bus_id")).strip().upper()
+    if bus_id and _coerce_str(entry.get("bus_id")).strip().upper() != bus_id:
+        return False
+
+    content_hint = _coerce_str(match_payload.get("content_hint")).strip().lower()
+    if content_hint:
+        entry_content_hint = _coerce_str(entry.get("content_hint")).strip().lower()
+        if entry_content_hint != content_hint:
+            return False
+
+    label_regex = match_payload.get("label_regex")
+    if isinstance(label_regex, str) and label_regex:
+        if re.search(label_regex, _coerce_str(entry.get("label")).strip()) is None:
+            return False
     return True
 
 

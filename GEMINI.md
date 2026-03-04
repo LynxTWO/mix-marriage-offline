@@ -27,8 +27,9 @@ Non-negotiables:
   when recommendations are not render-eligible.
 - Keep scene-driven placement mixdown deterministic when enabled: one
   layout-agnostic scene should render conservative
-  2.0/5.1/7.1/7.1.4/7.1.6/9.1.6 outputs with front-only object routing and
-  subtle confidence-gated/capped bed surround-height sends.
+  2.0/5.1/7.1/7.1.4/7.1.6/9.1.6 outputs with role/azimuth-driven object stage
+  routing (perspective-gated side/rear/wide use) and subtle
+  confidence-gated/capped hall-room-first bed surround-height sends.
 - Preserve stereo imaging in placement render paths: stereo stems should not
   collapse to mono in `LAYOUT.2_0`, scene stereo hints (`width_hint`,
   `azimuth_hint`) must remain evidence-backed/deterministic, and any optional

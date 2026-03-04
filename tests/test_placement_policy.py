@@ -5,7 +5,9 @@ import unittest
 from pathlib import Path
 from typing import Any
 
+from mmo.core.scene_builder import build_scene_from_bus_plan
 from mmo.core.placement_policy import build_render_intent
+from mmo.core.scene_templates import apply_scene_templates
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +32,131 @@ def _stem_by_id(render_intent: dict[str, Any]) -> dict[str, dict[str, Any]]:
         if isinstance(stem_id, str) and stem_id:
             out[stem_id] = row
     return out
+
+
+def _mini_orchestra_stems_map() -> dict[str, Any]:
+    return {
+        "schema_version": "0.1.0",
+        "generated_utc": "2000-01-01T00:00:00Z",
+        "stems_dir": "/tmp/mini_orchestra",
+        "roles_ref": "ontology/roles.yaml",
+        "assignments": [
+            {
+                "file_id": "STEM.BAGPIPE",
+                "rel_path": "bagpipe.wav",
+                "role_id": "ROLE.WINDS.BAGPIPE",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.BRASS",
+                "rel_path": "brass_horn.wav",
+                "role_id": "ROLE.BRASS.HORN",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.CELLO",
+                "rel_path": "cello.wav",
+                "role_id": "ROLE.STRINGS.CELLO",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.DIDGE",
+                "rel_path": "didgeridoo.wav",
+                "role_id": "ROLE.WINDS.DIDGERIDOO",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.PERC",
+                "rel_path": "perc.wav",
+                "role_id": "ROLE.DRUM.PERCUSSION",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.VIOLA",
+                "rel_path": "viola.wav",
+                "role_id": "ROLE.STRINGS.VIOLA",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.VIOLIN",
+                "rel_path": "violin.wav",
+                "role_id": "ROLE.STRINGS.VIOLIN",
+                "confidence": 0.95,
+            },
+        ],
+    }
+
+
+def _mini_orchestra_bus_plan() -> dict[str, Any]:
+    return {
+        "schema_version": "0.1.0",
+        "generated_utc": "2000-01-01T00:00:00Z",
+        "assignments": [
+            {
+                "stem_id": "STEM.BAGPIPE",
+                "file_path": "bagpipe.wav",
+                "role_id": "ROLE.WINDS.BAGPIPE",
+                "bus_id": "BUS.MUSIC.WINDS",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.BRASS",
+                "file_path": "brass_horn.wav",
+                "role_id": "ROLE.BRASS.HORN",
+                "bus_id": "BUS.MUSIC.BRASS",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.CELLO",
+                "file_path": "cello.wav",
+                "role_id": "ROLE.STRINGS.CELLO",
+                "bus_id": "BUS.MUSIC.STRINGS",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.DIDGE",
+                "file_path": "didgeridoo.wav",
+                "role_id": "ROLE.WINDS.DIDGERIDOO",
+                "bus_id": "BUS.MUSIC.WINDS",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.PERC",
+                "file_path": "perc.wav",
+                "role_id": "ROLE.DRUM.PERCUSSION",
+                "bus_id": "BUS.DRUMS.PERC",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.VIOLA",
+                "file_path": "viola.wav",
+                "role_id": "ROLE.STRINGS.VIOLA",
+                "bus_id": "BUS.MUSIC.STRINGS",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.VIOLIN",
+                "file_path": "violin.wav",
+                "role_id": "ROLE.STRINGS.VIOLIN",
+                "bus_id": "BUS.MUSIC.STRINGS",
+                "confidence": 0.95,
+            },
+        ],
+    }
+
+
+def _mini_orchestra_scene(template_id: str) -> dict[str, Any]:
+    scene = build_scene_from_bus_plan(
+        _mini_orchestra_stems_map(),
+        _mini_orchestra_bus_plan(),
+        profile_id="PROFILE.ASSIST",
+    )
+    return apply_scene_templates(
+        scene,
+        [template_id],
+        scene_templates_path=_REPO_ROOT / "ontology" / "scene_templates.yaml",
+        scene_locks_path=_REPO_ROOT / "ontology" / "scene_locks.yaml",
+    )
 
 
 class TestPlacementPolicy(unittest.TestCase):
@@ -142,7 +269,7 @@ class TestPlacementPolicy(unittest.TestCase):
 
         for speaker_id in ("SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"):
             self.assertGreater(amb[speaker_id], 0.0)
-            self.assertGreater(pad[speaker_id], 0.0)
+            self.assertEqual(pad[speaker_id], 0.0)
             self.assertEqual(kick[speaker_id], 0.0)
             self.assertEqual(snare[speaker_id], 0.0)
 
@@ -310,6 +437,41 @@ class TestPlacementPolicy(unittest.TestCase):
         self.assertIn(
             "immersive_perspective_source:scene.intent.notes",
             notes_from_scene_note,
+        )
+
+    def test_orchestra_template_places_violin_left_and_uses_wides_in_9_1_6(self) -> None:
+        scene = _mini_orchestra_scene("TEMPLATE.SEATING.ORCHESTRA_AUDIENCE")
+        render_intent = build_render_intent(scene, "LAYOUT.9_1_6")
+        self.assertIsInstance(render_intent, dict)
+        if not isinstance(render_intent, dict):
+            return
+
+        violin = _stem_by_id(render_intent)["STEM.VIOLIN"]["gains"]
+        self.assertGreater(violin["SPK.L"], violin["SPK.R"])
+        self.assertGreater(violin["SPK.LW"], 0.0)
+        self.assertEqual(violin["SPK.RRS"], 0.0)
+
+    def test_orchestra_brass_is_rear_biased_only_in_in_orchestra_mode(self) -> None:
+        audience_scene = _mini_orchestra_scene("TEMPLATE.SEATING.ORCHESTRA_AUDIENCE")
+        in_orchestra_scene = _mini_orchestra_scene("TEMPLATE.SEATING.ORCHESTRA.IN_ORCHESTRA")
+
+        audience_intent = build_render_intent(audience_scene, "LAYOUT.7_1_4")
+        in_orchestra_intent = build_render_intent(in_orchestra_scene, "LAYOUT.7_1_4")
+        self.assertIsInstance(audience_intent, dict)
+        self.assertIsInstance(in_orchestra_intent, dict)
+        if not isinstance(audience_intent, dict) or not isinstance(in_orchestra_intent, dict):
+            return
+
+        audience_brass = _stem_by_id(audience_intent)["STEM.BRASS"]["gains"]
+        in_orchestra_brass = _stem_by_id(in_orchestra_intent)["STEM.BRASS"]["gains"]
+
+        self.assertEqual(audience_brass["SPK.LRS"], 0.0)
+        self.assertEqual(audience_brass["SPK.RRS"], 0.0)
+        self.assertGreater(in_orchestra_brass["SPK.LRS"], 0.0)
+        self.assertGreater(in_orchestra_brass["SPK.RRS"], 0.0)
+        self.assertGreater(
+            in_orchestra_brass["SPK.LRS"] + in_orchestra_brass["SPK.RRS"],
+            in_orchestra_brass["SPK.L"] + in_orchestra_brass["SPK.R"],
         )
 
 

@@ -140,6 +140,18 @@ roles:
       regex:
       - (?i)\btrumpet\d*\b
       - (?i)\btrpt\d*\b
+  ROLE.BRASS.TUBA:
+    label: Tuba
+    description: Tuba stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - tuba
+      - sousaphone
+      regex:
+      - (?i)\btuba\d*\b
+      - (?i)\bsousaphone\d*\b
   ROLE.BUS.BASS:
     label: Bass bus
     description: Submix bus containing bass elements.
@@ -961,6 +973,57 @@ roles:
       regex:
       - (?i)\bvox\d*\b
       - (?i)\bvocals?\d*\b
+  ROLE.WINDS.BAGPIPE:
+    label: Bagpipe
+    description: Bagpipe or pipes stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - bagpipe
+      - bagpipes
+      - pipes
+      - uilleann
+      regex:
+      - (?i)\bbagpipes?\d*\b
+      - (?i)\builleann\s*pipes?\b
+      - (?i)\bpipes?\d*\b
+  ROLE.WINDS.DIDGERIDOO:
+    label: Didgeridoo
+    description: Didgeridoo / didge drone stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - didgeridoo
+      - digeridoo
+      - didge
+      regex:
+      - (?i)\bdidgeridoo\d*\b
+      - (?i)\bdigeridoo\d*\b
+      - (?i)\bdidge\d*\b
+  ROLE.WINDS.DUDUK:
+    label: Duduk
+    description: Duduk or related reed wind stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - duduk
+      regex:
+      - (?i)\bduduk\d*\b
+  ROLE.WINDS.PAN_FLUTE:
+    label: Pan flute
+    description: Pan flute / pan pipes stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - pan flute
+      - pan pipes
+      regex:
+      - (?i)\bpan\s*flute\d*\b
+      - (?i)\bpan\s*pipes?\d*\b
   ROLE.WINDS.SECTION:
     label: Winds
     description: Woodwinds or wind ensemble layers.
@@ -977,6 +1040,28 @@ roles:
       - (?i)\b(woodwinds?|winds?)\d*\b
       - (?i)\bwind\s*section\d*\b
       - (?i)\b(oboe|reeds?)\d*\b
+  ROLE.WINDS.SHAKUHACHI:
+    label: Shakuhachi
+    description: Shakuhachi or bamboo flute stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - shakuhachi
+      - bamboo flute
+      regex:
+      - (?i)\bshakuhachi\d*\b
+      - (?i)\bbamboo\s*flute\d*\b
+  ROLE.WW.BASSOON:
+    label: Bassoon
+    description: Bassoon stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - bassoon
+      regex:
+      - (?i)\bbassoon\d*\b
   ROLE.WW.CLARINET:
     label: Clarinet
     description: Clarinet stem.
@@ -1001,6 +1086,28 @@ roles:
       regex:
       - (?i)\bflute\d*\b
       - (?i)\bflt\d*\b
+  ROLE.WW.OBOE:
+    label: Oboe
+    description: Oboe stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - oboe
+      regex:
+      - (?i)\boboe\d*\b
+  ROLE.WW.PICCOLO:
+    label: Piccolo
+    description: Piccolo stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - piccolo
+      - picc
+      regex:
+      - (?i)\bpiccolo\d*\b
+      - (?i)\bpicc\d*\b
   ROLE.WW.SAX:
     label: Sax
     description: Saxophone stem.

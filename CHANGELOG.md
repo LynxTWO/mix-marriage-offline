@@ -124,6 +124,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Role-driven deterministic seating templates and immersive-aware placement routing:
+  - Added scene-template registry entries:
+    `TEMPLATE.SEATING.ORCHESTRA_AUDIENCE`,
+    `TEMPLATE.SEATING.ORCHESTRA.IN_ORCHESTRA`, and
+    `TEMPLATE.SEATING.BAND.IN_BAND` (root + packaged ontology mirror),
+    including scene perspective patches and per-role azimuth regions.
+  - Extended scene-template contracts to support role/content matching
+    (`role_id`, `role_regex`, `stem_id`, `group_bus`, `bus_id`,
+    `content_hint`) and generalized template IDs to `TEMPLATE.*`
+    (schemas + packaged mirrors + UI bundle schema pattern updates).
+  - Placement policy now consumes template-applied azimuth intent and
+    deterministic role defaults to route object sends by region across
+    L/C/R, LS/RS, LRS/RRS, and LW/RW (where available), with perspective
+    gating so brass/percussion rear bias activates only in `in_orchestra`.
+  - Added deterministic section slot spreading so dense/odd instrument sets
+    distribute naturally instead of collapsing to one point, and added
+    explicit rare-role placement coverage through new roles:
+    `ROLE.BRASS.TUBA`, `ROLE.WINDS.BAGPIPE`,
+    `ROLE.WINDS.DIDGERIDOO`, `ROLE.WINDS.DUDUK`,
+    `ROLE.WINDS.PAN_FLUTE`, `ROLE.WINDS.SHAKUHACHI`,
+    `ROLE.WW.BASSOON`, `ROLE.WW.OBOE`, and `ROLE.WW.PICCOLO`.
+  - Bed overhead sends are now hall/room-focused and capped; non-hall/room
+    beds stay surround-only by default (object heights remain bed-first).
+  - Added regression coverage for mini-orchestra stems-map → scene → template
+    → placement behavior, including violin left bias and brass rear bias only
+    in `in_orchestra`.
+
 - Scene builder + conservative surround bed routing contract hardening:
   - Scene schema now allows deterministic bed-to-stem mapping via
     `beds[].stem_ids` (root schema + packaged mirror).

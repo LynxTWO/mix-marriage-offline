@@ -188,7 +188,9 @@ What remains: broaden this stereo-hint fixture pattern into additional multi-ste
   render-eligible.
 - [x] Scene-driven placement rendering supports one layout-agnostic scene
   feeding conservative `2.0/5.1/7.1/7.1.4/7.1.6/9.1.6` outputs with
-  front-only object routing and capped confidence-gated bed surround/height sends.
+  deterministic role/azimuth-aware object stage routing (perspective-gated
+  side/rear/wide use) and capped confidence-gated hall/room-first bed
+  surround/height sends.
 - [x] `safe-render` never reports zero-output renderer stages as success:
   it emits `ISSUE.RENDER.NO_OUTPUTS` and exits non-zero by default unless
   `--allow-empty-outputs` is explicitly set.
