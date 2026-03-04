@@ -419,8 +419,8 @@ class TestCliScene(unittest.TestCase):
                         'version: "0.1.0"',
                         "overrides:",
                         "  STEMFILE.5555555555:",
-                        '    role_id: "ROLE.VOCAL.LEAD"',
-                        '    bus_id: "BUS.VOX.LEAD"',
+                        '    role_id: "ROLE.DRUM.KICK"',
+                        '    bus_id: "BUS.DRUMS.KICK"',
                         "    placement:",
                         "      azimuth_deg: 0.0",
                         "      width: 0.1",
@@ -463,8 +463,9 @@ class TestCliScene(unittest.TestCase):
                 if isinstance(row, dict) and isinstance(row.get("stem_id"), str)
             }
             locked = by_stem["STEMFILE.5555555555"]
-            self.assertEqual(locked.get("role_id"), "ROLE.VOCAL.LEAD")
-            self.assertEqual(locked.get("group_bus"), "BUS.VOX")
+            self.assertEqual(locked.get("role_id"), "ROLE.DRUM.KICK")
+            self.assertEqual(locked.get("bus_id"), "BUS.DRUMS.KICK")
+            self.assertEqual(locked.get("group_bus"), "BUS.DRUMS")
             self.assertEqual(locked.get("azimuth_hint"), 0.0)
             self.assertEqual(locked.get("width_hint"), 0.1)
             self.assertEqual(locked["intent"].get("position"), {"azimuth_deg": 0.0})
@@ -491,6 +492,7 @@ class TestCliScene(unittest.TestCase):
             )
             self.assertEqual(row.get("role_source"), "locked")
             self.assertEqual(row.get("bus_source"), "locked")
+            self.assertEqual(row.get("bus_id"), "BUS.DRUMS.KICK")
             self.assertEqual(row.get("azimuth_source"), "locked")
             self.assertEqual(row.get("width_source"), "locked")
             self.assertEqual(row.get("surround_send_caps_source"), "locked")
