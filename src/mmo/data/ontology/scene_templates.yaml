@@ -100,12 +100,20 @@ templates:
           depth: 0.32
       - scope: "object"
         match:
-          role_regex: "^ROLE\\.GTR\\.(ELECTRIC|ACOUSTIC|LEAD|RHYTHM)(\\.|$)"
+          role_regex: "^ROLE\\.GTR\\.(ACOUSTIC|BANJO|ELECTRIC|LEAD|MANDOLIN|RHYTHM|STEEL|UKULELE|WORLD_PLUCKED)(\\.|$)"
         set:
           position:
             azimuth_deg: 28.0
           width: 0.52
           depth: 0.34
+      - scope: "object"
+        match:
+          role_regex: "^ROLE\\.STRINGS\\.(VIOLIN|VIOLA|CELLO|BOWED|HARP|PLUCKED|STRUCK|SECTION|OTHER)(\\.|$)"
+        set:
+          position:
+            azimuth_deg: 24.0
+          width: 0.56
+          depth: 0.4
       - scope: "object"
         match:
           role_regex: "^ROLE\\.KEYS\\."
@@ -132,7 +140,7 @@ templates:
           depth: 0.26
       - scope: "object"
         match:
-          role_regex: "^ROLE\\.DRUM\\.(PERCUSSION|CYMBALS|OVERHEADS|ROOM|TOMS)(\\.|$)"
+          role_regex: "^ROLE\\.DRUM\\.(PERCUSSION|CYMBALS|OVERHEADS|ROOM|TOMS|HAND_PERC|LATIN_PERC|MALLETS|TIMPANI|WORLD_PERC)(\\.|$)"
         set:
           position:
             azimuth_deg: 148.0
@@ -231,7 +239,7 @@ templates:
           depth: 0.4
       - scope: "object"
         match:
-          role_regex: "^ROLE\\.STRINGS\\.(SECTION|OTHER)(\\.|$)"
+          role_regex: "^ROLE\\.STRINGS\\.(SECTION|OTHER|BOWED|HARP|PLUCKED|STRUCK)(\\.|$)"
         set:
           position:
             azimuth_deg: 44.0
@@ -256,7 +264,7 @@ templates:
           loudness_bias: "back"
       - scope: "object"
         match:
-          role_regex: "^ROLE\\.DRUM\\.(PERCUSSION|CYMBALS|OVERHEADS|ROOM|TOMS)(\\.|$)"
+          role_regex: "^ROLE\\.DRUM\\.(PERCUSSION|CYMBALS|OVERHEADS|ROOM|TOMS|HAND_PERC|LATIN_PERC|MALLETS|TIMPANI|WORLD_PERC)(\\.|$)"
         set:
           position:
             azimuth_deg: 170.0
@@ -348,7 +356,7 @@ templates:
           depth: 0.42
       - scope: "object"
         match:
-          role_regex: "^ROLE\\.STRINGS\\.(SECTION|OTHER)(\\.|$)"
+          role_regex: "^ROLE\\.STRINGS\\.(SECTION|OTHER|BOWED|HARP|PLUCKED|STRUCK)(\\.|$)"
         set:
           position:
             azimuth_deg: 36.0
@@ -373,7 +381,7 @@ templates:
           loudness_bias: "back"
       - scope: "object"
         match:
-          role_regex: "^ROLE\\.DRUM\\.(PERCUSSION|CYMBALS|OVERHEADS|ROOM|TOMS)(\\.|$)"
+          role_regex: "^ROLE\\.DRUM\\.(PERCUSSION|CYMBALS|OVERHEADS|ROOM|TOMS|HAND_PERC|LATIN_PERC|MALLETS|TIMPANI|WORLD_PERC)(\\.|$)"
         set:
           position:
             azimuth_deg: 152.0

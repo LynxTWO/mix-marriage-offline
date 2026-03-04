@@ -191,6 +191,10 @@ What remains: broaden this stereo-hint fixture pattern into additional multi-ste
   deterministic role/azimuth-aware object stage routing (perspective-gated
   side/rear/wide use) and capped confidence-gated hall/room-first bed
   surround/height sends.
+- [x] Stem-role inference now includes broad uncommon/rare instrument aliases
+  (world strings/winds/brass/percussion/keys/guitars), and those roles feed the
+  same deterministic template + placement path so large mixed ensembles still
+  map into explainable real-world stage families in `in_orchestra` mode.
 - [x] `safe-render` never reports zero-output renderer stages as success:
   it emits `ISSUE.RENDER.NO_OUTPUTS` and exits non-zero by default unless
   `--allow-empty-outputs` is explicitly set.

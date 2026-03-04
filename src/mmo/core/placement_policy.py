@@ -51,6 +51,28 @@ _IMMERSIVE_PERSPECTIVES: frozenset[str] = frozenset({"in_band", "in_orchestra"})
 _HALL_ROOM_CONTENT_HINTS: frozenset[str] = frozenset(
     {"ambience", "reverb_return", "crowd"}
 )
+_MUSIC_ROLE_PREFIXES: tuple[str, ...] = (
+    "ROLE.BRASS.",
+    "ROLE.GTR.",
+    "ROLE.KEYS.",
+    "ROLE.MUSIC.",
+    "ROLE.STRINGS.",
+    "ROLE.SYNTH.",
+    "ROLE.WINDS.",
+    "ROLE.WW.",
+)
+_PERCUSSION_ROLE_PREFIXES: tuple[str, ...] = (
+    "ROLE.DRUM.CYMBALS",
+    "ROLE.DRUM.HAND_PERC",
+    "ROLE.DRUM.LATIN_PERC",
+    "ROLE.DRUM.MALLETS",
+    "ROLE.DRUM.OVERHEADS",
+    "ROLE.DRUM.PERCUSSION",
+    "ROLE.DRUM.ROOM",
+    "ROLE.DRUM.TIMPANI",
+    "ROLE.DRUM.TOMS",
+    "ROLE.DRUM.WORLD_PERC",
+)
 
 _AZIMUTH_CENTER_DEG = 12.0
 _AZIMUTH_WIDE_MIN_DEG = 35.0
@@ -243,9 +265,9 @@ def _group_bus_from_object(obj: dict[str, Any], role_id: str) -> str:
         return "BUS.DRUMS"
     if role_id.startswith("ROLE.BASS."):
         return "BUS.BASS"
-    if role_id.startswith("ROLE.VOCAL.") or role_id.startswith("ROLE.DIALOGUE."):
+    if role_id.startswith(("ROLE.VOCAL.", "ROLE.DIALOGUE.", "ROLE.VOX.")):
         return "BUS.VOX"
-    if role_id.startswith("ROLE.GTR.") or role_id.startswith("ROLE.KEYS."):
+    if role_id.startswith(_MUSIC_ROLE_PREFIXES):
         return "BUS.MUSIC"
     if role_id.startswith("ROLE.FX.") or role_id.startswith("ROLE.SFX."):
         return "BUS.FX"
@@ -406,15 +428,7 @@ def _is_brass_role(role_id: str) -> bool:
 
 
 def _is_percussion_role(role_id: str) -> bool:
-    return role_id.startswith(
-        (
-            "ROLE.DRUM.PERCUSSION",
-            "ROLE.DRUM.CYMBALS",
-            "ROLE.DRUM.OVERHEADS",
-            "ROLE.DRUM.ROOM",
-            "ROLE.DRUM.TOMS",
-        )
-    )
+    return role_id.startswith(_PERCUSSION_ROLE_PREFIXES)
 
 
 def _is_broad_strings_role(role_id: str, *, width_hint: float) -> bool:
@@ -431,7 +445,9 @@ def _role_slot_group_key(role_id: str, group_bus: str) -> str:
     if role_id.startswith(("ROLE.BASS.", "ROLE.STRINGS.BASS")):
         return "SECTION.BASS"
     if role_id.startswith("ROLE.DRUM."):
-        return "SECTION.DRUMS"
+        if _is_percussion_role(role_id):
+            return "SECTION.DRUMS.PERCUSSION"
+        return "SECTION.DRUMS.KIT"
     if _is_strings_role(role_id):
         if role_id.startswith("ROLE.STRINGS.VIOLIN"):
             return "SECTION.STRINGS.VIOLIN"
@@ -473,6 +489,14 @@ def _role_default_azimuth(
         return -20.0
     if role_id.startswith(("ROLE.STRINGS.BASS", "ROLE.BASS.")):
         return -52.0
+    if role_id.startswith("ROLE.STRINGS.HARP"):
+        return 56.0
+    if role_id.startswith("ROLE.STRINGS.BOWED"):
+        return 30.0
+    if role_id.startswith("ROLE.STRINGS.PLUCKED"):
+        return 18.0
+    if role_id.startswith("ROLE.STRINGS.STRUCK"):
+        return 14.0
     if role_id.startswith("ROLE.STRINGS."):
         return 34.0
 
@@ -485,10 +509,22 @@ def _role_default_azimuth(
             return -8.0
         if role_id.startswith("ROLE.WINDS.PAN_FLUTE"):
             return 10.0
+        if role_id.startswith("ROLE.WINDS.OCARINA"):
+            return 6.0
+        if role_id.startswith("ROLE.WINDS.RECORDER"):
+            return 8.0
         if role_id.startswith("ROLE.WINDS.SHAKUHACHI"):
             return 8.0
+        if role_id.startswith("ROLE.WINDS.WHISTLE"):
+            return 12.0
         if role_id.startswith("ROLE.WW.BASSOON"):
             return -10.0
+        if role_id.startswith("ROLE.WW.BASS_CLARINET"):
+            return -6.0
+        if role_id.startswith("ROLE.WW.CONTRABASSOON"):
+            return -16.0
+        if role_id.startswith("ROLE.WW.ENGLISH_HORN"):
+            return 2.0
         if role_id.startswith("ROLE.WW.OBOE"):
             return 6.0
         if role_id.startswith("ROLE.WW.PICCOLO"):
@@ -500,11 +536,27 @@ def _role_default_azimuth(
             if perspective == "in_orchestra":
                 return -168.0
             return -140.0
+        if role_id.startswith("ROLE.BRASS.EUPHONIUM"):
+            if perspective == "in_orchestra":
+                return -172.0
+            return -146.0
+        if role_id.startswith(("ROLE.BRASS.CORNET", "ROLE.BRASS.FLUGELHORN")):
+            if perspective == "in_orchestra":
+                return 170.0
+            return 142.0
         if perspective == "in_orchestra":
             return 176.0
         return 150.0
 
     if _is_percussion_role(role_id):
+        if role_id.startswith("ROLE.DRUM.TIMPANI"):
+            if perspective == "in_orchestra":
+                return 176.0
+            return 150.0
+        if role_id.startswith("ROLE.DRUM.MALLETS"):
+            if perspective == "in_orchestra":
+                return 164.0
+            return 142.0
         if perspective == "in_orchestra":
             return 170.0
         return 138.0
@@ -515,8 +567,22 @@ def _role_default_azimuth(
         return 42.0
     if role_id.startswith("ROLE.GTR.") and role_id.endswith("_R"):
         return -42.0
+    if role_id.startswith("ROLE.GTR.STEEL"):
+        return 34.0
+    if role_id.startswith(("ROLE.GTR.BANJO", "ROLE.GTR.MANDOLIN", "ROLE.GTR.WORLD_PLUCKED")):
+        return 24.0
+    if role_id.startswith("ROLE.GTR.UKULELE"):
+        return 20.0
     if role_id.startswith("ROLE.GTR."):
         return 28.0
+    if role_id.startswith("ROLE.KEYS.ORGAN"):
+        return -10.0
+    if role_id.startswith(("ROLE.KEYS.ACCORDION", "ROLE.KEYS.REED_ORGAN")):
+        return -4.0
+    if role_id.startswith("ROLE.KEYS.CELESTA"):
+        return 10.0
+    if role_id.startswith("ROLE.KEYS.HARPSICHORD"):
+        return -18.0
     if role_id.startswith("ROLE.KEYS."):
         return -26.0
     if role_id.startswith("ROLE.SYNTH."):

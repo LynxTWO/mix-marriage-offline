@@ -145,6 +145,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `ROLE.WINDS.DIDGERIDOO`, `ROLE.WINDS.DUDUK`,
     `ROLE.WINDS.PAN_FLUTE`, `ROLE.WINDS.SHAKUHACHI`,
     `ROLE.WW.BASSOON`, `ROLE.WW.OBOE`, and `ROLE.WW.PICCOLO`.
+  - Expanded role ontology + stem inference coverage for uncommon/rare
+    instruments across strings (bowed/plucked/struck/harp families), brass
+    variants (cornet/flugelhorn/euphonium), woodwinds (bass clarinet,
+    contrabassoon, English horn, recorder/ocarina/whistle), free-reed keys,
+    and mallet/latin/world percussion so large mixed stem sets classify into
+    deterministic stage families without dropping to unknown.
+  - Added hybrid stress coverage for `INTENT.PERSPECTIVE=in_orchestra`
+    template placement (mixed orchestral + band + rare instruments), and
+    refreshed stems-small render-plan hash expectations so the deterministic
+    self-dogfood regression harness stays aligned with the expanded role map.
   - Bed overhead sends are now hall/room-focused and capped; non-hall/room
     beds stay surround-only by default (object heights remain bed-first).
   - Added regression coverage for mini-orchestra stems-map → scene → template

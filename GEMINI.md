@@ -49,6 +49,10 @@ Non-negotiables:
 - Keep stems artifact progression deterministic: `stems_map` (role identity)
   and `bus_plan` (bus-path identity) must preserve stable sorting and
   schema-valid contracts across repeated runs.
+- Keep role ontology + classifier coverage additive for uncommon/rare
+  instruments (world strings/winds/brass/percussion/keys/guitars) and ensure
+  those roles stay wired through template and placement routing with
+  deterministic regression coverage.
 - Keep `fixtures/stems_small/` regression fixtures aligned with
   `fixtures/expected_bus_plan.json`, `fixtures/expected_scene.json`, and
   `tests/test_stems_small_regression.py` hash expectations.

@@ -55,6 +55,33 @@ roles:
       regex:
       - (?i)\bbass\s*di\b
       - (?i)\bdi\s*bass\b
+  ROLE.BASS.GUITAR:
+    label: Bass guitar
+    description: Electric or amplified bass guitar performance.
+    kind: source
+    default_bus_group: BASS
+    inference:
+      keywords:
+      - bass
+      - bass guitar
+      - electric bass
+      - elec bass
+      - fretless bass
+      - p bass
+      - p-bass
+      - j bass
+      - j-bass
+      - five string bass
+      - 5 string bass
+      - ubass
+      - u-bass
+      regex:
+      - (?i)\bbass\s*guitar\b
+      - (?i)\belectric\s*bass\b
+      - (?i)\bfretless\s*bass\b
+      - (?i)\b(5|five)\s*[-_ ]?string\s*bass\b
+      - (?i)\b([pj])\s*[-_ ]?bass\b
+      - (?i)\bu[-_ ]?bass\b
   ROLE.BASS.SUB:
     label: Sub bass
     description: Dedicated sub layer (often < 80 Hz).
@@ -82,6 +109,51 @@ roles:
       regex:
       - (?i)\bsynth\s*bass\b
       - (?i)\b808\b
+  ROLE.BRASS.CORNET:
+    label: Cornet
+    description: Cornet stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - cornet
+      - bb cornet
+      regex:
+      - (?i)\bcornet\d*\b
+      - (?i)\bbb\s*cornet\d*\b
+  ROLE.BRASS.EUPHONIUM:
+    label: Euphonium
+    description: Euphonium/baritone horn family stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - euphonium
+      - euph
+      - eupho
+      - baritone horn
+      - tenor tuba
+      - bombardon
+      - ophicleide
+      - serpent
+      regex:
+      - (?i)\beuph(onium|o)?\d*\b
+      - (?i)\bbaritone\s*horn\d*\b
+      - (?i)\btenor\s*tuba\d*\b
+      - (?i)\b(bombardon|ophicleide|serpent)\d*\b
+  ROLE.BRASS.FLUGELHORN:
+    label: Flugelhorn
+    description: Flugelhorn stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - flugel
+      - flugelhorn
+      - flugel horn
+      regex:
+      - (?i)\bflugel\s*horn\d*\b
+      - (?i)\bflugelhorn\d*\b
   ROLE.BRASS.HORN:
     label: Horn
     description: French horn or horn line stem.
@@ -92,9 +164,20 @@ roles:
       - horn
       - horns
       - french horn
+      - orchestral horn
+      - f horn
+      - double horn
+      - vienna horn
+      - mellophone
+      - mello
+      - alto horn
+      - wagner tuba
+      - wagner horn
       regex:
       - (?i)\bhorns?\d*\b
       - (?i)\bfrench\s*horn\d*\b
+      - (?i)\b(f|double)\s*horn\d*\b
+      - (?i)\b(vienna\s*horn|mello(phone)?|alto\s*horn|wagner\s*(tuba|horn))\d*\b
   ROLE.BRASS.OTHER:
     label: Other brass
     description: Generic or unclassified brass stem.
@@ -125,9 +208,17 @@ roles:
       keywords:
       - trombone
       - tbn
+      - trb
+      - bass trombone
+      - alto trombone
+      - contrabass trombone
+      - valve trombone
+      - sackbut
       regex:
       - (?i)\btrombone\d*\b
       - (?i)\btbn\d*\b
+      - (?i)\btrb\d*\b
+      - (?i)\b(sackbut|valve\s*trombone|alto\s*trombone|bass\s*trombone|contrabass\s*trombone)\d*\b
   ROLE.BRASS.TRUMPET:
     label: Trumpet
     description: Trumpet stem.
@@ -137,9 +228,22 @@ roles:
       keywords:
       - trumpet
       - trpt
+      - tpt
+      - trp
+      - c trumpet
+      - bb trumpet
+      - piccolo trumpet
+      - bass trumpet
+      - natural trumpet
+      - bugle
+      - post horn
       regex:
       - (?i)\btrumpet\d*\b
       - (?i)\btrpt\d*\b
+      - (?i)\b(tpt|trp)\d*\b
+      - (?i)\b(c|bb)\s*trumpet\d*\b
+      - (?i)\b(piccolo|bass|natural)\s*trumpet\d*\b
+      - (?i)\b(bugle|post\s*horn)\d*\b
   ROLE.BRASS.TUBA:
     label: Tuba
     description: Tuba stem.
@@ -149,9 +253,15 @@ roles:
       keywords:
       - tuba
       - sousaphone
+      - helicon
+      - cc tuba
+      - bbb tuba
+      - f tuba
       regex:
       - (?i)\btuba\d*\b
       - (?i)\bsousaphone\d*\b
+      - (?i)\bhelicon\d*\b
+      - (?i)\b(cc|bbb|f)\s*tuba\d*\b
   ROLE.BUS.BASS:
     label: Bass bus
     description: Submix bus containing bass elements.
@@ -272,6 +382,36 @@ roles:
       - splash
       regex:
       - (?i)\b(ride|crash|china|splash)\b
+  ROLE.DRUM.HAND_PERC:
+    label: Hand percussion
+    description: Small hand percussion and shakers.
+    kind: source
+    default_bus_group: DRUMS
+    inference:
+      keywords:
+      - hand perc
+      - hand percussion
+      - triangle
+      - tambourine
+      - shaker
+      - maracas
+      - claves
+      - guiro
+      - cabasa
+      - agogo
+      - woodblock
+      - temple blocks
+      - castanets
+      - vibraslap
+      - sleigh bells
+      - finger cymbals
+      - zills
+      - slapstick
+      - whip
+      - ratchet
+      - flexatone
+      regex:
+      - (?i)\b(hand\s*perc(ussion)?|triangle|tamb(ourine)?|shaker|maracas?|claves?|guiro|cabasa|agogo|wood\s*block|temple\s*blocks?|castanets?|vibraslap|sleigh\s*bells?|finger\s*cymbals?|zills?|slap\s*stick|whip|ratchet|flexatone)\b
   ROLE.DRUM.HIHAT:
     label: Hi-hat
     description: Hi-hat cymbals.
@@ -299,6 +439,25 @@ roles:
       regex:
       - (?i)\b(kick|bd)\b
       - (?i)\bbass\s*drum\b
+  ROLE.DRUM.LATIN_PERC:
+    label: Latin percussion
+    description: Afro-Cuban/Latin hand percussion ensemble stems.
+    kind: source
+    default_bus_group: DRUMS
+    inference:
+      keywords:
+      - latin perc
+      - latin percussion
+      - congas
+      - conga
+      - bongos
+      - bongo
+      - timbales
+      - cajon
+      - shekere
+      - chekere
+      regex:
+      - (?i)\b(latin\s*perc(ussion)?|congas?|bongos?|timbales?|cajon|s?hekere|chekere)\b
   ROLE.DRUM.LOOPS:
     label: Drum loop
     description: Looped drum/percussion stem.
@@ -314,6 +473,32 @@ roles:
       regex:
       - (?i)\bdrum\s*loop\b
       - (?i)\bbreak(beat)?\b
+  ROLE.DRUM.MALLETS:
+    label: Mallets
+    description: Tuned mallet percussion.
+    kind: source
+    default_bus_group: DRUMS
+    inference:
+      keywords:
+      - mallets
+      - xylophone
+      - marimba
+      - vibraphone
+      - vibes
+      - glock
+      - glockenspiel
+      - tubular bells
+      - chimes
+      - crotales
+      - cimbalom
+      - santur
+      - santoor
+      - yangqin
+      - steelpan
+      - steel drums
+      - handbells
+      regex:
+      - (?i)\b(mallets?|xylophone|marimba|vibra(phone)?|vibes|glock(en?spiel)?|tubular\s*bells?|chimes?|crotales?|cimbalom|sant[ou]r|yangqin|steel\s*(pan|drums?)|handbells?)\b
   ROLE.DRUM.OVERHEADS:
     label: Overheads
     description: Overhead mics capturing cymbals and kit image.
@@ -341,9 +526,10 @@ roles:
       - tamb
       - tambourine
       - shaker
+      - cowbell
       regex:
       - (?i)\bperc(ussion)?\b
-      - (?i)\b(conga|bongo|tamb(ourine)?|shaker)\b
+      - (?i)\b(conga|bongo|tamb(ourine)?|shaker|cowbell)\b
   ROLE.DRUM.ROOM:
     label: Room
     description: Room mics capturing kit ambience.
@@ -367,8 +553,22 @@ roles:
       keywords:
       - snare
       - sd
+      - orch snare
+      - concert snare
       regex:
-      - (?i)\b(snare|sd)\b
+      - (?i)\b(snare|sd|orch\s*snare|concert\s*snare)\b
+  ROLE.DRUM.TIMPANI:
+    label: Timpani
+    description: Timpani / kettledrums stem.
+    kind: source
+    default_bus_group: DRUMS
+    inference:
+      keywords:
+      - timpani
+      - timps
+      - kettledrums
+      regex:
+      - (?i)\b(timpani|timps?|kettle\s*drums?)\b
   ROLE.DRUM.TOMS:
     label: Toms
     description: Tom drums (rack/floor).
@@ -383,6 +583,39 @@ roles:
       regex:
       - (?i)\btoms?\b
       - (?i)\b(rack|floor)\s*tom\b
+  ROLE.DRUM.WORLD_PERC:
+    label: World percussion
+    description: Regional/world percussion families.
+    kind: source
+    default_bus_group: DRUMS
+    inference:
+      keywords:
+      - world perc
+      - world percussion
+      - djembe
+      - talking drum
+      - taiko
+      - tabla
+      - mridangam
+      - kanjira
+      - dhol
+      - ghatam
+      - darbuka
+      - doumbek
+      - dumbek
+      - riq
+      - daf
+      - frame drum
+      - surdo
+      - pandeiro
+      - cuica
+      - tamborim
+      - repinique
+      - caixa
+      - berimbau
+      - janggu
+      regex:
+      - (?i)\b(world\s*perc(ussion)?|djembe|talking\s*drum|taiko|tabla|mridangam|kanjira|dhol|ghatam|darbuka|doumbek|dumbek|riq|daf|frame\s*drum|surdo|pandeiro|cuica|tamborim|repinique|caixa|berimbau|janggu)\b
   ROLE.FX.AMBIENCE:
     label: Ambience
     description: Ambient texture beds (non-instrumental).
@@ -449,8 +682,31 @@ roles:
       - acoustic gtr
       - acoustic guitar
       - agtr
+      - steel string guitar
+      - flat top
+      - classical guitar
+      - nylon guitar
+      - spanish guitar
+      - twelve string
+      - 12 string
+      - baritone guitar
       regex:
       - (?i)\b(acoustic\s*gtr|acoustic\s*guitar|agtr|ac\s*gtr)\b
+      - (?i)\b(classical|nylon|spanish)\s*guitar\b
+      - (?i)\b(12|twelve)\s*[-_ ]?string\s*guitar\b
+      - (?i)\b(baritone|steel\s*string|flat\s*top)\s*guitar\b
+  ROLE.GTR.BANJO:
+    label: Banjo
+    description: Banjo family stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - banjo
+      - tenor banjo
+      - plectrum banjo
+      regex:
+      - (?i)\b(tenor|plectrum)?\s*banjo\d*\b
   ROLE.GTR.ELECTRIC:
     label: Electric guitar
     description: Electric guitar stem (general).
@@ -464,9 +720,13 @@ roles:
       - elecgtr
       - electric gtr
       - electric guitar
+      - e guitar
+      - strat
+      - les paul
       regex:
       - (?i)\belecgtr\d*\b
       - (?i)\b(electric\s*gtr|electric\s*guitar|egtr|gtr)\b
+      - (?i)\b(strat|les\s*paul)\d*\b
   ROLE.GTR.ELECTRIC_L:
     label: Electric guitar (left)
     description: Electric guitar stem intended as left side of a pair.
@@ -512,6 +772,20 @@ roles:
       regex:
       - (?i)\blead\s*(gtr|guitar)\b
       - (?i)\bsolo\b
+  ROLE.GTR.MANDOLIN:
+    label: Mandolin family
+    description: Mandolin, mandola, or mandocello stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - mandolin
+      - mand
+      - mando
+      - mandola
+      - mandocello
+      regex:
+      - (?i)\b(mandolin|mandola|mandocello|mando?)\d*\b
   ROLE.GTR.RHYTHM:
     label: Rhythm guitar
     description: Rhythm guitar stem.
@@ -525,6 +799,100 @@ roles:
       regex:
       - (?i)\brhythm\s*(gtr|guitar)\b
       - (?i)\bchords?\b
+  ROLE.GTR.STEEL:
+    label: Steel and slide guitar
+    description: Resonator, lap/pedal steel, and slide guitar stems.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - lap steel
+      - pedal steel
+      - slide guitar
+      - resonator guitar
+      - dobro
+      regex:
+      - (?i)\b(lap\s*steel|pedal\s*steel|slide\s*guitar|resonator|dobro)\d*\b
+  ROLE.GTR.UKULELE:
+    label: Ukulele
+    description: Ukulele family stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - ukulele
+      - ukelele
+      - uke
+      - soprano uke
+      - concert uke
+      - tenor uke
+      - baritone uke
+      regex:
+      - (?i)\b(ukulele|ukelele|uke)\d*\b
+      - (?i)\b(soprano|concert|tenor|baritone)\s*uke\d*\b
+  ROLE.GTR.WORLD_PLUCKED:
+    label: World plucked strings
+    description: Folk/world fretted plucked strings.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - world plucked
+      - bouzouki
+      - lute
+      - archlute
+      - theorbo
+      - oud
+      - saz
+      - baglama
+      - tambur
+      - balalaika
+      - domra
+      - charango
+      - cuatro
+      - tiple
+      - tres
+      - ronroco
+      regex:
+      - (?i)\b(world\s*plucked|bouzouki|lute|archlute|theorbo|oud|saz|ba[g]?lama|tambur|balalaika|domra|charango|cuatro|tiple|tres|ronroco)\d*\b
+  ROLE.KEYS.ACCORDION:
+    label: Accordion and free reed keys
+    description: Accordion/concertina/bandoneon family stems.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - accordion
+      - acc
+      - concertina
+      - bandoneon
+      - melodica
+      - harmonica
+      - chromatic harmonica
+      regex:
+      - (?i)\b(accordion|concertina|bandoneon|melodica|harmonica|chromatic\s*harmonica)\d*\b
+  ROLE.KEYS.CELESTA:
+    label: Celesta
+    description: Celesta / keyboard bells stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - celesta
+      - keyboard bells
+      regex:
+      - (?i)\b(celesta|keyboard\s*bells?)\d*\b
+  ROLE.KEYS.CLAVINET:
+    label: Clavinet
+    description: Clavinet / clav stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - clavinet
+      - clav
+      regex:
+      - (?i)\b(clavinet|clav)\d*\b
   ROLE.KEYS.EPIANO:
     label: Electric piano
     description: Electric piano (Rhodes/Wurli-style).
@@ -539,6 +907,18 @@ roles:
       - wurlitzer
       regex:
       - (?i)\b(e-?piano|electric\s*piano|wurli(tzer)?)\b
+  ROLE.KEYS.HARPSICHORD:
+    label: Harpsichord
+    description: Harpsichord / cembalo family stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - harpsichord
+      - cembalo
+      - clavichord
+      regex:
+      - (?i)\b(harpsichord|cembalo|clavichord)\d*\b
   ROLE.KEYS.KEYS:
     label: Keys
     description: Generic keyboard/keys stem.
@@ -549,9 +929,12 @@ roles:
       - keys
       - keyboard
       - keyboards
+      - keytar
+      - midi keys
       regex:
       - (?i)\bkeys\d*\b
       - (?i)\bkeyboards?\b
+      - (?i)\b(keytar|midi\s*keys?)\d*\b
   ROLE.KEYS.ORGAN:
     label: Organ
     description: Organ (Hammond/synth organ).
@@ -561,8 +944,15 @@ roles:
       keywords:
       - organ
       - hammond
+      - b3
+      - tonewheel organ
+      - pipe organ
+      - combo organ
+      - vox organ
+      - farfisa
       regex:
       - (?i)\b(organ|hammond)\d*\b
+      - (?i)\b(b3|tonewheel\s*organ|pipe\s*organ|combo\s*organ|vox\s*organ|farfisa)\d*\b
   ROLE.KEYS.PIANO:
     label: Piano
     description: Acoustic or sampled piano.
@@ -573,9 +963,28 @@ roles:
       - piano
       - grand
       - upright
+      - baby grand
+      - felt piano
+      - honky tonk
+      - player piano
+      - prepared piano
       regex:
       - (?i)\bpiano\d*\b
       - (?i)\b(grand|upright)\d*\b
+      - (?i)\b(baby\s*grand|felt\s*piano|honky\s*tonk|player\s*piano|prepared\s*piano)\d*\b
+  ROLE.KEYS.REED_ORGAN:
+    label: Reed organ
+    description: Harmonium and pump organ family stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - reed organ
+      - harmonium
+      - pump organ
+      - parlor organ
+      regex:
+      - (?i)\b(reed\s*organ|harmonium|pump\s*organ|parlor\s*organ)\d*\b
   ROLE.KEYS.RHODES:
     label: Rhodes
     description: Rhodes electric piano stem.
@@ -697,10 +1106,37 @@ roles:
       - double bass
       - string bass
       - contrabass
+      - acoustic bass
+      - octobass
+      - octobasse
+      - db
+      - cb
       regex:
       - (?i)\b(upright|double|string)\s*bass\d*\b
       - (?i)\bcontra\s*bass\d*\b
       - (?i)\bcontrabass\d*\b
+      - (?i)\b(acoustic\s*bass|octobass(e)?|db|cb)\d*\b
+  ROLE.STRINGS.BOWED:
+    label: Bowed strings
+    description: Bowed string instruments outside the core orchestral quartet.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - bowed strings
+      - viola da gamba
+      - gamba
+      - hardanger fiddle
+      - hardingfele
+      - nyckelharpa
+      - erhu
+      - jinghu
+      - gaohu
+      - zhonghu
+      - morin khuur
+      - sarangi
+      regex:
+      - (?i)\b(bowed\s*strings?|viola\s*da\s*gamba|gamba|hardanger\s*fiddle|hardingfele|nyckelharpa|erhu|jinghu|gaohu|zhonghu|morin\s*khuur|sarangi)\d*\b
   ROLE.STRINGS.CELLO:
     label: Cello
     description: Cello stem.
@@ -710,8 +1146,35 @@ roles:
       keywords:
       - cello
       - celli
+      - violoncello
+      - vc
+      - vlc
+      - solo cello
+      - electric cello
       regex:
       - (?i)\bcell(o|i)\d*\b
+      - (?i)\bvioloncello\d*\b
+      - (?i)\b(vc|vlc)\d*\b
+      - (?i)\b(solo|electric)\s*cello\d*\b
+  ROLE.STRINGS.HARP:
+    label: Harp family
+    description: Harp and related plucked frame-string instruments.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - harp
+      - concert harp
+      - pedal harp
+      - lever harp
+      - celtic harp
+      - electric harp
+      - lyre
+      - kora
+      - qanun
+      - kanun
+      regex:
+      - (?i)\b(harp|concert\s*harp|pedal\s*harp|lever\s*harp|celtic\s*harp|electric\s*harp|lyre|kora|q?anun)\d*\b
   ROLE.STRINGS.OTHER:
     label: Other strings
     description: Generic or unclassified strings stem.
@@ -723,6 +1186,28 @@ roles:
       - string
       regex:
       - (?i)\bstrings?\d*\b
+  ROLE.STRINGS.PLUCKED:
+    label: Plucked strings
+    description: Non-guitar plucked string family stems.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - plucked strings
+      - autoharp
+      - zither
+      - guzheng
+      - guqin
+      - pipa
+      - ruan
+      - shamisen
+      - koto
+      - biwa
+      - sitar
+      - veena
+      - vina
+      regex:
+      - (?i)\b(plucked\s*strings?|autoharp|zither|guzheng|guqin|pipa|ruan|shamisen|koto|biwa|sitar|veena|vina)\d*\b
   ROLE.STRINGS.SECTION:
     label: Strings section
     description: Layered orchestral string section.
@@ -736,6 +1221,23 @@ roles:
       regex:
       - (?i)\bstring\s*section\d*\b
       - (?i)\b(orchestral|orch)\s*strings?\b
+  ROLE.STRINGS.STRUCK:
+    label: Struck strings
+    description: Struck string instruments (dulcimer/cimbalom family).
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - struck strings
+      - hammered dulcimer
+      - mountain dulcimer
+      - appalachian dulcimer
+      - cimbalom
+      - santur
+      - santoor
+      - yangqin
+      regex:
+      - (?i)\b(struck\s*strings?|hammered\s*dulcimer|mountain\s*dulcimer|appalachian\s*dulcimer|cimbalom|sant[ou]r|yangqin)\d*\b
   ROLE.STRINGS.VIOLA:
     label: Viola
     description: Viola stem.
@@ -745,8 +1247,13 @@ roles:
       keywords:
       - viola
       - violas
+      - vla
+      - va
+      - alto violin
       regex:
       - (?i)\bviolas?\d*\b
+      - (?i)\b(vla|va)\d*\b
+      - (?i)\balto\s*violin\d*\b
   ROLE.STRINGS.VIOLIN:
     label: Violin
     description: Violin stem.
@@ -756,8 +1263,19 @@ roles:
       keywords:
       - violin
       - violins
+      - fiddle
+      - vln
+      - vn
+      - first violins
+      - second violins
+      - solo violin
+      - electric violin
       regex:
       - (?i)\bviolins?\d*\b
+      - (?i)\bfiddle\d*\b
+      - (?i)\b(vln|vn)\d*\b
+      - (?i)\b(1st|first|2nd|second)\s*violins?\b
+      - (?i)\b(solo|electric)\s*violin\d*\b
   ROLE.SYNTH.ARP:
     label: Arpeggiator
     description: Arp pattern or rhythmic synth sequence.
@@ -984,10 +1502,14 @@ roles:
       - bagpipes
       - pipes
       - uilleann
+      - highland pipes
+      - smallpipes
+      - northumbrian pipes
       regex:
       - (?i)\bbagpipes?\d*\b
       - (?i)\builleann\s*pipes?\b
-      - (?i)\bpipes?\d*\b
+      - (?i)\b(highland|northumbrian)\s*pipes?\b
+      - (?i)\bsmallpipes?\b
   ROLE.WINDS.DIDGERIDOO:
     label: Didgeridoo
     description: Didgeridoo / didge drone stem.
@@ -1010,8 +1532,21 @@ roles:
     inference:
       keywords:
       - duduk
+      - hichiriki
+      - suona
+      - zurna
       regex:
-      - (?i)\bduduk\d*\b
+      - (?i)\b(duduk|hichiriki|suona|zurna)\d*\b
+  ROLE.WINDS.OCARINA:
+    label: Ocarina
+    description: Ocarina and vessel flute family stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - ocarina
+      regex:
+      - (?i)\bocarina\d*\b
   ROLE.WINDS.PAN_FLUTE:
     label: Pan flute
     description: Pan flute / pan pipes stem.
@@ -1021,9 +1556,30 @@ roles:
       keywords:
       - pan flute
       - pan pipes
+      - panpipes
+      - siku
+      - zampona
       regex:
       - (?i)\bpan\s*flute\d*\b
       - (?i)\bpan\s*pipes?\d*\b
+      - (?i)\b(panpipes|siku|zampona)\d*\b
+  ROLE.WINDS.RECORDER:
+    label: Recorder
+    description: Recorder family stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - recorder
+      - blockflote
+      - blockflote
+      - descant recorder
+      - sopranino recorder
+      - alto recorder
+      - tenor recorder
+      - bass recorder
+      regex:
+      - (?i)\b(recorders?|blockflote|descant\s*recorder|sopranino\s*recorder|alto\s*recorder|tenor\s*recorder|bass\s*recorder)\d*\b
   ROLE.WINDS.SECTION:
     label: Winds
     description: Woodwinds or wind ensemble layers.
@@ -1036,10 +1592,12 @@ roles:
       - wind section
       - reeds
       - oboe
+      - bagpipes
+      - duduk
       regex:
       - (?i)\b(woodwinds?|winds?)\d*\b
       - (?i)\bwind\s*section\d*\b
-      - (?i)\b(oboe|reeds?)\d*\b
+      - (?i)\b(oboe|reeds?|bagpipes?|duduk)\d*\b
   ROLE.WINDS.SHAKUHACHI:
     label: Shakuhachi
     description: Shakuhachi or bamboo flute stem.
@@ -1052,6 +1610,19 @@ roles:
       regex:
       - (?i)\bshakuhachi\d*\b
       - (?i)\bbamboo\s*flute\d*\b
+  ROLE.WINDS.WHISTLE:
+    label: Whistle
+    description: Tin/low whistle family stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - tin whistle
+      - pennywhistle
+      - low whistle
+      - fife
+      regex:
+      - (?i)\b(tin\s*whistle|penny\s*whistle|pennywhistle|low\s*whistle|fife)\d*\b
   ROLE.WW.BASSOON:
     label: Bassoon
     description: Bassoon stem.
@@ -1060,8 +1631,24 @@ roles:
     inference:
       keywords:
       - bassoon
+      - bsn
+      - bn
       regex:
       - (?i)\bbassoon\d*\b
+      - (?i)\b(bsn|bn)\d*\b
+  ROLE.WW.BASS_CLARINET:
+    label: Bass clarinet
+    description: Bass clarinet stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - bass clarinet
+      - bass clar
+      - bcl
+      regex:
+      - (?i)\bbass\s*clar(inet)?\d*\b
+      - (?i)\bbcl\d*\b
   ROLE.WW.CLARINET:
     label: Clarinet
     description: Clarinet stem.
@@ -1071,9 +1658,46 @@ roles:
       keywords:
       - clarinet
       - clar
+      - bb clarinet
+      - eb clarinet
+      - a clarinet
+      - alto clarinet
+      - contra alto clarinet
+      - contrabass clarinet
+      - chalumeau
+      - tarogato
+      - tarogato
       regex:
       - (?i)\bclarinet\d*\b
       - (?i)\bclar\d*\b
+      - (?i)\b(bb|eb|a|alto|contra[-_ ]?alto|contrabass)\s*clarinet\d*\b
+      - (?i)\b(chalumeau|tarogato)\d*\b
+  ROLE.WW.CONTRABASSOON:
+    label: Contrabassoon
+    description: Contrabassoon / low bassoon family stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - contrabassoon
+      - cbsn
+      - contra bassoon
+      regex:
+      - (?i)\b(contrabassoon|contra\s*bassoon|cbsn)\d*\b
+  ROLE.WW.ENGLISH_HORN:
+    label: English horn
+    description: English horn / cor anglais stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - english horn
+      - cor anglais
+      - eh
+      - oboe damore
+      - oboe d amore
+      regex:
+      - (?i)\b(english\s*horn|cor\s*anglais|eh|oboe\s*d[' ]?amore)\d*\b
   ROLE.WW.FLUTE:
     label: Flute
     description: Flute stem.
@@ -1083,9 +1707,19 @@ roles:
       keywords:
       - flute
       - flt
+      - concert flute
+      - c flute
+      - piccolo flute
+      - alto flute
+      - bass flute
+      - contrabass flute
+      - dizi
+      - bansuri
       regex:
       - (?i)\bflute\d*\b
       - (?i)\bflt\d*\b
+      - (?i)\b(concert|c|piccolo|alto|bass|contrabass)\s*flute\d*\b
+      - (?i)\b(dizi|bansuri)\d*\b
   ROLE.WW.OBOE:
     label: Oboe
     description: Oboe stem.
@@ -1094,8 +1728,14 @@ roles:
     inference:
       keywords:
       - oboe
+      - bass oboe
+      - heckelphone
+      - shawm
+      - bombarde
+      - krummhorn
+      - dulcian
       regex:
-      - (?i)\boboe\d*\b
+      - (?i)\b(oboe|bass\s*oboe|heckelphone|shawm|bombarde|krummhorn|dulcian)\d*\b
   ROLE.WW.PICCOLO:
     label: Piccolo
     description: Piccolo stem.
@@ -1117,5 +1757,13 @@ roles:
       keywords:
       - sax
       - saxophone
+      - soprano sax
+      - alto sax
+      - tenor sax
+      - bari sax
+      - baritone sax
+      - bass sax
+      - sopranino sax
       regex:
       - (?i)\bsax(ophone)?\d*\b
+      - (?i)\b(sopranino|soprano|alto|tenor|bari(tone)?|bass)\s*sax(ophone)?\d*\b

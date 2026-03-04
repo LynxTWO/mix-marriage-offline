@@ -264,6 +264,167 @@ class TestStemsClassifier(unittest.TestCase):
             ):
                 self.assertNotEqual(by_rel_path[rel_path]["role_id"], "ROLE.OTHER.UNKNOWN")
 
+    def test_rare_and_world_instruments_classify_to_deterministic_roles(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        roles_payload = load_roles(repo_root / "ontology" / "roles.yaml")
+        stems_index = {
+            "version": "0.1.0",
+            "root_dir": "demo",
+            "stem_sets": [],
+            "files": [
+                {
+                    "file_id": "STEMFILE.erhu",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/erhu.wav",
+                    "basename": "erhu",
+                    "ext": ".wav",
+                    "tokens": ["erhu"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.shamisen",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/shamisen.wav",
+                    "basename": "shamisen",
+                    "ext": ".wav",
+                    "tokens": ["shamisen"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.hammered_dulcimer",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/hammered_dulcimer.wav",
+                    "basename": "hammered_dulcimer",
+                    "ext": ".wav",
+                    "tokens": ["hammered", "dulcimer"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.bagpipes",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/bagpipes.wav",
+                    "basename": "bagpipes",
+                    "ext": ".wav",
+                    "tokens": ["bagpipes"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.ocarina",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/ocarina.wav",
+                    "basename": "ocarina",
+                    "ext": ".wav",
+                    "tokens": ["ocarina"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.bass_clarinet",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/bass_clarinet.wav",
+                    "basename": "bass_clarinet",
+                    "ext": ".wav",
+                    "tokens": ["bass", "clarinet"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.euphonium",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/euphonium.wav",
+                    "basename": "euphonium",
+                    "ext": ".wav",
+                    "tokens": ["euphonium"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.marimba",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/marimba.wav",
+                    "basename": "marimba",
+                    "ext": ".wav",
+                    "tokens": ["marimba"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.tabla",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/tabla.wav",
+                    "basename": "tabla",
+                    "ext": ".wav",
+                    "tokens": ["tabla"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.accordion",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/accordion.wav",
+                    "basename": "accordion",
+                    "ext": ".wav",
+                    "tokens": ["accordion"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.pipe_organ",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/pipe_organ.wav",
+                    "basename": "pipe_organ",
+                    "ext": ".wav",
+                    "tokens": ["pipe", "organ"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.mandolin",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/mandolin.wav",
+                    "basename": "mandolin",
+                    "ext": ".wav",
+                    "tokens": ["mandolin"],
+                    "folder_tokens": [],
+                },
+                {
+                    "file_id": "STEMFILE.ukulele",
+                    "set_id": "STEMSET.demo",
+                    "rel_path": "stems/ukulele.wav",
+                    "basename": "ukulele",
+                    "ext": ".wav",
+                    "tokens": ["ukulele"],
+                    "folder_tokens": [],
+                },
+            ],
+        }
+
+        stems_map = classify_stems(stems_index, roles_payload)
+        assignments = stems_map.get("assignments")
+        self.assertIsInstance(assignments, list)
+        if not isinstance(assignments, list):
+            return
+
+        by_rel_path = {
+            item.get("rel_path"): item
+            for item in assignments
+            if isinstance(item, dict) and isinstance(item.get("rel_path"), str)
+        }
+        expected = {
+            "stems/erhu.wav": "ROLE.STRINGS.BOWED",
+            "stems/shamisen.wav": "ROLE.STRINGS.PLUCKED",
+            "stems/hammered_dulcimer.wav": "ROLE.STRINGS.STRUCK",
+            "stems/bagpipes.wav": "ROLE.WINDS.BAGPIPE",
+            "stems/ocarina.wav": "ROLE.WINDS.OCARINA",
+            "stems/bass_clarinet.wav": "ROLE.WW.BASS_CLARINET",
+            "stems/euphonium.wav": "ROLE.BRASS.EUPHONIUM",
+            "stems/marimba.wav": "ROLE.DRUM.MALLETS",
+            "stems/tabla.wav": "ROLE.DRUM.WORLD_PERC",
+            "stems/accordion.wav": "ROLE.KEYS.ACCORDION",
+            "stems/pipe_organ.wav": "ROLE.KEYS.ORGAN",
+            "stems/mandolin.wav": "ROLE.GTR.MANDOLIN",
+            "stems/ukulele.wav": "ROLE.GTR.UKULELE",
+        }
+        for rel_path, expected_role_id in expected.items():
+            self.assertEqual(
+                by_rel_path[rel_path]["role_id"],
+                expected_role_id,
+                msg=f"{rel_path} expected {expected_role_id}, got {by_rel_path[rel_path]['role_id']}",
+            )
+
     def test_user_lexicon_can_override_common_lexicon_with_additional_keyword(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         roles_payload = load_roles(repo_root / "ontology" / "roles.yaml")

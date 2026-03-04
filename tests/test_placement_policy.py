@@ -159,6 +159,274 @@ def _mini_orchestra_scene(template_id: str) -> dict[str, Any]:
     )
 
 
+def _hybrid_stage_stems_map() -> dict[str, Any]:
+    return {
+        "schema_version": "0.1.0",
+        "generated_utc": "2000-01-01T00:00:00Z",
+        "stems_dir": "/tmp/hybrid_stage",
+        "roles_ref": "ontology/roles.yaml",
+        "assignments": [
+            {
+                "file_id": "STEM.BAGPIPE",
+                "rel_path": "bagpipe.wav",
+                "role_id": "ROLE.WINDS.BAGPIPE",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.BASS_CLAR",
+                "rel_path": "bass_clarinet.wav",
+                "role_id": "ROLE.WW.BASS_CLARINET",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.BASS_GTR",
+                "rel_path": "bass_guitar.wav",
+                "role_id": "ROLE.BASS.GUITAR",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.BGV",
+                "rel_path": "bgv.wav",
+                "role_id": "ROLE.VOCAL.BGV",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.DIDGE",
+                "rel_path": "didgeridoo.wav",
+                "role_id": "ROLE.WINDS.DIDGERIDOO",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.ERHU",
+                "rel_path": "erhu.wav",
+                "role_id": "ROLE.STRINGS.BOWED",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.EUPH",
+                "rel_path": "euphonium.wav",
+                "role_id": "ROLE.BRASS.EUPHONIUM",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.FLUTE",
+                "rel_path": "flute.wav",
+                "role_id": "ROLE.WW.FLUTE",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.HARP",
+                "rel_path": "harp.wav",
+                "role_id": "ROLE.STRINGS.HARP",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.LEAD_A",
+                "rel_path": "lead_a.wav",
+                "role_id": "ROLE.VOCAL.LEAD",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.LEAD_B",
+                "rel_path": "lead_b.wav",
+                "role_id": "ROLE.VOX.LEAD",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.MANDO",
+                "rel_path": "mandolin.wav",
+                "role_id": "ROLE.GTR.MANDOLIN",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.MARIMBA",
+                "rel_path": "marimba.wav",
+                "role_id": "ROLE.DRUM.MALLETS",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.ORGAN",
+                "rel_path": "pipe_organ.wav",
+                "role_id": "ROLE.KEYS.ORGAN",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.SHAMISEN",
+                "rel_path": "shamisen.wav",
+                "role_id": "ROLE.STRINGS.PLUCKED",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.TABLA",
+                "rel_path": "tabla.wav",
+                "role_id": "ROLE.DRUM.WORLD_PERC",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.TUBA",
+                "rel_path": "tuba.wav",
+                "role_id": "ROLE.BRASS.TUBA",
+                "confidence": 0.95,
+            },
+            {
+                "file_id": "STEM.VIOLIN",
+                "rel_path": "violin.wav",
+                "role_id": "ROLE.STRINGS.VIOLIN",
+                "confidence": 0.95,
+            },
+        ],
+    }
+
+
+def _hybrid_stage_bus_plan() -> dict[str, Any]:
+    return {
+        "schema_version": "0.1.0",
+        "generated_utc": "2000-01-01T00:00:00Z",
+        "assignments": [
+            {
+                "stem_id": "STEM.BAGPIPE",
+                "file_path": "bagpipe.wav",
+                "role_id": "ROLE.WINDS.BAGPIPE",
+                "bus_id": "BUS.MUSIC.WINDS",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.BASS_CLAR",
+                "file_path": "bass_clarinet.wav",
+                "role_id": "ROLE.WW.BASS_CLARINET",
+                "bus_id": "BUS.MUSIC.WINDS",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.BASS_GTR",
+                "file_path": "bass_guitar.wav",
+                "role_id": "ROLE.BASS.GUITAR",
+                "bus_id": "BUS.BASS.GTR",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.BGV",
+                "file_path": "bgv.wav",
+                "role_id": "ROLE.VOCAL.BGV",
+                "bus_id": "BUS.VOX.BGV",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.DIDGE",
+                "file_path": "didgeridoo.wav",
+                "role_id": "ROLE.WINDS.DIDGERIDOO",
+                "bus_id": "BUS.MUSIC.WINDS",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.ERHU",
+                "file_path": "erhu.wav",
+                "role_id": "ROLE.STRINGS.BOWED",
+                "bus_id": "BUS.MUSIC.STRINGS",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.EUPH",
+                "file_path": "euphonium.wav",
+                "role_id": "ROLE.BRASS.EUPHONIUM",
+                "bus_id": "BUS.MUSIC.BRASS",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.FLUTE",
+                "file_path": "flute.wav",
+                "role_id": "ROLE.WW.FLUTE",
+                "bus_id": "BUS.MUSIC.WINDS",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.HARP",
+                "file_path": "harp.wav",
+                "role_id": "ROLE.STRINGS.HARP",
+                "bus_id": "BUS.MUSIC.STRINGS",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.LEAD_A",
+                "file_path": "lead_a.wav",
+                "role_id": "ROLE.VOCAL.LEAD",
+                "bus_id": "BUS.VOX.LEAD",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.LEAD_B",
+                "file_path": "lead_b.wav",
+                "role_id": "ROLE.VOX.LEAD",
+                "bus_id": "BUS.VOX.LEAD",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.MANDO",
+                "file_path": "mandolin.wav",
+                "role_id": "ROLE.GTR.MANDOLIN",
+                "bus_id": "BUS.MUSIC.GTR",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.MARIMBA",
+                "file_path": "marimba.wav",
+                "role_id": "ROLE.DRUM.MALLETS",
+                "bus_id": "BUS.DRUMS.PERC",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.ORGAN",
+                "file_path": "pipe_organ.wav",
+                "role_id": "ROLE.KEYS.ORGAN",
+                "bus_id": "BUS.MUSIC.KEYS",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.SHAMISEN",
+                "file_path": "shamisen.wav",
+                "role_id": "ROLE.STRINGS.PLUCKED",
+                "bus_id": "BUS.MUSIC.STRINGS",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.TABLA",
+                "file_path": "tabla.wav",
+                "role_id": "ROLE.DRUM.WORLD_PERC",
+                "bus_id": "BUS.DRUMS.PERC",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.TUBA",
+                "file_path": "tuba.wav",
+                "role_id": "ROLE.BRASS.TUBA",
+                "bus_id": "BUS.MUSIC.BRASS",
+                "confidence": 0.95,
+            },
+            {
+                "stem_id": "STEM.VIOLIN",
+                "file_path": "violin.wav",
+                "role_id": "ROLE.STRINGS.VIOLIN",
+                "bus_id": "BUS.MUSIC.STRINGS",
+                "confidence": 0.95,
+            },
+        ],
+    }
+
+
+def _hybrid_stage_scene(template_id: str) -> dict[str, Any]:
+    scene = build_scene_from_bus_plan(
+        _hybrid_stage_stems_map(),
+        _hybrid_stage_bus_plan(),
+        profile_id="PROFILE.ASSIST",
+    )
+    return apply_scene_templates(
+        scene,
+        [template_id],
+        scene_templates_path=_REPO_ROOT / "ontology" / "scene_templates.yaml",
+        scene_locks_path=_REPO_ROOT / "ontology" / "scene_locks.yaml",
+    )
+
+
 class TestPlacementPolicy(unittest.TestCase):
     def test_deterministic_for_known_fixture(self) -> None:
         scene = _load_fixture_scene()
@@ -473,6 +741,55 @@ class TestPlacementPolicy(unittest.TestCase):
             in_orchestra_brass["SPK.LRS"] + in_orchestra_brass["SPK.RRS"],
             in_orchestra_brass["SPK.L"] + in_orchestra_brass["SPK.R"],
         )
+
+    def test_hybrid_in_orchestra_template_spreads_sections_and_keeps_object_heights_off(self) -> None:
+        scene = _hybrid_stage_scene("TEMPLATE.SEATING.ORCHESTRA.IN_ORCHESTRA")
+        render_intent = build_render_intent(scene, "LAYOUT.9_1_6")
+        self.assertIsInstance(render_intent, dict)
+        if not isinstance(render_intent, dict):
+            return
+
+        by_stem = _stem_by_id(render_intent)
+        violin = by_stem["STEM.VIOLIN"]["gains"]
+        erhu = by_stem["STEM.ERHU"]["gains"]
+        self.assertGreater(violin["SPK.L"], violin["SPK.R"])
+        self.assertGreater(erhu["SPK.L"], erhu["SPK.R"])
+
+        euph = by_stem["STEM.EUPH"]["gains"]
+        tuba = by_stem["STEM.TUBA"]["gains"]
+        self.assertGreater(euph["SPK.LRS"] + euph["SPK.RRS"], euph["SPK.L"] + euph["SPK.R"])
+        self.assertGreater(tuba["SPK.LRS"] + tuba["SPK.RRS"], tuba["SPK.L"] + tuba["SPK.R"])
+
+        marimba = by_stem["STEM.MARIMBA"]["gains"]
+        tabla = by_stem["STEM.TABLA"]["gains"]
+        self.assertGreater(
+            marimba["SPK.LRS"] + marimba["SPK.RRS"],
+            marimba["SPK.L"] + marimba["SPK.R"],
+        )
+        self.assertGreater(
+            tabla["SPK.LRS"] + tabla["SPK.RRS"],
+            tabla["SPK.L"] + tabla["SPK.R"],
+        )
+
+        for stem_id, send in by_stem.items():
+            if not stem_id.startswith("STEM."):
+                continue
+            gains = send.get("gains", {})
+            self.assertEqual(gains.get("SPK.TFL", 0.0), 0.0)
+            self.assertEqual(gains.get("SPK.TFR", 0.0), 0.0)
+            self.assertEqual(gains.get("SPK.TRL", 0.0), 0.0)
+            self.assertEqual(gains.get("SPK.TRR", 0.0), 0.0)
+            self.assertEqual(gains.get("SPK.TFC", 0.0), 0.0)
+            self.assertEqual(gains.get("SPK.TBC", 0.0), 0.0)
+
+        euph_notes = by_stem["STEM.EUPH"].get("notes")
+        tuba_notes = by_stem["STEM.TUBA"].get("notes")
+        self.assertIsInstance(euph_notes, list)
+        self.assertIsInstance(tuba_notes, list)
+        if isinstance(euph_notes, list):
+            self.assertTrue(any(note.startswith("section_slot:") for note in euph_notes))
+        if isinstance(tuba_notes, list):
+            self.assertTrue(any(note.startswith("section_slot:") for note in tuba_notes))
 
 
 if __name__ == "__main__":
