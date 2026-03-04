@@ -3,12 +3,12 @@ plugin_type: "renderer"
 name: "Baseline Mixdown Renderer"
 version: "0.1.0"
 license: "Apache-2.0"
-description: "Render deterministic baseline masters for 2.0/5.1/7.1 even with zero eligible recommendations."
+description: "Render deterministic baseline masters for 2.0/5.1/7.1/7.1.4/9.1.6 even with zero eligible recommendations."
 mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.renderers.mixdown_renderer:MixdownRenderer"
 capabilities:
-  max_channels: 8
+  max_channels: 16
   channel_mode: "true_multichannel"
   deterministic_seed_policy: "none"
   supported_contexts:
@@ -23,6 +23,8 @@ capabilities:
       - "TARGET.STEREO.2_0"
       - "TARGET.SURROUND.5_1"
       - "TARGET.SURROUND.7_1"
+      - "TARGET.IMMERSIVE.7_1_4"
+      - "TARGET.IMMERSIVE.9_1_6"
   dsp_traits:
     tier: "information_preserving"
     linearity: "linear"

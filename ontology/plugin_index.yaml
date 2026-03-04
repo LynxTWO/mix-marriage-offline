@@ -114,6 +114,22 @@ entries:
       - "render"
       - "safety"
     manifest_path: "plugins/renderers/gain_trim_renderer.plugin.yaml"
+  - plugin_id: "PLUGIN.RENDERER.MIXDOWN_BASELINE"
+    plugin_type: "renderer"
+    name: "Baseline Mixdown Renderer"
+    summary: "Always emit conservative baseline WAV masters for safe-render verification."
+    preview:
+      tagline: "Deterministic baseline masters even when no actions are eligible."
+      gradient: "sunset"
+      chips:
+        - "Baseline"
+        - "Render"
+        - "Deterministic"
+    version: "0.1.0"
+    tags:
+      - "render"
+      - "safety"
+    manifest_path: "plugins/renderers/mixdown_renderer.plugin.yaml"
   - plugin_id: "PLUGIN.RENDERER.SAFE"
     plugin_type: "renderer"
     name: "Safe Renderer"

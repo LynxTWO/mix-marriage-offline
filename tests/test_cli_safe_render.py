@@ -25,6 +25,7 @@ from pathlib import Path
 import jsonschema
 
 from mmo.cli import main
+from mmo.dsp.meters import iter_wav_float64_samples
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCHEMAS_DIR = _REPO_ROOT / "schemas"
@@ -171,6 +172,20 @@ def _write_stub_only_plugins_dir(path: Path) -> Path:
         encoding="utf-8",
     )
     return path
+
+
+def _peak_abs_wav(path: Path) -> float:
+    peak = 0.0
+    for chunk in iter_wav_float64_samples(
+        path,
+        error_context="safe-render baseline test",
+    ):
+        if not chunk:
+            continue
+        chunk_peak = max(abs(sample) for sample in chunk)
+        if chunk_peak > peak:
+            peak = chunk_peak
+    return peak
 
 
 class TestSafeRenderDryRun(unittest.TestCase):
@@ -629,7 +644,15 @@ class TestSafeRenderFullRender(unittest.TestCase):
 
 
 class TestSafeRenderBaselineMixdown(unittest.TestCase):
-    def test_safe_render_zero_recommendations_writes_stereo_master(self) -> None:
+    def test_safe_render_zero_recommendations_writes_all_layout_masters(self) -> None:
+        expected_layouts = (
+            "LAYOUT.2_0",
+            "LAYOUT.5_1",
+            "LAYOUT.7_1",
+            "LAYOUT.7_1_4",
+            "LAYOUT.9_1_6",
+        )
+        target_peak_linear = math.pow(10.0, -1.0 / 20.0)
         with tempfile.TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)
             report = _make_baseline_fixture_report()
@@ -661,9 +684,15 @@ class TestSafeRenderBaselineMixdown(unittest.TestCase):
             )
             self.assertEqual(exit_code, 0, msg=stderr)
 
-            master_path = out_dir / "LAYOUT_2_0" / "master.wav"
-            self.assertTrue(master_path.exists(), f"missing baseline output: {master_path}")
-            self.assertGreater(master_path.stat().st_size, 44)
+            for layout_id in expected_layouts:
+                layout_slug = layout_id.replace(".", "_")
+                master_path = out_dir / layout_slug / "master.wav"
+                self.assertTrue(master_path.exists(), f"missing baseline output: {master_path}")
+                self.assertGreater(master_path.stat().st_size, 44)
+                self.assertLessEqual(
+                    _peak_abs_wav(master_path),
+                    target_peak_linear + 1e-3,
+                )
 
             receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
             manifests = receipt.get("renderer_manifests", [])
@@ -681,15 +710,33 @@ class TestSafeRenderBaselineMixdown(unittest.TestCase):
                 return
             outputs = baseline_manifest.get("outputs")
             self.assertIsInstance(outputs, list)
-            self.assertGreater(len(outputs), 0)
+            if not isinstance(outputs, list):
+                return
+            self.assertEqual(len(outputs), len(expected_layouts))
+            self.assertEqual(
+                {
+                    item.get("layout_id")
+                    for item in outputs
+                    if isinstance(item, dict)
+                },
+                set(expected_layouts),
+            )
 
             qa = json.loads(qa_path.read_text(encoding="utf-8"))
             qa_outputs = qa.get("outputs")
             self.assertIsInstance(qa_outputs, list)
-            self.assertGreater(len(qa_outputs), 0)
+            if not isinstance(qa_outputs, list):
+                return
+            self.assertGreaterEqual(len(qa_outputs), len(expected_layouts))
 
     def test_safe_render_baseline_render_many_hashes_are_deterministic(self) -> None:
-        targets = ("LAYOUT.2_0", "LAYOUT.5_1", "LAYOUT.7_1")
+        targets = (
+            "LAYOUT.2_0",
+            "LAYOUT.5_1",
+            "LAYOUT.7_1",
+            "LAYOUT.7_1_4",
+            "LAYOUT.9_1_6",
+        )
         with tempfile.TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)
             report = _make_baseline_fixture_report()

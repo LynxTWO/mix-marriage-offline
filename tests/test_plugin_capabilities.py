@@ -63,7 +63,7 @@ class TestPluginCapabilities(unittest.TestCase):
             if capabilities is None:
                 return
 
-            expected_max_channels = 8 if plugin_id == "PLUGIN.RENDERER.MIXDOWN_BASELINE" else 32
+            expected_max_channels = 16 if plugin_id == "PLUGIN.RENDERER.MIXDOWN_BASELINE" else 32
             self.assertEqual(capabilities.max_channels, expected_max_channels)
             self.assertEqual(capabilities.supported_contexts, ("render", "auto_apply"))
             if plugin_id == "PLUGIN.RENDERER.MIXDOWN_BASELINE":
@@ -102,6 +102,8 @@ class TestPluginCapabilities(unittest.TestCase):
                         "TARGET.STEREO.2_0",
                         "TARGET.SURROUND.5_1",
                         "TARGET.SURROUND.7_1",
+                        "TARGET.IMMERSIVE.7_1_4",
+                        "TARGET.IMMERSIVE.9_1_6",
                     ),
                 )
             else:

@@ -22,9 +22,9 @@ Non-negotiables:
   render-many batches.
 - Keep watch-folder visual queue telemetry deterministic (stable ordering,
   explicit state transitions, and install-safe CLI wiring).
-- Keep safe-render baseline mixdown deterministic: supported 2.0/5.1/7.1
-  targets must still emit conservative WAV masters when recommendations are
-  not render-eligible.
+- Keep safe-render baseline mixdown deterministic: supported
+  2.0/5.1/7.1/7.1.4/9.1.6 targets must still emit conservative WAV masters
+  when recommendations are not render-eligible.
 - Keep render-many surround similarity gating deterministic: compare stereo
   renders against downmix(rendered 5.1/7.1), and if gates fail, allow only a
   single bounded surround-send reduction retry before final pass/fail logging.

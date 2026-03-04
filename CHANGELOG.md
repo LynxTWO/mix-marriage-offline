@@ -167,15 +167,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Baseline mixdown renderer for safe-render zero-recommendation runs:
   - Added `PLUGIN.RENDERER.MIXDOWN_BASELINE` with `true_multichannel`
-    capability metadata (`max_channels: 8`) and deterministic headroom
+    capability metadata (`max_channels: 16`) and deterministic headroom
     policy (`worst_case_peak_sum -> -1 dBFS`, fallback `-12 dB` trim).
   - Added `src/mmo/plugins/renderers/mixdown_renderer.py` to write
     conservative layout masters:
-    `LAYOUT_2_0/master.wav`, `LAYOUT_5_1/master.wav`, `LAYOUT_7_1/master.wav`
-    (per-target, with immersive-to-bed fallback where needed).
-  - Safe-render now injects `session.target_layout_id` before renderer
-    execution so baseline layout selection is deterministic even when
-    `eligible_render == 0`.
+    `LAYOUT_2_0/master.wav`, `LAYOUT_5_1/master.wav`, `LAYOUT_7_1/master.wav`,
+    `LAYOUT_7_1_4/master.wav`, and `LAYOUT_9_1_6/master.wav`
+    (always emitted per run, even with zero eligible recommendations).
   - Added fixture-driven safe-render coverage for baseline output existence
     and deterministic output hashes.
 - Deterministic stems bus-plan artifact generator:
