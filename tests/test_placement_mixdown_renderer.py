@@ -9,6 +9,8 @@ from pathlib import Path
 
 from mmo.core.downmix import enforce_rendered_surround_similarity_gate
 from mmo.core.layout_negotiation import get_layout_channel_order
+from mmo.dsp.io import read_wav_metadata
+from mmo.dsp.meters import iter_wav_float64_samples
 from mmo.plugins.renderers.placement_mixdown_renderer import PlacementMixdownRenderer
 
 
@@ -35,6 +37,104 @@ def _write_mono_wav(
         handle.setsampwidth(2)
         handle.setframerate(sample_rate_hz)
         handle.writeframes(struct.pack(f"<{len(interleaved)}h", *interleaved))
+
+
+def _write_stereo_wav(
+    path: Path,
+    *,
+    sample_rate_hz: int = 48000,
+    duration_s: float = 0.12,
+    freq_hz: float = 220.0,
+    left_amplitude: float = 0.25,
+    right_amplitude: float = 0.25,
+    phase_offset_rad: float = 0.0,
+) -> None:
+    frames = int(sample_rate_hz * duration_s)
+    interleaved: list[int] = []
+    for index in range(frames):
+        phase = 2.0 * math.pi * freq_hz * index / sample_rate_hz
+        left = int(left_amplitude * 32767.0 * math.sin(phase))
+        right = int(right_amplitude * 32767.0 * math.sin(phase + phase_offset_rad))
+        interleaved.extend((left, right))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate_hz)
+        handle.writeframes(struct.pack(f"<{len(interleaved)}h", *interleaved))
+
+
+def _channel_energy(path: Path) -> tuple[list[float], int]:
+    metadata = read_wav_metadata(path)
+    channels = int(metadata["channels"])
+    sums = [0.0] * channels
+    frames = 0
+    for chunk in iter_wav_float64_samples(path, error_context="placement renderer test"):
+        total = len(chunk)
+        if channels <= 0 or total % channels != 0:
+            continue
+        for index in range(0, total, channels):
+            for channel_index in range(channels):
+                sample = float(chunk[index + channel_index])
+                sums[channel_index] += sample * sample
+            frames += 1
+    return sums, max(frames, 1)
+
+
+def _single_stereo_scene_payload(
+    stems_dir: Path,
+    *,
+    role_id: str = "ROLE.SYNTH.LEAD",
+    confidence: float = 0.95,
+    perspective: str | None = None,
+) -> dict:
+    scene = {
+        "schema_version": "0.1.0",
+        "scene_id": "SCENE.TEST.PLACEMENT.STEREO",
+        "source": {
+            "stems_dir": stems_dir.resolve().as_posix(),
+            "created_from": "draft",
+        },
+        "intent": {
+            "confidence": 0.0,
+            "locks": [],
+        },
+        "objects": [
+            {
+                "object_id": "OBJ.STEM.STEREO",
+                "stem_id": "STEM.STEREO",
+                "role_id": role_id,
+                "group_bus": "BUS.MUSIC",
+                "label": "Stereo Stem",
+                "channel_count": 2,
+                "width_hint": 0.8,
+                "azimuth_hint": 25.0,
+                "depth_hint": 0.3,
+                "confidence": confidence,
+                "intent": {
+                    "confidence": confidence,
+                    "width": 0.8,
+                    "depth": 0.3,
+                    "position": {"azimuth_deg": 25.0},
+                    "locks": [],
+                },
+                "notes": [],
+            },
+        ],
+        "beds": [
+            {
+                "bed_id": "BED.FIELD.001",
+                "label": "Field",
+                "kind": "field",
+                "intent": {"diffuse": 0.5, "confidence": 0.0, "locks": []},
+                "notes": [],
+            }
+        ],
+        "metadata": {},
+    }
+    if perspective is not None:
+        scene["intent"]["perspective"] = perspective
+    return scene
 
 
 def _scene_payload(stems_dir: Path) -> dict:
@@ -235,6 +335,154 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
             self.assertIsInstance(why, list)
             if isinstance(why, list):
                 self.assertIn("surround_send_enabled", why)
+
+    def test_stereo_layout_preserves_lr_energy_ratio(self) -> None:
+        stem_path = self.stems_dir / "stereo_lr.wav"
+        _write_stereo_wav(
+            stem_path,
+            left_amplitude=0.56,
+            right_amplitude=0.14,
+        )
+        session = {
+            "stems_dir": self.stems_dir.resolve().as_posix(),
+            "stems": [
+                {"stem_id": "STEM.STEREO", "file_path": "stereo_lr.wav", "channel_count": 2},
+            ],
+            "scene_payload": _single_stereo_scene_payload(self.stems_dir),
+        }
+
+        renderer = PlacementMixdownRenderer()
+        manifest = renderer.render(session, [], self.out_dir)
+        by_layout = _output_by_layout(manifest)
+        stereo_row = by_layout.get("LAYOUT.2_0")
+        self.assertIsInstance(stereo_row, dict)
+        if not isinstance(stereo_row, dict):
+            return
+
+        rendered_path = self.out_dir / Path(stereo_row["file_path"])
+        source_energy, _ = _channel_energy(stem_path)
+        rendered_energy, _ = _channel_energy(rendered_path)
+
+        src_ratio_db = 10.0 * math.log10((source_energy[0] + 1e-12) / (source_energy[1] + 1e-12))
+        out_ratio_db = 10.0 * math.log10(
+            (rendered_energy[0] + 1e-12) / (rendered_energy[1] + 1e-12)
+        )
+        self.assertAlmostEqual(out_ratio_db, src_ratio_db, delta=0.6)
+        self.assertGreater(rendered_energy[0], rendered_energy[1])
+
+        metadata = stereo_row.get("metadata")
+        self.assertIsInstance(metadata, dict)
+        if not isinstance(metadata, dict):
+            return
+        summary = metadata.get("stem_send_summary")
+        self.assertIsInstance(summary, list)
+        if not isinstance(summary, list):
+            return
+        row = next(
+            item
+            for item in summary
+            if isinstance(item, dict) and item.get("stem_id") == "STEM.STEREO"
+        )
+        self.assertEqual(row.get("mix_mode"), "stereo_channel_wise")
+
+    def test_anchor_stereo_does_not_wrap_without_immersive_perspective(self) -> None:
+        stem_path = self.stems_dir / "anchor.wav"
+        _write_stereo_wav(
+            stem_path,
+            left_amplitude=0.48,
+            right_amplitude=0.20,
+        )
+        session = {
+            "stems_dir": self.stems_dir.resolve().as_posix(),
+            "stems": [
+                {"stem_id": "STEM.STEREO", "file_path": "anchor.wav", "channel_count": 2},
+            ],
+            "scene_payload": _single_stereo_scene_payload(
+                self.stems_dir,
+                role_id="ROLE.DRUM.KICK",
+                confidence=0.98,
+            ),
+        }
+
+        renderer = PlacementMixdownRenderer()
+        manifest = renderer.render(session, [], self.out_dir)
+        by_layout = _output_by_layout(manifest)
+        immersive_row = by_layout.get("LAYOUT.9_1_6")
+        self.assertIsInstance(immersive_row, dict)
+        if not isinstance(immersive_row, dict):
+            return
+
+        rendered_path = self.out_dir / Path(immersive_row["file_path"])
+        energies, frame_count = _channel_energy(rendered_path)
+        order = get_layout_channel_order("LAYOUT.9_1_6")
+        per_speaker = {
+            speaker_id: energies[index] / frame_count
+            for index, speaker_id in enumerate(order)
+        }
+        front_energy = per_speaker["SPK.L"] + per_speaker["SPK.R"]
+        wrap_energy = sum(
+            per_speaker.get(speaker_id, 0.0)
+            for speaker_id in ("SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS", "SPK.LW", "SPK.RW")
+        )
+        self.assertLess(wrap_energy, front_energy * 1e-4)
+
+    def test_stereo_wrap_to_wides_requires_immersive_perspective_and_confidence(self) -> None:
+        stem_path = self.stems_dir / "wrap.wav"
+        _write_stereo_wav(
+            stem_path,
+            left_amplitude=0.52,
+            right_amplitude=0.18,
+        )
+        session = {
+            "stems_dir": self.stems_dir.resolve().as_posix(),
+            "stems": [
+                {"stem_id": "STEM.STEREO", "file_path": "wrap.wav", "channel_count": 2},
+            ],
+            "scene_payload": _single_stereo_scene_payload(
+                self.stems_dir,
+                role_id="ROLE.SYNTH.LEAD",
+                confidence=0.95,
+                perspective="in_band",
+            ),
+        }
+
+        renderer = PlacementMixdownRenderer()
+        manifest = renderer.render(session, [], self.out_dir)
+        by_layout = _output_by_layout(manifest)
+        immersive_row = by_layout.get("LAYOUT.9_1_6")
+        self.assertIsInstance(immersive_row, dict)
+        if not isinstance(immersive_row, dict):
+            return
+
+        rendered_path = self.out_dir / Path(immersive_row["file_path"])
+        energies, frame_count = _channel_energy(rendered_path)
+        order = get_layout_channel_order("LAYOUT.9_1_6")
+        per_speaker = {
+            speaker_id: energies[index] / frame_count
+            for index, speaker_id in enumerate(order)
+        }
+        front_energy = per_speaker["SPK.L"] + per_speaker["SPK.R"]
+        wide_energy = per_speaker.get("SPK.LW", 0.0) + per_speaker.get("SPK.RW", 0.0)
+        self.assertGreater(wide_energy, 0.0)
+        self.assertLess(wide_energy, front_energy * 0.05)
+
+        metadata = immersive_row.get("metadata")
+        self.assertIsInstance(metadata, dict)
+        if not isinstance(metadata, dict):
+            return
+        summary = metadata.get("stem_send_summary")
+        self.assertIsInstance(summary, list)
+        if not isinstance(summary, list):
+            return
+        row = next(
+            item
+            for item in summary
+            if isinstance(item, dict) and item.get("stem_id") == "STEM.STEREO"
+        )
+        mix_mode = row.get("mix_mode")
+        self.assertIsInstance(mix_mode, str)
+        if isinstance(mix_mode, str):
+            self.assertIn("wide_wrap", mix_mode)
 
     def test_similarity_gate_supports_rendered_fallback_after_placement_render(self) -> None:
         renderer = PlacementMixdownRenderer()

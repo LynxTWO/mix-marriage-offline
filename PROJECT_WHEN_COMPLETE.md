@@ -155,11 +155,11 @@ What remains: expand fixture-session coverage for front/quad render variants in 
 
 ### 4.7 Fixtures and CI prevent regressions
 - [x] Fixture sessions exist for stereo, 5.1, 7.1, and one immersive target.
-- [ ] Fixture for “stereo stems with baked pan/width” validates inference is advisory and confidence-gated.
+- [x] Fixture for “stereo stems with baked pan/width” validates inference is advisory and confidence-gated.
 - [x] Determinism tests exist (byte-stable or numerically stable within documented tolerance).
 - [x] Downmix similarity tests exist and fail CI when gates regress.
 - [x] CI runs on Windows, Linux, macOS (or documents any limitations).
-What remains: add the explicit baked-pan/baked-width stereo fixture that validates advisory-only inference confidence-gating.
+What remains: broaden this stereo-hint fixture pattern into additional multi-stem and mixed confidence edge cases.
 
 ### 4.8 UX/CLI is usable for real work
 - [x] CLI can: validate, analyze, generate scene, render, and output reports.
