@@ -28,6 +28,10 @@ mmo downmix list --policies
 QA a downmix against a reference.
 mmo downmix qa --src your_5_1.wav --ref your_stereo_ref.wav --source-layout LAYOUT.5_1 --format json
 
+Rendered similarity fallback (safe-render/downmix workflows).
+When rendered surround/immersive output drifts too far from stereo reference behavior, MMO can run one bounded retry that attenuates backoff channels and re-checks once.
+Backoff channels include surrounds, heights, and wides when present (`5.1`, `7.1`, `7.1.4`, `9.1.6`).
+
 How to interpret QA.
 A high similarity score means your fold-down behaves like your intended stereo.
 A low score means your surround balance is not collapsing the way you think.

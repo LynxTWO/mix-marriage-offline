@@ -52,6 +52,7 @@ class TestPluginCapabilities(unittest.TestCase):
             "PLUGIN.RENDERER.SAFE",
             "PLUGIN.RENDERER.GAIN_TRIM",
             "PLUGIN.RENDERER.MIXDOWN_BASELINE",
+            "PLUGIN.RENDERER.PLACEMENT_MIXDOWN_V1",
         ):
             plugin = by_id.get(plugin_id)
             self.assertIsNotNone(plugin)
@@ -72,10 +73,18 @@ class TestPluginCapabilities(unittest.TestCase):
                     ("Always writes a baseline master for supported target layouts.",),
                 )
             else:
-                self.assertEqual(
-                    capabilities.notes,
-                    ("Deterministic gain/trim rendering; no boosts.",),
-                )
+                if plugin_id == "PLUGIN.RENDERER.PLACEMENT_MIXDOWN_V1":
+                    self.assertEqual(
+                        capabilities.notes,
+                        (
+                            "Scene-driven deterministic placement mixdown with conservative surround and height sends.",
+                        ),
+                    )
+                else:
+                    self.assertEqual(
+                        capabilities.notes,
+                        ("Deterministic gain/trim rendering; no boosts.",),
+                    )
             if plugin_id == "PLUGIN.RENDERER.SAFE":
                 self.assertIsNotNone(capabilities.scene)
                 if capabilities.scene is None:
@@ -96,6 +105,24 @@ class TestPluginCapabilities(unittest.TestCase):
                 self.assertTrue(capabilities.scene.supports_beds)
                 self.assertTrue(capabilities.scene.supports_locks)
                 self.assertFalse(capabilities.scene.requires_speaker_positions)
+                self.assertEqual(
+                    capabilities.scene.supported_target_ids,
+                    (
+                        "TARGET.STEREO.2_0",
+                        "TARGET.SURROUND.5_1",
+                        "TARGET.SURROUND.7_1",
+                        "TARGET.IMMERSIVE.7_1_4",
+                        "TARGET.IMMERSIVE.9_1_6",
+                    ),
+                )
+            elif plugin_id == "PLUGIN.RENDERER.PLACEMENT_MIXDOWN_V1":
+                self.assertIsNotNone(capabilities.scene)
+                if capabilities.scene is None:
+                    return
+                self.assertTrue(capabilities.scene.supports_objects)
+                self.assertTrue(capabilities.scene.supports_beds)
+                self.assertTrue(capabilities.scene.supports_locks)
+                self.assertTrue(capabilities.scene.requires_speaker_positions)
                 self.assertEqual(
                     capabilities.scene.supported_target_ids,
                     (

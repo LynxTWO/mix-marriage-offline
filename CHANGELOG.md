@@ -176,6 +176,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     (always emitted per run, even with zero eligible recommendations).
   - Added fixture-driven safe-render coverage for baseline output existence
     and deterministic output hashes.
+- Scene-driven placement mixdown renderer and immersive send expansion:
+  - Added `PLUGIN.RENDERER.PLACEMENT_MIXDOWN_V1` with deterministic scene-based
+    placement rendering for `LAYOUT.2_0`, `LAYOUT.5_1`, `LAYOUT.7_1`,
+    `LAYOUT.7_1_4`, and `LAYOUT.9_1_6` (WAV PCM24 output).
+  - Expanded conservative placement policy support to immersive layouts with
+    explicit wide/height speaker handling (`SPK.LW/RW`, `SPK.TFL/TFR/TRL/TRR/TFC/TBC`),
+    front-safe transient defaults, and explicit-intent + high-evidence-only
+    transient wrap exceptions.
+  - Extended rendered surround-similarity fallback attenuation to cover
+    immersive backoff channels (surrounds, heights, wides) for
+    `LAYOUT.7_1_4` and `LAYOUT.9_1_6` in addition to `5.1/7.1`.
 - Deterministic stems bus-plan artifact generator:
   - Added `mmo stems bus-plan --map <stems_map.json> --out <bus_plan.json> [--csv <bus_plan.csv>]`
     to build a schema-validated `mmo.bus_plan.v1` artifact from classified stems.

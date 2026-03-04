@@ -130,6 +130,22 @@ entries:
       - "render"
       - "safety"
     manifest_path: "plugins/renderers/mixdown_renderer.plugin.yaml"
+  - plugin_id: "PLUGIN.RENDERER.PLACEMENT_MIXDOWN_V1"
+    plugin_type: "renderer"
+    name: "Placement Mixdown Renderer"
+    summary: "Render scene-driven conservative spatial placement across surround and immersive targets."
+    preview:
+      tagline: "One scene to 2.0/5.1/7.1/7.1.4/9.1.6 with deterministic placement."
+      gradient: "sunset"
+      chips:
+        - "Placement"
+        - "Immersive"
+        - "Deterministic"
+    version: "0.1.0"
+    tags:
+      - "render"
+      - "safety"
+    manifest_path: "plugins/renderers/placement_mixdown_renderer.plugin.yaml"
   - plugin_id: "PLUGIN.RENDERER.SAFE"
     plugin_type: "renderer"
     name: "Safe Renderer"

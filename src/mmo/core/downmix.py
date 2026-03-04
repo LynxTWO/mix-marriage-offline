@@ -15,7 +15,8 @@ Exported public API
 - ``measure_downmix_similarity()`` — measure actual similarity from rendered audio.
 - ``apply_downmix_matrix_deterministic()`` — apply a resolved matrix deterministically.
 - ``compare_rendered_surround_to_stereo_reference()`` — compare surround fold-down vs stereo.
-- ``enforce_rendered_surround_similarity_gate()`` — one-shot fallback gate for 5.1/7.1 renders.
+- ``enforce_rendered_surround_similarity_gate()`` — one-shot fallback gate for
+  5.1/7.1/7.1.4/9.1.6 renders.
 """
 
 from __future__ import annotations
@@ -42,11 +43,24 @@ RENDERED_SIMILARITY_GATE_VERSION = "1.0.0"
 _LFE_CHANNEL_IDS: frozenset[str] = frozenset(
     {"LFE", "LFE1", "LFE2", "SPK.LFE", "SPK.LFE1", "SPK.LFE2"}
 )
-_SURROUND_SPK_IDS: frozenset[str] = frozenset(
-    {"SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS"}
+_BACKOFF_SPK_IDS: frozenset[str] = frozenset(
+    {
+        "SPK.LS",
+        "SPK.RS",
+        "SPK.LRS",
+        "SPK.RRS",
+        "SPK.TFL",
+        "SPK.TFR",
+        "SPK.TRL",
+        "SPK.TRR",
+        "SPK.TFC",
+        "SPK.TBC",
+        "SPK.LW",
+        "SPK.RW",
+    }
 )
 _SUPPORTED_SURROUND_FALLBACK_LAYOUTS: frozenset[str] = frozenset(
-    {"LAYOUT.5_1", "LAYOUT.7_1"}
+    {"LAYOUT.5_1", "LAYOUT.7_1", "LAYOUT.7_1_4", "LAYOUT.9_1_6"}
 )
 _TARGET_STEREO_LAYOUT_ID = "LAYOUT.2_0"
 _PCM24_MIN = -8_388_608
@@ -972,12 +986,12 @@ def _surround_channel_indices(layout_id: str, channel_count: int) -> List[int]:
         index
         for index, speaker_id in enumerate(order)
         if isinstance(speaker_id, str)
-        and speaker_id in _SURROUND_SPK_IDS
+        and speaker_id in _BACKOFF_SPK_IDS
         and index < channel_count
     ]
     if not indices:
         raise ValueError(
-            f"Layout {layout_id} has no surround channel indices within {channel_count} channels."
+            f"Layout {layout_id} has no fallback backoff channel indices within {channel_count} channels."
         )
     return sorted(indices)
 
@@ -1056,7 +1070,8 @@ def enforce_rendered_surround_similarity_gate(
 ) -> Dict[str, Any]:
     """Run rendered similarity gate and apply a single deterministic fallback pass.
 
-    Fallback is layout-scoped to 5.1/7.1 and attenuates surround channels once.
+    Fallback is layout-scoped to 5.1/7.1/7.1.4/9.1.6 and attenuates one pass of
+    surround/height/wide channels.
     """
     first = compare_rendered_surround_to_stereo_reference(
         stereo_render_file=stereo_render_file,

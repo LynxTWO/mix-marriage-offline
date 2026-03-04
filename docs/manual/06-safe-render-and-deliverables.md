@@ -17,6 +17,15 @@ mmo safe-render --report out/report.json --render-many --render-many-targets ste
 Baseline outputs are always produced.
 Even when zero recommendations are render-eligible, safe-render writes a conservative baseline WAV master for supported layout targets.
 
+One scene, many targets.
+MMO can render a single layout-agnostic scene into 2.0, 5.1, 7.1, 7.1.4, and 9.1.6.
+Conservative placement rules keep kick/snare/bass anchors front-safe by default, while ambience and bed-like stems can receive modest surround spread and subtle height sends on immersive targets.
+
+Requesting “in the middle of the band/orchestra”.
+Wrap-style transient placement is opt-in and evidence-gated.
+Use an explicit immersive marker (`IN_THE_MIDDLE`, `MIDDLE_OF_BAND`, `MIDDLE_OF_ORCHESTRA`) and keep width/depth/confidence high.
+Without both explicit intent and high evidence, anchors stay front-safe.
+
 Channel-ordering standards.
 MMO processes internally using SMPTE ordering.
 MMO can export in SMPTE, FILM, LOGIC_PRO, VST3, or AAF ordering.

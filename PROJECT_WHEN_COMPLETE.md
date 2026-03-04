@@ -183,6 +183,9 @@ What remains: add the explicit baked-pan/baked-width stereo fixture that validat
 - [x] `safe-render` always produces baseline WAV outputs for supported
   2.0/5.1/7.1/7.1.4/9.1.6 layout targets, even when no recommendations are
   render-eligible.
+- [x] Scene-driven placement rendering supports one layout-agnostic scene
+  feeding conservative `2.0/5.1/7.1/7.1.4/9.1.6` outputs with explicit
+  immersive-intent gating for transient wrap behavior.
 - [x] `safe-render` never reports zero-output renderer stages as success:
   it emits `ISSUE.RENDER.NO_OUTPUTS` and exits non-zero by default unless
   `--allow-empty-outputs` is explicitly set.

@@ -25,9 +25,14 @@ Non-negotiables:
 - Keep safe-render baseline mixdown deterministic: supported
   2.0/5.1/7.1/7.1.4/9.1.6 targets must still emit conservative WAV masters
   when recommendations are not render-eligible.
+- Keep scene-driven placement mixdown deterministic when enabled: one
+  layout-agnostic scene should render conservative 2.0/5.1/7.1/7.1.4/9.1.6
+  outputs with front-safe anchors unless explicit immersive intent + high
+  evidence allows transient wrap.
 - Keep render-many surround similarity gating deterministic: compare stereo
-  renders against downmix(rendered 5.1/7.1), and if gates fail, allow only a
-  single bounded surround-send reduction retry before final pass/fail logging.
+  renders against downmix(rendered surround/immersive), and if gates fail,
+  allow only a single bounded backoff retry (surround/height/wide channels)
+  before final pass/fail logging.
 - Keep safe-render zero-output behavior fail-safe: emit
   `ISSUE.RENDER.NO_OUTPUTS` and return non-zero by default unless
   `--allow-empty-outputs` is explicitly set.

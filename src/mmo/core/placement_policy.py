@@ -12,6 +12,8 @@ _SUPPORTED_LAYOUT_IDS: frozenset[str] = frozenset({
     "LAYOUT.2_0",
     "LAYOUT.5_1",
     "LAYOUT.7_1",
+    "LAYOUT.7_1_4",
+    "LAYOUT.9_1_6",
 })
 
 _FRONT_LEFT = "SPK.L"
@@ -21,6 +23,14 @@ _SIDE_LEFT = "SPK.LS"
 _SIDE_RIGHT = "SPK.RS"
 _REAR_LEFT = "SPK.LRS"
 _REAR_RIGHT = "SPK.RRS"
+_WIDE_LEFT = "SPK.LW"
+_WIDE_RIGHT = "SPK.RW"
+_TOP_FRONT_LEFT = "SPK.TFL"
+_TOP_FRONT_RIGHT = "SPK.TFR"
+_TOP_REAR_LEFT = "SPK.TRL"
+_TOP_REAR_RIGHT = "SPK.TRR"
+_TOP_FRONT_CENTER = "SPK.TFC"
+_TOP_BACK_CENTER = "SPK.TBC"
 
 _LOCK_NO_STEREO_WIDENING = "LOCK.NO_STEREO_WIDENING"
 _LOCK_PRESERVE_CENTER_IMAGE = "LOCK.PRESERVE_CENTER_IMAGE"
@@ -375,6 +385,46 @@ def _set_surround(
         gains[_REAR_RIGHT] = _round_gain(rear_gain)
 
 
+def _set_wides(gains: dict[str, float], wide_gain: float) -> None:
+    if _WIDE_LEFT in gains:
+        gains[_WIDE_LEFT] = _round_gain(wide_gain)
+    if _WIDE_RIGHT in gains:
+        gains[_WIDE_RIGHT] = _round_gain(wide_gain)
+
+
+def _set_heights(
+    gains: dict[str, float],
+    *,
+    top_front_gain: float,
+    top_rear_gain: float,
+    top_center_gains: tuple[float, float] | None = None,
+) -> None:
+    if _TOP_FRONT_LEFT in gains:
+        gains[_TOP_FRONT_LEFT] = _round_gain(top_front_gain)
+    if _TOP_FRONT_RIGHT in gains:
+        gains[_TOP_FRONT_RIGHT] = _round_gain(top_front_gain)
+    if _TOP_REAR_LEFT in gains:
+        gains[_TOP_REAR_LEFT] = _round_gain(top_rear_gain)
+    if _TOP_REAR_RIGHT in gains:
+        gains[_TOP_REAR_RIGHT] = _round_gain(top_rear_gain)
+    if top_center_gains is None:
+        return
+    top_front_center, top_back_center = top_center_gains
+    if _TOP_FRONT_CENTER in gains:
+        gains[_TOP_FRONT_CENTER] = _round_gain(top_front_center)
+    if _TOP_BACK_CENTER in gains:
+        gains[_TOP_BACK_CENTER] = _round_gain(top_back_center)
+
+
+def _immersive_channel_send_cap(value: float) -> float:
+    if value < 0.0:
+        return 0.0
+    # Conservative default cap for first-pass immersive widening.
+    if value > 0.12:
+        return 0.12
+    return value
+
+
 def _measurement_surround_wrap_allowed(
     *,
     confidence: float,
@@ -447,6 +497,10 @@ def _stem_send(
     center_gain = 0.0
     side_gain = 0.0
     rear_gain = 0.0
+    wide_gain = 0.0
+    top_front_gain = 0.0
+    top_rear_gain = 0.0
+    top_center_gains: tuple[float, float] | None = None
     notes: list[str] = []
 
     if _is_anchor_transient(role_id):
@@ -460,10 +514,12 @@ def _stem_send(
             immersive_intent=anchor_wrap_intent,
         ):
             policy_class = "ANCHOR.TRANSIENT_SURROUND_WRAP_MEASURED"
-            front_gain = 0.32
-            side_gain = 0.34
-            rear_gain = 0.24
+            front_gain = 0.4
+            side_gain = 0.27
+            rear_gain = 0.17
+            wide_gain = 0.12
             notes.append("measurement_gated_surround_wrap")
+            notes.append("immersive_wrap_front_preserved")
         elif (
             confidence >= 0.9
             and width_hint >= 0.9
@@ -489,6 +545,15 @@ def _stem_send(
         spread = 0.22 * (0.6 + (0.4 * width_hint)) * (0.65 + (0.35 * confidence))
         side_gain = spread
         rear_gain = spread * 0.72
+        wide_gain = _immersive_channel_send_cap(side_gain * 0.75)
+        top_front_gain = _immersive_channel_send_cap(side_gain * 0.5)
+        top_rear_gain = _immersive_channel_send_cap(top_front_gain * 0.86)
+        top_center_gains = (
+            _immersive_channel_send_cap(top_front_gain * 0.75),
+            _immersive_channel_send_cap(top_rear_gain * 0.75),
+        )
+        if top_front_gain > 0.0:
+            notes.append("ambient_height_send_enabled")
     elif _is_percussion_role(role_id, tokens):
         policy_class = "PERCUSSION.TINY_SURROUND"
         front_gain = 0.72
@@ -502,24 +567,33 @@ def _stem_send(
     else:
         policy_class = "FRONT.DEFAULT_SAFE"
         front_gain = 0.74
-        if width_hint >= 0.85 and confidence >= 0.9:
-            side_gain = 0.035
-            rear_gain = 0.02
-            notes.append("minimal_surround_send_high_confidence")
+        notes.append("front_safe_default")
 
     if _LOCK_NO_STEREO_WIDENING in effective_locks:
         side_gain = 0.0
         rear_gain = 0.0
+        wide_gain = 0.0
+        top_front_gain = 0.0
+        top_rear_gain = 0.0
+        top_center_gains = (0.0, 0.0)
         notes.append("surround_send_disabled_by_lock_no_stereo_widening")
 
     if _LOCK_PRESERVE_TRANSIENTS in effective_locks and _is_anchor_transient(role_id):
         side_gain = 0.0
         rear_gain = 0.0
+        wide_gain = 0.0
+        top_front_gain = 0.0
+        top_rear_gain = 0.0
+        top_center_gains = (0.0, 0.0)
         notes.append("transient_anchor_front_safety_lock")
 
     if _LOCK_PRESERVE_TRANSIENTS in effective_locks and _is_percussion_role(role_id, tokens):
         side_gain = 0.0
         rear_gain = 0.0
+        wide_gain = 0.0
+        top_front_gain = 0.0
+        top_rear_gain = 0.0
+        top_center_gains = (0.0, 0.0)
         notes.append("percussion_surround_send_disabled_preserve_transients")
 
     if _LOCK_PRESERVE_CENTER_IMAGE in effective_locks and _CENTER in channel_order:
@@ -559,6 +633,13 @@ def _stem_send(
     _set_front(gains, front_gain)
     _set_center(gains, center_gain)
     _set_surround(gains, side_gain=side_gain, rear_gain=rear_gain)
+    _set_wides(gains, wide_gain)
+    _set_heights(
+        gains,
+        top_front_gain=top_front_gain,
+        top_rear_gain=top_rear_gain,
+        top_center_gains=top_center_gains,
+    )
 
     return {
         "stem_id": stem_id,
@@ -586,6 +667,9 @@ def _has_policy_signals(objects: list[dict[str, Any]]) -> bool:
         if role_id or group_bus:
             return True
         if "width_hint" in obj or "depth_hint" in obj:
+            return True
+        intent = obj.get("intent")
+        if isinstance(intent, dict) and ("width" in intent or "depth" in intent):
             return True
     return False
 
@@ -682,6 +766,7 @@ def build_render_intent(
                 "Measured surround-wrap exception requires explicit immersive "
                 "intent plus high width/depth/confidence evidence."
             ),
+            "Ambient roles may receive subtle surround/height sends in immersive layouts.",
             "LFE sends remain zero by default (manual/explicit only).",
         ],
     }

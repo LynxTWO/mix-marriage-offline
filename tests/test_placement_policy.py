@@ -41,7 +41,7 @@ class TestPlacementPolicy(unittest.TestCase):
 
     def test_returns_none_for_unsupported_layout(self) -> None:
         scene = _load_fixture_scene()
-        self.assertIsNone(build_render_intent(scene, "LAYOUT.7_1_4"))
+        self.assertIsNone(build_render_intent(scene, "LAYOUT.5_1_2"))
 
     def test_2_0_is_front_only(self) -> None:
         scene = _load_fixture_scene()
@@ -208,6 +208,44 @@ class TestPlacementPolicy(unittest.TestCase):
         self.assertGreater(amb["SPK.RS"], 0.0)
         self.assertGreater(amb["SPK.LRS"], 0.0)
         self.assertGreater(amb["SPK.RRS"], 0.0)
+
+    def test_7_1_4_adds_subtle_height_for_ambient_only(self) -> None:
+        scene = _load_fixture_scene()
+        render_intent = build_render_intent(scene, "LAYOUT.7_1_4")
+        self.assertIsInstance(render_intent, dict)
+        if not isinstance(render_intent, dict):
+            return
+
+        by_stem = _stem_by_id(render_intent)
+        amb = by_stem["STEM.AMB"]["gains"]
+        pad = by_stem["STEM.PAD"]["gains"]
+        kick = by_stem["STEM.KICK"]["gains"]
+        snare = by_stem["STEM.SNARE"]["gains"]
+
+        for speaker_id in ("SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR"):
+            self.assertGreater(amb[speaker_id], 0.0)
+            self.assertGreater(pad[speaker_id], 0.0)
+            self.assertEqual(kick[speaker_id], 0.0)
+            self.assertEqual(snare[speaker_id], 0.0)
+
+        self.assertLess(amb["SPK.TFL"], amb["SPK.LS"])
+        self.assertLess(amb["SPK.TFR"], amb["SPK.RS"])
+
+    def test_9_1_6_adds_wides_for_ambient_not_anchor(self) -> None:
+        scene = _load_fixture_scene()
+        render_intent = build_render_intent(scene, "LAYOUT.9_1_6")
+        self.assertIsInstance(render_intent, dict)
+        if not isinstance(render_intent, dict):
+            return
+
+        by_stem = _stem_by_id(render_intent)
+        amb = by_stem["STEM.AMB"]["gains"]
+        kick = by_stem["STEM.KICK"]["gains"]
+
+        self.assertGreater(amb["SPK.LW"], 0.0)
+        self.assertGreater(amb["SPK.RW"], 0.0)
+        self.assertEqual(kick["SPK.LW"], 0.0)
+        self.assertEqual(kick["SPK.RW"], 0.0)
 
     def test_bus_gain_staging_is_present_and_deterministic(self) -> None:
         scene = _load_fixture_scene()
