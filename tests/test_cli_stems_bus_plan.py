@@ -32,7 +32,11 @@ def _schema_validator(schema_path: Path) -> jsonschema.Draft202012Validator:
         if isinstance(schema_id, str) and schema_id:
             registry = registry.with_resource(schema_id, resource)
     root_schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    return jsonschema.Draft202012Validator(root_schema, registry=registry)
+    try:
+        return jsonschema.Draft202012Validator(root_schema, registry=registry)
+    except TypeError:
+        # jsonschema<4.22 does not accept a registry kwarg.
+        return jsonschema.Draft202012Validator(root_schema)
 
 
 class TestCliStemsBusPlan(unittest.TestCase):
@@ -58,6 +62,8 @@ class TestCliStemsBusPlan(unittest.TestCase):
 
             _write_tiny_wav(stems_dir / "Kick1.wav")
             _write_tiny_wav(stems_dir / "Snare1.wav")
+            _write_tiny_wav(stems_dir / "Crash1.wav")
+            _write_tiny_wav(stems_dir / "BassDI.wav")
             _write_tiny_wav(stems_dir / "Synth01.wav")
             _write_tiny_wav(stems_dir / "SFX1.wav")
 
@@ -110,12 +116,48 @@ class TestCliStemsBusPlan(unittest.TestCase):
                 "BUS.DRUMS.SNARE",
             )
             self.assertEqual(
+                by_file_path["stems/Crash1.wav"]["bus_id"],
+                "BUS.DRUMS.CYMBALS",
+            )
+            self.assertEqual(
+                by_file_path["stems/BassDI.wav"]["bus_id"],
+                "BUS.BASS",
+            )
+            self.assertEqual(
                 by_file_path["stems/Synth01.wav"]["bus_id"],
                 "BUS.MUSIC.SYNTH",
             )
             self.assertEqual(
                 by_file_path["stems/SFX1.wav"]["bus_id"],
                 "BUS.FX.SFX",
+            )
+
+            buses = bus_plan_payload.get("buses")
+            self.assertIsInstance(buses, list)
+            if not isinstance(buses, list):
+                return
+            by_bus_id = {
+                item.get("bus_id"): item
+                for item in buses
+                if isinstance(item, dict) and isinstance(item.get("bus_id"), str)
+            }
+            self.assertIn("BUS.MASTER", by_bus_id)
+            self.assertEqual(by_bus_id["BUS.MASTER"].get("parent_id"), None)
+            master_children = by_bus_id["BUS.MASTER"].get("children_ids")
+            self.assertIsInstance(master_children, list)
+            if isinstance(master_children, list):
+                self.assertIn("BUS.DRUMS", master_children)
+                self.assertIn("BUS.BASS", master_children)
+                self.assertIn("BUS.MUSIC", master_children)
+                self.assertIn("BUS.FX", master_children)
+
+            self.assertEqual(
+                by_file_path["stems/Kick1.wav"]["bus_path"],
+                "BUS.MASTER/BUS.DRUMS/BUS.DRUMS.KICK",
+            )
+            self.assertEqual(
+                by_file_path["stems/BassDI.wav"]["bus_path"],
+                "BUS.MASTER/BUS.BASS",
             )
 
             self.assertTrue(bus_plan_csv_path.exists())

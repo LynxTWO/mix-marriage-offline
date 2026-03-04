@@ -37,6 +37,9 @@ except Exception:  # pragma: no cover - dependency/runtime environment specific
 
 _DEFAULT_PROFILE_ID = "PROFILE.ASSIST"
 _DEFAULT_GUI_WORKSPACE = "_mmo_gui"
+_DEFAULT_GUI_STEMS_MAP = "stems_map.json"
+_DEFAULT_GUI_BUS_PLAN = "bus_plan.json"
+_DEFAULT_GUI_BUS_PLAN_CSV = "bus_plan.summary.csv"
 _DEFAULT_RENDER_MANY_TARGET_IDS: tuple[str, ...] = (
     "TARGET.STEREO.2_0",
     "TARGET.SURROUND.5_1",
@@ -362,6 +365,166 @@ def build_analyze_cli_argv(
         "--profile",
         config.profile_id,
     ]
+
+
+def gui_stems_map_path(workspace_dir: Path) -> Path:
+    return workspace_dir / _DEFAULT_GUI_STEMS_MAP
+
+
+def gui_bus_plan_path(workspace_dir: Path) -> Path:
+    return workspace_dir / _DEFAULT_GUI_BUS_PLAN
+
+
+def gui_bus_plan_csv_path(workspace_dir: Path) -> Path:
+    return workspace_dir / _DEFAULT_GUI_BUS_PLAN_CSV
+
+
+def build_stems_classify_cli_argv(
+    config: GuiRunConfig,
+    *,
+    workspace_dir: Path,
+) -> list[str]:
+    return [
+        "stems",
+        "classify",
+        "--root",
+        _as_posix(config.stems_dir),
+        "--out",
+        _as_posix(gui_stems_map_path(workspace_dir)),
+    ]
+
+
+def build_stems_bus_plan_cli_argv(
+    *,
+    workspace_dir: Path,
+) -> list[str]:
+    return [
+        "stems",
+        "bus-plan",
+        "--map",
+        _as_posix(gui_stems_map_path(workspace_dir)),
+        "--out",
+        _as_posix(gui_bus_plan_path(workspace_dir)),
+        "--csv",
+        _as_posix(gui_bus_plan_csv_path(workspace_dir)),
+    ]
+
+
+def _bus_plan_count_items(counts_payload: Any) -> tuple[tuple[str, int], ...]:
+    if not isinstance(counts_payload, Mapping):
+        return ()
+    rows: list[tuple[str, int]] = []
+    for raw_key, raw_value in counts_payload.items():
+        if not isinstance(raw_key, str):
+            continue
+        if not isinstance(raw_value, int):
+            continue
+        rows.append((raw_key, raw_value))
+    return tuple(sorted(rows, key=lambda row: row[0]))
+
+
+def bus_plan_role_count_items(bus_plan_payload: Mapping[str, Any]) -> tuple[tuple[str, int], ...]:
+    summary_payload = bus_plan_payload.get("summary")
+    if not isinstance(summary_payload, Mapping):
+        return ()
+    return _bus_plan_count_items(summary_payload.get("role_counts"))
+
+
+def bus_plan_tree_lines(bus_plan_payload: Mapping[str, Any]) -> tuple[str, ...]:
+    buses_payload = bus_plan_payload.get("buses")
+    if not isinstance(buses_payload, list):
+        return ()
+
+    ordered_bus_ids: list[str] = []
+    bus_by_id: dict[str, Mapping[str, Any]] = {}
+    parent_by_id: dict[str, str | None] = {}
+    children_by_id: dict[str, tuple[str, ...]] = {}
+
+    for row in buses_payload:
+        if not isinstance(row, Mapping):
+            continue
+        bus_id = row.get("bus_id")
+        if not isinstance(bus_id, str) or not bus_id.strip():
+            continue
+        cleaned_bus_id = bus_id.strip()
+        ordered_bus_ids.append(cleaned_bus_id)
+        bus_by_id[cleaned_bus_id] = row
+
+    for bus_id in ordered_bus_ids:
+        row = bus_by_id[bus_id]
+        raw_parent = row.get("parent_id")
+        parent_id = raw_parent.strip() if isinstance(raw_parent, str) and raw_parent.strip() else None
+        parent_by_id[bus_id] = parent_id
+
+        raw_children = row.get("children_ids")
+        if isinstance(raw_children, list):
+            children = tuple(
+                child.strip()
+                for child in raw_children
+                if isinstance(child, str) and child.strip()
+            )
+        else:
+            children = ()
+        children_by_id[bus_id] = children
+
+    root_ids = [
+        bus_id
+        for bus_id in ordered_bus_ids
+        if parent_by_id.get(bus_id) is None
+    ]
+    if not root_ids:
+        root_ids = ordered_bus_ids[:]
+
+    lines: list[str] = []
+    visited: set[str] = set()
+
+    def _walk(bus_id: str, depth: int) -> None:
+        if bus_id in visited:
+            return
+        visited.add(bus_id)
+        row = bus_by_id.get(bus_id)
+        if row is None:
+            return
+        raw_stem_ids = row.get("stem_ids")
+        stem_count = (
+            len([item for item in raw_stem_ids if isinstance(item, str)])
+            if isinstance(raw_stem_ids, list)
+            else 0
+        )
+        indent = "  " * max(depth, 0)
+        lines.append(f"{indent}- {bus_id} ({stem_count} stems)")
+        for child_id in children_by_id.get(bus_id, ()):
+            if child_id in bus_by_id:
+                _walk(child_id, depth + 1)
+
+    for root_id in root_ids:
+        _walk(root_id, depth=0)
+
+    for bus_id in ordered_bus_ids:
+        if bus_id not in visited:
+            _walk(bus_id, depth=0)
+
+    return tuple(lines)
+
+
+def render_bus_plan_summary_text(bus_plan_payload: Mapping[str, Any]) -> str:
+    role_items = bus_plan_role_count_items(bus_plan_payload)
+    tree_rows = bus_plan_tree_lines(bus_plan_payload)
+
+    lines = ["Role counts:"]
+    if role_items:
+        for role_id, count in role_items:
+            lines.append(f"- {role_id}: {count}")
+    else:
+        lines.append("- (none)")
+
+    lines.append("")
+    lines.append("Bus tree:")
+    if tree_rows:
+        lines.extend(tree_rows)
+    else:
+        lines.append("- (none)")
+    return "\n".join(lines)
 
 
 def build_watch_cli_argv(
@@ -1259,6 +1422,14 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
 
         self.after(0, _apply)
 
+    def _set_bus_plan_summary_threadsafe(self, summary_text: str) -> None:
+        def _apply() -> None:
+            if self._dashboard_panel is None:
+                return
+            self._dashboard_panel.set_bus_plan_summary(summary_text)
+
+        self.after(0, _apply)
+
     def _set_running_threadsafe(self, running: bool) -> None:
         def _apply() -> None:
             self._run_button.configure(state="disabled" if running else "normal")
@@ -1400,6 +1571,9 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         self._set_status_threadsafe(status_text)
         self._set_progress_threadsafe(0.0)
         self._set_warning_banner_threadsafe(show=False)
+        self._set_bus_plan_summary_threadsafe(
+            "Role counts:\n- (pending analyze)\n\nBus tree:\n- (pending analyze)"
+        )
         workspace_dir = config.out_dir / _DEFAULT_GUI_WORKSPACE
         workspace_dir.mkdir(parents=True, exist_ok=True)
         self._cancel_file_path = build_pipeline_paths(workspace_dir).cancel_token_path
@@ -1603,6 +1777,49 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
                 self._set_status_threadsafe("Analyze failed. Check live log.")
                 return
             self._set_progress_threadsafe(0.15)
+
+            self._set_status_threadsafe("Analyze complete. Classifying stems...")
+            classify_argv = build_stems_classify_cli_argv(
+                config,
+                workspace_dir=workspace_dir,
+            )
+            classify_rc = self._run_command(classify_argv, stage="stems-classify")
+            if classify_rc != 0 and self._cancel_requested():
+                self._set_status_threadsafe("Cancelled during stems classification.")
+                return
+            if classify_rc != 0:
+                self._set_status_threadsafe("Stems classification failed. Check live log.")
+                return
+
+            self._set_status_threadsafe("Building deterministic bus plan...")
+            bus_plan_argv = build_stems_bus_plan_cli_argv(workspace_dir=workspace_dir)
+            bus_plan_rc = self._run_command(bus_plan_argv, stage="stems-bus-plan")
+            if bus_plan_rc != 0 and self._cancel_requested():
+                self._set_status_threadsafe("Cancelled during bus plan generation.")
+                return
+            if bus_plan_rc != 0:
+                self._set_status_threadsafe("Bus plan generation failed. Check live log.")
+                return
+
+            bus_plan_out_path = gui_bus_plan_path(workspace_dir)
+            if not bus_plan_out_path.exists():
+                self._set_status_threadsafe("Bus plan artifact missing after generation.")
+                return
+            try:
+                bus_plan_payload = json.loads(bus_plan_out_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                self._set_status_threadsafe("Bus plan artifact is unreadable.")
+                return
+            if not isinstance(bus_plan_payload, Mapping):
+                self._set_status_threadsafe("Bus plan artifact is invalid.")
+                return
+            bus_summary = render_bus_plan_summary_text(bus_plan_payload)
+            self._set_bus_plan_summary_threadsafe(bus_summary)
+            for line in bus_summary.splitlines():
+                log_line = line if line else "-"
+                self._append_log_threadsafe(f"[BUS.PLAN] {log_line}")
+            self._set_status_threadsafe("Analyze complete. Bus plan ready.")
+            self._set_progress_threadsafe(0.2)
 
             dry_rc = self._run_command(dry_run_argv, stage="safe-render(dry)")
             if dry_rc != 0 and self._cancel_requested():

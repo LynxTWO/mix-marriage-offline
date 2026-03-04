@@ -4,6 +4,7 @@ from typing import Any
 
 BUS_PLAN_SCHEMA = "mmo.bus_plan.v1"
 DEFAULT_GENERATED_UTC = "1970-01-01T00:00:00Z"
+_MASTER_BUS_ID = "BUS.MASTER"
 
 _MAIN_GROUP_ORDER: tuple[str, ...] = (
     "DRUMS",
@@ -113,7 +114,7 @@ def _drum_consolidation_bus(role_id: str) -> str | None:
         "ROLE.DRUM.CYMBALS",
         "ROLE.DRUM.OVERHEADS",
     }:
-        return "BUS.DRUMS.CYMS"
+        return "BUS.DRUMS.CYMBALS"
     return None
 
 
@@ -130,12 +131,18 @@ def _bus_id_for_assignment(
                 return "BUS.VOX"
             if group_candidate in {"SFX", "FX"}:
                 return "BUS.FX"
+            if group_candidate == "MASTER":
+                return _MASTER_BUS_ID
             if group_candidate in {"DRUMS", "BASS", "MUSIC"}:
                 return f"BUS.{group_candidate}"
 
     drum_bus = _drum_consolidation_bus(role_id)
     if drum_bus is not None:
         return drum_bus
+
+    # Bass stems are collapsed to one deterministic group bus.
+    if role_id.startswith("ROLE.BASS."):
+        return "BUS.BASS"
 
     group = _group_for_role(role_id, role_entry, assignment)
     suffix = _role_suffix(role_id)
@@ -164,6 +171,8 @@ def _assignment_sort_key(item: dict[str, Any]) -> tuple[int, int, str, str]:
 
 
 def _bus_sort_key(bus_id: str) -> tuple[int, int, str, str]:
+    if bus_id == _MASTER_BUS_ID:
+        return (-1, 0, "MASTER", bus_id)
     parts = bus_id.split(".")
     group = parts[1] if len(parts) > 1 else "OTHER"
     group_rank = _GROUP_SORT_RANK.get(group, len(_GROUP_SORT_RANK))
@@ -173,10 +182,12 @@ def _bus_sort_key(bus_id: str) -> tuple[int, int, str, str]:
 
 
 def _bus_path(bus_id: str) -> str:
-    if bus_id.count(".") == 1:
+    if bus_id == _MASTER_BUS_ID:
         return bus_id
+    if bus_id.count(".") == 1:
+        return f"{_MASTER_BUS_ID}/{bus_id}"
     group = bus_id.split(".")[1]
-    return f"BUS.{group}/{bus_id}"
+    return f"{_MASTER_BUS_ID}/BUS.{group}/{bus_id}"
 
 
 def build_bus_plan(stems_map: dict[str, Any], roles: dict[str, Any]) -> dict[str, Any]:
@@ -196,8 +207,12 @@ def build_bus_plan(stems_map: dict[str, Any], roles: dict[str, Any]) -> dict[str
 
     role_entries = _role_lookup(roles)
 
-    bus_to_stems: dict[str, list[str]] = {}
-    bus_children: dict[str, set[str]] = {}
+    bus_to_stems: dict[str, list[str]] = {
+        _MASTER_BUS_ID: [],
+    }
+    bus_children: dict[str, set[str]] = {
+        _MASTER_BUS_ID: set(),
+    }
     assignment_rows: list[dict[str, Any]] = []
     role_ids_for_counts: list[str] = []
     bus_ids_for_counts: list[str] = []
@@ -215,21 +230,25 @@ def build_bus_plan(stems_map: dict[str, Any], roles: dict[str, Any]) -> dict[str
 
         role_entry = role_entries.get(role_id)
         bus_id = _bus_id_for_assignment(role_id, role_entry, assignment)
-        parent_id = bus_id if bus_id.count(".") == 1 else "BUS." + bus_id.split(".")[1]
+        group_bus_id = bus_id if bus_id.count(".") == 1 else "BUS." + bus_id.split(".")[1]
 
-        if parent_id not in bus_to_stems:
-            bus_to_stems[parent_id] = []
+        if group_bus_id not in bus_to_stems:
+            bus_to_stems[group_bus_id] = []
         if bus_id not in bus_to_stems:
             bus_to_stems[bus_id] = []
 
-        bus_to_stems[parent_id].append(stem_id)
-        if bus_id != parent_id:
+        bus_to_stems[_MASTER_BUS_ID].append(stem_id)
+        if group_bus_id != _MASTER_BUS_ID:
+            bus_to_stems[group_bus_id].append(stem_id)
+        if bus_id != group_bus_id:
             bus_to_stems[bus_id].append(stem_id)
 
-        if parent_id not in bus_children:
-            bus_children[parent_id] = set()
-        if bus_id != parent_id:
-            bus_children[parent_id].add(bus_id)
+        if group_bus_id not in bus_children:
+            bus_children[group_bus_id] = set()
+        if group_bus_id != _MASTER_BUS_ID:
+            bus_children[_MASTER_BUS_ID].add(group_bus_id)
+        if bus_id != group_bus_id:
+            bus_children[group_bus_id].add(bus_id)
 
         assignment_rows.append(
             {
@@ -253,8 +272,10 @@ def build_bus_plan(stems_map: dict[str, Any], roles: dict[str, Any]) -> dict[str
     for bus_id in ordered_bus_ids:
         parts = bus_id.split(".")
         parent_id: str | None
-        if len(parts) == 2:
+        if bus_id == _MASTER_BUS_ID:
             parent_id = None
+        elif len(parts) == 2:
+            parent_id = _MASTER_BUS_ID
         else:
             parent_id = "BUS." + parts[1]
 

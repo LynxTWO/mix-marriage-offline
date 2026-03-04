@@ -185,7 +185,11 @@ def _validate_json_payload(
         )
         raise SystemExit(1)
 
-    validator = jsonschema.Draft202012Validator(schema, registry=registry)
+    try:
+        validator = jsonschema.Draft202012Validator(schema, registry=registry)
+    except TypeError:
+        # jsonschema<4.22 does not accept a registry kwarg.
+        validator = jsonschema.Draft202012Validator(schema)
     errors = sorted(validator.iter_errors(payload), key=lambda err: list(err.path))
     if not errors:
         return

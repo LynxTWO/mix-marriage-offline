@@ -21,7 +21,11 @@ def _schema_validator(schema_path: Path) -> jsonschema.Draft202012Validator:
         if isinstance(schema_id, str) and schema_id:
             registry = registry.with_resource(schema_id, resource)
     root_schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    return jsonschema.Draft202012Validator(root_schema, registry=registry)
+    try:
+        return jsonschema.Draft202012Validator(root_schema, registry=registry)
+    except TypeError:
+        # jsonschema<4.22 does not accept a registry kwarg.
+        return jsonschema.Draft202012Validator(root_schema)
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]

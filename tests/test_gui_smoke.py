@@ -19,14 +19,22 @@ from mmo.gui.main import (
     _try_cli_passthrough,
     GuiPipelinePaths,
     GuiRunConfig,
+    build_stems_bus_plan_cli_argv,
+    build_stems_classify_cli_argv,
     build_plugin_discover_cards,
     build_pipeline_cli_argvs,
     build_safe_render_cli_argv,
     build_watch_cli_argv,
+    bus_plan_tree_lines,
+    bus_plan_role_count_items,
+    gui_bus_plan_csv_path,
+    gui_bus_plan_path,
+    gui_stems_map_path,
     has_high_risk_blocked_recommendations,
     has_no_outputs_issue,
     main as gui_main,
     normalize_render_many_layout_ids,
+    render_bus_plan_summary_text,
     render_target_layout_map,
 )
 
@@ -178,6 +186,107 @@ class TestGuiSmoke(unittest.TestCase):
             )
             self.assertIn("--visual-queue", argv)
             self.assertIn("--cinematic-progress", argv)
+
+    def test_post_analyze_cli_args_write_bus_plan_artifacts_in_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            temp_root = Path(td)
+            config = GuiRunConfig(
+                stems_dir=temp_root / "stems",
+                out_dir=temp_root / "out",
+                target_id="TARGET.STEREO.2_0",
+                render_many=False,
+                render_many_target_ids=(),
+                layout_standard="SMPTE",
+                preview_headphones=False,
+                plugins_dir=_PLUGINS_DIR,
+            )
+            workspace = temp_root / "_mmo_gui"
+
+            classify_argv = build_stems_classify_cli_argv(config, workspace_dir=workspace)
+            bus_plan_argv = build_stems_bus_plan_cli_argv(workspace_dir=workspace)
+
+            self.assertEqual(
+                classify_argv,
+                [
+                    "stems",
+                    "classify",
+                    "--root",
+                    config.stems_dir.resolve().as_posix(),
+                    "--out",
+                    gui_stems_map_path(workspace).resolve().as_posix(),
+                ],
+            )
+            self.assertEqual(
+                bus_plan_argv,
+                [
+                    "stems",
+                    "bus-plan",
+                    "--map",
+                    gui_stems_map_path(workspace).resolve().as_posix(),
+                    "--out",
+                    gui_bus_plan_path(workspace).resolve().as_posix(),
+                    "--csv",
+                    gui_bus_plan_csv_path(workspace).resolve().as_posix(),
+                ],
+            )
+
+    def test_bus_plan_summary_render_includes_role_counts_and_tree(self) -> None:
+        payload = {
+            "summary": {
+                "role_counts": {
+                    "ROLE.BASS.DI": 1,
+                    "ROLE.DRUM.KICK": 2,
+                }
+            },
+            "buses": [
+                {
+                    "bus_id": "BUS.MASTER",
+                    "parent_id": None,
+                    "children_ids": ["BUS.BASS", "BUS.DRUMS"],
+                    "stem_ids": ["STEMFILE.0000000001", "STEMFILE.0000000002", "STEMFILE.0000000003"],
+                },
+                {
+                    "bus_id": "BUS.BASS",
+                    "parent_id": "BUS.MASTER",
+                    "children_ids": [],
+                    "stem_ids": ["STEMFILE.0000000003"],
+                },
+                {
+                    "bus_id": "BUS.DRUMS",
+                    "parent_id": "BUS.MASTER",
+                    "children_ids": ["BUS.DRUMS.KICK"],
+                    "stem_ids": ["STEMFILE.0000000001", "STEMFILE.0000000002"],
+                },
+                {
+                    "bus_id": "BUS.DRUMS.KICK",
+                    "parent_id": "BUS.DRUMS",
+                    "children_ids": [],
+                    "stem_ids": ["STEMFILE.0000000001", "STEMFILE.0000000002"],
+                },
+            ],
+        }
+
+        self.assertEqual(
+            bus_plan_role_count_items(payload),
+            (
+                ("ROLE.BASS.DI", 1),
+                ("ROLE.DRUM.KICK", 2),
+            ),
+        )
+        self.assertEqual(
+            bus_plan_tree_lines(payload),
+            (
+                "- BUS.MASTER (3 stems)",
+                "  - BUS.BASS (1 stems)",
+                "  - BUS.DRUMS (2 stems)",
+                "    - BUS.DRUMS.KICK (2 stems)",
+            ),
+        )
+        summary_text = render_bus_plan_summary_text(payload)
+        self.assertIn("Role counts:", summary_text)
+        self.assertIn("- ROLE.DRUM.KICK: 2", summary_text)
+        self.assertIn("Bus tree:", summary_text)
+        self.assertIn("- BUS.MASTER (3 stems)", summary_text)
 
     def test_plugin_discover_cards_are_sorted_and_deterministic(self) -> None:
         payload = {

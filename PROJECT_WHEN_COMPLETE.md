@@ -218,6 +218,9 @@ What remains: make loudness-matched A/B compensation visible in report artifacts
 - [x] Web GUI includes a deterministic scene-intent top-down preview (5.1/7.1/7.1.4/9.1.6)
   showing labeled object dots with confidence, bed halo energy, and warnings for
   low-confidence intent rows or missing lock coverage.
+- [x] Desktop GUI Analyze immediately surfaces deterministic stems routing context:
+  `_mmo_gui/stems_map.json` + `_mmo_gui/bus_plan.json` (+ CSV summary) are generated,
+  and the Dashboard shows role counts with a hierarchical bus tree.
 - [ ] A GUI exists (local web app is fine) that exposes the same workflow as the CLI: validate → analyze → scene → render → results → compare.
 - [ ] GUI copy and structure follow the design system in ontology/gui_design.yaml (theme tokens, screen templates, and progressive disclosure).
 - [x] Any plugin/config UI is generated from JSON Schema with optional UI hints (example: x_mmo_ui or a dedicated ui_hints registry) so agents do not hand-build one-off forms.

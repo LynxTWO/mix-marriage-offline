@@ -865,6 +865,12 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
         self._engineer_mode = False
         self._active_theme_name: str = "Midnight Studio"
         self._active_theme: dict[str, str] = dict(_THEME)
+        self._bus_plan_summary_text = (
+            "Role counts:\n"
+            "- (pending analyze)\n\n"
+            "Bus tree:\n"
+            "- (pending analyze)"
+        )
 
         # Interactive 3D orbit state for speaker layout
         self._orbit_yaw: float = 32.0
@@ -913,6 +919,16 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             self._telemetry,
             mood_line=cleaned,
         )
+
+    def set_bus_plan_summary(self, text: str) -> None:
+        cleaned = text.strip()
+        if not cleaned:
+            cleaned = "Role counts:\n- (none)\n\nBus tree:\n- (none)"
+        self._bus_plan_summary_text = cleaned
+        self._bus_plan_box.configure(state="normal")
+        self._bus_plan_box.delete("1.0", "end")
+        self._bus_plan_box.insert("end", cleaned)
+        self._bus_plan_box.configure(state="disabled")
 
     def ingest_live_payload(self, payload: Mapping[str, Any]) -> None:
         confidence = _clamp(
@@ -992,6 +1008,11 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
         for canvas in self._canvas_widgets:
             canvas.configure(bg=theme["panel"])
         self._title.configure(text_color=theme["accent_hot"])
+        self._bus_plan_box.configure(
+            fg_color=theme["panel"],
+            border_color=theme["surface_edge"],
+            text_color=theme["text"],
+        )
 
     def _theme_risk_color(self, risk: str) -> str:
         return {
@@ -1135,6 +1156,27 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
             sticky="w",
         )
 
+        self._bus_plan_box = ctk.CTkTextbox(
+            self.container,
+            height=130,
+            border_width=1,
+            border_color=_THEME["surface_edge"],
+            fg_color=_THEME["panel"],
+            text_color=_THEME["text"],
+            font=("JetBrains Mono", 11),
+        )
+        self._bus_plan_box.grid(
+            row=6,
+            column=0,
+            columnspan=2,
+            padx=12,
+            pady=(0, 8),
+            sticky="ew",
+        )
+        self._bus_plan_box.configure(state="normal")
+        self._bus_plan_box.insert("end", self._bus_plan_summary_text)
+        self._bus_plan_box.configure(state="disabled")
+
         self._engineer_box = ctk.CTkTextbox(
             self.container,
             height=108,
@@ -1198,7 +1240,7 @@ class VisualizationDashboardPanel:  # pragma: no cover - GUI runtime path
         self._engineer_mode = bool(self._engineer_switch.get())
         if self._engineer_mode:
             self._engineer_box.grid(
-                row=6,
+                row=7,
                 column=0,
                 columnspan=2,
                 padx=12,

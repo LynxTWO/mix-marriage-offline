@@ -183,11 +183,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     to build a schema-validated `mmo.bus_plan.v1` artifact from classified stems.
   - Added `src/mmo/core/bus_plan.py` with deterministic stem ordering, fixed main-bus group
     ordering (`DRUMS`, `BASS`, `MUSIC`, `VOX`, `FX`, `OTHER`), and drum consolidation rules
-    (`KICK`, `SNARE`, `TOMS`, `PERC`, `CYMS`).
+    (`KICK`, `SNARE`, `TOMS`, `PERC`, `CYMBALS`) under `BUS.MASTER`.
   - Added `schemas/bus_plan.schema.json` and packaged mirror
     `src/mmo/data/schemas/bus_plan.schema.json`.
   - Added end-to-end CLI coverage in `tests/test_cli_stems_bus_plan.py` validating schema
     compliance and expected bus assignments for kick/snare/synth/SFX stems.
+- GUI Analyze now emits and surfaces stems bus planning:
+  - Desktop GUI post-analyze stage now runs deterministic
+    `stems classify` and `stems bus-plan` into `_mmo_gui/`
+    (`stems_map.json`, `bus_plan.json`, `bus_plan.summary.csv`) before safe-render.
+  - Dashboard now shows a dedicated post-analyze `Role counts` + `Bus tree` panel,
+    and Live Log mirrors that summary for immediate review.
+  - Bus-plan hierarchy now includes `BUS.MASTER` as root, routes grouped buses under
+    that root, consolidates cymbals as `BUS.DRUMS.CYMBALS`, and collapses
+    `ROLE.BASS.*` to `BUS.BASS`.
+  - Added GUI smoke coverage for deterministic post-analyze CLI argv generation and
+    bus-plan summary rendering.
 - Scene intent scaffolding from stems artifacts:
   - Added `mmo scene build --map <stems_map.json> --bus <bus_plan.json> --out <scene.json> [--profile PROFILE.ASSIST]`
     to generate deterministic scene intent scaffolding from bus-plan inputs.

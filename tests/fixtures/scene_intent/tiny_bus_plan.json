@@ -1,8 +1,16 @@
 {
   "assignments": [
     {
+      "bus_id": "BUS.FX.REVERB",
+      "bus_path": "BUS.MASTER/BUS.FX/BUS.FX.REVERB",
+      "confidence": 0.8,
+      "file_path": "stems/HallVerbReturn.wav",
+      "role_id": "ROLE.FX.REVERB",
+      "stem_id": "STEMFILE.3333333333"
+    },
+    {
       "bus_id": "BUS.DRUMS.KICK",
-      "bus_path": "BUS.DRUMS/BUS.DRUMS.KICK",
+      "bus_path": "BUS.MASTER/BUS.DRUMS/BUS.DRUMS.KICK",
       "confidence": 0.99,
       "file_path": "stems/Kick.wav",
       "role_id": "ROLE.DRUM.KICK",
@@ -10,45 +18,56 @@
     },
     {
       "bus_id": "BUS.VOX.LEAD",
-      "bus_path": "BUS.VOX/BUS.VOX.LEAD",
+      "bus_path": "BUS.MASTER/BUS.VOX/BUS.VOX.LEAD",
       "confidence": 0.95,
       "file_path": "stems/LeadVox.wav",
       "role_id": "ROLE.VOCAL.LEAD",
       "stem_id": "STEMFILE.2222222222"
     },
     {
-      "bus_id": "BUS.FX.REVERB",
-      "bus_path": "BUS.FX/BUS.FX.REVERB",
-      "confidence": 0.8,
-      "file_path": "stems/HallVerbReturn.wav",
-      "role_id": "ROLE.FX.REVERB",
-      "stem_id": "STEMFILE.3333333333"
-    },
-    {
-      "bus_id": "BUS.MUSIC.SYNTH",
-      "bus_path": "BUS.MUSIC/BUS.MUSIC.SYNTH",
-      "confidence": 0.74,
-      "file_path": "stems/PadWide.wav",
-      "role_id": "ROLE.SYNTH.PAD",
-      "stem_id": "STEMFILE.4444444444"
-    },
-    {
       "bus_id": "BUS.OTHER.UNKNOWN",
-      "bus_path": "BUS.OTHER/BUS.OTHER.UNKNOWN",
+      "bus_path": "BUS.MASTER/BUS.OTHER/BUS.OTHER.UNKNOWN",
       "confidence": 0.2,
       "file_path": "stems/Mystery.wav",
       "role_id": "ROLE.OTHER.UNKNOWN",
       "stem_id": "STEMFILE.5555555555"
+    },
+    {
+      "bus_id": "BUS.MUSIC.SYNTH",
+      "bus_path": "BUS.MASTER/BUS.MUSIC/BUS.MUSIC.SYNTH",
+      "confidence": 0.74,
+      "file_path": "stems/PadWide.wav",
+      "role_id": "ROLE.SYNTH.PAD",
+      "stem_id": "STEMFILE.4444444444"
     }
   ],
   "buses": [
+    {
+      "bus_id": "BUS.MASTER",
+      "children_ids": [
+        "BUS.DRUMS",
+        "BUS.MUSIC",
+        "BUS.VOX",
+        "BUS.FX",
+        "BUS.OTHER"
+      ],
+      "label": "Master",
+      "parent_id": null,
+      "stem_ids": [
+        "STEMFILE.3333333333",
+        "STEMFILE.1111111111",
+        "STEMFILE.2222222222",
+        "STEMFILE.5555555555",
+        "STEMFILE.4444444444"
+      ]
+    },
     {
       "bus_id": "BUS.DRUMS",
       "children_ids": [
         "BUS.DRUMS.KICK"
       ],
       "label": "Drums",
-      "parent_id": null,
+      "parent_id": "BUS.MASTER",
       "stem_ids": [
         "STEMFILE.1111111111"
       ]
@@ -63,12 +82,32 @@
       ]
     },
     {
+      "bus_id": "BUS.MUSIC",
+      "children_ids": [
+        "BUS.MUSIC.SYNTH"
+      ],
+      "label": "Music",
+      "parent_id": "BUS.MASTER",
+      "stem_ids": [
+        "STEMFILE.4444444444"
+      ]
+    },
+    {
+      "bus_id": "BUS.MUSIC.SYNTH",
+      "children_ids": [],
+      "label": "Music Synth",
+      "parent_id": "BUS.MUSIC",
+      "stem_ids": [
+        "STEMFILE.4444444444"
+      ]
+    },
+    {
       "bus_id": "BUS.VOX",
       "children_ids": [
         "BUS.VOX.LEAD"
       ],
       "label": "Vox",
-      "parent_id": null,
+      "parent_id": "BUS.MASTER",
       "stem_ids": [
         "STEMFILE.2222222222"
       ]
@@ -88,7 +127,7 @@
         "BUS.FX.REVERB"
       ],
       "label": "Fx",
-      "parent_id": null,
+      "parent_id": "BUS.MASTER",
       "stem_ids": [
         "STEMFILE.3333333333"
       ]
@@ -103,32 +142,12 @@
       ]
     },
     {
-      "bus_id": "BUS.MUSIC",
-      "children_ids": [
-        "BUS.MUSIC.SYNTH"
-      ],
-      "label": "Music",
-      "parent_id": null,
-      "stem_ids": [
-        "STEMFILE.4444444444"
-      ]
-    },
-    {
-      "bus_id": "BUS.MUSIC.SYNTH",
-      "children_ids": [],
-      "label": "Music Synth",
-      "parent_id": "BUS.MUSIC",
-      "stem_ids": [
-        "STEMFILE.4444444444"
-      ]
-    },
-    {
       "bus_id": "BUS.OTHER",
       "children_ids": [
         "BUS.OTHER.UNKNOWN"
       ],
       "label": "Other",
-      "parent_id": null,
+      "parent_id": "BUS.MASTER",
       "stem_ids": [
         "STEMFILE.5555555555"
       ]
