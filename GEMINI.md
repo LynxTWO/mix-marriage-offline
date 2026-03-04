@@ -29,6 +29,10 @@ Non-negotiables:
   layout-agnostic scene should render conservative
   2.0/5.1/7.1/7.1.4/7.1.6/9.1.6 outputs with front-only object routing and
   subtle confidence-gated/capped bed surround-height sends.
+- Preserve stereo imaging in placement render paths: stereo stems should not
+  collapse to mono in `LAYOUT.2_0`, scene stereo hints (`width_hint`,
+  `azimuth_hint`) must remain evidence-backed/deterministic, and any optional
+  side wrap beyond L/R must stay confidence-gated and perspective-gated.
 - Keep render-many surround similarity gating deterministic: compare stereo
   renders against downmix(rendered surround/immersive), and if gates fail,
   allow only a single bounded backoff retry (surround/height/wide channels)

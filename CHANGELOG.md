@@ -105,6 +105,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Added regression assertions in lock + CLI scene lock tests for
     `ROLE.DRUM.KICK` + `BUS.DRUMS.KICK` overrides.
 
+- Placement scene/render stereo imaging is now preserved end-to-end:
+  - Added deterministic stereo feature extraction (`src/mmo/core/stem_features.py`)
+    using L/R correlation + side/mid ratio for `width_hint` and ILD-window
+    analysis for `azimuth_hint`.
+  - `build_scene_from_session()` now infers stereo hints from actual stereo WAV
+    stems when confidence is high enough, writes `object.width_hint` and
+    `object.azimuth_hint`, and stores metric/value evidence in
+    `metadata.stereo_hints` (with schema updates in both scene schema mirrors).
+  - `placement_mixdown_renderer` no longer folds every stem to mono:
+    `LAYOUT.2_0` now sums stereo stems channel-wise, while multichannel layouts
+    use deterministic mid/side routing that keeps stereo side energy in L/R.
+  - Side wrap remains conservative: by default there is no surround leakage for
+    anchor-like objects; optional tiny wide-channel wrap only engages when
+    immersive perspective (`in_band`/`in_orchestra`) and high confidence are present.
+  - Added regression coverage for scene hint evidence + confidence gating and
+    stereo render energy-ratio preservation / wrap behavior.
+
 ### Added
 
 - Scene builder + conservative surround bed routing contract hardening:

@@ -17,6 +17,7 @@ from re import split as re_split
 from typing import Any
 
 from mmo.core.media_tags import source_metadata_from_value
+from mmo.core.stem_features import infer_stereo_hints
 
 SCENE_SCHEMA_VERSION = "0.1.0"
 _CREATED_FROM = "analyze"
@@ -25,6 +26,8 @@ _LOCK_HASH_PREFIX_LEN = 12
 # Inference thresholds
 _CONFIDENCE_GATE = 0.3          # below this, don't emit inferred hints
 _ADVISORY_STEREO_CONF_CAP = 0.35  # max confidence for stereo-stem advisory inference
+_STEREO_HINT_CONFIDENCE_GATE = 0.5
+_WAV_EXTENSIONS = {".wav", ".wave"}
 
 # Height bed channel counts (advisory; channel count alone cannot disambiguate all layouts)
 _IMMERSIVE_714_CHANNELS = 12   # 7.1.4: 8-ch bed + 4 height speakers
@@ -117,6 +120,42 @@ def _safe_float(value: Any) -> float | None:
     return None
 
 
+def _resolve_stem_source_path(
+    *,
+    stem: dict[str, Any],
+    stems_dir_path: Path,
+) -> Path | None:
+    file_path = _coerce_str(stem.get("file_path")).strip()
+    if not file_path:
+        return None
+    candidate = Path(file_path)
+    if not candidate.is_absolute():
+        candidate = stems_dir_path / candidate
+    if candidate.suffix.lower() not in _WAV_EXTENSIONS:
+        return None
+    if not candidate.exists():
+        return None
+    return candidate
+
+
+def _stereo_hint_metrics_rows(metrics: Any) -> list[dict[str, Any]]:
+    if not isinstance(metrics, dict):
+        return []
+    rows: list[dict[str, Any]] = []
+    for metric_id in sorted(metrics.keys()):
+        value = metrics.get(metric_id)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, (int, float)):
+            rows.append(
+                {
+                    "metric_id": metric_id,
+                    "value": round(float(value), 6),
+                }
+            )
+    return rows
+
+
 # ---------------------------------------------------------------------------
 # Inference functions (objective, conservative, advisory)
 # ---------------------------------------------------------------------------
@@ -194,8 +233,9 @@ def _build_object_intent(
     stem: dict[str, Any],
     meter: dict[str, Any] | None,
     lock_ids: list[str],
-) -> tuple[dict[str, Any], list[str]]:
-    """Return (intent_dict, advisory_notes).
+    stereo_hints: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, float], list[str]]:
+    """Return (intent_dict, applied_hints, advisory_notes).
 
     Width and depth are only emitted when confidence >= _CONFIDENCE_GATE.
     Confidence for stereo stems is always capped at _ADVISORY_STEREO_CONF_CAP.
@@ -210,6 +250,24 @@ def _build_object_intent(
 
     width, width_conf = _infer_width_from_correlation(correlation, is_stereo=is_stereo)
     depth, depth_conf = _infer_depth_from_crest(crest_db)
+    stereo_width = _safe_float(stereo_hints.get("width_hint")) if isinstance(stereo_hints, dict) else None
+    stereo_azimuth = (
+        _safe_float(stereo_hints.get("azimuth_deg_hint"))
+        if isinstance(stereo_hints, dict)
+        else None
+    )
+    stereo_conf = _safe_float(stereo_hints.get("confidence")) if isinstance(stereo_hints, dict) else None
+    stereo_hint_ready = bool(
+        is_stereo
+        and stereo_width is not None
+        and stereo_azimuth is not None
+        and stereo_conf is not None
+        and stereo_conf >= _STEREO_HINT_CONFIDENCE_GATE
+    )
+
+    if stereo_hint_ready and stereo_width is not None and stereo_conf is not None:
+        width = max(0.0, min(1.0, stereo_width))
+        width_conf = max(width_conf, stereo_conf)
 
     # Cap confidence for advisory stereo inferences
     if is_stereo:
@@ -222,13 +280,20 @@ def _build_object_intent(
         "confidence": effective_conf,
         "locks": sorted(lock_ids),
     }
+    applied_hints: dict[str, float] = {}
     notes: list[str] = []
 
     if effective_conf >= _CONFIDENCE_GATE:
         if width is not None and width_conf >= _CONFIDENCE_GATE:
             intent["width"] = round(width, 3)
+            applied_hints["width_hint"] = round(width, 3)
         if depth is not None and depth_conf >= _CONFIDENCE_GATE:
             intent["depth"] = round(depth, 3)
+        if stereo_hint_ready and stereo_azimuth is not None:
+            azimuth = max(-180.0, min(180.0, stereo_azimuth))
+            intent["position"] = {"azimuth_deg": round(azimuth, 3)}
+            applied_hints["azimuth_hint"] = round(azimuth, 3)
+            notes.append("stereo_feature_hint")
 
     if is_stereo and meter is not None:
         notes.append("advisory_stereo_stem")
@@ -239,7 +304,7 @@ def _build_object_intent(
         elif channel_count == _IMMERSIVE_10CH_CHANNELS:
             notes.append("height_bed_10ch_candidate")
 
-    return intent, notes
+    return intent, applied_hints, notes
 
 
 def _label_from_stem(stem: dict[str, Any], *, index: int) -> str:
@@ -347,13 +412,29 @@ def build_scene_from_session(
 
     # Build objects (all stems → objects; multichannel noted but not reclassified)
     objects: list[dict[str, Any]] = []
+    stereo_hint_evidence: list[dict[str, Any]] = []
     for idx, stem in enumerate(stems):
         stem_id = _coerce_str(stem.get("stem_id")).strip() or f"STEM.{idx:03d}"
         object_id = f"OBJ.{stem_id}"
         meter = meter_index.get(stem_id)
         lock_ids = list(user_locks_map.get(stem_id, []))
+        channel_count = _coerce_channel_count(stem.get("channel_count"))
 
-        intent, infer_notes = _build_object_intent(stem, meter, lock_ids)
+        stereo_hints: dict[str, Any] | None = None
+        if channel_count == 2:
+            source_path = _resolve_stem_source_path(stem=stem, stems_dir_path=stems_dir_path)
+            if source_path is not None:
+                try:
+                    stereo_hints = infer_stereo_hints(source_path)
+                except ValueError:
+                    stereo_hints = None
+
+        intent, applied_hints, infer_notes = _build_object_intent(
+            stem,
+            meter,
+            lock_ids,
+            stereo_hints=stereo_hints,
+        )
 
         existing_notes = _string_list(stem.get("notes"))
         all_notes = existing_notes + [n for n in infer_notes if n not in existing_notes]
@@ -362,14 +443,41 @@ def build_scene_from_session(
             "object_id": object_id,
             "stem_id": stem_id,
             "label": _label_from_stem(stem, index=idx),
-            "channel_count": _coerce_channel_count(stem.get("channel_count")),
+            "channel_count": channel_count,
             "intent": intent,
             "notes": all_notes,
         }
+        if "width_hint" in applied_hints:
+            object_payload["width_hint"] = applied_hints["width_hint"]
+        if "azimuth_hint" in applied_hints:
+            object_payload["azimuth_hint"] = applied_hints["azimuth_hint"]
         source_metadata = source_metadata_from_value(stem.get("source_metadata"))
         if source_metadata is not None:
             object_payload["source_metadata"] = source_metadata
         objects.append(object_payload)
+
+        if isinstance(stereo_hints, dict):
+            stereo_width = _safe_float(stereo_hints.get("width_hint"))
+            stereo_azimuth = _safe_float(stereo_hints.get("azimuth_deg_hint"))
+            stereo_confidence = _safe_float(stereo_hints.get("confidence"))
+            if (
+                stereo_width is not None
+                and stereo_azimuth is not None
+                and stereo_confidence is not None
+            ):
+                stereo_hint_evidence.append(
+                    {
+                        "object_id": object_id,
+                        "stem_id": stem_id,
+                        "width_hint": round(max(0.0, min(1.0, stereo_width)), 3),
+                        "azimuth_deg_hint": round(max(-180.0, min(180.0, stereo_azimuth)), 3),
+                        "confidence": round(max(0.0, min(1.0, stereo_confidence)), 3),
+                        "applied": bool(
+                            "width_hint" in applied_hints and "azimuth_hint" in applied_hints
+                        ),
+                        "metrics": _stereo_hint_metrics_rows(stereo_hints.get("metrics")),
+                    }
+                )
 
     # Stable sort: stem_id then object_id
     objects.sort(key=lambda o: (o["stem_id"], o["object_id"]))
@@ -400,6 +508,14 @@ def build_scene_from_session(
     if isinstance(metering_report, dict) and "mode" in metering_report:
         metadata["metering"] = _build_scene_metering(
             metering_report, objects, meter_index, len(stems)
+        )
+    if stereo_hint_evidence:
+        metadata["stereo_hints"] = sorted(
+            stereo_hint_evidence,
+            key=lambda row: (
+                _coerce_str(row.get("stem_id")),
+                _coerce_str(row.get("object_id")),
+            ),
         )
 
     # Source block

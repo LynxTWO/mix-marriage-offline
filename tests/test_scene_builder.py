@@ -13,8 +13,11 @@ Covers:
 from __future__ import annotations
 
 import json
+import math
+import struct
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -77,6 +80,30 @@ def _make_metering(
             "true_peak_max_dbtp": max(tp_vals) if tp_vals else None,
         },
     }
+
+
+def _write_stereo_wav(
+    path: Path,
+    *,
+    sample_rate_hz: int = 48_000,
+    duration_s: float = 0.2,
+    left_amplitude: float = 0.4,
+    right_amplitude: float = 0.4,
+    phase_offset_rad: float = 0.0,
+) -> None:
+    frames = int(sample_rate_hz * duration_s)
+    interleaved: list[int] = []
+    for index in range(frames):
+        phase = 2.0 * math.pi * 220.0 * index / sample_rate_hz
+        left = int(left_amplitude * 32767.0 * math.sin(phase))
+        right = int(right_amplitude * 32767.0 * math.sin(phase + phase_offset_rad))
+        interleaved.extend((left, right))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate_hz)
+        handle.writeframes(struct.pack(f"<{len(interleaved)}h", *interleaved))
 
 
 # ---------------------------------------------------------------------------
@@ -283,6 +310,76 @@ class TestSceneBuilderInference(unittest.TestCase):
             scene = build_scene_from_session(session, metering)
             obj = scene["objects"][0]
             self.assertNotIn("width", obj["intent"])
+
+
+class TestSceneBuilderStereoHintExtraction(unittest.TestCase):
+    def test_wide_stereo_signal_emits_object_hints_and_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            stems_dir = Path(tmp) / "stems"
+            stem_path = stems_dir / "wide.wav"
+            _write_stereo_wav(
+                stem_path,
+                left_amplitude=0.4,
+                right_amplitude=0.4,
+                phase_offset_rad=math.pi,
+            )
+            session: dict[str, Any] = {
+                "stems_dir": stems_dir.resolve().as_posix(),
+                "stems": [
+                    {
+                        "stem_id": "STEM.WIDE",
+                        "file_path": "wide.wav",
+                        "channel_count": 2,
+                        "label": "Wide",
+                    }
+                ],
+            }
+
+            scene = build_scene_from_session(session)
+            obj = scene["objects"][0]
+            self.assertGreater(obj.get("width_hint", 0.0), 0.0)
+            self.assertIn("azimuth_hint", obj)
+
+            stereo_hints = scene.get("metadata", {}).get("stereo_hints")
+            self.assertIsInstance(stereo_hints, list)
+            if not isinstance(stereo_hints, list):
+                return
+            self.assertEqual(len(stereo_hints), 1)
+            evidence = stereo_hints[0]
+            self.assertTrue(evidence.get("applied"))
+            metric_ids = {
+                item.get("metric_id")
+                for item in evidence.get("metrics", [])
+                if isinstance(item, dict)
+            }
+            self.assertIn("lr_correlation", metric_ids)
+            self.assertIn("side_mid_ratio_db", metric_ids)
+            self.assertIn("ild_weighted_db", metric_ids)
+
+    def test_left_heavy_stereo_signal_infers_positive_azimuth(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            stems_dir = Path(tmp) / "stems"
+            stem_path = stems_dir / "left_heavy.wav"
+            _write_stereo_wav(
+                stem_path,
+                left_amplitude=0.55,
+                right_amplitude=0.12,
+            )
+            session: dict[str, Any] = {
+                "stems_dir": stems_dir.resolve().as_posix(),
+                "stems": [
+                    {
+                        "stem_id": "STEM.LEFT",
+                        "file_path": "left_heavy.wav",
+                        "channel_count": 2,
+                        "label": "Left Heavy",
+                    }
+                ],
+            }
+
+            scene = build_scene_from_session(session)
+            obj = scene["objects"][0]
+            self.assertGreater(obj.get("azimuth_hint", 0.0), 0.0)
 
 
 class TestSceneBuilderStereoAdvisory(unittest.TestCase):
