@@ -855,7 +855,16 @@ def _collect_stem_samples(
             for chunk in iter_wav_float64_samples(stem_path, error_context="lfe audit"):
                 samples.extend(chunk)
         except ValueError:
-            return None
+            # Some valid WAV variants (e.g. WAVE_FORMAT_EXTENSIBLE in older Python
+            # runtimes) may fail the pure-WAV decoder; fall back to ffmpeg when available.
+            decoder_cmd = ffmpeg_cmd or resolve_ffmpeg_cmd()
+            if decoder_cmd is None:
+                return None
+            try:
+                for chunk in iter_ffmpeg_float64_samples(stem_path, decoder_cmd):
+                    samples.extend(chunk)
+            except ValueError:
+                return None
         return samples
     elif format_id in {"flac", "wavpack", "aiff"}:
         if ffmpeg_cmd is None:

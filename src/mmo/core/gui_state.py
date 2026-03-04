@@ -40,12 +40,20 @@ def _validate_payload_against_schema(payload: dict[str, Any]) -> None:
     if jsonschema is None:
         raise RuntimeError("jsonschema is required to validate GUI state files.")
 
-    from mmo.core.schema_registry import build_schema_registry, load_json_schema  # noqa: WPS433
+    from mmo.core.schema_registry import (  # noqa: WPS433
+        build_draft202012_validator,
+        build_schema_registry,
+        load_json_schema,
+    )
 
     schema_path = _gui_state_schema_path()
     schema = load_json_schema(schema_path)
     registry = build_schema_registry(schema_path.parent)
-    validator = jsonschema.Draft202012Validator(schema, registry=registry)
+    validator = build_draft202012_validator(
+        schema,
+        registry=registry,
+        schemas_dir=schema_path.parent,
+    )
     errors = sorted(validator.iter_errors(payload), key=lambda err: list(err.path))
     if not errors:
         return

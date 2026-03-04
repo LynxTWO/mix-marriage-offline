@@ -76,32 +76,6 @@ def _scene_payload(stems_dir: Path) -> dict:
                 "intent": {"confidence": 0.92, "width": 0.24, "depth": 0.22, "locks": []},
                 "notes": [],
             },
-            {
-                "object_id": "OBJ.STEM.PAD",
-                "stem_id": "STEM.PAD",
-                "role_id": "ROLE.SYNTH.PAD",
-                "group_bus": "BUS.MUSIC.SYNTH",
-                "label": "Pad",
-                "channel_count": 1,
-                "width_hint": 0.93,
-                "depth_hint": 0.65,
-                "confidence": 0.9,
-                "intent": {"confidence": 0.9, "width": 0.93, "depth": 0.65, "locks": []},
-                "notes": ["long texture"],
-            },
-            {
-                "object_id": "OBJ.STEM.SFX",
-                "stem_id": "STEM.SFX",
-                "role_id": "ROLE.SFX.WHOOSH",
-                "group_bus": "BUS.FX.AMBIENCE",
-                "label": "SFX",
-                "channel_count": 1,
-                "width_hint": 0.9,
-                "depth_hint": 0.8,
-                "confidence": 0.88,
-                "intent": {"confidence": 0.88, "width": 0.9, "depth": 0.8, "locks": []},
-                "notes": ["room", "wash"],
-            },
         ],
         "beds": [
             {
@@ -110,7 +84,31 @@ def _scene_payload(stems_dir: Path) -> dict:
                 "kind": "field",
                 "intent": {"diffuse": 0.5, "confidence": 0.0, "locks": []},
                 "notes": [],
-            }
+            },
+            {
+                "bed_id": "BED.BUS.MUSIC.SYNTH",
+                "label": "Music Synth",
+                "kind": "bed",
+                "bus_id": "BUS.MUSIC.SYNTH",
+                "stem_ids": ["STEM.PAD"],
+                "content_hint": "pad_texture",
+                "width_hint": 0.9,
+                "confidence": 0.9,
+                "intent": {"diffuse": 0.9, "confidence": 0.9, "locks": []},
+                "notes": ["content_hint: pad_texture"],
+            },
+            {
+                "bed_id": "BED.BUS.FX.AMBIENCE",
+                "label": "Fx Ambience",
+                "kind": "bed",
+                "bus_id": "BUS.FX.AMBIENCE",
+                "stem_ids": ["STEM.SFX"],
+                "content_hint": "ambience",
+                "width_hint": 0.95,
+                "confidence": 0.88,
+                "intent": {"diffuse": 0.95, "confidence": 0.88, "locks": []},
+                "notes": ["content_hint: ambience"],
+            },
         ],
         "metadata": {},
     }
@@ -165,6 +163,7 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
             "LAYOUT.5_1",
             "LAYOUT.7_1",
             "LAYOUT.7_1_4",
+            "LAYOUT.7_1_6",
             "LAYOUT.9_1_6",
         )
         for layout_id in expected_layouts:
@@ -228,6 +227,14 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
         for stem_id in ("STEM.PAD", "STEM.SFX"):
             channels = set(by_stem[stem_id].get("nonzero_channels") or [])
             self.assertTrue(channels & backoff_channels)
+            surround_sends = by_stem[stem_id].get("surround_sends")
+            overhead_sends = by_stem[stem_id].get("overhead_sends")
+            why = by_stem[stem_id].get("why")
+            self.assertIsInstance(surround_sends, dict)
+            self.assertIsInstance(overhead_sends, dict)
+            self.assertIsInstance(why, list)
+            if isinstance(why, list):
+                self.assertIn("surround_send_enabled", why)
 
     def test_similarity_gate_supports_rendered_fallback_after_placement_render(self) -> None:
         renderer = PlacementMixdownRenderer()

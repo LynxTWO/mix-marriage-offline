@@ -63,12 +63,20 @@ def _build_event_validator() -> Any:
     if jsonschema is None:
         raise RuntimeError("jsonschema is required to validate event logs.")
 
-    from mmo.core.schema_registry import build_schema_registry, load_json_schema  # noqa: WPS433
+    from mmo.core.schema_registry import (  # noqa: WPS433
+        build_draft202012_validator,
+        build_schema_registry,
+        load_json_schema,
+    )
 
     schema_path = _event_schema_path()
     schema = load_json_schema(schema_path)
     registry = build_schema_registry(schema_path.parent)
-    return jsonschema.Draft202012Validator(schema, registry=registry)
+    return build_draft202012_validator(
+        schema,
+        registry=registry,
+        schemas_dir=schema_path.parent,
+    )
 
 
 def _error_path(error: Any) -> str:

@@ -85,46 +85,6 @@
       "notes": []
     },
     {
-      "object_id": "OBJ.STEM.PAD",
-      "stem_id": "STEM.PAD",
-      "role_id": "ROLE.SYNTH.PAD",
-      "group_bus": "BUS.MUSIC.SYNTH",
-      "label": "Pad Wide",
-      "channel_count": 1,
-      "width_hint": 0.9,
-      "depth_hint": 0.6,
-      "confidence": 0.86,
-      "intent": {
-        "confidence": 0.86,
-        "width": 0.9,
-        "depth": 0.6,
-        "locks": []
-      },
-      "notes": [
-        "long texture"
-      ]
-    },
-    {
-      "object_id": "OBJ.STEM.AMB",
-      "stem_id": "STEM.AMB",
-      "role_id": "ROLE.FX.AMBIENCE",
-      "group_bus": "BUS.FX.AMBIENCE",
-      "label": "Room Ambience",
-      "channel_count": 1,
-      "width_hint": 0.95,
-      "depth_hint": 0.8,
-      "confidence": 0.88,
-      "intent": {
-        "confidence": 0.88,
-        "width": 0.95,
-        "depth": 0.8,
-        "locks": []
-      },
-      "notes": [
-        "long tail"
-      ]
-    },
-    {
       "object_id": "OBJ.STEM.HAT",
       "stem_id": "STEM.HAT",
       "role_id": "ROLE.DRUM.HIHAT",
@@ -213,6 +173,46 @@
         "locks": []
       },
       "notes": []
+    },
+    {
+      "bed_id": "BED.BUS.FX.AMBIENCE",
+      "label": "Fx Ambience",
+      "kind": "bed",
+      "bus_id": "BUS.FX.AMBIENCE",
+      "stem_ids": [
+        "STEM.AMB"
+      ],
+      "content_hint": "ambience",
+      "width_hint": 0.95,
+      "confidence": 0.88,
+      "intent": {
+        "diffuse": 0.95,
+        "confidence": 0.88,
+        "locks": []
+      },
+      "notes": [
+        "content_hint: ambience"
+      ]
+    },
+    {
+      "bed_id": "BED.BUS.MUSIC.SYNTH",
+      "label": "Music Synth",
+      "kind": "bed",
+      "bus_id": "BUS.MUSIC.SYNTH",
+      "stem_ids": [
+        "STEM.PAD"
+      ],
+      "content_hint": "pad_texture",
+      "width_hint": 0.9,
+      "confidence": 0.86,
+      "intent": {
+        "diffuse": 0.9,
+        "confidence": 0.86,
+        "locks": []
+      },
+      "notes": [
+        "content_hint: pad_texture"
+      ]
     }
   ],
   "metadata": {

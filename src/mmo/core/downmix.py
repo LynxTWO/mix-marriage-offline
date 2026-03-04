@@ -16,7 +16,7 @@ Exported public API
 - ``apply_downmix_matrix_deterministic()`` — apply a resolved matrix deterministically.
 - ``compare_rendered_surround_to_stereo_reference()`` — compare surround fold-down vs stereo.
 - ``enforce_rendered_surround_similarity_gate()`` — one-shot fallback gate for
-  5.1/7.1/7.1.4/9.1.6 renders.
+  5.1/7.1/7.1.4/7.1.6/9.1.6 renders.
 """
 
 from __future__ import annotations
@@ -60,7 +60,13 @@ _BACKOFF_SPK_IDS: frozenset[str] = frozenset(
     }
 )
 _SUPPORTED_SURROUND_FALLBACK_LAYOUTS: frozenset[str] = frozenset(
-    {"LAYOUT.5_1", "LAYOUT.7_1", "LAYOUT.7_1_4", "LAYOUT.9_1_6"}
+    {
+        "LAYOUT.5_1",
+        "LAYOUT.7_1",
+        "LAYOUT.7_1_4",
+        "LAYOUT.7_1_6",
+        "LAYOUT.9_1_6",
+    }
 )
 _TARGET_STEREO_LAYOUT_ID = "LAYOUT.2_0"
 _PCM24_MIN = -8_388_608
@@ -1070,7 +1076,7 @@ def enforce_rendered_surround_similarity_gate(
 ) -> Dict[str, Any]:
     """Run rendered similarity gate and apply a single deterministic fallback pass.
 
-    Fallback is layout-scoped to 5.1/7.1/7.1.4/9.1.6 and attenuates one pass of
+    Fallback is layout-scoped to 5.1/7.1/7.1.4/7.1.6/9.1.6 and attenuates one pass of
     surround/height/wide channels.
     """
     first = compare_rendered_surround_to_stereo_reference(

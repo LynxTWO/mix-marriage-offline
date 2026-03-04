@@ -97,6 +97,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Scene builder + conservative surround bed routing contract hardening:
+  - Scene schema now allows deterministic bed-to-stem mapping via
+    `beds[].stem_ids` (root schema + packaged mirror).
+  - `mmo scene build --map <stems_map.json> --bus <bus_plan.json> --out <scene.json>`
+    now emits stricter conservative classification behavior:
+    bed candidates include pads/ambience/room/long-SFX/drones/crowds/reverbs;
+    unknowns remain low-confidence objects with no placement hints.
+  - Placement policy v1 now enforces front-only object routing, subtle
+    deterministic bed surround/height sends (capped, ~-12 dB relative), and
+    confidence/lock-based surround-disable behavior.
+  - Added deterministic bed stem routing from scene (`beds[].stem_ids`) into
+    render-intent `stem_sends`, with bed rows overriding object rows per stem.
+
+- 7.1.6 conservative immersive support + downmix QA fallback coverage:
+  - Placement mixdown renderer now emits `LAYOUT.7_1_6` alongside existing
+    immersive outputs.
+  - Rendered surround-vs-stereo similarity fallback now includes `LAYOUT.7_1_6`
+    in the one-shot bounded backoff gate set.
+  - Added versioned `LAYOUT.7_1_6 -> LAYOUT.2_0` downmix conversion
+    (`DMX.IMM.7_1_6_TO_2_0.COMPOSED`) to ontology policy and matrix registries
+    (root + packaged mirrors).
+
+- Placement receipts now explicitly explain immersive sends:
+  - `stem_send_summary` rows include per-stem `surround_sends`,
+    `overhead_sends`, and `why` evidence arrays for deterministic receipts.
+
 - GUI scene-intent preview contract + web rendering:
   - Added deterministic `scene_preview` payload in `ui_bundle.json` with
     layout options for `LAYOUT.5_1`, `LAYOUT.7_1`, `LAYOUT.7_1_4`, and
@@ -179,14 +205,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Scene-driven placement mixdown renderer and immersive send expansion:
   - Added `PLUGIN.RENDERER.PLACEMENT_MIXDOWN_V1` with deterministic scene-based
     placement rendering for `LAYOUT.2_0`, `LAYOUT.5_1`, `LAYOUT.7_1`,
-    `LAYOUT.7_1_4`, and `LAYOUT.9_1_6` (WAV PCM24 output).
+    `LAYOUT.7_1_4`, `LAYOUT.7_1_6`, and `LAYOUT.9_1_6` (WAV PCM24 output).
   - Expanded conservative placement policy support to immersive layouts with
-    explicit wide/height speaker handling (`SPK.LW/RW`, `SPK.TFL/TFR/TRL/TRR/TFC/TBC`),
-    front-safe transient defaults, and explicit-intent + high-evidence-only
-    transient wrap exceptions.
+    explicit wide/height speaker handling (`SPK.LW/RW`,
+    `SPK.TFL/TFR/TRL/TRR/TFC/TBC`), front-only object routing, and
+    confidence-gated/capped bed sends for translation safety.
   - Extended rendered surround-similarity fallback attenuation to cover
     immersive backoff channels (surrounds, heights, wides) for
-    `LAYOUT.7_1_4` and `LAYOUT.9_1_6` in addition to `5.1/7.1`.
+    `LAYOUT.7_1_4`, `LAYOUT.7_1_6`, and `LAYOUT.9_1_6` in addition to `5.1/7.1`.
 - Deterministic stems bus-plan artifact generator:
   - Added `mmo stems bus-plan --map <stems_map.json> --out <bus_plan.json> [--csv <bus_plan.csv>]`
     to build a schema-validated `mmo.bus_plan.v1` artifact from classified stems.

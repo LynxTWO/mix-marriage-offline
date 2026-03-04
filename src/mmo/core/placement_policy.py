@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from mmo.dsp.downmix import load_layouts
@@ -8,13 +9,16 @@ from mmo.resources import ontology_dir
 PLACEMENT_POLICY_ID = "POLICY.PLACEMENT.CONSERVATIVE_SURROUND_V1"
 PLACEMENT_POLICY_SCHEMA_VERSION = "0.1.0"
 
-_SUPPORTED_LAYOUT_IDS: frozenset[str] = frozenset({
-    "LAYOUT.2_0",
-    "LAYOUT.5_1",
-    "LAYOUT.7_1",
-    "LAYOUT.7_1_4",
-    "LAYOUT.9_1_6",
-})
+_SUPPORTED_LAYOUT_IDS: frozenset[str] = frozenset(
+    {
+        "LAYOUT.2_0",
+        "LAYOUT.5_1",
+        "LAYOUT.7_1",
+        "LAYOUT.7_1_4",
+        "LAYOUT.7_1_6",
+        "LAYOUT.9_1_6",
+    }
+)
 
 _FRONT_LEFT = "SPK.L"
 _FRONT_RIGHT = "SPK.R"
@@ -34,41 +38,13 @@ _TOP_BACK_CENTER = "SPK.TBC"
 
 _LOCK_NO_STEREO_WIDENING = "LOCK.NO_STEREO_WIDENING"
 _LOCK_PRESERVE_CENTER_IMAGE = "LOCK.PRESERVE_CENTER_IMAGE"
-_LOCK_PRESERVE_TRANSIENTS = "LOCK.PRESERVE_TRANSIENTS"
 
-_BUS_OTHER = "BUS.OTHER"
 _ROLE_UNKNOWN = "ROLE.OTHER.UNKNOWN"
+_BUS_UNKNOWN = "BUS.OTHER"
 
-_AMBIENT_TOKENS: frozenset[str] = frozenset({
-    "AMBIENCE",
-    "AMBIENT",
-    "ATMOS",
-    "AUDIENCE",
-    "CROWD",
-    "LONG",
-    "PAD",
-    "PADS",
-    "REVERB",
-    "ROOM",
-    "SFX",
-    "TEXTURE",
-    "WASH",
-})
-_PERCUSSION_TOKENS: frozenset[str] = frozenset({
-    "CYMBAL",
-    "CYMBALS",
-    "HAT",
-    "HIHAT",
-    "PERC",
-    "PERCUSSION",
-})
-_IMMERSIVE_INTENT_MARKERS: frozenset[str] = frozenset({
-    "YOU_ARE_THERE",
-    "IN_THE_MIDDLE",
-    "MIDDLE_OF_BAND",
-    "MIDDLE_OF_ORCHESTRA",
-    "IMMERSIVE_ANCHOR_WRAP",
-})
+_BED_SURROUND_RELATIVE_DB = -12.0
+_BED_SURROUND_SEND_CAP = 0.2
+_BED_SURROUND_CONFIDENCE_MIN = 0.6
 
 
 def _coerce_str(value: Any) -> str:
@@ -89,17 +65,6 @@ def _clamp_unit(value: Any, *, default: float) -> float:
     numeric = _coerce_float(value)
     if numeric is None:
         numeric = default
-    if numeric < 0.0:
-        return 0.0
-    if numeric > 1.0:
-        return 1.0
-    return round(numeric, 3)
-
-
-def _clamp_optional_unit(value: Any) -> float | None:
-    numeric = _coerce_float(value)
-    if numeric is None:
-        return None
     if numeric < 0.0:
         return 0.0
     if numeric > 1.0:
@@ -155,13 +120,19 @@ def _scene_objects(scene: dict[str, Any]) -> list[dict[str, Any]]:
     return [item[3] for item in rows]
 
 
-def _scene_lock_ids(scene: dict[str, Any]) -> set[str]:
-    scene_intent = _scene_intent_payload(scene)
-    return {
-        lock_id.strip()
-        for lock_id in _string_list(scene_intent.get("locks"))
-        if lock_id.strip()
-    }
+def _scene_beds(scene: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_beds = scene.get("beds")
+    if not isinstance(raw_beds, list):
+        return []
+    rows: list[tuple[str, str, int, dict[str, Any]]] = []
+    for index, row in enumerate(raw_beds):
+        if not isinstance(row, dict):
+            continue
+        bed_id = _coerce_str(row.get("bed_id")).strip()
+        label = _coerce_str(row.get("label")).strip()
+        rows.append((bed_id, label, index, row))
+    rows.sort(key=lambda item: (item[0], item[1], item[2]))
+    return [item[3] for item in rows]
 
 
 def _scene_intent_payload(scene: dict[str, Any]) -> dict[str, Any]:
@@ -169,6 +140,15 @@ def _scene_intent_payload(scene: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(intent, dict):
         return {}
     return intent
+
+
+def _scene_lock_ids(scene: dict[str, Any]) -> set[str]:
+    scene_intent = _scene_intent_payload(scene)
+    return {
+        lock_id.strip()
+        for lock_id in _string_list(scene_intent.get("locks"))
+        if lock_id.strip()
+    }
 
 
 def _object_lock_ids(obj: dict[str, Any]) -> set[str]:
@@ -214,121 +194,6 @@ def _scene_locks_receipt_index(scene: dict[str, Any]) -> dict[str, dict[str, str
     return index
 
 
-def _tokenize_text(value: str) -> set[str]:
-    normalized = _coerce_str(value).strip().upper()
-    if not normalized:
-        return set()
-    token = []
-    tokens: set[str] = set()
-    for ch in normalized:
-        if ch.isalnum():
-            token.append(ch)
-            continue
-        if token:
-            tokens.add("".join(token))
-            token.clear()
-    if token:
-        tokens.add("".join(token))
-    return tokens
-
-
-def _normalize_marker_text(value: str) -> str:
-    normalized = _coerce_str(value).strip().upper()
-    if not normalized:
-        return ""
-    chars: list[str] = []
-    previous_was_separator = False
-    for ch in normalized:
-        if ch.isalnum():
-            chars.append(ch)
-            previous_was_separator = False
-            continue
-        if not previous_was_separator:
-            chars.append("_")
-            previous_was_separator = True
-    return "".join(chars).strip("_")
-
-
-def _has_immersive_intent_marker(candidates: list[str]) -> bool:
-    for candidate in candidates:
-        normalized = _normalize_marker_text(candidate)
-        if not normalized:
-            continue
-        for marker in _IMMERSIVE_INTENT_MARKERS:
-            if marker in normalized:
-                return True
-    return False
-
-
-def _role_tokens(obj: dict[str, Any]) -> set[str]:
-    role_id = _coerce_str(obj.get("role_id")).strip().upper()
-    label = _coerce_str(obj.get("label")).strip()
-    group_bus = _coerce_str(obj.get("group_bus")).strip().upper()
-    tokens: set[str] = set()
-    tokens.update(_tokenize_text(role_id))
-    tokens.update(_tokenize_text(label))
-    tokens.update(_tokenize_text(group_bus))
-    for note in _string_list(obj.get("notes")):
-        tokens.update(_tokenize_text(note))
-    return tokens
-
-
-def _is_anchor_transient(role_id: str) -> bool:
-    return (
-        role_id.startswith("ROLE.DRUM.KICK")
-        or role_id.startswith("ROLE.DRUM.SNARE")
-        or role_id.startswith("ROLE.BASS.")
-    )
-
-
-def _is_lead_center_role(role_id: str) -> bool:
-    return (
-        role_id.startswith("ROLE.VOCAL.LEAD")
-        or role_id.startswith("ROLE.DIALOGUE.LEAD")
-    )
-
-
-def _is_ambient_role(role_id: str, tokens: set[str]) -> bool:
-    if role_id.startswith("ROLE.SYNTH.PAD"):
-        return True
-    if role_id.startswith("ROLE.FX.REVERB"):
-        return True
-    if role_id.startswith("ROLE.FX.AMBIENCE"):
-        return True
-    if role_id.startswith("ROLE.SFX."):
-        return True
-    return bool(tokens & _AMBIENT_TOKENS)
-
-
-def _is_percussion_role(role_id: str, tokens: set[str]) -> bool:
-    if role_id.startswith("ROLE.DRUM.HIHAT"):
-        return True
-    if role_id.startswith("ROLE.DRUM.PERC"):
-        return True
-    if role_id.startswith("ROLE.DRUM.CYMBAL"):
-        return True
-    return bool(tokens & _PERCUSSION_TOKENS)
-
-
-def _anchor_wrap_intent_requested(
-    *,
-    scene_intent: dict[str, Any],
-    object_intent: dict[str, Any],
-    obj: dict[str, Any],
-) -> bool:
-    object_bias = _coerce_str(object_intent.get("loudness_bias")).strip().lower()
-    scene_bias = _coerce_str(scene_intent.get("loudness_bias")).strip().lower()
-    if object_bias == "back" or scene_bias == "back":
-        return True
-    marker_candidates: list[str] = [
-        _coerce_str(obj.get("label")),
-        _coerce_str(obj.get("role_id")),
-    ]
-    marker_candidates.extend(_string_list(obj.get("notes")))
-    marker_candidates.extend(_string_list(scene_intent.get("notes")))
-    return _has_immersive_intent_marker(marker_candidates)
-
-
 def _group_bus_from_object(obj: dict[str, Any], role_id: str) -> str:
     group_bus = _coerce_str(obj.get("group_bus")).strip().upper()
     if group_bus:
@@ -339,11 +204,11 @@ def _group_bus_from_object(obj: dict[str, Any], role_id: str) -> str:
         return "BUS.BASS"
     if role_id.startswith("ROLE.VOCAL.") or role_id.startswith("ROLE.DIALOGUE."):
         return "BUS.VOX"
-    if role_id.startswith("ROLE.SYNTH.") or role_id.startswith("ROLE.INSTRUMENT."):
+    if role_id.startswith("ROLE.GTR.") or role_id.startswith("ROLE.KEYS."):
         return "BUS.MUSIC"
     if role_id.startswith("ROLE.FX.") or role_id.startswith("ROLE.SFX."):
         return "BUS.FX"
-    return _BUS_OTHER
+    return _BUS_UNKNOWN
 
 
 def _round_gain(value: float) -> float:
@@ -416,56 +281,58 @@ def _set_heights(
         gains[_TOP_BACK_CENTER] = _round_gain(top_back_center)
 
 
-def _immersive_channel_send_cap(value: float) -> float:
-    if value < 0.0:
-        return 0.0
-    # Conservative default cap for first-pass immersive widening.
-    if value > 0.12:
-        return 0.12
-    return value
-
-
-def _measurement_surround_wrap_allowed(
-    *,
-    confidence: float,
-    width_hint: float,
-    depth_hint: float,
-    locks: set[str],
-    immersive_intent: bool,
-) -> bool:
-    if not immersive_intent:
-        return False
-    if _LOCK_NO_STEREO_WIDENING in locks:
-        return False
-    if _LOCK_PRESERVE_TRANSIENTS in locks:
-        return False
-    if confidence < 0.9:
-        return False
-    if width_hint < 0.9:
-        return False
-    if depth_hint < 0.75:
-        return False
-    return True
-
-
-def _bus_trim_db_for_class(policy_class: str) -> float:
-    if policy_class == "AMBIENT.MODEST_SURROUND":
-        return -1.5
-    if policy_class == "PERCUSSION.TINY_SURROUND":
-        return -0.75
-    return 0.0
-
-
 def _nonzero_channels(gains: dict[str, float], channel_order: list[str]) -> list[str]:
     return [speaker_id for speaker_id in channel_order if gains.get(speaker_id, 0.0) > 0.0]
 
 
-def _stem_send(
+def _db_to_linear(db_value: float) -> float:
+    return math.pow(10.0, db_value / 20.0)
+
+
+def _bus_trim_db_for_class(policy_class: str) -> float:
+    if policy_class.startswith("BED."):
+        return -1.5
+    return 0.0
+
+
+def _is_anchor_role(role_id: str) -> bool:
+    return (
+        role_id.startswith("ROLE.DRUM.KICK")
+        or role_id.startswith("ROLE.DRUM.SNARE")
+        or role_id.startswith("ROLE.BASS.")
+    )
+
+
+def _is_lead_center_role(role_id: str) -> bool:
+    return (
+        role_id.startswith("ROLE.VOCAL.LEAD")
+        or role_id.startswith("ROLE.DIALOGUE.LEAD")
+    )
+
+
+def _append_source_notes(
+    notes: list[str],
+    source_receipt_row: dict[str, str] | None,
+) -> None:
+    if not isinstance(source_receipt_row, dict):
+        return
+    for key in (
+        "role_source",
+        "bus_source",
+        "azimuth_source",
+        "width_source",
+        "surround_send_caps_source",
+    ):
+        value = _coerce_str(source_receipt_row.get(key)).strip()
+        if value:
+            notes.append(f"{key}:{value}")
+
+
+def _object_send(
     *,
     obj: dict[str, Any],
     channel_order: list[str],
     scene_locks: set[str],
-    scene_intent: dict[str, Any],
     source_receipt_row: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     stem_id = _coerce_str(obj.get("stem_id")).strip()
@@ -486,115 +353,19 @@ def _stem_send(
     )
     effective_locks = set(scene_locks) | _object_lock_ids(obj)
     group_bus = _group_bus_from_object(obj, role_id)
-    tokens = _role_tokens(obj)
-    anchor_wrap_intent = _anchor_wrap_intent_requested(
-        scene_intent=scene_intent,
-        object_intent=intent_payload,
-        obj=obj,
-    )
 
     front_gain = 0.74
     center_gain = 0.0
-    side_gain = 0.0
-    rear_gain = 0.0
-    wide_gain = 0.0
-    top_front_gain = 0.0
-    top_rear_gain = 0.0
-    top_center_gains: tuple[float, float] | None = None
-    notes: list[str] = []
+    policy_class = "OBJECT.FRONT_ONLY"
+    notes = ["object_front_only_v1"]
 
-    if _is_anchor_transient(role_id):
-        policy_class = "ANCHOR.TRANSIENT_FRONT_ONLY"
+    if _is_anchor_role(role_id):
+        policy_class = "OBJECT.ANCHOR_FRONT_ONLY"
         front_gain = 0.86
-        if _measurement_surround_wrap_allowed(
-            confidence=confidence,
-            width_hint=width_hint,
-            depth_hint=depth_hint,
-            locks=effective_locks,
-            immersive_intent=anchor_wrap_intent,
-        ):
-            policy_class = "ANCHOR.TRANSIENT_SURROUND_WRAP_MEASURED"
-            front_gain = 0.4
-            side_gain = 0.27
-            rear_gain = 0.17
-            wide_gain = 0.12
-            notes.append("measurement_gated_surround_wrap")
-            notes.append("immersive_wrap_front_preserved")
-        elif (
-            confidence >= 0.9
-            and width_hint >= 0.9
-            and depth_hint >= 0.75
-            and _LOCK_NO_STEREO_WIDENING not in effective_locks
-            and _LOCK_PRESERVE_TRANSIENTS not in effective_locks
-            and not anchor_wrap_intent
-        ):
-            notes.append("surround_wrap_blocked_missing_immersive_intent")
-        elif (
-            anchor_wrap_intent
-            and _LOCK_NO_STEREO_WIDENING not in effective_locks
-            and _LOCK_PRESERVE_TRANSIENTS not in effective_locks
-        ):
-            notes.append("surround_wrap_blocked_insufficient_measurement_evidence")
     elif _is_lead_center_role(role_id):
-        policy_class = "LEAD.CENTER_OPTIONAL"
+        policy_class = "OBJECT.LEAD_FRONT_ONLY"
         front_gain = 0.58
         center_gain = 0.72
-    elif _is_ambient_role(role_id, tokens):
-        policy_class = "AMBIENT.MODEST_SURROUND"
-        front_gain = 0.68
-        spread = 0.22 * (0.6 + (0.4 * width_hint)) * (0.65 + (0.35 * confidence))
-        side_gain = spread
-        rear_gain = spread * 0.72
-        wide_gain = _immersive_channel_send_cap(side_gain * 0.75)
-        top_front_gain = _immersive_channel_send_cap(side_gain * 0.5)
-        top_rear_gain = _immersive_channel_send_cap(top_front_gain * 0.86)
-        top_center_gains = (
-            _immersive_channel_send_cap(top_front_gain * 0.75),
-            _immersive_channel_send_cap(top_rear_gain * 0.75),
-        )
-        if top_front_gain > 0.0:
-            notes.append("ambient_height_send_enabled")
-    elif _is_percussion_role(role_id, tokens):
-        policy_class = "PERCUSSION.TINY_SURROUND"
-        front_gain = 0.72
-        if width_hint >= 0.78 and confidence >= 0.75:
-            send = 0.06 * (0.7 + (0.3 * width_hint)) * (0.7 + (0.3 * confidence))
-            side_gain = send
-            rear_gain = send * 0.6
-            notes.append("tiny_surround_send_enabled")
-        else:
-            notes.append("tiny_surround_send_disabled_low_confidence_or_width")
-    else:
-        policy_class = "FRONT.DEFAULT_SAFE"
-        front_gain = 0.74
-        notes.append("front_safe_default")
-
-    if _LOCK_NO_STEREO_WIDENING in effective_locks:
-        side_gain = 0.0
-        rear_gain = 0.0
-        wide_gain = 0.0
-        top_front_gain = 0.0
-        top_rear_gain = 0.0
-        top_center_gains = (0.0, 0.0)
-        notes.append("surround_send_disabled_by_lock_no_stereo_widening")
-
-    if _LOCK_PRESERVE_TRANSIENTS in effective_locks and _is_anchor_transient(role_id):
-        side_gain = 0.0
-        rear_gain = 0.0
-        wide_gain = 0.0
-        top_front_gain = 0.0
-        top_rear_gain = 0.0
-        top_center_gains = (0.0, 0.0)
-        notes.append("transient_anchor_front_safety_lock")
-
-    if _LOCK_PRESERVE_TRANSIENTS in effective_locks and _is_percussion_role(role_id, tokens):
-        side_gain = 0.0
-        rear_gain = 0.0
-        wide_gain = 0.0
-        top_front_gain = 0.0
-        top_rear_gain = 0.0
-        top_center_gains = (0.0, 0.0)
-        notes.append("percussion_surround_send_disabled_preserve_transients")
 
     if _LOCK_PRESERVE_CENTER_IMAGE in effective_locks and _CENTER in channel_order:
         if _is_lead_center_role(role_id):
@@ -602,44 +373,11 @@ def _stem_send(
             front_gain = min(front_gain, 0.52)
             notes.append("center_anchor_strengthened_by_lock")
 
-    surround_send_caps = intent_payload.get("surround_send_caps")
-    surround_send_caps_payload = (
-        surround_send_caps if isinstance(surround_send_caps, dict) else {}
-    )
-    side_max_gain = _clamp_optional_unit(surround_send_caps_payload.get("side_max_gain"))
-    rear_max_gain = _clamp_optional_unit(surround_send_caps_payload.get("rear_max_gain"))
-    if side_max_gain is not None or rear_max_gain is not None:
-        notes.append("surround_send_caps_present")
-    if side_max_gain is not None and side_gain > side_max_gain:
-        side_gain = side_max_gain
-        notes.append("surround_side_send_capped_by_lock")
-    if rear_max_gain is not None and rear_gain > rear_max_gain:
-        rear_gain = rear_max_gain
-        notes.append("surround_rear_send_capped_by_lock")
-
-    if isinstance(source_receipt_row, dict):
-        for key in (
-            "role_source",
-            "bus_source",
-            "azimuth_source",
-            "width_source",
-            "surround_send_caps_source",
-        ):
-            value = _coerce_str(source_receipt_row.get(key)).strip()
-            if value:
-                notes.append(f"{key}:{value}")
+    _append_source_notes(notes, source_receipt_row)
 
     gains = _empty_gains(channel_order)
     _set_front(gains, front_gain)
     _set_center(gains, center_gain)
-    _set_surround(gains, side_gain=side_gain, rear_gain=rear_gain)
-    _set_wides(gains, wide_gain)
-    _set_heights(
-        gains,
-        top_front_gain=top_front_gain,
-        top_rear_gain=top_rear_gain,
-        top_center_gains=top_center_gains,
-    )
 
     return {
         "stem_id": stem_id,
@@ -660,18 +398,123 @@ def _stem_send(
     }
 
 
-def _has_policy_signals(objects: list[dict[str, Any]]) -> bool:
-    for obj in objects:
-        role_id = _coerce_str(obj.get("role_id")).strip()
-        group_bus = _coerce_str(obj.get("group_bus")).strip()
-        if role_id or group_bus:
-            return True
-        if "width_hint" in obj or "depth_hint" in obj:
-            return True
-        intent = obj.get("intent")
-        if isinstance(intent, dict) and ("width" in intent or "depth" in intent):
-            return True
-    return False
+def _bed_role_from_content_hint(content_hint: str) -> str:
+    normalized = _coerce_str(content_hint).strip().lower()
+    if normalized == "reverb_return":
+        return "ROLE.FX.REVERB"
+    if normalized == "ambience":
+        return "ROLE.FX.AMBIENCE"
+    if normalized == "pad_texture":
+        return "ROLE.SYNTH.PAD"
+    if normalized == "crowd":
+        return "ROLE.FX.AMBIENCE"
+    return _ROLE_UNKNOWN
+
+
+def _bed_stem_ids(bed: dict[str, Any]) -> list[str]:
+    stem_ids_raw = bed.get("stem_ids")
+    if not isinstance(stem_ids_raw, list):
+        return []
+    stem_ids = sorted(
+        {
+            _coerce_str(stem_id).strip()
+            for stem_id in stem_ids_raw
+            if _coerce_str(stem_id).strip()
+        }
+    )
+    return stem_ids
+
+
+def _bed_send(
+    *,
+    bed: dict[str, Any],
+    stem_id: str,
+    channel_order: list[str],
+    scene_locks: set[str],
+) -> dict[str, Any]:
+    bed_id = _coerce_str(bed.get("bed_id")).strip()
+    bus_id = _coerce_str(bed.get("bus_id")).strip().upper() or _BUS_UNKNOWN
+    content_hint = _coerce_str(bed.get("content_hint")).strip()
+    intent = bed.get("intent")
+    intent_payload = intent if isinstance(intent, dict) else {}
+    confidence = _clamp_unit(
+        bed.get("confidence", intent_payload.get("confidence")),
+        default=0.0,
+    )
+    width_hint = _clamp_unit(
+        bed.get("width_hint", intent_payload.get("diffuse")),
+        default=0.75,
+    )
+    depth_hint = 0.7
+    locks = set(scene_locks)
+    role_id = _bed_role_from_content_hint(content_hint)
+
+    front_gain = 0.68
+    side_gain = 0.0
+    rear_gain = 0.0
+    wide_gain = 0.0
+    top_front_gain = 0.0
+    top_rear_gain = 0.0
+    top_center_gains: tuple[float, float] | None = None
+    policy_class = "BED.FRONT_ONLY_LOW_CONFIDENCE"
+    notes = [
+        "bed_subtle_surround_policy_v1",
+        f"bed_id:{bed_id or '<unknown>'}",
+        f"bed_surround_relative_db:{_BED_SURROUND_RELATIVE_DB:.1f}",
+    ]
+
+    if _LOCK_NO_STEREO_WIDENING in locks:
+        notes.append("surround_send_disabled_by_lock_no_stereo_widening")
+    elif confidence < _BED_SURROUND_CONFIDENCE_MIN:
+        notes.append("surround_send_disabled_low_confidence")
+    else:
+        policy_class = "BED.SUBTLE_SURROUND_V1"
+        base = front_gain * _db_to_linear(_BED_SURROUND_RELATIVE_DB)
+        spatial_scale = (0.75 + (0.25 * width_hint)) * (0.7 + (0.3 * confidence))
+        side_gain = min(_BED_SURROUND_SEND_CAP, base * spatial_scale)
+        rear_gain = min(_BED_SURROUND_SEND_CAP, side_gain * 0.85)
+        wide_gain = min(_BED_SURROUND_SEND_CAP, side_gain * 0.75)
+        top_front_gain = min(_BED_SURROUND_SEND_CAP, side_gain * 0.65)
+        top_rear_gain = min(_BED_SURROUND_SEND_CAP, side_gain * 0.55)
+        top_center_gains = (
+            min(_BED_SURROUND_SEND_CAP, top_front_gain * 0.7),
+            min(_BED_SURROUND_SEND_CAP, top_rear_gain * 0.7),
+        )
+        notes.append("surround_send_enabled")
+        if top_front_gain > 0.0:
+            notes.append("overhead_send_enabled")
+
+    gains = _empty_gains(channel_order)
+    _set_front(gains, front_gain)
+    _set_surround(gains, side_gain=side_gain, rear_gain=rear_gain)
+    _set_wides(gains, wide_gain)
+    _set_heights(
+        gains,
+        top_front_gain=top_front_gain,
+        top_rear_gain=top_rear_gain,
+        top_center_gains=top_center_gains,
+    )
+
+    if content_hint:
+        notes.append(f"content_hint:{content_hint}")
+
+    return {
+        "stem_id": stem_id,
+        "role_id": role_id,
+        "group_bus": bus_id,
+        "policy_class": policy_class,
+        "confidence": confidence,
+        "width_hint": width_hint,
+        "depth_hint": depth_hint,
+        "locks": sorted(locks),
+        "bus_trim_db": _bus_trim_db_for_class(policy_class),
+        "gains": {
+            speaker_id: _round_gain(gains.get(speaker_id, 0.0))
+            for speaker_id in channel_order
+        },
+        "nonzero_channels": _nonzero_channels(gains, channel_order),
+        "notes": sorted(notes),
+    }
 
 
 def _bus_gain_staging(
@@ -713,11 +556,7 @@ def build_render_intent(
     *,
     layouts: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
-    """Build conservative scene->layout placement sends for renderer consumption.
-
-    Returns ``None`` when the scene does not carry role/group/hint data needed
-    by this policy path, or when ``target_layout_id`` is outside current scope.
-    """
+    """Build conservative scene->layout placement sends for renderer consumption."""
     if not isinstance(scene, dict):
         raise ValueError("scene must be an object.")
 
@@ -730,24 +569,59 @@ def build_render_intent(
         return None
 
     objects = _scene_objects(scene)
-    if not objects or not _has_policy_signals(objects):
+    beds = _scene_beds(scene)
+    if not objects and not beds:
         return None
 
     scene_locks = _scene_lock_ids(scene)
-    scene_intent = _scene_intent_payload(scene)
     source_receipt_index = _scene_locks_receipt_index(scene)
-    stem_sends = [
-        _stem_send(
+
+    object_rows = [
+        _object_send(
             obj=obj,
             channel_order=channel_order,
             scene_locks=scene_locks,
-            scene_intent=scene_intent,
             source_receipt_row=source_receipt_index.get(
                 _coerce_str(obj.get("stem_id")).strip()
             ),
         )
         for obj in objects
     ]
+
+    bed_rows: list[dict[str, Any]] = []
+    for bed in beds:
+        for stem_id in _bed_stem_ids(bed):
+            bed_rows.append(
+                _bed_send(
+                    bed=bed,
+                    stem_id=stem_id,
+                    channel_order=channel_order,
+                    scene_locks=scene_locks,
+                )
+            )
+
+    combined_by_stem: dict[str, dict[str, Any]] = {}
+    for row in object_rows:
+        stem_id = _coerce_str(row.get("stem_id")).strip()
+        if stem_id:
+            combined_by_stem[stem_id] = row
+    for row in bed_rows:
+        stem_id = _coerce_str(row.get("stem_id")).strip()
+        if not stem_id:
+            continue
+        existing = combined_by_stem.get(stem_id)
+        if isinstance(existing, dict):
+            existing_notes = existing.get("notes")
+            if isinstance(existing_notes, list):
+                existing_notes.append("bed_overrides_object_send")
+        combined_by_stem[stem_id] = row
+
+    stem_sends = [
+        combined_by_stem[stem_id]
+        for stem_id in sorted(combined_by_stem.keys())
+    ]
+    if not stem_sends:
+        return None
 
     return {
         "schema_version": PLACEMENT_POLICY_SCHEMA_VERSION,
@@ -760,13 +634,12 @@ def build_render_intent(
         ),
         "stem_sends": stem_sends,
         "notes": [
-            "Conservative front-heavy placement policy.",
-            "Primary transient anchors remain front-safe by default.",
+            "Objects are front-only by default in conservative placement v1.",
             (
-                "Measured surround-wrap exception requires explicit immersive "
-                "intent plus high width/depth/confidence evidence."
+                "Bed stems may receive subtle deterministic surround/height sends "
+                "at approximately -12 dB relative, capped for translation safety."
             ),
-            "Ambient roles may receive subtle surround/height sends in immersive layouts.",
+            "Bed surround sends are disabled when confidence is below threshold.",
             "LFE sends remain zero by default (manual/explicit only).",
         ],
     }

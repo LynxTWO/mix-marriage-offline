@@ -43,18 +43,18 @@ _EXPECTED_BUS_PLAN_SHA256 = {
     "surround_7_1_catalog": "9aedc80b901f0629e82d590487358fff202a252e1b3a37aaa51c0416fcc02edf",
 }
 _EXPECTED_SCENE_SHA256 = {
-    "immersive_7_1_4_catalog": "f00bcb6720cc1891058fad9a0782d9ba8aed7123c9589a707d573b01a9157aa7",
-    "immersive_9_1_6_catalog": "4b5598aea9c8715f7fa8700947b8089ee0b012251ebfdc7b563407be7b1ebf82",
-    "stereo_catalog": "3b730c4bfec9014234f0d3779fa6882ed05a426f60560415294aeb4ffa601121",
-    "surround_5_1_catalog": "8aa49be7b671399655edd865ad792042f493616e1ca34056061984ea403e90bf",
-    "surround_7_1_catalog": "0a1307d8c89b9f100e6dfc58865409af8580694ef07bcf8472569069718e0120",
+    "immersive_7_1_4_catalog": "51e9af0646a63d96c5a8a73b5f2e2a75f3aa14a11bd3976bebdd6cec1f7a6895",
+    "immersive_9_1_6_catalog": "85db1365e24337ae3d46cfade30a762052e870b7d42c2d29ef4f21ed79473010",
+    "stereo_catalog": "83c4f19404922eb64e5dffd49ab195454b64d660583be2a2ca5f3911d7eacbbb",
+    "surround_5_1_catalog": "2bdff10b33af64a9f4470f8ddd6e1cfef39c1a58080c2c867129c34f92f758dd",
+    "surround_7_1_catalog": "d68a66c22991d817fedee89af3504a67b704084b06ba04ace31f4478017831ed",
 }
 _EXPECTED_RENDER_PLAN_SHA256 = {
-    "immersive_7_1_4_catalog": "602e7a05c9905202f23294df4e2d4d0c8c79f494b66fbcf96bd6b1bb8feba72c",
-    "immersive_9_1_6_catalog": "53e09a894c19a88342453050a48ee4b37fc55460600094367544e78831be96b5",
-    "stereo_catalog": "4315812cfe7ee1d35f2695dc7864dda6f56a6e4f8b045bb28c309c3a165c2436",
-    "surround_5_1_catalog": "cbddc68f11d2f1db153b652b97482a58f342787065ef875e773012531e225072",
-    "surround_7_1_catalog": "78de1fd7ff52dffac415dd4a5dbd4419b176da23aa6c48d26a2dbf67cbf9b7af",
+    "immersive_7_1_4_catalog": "d55cd4b64b17e59d8fc58e67a71f92fd9cf4236342a85718b3093d80214bd54c",
+    "immersive_9_1_6_catalog": "9976df2f64107367914e0cdf8988d7200ffd3b661afb20a1fc534ad8a7e59c90",
+    "stereo_catalog": "df93aa2e4ab83ed738de0f62d3d391b186ca7b1acf8bf5e51bcb0b347c54adad",
+    "surround_5_1_catalog": "f22588a94c9437e4d83caa828405c5115944caf45465373c42c0ca4d58677be3",
+    "surround_7_1_catalog": "41b96d8294c7557f3145261b387beaa573fed21c4d61d4b867e38d2e9421f340",
 }
 
 

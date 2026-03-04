@@ -92,6 +92,11 @@ class TestDownmixRegistryDefaultPolicy(unittest.TestCase):
         result = reg.default_policy_for_source("LAYOUT.7_1_4")
         self.assertEqual(result, "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0")
 
+    def test_default_policy_for_716_source(self) -> None:
+        reg = load_downmix_registry(_DOWNMIX_PATH)
+        result = reg.default_policy_for_source("LAYOUT.7_1_6")
+        self.assertEqual(result, "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0")
+
     def test_default_policy_for_916_source(self) -> None:
         reg = load_downmix_registry(_DOWNMIX_PATH)
         result = reg.default_policy_for_source("LAYOUT.9_1_6")
@@ -213,6 +218,13 @@ class TestDownmixRegistryResolve(unittest.TestCase):
         self.assertEqual(steps[0]["source_layout_id"], "LAYOUT.9_1_6")
         self.assertEqual(steps[0]["target_layout_id"], "LAYOUT.7_1_4")
         self.assertEqual(steps[0]["matrix_id"], "DMX.IMM.9_1_6_TO_7_1_4.BED_FIRST")
+
+    def test_resolve_716_to_20_direct_matrix(self) -> None:
+        reg = load_downmix_registry(_DOWNMIX_PATH)
+        result = reg.resolve(None, "LAYOUT.7_1_6", "LAYOUT.2_0")
+        self.assertEqual(result["source_layout_id"], "LAYOUT.7_1_6")
+        self.assertEqual(result["target_layout_id"], "LAYOUT.2_0")
+        self.assertEqual(result["matrix_id"], "DMX.IMM.7_1_6_TO_2_0.COMPOSED")
 
 
 class TestDownmixRegistryDeterministicOrdering(unittest.TestCase):

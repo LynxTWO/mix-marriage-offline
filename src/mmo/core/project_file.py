@@ -50,33 +50,25 @@ def _load_json_schema(schema_path: Path) -> dict[str, Any]:
 
 
 def _build_schema_registry(schemas_dir: Path) -> Any:
-    try:
-        from referencing import Registry, Resource  # noqa: WPS433
-        from referencing.jsonschema import DRAFT202012  # noqa: WPS433
-    except ImportError as exc:  # pragma: no cover - optional dependency
-        raise RuntimeError(
-            "jsonschema referencing support is unavailable; cannot validate project files."
-        ) from exc
+    from mmo.core.schema_registry import build_schema_registry  # noqa: WPS433
 
-    registry = Registry()
-    for schema_file in sorted(schemas_dir.glob("*.schema.json")):
-        schema = _load_json_schema(schema_file)
-        resource = Resource.from_contents(schema, default_specification=DRAFT202012)
-        registry = registry.with_resource(schema_file.resolve().as_uri(), resource)
-        schema_id = schema.get("$id")
-        if isinstance(schema_id, str) and schema_id:
-            registry = registry.with_resource(schema_id, resource)
-    return registry
+    return build_schema_registry(schemas_dir)
 
 
 def _validate_project_payload(payload: dict[str, Any]) -> None:
     if jsonschema is None:
         raise RuntimeError("jsonschema is required to validate project files.")
 
+    from mmo.core.schema_registry import build_draft202012_validator  # noqa: WPS433
+
     schema_path = _project_schema_path()
     schema = _load_json_schema(schema_path)
     registry = _build_schema_registry(schema_path.parent)
-    validator = jsonschema.Draft202012Validator(schema, registry=registry)
+    validator = build_draft202012_validator(
+        schema,
+        registry=registry,
+        schemas_dir=schema_path.parent,
+    )
     errors = sorted(validator.iter_errors(payload), key=lambda err: list(err.path))
     if not errors:
         return

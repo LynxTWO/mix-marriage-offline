@@ -93,6 +93,7 @@ def report_schema_is_valid(report: dict[str, Any], schema_path: Path) -> bool:
         from referencing.jsonschema import DRAFT202012
     except ImportError:  # pragma: no cover - environment issue
         return False
+    from mmo.core.schema_registry import build_draft202012_validator
 
     try:
         root_schema = json.loads(schema_path.read_text(encoding="utf-8"))
@@ -115,7 +116,11 @@ def report_schema_is_valid(report: dict[str, Any], schema_path: Path) -> bool:
         if isinstance(schema_id, str) and schema_id:
             registry = registry.with_resource(schema_id, resource)
 
-    validator = jsonschema.Draft202012Validator(root_schema, registry=registry)
+    validator = build_draft202012_validator(
+        root_schema,
+        registry=registry,
+        schemas_dir=schema_path.parent,
+    )
     return next(validator.iter_errors(report), None) is None
 
 

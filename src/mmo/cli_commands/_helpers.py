@@ -143,23 +143,20 @@ def _load_json_schema(schema_path: Path) -> dict[str, Any]:
 
 
 def _build_schema_registry(schemas_dir: Path) -> Any:
-    try:
-        from referencing import Registry, Resource  # noqa: WPS433
-        from referencing.jsonschema import DRAFT202012  # noqa: WPS433
-    except ImportError as exc:  # pragma: no cover - environment issue
-        raise ValueError(
-            "jsonschema referencing support is unavailable; cannot validate schema refs."
-        ) from exc
+    from mmo.core.schema_registry import build_schema_registry  # noqa: WPS433
 
-    registry = Registry()
+    return build_schema_registry(schemas_dir)
+
+
+def _build_schema_store(schemas_dir: Path) -> dict[str, dict[str, Any]]:
+    store: dict[str, dict[str, Any]] = {}
     for schema_file in sorted(schemas_dir.glob("*.schema.json")):
         schema = _load_json_schema(schema_file)
-        resource = Resource.from_contents(schema, default_specification=DRAFT202012)
-        registry = registry.with_resource(schema_file.resolve().as_uri(), resource)
+        store[schema_file.resolve().as_uri()] = schema
         schema_id = schema.get("$id")
         if isinstance(schema_id, str) and schema_id:
-            registry = registry.with_resource(schema_id, resource)
-    return registry
+            store[schema_id] = schema
+    return store
 
 
 def _validate_json_payload(
@@ -189,7 +186,13 @@ def _validate_json_payload(
         validator = jsonschema.Draft202012Validator(schema, registry=registry)
     except TypeError:
         # jsonschema<4.22 does not accept a registry kwarg.
-        validator = jsonschema.Draft202012Validator(schema)
+        resolver_cls = getattr(jsonschema, "RefResolver", None)
+        if resolver_cls is not None:
+            store = _build_schema_store(schema_path.parent)
+            resolver = resolver_cls.from_schema(schema, store=store)
+            validator = jsonschema.Draft202012Validator(schema, resolver=resolver)
+        else:
+            validator = jsonschema.Draft202012Validator(schema)
     errors = sorted(validator.iter_errors(payload), key=lambda err: list(err.path))
     if not errors:
         return

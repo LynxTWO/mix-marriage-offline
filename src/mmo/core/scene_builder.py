@@ -47,11 +47,25 @@ _SCENE_INTENT_BED_HINTS = {
     "ROOM",
     "AMBIENCE",
     "AMBIENT",
+    "LONG",
+    "SFX",
+    "DRONE",
+    "DRONES",
     "PAD",
     "PADS",
     "CROWD",
     "AUDIENCE",
 }
+_SCENE_INTENT_CLOSE_INSTRUMENT_ROLE_PREFIXES: tuple[str, ...] = (
+    "ROLE.GTR.",
+    "ROLE.KEYS.",
+    "ROLE.STRINGS.",
+    "ROLE.BRASS.",
+    "ROLE.WINDS.",
+    "ROLE.WW.",
+    "ROLE.SYNTH.LEAD",
+    "ROLE.SYNTH.ARP",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -487,6 +501,7 @@ def _scene_intent_object_hints(
     assignment_confidence: float,
     *,
     uncertain: bool,
+    close_instrument: bool,
 ) -> dict[str, Any]:
     role_upper = role_id.upper()
     is_bass = role_upper.startswith("ROLE.BASS.")
@@ -502,11 +517,11 @@ def _scene_intent_object_hints(
 
     if uncertain:
         return {
-            "width_hint": 0.4,
-            "depth_hint": 0.5,
+            "width_hint": None,
+            "depth_hint": None,
             "confidence": min(0.35, max(0.2, assignment_confidence)),
             "azimuth_hint": None,
-            "classification_note": "object_low_confidence",
+            "classification_note": "object_low_confidence_no_hint",
         }
 
     if is_center_anchor:
@@ -525,6 +540,15 @@ def _scene_intent_object_hints(
             "confidence": max(0.75, assignment_confidence),
             "azimuth_hint": None,
             "classification_note": "close_miked_drum_object",
+        }
+
+    if close_instrument:
+        return {
+            "width_hint": 0.3,
+            "depth_hint": 0.35,
+            "confidence": max(0.72, assignment_confidence),
+            "azimuth_hint": None,
+            "classification_note": "close_instrument_object",
         }
 
     return {
@@ -705,12 +729,21 @@ def build_scene_from_bus_plan(
             or role_id.startswith("ROLE.VOCAL.LEAD")
             or role_id.startswith("ROLE.DIALOGUE.LEAD")
         )
+        is_close_instrument = role_id.startswith(_SCENE_INTENT_CLOSE_INSTRUMENT_ROLE_PREFIXES)
+        if not is_close_instrument and (
+            "CLOSE" in tokens
+            or "MIC" in tokens
+            or "DI" in tokens
+        ):
+            is_close_instrument = True
+        is_object_candidate = is_anchor_object or is_close_instrument
 
         if is_bed_candidate:
             content_hint = _scene_intent_content_hint(tokens)
             bed_bucket = bed_buckets.setdefault(bus_id, [])
             bed_bucket.append(
                 {
+                    "stem_id": stem_id,
                     "content_hint": content_hint,
                     "width_hint": _scene_intent_bed_width_hint(content_hint),
                     "confidence": max(0.65, assignment_confidence),
@@ -721,7 +754,8 @@ def build_scene_from_bus_plan(
         hints = _scene_intent_object_hints(
             role_id,
             assignment_confidence,
-            uncertain=not is_anchor_object,
+            uncertain=not is_object_candidate,
+            close_instrument=is_close_instrument,
         )
         object_rows.append(
             {
@@ -749,15 +783,19 @@ def build_scene_from_bus_plan(
         )
     ):
         confidence = _clamp_unit(row.get("confidence"), default=0.0)
-        width_hint = _clamp_unit(row.get("width_hint"), default=0.4)
-        depth_hint = _clamp_unit(row.get("depth_hint"), default=0.5)
+        width_hint_raw = _safe_float(row.get("width_hint"))
+        width_hint = _clamp_unit(width_hint_raw, default=0.4) if width_hint_raw is not None else None
+        depth_hint_raw = _safe_float(row.get("depth_hint"))
+        depth_hint = _clamp_unit(depth_hint_raw, default=0.5) if depth_hint_raw is not None else None
 
         object_intent: dict[str, Any] = {
             "confidence": confidence,
             "locks": [],
-            "width": width_hint,
-            "depth": depth_hint,
         }
+        if width_hint is not None:
+            object_intent["width"] = width_hint
+        if depth_hint is not None:
+            object_intent["depth"] = depth_hint
 
         azimuth_hint_value = row.get("azimuth_hint")
         if isinstance(azimuth_hint_value, (int, float)):
@@ -775,8 +813,6 @@ def build_scene_from_bus_plan(
             ),
             "channel_count": 1,
             "azimuth_hint": azimuth_hint_value if isinstance(azimuth_hint_value, (int, float)) else None,
-            "width_hint": width_hint,
-            "depth_hint": depth_hint,
             "confidence": confidence,
             "locks": {
                 "azimuth_hint": False,
@@ -792,6 +828,10 @@ def build_scene_from_bus_plan(
         }
         if object_payload["azimuth_hint"] is None:
             object_payload.pop("azimuth_hint")
+        if width_hint is not None:
+            object_payload["width_hint"] = width_hint
+        if depth_hint is not None:
+            object_payload["depth_hint"] = depth_hint
         objects.append(object_payload)
 
     beds: list[dict[str, Any]] = []
@@ -816,6 +856,13 @@ def build_scene_from_bus_plan(
             sum(_clamp_unit(item.get("confidence"), default=0.0) for item in bucket) / len(bucket),
             3,
         )
+        stem_ids = sorted(
+            {
+                _coerce_str(item.get("stem_id")).strip()
+                for item in bucket
+                if _coerce_str(item.get("stem_id")).strip()
+            }
+        )
         bed_id = f"BED.{bus_id.replace('BUS.', '').replace('.', '_')}"
         beds.append(
             {
@@ -823,6 +870,7 @@ def build_scene_from_bus_plan(
                 "label": bus_id.replace("BUS.", "").replace(".", " ").title(),
                 "kind": "bed",
                 "bus_id": bus_id,
+                "stem_ids": stem_ids,
                 "content_hint": content_hint,
                 "width_hint": width_hint,
                 "confidence": confidence,

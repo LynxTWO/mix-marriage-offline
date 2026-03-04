@@ -23,9 +23,9 @@ downmix:
 
     POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0:
       label: "Immersive fold-down v0"
-      description: "Height-to-bed fold-downs plus bed fold-downs for common immersive beds (5.1.2/5.1.4/7.1.2/7.1.4/7.2.4/9.1.6)."
+      description: "Height-to-bed fold-downs plus bed fold-downs for common immersive beds (5.1.2/5.1.4/7.1.2/7.1.4/7.1.6/7.2.4/9.1.6)."
       file: "downmix_policies/immersive_foldown_v0.yaml"
-      supports_source_layouts: ["LAYOUT.5_1_2", "LAYOUT.5_1_4", "LAYOUT.7_1_2", "LAYOUT.7_1_4", "LAYOUT.7_2_4", "LAYOUT.9_1_6"]
+      supports_source_layouts: ["LAYOUT.5_1_2", "LAYOUT.5_1_4", "LAYOUT.7_1_2", "LAYOUT.7_1_4", "LAYOUT.7_1_6", "LAYOUT.7_2_4", "LAYOUT.9_1_6"]
       supports_target_layouts: ["LAYOUT.7_1_4", "LAYOUT.7_1", "LAYOUT.5_1", "LAYOUT.2_0", "LAYOUT.1_0"]
 
   # Default policy selection given a source layout.
@@ -45,6 +45,7 @@ downmix:
     LAYOUT.5_1_4: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
     LAYOUT.7_1_2: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
     LAYOUT.7_1_4: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+    LAYOUT.7_1_6: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
     LAYOUT.7_2_4: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
     LAYOUT.9_1_6: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
 
@@ -115,6 +116,11 @@ downmix:
       target_layout_id: "LAYOUT.2_0"
       policy_id: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
       matrix_id: "DMX.IMM.7_1_4_TO_2_0.COMPOSED"
+
+    - source_layout_id: "LAYOUT.7_1_6"
+      target_layout_id: "LAYOUT.2_0"
+      policy_id: "POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0"
+      matrix_id: "DMX.IMM.7_1_6_TO_2_0.COMPOSED"
 
     - source_layout_id: "LAYOUT.7_2_4"
       target_layout_id: "LAYOUT.2_0"

@@ -212,11 +212,23 @@ class TestDeliverablesGrouping(unittest.TestCase):
 
             deliverables = render_manifest.get("deliverables")
             self.assertIsInstance(deliverables, list)
-            self.assertEqual(len(deliverables), 1)
             if not isinstance(deliverables, list) or not deliverables:
                 return
 
-            deliverable = deliverables[0]
+            deliverable = next(
+                (
+                    item
+                    for item in deliverables
+                    if isinstance(item, dict)
+                    and item.get("target_layout_id") == "LAYOUT.2_0"
+                    and item.get("channel_count") == 2
+                ),
+                None,
+            )
+            self.assertIsNotNone(deliverable)
+            if not isinstance(deliverable, dict):
+                return
+
             self.assertEqual(deliverable.get("target_layout_id"), "LAYOUT.2_0")
             self.assertEqual(deliverable.get("channel_count"), 2)
             self.assertEqual(deliverable.get("formats"), ["flac", "wav"])
@@ -242,11 +254,22 @@ class TestDeliverablesGrouping(unittest.TestCase):
                 return
             dashboard_deliverables = dashboard.get("deliverables")
             self.assertIsInstance(dashboard_deliverables, list)
-            self.assertEqual(len(dashboard_deliverables), 1)
             if not isinstance(dashboard_deliverables, list) or not dashboard_deliverables:
                 return
 
-            dashboard_deliverable = dashboard_deliverables[0]
+            dashboard_deliverable = next(
+                (
+                    item
+                    for item in dashboard_deliverables
+                    if isinstance(item, dict)
+                    and item.get("deliverable_id") == deliverable.get("deliverable_id")
+                ),
+                None,
+            )
+            self.assertIsNotNone(dashboard_deliverable)
+            if not isinstance(dashboard_deliverable, dict):
+                return
+
             self.assertEqual(
                 dashboard_deliverable.get("deliverable_id"),
                 deliverable.get("deliverable_id"),

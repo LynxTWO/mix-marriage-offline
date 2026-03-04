@@ -26,9 +26,9 @@ Non-negotiables:
   2.0/5.1/7.1/7.1.4/9.1.6 targets must still emit conservative WAV masters
   when recommendations are not render-eligible.
 - Keep scene-driven placement mixdown deterministic when enabled: one
-  layout-agnostic scene should render conservative 2.0/5.1/7.1/7.1.4/9.1.6
-  outputs with front-safe anchors unless explicit immersive intent + high
-  evidence allows transient wrap.
+  layout-agnostic scene should render conservative
+  2.0/5.1/7.1/7.1.4/7.1.6/9.1.6 outputs with front-only object routing and
+  subtle confidence-gated/capped bed surround-height sends.
 - Keep render-many surround similarity gating deterministic: compare stereo
   renders against downmix(rendered surround/immersive), and if gates fail,
   allow only a single bounded backoff retry (surround/height/wide channels)

@@ -451,15 +451,26 @@ def _validate_one_check(
         return entry
 
     try:
-        from mmo.cli_commands._helpers import _build_schema_registry
+        from mmo.cli_commands._helpers import _build_schema_registry, _build_schema_store
         registry = _build_schema_registry(schemas_dir)
+        store = _build_schema_store(schemas_dir)
     except (ValueError, RuntimeError):
         registry = None
+        store = {}
 
     validator_kwargs: dict[str, Any] = {"schema": schema}
     if registry is not None:
         validator_kwargs["registry"] = registry
-    validator = jsonschema.Draft202012Validator(**validator_kwargs)
+    try:
+        validator = jsonschema.Draft202012Validator(**validator_kwargs)
+    except TypeError:
+        # jsonschema<4.22 does not accept a registry kwarg.
+        resolver_cls = getattr(jsonschema, "RefResolver", None)
+        if resolver_cls is not None and store:
+            resolver = resolver_cls.from_schema(schema, store=store)
+            validator = jsonschema.Draft202012Validator(schema, resolver=resolver)
+        else:
+            validator = jsonschema.Draft202012Validator(schema)
     errors = sorted(validator.iter_errors(data), key=lambda e: list(e.path))
     if errors:
         entry["status"] = "invalid"

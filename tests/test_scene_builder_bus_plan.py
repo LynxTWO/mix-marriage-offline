@@ -89,6 +89,8 @@ class TestSceneBuilderFromBusPlan(unittest.TestCase):
         uncertain = by_stem["STEMFILE.5555555555"]
         self.assertLessEqual(uncertain["confidence"], 0.35)
         self.assertNotIn("azimuth_hint", uncertain)
+        self.assertNotIn("width_hint", uncertain)
+        self.assertNotIn("depth_hint", uncertain)
 
         self.assertEqual(by_stem["STEMFILE.1111111111"].get("azimuth_hint"), 0.0)
         self.assertEqual(by_stem["STEMFILE.2222222222"].get("azimuth_hint"), 0.0)
@@ -101,9 +103,22 @@ class TestSceneBuilderFromBusPlan(unittest.TestCase):
             [row.get("bus_id") for row in beds if isinstance(row, dict)],
             ["BUS.FX.REVERB", "BUS.MUSIC.SYNTH"],
         )
-        bed_bus_ids = {row.get("bus_id") for row in beds if isinstance(row, dict)}
+        by_bus_id = {
+            row.get("bus_id"): row
+            for row in beds
+            if isinstance(row, dict) and isinstance(row.get("bus_id"), str)
+        }
+        bed_bus_ids = set(by_bus_id.keys())
         self.assertIn("BUS.FX.REVERB", bed_bus_ids)
         self.assertIn("BUS.MUSIC.SYNTH", bed_bus_ids)
+        self.assertEqual(
+            by_bus_id["BUS.FX.REVERB"].get("stem_ids"),
+            ["STEMFILE.3333333333"],
+        )
+        self.assertEqual(
+            by_bus_id["BUS.MUSIC.SYNTH"].get("stem_ids"),
+            ["STEMFILE.4444444444"],
+        )
 
         rules = scene.get("rules")
         self.assertIsInstance(rules, dict)

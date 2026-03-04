@@ -218,6 +218,33 @@ downmix_policy_pack:
           SPK.TFR: 0.5
           SPK.TRR: 0.25
 
+    DMX.IMM.7_1_6_TO_2_0.COMPOSED:
+      label: "7.1.6 -> 2.0 (composed)"
+      source_layout_id: "LAYOUT.7_1_6"
+      target_layout_id: "LAYOUT.2_0"
+      coefficients:
+        SPK.L:
+          SPK.L: 1.0
+          SPK.C: 0.7071
+          SPK.LS: 0.7071
+          SPK.LRS: 0.5
+          SPK.TFL: 0.5
+          SPK.TRL: 0.25
+          SPK.TFC: 0.25
+          SPK.TBC: 0.085
+        SPK.R:
+          SPK.R: 1.0
+          SPK.C: 0.7071
+          SPK.RS: 0.7071
+          SPK.RRS: 0.5
+          SPK.TFR: 0.5
+          SPK.TRR: 0.25
+          SPK.TFC: 0.25
+          SPK.TBC: 0.085
+      notes:
+        - "Conservative 7.1.6 fold-down: side/rear/height channels fold with bounded coefficients."
+        - "Top-center channels are included at reduced gain for translation safety."
+
     DMX.IMM.7_2_4_TO_2_0.COMPOSED:
       label: "7.2.4 -> 2.0 (composed, dual-LFE dropped)"
       source_layout_id: "LAYOUT.7_2_4"

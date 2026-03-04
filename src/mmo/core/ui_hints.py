@@ -11,7 +11,11 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     jsonschema = None
 
-from mmo.core.schema_registry import build_schema_registry, load_json_schema
+from mmo.core.schema_registry import (
+    build_draft202012_validator,
+    build_schema_registry,
+    load_json_schema,
+)
 from mmo.resources import schemas_dir
 
 UI_HINTS_SCHEMA_VERSION = "0.1.0"
@@ -96,7 +100,11 @@ def _build_ui_hints_validator() -> Any:
     schema_path = schemas_dir() / "ui_hints.schema.json"
     schema = load_json_schema(schema_path)
     registry = build_schema_registry(schema_path.parent)
-    return jsonschema.Draft202012Validator(schema, registry=registry)
+    return build_draft202012_validator(
+        schema,
+        registry=registry,
+        schemas_dir=schema_path.parent,
+    )
 
 
 def _relative_error_path(path: Iterable[Any]) -> str:

@@ -140,6 +140,74 @@ def _write_714_wav(
         handle.writeframes(struct.pack(f"<{len(interleaved)}h", *interleaved))
 
 
+def _write_716_wav(
+    path: Path,
+    *,
+    sample_rate_hz: int = 48000,
+    duration_s: float = 0.25,
+    amp_l: float = 0.25,
+    amp_r: float = 0.25,
+    amp_tfl: float = 0.0,
+    amp_tfr: float = 0.0,
+    amp_trl: float = 0.0,
+    amp_trr: float = 0.0,
+    amp_tfc: float = 0.0,
+    amp_tbc: float = 0.0,
+) -> None:
+    # Channel order: L R C LFE LS RS LRS RRS TFL TFR TRL TRR TFC TBC
+    frames = int(sample_rate_hz * duration_s)
+    interleaved: list[int] = []
+    for index in range(frames):
+        sample_l = int(
+            amp_l * 32767.0 * math.sin(2.0 * math.pi * 220.0 * index / sample_rate_hz)
+        )
+        sample_r = int(
+            amp_r * 32767.0 * math.sin(2.0 * math.pi * 330.0 * index / sample_rate_hz)
+        )
+        sample_tfl = int(
+            amp_tfl * 32767.0 * math.sin(2.0 * math.pi * 440.0 * index / sample_rate_hz)
+        )
+        sample_tfr = int(
+            amp_tfr * 32767.0 * math.sin(2.0 * math.pi * 550.0 * index / sample_rate_hz)
+        )
+        sample_trl = int(
+            amp_trl * 32767.0 * math.sin(2.0 * math.pi * 660.0 * index / sample_rate_hz)
+        )
+        sample_trr = int(
+            amp_trr * 32767.0 * math.sin(2.0 * math.pi * 770.0 * index / sample_rate_hz)
+        )
+        sample_tfc = int(
+            amp_tfc * 32767.0 * math.sin(2.0 * math.pi * 880.0 * index / sample_rate_hz)
+        )
+        sample_tbc = int(
+            amp_tbc * 32767.0 * math.sin(2.0 * math.pi * 990.0 * index / sample_rate_hz)
+        )
+        interleaved.extend(
+            [
+                sample_l,
+                sample_r,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                sample_tfl,
+                sample_tfr,
+                sample_trl,
+                sample_trr,
+                sample_tfc,
+                sample_tbc,
+            ]
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(14)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate_hz)
+        handle.writeframes(struct.pack(f"<{len(interleaved)}h", *interleaved))
+
+
 class TestRenderedSimilarityGate(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.mkdtemp()
@@ -266,6 +334,41 @@ class TestRenderedSimilarityGate(unittest.TestCase):
             stereo_render_file=stereo_path,
             surround_render_file=immersive_path,
             source_layout_id="LAYOUT.7_1_4",
+            surround_backoff_db=-36.0,
+            loudness_delta_warn_abs=0.8,
+            loudness_delta_error_abs=1.6,
+            correlation_time_warn_lte=0.3,
+            correlation_time_error_lte=0.1,
+            spectral_distance_warn_db=5.0,
+            spectral_distance_error_db=10.0,
+            peak_delta_warn_abs=2.5,
+            peak_delta_error_abs=5.0,
+            true_peak_delta_warn_abs=2.0,
+            true_peak_delta_error_abs=4.0,
+        )
+        self.assertTrue(result["fallback_applied"])
+        self.assertEqual(len(result["attempts"]), 2)
+
+    def test_enforce_similarity_gate_supports_7_1_6_height_backoff(self) -> None:
+        stereo_path = self._path("reference.stereo.wav")
+        immersive_path = self._path("surround.7_1_6.hot_heights.wav")
+        _write_stereo_wav(stereo_path, amp_l=0.2, amp_r=0.2)
+        _write_716_wav(
+            immersive_path,
+            amp_l=0.2,
+            amp_r=0.2,
+            amp_tfl=0.95,
+            amp_tfr=0.95,
+            amp_trl=0.95,
+            amp_trr=0.95,
+            amp_tfc=0.95,
+            amp_tbc=0.95,
+        )
+
+        result = enforce_rendered_surround_similarity_gate(
+            stereo_render_file=stereo_path,
+            surround_render_file=immersive_path,
+            source_layout_id="LAYOUT.7_1_6",
             surround_backoff_db=-36.0,
             loudness_delta_warn_abs=0.8,
             loudness_delta_error_abs=1.6,

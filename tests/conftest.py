@@ -3,10 +3,70 @@ import shutil
 import sys
 import tempfile
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Optional
 
 import pytest
+
+
+def _schema_store_from_registry(registry: object) -> dict[str, dict]:
+    resources = getattr(registry, "_resources", None)
+    if not isinstance(resources, Mapping):
+        return {}
+
+    store: dict[str, dict] = {}
+    for uri, resource in resources.items():
+        if not isinstance(uri, str):
+            continue
+        contents = getattr(resource, "contents", None)
+        if not isinstance(contents, dict):
+            continue
+        store[uri] = contents
+        schema_id = contents.get("$id")
+        if isinstance(schema_id, str) and schema_id:
+            store[schema_id] = contents
+    return store
+
+
+def _patch_jsonschema_registry_kwarg_compat() -> None:
+    try:
+        import jsonschema
+    except ImportError:
+        return
+
+    validator_cls = getattr(jsonschema, "Draft202012Validator", None)
+    if validator_cls is None:
+        return
+    try:
+        validator_cls({})
+    except Exception:
+        return
+    try:
+        validator_cls({}, registry=None)
+        return
+    except TypeError:
+        pass
+    except Exception:
+        return
+
+    resolver_cls = getattr(jsonschema, "RefResolver", None)
+    if resolver_cls is None:
+        return
+
+    class _CompatDraft202012Validator(validator_cls):  # type: ignore[misc, valid-type]
+        def __init__(self, *args, **kwargs):
+            registry = kwargs.pop("registry", None)
+            schema = args[0] if args else kwargs.get("schema")
+            if registry is not None and isinstance(schema, dict) and "resolver" not in kwargs:
+                store = _schema_store_from_registry(registry)
+                if store:
+                    kwargs["resolver"] = resolver_cls.from_schema(schema, store=store)
+            super().__init__(*args, **kwargs)
+
+    _CompatDraft202012Validator.__name__ = validator_cls.__name__
+    _CompatDraft202012Validator.__qualname__ = validator_cls.__qualname__
+    jsonschema.Draft202012Validator = _CompatDraft202012Validator  # type: ignore[attr-defined]
 
 
 def _resolved_path(path_value: str) -> Optional[Path]:
@@ -36,6 +96,16 @@ def _prefer_repo_src() -> None:
 
     sys.path.insert(0, str(src_dir))
 
+    existing_pythonpath = os.environ.get("PYTHONPATH", "")
+    existing_entries = [entry for entry in existing_pythonpath.split(os.pathsep) if entry]
+    filtered_entries: list[str] = []
+    for entry in existing_entries:
+        if _resolved_path(entry) == src_dir:
+            continue
+        filtered_entries.append(entry)
+    filtered_entries.insert(0, str(src_dir))
+    os.environ["PYTHONPATH"] = os.pathsep.join(filtered_entries)
+
 
 def _repair_stdio_if_needed() -> None:
     if os.name != "nt":
@@ -62,6 +132,7 @@ def pytest_sessionstart(session) -> None:
 
 
 _prefer_repo_src()
+_patch_jsonschema_registry_kwarg_compat()
 
 
 def _to_posix(path: Path) -> str:

@@ -630,6 +630,8 @@ def _source_tags_lines(stems: Any) -> List[str]:
 
 def _speaker_layout_summary_table(layout_id: str, standard_str: str) -> "Table | None":
     """Build a per-slot channel table for layout_id × standard_str."""
+    if Table is None or TableStyle is None or colors is None:
+        return None
     if not layout_id or not standard_str:
         return None
     layout = get_preset(layout_id, standard_str)

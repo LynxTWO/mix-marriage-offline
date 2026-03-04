@@ -20,6 +20,7 @@ _SUPPORTED_LAYOUT_IDS: tuple[str, ...] = (
     "LAYOUT.5_1",
     "LAYOUT.7_1",
     "LAYOUT.7_1_4",
+    "LAYOUT.7_1_6",
     "LAYOUT.9_1_6",
 )
 _DEFAULT_CHANNEL_ORDER: dict[str, tuple[str, ...]] = {
@@ -49,6 +50,22 @@ _DEFAULT_CHANNEL_ORDER: dict[str, tuple[str, ...]] = {
         "SPK.TRL",
         "SPK.TRR",
     ),
+    "LAYOUT.7_1_6": (
+        "SPK.L",
+        "SPK.R",
+        "SPK.C",
+        "SPK.LFE",
+        "SPK.LS",
+        "SPK.RS",
+        "SPK.LRS",
+        "SPK.RRS",
+        "SPK.TFL",
+        "SPK.TFR",
+        "SPK.TRL",
+        "SPK.TRR",
+        "SPK.TFC",
+        "SPK.TBC",
+    ),
     "LAYOUT.9_1_6": (
         "SPK.L",
         "SPK.R",
@@ -73,6 +90,19 @@ _DEFAULT_SAMPLE_RATE_HZ = 48_000
 _DEFAULT_SILENCE_FRAMES = 4_800
 _TARGET_PEAK_DBFS = -1.0
 _FLOAT_MAX = math.nextafter(1.0, 0.0)
+_SURROUND_CHANNEL_IDS: frozenset[str] = frozenset(
+    {
+        "SPK.LS",
+        "SPK.RS",
+        "SPK.LRS",
+        "SPK.RRS",
+        "SPK.LW",
+        "SPK.RW",
+    }
+)
+_OVERHEAD_CHANNEL_IDS: frozenset[str] = frozenset(
+    {"SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR", "SPK.TFC", "SPK.TBC"}
+)
 
 
 def _json_clone(value: Any) -> Any:
@@ -248,6 +278,23 @@ def _gain_vector(
         gain = _coerce_float(gains.get(speaker_id))
         vector.append(gain if gain is not None else 0.0)
     return vector
+
+
+def _positive_send_map(
+    gains_payload: Any,
+    *,
+    allowed_channels: frozenset[str],
+) -> dict[str, float]:
+    gains = gains_payload if isinstance(gains_payload, dict) else {}
+    rows: dict[str, float] = {}
+    for speaker_id in sorted(gains.keys()):
+        if speaker_id not in allowed_channels:
+            continue
+        gain = _coerce_float(gains.get(speaker_id))
+        if gain is None or gain <= 0.0:
+            continue
+        rows[speaker_id] = round(gain, 6)
+    return rows
 
 
 def _float_samples_to_pcm24_bytes(samples: Sequence[float]) -> bytes:
@@ -433,7 +480,16 @@ def _mix_layout_from_intent(
             "stem_id": _coerce_str(row.get("stem_id")),
             "policy_class": _coerce_str(row.get("policy_class")),
             "nonzero_channels": list(row.get("nonzero_channels") or []),
+            "surround_sends": _positive_send_map(
+                row.get("gains"),
+                allowed_channels=_SURROUND_CHANNEL_IDS,
+            ),
+            "overhead_sends": _positive_send_map(
+                row.get("gains"),
+                allowed_channels=_OVERHEAD_CHANNEL_IDS,
+            ),
             "notes": list(row.get("notes") or []),
+            "why": list(row.get("notes") or []),
         }
         for row in stem_send_rows
         if isinstance(row, dict)

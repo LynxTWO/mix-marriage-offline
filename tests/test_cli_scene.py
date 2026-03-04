@@ -14,15 +14,26 @@ from mmo.cli import main
 
 def _schema_validator(schema_path: Path) -> jsonschema.Draft202012Validator:
     registry = Registry()
+    store: dict[str, dict] = {}
     for candidate in sorted(schema_path.parent.glob("*.schema.json")):
         schema = json.loads(candidate.read_text(encoding="utf-8"))
         resource = Resource.from_contents(schema, default_specification=DRAFT202012)
         registry = registry.with_resource(candidate.resolve().as_uri(), resource)
+        store[candidate.resolve().as_uri()] = schema
         schema_id = schema.get("$id")
         if isinstance(schema_id, str) and schema_id:
             registry = registry.with_resource(schema_id, resource)
+            store[schema_id] = schema
     root_schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    return jsonschema.Draft202012Validator(root_schema, registry=registry)
+    try:
+        return jsonschema.Draft202012Validator(root_schema, registry=registry)
+    except TypeError:
+        # jsonschema<4.22 does not accept a registry kwarg.
+        resolver_cls = getattr(jsonschema, "RefResolver", None)
+        if resolver_cls is not None:
+            resolver = resolver_cls.from_schema(root_schema, store=store)
+            return jsonschema.Draft202012Validator(root_schema, resolver=resolver)
+        return jsonschema.Draft202012Validator(root_schema)
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -335,6 +346,34 @@ class TestCliScene(unittest.TestCase):
                     "STEMFILE.2222222222",
                 ],
             )
+            objects_by_stem = {
+                row.get("stem_id"): row
+                for row in payload_a.get("objects", [])
+                if isinstance(row, dict) and isinstance(row.get("stem_id"), str)
+            }
+            uncertain = objects_by_stem.get("STEMFILE.5555555555")
+            self.assertIsInstance(uncertain, dict)
+            if isinstance(uncertain, dict):
+                self.assertNotIn("azimuth_hint", uncertain)
+                self.assertNotIn("width_hint", uncertain)
+                self.assertNotIn("depth_hint", uncertain)
+
+            beds = payload_a.get("beds")
+            self.assertIsInstance(beds, list)
+            if isinstance(beds, list):
+                by_bus_id = {
+                    row.get("bus_id"): row
+                    for row in beds
+                    if isinstance(row, dict) and isinstance(row.get("bus_id"), str)
+                }
+                self.assertEqual(
+                    by_bus_id["BUS.FX.REVERB"].get("stem_ids"),
+                    ["STEMFILE.3333333333"],
+                )
+                self.assertEqual(
+                    by_bus_id["BUS.MUSIC.SYNTH"].get("stem_ids"),
+                    ["STEMFILE.4444444444"],
+                )
             self.assertEqual(
                 payload_a.get("source_refs", {}).get("stems_map_ref"),
                 stems_map_path.resolve().as_posix(),
