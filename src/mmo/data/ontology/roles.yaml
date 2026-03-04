@@ -82,19 +82,64 @@ roles:
       regex:
       - (?i)\bsynth\s*bass\b
       - (?i)\b808\b
-  ROLE.BRASS.SECTION:
-    label: Brass
-    description: Brass section or layered brass.
+  ROLE.BRASS.HORN:
+    label: Horn
+    description: French horn or horn line stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - horn
+      - horns
+      - french horn
+      regex:
+      - (?i)\bhorns?\d*\b
+      - (?i)\bfrench\s*horn\d*\b
+  ROLE.BRASS.OTHER:
+    label: Other brass
+    description: Generic or unclassified brass stem.
     kind: source
     default_bus_group: MUSIC
     inference:
       keywords:
       - brass
-      - horns
-      - brass section
       regex:
-      - (?i)\b(brass|horns)\b
-      - (?i)\bbrass\s*section\b
+      - (?i)\bbrass\d*\b
+  ROLE.BRASS.SECTION:
+    label: Brass section
+    description: Layered brass section stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - brass section
+      - horn section
+      regex:
+      - (?i)\b(brass|horn)\s*section\d*\b
+  ROLE.BRASS.TROMBONE:
+    label: Trombone
+    description: Trombone stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - trombone
+      - tbn
+      regex:
+      - (?i)\btrombone\d*\b
+      - (?i)\btbn\d*\b
+  ROLE.BRASS.TRUMPET:
+    label: Trumpet
+    description: Trumpet stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - trumpet
+      - trpt
+      regex:
+      - (?i)\btrumpet\d*\b
+      - (?i)\btrpt\d*\b
   ROLE.BUS.BASS:
     label: Bass bus
     description: Submix bus containing bass elements.
@@ -404,9 +449,11 @@ roles:
       - gtr
       - guitar
       - egtr
+      - elecgtr
       - electric gtr
       - electric guitar
       regex:
+      - (?i)\belecgtr\d*\b
       - (?i)\b(electric\s*gtr|electric\s*guitar|egtr|gtr)\b
   ROLE.GTR.ELECTRIC_L:
     label: Electric guitar (left)
@@ -476,11 +523,23 @@ roles:
       - ep
       - e-piano
       - electric piano
-      - rhodes
       - wurli
       - wurlitzer
       regex:
-      - (?i)\b(e-?piano|electric\s*piano|rhodes|wurli(tzer)?)\b
+      - (?i)\b(e-?piano|electric\s*piano|wurli(tzer)?)\b
+  ROLE.KEYS.KEYS:
+    label: Keys
+    description: Generic keyboard/keys stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - keys
+      - keyboard
+      - keyboards
+      regex:
+      - (?i)\bkeys\d*\b
+      - (?i)\bkeyboards?\b
   ROLE.KEYS.ORGAN:
     label: Organ
     description: Organ (Hammond/synth organ).
@@ -491,7 +550,7 @@ roles:
       - organ
       - hammond
       regex:
-      - (?i)\b(organ|hammond)\b
+      - (?i)\b(organ|hammond)\d*\b
   ROLE.KEYS.PIANO:
     label: Piano
     description: Acoustic or sampled piano.
@@ -503,8 +562,19 @@ roles:
       - grand
       - upright
       regex:
-      - (?i)\bpiano\b
-      - (?i)\b(grand|upright)\b
+      - (?i)\bpiano\d*\b
+      - (?i)\b(grand|upright)\d*\b
+  ROLE.KEYS.RHODES:
+    label: Rhodes
+    description: Rhodes electric piano stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - rhodes
+      - fender rhodes
+      regex:
+      - (?i)\brhodes\d*\b
   ROLE.MASTER.MIX:
     label: Mix master
     description: Full mix print or mix bus stem (2-channel or multichannel).
@@ -604,19 +674,78 @@ roles:
       regex:
       - (?i)\bhard\s*sfx\b
       - (?i)\bhard\s*fx\b
-  ROLE.STRINGS.SECTION:
-    label: Strings
-    description: String section or layered strings.
+  ROLE.STRINGS.BASS:
+    label: String bass
+    description: Upright/double bass in the string family.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - upright bass
+      - double bass
+      - string bass
+      - contrabass
+      regex:
+      - (?i)\b(upright|double|string)\s*bass\d*\b
+      - (?i)\bcontra\s*bass\d*\b
+      - (?i)\bcontrabass\d*\b
+  ROLE.STRINGS.CELLO:
+    label: Cello
+    description: Cello stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - cello
+      - celli
+      regex:
+      - (?i)\bcell(o|i)\d*\b
+  ROLE.STRINGS.OTHER:
+    label: Other strings
+    description: Generic or unclassified strings stem.
     kind: source
     default_bus_group: MUSIC
     inference:
       keywords:
       - strings
+      - string
+      regex:
+      - (?i)\bstrings?\d*\b
+  ROLE.STRINGS.SECTION:
+    label: Strings section
+    description: Layered orchestral string section.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
       - string section
+      - strings section
       - orch strings
       regex:
-      - (?i)\bstrings?\b
-      - (?i)\bstring\s*section\b
+      - (?i)\bstring\s*section\d*\b
+      - (?i)\b(orchestral|orch)\s*strings?\b
+  ROLE.STRINGS.VIOLA:
+    label: Viola
+    description: Viola stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - viola
+      - violas
+      regex:
+      - (?i)\bviolas?\d*\b
+  ROLE.STRINGS.VIOLIN:
+    label: Violin
+    description: Violin stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - violin
+      - violins
+      regex:
+      - (?i)\bviolins?\d*\b
   ROLE.SYNTH.ARP:
     label: Arpeggiator
     description: Arp pattern or rhythmic synth sequence.
@@ -791,9 +920,47 @@ roles:
       - vox lead
       - lv
       regex:
+      - (?i)\bleadvox\d*\b
       - (?i)\blead\s*vox\b
       - (?i)\blead\s*vocal\b
       - (?i)\bvox\s*lead\b
+  ROLE.VOX.BGV:
+    label: Backing vox
+    description: Compact-token backing vocal naming variant.
+    kind: source
+    default_bus_group: VOCALS
+    inference:
+      keywords:
+      - backingvox
+      - bvox
+      regex:
+      - (?i)\bbackingvox\d*\b
+      - (?i)\bbvox\d*\b
+  ROLE.VOX.LEAD:
+    label: Lead vox
+    description: Compact-token lead vocal naming variant.
+    kind: source
+    default_bus_group: VOCALS
+    inference:
+      keywords:
+      - leadvox
+      - voxlead
+      regex:
+      - (?i)\bleadvox\d*\b
+      - (?i)\bvoxlead\d*\b
+  ROLE.VOX.OTHER:
+    label: Other vox
+    description: Generic compact vox token stem.
+    kind: source
+    default_bus_group: VOCALS
+    inference:
+      keywords:
+      - vox
+      - vocals
+      - vocal
+      regex:
+      - (?i)\bvox\d*\b
+      - (?i)\bvocals?\d*\b
   ROLE.WINDS.SECTION:
     label: Winds
     description: Woodwinds or wind ensemble layers.
@@ -803,9 +970,45 @@ roles:
       keywords:
       - winds
       - woodwinds
-      - flute
-      - clarinet
+      - wind section
+      - reeds
       - oboe
-      - sax
       regex:
-      - (?i)\b(woodwinds?|winds?|flute|clarinet|oboe|sax)\b
+      - (?i)\b(woodwinds?|winds?)\d*\b
+      - (?i)\bwind\s*section\d*\b
+      - (?i)\b(oboe|reeds?)\d*\b
+  ROLE.WW.CLARINET:
+    label: Clarinet
+    description: Clarinet stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - clarinet
+      - clar
+      regex:
+      - (?i)\bclarinet\d*\b
+      - (?i)\bclar\d*\b
+  ROLE.WW.FLUTE:
+    label: Flute
+    description: Flute stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - flute
+      - flt
+      regex:
+      - (?i)\bflute\d*\b
+      - (?i)\bflt\d*\b
+  ROLE.WW.SAX:
+    label: Sax
+    description: Saxophone stem.
+    kind: source
+    default_bus_group: MUSIC
+    inference:
+      keywords:
+      - sax
+      - saxophone
+      regex:
+      - (?i)\bsax(ophone)?\d*\b

@@ -483,6 +483,34 @@ class TestRoleNamingValidation(unittest.TestCase):
                 "Recognised names should not trigger UNKNOWN_ROLE",
             )
 
+    def test_inventory_family_token_names_no_unknown_role_issue(self) -> None:
+        """Top inventory family tokens with numeric suffixes should be recognised."""
+        with tempfile.TemporaryDirectory() as tmp:
+            stems_dir = Path(tmp) / "stems"
+            stems_dir.mkdir()
+            for name in (
+                "Violin1.wav",
+                "Trumpet2.wav",
+                "ElecGtr1.wav",
+                "LeadVox1.wav",
+                "BackingVox2.wav",
+                "Piano1.wav",
+            ):
+                _write_wav(stems_dir / name, 2, 48000, 16, 1024)
+
+            rc, stdout, _stderr = _run_scan_session(stems_dir)
+            self.assertEqual(rc, 0)
+            report = json.loads(stdout)
+            unknown_role_issues = [
+                i for i in report.get("issues", [])
+                if isinstance(i, dict) and i.get("issue_id") == "ISSUE.VALIDATION.UNKNOWN_ROLE"
+            ]
+            self.assertEqual(
+                unknown_role_issues,
+                [],
+                "Inventory family token stems should not trigger UNKNOWN_ROLE",
+            )
+
     def test_unrecognised_role_name_emits_issue(self) -> None:
         """A stem with a completely opaque name should get an UNKNOWN_ROLE issue."""
         with tempfile.TemporaryDirectory() as tmp:

@@ -213,6 +213,57 @@ class TestStemsClassifier(unittest.TestCase):
             by_rel_path["stems/backingvox1.wav"]["reasons"],
         )
 
+    def test_family_tokens_with_numeric_suffixes_classify_without_unknown(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        roles_payload = load_roles(repo_root / "ontology" / "roles.yaml")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "stems_root"
+            for name in (
+                "Violin1.wav",
+                "Trumpet2.wav",
+                "ElecGtr1.wav",
+                "LeadVox1.wav",
+                "BackingVox2.wav",
+                "Piano1.wav",
+            ):
+                _write_tiny_wav(root / "stems" / name)
+
+            stems_index = build_stems_index(root, root_dir="demo_stems")
+            stems_map = classify_stems(stems_index, roles_payload)
+            assignments = stems_map.get("assignments")
+            self.assertIsInstance(assignments, list)
+            if not isinstance(assignments, list):
+                return
+
+            by_rel_path = {
+                item.get("rel_path"): item
+                for item in assignments
+                if isinstance(item, dict) and isinstance(item.get("rel_path"), str)
+            }
+
+            self.assertEqual(by_rel_path["stems/Violin1.wav"]["role_id"], "ROLE.STRINGS.VIOLIN")
+            self.assertEqual(by_rel_path["stems/Trumpet2.wav"]["role_id"], "ROLE.BRASS.TRUMPET")
+            self.assertEqual(by_rel_path["stems/ElecGtr1.wav"]["role_id"], "ROLE.GTR.ELECTRIC")
+            self.assertEqual(by_rel_path["stems/Piano1.wav"]["role_id"], "ROLE.KEYS.PIANO")
+
+            lead_role_id = by_rel_path["stems/LeadVox1.wav"]["role_id"]
+            self.assertIn(lead_role_id, {"ROLE.VOCAL.LEAD", "ROLE.VOX.LEAD"})
+
+            backing = by_rel_path["stems/BackingVox2.wav"]
+            self.assertNotEqual(backing["role_id"], "ROLE.OTHER.UNKNOWN")
+            self.assertEqual(backing["bus_group"], "VOCALS")
+
+            for rel_path in (
+                "stems/Violin1.wav",
+                "stems/Trumpet2.wav",
+                "stems/ElecGtr1.wav",
+                "stems/LeadVox1.wav",
+                "stems/BackingVox2.wav",
+                "stems/Piano1.wav",
+            ):
+                self.assertNotEqual(by_rel_path[rel_path]["role_id"], "ROLE.OTHER.UNKNOWN")
+
     def test_user_lexicon_can_override_common_lexicon_with_additional_keyword(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         roles_payload = load_roles(repo_root / "ontology" / "roles.yaml")
