@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import shutil
 import struct
 import wave
 from dataclasses import dataclass
@@ -114,6 +115,27 @@ _OVERHEAD_CHANNEL_IDS: frozenset[str] = frozenset(
 _IMMERSIVE_WRAP_PERSPECTIVES: frozenset[str] = frozenset({"in_band", "in_orchestra"})
 _SIDE_WRAP_CONFIDENCE_MIN = 0.8
 _SIDE_WRAP_WIDE_GAIN_RATIO = 0.12
+_DEFAULT_SUBBUS_EXPORT_IDS: tuple[str, ...] = (
+    "BUS.DRUMS",
+    "BUS.BASS",
+    "BUS.MUSIC",
+    "BUS.VOX",
+    "BUS.FX",
+)
+_SUBBUS_FILENAME_BY_ID: dict[str, str] = {
+    "BUS.DRUMS": "drums",
+    "BUS.BASS": "bass",
+    "BUS.MUSIC": "music",
+    "BUS.VOX": "vox",
+    "BUS.FX": "fx",
+}
+_STEM_COPY_SUFFIX_BY_FORMAT: dict[str, str] = {
+    "wav": "wav",
+    "flac": "flac",
+    "wv": "wv",
+    "aiff": "aiff",
+    "alac": "m4a",
+}
 
 
 @dataclass(frozen=True)
@@ -161,6 +183,14 @@ class _StemPassState:
     iterator: Iterator[list[float]]
     active: bool = True
     failed: bool = False
+
+
+@dataclass(frozen=True)
+class _ExportOptions:
+    export_stems: bool
+    export_buses: bool
+    export_master: bool
+    export_layout_ids: tuple[str, ...]
 
 
 def _json_clone(value: Any) -> Any:
@@ -213,6 +243,161 @@ def _coerce_bool(value: Any) -> bool | None:
         if normalized in {"0", "false", "no", "off"}:
             return False
     return None
+
+
+def _normalize_layout_ids(value: Any) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return ()
+    normalized = {
+        item.strip().upper()
+        for item in value
+        if isinstance(item, str) and item.strip()
+    }
+    if not normalized:
+        return ()
+    return tuple(
+        layout_id
+        for layout_id in _SUPPORTED_LAYOUT_IDS
+        if layout_id in normalized
+    )
+
+
+def _resolve_export_options(session: Dict[str, Any]) -> _ExportOptions:
+    defaults = _ExportOptions(
+        export_stems=False,
+        export_buses=False,
+        export_master=True,
+        export_layout_ids=(),
+    )
+    raw_options = session.get("render_export_options")
+    if not isinstance(raw_options, dict):
+        return defaults
+    export_stems = _coerce_bool(raw_options.get("export_stems"))
+    export_buses = _coerce_bool(raw_options.get("export_buses"))
+    export_master = _coerce_bool(raw_options.get("export_master"))
+    return _ExportOptions(
+        export_stems=defaults.export_stems if export_stems is None else export_stems,
+        export_buses=defaults.export_buses if export_buses is None else export_buses,
+        export_master=defaults.export_master if export_master is None else export_master,
+        export_layout_ids=_normalize_layout_ids(raw_options.get("export_layout_ids")),
+    )
+
+
+def _layout_relative_dir(
+    *,
+    output_dir: Path,
+    layout_id: str,
+) -> Path:
+    layout_dir = _layout_slug(layout_id)
+    if output_dir.name.casefold() == layout_dir.casefold():
+        return Path()
+    return Path(layout_dir)
+
+
+def _master_output_relative_path(
+    *,
+    output_dir: Path,
+    layout_id: str,
+) -> Path:
+    return _layout_relative_dir(output_dir=output_dir, layout_id=layout_id) / "master.wav"
+
+
+def _bus_slug(bus_id: str) -> str:
+    mapped = _SUBBUS_FILENAME_BY_ID.get(bus_id)
+    if mapped:
+        return mapped
+    token = bus_id.strip().upper()
+    if token.startswith("BUS."):
+        token = token[4:]
+    cleaned = "".join(ch if ch.isalnum() else "_" for ch in token)
+    cleaned = cleaned.strip("_").lower()
+    return cleaned or "other"
+
+
+def _identifier_token(value: str) -> str:
+    token = "".join(
+        ch if ch.isalnum() else "_"
+        for ch in value.strip().upper()
+    )
+    token = token.strip("_")
+    return token or "UNKNOWN"
+
+
+def _bus_output_relative_path(
+    *,
+    output_dir: Path,
+    layout_id: str,
+    bus_id: str,
+) -> Path:
+    base_dir = _layout_relative_dir(output_dir=output_dir, layout_id=layout_id)
+    return base_dir / "buses" / f"{_bus_slug(bus_id)}.wav"
+
+
+def _scene_stem_reference_map(scene: dict[str, Any]) -> dict[str, dict[str, list[str]]]:
+    refs: dict[str, dict[str, set[str]]] = {}
+    objects = scene.get("objects")
+    if isinstance(objects, list):
+        for obj in objects:
+            if not isinstance(obj, dict):
+                continue
+            stem_id = _coerce_str(obj.get("stem_id")).strip()
+            if not stem_id:
+                continue
+            object_id = _coerce_str(obj.get("object_id")).strip()
+            row = refs.setdefault(stem_id, {"objects": set(), "beds": set()})
+            if object_id:
+                row["objects"].add(object_id)
+    beds = scene.get("beds")
+    if isinstance(beds, list):
+        for bed in beds:
+            if not isinstance(bed, dict):
+                continue
+            bed_id = _coerce_str(bed.get("bed_id")).strip()
+            stem_ids = bed.get("stem_ids")
+            if not isinstance(stem_ids, list):
+                continue
+            for raw_stem_id in stem_ids:
+                stem_id = _coerce_str(raw_stem_id).strip()
+                if not stem_id:
+                    continue
+                row = refs.setdefault(stem_id, {"objects": set(), "beds": set()})
+                if bed_id:
+                    row["beds"].add(bed_id)
+    normalized: dict[str, dict[str, list[str]]] = {}
+    for stem_id in sorted(refs.keys()):
+        normalized[stem_id] = {
+            "objects": sorted(refs[stem_id]["objects"]),
+            "beds": sorted(refs[stem_id]["beds"]),
+        }
+    return normalized
+
+
+def _stem_reference_summary(refs: dict[str, list[str]]) -> str:
+    object_ids = refs.get("objects") if isinstance(refs, dict) else None
+    bed_ids = refs.get("beds") if isinstance(refs, dict) else None
+    parts: list[str] = []
+    if isinstance(object_ids, list) and object_ids:
+        parts.append("object:" + ",".join(object_ids))
+    if isinstance(bed_ids, list) and bed_ids:
+        parts.append("bed:" + ",".join(bed_ids))
+    if not parts:
+        return "scene_unmapped"
+    return ";".join(parts)
+
+
+def _selected_layout_ids(
+    export_options: _ExportOptions,
+) -> list[str]:
+    if export_options.export_layout_ids:
+        return list(export_options.export_layout_ids)
+    return list(_SUPPORTED_LAYOUT_IDS)
+
+
+def _infer_stem_copy_format(source_path: Path) -> str:
+    format_id = detect_format_from_path(source_path)
+    if format_id in _STEM_COPY_SUFFIX_BY_FORMAT:
+        return format_id
+    return ""
 
 
 def _resolve_explicit_render_sample_rate_hz(
@@ -312,17 +497,6 @@ def _layout_channel_order(layout_id: str) -> list[str]:
 
 def _layout_slug(layout_id: str) -> str:
     return layout_id.replace(".", "_")
-
-
-def _output_relative_path(
-    *,
-    output_dir: Path,
-    layout_id: str,
-) -> Path:
-    layout_dir = _layout_slug(layout_id)
-    if output_dir.name.casefold() == layout_dir.casefold():
-        return Path("master.wav")
-    return Path(layout_dir) / "master.wav"
 
 
 def _received_recommendation_ids(
@@ -900,17 +1074,252 @@ def _write_trimmed_chunk(
     handle.writeframes(_float_samples_to_pcm24_bytes(trimmed))
 
 
+def _render_subbus_output(
+    *,
+    layout_id: str,
+    output_dir: Path,
+    bus_id: str,
+    prepared_stems: list[_PreparedStem],
+    trim_linear: float,
+    sample_rate_hz: int,
+    channel_count: int,
+    bus_trim_db: float,
+    stem_scene_refs: dict[str, dict[str, list[str]]],
+) -> tuple[dict[str, Any] | None, list[str]]:
+    if not prepared_stems:
+        return None, []
+    rel_path = _bus_output_relative_path(
+        output_dir=output_dir,
+        layout_id=layout_id,
+        bus_id=bus_id,
+    )
+    abs_path = output_dir / rel_path
+    if abs_path.exists():
+        return None, [f"{layout_id}:{bus_id}:skipped_existing_output:{rel_path.as_posix()}"]
+
+    notes: list[str] = []
+    abs_path.parent.mkdir(parents=True, exist_ok=True)
+    pass_frames = 0
+    with wave.open(str(abs_path), "wb") as handle:
+        handle.setnchannels(channel_count)
+        handle.setsampwidth(3)
+        handle.setframerate(sample_rate_hz)
+        _, pass_frames, pass_notes = _run_mix_pass(
+            prepared_stems=prepared_stems,
+            channel_count=channel_count,
+            layout_id=layout_id,
+            on_chunk=lambda chunk, frame_count: _write_trimmed_chunk(
+                handle=handle,
+                mixed_chunk=chunk,
+                frame_count=frame_count,
+                channel_count=channel_count,
+                trim_linear=trim_linear,
+            ),
+        )
+        if pass_notes:
+            notes.extend(pass_notes)
+        if pass_frames <= 0:
+            silence = [0.0] * (_DEFAULT_SILENCE_FRAMES * channel_count)
+            handle.writeframes(_float_samples_to_pcm24_bytes(silence))
+
+    output_sha = sha256_file(abs_path)
+    stem_ids = sorted(stem.stem_id for stem in prepared_stems)
+    scene_bindings = {
+        stem_id: _stem_reference_summary(stem_scene_refs.get(stem_id, {}))
+        for stem_id in stem_ids
+    }
+    output_row: dict[str, Any] = {
+        "output_id": (
+            "OUTPUT.PLACEMENT_SUBBUS."
+            f"{_layout_slug(layout_id)}."
+            f"{_identifier_token(bus_id)}."
+            f"{output_sha[:12]}"
+        ),
+        "file_path": rel_path.as_posix(),
+        "layout_id": layout_id,
+        "target_bus_id": bus_id,
+        "format": "wav",
+        "sample_rate_hz": sample_rate_hz,
+        "bit_depth": 24,
+        "channel_count": channel_count,
+        "sha256": output_sha,
+        "notes": (
+            "scene_subbus_export "
+            f"trim_linear_from_master={trim_linear:.6f}"
+        ),
+        "metadata": {
+            "artifact_role": "subbus",
+            "main_bus_id": "BUS.MAIN",
+            "bus_trim_db": bus_trim_db,
+            "source_stem_ids": stem_ids,
+            "scene_bindings": scene_bindings,
+        },
+    }
+    if notes:
+        output_row["metadata"]["warnings"] = sorted(set(notes))
+    return output_row, []
+
+
+def _export_subbus_outputs(
+    *,
+    layout_id: str,
+    output_dir: Path,
+    prepared_stems: list[_PreparedStem],
+    sends_by_stem: dict[str, dict[str, Any]],
+    trim_linear: float,
+    sample_rate_hz: int,
+    channel_count: int,
+    render_intent: dict[str, Any],
+    stem_scene_refs: dict[str, dict[str, list[str]]],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    stem_bus_by_id: dict[str, str] = {}
+    for stem in prepared_stems:
+        send_row = sends_by_stem.get(stem.stem_id)
+        bus_id = (
+            _coerce_str(send_row.get("group_bus")).strip().upper()
+            if isinstance(send_row, dict)
+            else ""
+        ) or "BUS.OTHER"
+        stem_bus_by_id[stem.stem_id] = bus_id
+
+    stems_by_bus: dict[str, list[_PreparedStem]] = {}
+    for stem in prepared_stems:
+        bus_id = stem_bus_by_id.get(stem.stem_id, "BUS.OTHER")
+        stems_by_bus.setdefault(bus_id, []).append(stem)
+
+    bus_gain_staging = render_intent.get("bus_gain_staging")
+    group_trims = (
+        bus_gain_staging.get("group_trims_db")
+        if isinstance(bus_gain_staging, dict)
+        else None
+    )
+
+    outputs: list[dict[str, Any]] = []
+    notes: list[str] = []
+    for bus_id in _DEFAULT_SUBBUS_EXPORT_IDS:
+        bus_stems = stems_by_bus.get(bus_id) or []
+        if not bus_stems:
+            continue
+        bus_trim_db = _coerce_float(group_trims.get(bus_id)) if isinstance(group_trims, dict) else None
+        output_row, output_notes = _render_subbus_output(
+            layout_id=layout_id,
+            output_dir=output_dir,
+            bus_id=bus_id,
+            prepared_stems=bus_stems,
+            trim_linear=trim_linear,
+            sample_rate_hz=sample_rate_hz,
+            channel_count=channel_count,
+            bus_trim_db=bus_trim_db if bus_trim_db is not None else 0.0,
+            stem_scene_refs=stem_scene_refs,
+        )
+        if output_notes:
+            notes.extend(output_notes)
+        if isinstance(output_row, dict):
+            outputs.append(output_row)
+    return outputs, notes
+
+
+def _export_stem_copy_outputs(
+    *,
+    session: Dict[str, Any],
+    output_dir: Path,
+    stem_bus_by_id: dict[str, str],
+    stem_scene_refs: dict[str, dict[str, list[str]]],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    stems_dir = _resolve_stems_dir(session)
+    stems = _stem_rows(session)
+    outputs: list[dict[str, Any]] = []
+    notes: list[str] = []
+    seen_stem_ids: set[str] = set()
+    for stem in stems:
+        stem_id = _coerce_str(stem.get("stem_id")).strip()
+        if not stem_id or stem_id in seen_stem_ids:
+            continue
+        seen_stem_ids.add(stem_id)
+        source_path, resolve_reason = _resolve_stem_source_path(stem, stems_dir)
+        if resolve_reason is not None or source_path is None:
+            notes.append(f"stems:{stem_id}:{resolve_reason or 'unresolved_path'}")
+            continue
+        if not source_path.exists():
+            notes.append(f"stems:{stem_id}:missing_source_file")
+            continue
+
+        source_format = _infer_stem_copy_format(source_path)
+        if not source_format:
+            notes.append(f"stems:{stem_id}:unsupported_copy_format")
+            continue
+        suffix = _STEM_COPY_SUFFIX_BY_FORMAT[source_format]
+        rel_path = Path("stems") / f"{stem_id}.{suffix}"
+        abs_path = output_dir / rel_path
+        if abs_path.exists():
+            notes.append(f"stems:{stem_id}:skipped_existing_output:{rel_path.as_posix()}")
+            continue
+
+        abs_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copyfile(source_path, abs_path)
+        except OSError:
+            notes.append(f"stems:{stem_id}:copy_failed")
+            continue
+
+        output_sha = sha256_file(abs_path)
+        metadata_payload: dict[str, Any] = {
+            "artifact_role": "stem_copy",
+            "main_bus_id": "BUS.MAIN",
+            "subbus_id": stem_bus_by_id.get(stem_id, "BUS.OTHER"),
+            "scene_binding": _stem_reference_summary(stem_scene_refs.get(stem_id, {})),
+            "source_path": source_path.as_posix(),
+        }
+
+        channel_count = _coerce_int(stem.get("channel_count"))
+        sample_rate_hz = _coerce_int(stem.get("sample_rate_hz"))
+        try:
+            source_meta = read_audio_metadata(source_path)
+        except Exception:
+            source_meta = {}
+        if channel_count is None:
+            channel_count = _coerce_int(source_meta.get("channels"))
+        if sample_rate_hz is None:
+            sample_rate_hz = _coerce_int(source_meta.get("sample_rate_hz"))
+
+        output_row: dict[str, Any] = {
+            "output_id": f"OUTPUT.PLACEMENT_STEM_COPY.{_identifier_token(stem_id)}.{output_sha[:12]}",
+            "file_path": rel_path.as_posix(),
+            "target_stem_id": stem_id,
+            "target_bus_id": stem_bus_by_id.get(stem_id, "BUS.OTHER"),
+            "format": source_format,
+            "sha256": output_sha,
+            "notes": "scene_stem_copy_export",
+            "metadata": metadata_payload,
+        }
+        if isinstance(channel_count, int) and channel_count > 0:
+            output_row["channel_count"] = channel_count
+        if isinstance(sample_rate_hz, int) and sample_rate_hz > 0:
+            output_row["sample_rate_hz"] = sample_rate_hz
+        outputs.append(output_row)
+
+    outputs.sort(
+        key=lambda row: (
+            _coerce_str(row.get("target_stem_id")),
+            _coerce_str(row.get("file_path")),
+        )
+    )
+    return outputs, notes
+
+
 def _mix_layout_from_intent(
     *,
     session: Dict[str, Any],
     render_intent: dict[str, Any],
     layout_id: str,
     output_dir: Path,
-) -> tuple[dict[str, Any] | None, list[str]]:
+    export_options: _ExportOptions,
+    stem_scene_refs: dict[str, dict[str, list[str]]],
+) -> tuple[list[dict[str, Any]], list[str]]:
     notes: list[str] = []
     channel_order = render_intent.get("channel_order")
     if not isinstance(channel_order, list) or not channel_order:
-        return None, [f"{layout_id}:missing_channel_order"]
+        return [], [f"{layout_id}:missing_channel_order"]
 
     normalized_channel_order = [
         speaker_id
@@ -918,14 +1327,7 @@ def _mix_layout_from_intent(
         if isinstance(speaker_id, str) and speaker_id
     ]
     if not normalized_channel_order:
-        return None, [f"{layout_id}:invalid_channel_order"]
-
-    rel_path = _output_relative_path(output_dir=output_dir, layout_id=layout_id)
-    abs_path = output_dir / rel_path
-    if abs_path.exists():
-        return None, [
-            f"{layout_id}:skipped_existing_output:{rel_path.as_posix()}"
-        ]
+        return [], [f"{layout_id}:invalid_channel_order"]
 
     stem_sends = render_intent.get("stem_sends")
     stem_send_rows = stem_sends if isinstance(stem_sends, list) else []
@@ -987,33 +1389,6 @@ def _mix_layout_from_intent(
         trim_linear = min(1.0, target_peak_linear / pre_trim_peak)
     trim_db = _linear_to_db(trim_linear)
 
-    abs_path.parent.mkdir(parents=True, exist_ok=True)
-    pass2_frames = 0
-    with wave.open(str(abs_path), "wb") as handle:
-        handle.setnchannels(channel_count)
-        handle.setsampwidth(3)
-        handle.setframerate(sample_rate_hz)
-
-        if rendered_audio:
-            _, pass2_frames, pass2_notes = _run_mix_pass(
-                prepared_stems=prepared_stems,
-                channel_count=channel_count,
-                layout_id=layout_id,
-                on_chunk=lambda chunk, frame_count: _write_trimmed_chunk(
-                    handle=handle,
-                    mixed_chunk=chunk,
-                    frame_count=frame_count,
-                    channel_count=channel_count,
-                    trim_linear=trim_linear,
-                ),
-            )
-            if pass2_notes:
-                notes.extend(pass2_notes)
-        if pass2_frames <= 0:
-            silence = [0.0] * (_DEFAULT_SILENCE_FRAMES * channel_count)
-            handle.writeframes(_float_samples_to_pcm24_bytes(silence))
-
-    output_sha = sha256_file(abs_path)
     layout_slug = _layout_slug(layout_id)
     stereo_reinterpret_allowed = bool(
         _coerce_bool(render_intent.get("stereo_reinterpret_allowed"))
@@ -1048,43 +1423,100 @@ def _mix_layout_from_intent(
             }
         )
 
-    output_row: dict[str, Any] = {
-        "output_id": f"OUTPUT.PLACEMENT_MIXDOWN.{layout_slug}.{output_sha[:12]}",
-        "file_path": rel_path.as_posix(),
-        "layout_id": layout_id,
-        "format": "wav",
-        "sample_rate_hz": sample_rate_hz,
-        "bit_depth": 24,
-        "channel_count": channel_count,
-        "sha256": output_sha,
-        "notes": (
-            "scene_placement_mixdown stereo_imaging_preserved"
-            f" trim_db={trim_db:.4f}"
-        ),
-        "metadata": {
-            "applied_policy_id": _coerce_str(render_intent.get("policy_id")),
-            "channel_order": list(normalized_channel_order),
-            "trim_db": trim_db,
-            "trim_linear": trim_linear,
-            "target_peak_dbfs": _TARGET_PEAK_DBFS,
-            "pre_trim_peak": pre_trim_peak,
-            "decoded_stem_count": decoded_stems,
-            "render_strategy": "two_pass_streaming",
-            "render_passes": _RENDER_PASS_COUNT,
-            "chunk_frames": _RENDER_CHUNK_FRAMES,
-            "stereo_reinterpret_allowed": stereo_reinterpret_allowed,
-            "resampling": resampling_receipt,
-            "what_why": (
-                "Rendered one layout-agnostic scene into layout speakers using "
-                "conservative placement sends; stereo stems keep L/R imaging in "
-                "stereo outputs and mid/side handling in multichannel outputs."
-            ),
-            "stem_send_summary": stem_send_summary,
-        },
-    }
+    outputs: list[dict[str, Any]] = []
+    master_rel_path = _master_output_relative_path(output_dir=output_dir, layout_id=layout_id)
+    master_abs_path = output_dir / master_rel_path
+    if export_options.export_master:
+        if master_abs_path.exists():
+            notes.append(f"{layout_id}:skipped_existing_output:{master_rel_path.as_posix()}")
+        else:
+            master_abs_path.parent.mkdir(parents=True, exist_ok=True)
+            pass2_frames = 0
+            with wave.open(str(master_abs_path), "wb") as handle:
+                handle.setnchannels(channel_count)
+                handle.setsampwidth(3)
+                handle.setframerate(sample_rate_hz)
+
+                if rendered_audio:
+                    _, pass2_frames, pass2_notes = _run_mix_pass(
+                        prepared_stems=prepared_stems,
+                        channel_count=channel_count,
+                        layout_id=layout_id,
+                        on_chunk=lambda chunk, frame_count: _write_trimmed_chunk(
+                            handle=handle,
+                            mixed_chunk=chunk,
+                            frame_count=frame_count,
+                            channel_count=channel_count,
+                            trim_linear=trim_linear,
+                        ),
+                    )
+                    if pass2_notes:
+                        notes.extend(pass2_notes)
+                if pass2_frames <= 0:
+                    silence = [0.0] * (_DEFAULT_SILENCE_FRAMES * channel_count)
+                    handle.writeframes(_float_samples_to_pcm24_bytes(silence))
+
+            output_sha = sha256_file(master_abs_path)
+            outputs.append(
+                {
+                    "output_id": f"OUTPUT.PLACEMENT_MIXDOWN.{layout_slug}.{output_sha[:12]}",
+                    "file_path": master_rel_path.as_posix(),
+                    "layout_id": layout_id,
+                    "format": "wav",
+                    "sample_rate_hz": sample_rate_hz,
+                    "bit_depth": 24,
+                    "channel_count": channel_count,
+                    "sha256": output_sha,
+                    "notes": (
+                        "scene_placement_mixdown stereo_imaging_preserved"
+                        f" trim_db={trim_db:.4f}"
+                    ),
+                    "metadata": {
+                        "artifact_role": "master",
+                        "applied_policy_id": _coerce_str(render_intent.get("policy_id")),
+                        "channel_order": list(normalized_channel_order),
+                        "trim_db": trim_db,
+                        "trim_linear": trim_linear,
+                        "target_peak_dbfs": _TARGET_PEAK_DBFS,
+                        "pre_trim_peak": pre_trim_peak,
+                        "decoded_stem_count": decoded_stems,
+                        "render_strategy": "two_pass_streaming",
+                        "render_passes": _RENDER_PASS_COUNT,
+                        "chunk_frames": _RENDER_CHUNK_FRAMES,
+                        "stereo_reinterpret_allowed": stereo_reinterpret_allowed,
+                        "resampling": resampling_receipt,
+                        "what_why": (
+                            "Rendered one layout-agnostic scene into layout speakers using "
+                            "conservative placement sends; stereo stems keep L/R imaging in "
+                            "stereo outputs and mid/side handling in multichannel outputs."
+                        ),
+                        "stem_send_summary": stem_send_summary,
+                    },
+                }
+            )
+
+    if export_options.export_buses:
+        bus_outputs, bus_notes = _export_subbus_outputs(
+            layout_id=layout_id,
+            output_dir=output_dir,
+            prepared_stems=prepared_stems,
+            sends_by_stem=sends_by_stem,
+            trim_linear=trim_linear,
+            sample_rate_hz=sample_rate_hz,
+            channel_count=channel_count,
+            render_intent=render_intent,
+            stem_scene_refs=stem_scene_refs,
+        )
+        outputs.extend(bus_outputs)
+        if bus_notes:
+            notes.extend(bus_notes)
+
     if notes:
-        output_row["metadata"]["warnings"] = sorted(set(notes))
-    return output_row, []
+        for output_row in outputs:
+            metadata = output_row.get("metadata")
+            if isinstance(metadata, dict):
+                metadata["warnings"] = sorted(set(notes))
+    return outputs, notes
 
 
 class PlacementMixdownRenderer(RendererPlugin):
@@ -1112,11 +1544,15 @@ class PlacementMixdownRenderer(RendererPlugin):
             return manifest
 
         stereo_reinterpret_allowed = _scene_stereo_reinterpret_allowed(scene)
+        export_options = _resolve_export_options(session)
+        selected_layouts = _selected_layout_ids(export_options)
         out_dir = Path(output_dir)
+        stem_scene_refs = _scene_stem_reference_map(scene)
         outputs: list[dict[str, Any]] = []
         notes: list[str] = []
+        stem_bus_by_id: dict[str, str] = {}
 
-        for layout_id in _SUPPORTED_LAYOUT_IDS:
+        for layout_id in selected_layouts:
             channel_order = _layout_channel_order(layout_id)
             if not channel_order:
                 notes.append(f"{layout_id}:missing_channel_order")
@@ -1128,17 +1564,46 @@ class PlacementMixdownRenderer(RendererPlugin):
                 continue
             render_intent = dict(render_intent)
             render_intent["stereo_reinterpret_allowed"] = stereo_reinterpret_allowed
+            stem_sends = render_intent.get("stem_sends")
+            if isinstance(stem_sends, list):
+                for row in stem_sends:
+                    if not isinstance(row, dict):
+                        continue
+                    stem_id = _coerce_str(row.get("stem_id")).strip()
+                    if not stem_id or stem_id in stem_bus_by_id:
+                        continue
+                    group_bus = _coerce_str(row.get("group_bus")).strip().upper() or "BUS.OTHER"
+                    stem_bus_by_id[stem_id] = group_bus
 
-            output_row, layout_notes = _mix_layout_from_intent(
+            if not (export_options.export_master or export_options.export_buses):
+                continue
+
+            layout_outputs, layout_notes = _mix_layout_from_intent(
                 session=session,
                 render_intent=render_intent,
                 layout_id=layout_id,
                 output_dir=out_dir,
+                export_options=export_options,
+                stem_scene_refs=stem_scene_refs,
             )
             if layout_notes:
                 notes.extend(layout_notes)
-            if isinstance(output_row, dict):
-                outputs.append(output_row)
+            if layout_outputs:
+                outputs.extend(layout_outputs)
+
+        if export_options.export_stems:
+            stem_outputs, stem_notes = _export_stem_copy_outputs(
+                session=session,
+                output_dir=out_dir,
+                stem_bus_by_id=stem_bus_by_id,
+                stem_scene_refs=stem_scene_refs,
+            )
+            if stem_outputs:
+                outputs.extend(stem_outputs)
+            if stem_notes:
+                notes.extend(stem_notes)
+        if export_options.export_layout_ids and not selected_layouts:
+            notes.append("export_layout_ids: no supported layouts selected")
 
         outputs.sort(
             key=lambda row: (

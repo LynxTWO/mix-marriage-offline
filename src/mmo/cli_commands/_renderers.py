@@ -664,6 +664,10 @@ def _run_render_many_targets(
     layout_standard: str = "SMPTE",
     preview_headphones: bool = False,
     allow_empty_outputs: bool = False,
+    export_stems: bool = False,
+    export_buses: bool = False,
+    export_master: bool = True,
+    export_layouts: list[str] | None = None,
     live_progress: bool = False,
     cancel_file: Path | None = None,
     cancel_token: CancelToken | None = None,
@@ -737,6 +741,10 @@ def _run_render_many_targets(
             layout_standard=layout_standard,
             preview_headphones=preview_headphones,
             allow_empty_outputs=allow_empty_outputs,
+            export_stems=export_stems,
+            export_buses=export_buses,
+            export_master=export_master,
+            export_layouts=export_layouts,
             live_progress=live_progress,
             cancel_file=cancel_file,
             cancel_token=token,
@@ -830,6 +838,21 @@ def _build_receipt_id(report_id: str, target: str) -> str:
         f"{report_id}:{target}".encode("utf-8")
     ).hexdigest()
     return f"RECEIPT.SAFE_RENDER.{digest[:16].upper()}"
+
+
+def _resolve_export_layout_ids(export_layouts: list[str] | None) -> list[str]:
+    if not export_layouts:
+        return []
+    layout_ids: set[str] = set()
+    for raw_token in export_layouts:
+        token = _coerce_str(raw_token).strip()
+        if not token:
+            continue
+        resolved_target = resolve_target_token(token)
+        layout_id = _coerce_str(resolved_target.layout_id).strip()
+        if layout_id:
+            layout_ids.add(layout_id)
+    return sorted(layout_ids)
 
 
 def _collect_output_entries_from_manifests(
@@ -1143,6 +1166,10 @@ def _run_safe_render_command(
     layout_standard: str = "SMPTE",
     preview_headphones: bool = False,
     allow_empty_outputs: bool = False,
+    export_stems: bool = False,
+    export_buses: bool = False,
+    export_master: bool = True,
+    export_layouts: list[str] | None = None,
     live_progress: bool = False,
     cancel_file: Path | None = None,
     cancel_token: CancelToken | None = None,
@@ -1206,6 +1233,10 @@ def _run_safe_render_command(
                 layout_standard=layout_standard,
                 preview_headphones=preview_headphones,
                 allow_empty_outputs=allow_empty_outputs,
+                export_stems=export_stems,
+                export_buses=export_buses,
+                export_master=export_master,
+                export_layouts=export_layouts,
                 live_progress=live_progress,
                 cancel_file=cancel_file,
                 cancel_token=token,
@@ -1221,6 +1252,7 @@ def _run_safe_render_command(
         _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
         resolved_target = resolve_target_token(target)
         binaural_target_requested = is_binaural_layout(resolved_target.layout_id)
+        resolved_export_layout_ids = _resolve_export_layout_ids(export_layouts)
         binaural_source_selection = None
         progress.emit_log(
             kind="info",
@@ -1263,6 +1295,12 @@ def _run_safe_render_command(
         )
         if isinstance(scene_payload_for_render, dict):
             session_payload["scene_payload"] = _json_clone(scene_payload_for_render)
+        session_payload["render_export_options"] = {
+            "export_stems": bool(export_stems),
+            "export_buses": bool(export_buses),
+            "export_master": bool(export_master),
+            "export_layout_ids": resolved_export_layout_ids,
+        }
         session_payload["target_layout_id"] = resolved_target.layout_id
         if run_config is not None:
             normalized_run_config = normalize_run_config(run_config)
@@ -1381,6 +1419,15 @@ def _run_safe_render_command(
                             "binaural_virtualization=true"
                             if binaural_target_requested
                             else "binaural_virtualization=false"
+                        ),
+                        f"export_stems={'true' if export_stems else 'false'}",
+                        f"export_buses={'true' if export_buses else 'false'}",
+                        f"export_master={'true' if export_master else 'false'}",
+                        (
+                            "export_layout_ids="
+                            f"{','.join(resolved_export_layout_ids)}"
+                            if resolved_export_layout_ids
+                            else "export_layout_ids=all"
                         ),
                     ],
                 }
@@ -1549,6 +1596,15 @@ def _run_safe_render_command(
                         "layout_standard="
                         f"{layout_standard} (channel ordering: "
                         f"{'SMPTE/ITU-R default' if layout_standard == 'SMPTE' else 'Film/Cinema/Pro Tools'})"
+                    ),
+                    f"export_stems={'true' if export_stems else 'false'}",
+                    f"export_buses={'true' if export_buses else 'false'}",
+                    f"export_master={'true' if export_master else 'false'}",
+                    (
+                        "export_layout_ids="
+                        f"{','.join(resolved_export_layout_ids)}"
+                        if resolved_export_layout_ids
+                        else "export_layout_ids=all"
                     ),
                 ],
             }
@@ -1787,6 +1843,15 @@ def _run_safe_render_command(
                     "layout_standard="
                     f"{layout_standard} (channel ordering: "
                     f"{'SMPTE/ITU-R default' if layout_standard == 'SMPTE' else 'Film/Cinema/Pro Tools'})"
+                ),
+                f"export_stems={'true' if export_stems else 'false'}",
+                f"export_buses={'true' if export_buses else 'false'}",
+                f"export_master={'true' if export_master else 'false'}",
+                (
+                    "export_layout_ids="
+                    f"{','.join(resolved_export_layout_ids)}"
+                    if resolved_export_layout_ids
+                    else "export_layout_ids=all"
                 ),
             ],
         }

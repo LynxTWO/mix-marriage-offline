@@ -1242,6 +1242,41 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     safe_render_parser.add_argument(
+        "--export-stems",
+        action="store_true",
+        default=False,
+        help=(
+            "Export deterministic stem copy artifacts for inspection "
+            "(written under out-dir/stems/)."
+        ),
+    )
+    safe_render_parser.add_argument(
+        "--export-buses",
+        action="store_true",
+        default=False,
+        help=(
+            "Export scene-aware subbus WAV artifacts (Drums/Bass/Music/Vox/FX) "
+            "alongside each layout master."
+        ),
+    )
+    safe_render_parser.add_argument(
+        "--export-master",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Enable or disable master WAV export per layout "
+            "(default: --export-master)."
+        ),
+    )
+    safe_render_parser.add_argument(
+        "--export-layouts",
+        default=None,
+        help=(
+            "Optional comma-separated target/layout tokens limiting which layout "
+            "artifacts are exported (for example: stereo,5.1,LAYOUT.7_1_4)."
+        ),
+    )
+    safe_render_parser.add_argument(
         "--live-progress",
         action="store_true",
         default=False,
@@ -5994,6 +6029,14 @@ def main(argv: list[str] | None = None) -> int:
                     _RENDER_MANY_DEFAULT_TARGETS,
                 )
                 _render_many_targets = list(_RENDER_MANY_DEFAULT_TARGETS)
+        _export_layouts_raw = getattr(args, "export_layouts", None)
+        _export_layouts: list[str] | None = None
+        if isinstance(_export_layouts_raw, str) and _export_layouts_raw.strip():
+            _export_layouts = [
+                token.strip()
+                for token in _export_layouts_raw.split(",")
+                if token.strip()
+            ]
         try:
             return _run_safe_render_command(
                 repo_root=None,
@@ -6030,6 +6073,10 @@ def main(argv: list[str] | None = None) -> int:
                 layout_standard=_safe_render_layout_standard,
                 preview_headphones=bool(getattr(args, "preview_headphones", False)),
                 allow_empty_outputs=bool(getattr(args, "allow_empty_outputs", False)),
+                export_stems=bool(getattr(args, "export_stems", False)),
+                export_buses=bool(getattr(args, "export_buses", False)),
+                export_master=bool(getattr(args, "export_master", True)),
+                export_layouts=_export_layouts,
                 live_progress=bool(getattr(args, "live_progress", False)),
                 cancel_file=(
                     Path(args.cancel_file)

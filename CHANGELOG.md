@@ -84,6 +84,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Scene-aware safe-render debug artifact exports:
+  - Added `safe-render` flags `--export-stems`, `--export-buses`,
+    `--export-master/--no-export-master` (default export on), and
+    `--export-layouts <csv>`.
+  - Placement render now writes optional stem-copy artifacts, optional
+    Drums/Bass/Music/Vox/FX subbus WAVs, and optional master WAVs with
+    deterministic SHA-256s in render manifest + safe-render receipt.
+  - Recall sheet CSV now includes `stem_subbus_main_scene_map`
+    (`stem -> subbus -> BUS.MAIN -> object/bed`) derived from render intent +
+    scene context.
+
 - Scene QA lint command for pre-render validation:
   - Added `mmo scene lint --scene <scene.json> [--locks <scene_locks.yaml|json>] [--out <report.json>]`.
   - Lint checks now cover missing stem references, duplicate object/bus references,

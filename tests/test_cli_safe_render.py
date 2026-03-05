@@ -917,6 +917,103 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
                     break
             self.assertTrue(saw_locked_width_source, "scene locks were not applied before placement")
 
+    def test_scene_exports_stems_and_buses_with_master_toggle_and_layout_filter(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            report = _make_baseline_fixture_report()
+            report_path = temp / "report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            scene_path = _materialize_explicit_scene_fixture(scene_out_path=temp / "scene.json")
+            plugins_dir = _write_placement_only_plugins_dir(temp / "plugins")
+            out_dir = temp / "renders"
+            manifest_path = temp / "render_manifest.json"
+
+            exit_code, _stdout, stderr = _run_main(
+                [
+                    "safe-render",
+                    "--report",
+                    str(report_path),
+                    "--plugins",
+                    str(plugins_dir),
+                    "--scene",
+                    str(scene_path),
+                    "--target",
+                    "LAYOUT.2_0",
+                    "--out-dir",
+                    str(out_dir),
+                    "--out-manifest",
+                    str(manifest_path),
+                    "--export-stems",
+                    "--export-buses",
+                    "--no-export-master",
+                    "--export-layouts",
+                    "stereo",
+                ]
+            )
+            self.assertEqual(exit_code, 0, msg=stderr)
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            renderer_manifests = manifest.get("renderer_manifests", [])
+            self.assertIsInstance(renderer_manifests, list)
+            placement_manifest = next(
+                (
+                    item
+                    for item in renderer_manifests
+                    if isinstance(item, dict)
+                    and item.get("renderer_id") == "PLUGIN.RENDERER.PLACEMENT_MIXDOWN_V1"
+                ),
+                None,
+            )
+            self.assertIsNotNone(placement_manifest)
+            if not isinstance(placement_manifest, dict):
+                return
+            outputs = placement_manifest.get("outputs")
+            self.assertIsInstance(outputs, list)
+            if not isinstance(outputs, list):
+                return
+
+            master_rows = [
+                row for row in outputs
+                if isinstance(row, dict)
+                and str(row.get("file_path", "")).endswith("/master.wav")
+            ]
+            self.assertEqual(master_rows, [], "master outputs should be disabled")
+
+            stem_rows = [
+                row for row in outputs
+                if isinstance(row, dict)
+                and str(row.get("target_stem_id", "")).strip()
+            ]
+            self.assertGreaterEqual(len(stem_rows), 3, "expected stem copy outputs")
+            for row in stem_rows:
+                file_path = str(row.get("file_path", ""))
+                sha256 = str(row.get("sha256", ""))
+                self.assertTrue(file_path.startswith("stems/"), f"unexpected stem path: {file_path}")
+                self.assertEqual(len(sha256), 64, "expected sha256 on stem artifact")
+                self.assertTrue((out_dir / file_path).is_file(), f"missing stem artifact: {file_path}")
+
+            bus_rows = [
+                row for row in outputs
+                if isinstance(row, dict)
+                and str(row.get("target_bus_id", "")).strip().startswith("BUS.")
+                and "/buses/" in str(row.get("file_path", ""))
+            ]
+            self.assertGreaterEqual(len(bus_rows), 2, "expected subbus outputs")
+            self.assertTrue(
+                any(str(row.get("layout_id", "")) == "LAYOUT.2_0" for row in bus_rows),
+                "subbus exports should honor --export-layouts=stereo",
+            )
+            for row in bus_rows:
+                file_path = str(row.get("file_path", ""))
+                sha256 = str(row.get("sha256", ""))
+                self.assertIn("/buses/", file_path, f"unexpected bus path: {file_path}")
+                self.assertEqual(len(sha256), 64, "expected sha256 on bus artifact")
+                self.assertTrue((out_dir / file_path).is_file(), f"missing bus artifact: {file_path}")
+
     def test_scene_strict_rejects_missing_stems_or_roles(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)

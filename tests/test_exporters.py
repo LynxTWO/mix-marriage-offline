@@ -444,6 +444,7 @@ class TestRecallSheet(unittest.TestCase):
                 "layout_standard",
                 "render_channel_orders",
                 "render_export_warnings",
+                "stem_subbus_main_scene_map",
             ],
         )
 
@@ -598,8 +599,8 @@ class TestRecallSheetContextFields(unittest.TestCase):
             out = Path(tmp) / "recall.csv"
             export_recall_sheet(report, out)
             rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
-        # 17 columns total (added render_channel_orders + render_export_warnings)
-        self.assertEqual(len(rows[0]), 17)
+        # 18 columns total.
+        self.assertEqual(len(rows[0]), 18)
         data = rows[1]
         # scene_id col 9
         self.assertEqual(data[9], "")
@@ -617,6 +618,8 @@ class TestRecallSheetContextFields(unittest.TestCase):
         self.assertEqual(data[15], "")
         # render_export_warnings col 16 — empty when render_report not provided
         self.assertEqual(data[16], "")
+        # stem_subbus_main_scene_map col 17 — empty when render_report not provided
+        self.assertEqual(data[17], "")
 
     def test_scene_context_populated(self) -> None:
         report = self._minimal_report()
@@ -732,11 +735,62 @@ class TestRecallSheetContextFields(unittest.TestCase):
         data = rows[1]
         render_channel_orders_index = header.index("render_channel_orders")
         render_export_warnings_index = header.index("render_export_warnings")
+        stem_map_index = header.index("stem_subbus_main_scene_map")
         self.assertEqual(
             data[render_channel_orders_index],
             "LAYOUT.5_2:SPK.L,SPK.R,SPK.C,SPK.LFE,SPK.LFE2,SPK.LS,SPK.RS",
         )
         self.assertIn("DIRECTOUT (mask=0)", data[render_export_warnings_index])
+        self.assertEqual(data[stem_map_index], "")
+
+    def test_render_report_context_populates_stem_subbus_scene_mapping(self) -> None:
+        report = self._minimal_report()
+        scene = {
+            "scene_id": "SCENE.DRAFT.test002",
+            "objects": [
+                {"object_id": "OBJ.KICK", "stem_id": "kick"},
+                {"object_id": "OBJ.BASS", "stem_id": "bass"},
+            ],
+            "beds": [
+                {"bed_id": "BED.MUSIC", "stem_ids": ["pad"]},
+            ],
+        }
+        render_report = {
+            "schema_version": "0.1.0",
+            "request": {"target_layout_id": "LAYOUT.2_0", "scene_path": "scene.json"},
+            "jobs": [
+                {
+                    "job_id": "JOB.001",
+                    "status": "completed",
+                    "target_layout_id": "LAYOUT.2_0",
+                    "output_files": [],
+                    "render_intent": {
+                        "stem_sends": [
+                            {"stem_id": "kick", "group_bus": "BUS.DRUMS"},
+                            {"stem_id": "bass", "group_bus": "BUS.BASS"},
+                            {"stem_id": "pad", "group_bus": "BUS.MUSIC"},
+                        ],
+                    },
+                }
+            ],
+            "policies_applied": {},
+            "qa_gates": {"status": "not_run", "gates": []},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "recall.csv"
+            export_recall_sheet(report, out, render_report=render_report, scene=scene)
+            rows = list(csv.reader(out.read_text(encoding="utf-8").splitlines()))
+        header = rows[0]
+        data = rows[1]
+        stem_map_index = header.index("stem_subbus_main_scene_map")
+        self.assertEqual(
+            data[stem_map_index],
+            (
+                "bass>BUS.BASS>BUS.MAIN>object:OBJ.BASS|"
+                "kick>BUS.DRUMS>BUS.MAIN>object:OBJ.KICK|"
+                "pad>BUS.MUSIC>BUS.MAIN>bed:BED.MUSIC"
+            ),
+        )
 
 
 class TestRecallSheetLayoutStandard(unittest.TestCase):

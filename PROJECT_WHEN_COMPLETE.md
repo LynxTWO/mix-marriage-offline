@@ -216,6 +216,11 @@ What remains: broaden this stereo-hint fixture pattern into additional multi-ste
 - [x] `safe-render` supports deterministic headphone preview rendering via
   `--preview-headphones`, writing explainable binaural preview outputs that
   reference their source render artifacts.
+- [x] `safe-render` now supports scene-aware debug exports for DAW recall:
+  `--export-stems`, `--export-buses`, `--export-master/--no-export-master`,
+  and `--export-layouts` produce deterministic stem-copy/subbus/master artifacts
+  with manifest/receipt hashes, and recall-sheet context now includes
+  `stem -> subbus -> BUS.MAIN -> scene object/bed` mapping.
 - [x] `mmo watch <folder>` supports smart batch processing for incoming stems by
   debouncing filesystem events and auto-running deterministic `--render-many`
   workflows on changed stem sets.

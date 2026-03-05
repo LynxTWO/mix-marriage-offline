@@ -29,6 +29,11 @@ Non-negotiables:
   `--scene` must take precedence over hidden scene rebuilds, optional
   `--scene-locks` must apply before placement policy, and receipt artifacts
   must preserve scene/lock source provenance.
+- Keep scene-aware safe-render export artifacts deterministic and explainable:
+  `--export-stems`, `--export-buses`, `--export-master/--no-export-master`,
+  and `--export-layouts` must emit stable file paths + SHA-256 hashes in
+  render manifest/receipt outputs and preserve stem->subbus->main-bus->scene
+  mapping context for recall CSV generation.
 - Keep scene-driven placement mixdown deterministic when enabled: one
   layout-agnostic scene should render conservative
   2.0/5.1/7.1/7.1.4/7.1.6/9.1.6 outputs with role/azimuth-driven object stage

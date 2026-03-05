@@ -190,6 +190,101 @@ def _extract_render_export_warnings(render_report: Optional[Dict[str, Any]]) -> 
     return " | ".join(sorted(warnings))
 
 
+def _scene_stem_refs(scene: Optional[Dict[str, Any]]) -> dict[str, dict[str, list[str]]]:
+    if not isinstance(scene, dict):
+        return {}
+    refs: dict[str, dict[str, set[str]]] = {}
+    objects = scene.get("objects")
+    if isinstance(objects, list):
+        for obj in objects:
+            if not isinstance(obj, dict):
+                continue
+            stem_id = str(obj.get("stem_id", "")).strip()
+            if not stem_id:
+                continue
+            object_id = str(obj.get("object_id", "")).strip()
+            row = refs.setdefault(stem_id, {"objects": set(), "beds": set()})
+            if object_id:
+                row["objects"].add(object_id)
+    beds = scene.get("beds")
+    if isinstance(beds, list):
+        for bed in beds:
+            if not isinstance(bed, dict):
+                continue
+            bed_id = str(bed.get("bed_id", "")).strip()
+            stem_ids = bed.get("stem_ids")
+            if not isinstance(stem_ids, list):
+                continue
+            for raw_stem_id in stem_ids:
+                stem_id = str(raw_stem_id).strip()
+                if not stem_id:
+                    continue
+                row = refs.setdefault(stem_id, {"objects": set(), "beds": set()})
+                if bed_id:
+                    row["beds"].add(bed_id)
+    normalized: dict[str, dict[str, list[str]]] = {}
+    for stem_id in sorted(refs.keys()):
+        normalized[stem_id] = {
+            "objects": sorted(refs[stem_id]["objects"]),
+            "beds": sorted(refs[stem_id]["beds"]),
+        }
+    return normalized
+
+
+def _stem_scene_binding_text(refs: dict[str, list[str]]) -> str:
+    object_ids = refs.get("objects") if isinstance(refs, dict) else None
+    bed_ids = refs.get("beds") if isinstance(refs, dict) else None
+    parts: list[str] = []
+    if isinstance(object_ids, list) and object_ids:
+        parts.append("object:" + ",".join(object_ids))
+    if isinstance(bed_ids, list) and bed_ids:
+        parts.append("bed:" + ",".join(bed_ids))
+    if not parts:
+        return "scene_unmapped"
+    return ";".join(parts)
+
+
+def _extract_stem_bus_scene_mapping(
+    render_report: Optional[Dict[str, Any]],
+    *,
+    scene: Optional[Dict[str, Any]],
+) -> str:
+    if not isinstance(render_report, dict):
+        return ""
+    jobs = render_report.get("jobs")
+    if not isinstance(jobs, list):
+        return ""
+
+    subbuses_by_stem: dict[str, set[str]] = {}
+    for job in jobs:
+        if not isinstance(job, dict):
+            continue
+        render_intent = job.get("render_intent")
+        if not isinstance(render_intent, dict):
+            continue
+        stem_sends = render_intent.get("stem_sends")
+        if not isinstance(stem_sends, list):
+            continue
+        for row in stem_sends:
+            if not isinstance(row, dict):
+                continue
+            stem_id = str(row.get("stem_id", "")).strip()
+            if not stem_id:
+                continue
+            subbus = str(row.get("group_bus", "")).strip().upper() or "BUS.OTHER"
+            subbuses_by_stem.setdefault(stem_id, set()).add(subbus)
+
+    if not subbuses_by_stem:
+        return ""
+    scene_refs = _scene_stem_refs(scene)
+    rows: list[str] = []
+    for stem_id in sorted(subbuses_by_stem.keys()):
+        subbus_ids = "+".join(sorted(subbuses_by_stem[stem_id]))
+        binding = _stem_scene_binding_text(scene_refs.get(stem_id, {}))
+        rows.append(f"{stem_id}>{subbus_ids}>BUS.MAIN>{binding}")
+    return "|".join(rows)
+
+
 def export_recall_sheet(
     report: Dict[str, Any],
     out_path: Path,
@@ -208,7 +303,8 @@ def export_recall_sheet(
     Context columns (always emitted; empty when context not provided):
                   scene_id, scene_object_count, target_layout_ids,
                   profile_id, preflight_status, layout_standard,
-                  render_channel_orders, render_export_warnings
+                  render_channel_orders, render_export_warnings,
+                  stem_subbus_main_scene_map
 
     Rows sorted by severity DESC, confidence DESC, issue_id ASC.
     """
@@ -231,6 +327,10 @@ def export_recall_sheet(
     ctx_layout_standard = layout_standard.strip() if isinstance(layout_standard, str) and layout_standard.strip() else ""
     ctx_render_channel_orders = _extract_render_channel_orders(render_report)
     ctx_render_export_warnings = _extract_render_export_warnings(render_report)
+    ctx_stem_bus_scene_map = _extract_stem_bus_scene_mapping(
+        render_report,
+        scene=scene,
+    )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -255,6 +355,7 @@ def export_recall_sheet(
                 "layout_standard",
                 "render_channel_orders",
                 "render_export_warnings",
+                "stem_subbus_main_scene_map",
             ]
         )
         for rank, issue in enumerate(sorted_issues, start=1):
@@ -279,5 +380,6 @@ def export_recall_sheet(
                     ctx_layout_standard,
                     ctx_render_channel_orders,
                     ctx_render_export_warnings,
+                    ctx_stem_bus_scene_map,
                 ]
             )
