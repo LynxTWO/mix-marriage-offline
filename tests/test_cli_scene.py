@@ -509,6 +509,255 @@ class TestCliScene(unittest.TestCase):
             self.assertEqual(row.get("surround_send_caps_source"), "locked")
             self.assertEqual(row.get("height_send_caps_source"), "locked")
 
+    def test_scene_cli_lint_reports_deterministic_errors_and_warnings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            scene_path = temp_path / "scene.json"
+            locks_path = temp_path / "scene_locks.yaml"
+            report_path_a = temp_path / "scene_lint_a.json"
+            report_path_b = temp_path / "scene_lint_b.json"
+
+            _write_json(
+                scene_path,
+                {
+                    "schema_version": "0.1.0",
+                    "scene_id": "SCENE.LINT.ERRORS",
+                    "source": {
+                        "stems_dir": "/tmp/stems",
+                        "created_from": "draft",
+                    },
+                    "intent": {
+                        "perspective": "audience",
+                        "locks": ["LOCK.NO_HEIGHT_SEND"],
+                    },
+                    "objects": [
+                        {
+                            "object_id": "OBJ.A",
+                            "stem_id": "STEM.A",
+                            "label": "Kick",
+                            "channel_count": 1,
+                            "role_id": "ROLE.DRUM.KICK",
+                            "intent": {
+                                "confidence": 0.2,
+                                "width": 1.2,
+                                "position": {"azimuth_deg": 210.0},
+                                "height_send_caps": {"top_max_gain": 0.2},
+                                "locks": ["LOCK.PRESERVE_DYNAMICS"],
+                            },
+                            "notes": [],
+                        },
+                        {
+                            "object_id": "OBJ.A",
+                            "stem_id": "STEM.A",
+                            "label": "Kick Double",
+                            "channel_count": 1,
+                            "intent": {
+                                "confidence": 0.6,
+                                "locks": [],
+                            },
+                            "notes": [],
+                        },
+                        {
+                            "object_id": "OBJ.B",
+                            "stem_id": "STEM.B",
+                            "label": "Pad",
+                            "channel_count": 2,
+                            "intent": {
+                                "confidence": 0.7,
+                                "locks": ["LOCK.NO_STEREO_WIDENING"],
+                            },
+                            "notes": [],
+                        },
+                    ],
+                    "beds": [
+                        {
+                            "bed_id": "BED.001",
+                            "label": "Room",
+                            "kind": "bed",
+                            "bus_id": "BUS.FX.REVERB",
+                            "stem_ids": ["STEM.MISSING", "STEM.MISSING"],
+                            "intent": {
+                                "confidence": 0.0,
+                                "locks": ["LOCK.NO_HEIGHT_SEND"],
+                                "height_send_caps": {"top_max_gain": 0.4},
+                            },
+                            "notes": [],
+                        },
+                        {
+                            "bed_id": "BED.002",
+                            "label": "FX",
+                            "kind": "bed",
+                            "bus_id": "BUS.FX.REVERB",
+                            "stem_ids": [],
+                            "intent": {
+                                "confidence": 0.0,
+                                "locks": [],
+                            },
+                            "notes": [],
+                        },
+                    ],
+                    "metadata": {},
+                },
+            )
+            locks_path.write_text(
+                "\n".join(
+                    [
+                        'version: "0.1.0"',
+                        "overrides:",
+                        "  STEM.A:",
+                        "    height_send_caps:",
+                        "      top_max_gain: 0.3",
+                        "  STEM.MISSING:",
+                        '    role_id: "ROLE.UNKNOWN.LINT"',
+                        '    bus_id: "BUS.CUSTOM.LINT"',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            first_stdout = StringIO()
+            with redirect_stdout(first_stdout):
+                first_exit = main(
+                    [
+                        "scene",
+                        "lint",
+                        "--scene",
+                        str(scene_path),
+                        "--locks",
+                        str(locks_path),
+                        "--out",
+                        str(report_path_a),
+                    ]
+                )
+
+            second_stdout = StringIO()
+            with redirect_stdout(second_stdout):
+                second_exit = main(
+                    [
+                        "scene",
+                        "lint",
+                        "--scene",
+                        str(scene_path),
+                        "--locks",
+                        str(locks_path),
+                        "--out",
+                        str(report_path_b),
+                    ]
+                )
+
+            self.assertEqual(first_exit, 2)
+            self.assertEqual(second_exit, 2)
+            self.assertIn("Scene lint failed", first_stdout.getvalue())
+            self.assertIn("Scene lint failed", second_stdout.getvalue())
+
+            first_payload = json.loads(report_path_a.read_text(encoding="utf-8"))
+            second_payload = json.loads(report_path_b.read_text(encoding="utf-8"))
+            self.assertEqual(first_payload, second_payload)
+
+            summary = first_payload.get("summary")
+            self.assertIsInstance(summary, dict)
+            if not isinstance(summary, dict):
+                return
+            self.assertFalse(summary.get("ok"))
+            self.assertGreater(summary.get("error_count", 0), 0)
+            self.assertGreater(summary.get("warn_count", 0), 0)
+
+            issues = first_payload.get("issues")
+            self.assertIsInstance(issues, list)
+            if not isinstance(issues, list):
+                return
+            issue_ids = {
+                item.get("issue_id")
+                for item in issues
+                if isinstance(item, dict) and isinstance(item.get("issue_id"), str)
+            }
+            self.assertIn("ISSUE.SCENE_LINT.MISSING_STEM_REFERENCE", issue_ids)
+            self.assertIn("ISSUE.SCENE_LINT.DUPLICATE_OBJECT_REFERENCE", issue_ids)
+            self.assertIn("ISSUE.SCENE_LINT.DUPLICATE_BUS_REFERENCE", issue_ids)
+            self.assertIn("ISSUE.SCENE_LINT.OUT_OF_RANGE_AZIMUTH", issue_ids)
+            self.assertIn("ISSUE.SCENE_LINT.OUT_OF_RANGE_WIDTH", issue_ids)
+            self.assertIn("ISSUE.SCENE_LINT.LOCK_CONFLICT", issue_ids)
+            self.assertIn("ISSUE.SCENE_LINT.LOCK_OVERRIDE_ROLE_UNKNOWN", issue_ids)
+            self.assertIn(
+                "ISSUE.SCENE_LINT.CRITICAL_ANCHOR_LOW_CONFIDENCE",
+                issue_ids,
+            )
+
+    def test_scene_cli_lint_warnings_only_exit_zero(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            scene_path = temp_path / "scene.json"
+            report_path = temp_path / "scene_lint.json"
+
+            _write_json(
+                scene_path,
+                {
+                    "schema_version": "0.1.0",
+                    "scene_id": "SCENE.LINT.WARN",
+                    "source": {
+                        "stems_dir": "/tmp/stems",
+                        "created_from": "draft",
+                    },
+                    "intent": {
+                        "perspective": "in_band",
+                        "locks": [],
+                    },
+                    "objects": [
+                        {
+                            "object_id": "OBJ.LEAD",
+                            "stem_id": "STEM.LEAD",
+                            "label": "Lead Vocal",
+                            "channel_count": 1,
+                            "role_id": "ROLE.VOCAL.LEAD",
+                            "bus_id": "BUS.VOX.LEAD",
+                            "group_bus": "BUS.VOX",
+                            "intent": {
+                                "confidence": 0.9,
+                                "locks": [],
+                            },
+                            "notes": [],
+                        }
+                    ],
+                    "beds": [],
+                    "metadata": {},
+                },
+            )
+
+            lint_stdout = StringIO()
+            with redirect_stdout(lint_stdout):
+                lint_exit = main(
+                    [
+                        "scene",
+                        "lint",
+                        "--scene",
+                        str(scene_path),
+                        "--out",
+                        str(report_path),
+                    ]
+                )
+
+            self.assertEqual(lint_exit, 0)
+            self.assertIn("Scene lint OK", lint_stdout.getvalue())
+
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+            summary = payload.get("summary")
+            self.assertIsInstance(summary, dict)
+            if not isinstance(summary, dict):
+                return
+            self.assertTrue(summary.get("ok"))
+            self.assertEqual(summary.get("error_count"), 0)
+            self.assertEqual(summary.get("warn_count"), 1)
+
+            issues = payload.get("issues")
+            self.assertIsInstance(issues, list)
+            if not isinstance(issues, list):
+                return
+            self.assertEqual(
+                [item.get("issue_id") for item in issues if isinstance(item, dict)],
+                ["ISSUE.SCENE_LINT.IMMERSIVE_NO_BED_OR_AMBIENT"],
+            )
+
     def test_scene_cli_build_unknown_templates_error_is_sorted_and_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

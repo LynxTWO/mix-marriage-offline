@@ -52,6 +52,7 @@ __all__ = [
     "_build_validated_scene_payload",
     "_run_scene_build_command",
     "_run_scene_build_from_bus_plan_command",
+    "_run_scene_lint_command",
     "_validate_scene_schema",
     "_scene_intent_failure_payload",
     "_validate_scene_intent_rules",
@@ -257,6 +258,37 @@ def _run_scene_build_from_bus_plan_command(
     )
     _write_json_file(out_path, scene_payload)
     return 0
+
+
+def _run_scene_lint_command(
+    *,
+    repo_root: Path,
+    scene_path: Path,
+    locks_path: Path | None = None,
+    out_path: Path | None = None,
+) -> int:
+    from mmo.core.locks import load_scene_build_locks  # noqa: WPS433
+    from mmo.core.scene_lint import (  # noqa: WPS433
+        build_scene_lint_payload,
+        render_scene_lint_text,
+        scene_lint_has_errors,
+    )
+
+    scene_payload = _load_json_object(scene_path, label="Scene")
+    locks_payload: dict[str, Any] | None = None
+    if isinstance(locks_path, Path):
+        locks_payload = load_scene_build_locks(locks_path)
+
+    lint_payload = build_scene_lint_payload(
+        scene_payload=scene_payload,
+        scene_path=scene_path,
+        locks_payload=locks_payload,
+        locks_path=locks_path,
+    )
+    if isinstance(out_path, Path):
+        _write_json_file(out_path, lint_payload)
+    print(render_scene_lint_text(lint_payload))
+    return 2 if scene_lint_has_errors(lint_payload) else 0
 
 
 def _validate_scene_schema(*, repo_root: Path | None = None, scene_payload: dict[str, Any]) -> None:

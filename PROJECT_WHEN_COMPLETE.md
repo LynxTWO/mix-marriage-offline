@@ -174,6 +174,10 @@ What remains: broaden this stereo-hint fixture pattern into additional multi-ste
   `locks > explicit metadata > inference`, and records locked-vs-inferred
   provenance in scene metadata receipts (including azimuth/width/depth and
   surround/height source tracking).
+- [x] `mmo scene lint` performs deterministic pre-render scene QA with
+  explainable issue reports for missing stem refs, duplicate object/bus refs,
+  placement range violations, lock conflicts, low-confidence critical anchors
+  (warn), and immersive perspective without bed/ambient candidates (warn).
 - [x] Target selection is interchangeable across CLI/GUI flows: `TARGET.*`,
   `LAYOUT.*`, and musician shorthands (`stereo`, `5.1`, `7.1`, `7.1.4`,
   `binaural`);

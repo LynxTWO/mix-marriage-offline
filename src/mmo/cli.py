@@ -3517,6 +3517,25 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="Path to scene JSON.",
     )
+    scene_lint_parser = scene_subparsers.add_parser(
+        "lint",
+        help="Lint a scene JSON for common QA issues before render.",
+    )
+    scene_lint_parser.add_argument(
+        "--scene",
+        required=True,
+        help="Path to scene JSON.",
+    )
+    scene_lint_parser.add_argument(
+        "--locks",
+        default=None,
+        help="Optional path to scene build locks/overrides YAML or JSON.",
+    )
+    scene_lint_parser.add_argument(
+        "--out",
+        default=None,
+        help="Optional path to write lint report JSON.",
+    )
     scene_locks_parser = scene_subparsers.add_parser(
         "locks",
         help="Edit scene locks.",
@@ -7273,6 +7292,20 @@ def main(argv: list[str] | None = None) -> int:
 
                 raise ValueError(
                     "scene build requires either --report or --map with --bus.",
+                )
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            except SystemExit as exc:
+                return int(exc.code) if isinstance(exc.code, int) else 1
+
+        if args.scene_command == "lint":
+            try:
+                return _run_scene_lint_command(
+                    repo_root=None,
+                    scene_path=Path(args.scene),
+                    locks_path=Path(args.locks) if args.locks else None,
+                    out_path=Path(args.out) if args.out else None,
                 )
             except (RuntimeError, ValueError) as exc:
                 print(str(exc), file=sys.stderr)

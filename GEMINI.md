@@ -71,6 +71,11 @@ Non-negotiables:
   `locks > explicit metadata > inference`, including role/bus/placement
   (`azimuth_deg`/`width`/`depth`) and surround/height send caps, and emit
   stable locked-vs-inferred provenance receipts in scene metadata.
+- Keep scene QA lint deterministic and explainable:
+  `mmo scene lint` must emit stable issue ordering/report payloads and cover
+  missing stem refs, duplicate object/bus refs, placement range violations,
+  lock-role/bus/layout conflicts, low-confidence critical anchors, and
+  immersive-perspective bed/ambient availability warnings.
 - Keep dual-LFE (x.2) export contracts explicit: preserve canonical SPK channel
   order in render/recall artifacts, use conservative WAV mask strategy, and
   surface validation guidance for toolchains that may drop `LFE2`.
