@@ -36,6 +36,11 @@ const sceneLayoutSelect = document.getElementById("scene-layout-select");
 const scenePreviewWarnings = document.getElementById("scene-preview-warnings");
 const scenePreviewStage = document.getElementById("scene-preview-stage");
 const scenePreviewOutput = document.getElementById("scene-preview-output");
+const scenePerspectiveSelect = document.getElementById("scene-perspective-select");
+const sceneLocksReloadButton = document.getElementById("scene-locks-reload-button");
+const sceneLocksSaveButton = document.getElementById("scene-locks-save-button");
+const sceneLocksContainer = document.getElementById("scene-locks-container");
+const sceneLocksOutput = document.getElementById("scene-locks-output");
 const renderSummaryOutput = document.getElementById("render-summary-output");
 const determinismOutput = document.getElementById("determinism-output");
 const safeRunReceiptOutput = document.getElementById("safe-run-receipt-output");
@@ -76,6 +81,15 @@ const state = {
   projectShow: null,
   sceneLayoutId: "",
   scenePreview: null,
+  sceneLocks: {
+    objects: [],
+    overridesCount: 0,
+    perspective: "audience",
+    perspectiveValues: ["audience", "on_stage", "in_band", "in_orchestra"],
+    roleOptions: [],
+    sceneLocksPath: "",
+    scenePath: "",
+  },
   pluginMarket: null,
   pluginMarketUpdate: null,
   pluginsById: new Map(),
@@ -156,6 +170,20 @@ function _deepClone(value) {
 
 function _isFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+function _clampUnit(value, fallback = 1) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  if (numeric <= 0) {
+    return 0;
+  }
+  if (numeric >= 1) {
+    return 1;
+  }
+  return numeric;
 }
 
 function _normalizeModifierKey(value) {
@@ -2340,6 +2368,337 @@ function _renderScenePreview() {
   );
 }
 
+function _defaultScenePerspectiveValues() {
+  return ["audience", "on_stage", "in_band", "in_orchestra"];
+}
+
+function _resetSceneLocksState() {
+  state.sceneLocks = {
+    objects: [],
+    overridesCount: 0,
+    perspective: "audience",
+    perspectiveValues: _defaultScenePerspectiveValues(),
+    roleOptions: [],
+    sceneLocksPath: "",
+    scenePath: "",
+  };
+}
+
+function _normalizeSceneLockRoleOptions(rows) {
+  const normalized = Array.isArray(rows)
+    ? rows
+      .filter((item) => _isObject(item))
+      .map((item) => ({
+        label: typeof item.label === "string" && item.label.trim()
+          ? item.label.trim()
+          : (typeof item.role_id === "string" ? item.role_id.trim() : ""),
+        roleId: typeof item.role_id === "string" ? item.role_id.trim() : "",
+      }))
+      .filter((item) => item.roleId)
+    : [];
+  normalized.sort((left, right) => left.roleId.localeCompare(right.roleId));
+  return normalized;
+}
+
+function _normalizeSceneLockRows(rows) {
+  const normalized = [];
+  const sourceRows = Array.isArray(rows) ? rows : [];
+  for (const item of sourceRows) {
+    if (!_isObject(item)) {
+      continue;
+    }
+    const stemId = typeof item.stem_id === "string" ? item.stem_id.trim() : "";
+    if (!stemId) {
+      continue;
+    }
+    const objectId = typeof item.object_id === "string" && item.object_id.trim()
+      ? item.object_id.trim()
+      : `OBJ.${stemId}`;
+    const label = typeof item.label === "string" && item.label.trim()
+      ? item.label.trim()
+      : objectId;
+    const inferredRoleId = typeof item.inferred_role_id === "string" && item.inferred_role_id.trim()
+      ? item.inferred_role_id.trim()
+      : "";
+    const roleOverrideId = typeof item.role_override_id === "string" && item.role_override_id.trim()
+      ? item.role_override_id.trim()
+      : "";
+    const surroundOverride = _isFiniteNumber(item.surround_cap_override)
+      ? _clampUnit(item.surround_cap_override, 1)
+      : null;
+    const heightOverride = _isFiniteNumber(item.height_cap_override)
+      ? _clampUnit(item.height_cap_override, 1)
+      : null;
+    const frontOnlyOverride = item.front_only_override === true
+      || (surroundOverride !== null && surroundOverride <= 0);
+    normalized.push({
+      confidence: _clampUnit(item.confidence, 0),
+      editFrontOnly: frontOnlyOverride,
+      editHeightCap: heightOverride === null ? 1 : heightOverride,
+      editRoleId: roleOverrideId,
+      editSurroundCap: frontOnlyOverride ? 0 : (surroundOverride === null ? 1 : surroundOverride),
+      inferredRoleId,
+      label,
+      objectId,
+      stemId,
+    });
+  }
+  normalized.sort((left, right) => {
+    if (left.objectId !== right.objectId) {
+      return left.objectId.localeCompare(right.objectId);
+    }
+    return left.stemId.localeCompare(right.stemId);
+  });
+  return normalized;
+}
+
+function _hydrateSceneLocksInspect(payload) {
+  const perspectiveValuesRaw = Array.isArray(payload?.perspective_values)
+    ? payload.perspective_values
+    : _defaultScenePerspectiveValues();
+  const perspectiveValues = perspectiveValuesRaw
+    .filter((item) => typeof item === "string" && item.trim())
+    .map((item) => item.trim());
+  const perspective = typeof payload?.perspective === "string" ? payload.perspective.trim() : "audience";
+  state.sceneLocks = {
+    objects: _normalizeSceneLockRows(payload?.objects),
+    overridesCount: Number.isFinite(payload?.overrides_count) ? Number(payload.overrides_count) : 0,
+    perspective: perspectiveValues.includes(perspective) ? perspective : (perspectiveValues[0] || "audience"),
+    perspectiveValues: perspectiveValues.length > 0 ? perspectiveValues : _defaultScenePerspectiveValues(),
+    roleOptions: _normalizeSceneLockRoleOptions(payload?.role_options),
+    sceneLocksPath: typeof payload?.scene_locks_path === "string" ? payload.scene_locks_path : "",
+    scenePath: typeof payload?.scene_path === "string" ? payload.scene_path : "",
+  };
+}
+
+function _updateSceneLockRow(stemId, patch) {
+  const nextRows = state.sceneLocks.objects.map((row) => {
+    if (row.stemId !== stemId) {
+      return row;
+    }
+    const next = { ...row, ...patch };
+    next.editRoleId = typeof next.editRoleId === "string" ? next.editRoleId.trim() : "";
+    next.editFrontOnly = next.editFrontOnly === true;
+    next.editSurroundCap = _clampUnit(next.editSurroundCap, 1);
+    next.editHeightCap = _clampUnit(next.editHeightCap, 1);
+    if (next.editFrontOnly) {
+      next.editSurroundCap = 0;
+    }
+    return next;
+  });
+  state.sceneLocks = {
+    ...state.sceneLocks,
+    objects: nextRows,
+  };
+  _renderSceneLocksEditor();
+}
+
+function _renderSceneLocksEditor() {
+  if (!sceneLocksContainer) {
+    return;
+  }
+  if (sceneLocksSaveButton) {
+    sceneLocksSaveButton.disabled = !Array.isArray(state.sceneLocks.objects)
+      || state.sceneLocks.objects.length === 0;
+  }
+
+  if (scenePerspectiveSelect) {
+    _setSelectOptions(
+      scenePerspectiveSelect,
+      state.sceneLocks.perspectiveValues.map((item) => ({
+        value: item,
+        label: item,
+      })),
+      state.sceneLocks.perspective,
+    );
+    scenePerspectiveSelect.disabled = false;
+  }
+
+  sceneLocksContainer.innerHTML = "";
+  if (!Array.isArray(state.sceneLocks.objects) || state.sceneLocks.objects.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "subtle";
+    empty.textContent = "Scene lock editor is unavailable (scene.draft.json missing or has no object rows).";
+    sceneLocksContainer.appendChild(empty);
+    return;
+  }
+
+  for (const row of state.sceneLocks.objects) {
+    const card = document.createElement("article");
+    card.className = "scene-lock-row";
+
+    const header = document.createElement("div");
+    header.className = "scene-lock-row-header";
+    const title = document.createElement("div");
+    title.className = "scene-lock-row-title";
+    title.textContent = `${row.label} (${row.stemId})`;
+    const meta = document.createElement("div");
+    meta.className = "scene-lock-row-meta";
+    meta.textContent = `${row.objectId} · confidence ${(row.confidence * 100).toFixed(0)}%`;
+    header.appendChild(title);
+    header.appendChild(meta);
+    card.appendChild(header);
+
+    const controls = document.createElement("div");
+    controls.className = "scene-lock-row-controls";
+
+    const roleLabel = document.createElement("label");
+    roleLabel.className = "scene-lock-control";
+    roleLabel.textContent = "Role override";
+    const roleSelect = document.createElement("select");
+    const autoRoleLabel = row.inferredRoleId ? `Auto (${row.inferredRoleId})` : "Auto";
+    _setSelectOptions(
+      roleSelect,
+      [
+        { value: "", label: autoRoleLabel },
+        ...state.sceneLocks.roleOptions.map((option) => ({
+          value: option.roleId,
+          label: `${option.roleId} · ${option.label}`,
+        })),
+      ],
+      row.editRoleId,
+    );
+    roleSelect.addEventListener("change", () => {
+      _updateSceneLockRow(row.stemId, { editRoleId: roleSelect.value });
+    });
+    roleLabel.appendChild(roleSelect);
+    controls.appendChild(roleLabel);
+
+    const frontOnlyLabel = document.createElement("label");
+    frontOnlyLabel.className = "toggle-inline scene-lock-control";
+    const frontOnlyToggle = document.createElement("input");
+    frontOnlyToggle.type = "checkbox";
+    frontOnlyToggle.checked = row.editFrontOnly === true;
+    frontOnlyToggle.addEventListener("change", () => {
+      const next = { editFrontOnly: frontOnlyToggle.checked };
+      if (frontOnlyToggle.checked) {
+        next.editSurroundCap = 0;
+      } else if (row.editSurroundCap <= 0) {
+        next.editSurroundCap = 1;
+      }
+      _updateSceneLockRow(row.stemId, next);
+    });
+    const frontOnlyText = document.createElement("span");
+    frontOnlyText.textContent = "Front-only";
+    frontOnlyLabel.appendChild(frontOnlyToggle);
+    frontOnlyLabel.appendChild(frontOnlyText);
+    controls.appendChild(frontOnlyLabel);
+
+    const surroundWrap = document.createElement("label");
+    surroundWrap.className = "scene-lock-slider";
+    surroundWrap.textContent = "Surround cap";
+    const surroundSlider = document.createElement("input");
+    surroundSlider.type = "range";
+    surroundSlider.min = "0";
+    surroundSlider.max = "1";
+    surroundSlider.step = "0.01";
+    surroundSlider.value = String(_clampUnit(row.editSurroundCap, 1));
+    surroundSlider.disabled = row.editFrontOnly === true;
+    surroundSlider.addEventListener("input", () => {
+      const nextCap = _clampUnit(surroundSlider.value, 1);
+      _updateSceneLockRow(row.stemId, {
+        editFrontOnly: nextCap > 0 ? false : row.editFrontOnly,
+        editSurroundCap: nextCap,
+      });
+    });
+    const surroundValue = document.createElement("span");
+    surroundValue.className = "scene-lock-slider-value";
+    surroundValue.textContent = row.editFrontOnly
+      ? "forced 0.00 (front-only)"
+      : `${_clampUnit(row.editSurroundCap, 1).toFixed(2)}`;
+    surroundWrap.appendChild(surroundSlider);
+    surroundWrap.appendChild(surroundValue);
+    controls.appendChild(surroundWrap);
+
+    const heightWrap = document.createElement("label");
+    heightWrap.className = "scene-lock-slider";
+    heightWrap.textContent = "Height cap";
+    const heightSlider = document.createElement("input");
+    heightSlider.type = "range";
+    heightSlider.min = "0";
+    heightSlider.max = "1";
+    heightSlider.step = "0.01";
+    heightSlider.value = String(_clampUnit(row.editHeightCap, 1));
+    heightSlider.addEventListener("input", () => {
+      _updateSceneLockRow(row.stemId, {
+        editHeightCap: _clampUnit(heightSlider.value, 1),
+      });
+    });
+    const heightValue = document.createElement("span");
+    heightValue.className = "scene-lock-slider-value";
+    heightValue.textContent = _clampUnit(row.editHeightCap, 1).toFixed(2);
+    heightWrap.appendChild(heightSlider);
+    heightWrap.appendChild(heightValue);
+    controls.appendChild(heightWrap);
+
+    card.appendChild(controls);
+    sceneLocksContainer.appendChild(card);
+  }
+}
+
+async function refreshSceneLocks() {
+  const projectDir = normalizePath(projectDirInput.value);
+  if (!projectDir) {
+    _resetSceneLocksState();
+    _renderSceneLocksEditor();
+    if (sceneLocksOutput) {
+      sceneLocksOutput.textContent = "Project directory is required to inspect scene locks.";
+    }
+    return;
+  }
+  const result = await apiRpc("scene.locks.inspect", { project_dir: projectDir });
+  _hydrateSceneLocksInspect(result);
+  _renderSceneLocksEditor();
+  if (_isObject(result.scene_preview)) {
+    state.scenePreview = _deepClone(result.scene_preview);
+    _renderScenePreview();
+  }
+  if (sceneLocksOutput) {
+    sceneLocksOutput.textContent = JSON.stringify(
+      {
+        overrides_count: state.sceneLocks.overridesCount,
+        perspective: state.sceneLocks.perspective,
+        scene_locks_path: state.sceneLocks.sceneLocksPath || null,
+        scene_path: state.sceneLocks.scenePath || null,
+      },
+      null,
+      2,
+    );
+  }
+}
+
+async function saveSceneLocks() {
+  const projectDir = normalizePath(projectDirInput.value);
+  if (!projectDir) {
+    throw new Error("Project directory is required.");
+  }
+  const rows = Array.isArray(state.sceneLocks.objects)
+    ? state.sceneLocks.objects.map((row) => ({
+      front_only: row.editFrontOnly === true,
+      height_cap: _clampUnit(row.editHeightCap, 1),
+      role_id: row.editRoleId || "",
+      stem_id: row.stemId,
+      surround_cap: _clampUnit(row.editSurroundCap, 1),
+    }))
+    : [];
+
+  setStatus("Saving scene_locks.yaml...");
+  const saveResult = await apiRpc("scene.locks.save", {
+    project_dir: projectDir,
+    perspective: state.sceneLocks.perspective,
+    rows,
+  });
+  if (_isObject(saveResult.scene_preview)) {
+    state.scenePreview = _deepClone(saveResult.scene_preview);
+    _renderScenePreview();
+  }
+  if (sceneLocksOutput) {
+    sceneLocksOutput.textContent = JSON.stringify(saveResult, null, 2);
+  }
+  await refreshSceneLocks();
+  setStatus("scene_locks.yaml saved and scene draft updated.");
+}
+
 function _renderIntentPreview() {
   const pluginChain = _pluginChainPayload();
   intentOutput.textContent = JSON.stringify(
@@ -2998,6 +3357,24 @@ async function refreshProjectShow() {
     _resetRenderRequestIntent();
   }
 
+  try {
+    setStatus("Loading scene lock editor...");
+    await refreshSceneLocks();
+  } catch (error) {
+    _resetSceneLocksState();
+    _renderSceneLocksEditor();
+    if (sceneLocksOutput) {
+      sceneLocksOutput.textContent = JSON.stringify(
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+        null,
+        2,
+      );
+    }
+    setStatus("Scene lock editor unavailable for current project state.");
+  }
+
   setStatus("Loading render artifacts...");
   await refreshRenderArtifactsFromProjectShow(result);
 
@@ -3159,6 +3536,36 @@ if (sceneLayoutSelect) {
   });
 }
 
+if (scenePerspectiveSelect) {
+  scenePerspectiveSelect.addEventListener("change", () => {
+    state.sceneLocks = {
+      ...state.sceneLocks,
+      perspective: scenePerspectiveSelect.value,
+    };
+  });
+}
+
+if (sceneLocksReloadButton) {
+  sceneLocksReloadButton.addEventListener("click", async () => {
+    try {
+      await refreshSceneLocks();
+      setStatus("scene lock editor refreshed.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    }
+  });
+}
+
+if (sceneLocksSaveButton) {
+  sceneLocksSaveButton.addEventListener("click", async () => {
+    try {
+      await saveSceneLocks();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    }
+  });
+}
+
 if (auditionJobSelect) {
   auditionJobSelect.addEventListener("change", () => {
     state.audition.jobId = auditionJobSelect.value;
@@ -3286,5 +3693,6 @@ _syncMaxTheoreticalQualityToggle();
 _renderFineModeIndicator();
 _refreshFineSteps();
 _renderScenePreview();
+_renderSceneLocksEditor();
 _renderHeadphonePreviewIdle();
 setStatus("Ready. Start with rpc.discover.");

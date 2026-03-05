@@ -106,6 +106,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Added CLI regression coverage for deterministic lint payload output and
     warnings-only non-failing behavior.
 
+- GUI scene lock editing workflow (dev shell v1):
+  - Added scene lock editor controls in web GUI: object list with confidence,
+    per-stem role override, front-only toggle, surround cap slider, height cap
+    slider, and scene perspective selector.
+  - Added GUI RPC methods `scene.locks.inspect` and `scene.locks.save` to load
+    and persist `scene_locks.yaml`, then apply overrides to
+    `drafts/scene.draft.json` for immediate re-render.
+  - Added GUI RPC regression coverage for inspect/save round-trips and lock
+    field preservation.
+
 ### Fixed
 
 - `safe-render` now supports first-class explicit scene inputs:

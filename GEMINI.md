@@ -80,6 +80,10 @@ Non-negotiables:
   `locks > explicit metadata > inference`, including role/bus/placement
   (`azimuth_deg`/`width`/`depth`) and surround/height send caps, and emit
   stable locked-vs-inferred provenance receipts in scene metadata.
+- Keep GUI scene-lock editing deterministic and project-local:
+  `scene.locks.inspect/save` should round-trip stable stem/object ordering,
+  persist `scene_locks.yaml`, preserve non-UI override fields, and update
+  `drafts/scene.draft.json` so corrected intent can be re-rendered immediately.
 - Keep scene QA lint deterministic and explainable:
   `mmo scene lint` must emit stable issue ordering/report payloads and cover
   missing stem refs, duplicate object/bus refs, placement range violations,

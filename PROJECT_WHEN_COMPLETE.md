@@ -251,6 +251,10 @@ What remains: make loudness-matched A/B compensation visible in report artifacts
 - [x] Web GUI includes a deterministic scene-intent top-down preview (5.1/7.1/7.1.4/9.1.6)
   showing labeled object dots with confidence, bed halo energy, and warnings for
   low-confidence intent rows or missing lock coverage.
+- [x] Web GUI now includes scene lock editing with save-to-file flow:
+  per-object confidence list, per-stem role override dropdown, front-only toggle,
+  surround/height cap sliders, perspective selector, and deterministic save to
+  `scene_locks.yaml` with scene draft refresh for re-render.
 - [x] Desktop GUI Analyze immediately surfaces deterministic stems routing context:
   `_mmo_gui/stems_map.json` + `_mmo_gui/bus_plan.json` (+ CSV summary) are generated,
   and the Dashboard shows role counts with a hierarchical bus tree.

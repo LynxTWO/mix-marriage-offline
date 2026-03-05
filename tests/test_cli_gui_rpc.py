@@ -12,6 +12,7 @@ from unittest.mock import patch
 from mmo import __version__ as _MMO_VERSION
 from mmo.cli import main
 from mmo.cli_commands import _gui_rpc
+from mmo.core.locks import load_scene_build_locks
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SANDBOX = (
@@ -556,6 +557,176 @@ class TestGuiRpcProjectSession(unittest.TestCase):
         ]
         self.assertEqual(restored_history, original_history)
         self.assertEqual(json.loads(receipt_path.read_text(encoding="utf-8")), original_receipt)
+
+
+class TestGuiRpcSceneLocks(unittest.TestCase):
+    def test_scene_locks_inspect_returns_object_rows_with_confidence(self) -> None:
+        project_dir, _ = _init_project(_SANDBOX / "scene_locks_inspect")
+        exit_code, responses, _, stderr = _run_rpc(
+            [
+                {
+                    "id": "scene-locks-inspect",
+                    "method": "scene.locks.inspect",
+                    "params": {"project_dir": str(project_dir)},
+                }
+            ]
+        )
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(stderr, "")
+        self.assertEqual(len(responses), 1)
+        response = responses[0]
+        self.assertTrue(response["ok"])
+
+        result = response["result"]
+        self.assertEqual(result["project_dir"], project_dir.resolve().as_posix())
+        self.assertEqual(
+            result["scene_path"],
+            (project_dir / "drafts" / "scene.draft.json").resolve().as_posix(),
+        )
+        self.assertEqual(
+            result["scene_locks_path"],
+            (project_dir / "scene_locks.yaml").resolve().as_posix(),
+        )
+        self.assertEqual(result["overrides_count"], 0)
+        self.assertIn(result["perspective"], result["perspective_values"])
+        self.assertIn("scene_preview", result)
+
+        rows = result["objects"]
+        self.assertIsInstance(rows, list)
+        self.assertGreater(len(rows), 0)
+        first = rows[0]
+        self.assertIsInstance(first.get("stem_id"), str)
+        self.assertTrue(first.get("stem_id"))
+        self.assertIsInstance(first.get("object_id"), str)
+        self.assertGreaterEqual(float(first.get("confidence", -1)), 0.0)
+        self.assertLessEqual(float(first.get("confidence", 2)), 1.0)
+        self.assertIn("role_override_id", first)
+        self.assertIn("surround_cap_override", first)
+        self.assertIn("height_cap_override", first)
+
+    def test_scene_locks_save_writes_yaml_and_updates_scene_draft(self) -> None:
+        project_dir, _ = _init_project(_SANDBOX / "scene_locks_save")
+        inspect_exit, inspect_responses, _, inspect_stderr = _run_rpc(
+            [
+                {
+                    "id": "scene-locks-inspect-before-save",
+                    "method": "scene.locks.inspect",
+                    "params": {"project_dir": str(project_dir)},
+                }
+            ]
+        )
+        self.assertEqual(inspect_exit, 0)
+        self.assertEqual(inspect_stderr, "")
+        self.assertTrue(inspect_responses[0]["ok"])
+
+        inspect_result = inspect_responses[0]["result"]
+        rows = inspect_result["objects"]
+        self.assertIsInstance(rows, list)
+        self.assertGreater(len(rows), 0)
+        first_row = rows[0]
+        stem_id = str(first_row["stem_id"])
+
+        scene_locks_path = project_dir / "scene_locks.yaml"
+        scene_locks_path.write_text(
+            "\n".join(
+                [
+                    'version: "0.1.0"',
+                    "overrides:",
+                    f"  {stem_id}:",
+                    '    bus_id: "BUS.DRUMS.KICK"',
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        save_exit, save_responses, _, save_stderr = _run_rpc(
+            [
+                {
+                    "id": "scene-locks-save",
+                    "method": "scene.locks.save",
+                    "params": {
+                        "project_dir": str(project_dir),
+                        "perspective": "in_orchestra",
+                        "rows": [
+                            {
+                                "stem_id": stem_id,
+                                "role_id": "ROLE.DRUM.KICK",
+                                "front_only": True,
+                                "surround_cap": 0.7,
+                                "height_cap": 0.25,
+                            }
+                        ],
+                    },
+                }
+            ]
+        )
+
+        self.assertEqual(save_exit, 0)
+        self.assertEqual(save_stderr, "")
+        self.assertEqual(len(save_responses), 1)
+        save_response = save_responses[0]
+        self.assertTrue(save_response["ok"])
+        save_result = save_response["result"]
+        self.assertEqual(
+            save_result["scene_locks_path"],
+            scene_locks_path.resolve().as_posix(),
+        )
+        self.assertEqual(save_result["perspective"], "in_orchestra")
+        self.assertIn(scene_locks_path.resolve().as_posix(), save_result["written"])
+        self.assertIn(
+            (project_dir / "drafts" / "scene.draft.json").resolve().as_posix(),
+            save_result["written"],
+        )
+
+        locks_payload = load_scene_build_locks(scene_locks_path)
+        override = locks_payload.get("overrides", {}).get(stem_id)
+        self.assertIsInstance(override, dict)
+        if not isinstance(override, dict):
+            return
+        # Existing non-UI lock fields are preserved.
+        self.assertEqual(override.get("bus_id"), "BUS.DRUMS.KICK")
+        self.assertEqual(override.get("role_id"), "ROLE.DRUM.KICK")
+        self.assertEqual(
+            override.get("surround_send_caps"),
+            {"side_max_gain": 0.0, "rear_max_gain": 0.0},
+        )
+        self.assertEqual(
+            override.get("height_send_caps"),
+            {"top_max_gain": 0.25},
+        )
+
+        scene_payload = json.loads(
+            (project_dir / "drafts" / "scene.draft.json").read_text(encoding="utf-8")
+        )
+        scene_intent = scene_payload.get("intent")
+        self.assertIsInstance(scene_intent, dict)
+        if isinstance(scene_intent, dict):
+            self.assertEqual(scene_intent.get("perspective"), "in_orchestra")
+
+        objects_by_stem = {
+            item.get("stem_id"): item
+            for item in scene_payload.get("objects", [])
+            if isinstance(item, dict)
+        }
+        locked_object = objects_by_stem.get(stem_id)
+        self.assertIsInstance(locked_object, dict)
+        if not isinstance(locked_object, dict):
+            return
+        self.assertEqual(locked_object.get("role_id"), "ROLE.DRUM.KICK")
+        object_intent = locked_object.get("intent")
+        self.assertIsInstance(object_intent, dict)
+        if not isinstance(object_intent, dict):
+            return
+        self.assertEqual(
+            object_intent.get("surround_send_caps"),
+            {"side_max_gain": 0.0, "rear_max_gain": 0.0},
+        )
+        self.assertEqual(
+            object_intent.get("height_send_caps"),
+            {"top_max_gain": 0.25},
+        )
 
 
 class TestGuiRpcDiscover(unittest.TestCase):

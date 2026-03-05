@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, TextIO
 
+from mmo.cli_commands._helpers import _load_json_object, _write_json_file
 from mmo.cli_commands._project import (
     _run_project_build_gui,
     _run_project_load,
@@ -18,11 +19,25 @@ from mmo.cli_commands._project import (
     _run_project_write_render_request,
 )
 from mmo.core.env_doctor import build_env_doctor_report
+from mmo.core.intent_params import load_intent_params, validate_scene_intent
+from mmo.core.locks import (
+    SCENE_BUILD_LOCKS_VERSION,
+    apply_scene_build_locks,
+    load_scene_build_locks,
+)
 from mmo.core.plugin_market import (
     build_plugin_market_list_payload,
     install_plugin_market_entry,
     update_plugin_market_snapshot,
 )
+from mmo.core.roles import load_roles
+from mmo.core.scene_editor import set_intent as edit_scene_set_intent
+from mmo.resources import ontology_dir
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover - optional dependency
+    yaml = None
 
 try:
     from mmo import __version__ as _MMO_VERSION
@@ -57,6 +72,13 @@ _PROJECT_WRITE_RENDER_REQUEST_ALLOWED_SET_KEYS: frozenset[str] = frozenset(
         "target_ids",
         "target_layout_ids",
     }
+)
+_SCENE_LOCKS_FILENAME = "scene_locks.yaml"
+_SCENE_PERSPECTIVE_VALUES: tuple[str, ...] = (
+    "audience",
+    "on_stage",
+    "in_band",
+    "in_orchestra",
 )
 
 _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
@@ -472,6 +494,72 @@ _RPC_DISCOVER_METHOD_DETAILS: dict[str, dict[str, Any]] = {
             ],
         },
     },
+    "scene.locks.inspect": {
+        "params_schema": {
+            "required": {
+                "project_dir": "string",
+            },
+            "optional": {},
+            "examples": [
+                {
+                    "project_dir": "C:/mmo/project",
+                },
+            ],
+        },
+        "result_shape": {
+            "keys": [
+                "objects",
+                "perspective",
+                "perspective_values",
+                "project_dir",
+                "role_options",
+                "scene_locks_path",
+                "scene_path",
+            ],
+            "optional_keys": [
+                "scene_preview",
+            ],
+        },
+    },
+    "scene.locks.save": {
+        "params_schema": {
+            "required": {
+                "project_dir": "string",
+                "rows": "array",
+            },
+            "optional": {
+                "perspective": "string",
+            },
+            "examples": [
+                {
+                    "project_dir": "C:/mmo/project",
+                    "perspective": "in_band",
+                    "rows": [
+                        {
+                            "front_only": True,
+                            "height_cap": 0.0,
+                            "role_id": "ROLE.DRUM.KICK",
+                            "stem_id": "STEM.KICK",
+                            "surround_cap": 0.0,
+                        }
+                    ],
+                },
+            ],
+        },
+        "result_shape": {
+            "keys": [
+                "overrides_count",
+                "perspective",
+                "project_dir",
+                "scene_locks_path",
+                "scene_path",
+                "written",
+            ],
+            "optional_keys": [
+                "scene_preview",
+            ],
+        },
+    },
     "rpc.discover": {
         "params_schema": {
             "required": {},
@@ -644,6 +732,438 @@ def _call_json_command(
             message=f"{method} returned non-object JSON output.",
         )
     return payload
+
+
+def _coerce_string(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    return ""
+
+
+def _coerce_unit_float(value: Any, *, default: float | None = None) -> float | None:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)):
+        return max(0.0, min(1.0, float(value)))
+    return default
+
+
+def _coerce_confidence(value: Any) -> float:
+    normalized = _coerce_unit_float(value, default=0.0)
+    return round(float(normalized if normalized is not None else 0.0), 3)
+
+
+def _scene_project_paths(project_dir: Path) -> tuple[Path, Path]:
+    return (
+        project_dir / "drafts" / "scene.draft.json",
+        project_dir / _SCENE_LOCKS_FILENAME,
+    )
+
+
+def _load_scene_from_project(project_dir: Path) -> tuple[Path, dict[str, Any]]:
+    scene_path, _ = _scene_project_paths(project_dir)
+    if not scene_path.is_file():
+        raise _RpcMethodError(
+            message=(
+                "Scene draft file is missing: "
+                f"{scene_path.resolve().as_posix()} (run project init/refresh first)."
+            ),
+        )
+    return scene_path, _load_json_object(scene_path, label="Scene")
+
+
+def _load_scene_locks_overrides(scene_locks_path: Path) -> dict[str, dict[str, Any]]:
+    if not scene_locks_path.is_file():
+        return {}
+    payload = load_scene_build_locks(scene_locks_path)
+    overrides = payload.get("overrides")
+    if not isinstance(overrides, dict):
+        return {}
+    return {
+        stem_id: dict(override)
+        for stem_id, override in overrides.items()
+        if isinstance(stem_id, str) and stem_id and isinstance(override, dict)
+    }
+
+
+def _scene_perspective(scene_payload: dict[str, Any]) -> str:
+    intent = scene_payload.get("intent")
+    perspective = _coerce_string(
+        intent.get("perspective") if isinstance(intent, dict) else None,
+    ).strip().lower()
+    if perspective in _SCENE_PERSPECTIVE_VALUES:
+        return perspective
+    return "audience"
+
+
+def _scene_role_options() -> list[dict[str, str]]:
+    payload = load_roles(ontology_dir() / "roles.yaml")
+    roles = payload.get("roles")
+    if not isinstance(roles, dict):
+        return []
+    rows: list[dict[str, str]] = []
+    for role_id in sorted(roles.keys()):
+        if role_id == "_meta":
+            continue
+        role_entry = roles.get(role_id)
+        if not isinstance(role_id, str) or not role_id.strip() or not isinstance(role_entry, dict):
+            continue
+        label = _coerce_string(role_entry.get("label")).strip() or role_id
+        rows.append({"role_id": role_id, "label": label})
+    return rows
+
+
+def _override_surround_cap(override: dict[str, Any]) -> float | None:
+    caps = override.get("surround_send_caps")
+    if not isinstance(caps, dict):
+        return None
+    side = _coerce_unit_float(caps.get("side_max_gain"))
+    rear = _coerce_unit_float(caps.get("rear_max_gain"))
+    if side is None and rear is None:
+        return None
+    return round(
+        max(
+            float(side if side is not None else 0.0),
+            float(rear if rear is not None else 0.0),
+        ),
+        3,
+    )
+
+
+def _override_height_cap(override: dict[str, Any]) -> float | None:
+    caps = override.get("height_send_caps")
+    if not isinstance(caps, dict):
+        return None
+    values = [
+        _coerce_unit_float(caps.get("top_max_gain")),
+        _coerce_unit_float(caps.get("top_front_max_gain")),
+        _coerce_unit_float(caps.get("top_rear_max_gain")),
+    ]
+    normalized = [float(value) for value in values if value is not None]
+    if not normalized:
+        return None
+    return round(max(normalized), 3)
+
+
+def _scene_lock_rows(
+    scene_payload: dict[str, Any],
+    overrides: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    objects = scene_payload.get("objects")
+    if not isinstance(objects, list):
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for row in objects:
+        if not isinstance(row, dict):
+            continue
+        stem_id = _coerce_string(row.get("stem_id")).strip()
+        if not stem_id:
+            continue
+        object_id = _coerce_string(row.get("object_id")).strip() or f"OBJ.{stem_id}"
+        label = _coerce_string(row.get("label")).strip() or object_id
+        intent = row.get("intent")
+        confidence_raw = (
+            intent.get("confidence")
+            if isinstance(intent, dict)
+            else row.get("confidence")
+        )
+        inferred_role_id = _coerce_string(row.get("role_id")).strip()
+        override = overrides.get(stem_id)
+        override_payload = override if isinstance(override, dict) else {}
+        role_override_id = _coerce_string(override_payload.get("role_id")).strip() or None
+        surround_cap_override = _override_surround_cap(override_payload)
+        height_cap_override = _override_height_cap(override_payload)
+        rows.append(
+            {
+                "confidence": _coerce_confidence(confidence_raw),
+                "height_cap_override": height_cap_override,
+                "inferred_role_id": inferred_role_id or None,
+                "label": label,
+                "object_id": object_id,
+                "role_effective_id": role_override_id or (inferred_role_id or None),
+                "role_override_id": role_override_id,
+                "stem_id": stem_id,
+                "surround_cap_override": surround_cap_override,
+                "front_only_override": bool(
+                    surround_cap_override is not None and surround_cap_override <= 0.0
+                ),
+            }
+        )
+    rows.sort(key=lambda item: (item["object_id"], item["stem_id"]))
+    return rows
+
+
+def _scene_preview_payload(scene_payload: dict[str, Any]) -> dict[str, Any] | None:
+    from mmo.core.ui_bundle import _scene_preview_payload as _build_scene_preview_payload  # noqa: WPS433
+
+    try:
+        preview = _build_scene_preview_payload(scene_payload)
+    except (RuntimeError, ValueError):
+        return None
+    return preview if isinstance(preview, dict) else None
+
+
+def _build_scene_locks_inspect_payload(project_dir: Path) -> dict[str, Any]:
+    resolved_project_dir = project_dir.resolve()
+    if not resolved_project_dir.exists() or not resolved_project_dir.is_dir():
+        raise _RpcMethodError(
+            message=f"Project directory does not exist: {resolved_project_dir.as_posix()}",
+        )
+
+    scene_path, scene_payload = _load_scene_from_project(resolved_project_dir)
+    _, scene_locks_path = _scene_project_paths(resolved_project_dir)
+    overrides = _load_scene_locks_overrides(scene_locks_path)
+    rows = _scene_lock_rows(scene_payload, overrides)
+    payload: dict[str, Any] = {
+        "project_dir": resolved_project_dir.as_posix(),
+        "scene_path": scene_path.resolve().as_posix(),
+        "scene_locks_path": scene_locks_path.resolve().as_posix(),
+        "perspective": _scene_perspective(scene_payload),
+        "perspective_values": list(_SCENE_PERSPECTIVE_VALUES),
+        "role_options": _scene_role_options(),
+        "objects": rows,
+        "overrides_count": len(overrides),
+    }
+    preview = _scene_preview_payload(scene_payload)
+    if isinstance(preview, dict):
+        payload["scene_preview"] = preview
+    return payload
+
+
+def _normalize_role_override(value: Any) -> str | None:
+    role_id = _coerce_string(value).strip()
+    if not role_id:
+        return None
+    if not role_id.startswith("ROLE."):
+        raise _RpcRequestError(
+            code="RPC.INVALID_PARAMS",
+            message="scene.locks.save row role_id must start with ROLE. when provided.",
+        )
+    return role_id
+
+
+def _merge_scene_lock_rows(
+    *,
+    rows: list[dict[str, Any]],
+    existing_overrides: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {
+        stem_id: dict(payload)
+        for stem_id, payload in existing_overrides.items()
+        if isinstance(stem_id, str) and stem_id and isinstance(payload, dict)
+    }
+    seen_stem_ids: set[str] = set()
+    for raw_row in rows:
+        if not isinstance(raw_row, dict):
+            raise _RpcRequestError(
+                code="RPC.INVALID_PARAMS",
+                message="scene.locks.save rows must contain only objects.",
+            )
+        stem_id = _coerce_string(raw_row.get("stem_id")).strip()
+        if not stem_id:
+            raise _RpcRequestError(
+                code="RPC.INVALID_PARAMS",
+                message="scene.locks.save row stem_id must be a non-empty string.",
+            )
+        if stem_id in seen_stem_ids:
+            raise _RpcRequestError(
+                code="RPC.INVALID_PARAMS",
+                message=f"scene.locks.save rows include duplicate stem_id: {stem_id}",
+            )
+        seen_stem_ids.add(stem_id)
+
+        row_payload = dict(merged.get(stem_id, {}))
+        role_id = _normalize_role_override(raw_row.get("role_id"))
+        if role_id is None:
+            row_payload.pop("role_id", None)
+        else:
+            row_payload["role_id"] = role_id
+
+        raw_front_only = raw_row.get("front_only")
+        front_only = bool(raw_front_only) if isinstance(raw_front_only, bool) else False
+        surround_cap = _coerce_unit_float(raw_row.get("surround_cap"), default=1.0)
+        if surround_cap is None:
+            surround_cap = 1.0
+        if front_only:
+            surround_cap = 0.0
+        if surround_cap >= 0.999:
+            row_payload.pop("surround_send_caps", None)
+        else:
+            row_payload["surround_send_caps"] = {
+                "side_max_gain": round(surround_cap, 3),
+                "rear_max_gain": round(surround_cap, 3),
+            }
+
+        height_cap = _coerce_unit_float(raw_row.get("height_cap"), default=1.0)
+        if height_cap is None:
+            height_cap = 1.0
+        if height_cap >= 0.999:
+            row_payload.pop("height_send_caps", None)
+        else:
+            row_payload["height_send_caps"] = {
+                "top_max_gain": round(height_cap, 3),
+            }
+
+        if row_payload:
+            merged[stem_id] = row_payload
+        else:
+            merged.pop(stem_id, None)
+
+    return {
+        stem_id: merged[stem_id]
+        for stem_id in sorted(merged.keys())
+    }
+
+
+def _write_scene_locks_yaml(path: Path, payload: dict[str, Any]) -> None:
+    if yaml is None:
+        raise _RpcMethodError(message="PyYAML is required to write scene_locks.yaml.")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rendered = yaml.safe_dump(payload, sort_keys=False)
+    if not rendered.endswith("\n"):
+        rendered += "\n"
+    path.write_text(rendered, encoding="utf-8")
+
+
+def _validated_scene_with_updates(
+    *,
+    scene_payload: dict[str, Any],
+    scene_locks_path: Path,
+    overrides: dict[str, dict[str, Any]],
+    perspective: str | None,
+) -> dict[str, Any]:
+    updated_scene = apply_scene_build_locks(
+        scene_payload,
+        {"version": SCENE_BUILD_LOCKS_VERSION, "overrides": overrides},
+        locks_path=scene_locks_path,
+    )
+    if isinstance(perspective, str):
+        updated_scene = edit_scene_set_intent(
+            updated_scene,
+            "scene",
+            None,
+            "perspective",
+            perspective,
+        )
+
+    scene_issues = validate_scene_intent(
+        updated_scene,
+        load_intent_params(ontology_dir() / "intent_params.yaml"),
+    )
+    if scene_issues:
+        issue = scene_issues[0] if isinstance(scene_issues[0], dict) else {}
+        issue_id = _coerce_string(issue.get("issue_id")).strip() or "ISSUE.SCENE.INTENT.INVALID"
+        message = _coerce_string(issue.get("message")).strip() or "Scene intent validation failed."
+        raise _RpcMethodError(
+            message=(
+                "scene.locks.save produced invalid scene intent: "
+                f"{issue_id}: {message}"
+            ),
+        )
+    return updated_scene
+
+
+def _handle_scene_locks_inspect(params: dict[str, Any]) -> dict[str, Any]:
+    _validate_allowed_params(
+        method="scene.locks.inspect",
+        params=params,
+        allowed={"project_dir"},
+    )
+    project_dir = _require_str_param(
+        method="scene.locks.inspect",
+        params=params,
+        name="project_dir",
+    )
+    try:
+        return _build_scene_locks_inspect_payload(Path(project_dir))
+    except (RuntimeError, ValueError, OSError) as exc:
+        raise _RpcMethodError(message=str(exc)) from exc
+
+
+def _handle_scene_locks_save(params: dict[str, Any]) -> dict[str, Any]:
+    _validate_allowed_params(
+        method="scene.locks.save",
+        params=params,
+        allowed={"project_dir", "perspective", "rows"},
+    )
+    project_dir = _require_str_param(
+        method="scene.locks.save",
+        params=params,
+        name="project_dir",
+    )
+    perspective = _optional_str_param(
+        method="scene.locks.save",
+        params=params,
+        name="perspective",
+        default=None,
+    )
+    if isinstance(perspective, str):
+        normalized_perspective = perspective.strip().lower()
+        if normalized_perspective not in _SCENE_PERSPECTIVE_VALUES:
+            expected = ", ".join(_SCENE_PERSPECTIVE_VALUES)
+            raise _RpcRequestError(
+                code="RPC.INVALID_PARAMS",
+                message=(
+                    "scene.locks.save perspective must be one of: "
+                    f"{expected}"
+                ),
+            )
+        perspective = normalized_perspective
+
+    raw_rows = params.get("rows")
+    if not isinstance(raw_rows, list):
+        raise _RpcRequestError(
+            code="RPC.INVALID_PARAMS",
+            message="scene.locks.save param 'rows' must be an array.",
+        )
+    rows = [row for row in raw_rows if isinstance(row, dict)]
+    if len(rows) != len(raw_rows):
+        raise _RpcRequestError(
+            code="RPC.INVALID_PARAMS",
+            message="scene.locks.save rows must contain only objects.",
+        )
+
+    try:
+        resolved_project_dir = Path(project_dir).resolve()
+        scene_path, scene_payload = _load_scene_from_project(resolved_project_dir)
+        _, scene_locks_path = _scene_project_paths(resolved_project_dir)
+        existing_overrides = _load_scene_locks_overrides(scene_locks_path)
+        merged_overrides = _merge_scene_lock_rows(
+            rows=rows,
+            existing_overrides=existing_overrides,
+        )
+        locks_payload = {
+            "version": SCENE_BUILD_LOCKS_VERSION,
+            "overrides": merged_overrides,
+        }
+        _write_scene_locks_yaml(scene_locks_path, locks_payload)
+
+        updated_scene = _validated_scene_with_updates(
+            scene_payload=scene_payload,
+            scene_locks_path=scene_locks_path,
+            overrides=merged_overrides,
+            perspective=perspective,
+        )
+        _write_json_file(scene_path, updated_scene)
+
+        preview_payload = _scene_preview_payload(updated_scene)
+        return {
+            "project_dir": resolved_project_dir.as_posix(),
+            "scene_path": scene_path.resolve().as_posix(),
+            "scene_locks_path": scene_locks_path.resolve().as_posix(),
+            "overrides_count": len(merged_overrides),
+            "perspective": _scene_perspective(updated_scene),
+            "written": [
+                scene_locks_path.resolve().as_posix(),
+                scene_path.resolve().as_posix(),
+            ],
+            "scene_preview": preview_payload if isinstance(preview_payload, dict) else None,
+        }
+    except _RpcRequestError:
+        raise
+    except (RuntimeError, ValueError, OSError) as exc:
+        raise _RpcMethodError(message=str(exc)) from exc
 
 
 def _handle_env_doctor(params: dict[str, Any]) -> dict[str, Any]:
@@ -1189,6 +1709,8 @@ _RPC_METHOD_HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "plugin.market.list": _handle_plugin_market_list,
     "plugin.market.update": _handle_plugin_market_update,
     "plugin.market.install": _handle_plugin_market_install,
+    "scene.locks.inspect": _handle_scene_locks_inspect,
+    "scene.locks.save": _handle_scene_locks_save,
     "rpc.discover": _handle_rpc_discover,
 }
 

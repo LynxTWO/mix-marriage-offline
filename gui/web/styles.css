@@ -220,6 +220,60 @@ button:hover {
   font-size: 0.9rem;
 }
 
+.scene-locks-container {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 0.55rem;
+}
+
+.scene-lock-row {
+  border: 1px solid #d6e1e8;
+  border-radius: 8px;
+  background: #fbfdff;
+  padding: 0.55rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.scene-lock-row-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.scene-lock-row-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.scene-lock-row-meta {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.scene-lock-row-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto minmax(180px, 1fr) minmax(180px, 1fr);
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.scene-lock-control {
+  margin: 0;
+}
+
+.scene-lock-slider {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.scene-lock-slider-value {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .timeline-container {
   display: grid;
   gap: 0.6rem;
@@ -583,5 +637,9 @@ button:hover {
   .scene-preview-svg {
     min-width: 0;
     height: 250px;
+  }
+
+  .scene-lock-row-controls {
+    grid-template-columns: 1fr;
   }
 }

@@ -121,6 +121,20 @@
         <div id="scene-preview-warnings" class="scene-preview-warnings"></div>
         <div id="scene-preview-stage" class="scene-preview-stage"></div>
         <pre id="scene-preview-output" class="code-block"></pre>
+        <h3>Scene Lock Editor</h3>
+        <p class="subtle">
+          Correct one wrong stem inference, then save a project-level <code>scene_locks.yaml</code>.
+        </p>
+        <div class="row align-end">
+          <label class="inline-field">
+            Perspective
+            <select id="scene-perspective-select"></select>
+          </label>
+          <button id="scene-locks-reload-button" type="button">Reload locks</button>
+          <button id="scene-locks-save-button" type="button">Save scene_locks.yaml</button>
+        </div>
+        <div id="scene-locks-container" class="scene-locks-container"></div>
+        <pre id="scene-locks-output" class="code-block"></pre>
       </section>
 
       <section class="panel">
