@@ -546,6 +546,17 @@ class TestGuiCliPassthrough(unittest.TestCase):
                 rc = _try_cli_passthrough(["-m", module, "--help"])
                 self.assertEqual(rc, 0)
 
+    def test_passthrough_preloaded_tool_help_emits_no_runpy_warning(self) -> None:
+        import mmo.tools.scan_session  # noqa: F401
+
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            rc = _try_cli_passthrough(["-m", "mmo.tools.scan_session", "--help"])
+        self.assertEqual(rc, 0)
+        self.assertNotIn("RuntimeWarning", stderr.getvalue())
+        self.assertNotIn("runpy", stderr.getvalue())
+
     def test_passthrough_returns_none_for_smoke_flag(self) -> None:
         self.assertIsNone(_try_cli_passthrough(["--smoke"]))
 

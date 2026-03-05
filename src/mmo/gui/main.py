@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
-import runpy
 import shlex
 import subprocess
 import sys
@@ -1928,8 +1928,23 @@ def _passthrough_module_to_run(module: str) -> str:
     return module
 
 
+def _passthrough_exit_code(code: object, *, from_system_exit: bool) -> int:
+    if code is None:
+        return 0
+    if isinstance(code, int):
+        return code
+    if isinstance(code, str):
+        if from_system_exit:
+            print(code, file=sys.stderr)
+        return 1
+    try:
+        return int(code)
+    except (TypeError, ValueError):
+        return 1
+
+
 def _try_cli_passthrough(argv: Sequence[str] | None) -> int | None:
-    """If argv starts with ['-m', 'mmo*', ...], dispatch via ``runpy``.
+    """If argv starts with ['-m', 'mmo*', ...], dispatch via module ``main()``.
 
     This allows a frozen GUI executable to also act as a Python module runner, so
     that ``sys.executable -m mmo ...`` and ``sys.executable -m mmo.tools...`` both
@@ -1945,34 +1960,37 @@ def _try_cli_passthrough(argv: Sequence[str] | None) -> int | None:
         original_argv = list(sys.argv)
         try:
             sys.argv = [module, *module_args]
-            runpy.run_module(module_to_run, run_name="__main__", alter_sys=True)
-            return 0
+            if module == "mmo":
+                from mmo.cli import main as cli_main
+
+                return _passthrough_exit_code(cli_main(), from_system_exit=False)
+
+            module_impl = importlib.import_module(module_to_run)
+            module_main = getattr(module_impl, "main", None)
+            if not callable(module_main):
+                print(
+                    f"error: module '{module_to_run}' has no callable main()",
+                    file=sys.stderr,
+                )
+                return 2
+            return _passthrough_exit_code(module_main(), from_system_exit=False)
         except SystemExit as exc:
-            code = exc.code
-            if code is None:
-                return 0
-            if isinstance(code, int):
-                return code
-            if isinstance(code, str):
-                print(code, file=sys.stderr)
-                return 1
-            try:
-                return int(code)
-            except (TypeError, ValueError):
-                return 1
+            return _passthrough_exit_code(exc.code, from_system_exit=True)
         except ImportError as exc:
-            missing_mmo_main = (
+            missing_mmo_entrypoint = (
                 module == "mmo"
                 and (
-                    getattr(exc, "name", "") == "mmo.__main__"
+                    getattr(exc, "name", "") in {"mmo.__main__", "mmo.cli"}
                     or "mmo.__main__" in str(exc)
+                    or "mmo.cli" in str(exc)
                 )
             )
-            if missing_mmo_main:
+            if missing_mmo_entrypoint:
                 print(
                     (
-                        "This build is missing mmo.__main__. Packaging bug: "
-                        "ensure PyInstaller includes hidden-import mmo.__main__."
+                        "This build is missing mmo CLI entrypoint modules "
+                        "(mmo.__main__/mmo.cli). Packaging bug: ensure PyInstaller "
+                        "includes hidden-imports for both modules."
                     ),
                     file=sys.stderr,
                 )

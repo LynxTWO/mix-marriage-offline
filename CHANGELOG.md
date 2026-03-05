@@ -127,6 +127,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- GUI `-m mmo*` passthrough no longer executes modules via `runpy`:
+  - Passthrough now imports target modules and calls callable `main()` entrypoints
+    directly, preserving prior exit-code behavior while avoiding
+    `RuntimeWarning: '<module>' found in sys.modules ...` noise in smoke/CI logs.
+  - Added GUI smoke regression coverage that preloads a tool module and asserts
+    passthrough help dispatch emits no `runpy` warning text.
+  - (`src/mmo/gui/main.py`, `tests/test_gui_smoke.py`)
+
 - `safe-render` now supports first-class explicit scene inputs:
   - Added `--scene <scene.json>`, `--scene-locks <scene_locks.yaml|json>`,
     and `--scene-strict`.
