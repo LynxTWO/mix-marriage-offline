@@ -378,7 +378,7 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
         out_ratio_db = 10.0 * math.log10(
             (rendered_energy[0] + 1e-12) / (rendered_energy[1] + 1e-12)
         )
-        self.assertAlmostEqual(out_ratio_db, src_ratio_db, delta=0.6)
+        self.assertAlmostEqual(out_ratio_db, src_ratio_db, delta=0.5)
         self.assertGreater(rendered_energy[0], rendered_energy[1])
 
         metadata = stereo_row.get("metadata")
@@ -394,7 +394,84 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
             for item in summary
             if isinstance(item, dict) and item.get("stem_id") == "STEM.STEREO"
         )
-        self.assertEqual(row.get("mix_mode"), "stereo_channel_wise")
+        self.assertEqual(row.get("mix_mode"), "stereo_channel_wise_ratio_preserve")
+        self.assertFalse(bool(row.get("stereo_reinterpret_allowed")))
+
+    def test_stereo_2_0_ratio_is_preserved_while_immersive_keeps_placement_mix(self) -> None:
+        stem_path = self.stems_dir / "stereo_ratio_vs_immersive.wav"
+        _write_stereo_wav(
+            stem_path,
+            left_amplitude=0.92,
+            right_amplitude=0.06,
+        )
+        scene = _single_stereo_scene_payload(
+            self.stems_dir,
+            role_id="ROLE.SYNTH.LEAD",
+            confidence=0.95,
+            perspective="in_band",
+        )
+        scene["intent"]["stereo_reinterpret_allowed"] = True
+        scene_object = scene.get("objects")[0]
+        if isinstance(scene_object, dict):
+            scene_object["azimuth_hint"] = 58.0
+            intent_payload = scene_object.get("intent")
+            if isinstance(intent_payload, dict):
+                position = intent_payload.get("position")
+                if isinstance(position, dict):
+                    position["azimuth_deg"] = 58.0
+
+        session = {
+            "stems_dir": self.stems_dir.resolve().as_posix(),
+            "stems": [
+                {
+                    "stem_id": "STEM.STEREO",
+                    "file_path": "stereo_ratio_vs_immersive.wav",
+                    "channel_count": 2,
+                },
+            ],
+            "scene_payload": scene,
+        }
+
+        renderer = PlacementMixdownRenderer()
+        manifest = renderer.render(session, [], self.out_dir)
+        by_layout = _output_by_layout(manifest)
+        stereo_row = by_layout.get("LAYOUT.2_0")
+        immersive_row = by_layout.get("LAYOUT.9_1_6")
+        self.assertIsInstance(stereo_row, dict)
+        self.assertIsInstance(immersive_row, dict)
+        if not isinstance(stereo_row, dict) or not isinstance(immersive_row, dict):
+            return
+
+        rendered_stereo_path = self.out_dir / Path(stereo_row["file_path"])
+        source_energy, _ = _channel_energy(stem_path)
+        rendered_stereo_energy, _ = _channel_energy(rendered_stereo_path)
+
+        src_ratio_db = 10.0 * math.log10((source_energy[0] + 1e-12) / (source_energy[1] + 1e-12))
+        out_ratio_db = 10.0 * math.log10(
+            (rendered_stereo_energy[0] + 1e-12) / (rendered_stereo_energy[1] + 1e-12)
+        )
+        self.assertAlmostEqual(out_ratio_db, src_ratio_db, delta=0.5)
+
+        immersive_meta = immersive_row.get("metadata")
+        self.assertIsInstance(immersive_meta, dict)
+        if not isinstance(immersive_meta, dict):
+            return
+        summary = immersive_meta.get("stem_send_summary")
+        self.assertIsInstance(summary, list)
+        if not isinstance(summary, list):
+            return
+        stem_summary = next(
+            item
+            for item in summary
+            if isinstance(item, dict) and item.get("stem_id") == "STEM.STEREO"
+        )
+        self.assertTrue(bool(stem_summary.get("stereo_reinterpret_allowed")))
+        mix_mode = stem_summary.get("mix_mode")
+        self.assertIsInstance(mix_mode, str)
+        if isinstance(mix_mode, str):
+            self.assertTrue(mix_mode.startswith("stereo_mid_side_preserve"))
+        nonzero_channels = set(stem_summary.get("nonzero_channels") or [])
+        self.assertTrue(any(channel not in {"SPK.L", "SPK.R"} for channel in nonzero_channels))
 
     def test_anchor_stereo_does_not_wrap_without_immersive_perspective(self) -> None:
         stem_path = self.stems_dir / "anchor.wav"

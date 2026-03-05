@@ -170,6 +170,24 @@ def _coerce_float(value: Any) -> float | None:
     return None
 
 
+def _coerce_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if value == 1:
+            return True
+        if value == 0:
+            return False
+        return None
+    if isinstance(value, str) and value.strip():
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return None
+
+
 def _db_to_linear(gain_db: float) -> float:
     return math.pow(10.0, gain_db / 20.0)
 
@@ -347,6 +365,68 @@ def _perspective_from_notes(notes_payload: Any) -> str | None:
         if perspective in _IMMERSIVE_WRAP_PERSPECTIVES:
             return perspective
     return None
+
+
+def _bool_flag_from_notes(
+    notes_payload: Any,
+    *,
+    key: str,
+) -> bool | None:
+    notes = notes_payload if isinstance(notes_payload, list) else []
+    prefix = f"{key.strip().lower()}:"
+    for note in notes:
+        if not isinstance(note, str):
+            continue
+        normalized = note.strip().lower()
+        if not normalized.startswith(prefix):
+            continue
+        value = normalized.split(":", 1)[1].strip()
+        return _coerce_bool(value)
+    return None
+
+
+def _scene_stereo_reinterpret_allowed(scene: dict[str, Any]) -> bool:
+    intent = scene.get("intent")
+    if isinstance(intent, dict):
+        explicit = _coerce_bool(intent.get("stereo_reinterpret_allowed"))
+        if explicit is not None:
+            return explicit
+        from_notes = _bool_flag_from_notes(
+            intent.get("notes"),
+            key="stereo_reinterpret_allowed",
+        )
+        if from_notes is not None:
+            return from_notes
+
+    metadata = scene.get("metadata")
+    if isinstance(metadata, dict):
+        explicit = _coerce_bool(metadata.get("stereo_reinterpret_allowed"))
+        if explicit is not None:
+            return explicit
+        from_notes = _bool_flag_from_notes(
+            metadata.get("notes"),
+            key="stereo_reinterpret_allowed",
+        )
+        if from_notes is not None:
+            return from_notes
+
+    return False
+
+
+def _stereo_reinterpret_allowed_for_stem(
+    *,
+    stem_row: dict[str, Any],
+    render_intent: dict[str, Any],
+) -> bool:
+    per_stem = _coerce_bool(stem_row.get("stereo_reinterpret_allowed"))
+    if per_stem is not None:
+        return per_stem
+
+    from_intent = _coerce_bool(render_intent.get("stereo_reinterpret_allowed"))
+    if from_intent is not None:
+        return from_intent
+
+    return False
 
 
 def _stereo_side_wrap_allowed(
@@ -600,7 +680,10 @@ def _prepare_layout_stems(
             if stem_channels == 1:
                 stem_mix_mode = "mono_by_policy_gains"
             elif stem_channels == 2 and layout_id == "LAYOUT.2_0":
-                stem_mix_mode = "stereo_channel_wise"
+                common_stereo_gain = 0.5 * (front_left_gain + front_right_gain)
+                front_left_gain = common_stereo_gain
+                front_right_gain = common_stereo_gain
+                stem_mix_mode = "stereo_channel_wise_ratio_preserve"
             elif stem_channels == 2:
                 stem_mix_mode = "stereo_mid_side_preserve"
             else:
@@ -771,6 +854,9 @@ def _mix_layout_from_intent(
 
     output_sha = sha256_file(abs_path)
     layout_slug = _layout_slug(layout_id)
+    stereo_reinterpret_allowed = bool(
+        _coerce_bool(render_intent.get("stereo_reinterpret_allowed"))
+    )
 
     stem_send_summary = []
     for row in stem_send_rows:
@@ -783,6 +869,10 @@ def _mix_layout_from_intent(
                 "stem_id": summary_stem_id,
                 "policy_class": _coerce_str(row.get("policy_class")),
                 "mix_mode": mix_mode,
+                "stereo_reinterpret_allowed": _stereo_reinterpret_allowed_for_stem(
+                    stem_row=row,
+                    render_intent=render_intent,
+                ),
                 "nonzero_channels": list(row.get("nonzero_channels") or []),
                 "surround_sends": _positive_send_map(
                     row.get("gains"),
@@ -821,6 +911,7 @@ def _mix_layout_from_intent(
             "render_strategy": "two_pass_streaming",
             "render_passes": _RENDER_PASS_COUNT,
             "chunk_frames": _RENDER_CHUNK_FRAMES,
+            "stereo_reinterpret_allowed": stereo_reinterpret_allowed,
             "what_why": (
                 "Rendered one layout-agnostic scene into layout speakers using "
                 "conservative placement sends; stereo stems keep L/R imaging in "
@@ -858,6 +949,7 @@ class PlacementMixdownRenderer(RendererPlugin):
             manifest["notes"] = "placement_scene_unavailable"
             return manifest
 
+        stereo_reinterpret_allowed = _scene_stereo_reinterpret_allowed(scene)
         out_dir = Path(output_dir)
         outputs: list[dict[str, Any]] = []
         notes: list[str] = []
@@ -872,6 +964,8 @@ class PlacementMixdownRenderer(RendererPlugin):
             if not isinstance(render_intent, dict):
                 notes.append(f"{layout_id}:placement_policy_unavailable")
                 continue
+            render_intent = dict(render_intent)
+            render_intent["stereo_reinterpret_allowed"] = stereo_reinterpret_allowed
 
             output_row, layout_notes = _mix_layout_from_intent(
                 session=session,
