@@ -30,6 +30,9 @@ Non-negotiables:
   2.0/5.1/7.1/7.1.4/7.1.6/9.1.6 outputs with role/azimuth-driven object stage
   routing (perspective-gated side/rear/wide use) and subtle
   confidence-gated/capped hall-room-first bed surround-height sends.
+- Keep placement mixdown memory bounded for long sessions by using
+  deterministic two-pass streaming (fixed-size chunk peak scan, then trimmed
+  PCM24 chunk writes) instead of whole-program in-memory accumulation.
 - Preserve stereo imaging in placement render paths: stereo stems should not
   collapse to mono in `LAYOUT.2_0`, scene stereo hints (`width_hint`,
   `azimuth_hint`) must remain evidence-backed/deterministic, and any optional

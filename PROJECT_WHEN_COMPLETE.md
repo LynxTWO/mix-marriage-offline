@@ -191,6 +191,9 @@ What remains: broaden this stereo-hint fixture pattern into additional multi-ste
   deterministic role/azimuth-aware object stage routing (perspective-gated
   side/rear/wide use) and capped confidence-gated hall/room-first bed
   surround/height sends.
+- [x] Placement scene renderer uses deterministic two-pass streaming
+  (`chunk_frames=4096`): pass 1 peak scan + pass 2 trimmed PCM24 chunk writes,
+  so long sessions avoid full-program in-memory mix buffers.
 - [x] Stem-role inference now includes broad uncommon/rare instrument aliases
   (world strings/winds/brass/percussion/keys/guitars), and those roles feed the
   same deterministic template + placement path so large mixed ensembles still

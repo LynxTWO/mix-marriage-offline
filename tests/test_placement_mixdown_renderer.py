@@ -9,7 +9,7 @@ from pathlib import Path
 
 from mmo.core.downmix import enforce_rendered_surround_similarity_gate
 from mmo.core.layout_negotiation import get_layout_channel_order
-from mmo.dsp.io import read_wav_metadata
+from mmo.dsp.io import read_wav_metadata, sha256_file
 from mmo.dsp.meters import iter_wav_float64_samples
 from mmo.plugins.renderers.placement_mixdown_renderer import PlacementMixdownRenderer
 
@@ -79,6 +79,17 @@ def _channel_energy(path: Path) -> tuple[list[float], int]:
                 sums[channel_index] += sample * sample
             frames += 1
     return sums, max(frames, 1)
+
+
+def _peak_abs(path: Path) -> float:
+    peak = 0.0
+    for chunk in iter_wav_float64_samples(path, error_context="placement renderer peak"):
+        if not chunk:
+            continue
+        chunk_peak = max(abs(float(sample)) for sample in chunk)
+        if chunk_peak > peak:
+            peak = chunk_peak
+    return peak
 
 
 def _single_stereo_scene_payload(
@@ -483,6 +494,69 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
         self.assertIsInstance(mix_mode, str)
         if isinstance(mix_mode, str):
             self.assertIn("wide_wrap", mix_mode)
+
+    def test_two_pass_streaming_long_fixture_has_stable_hash_and_peak_limit(self) -> None:
+        stem_path = self.stems_dir / "long_stereo.wav"
+        _write_stereo_wav(
+            stem_path,
+            sample_rate_hz=8_000,
+            duration_s=75.0,
+            freq_hz=110.0,
+            left_amplitude=0.9,
+            right_amplitude=0.5,
+            phase_offset_rad=0.7,
+        )
+        session = {
+            "stems_dir": self.stems_dir.resolve().as_posix(),
+            "stems": [
+                {"stem_id": "STEM.STEREO", "file_path": "long_stereo.wav", "channel_count": 2},
+            ],
+            "scene_payload": _single_stereo_scene_payload(
+                self.stems_dir,
+                role_id="ROLE.SYNTH.LEAD",
+                confidence=0.95,
+                perspective="in_band",
+            ),
+        }
+
+        renderer = PlacementMixdownRenderer()
+        out_a = self.temp / "long_render_a"
+        out_b = self.temp / "long_render_b"
+        manifest_a = renderer.render(session, [], out_a)
+        manifest_b = renderer.render(session, [], out_b)
+        by_layout_a = _output_by_layout(manifest_a)
+        by_layout_b = _output_by_layout(manifest_b)
+
+        row_a = by_layout_a.get("LAYOUT.7_1_4")
+        row_b = by_layout_b.get("LAYOUT.7_1_4")
+        self.assertIsInstance(row_a, dict)
+        self.assertIsInstance(row_b, dict)
+        if not isinstance(row_a, dict) or not isinstance(row_b, dict):
+            return
+
+        path_a = out_a / Path(row_a["file_path"])
+        path_b = out_b / Path(row_b["file_path"])
+        self.assertTrue(path_a.exists())
+        self.assertTrue(path_b.exists())
+
+        expected_channels = len(get_layout_channel_order("LAYOUT.7_1_4"))
+        with wave.open(str(path_a), "rb") as handle:
+            self.assertEqual(handle.getnchannels(), expected_channels)
+
+        target_peak_linear = math.pow(10.0, -1.0 / 20.0)
+        self.assertLessEqual(_peak_abs(path_a), target_peak_linear + 1e-4)
+
+        self.assertEqual(row_a.get("sha256"), sha256_file(path_a))
+        self.assertEqual(row_b.get("sha256"), sha256_file(path_b))
+        self.assertEqual(row_a.get("sha256"), row_b.get("sha256"))
+
+        metadata = row_a.get("metadata")
+        self.assertIsInstance(metadata, dict)
+        if not isinstance(metadata, dict):
+            return
+        self.assertEqual(metadata.get("render_strategy"), "two_pass_streaming")
+        self.assertEqual(metadata.get("render_passes"), 2)
+        self.assertEqual(metadata.get("chunk_frames"), 4096)
 
     def test_similarity_gate_supports_rendered_fallback_after_placement_render(self) -> None:
         renderer = PlacementMixdownRenderer()

@@ -121,6 +121,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     immersive perspective (`in_band`/`in_orchestra`) and high confidence are present.
   - Added regression coverage for scene hint evidence + confidence gating and
     stereo render energy-ratio preservation / wrap behavior.
+  - Placement renderer mixdown now uses deterministic two-pass streaming
+    (`chunk_frames=4096`): pass 1 scans mixed chunk peaks, pass 2 writes
+    trimmed PCM24 directly to the wave writer, avoiding full-program
+    in-memory accumulation on long sessions.
 
 ### Added
 

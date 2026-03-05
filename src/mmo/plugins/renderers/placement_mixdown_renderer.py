@@ -4,8 +4,9 @@ import json
 import math
 import struct
 import wave
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Sequence
+from typing import Any, Callable, Dict, Iterator, List, Sequence
 
 from mmo.core.layout_negotiation import get_layout_channel_order
 from mmo.core.placement_policy import build_render_intent
@@ -89,6 +90,8 @@ _WAV_EXTENSIONS = {".wav", ".wave"}
 _DEFAULT_SAMPLE_RATE_HZ = 48_000
 _DEFAULT_SILENCE_FRAMES = 4_800
 _TARGET_PEAK_DBFS = -1.0
+_RENDER_CHUNK_FRAMES = 4096
+_RENDER_PASS_COUNT = 2
 _FLOAT_MAX = math.nextafter(1.0, 0.0)
 _SURROUND_CHANNEL_IDS: frozenset[str] = frozenset(
     {
@@ -106,6 +109,31 @@ _OVERHEAD_CHANNEL_IDS: frozenset[str] = frozenset(
 _IMMERSIVE_WRAP_PERSPECTIVES: frozenset[str] = frozenset({"in_band", "in_orchestra"})
 _SIDE_WRAP_CONFIDENCE_MIN = 0.8
 _SIDE_WRAP_WIDE_GAIN_RATIO = 0.12
+
+
+@dataclass(frozen=True)
+class _PreparedStem:
+    stem_id: str
+    source_path: Path
+    stem_channels: int
+    gain_vector: tuple[float, ...]
+    front_left_idx: int
+    front_right_idx: int
+    front_left_gain: float
+    front_right_gain: float
+    wide_left_idx: int | None
+    wide_right_idx: int | None
+    wide_wrap_left_gain: float
+    wide_wrap_right_gain: float
+    stereo_channel_wise: bool
+
+
+@dataclass
+class _StemPassState:
+    stem: _PreparedStem
+    iterator: Iterator[list[float]]
+    active: bool = True
+    failed: bool = False
 
 
 def _json_clone(value: Any) -> Any:
@@ -356,64 +384,168 @@ def _float_samples_to_pcm24_bytes(samples: Sequence[float]) -> bytes:
     return bytes(out)
 
 
-def _write_pcm24_wav(
-    output_path: Path,
+def _mix_stem_chunk_into_buffer(
     *,
-    interleaved_samples: Sequence[float],
+    destination_chunk: list[float],
+    source_chunk: list[float],
+    frame_count: int,
     channel_count: int,
-    sample_rate_hz: int,
+    stem: _PreparedStem,
 ) -> None:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with wave.open(str(output_path), "wb") as handle:
-        handle.setnchannels(channel_count)
-        handle.setsampwidth(3)
-        handle.setframerate(sample_rate_hz)
-        handle.writeframes(_float_samples_to_pcm24_bytes(interleaved_samples))
+    source_index = 0
+    for frame_index in range(frame_count):
+        target_base = frame_index * channel_count
+        if stem.stem_channels == 1:
+            mono = float(source_chunk[source_index])
+            source_index += 1
+            for channel_index, gain in enumerate(stem.gain_vector):
+                if gain == 0.0:
+                    continue
+                destination_chunk[target_base + channel_index] += mono * gain
+            continue
+
+        if stem.stereo_channel_wise:
+            left = float(source_chunk[source_index])
+            right = float(source_chunk[source_index + 1])
+            source_index += 2
+            if stem.front_left_gain != 0.0:
+                destination_chunk[target_base + stem.front_left_idx] += left * stem.front_left_gain
+            if stem.front_right_gain != 0.0:
+                destination_chunk[target_base + stem.front_right_idx] += right * stem.front_right_gain
+            continue
+
+        left = 0.0
+        right = 0.0
+        mono_sum = 0.0
+        for source_channel_index in range(stem.stem_channels):
+            sample = float(source_chunk[source_index])
+            source_index += 1
+            mono_sum += sample
+            if source_channel_index == 0:
+                left = sample
+            elif source_channel_index == 1:
+                right = sample
+
+        mid = mono_sum / float(stem.stem_channels)
+        side = 0.5 * (left - right)
+
+        for channel_index, gain in enumerate(stem.gain_vector):
+            if gain == 0.0:
+                continue
+            destination_chunk[target_base + channel_index] += mid * gain
+
+        if stem.front_left_gain != 0.0:
+            destination_chunk[target_base + stem.front_left_idx] += side * stem.front_left_gain
+        if stem.front_right_gain != 0.0:
+            destination_chunk[target_base + stem.front_right_idx] -= side * stem.front_right_gain
+
+        if stem.wide_wrap_left_gain != 0.0 and isinstance(stem.wide_left_idx, int):
+            destination_chunk[target_base + stem.wide_left_idx] += side * stem.wide_wrap_left_gain
+        if stem.wide_wrap_right_gain != 0.0 and isinstance(stem.wide_right_idx, int):
+            destination_chunk[target_base + stem.wide_right_idx] -= side * stem.wide_wrap_right_gain
 
 
-def _mix_layout_from_intent(
+def _run_mix_pass(
+    *,
+    prepared_stems: list[_PreparedStem],
+    channel_count: int,
+    layout_id: str,
+    on_chunk: Callable[[list[float], int], None],
+) -> tuple[int, int, list[str]]:
+    states = [
+        _StemPassState(
+            stem=stem,
+            iterator=iter_wav_float64_samples(
+                stem.source_path,
+                error_context="placement mixdown renderer",
+            ),
+        )
+        for stem in prepared_stems
+    ]
+    notes: list[str] = []
+    total_frames = 0
+
+    while True:
+        any_active = False
+        mixed_chunk = [0.0] * (_RENDER_CHUNK_FRAMES * channel_count)
+        mixed_frame_count = 0
+
+        for state in states:
+            if not state.active:
+                continue
+            any_active = True
+
+            try:
+                chunk = next(state.iterator)
+            except StopIteration:
+                state.active = False
+                continue
+            except Exception:
+                state.active = False
+                state.failed = True
+                notes.append(f"{layout_id}:{state.stem.stem_id}:decode_failed")
+                continue
+
+            if not chunk:
+                continue
+
+            sample_count = len(chunk)
+            if sample_count % state.stem.stem_channels != 0:
+                state.active = False
+                state.failed = True
+                notes.append(f"{layout_id}:{state.stem.stem_id}:decode_failed")
+                continue
+
+            frame_count = sample_count // state.stem.stem_channels
+            if frame_count <= 0 or frame_count > _RENDER_CHUNK_FRAMES:
+                state.active = False
+                state.failed = True
+                notes.append(f"{layout_id}:{state.stem.stem_id}:decode_failed")
+                continue
+
+            if frame_count > mixed_frame_count:
+                mixed_frame_count = frame_count
+            _mix_stem_chunk_into_buffer(
+                destination_chunk=mixed_chunk,
+                source_chunk=chunk,
+                frame_count=frame_count,
+                channel_count=channel_count,
+                stem=state.stem,
+            )
+
+        if mixed_frame_count > 0:
+            on_chunk(mixed_chunk, mixed_frame_count)
+            total_frames += mixed_frame_count
+
+        if not any_active:
+            break
+
+    decoded_stems = sum(1 for state in states if not state.failed)
+    return decoded_stems, total_frames, notes
+
+
+def _prepare_layout_stems(
     *,
     session: Dict[str, Any],
     render_intent: dict[str, Any],
     layout_id: str,
-    output_dir: Path,
-) -> tuple[dict[str, Any] | None, list[str]]:
+    normalized_channel_order: list[str],
+    sends_by_stem: dict[str, dict[str, Any]],
+) -> tuple[list[_PreparedStem], int | None, dict[str, str], list[str]]:
     notes: list[str] = []
-    channel_order = render_intent.get("channel_order")
-    if not isinstance(channel_order, list) or not channel_order:
-        return None, [f"{layout_id}:missing_channel_order"]
-
-    normalized_channel_order = [
-        speaker_id
-        for speaker_id in channel_order
-        if isinstance(speaker_id, str) and speaker_id
-    ]
-    if not normalized_channel_order:
-        return None, [f"{layout_id}:invalid_channel_order"]
-
-    stem_sends = render_intent.get("stem_sends")
-    stem_send_rows = stem_sends if isinstance(stem_sends, list) else []
-    sends_by_stem: dict[str, dict[str, Any]] = {}
-    for row in stem_send_rows:
-        if not isinstance(row, dict):
-            continue
-        stem_id = _coerce_str(row.get("stem_id")).strip()
-        if not stem_id or stem_id in sends_by_stem:
-            continue
-        sends_by_stem[stem_id] = row
-
     stems_dir = _resolve_stems_dir(session)
     stems = _stem_rows(session)
-    channel_count = len(normalized_channel_order)
     speaker_idx = _speaker_index(normalized_channel_order)
     front_left_idx = speaker_idx.get("SPK.L")
     front_right_idx = speaker_idx.get("SPK.R")
+    if not isinstance(front_left_idx, int) or not isinstance(front_right_idx, int):
+        return [], None, {}, [f"{layout_id}:missing_front_lr_channels"]
+
     wide_left_idx = speaker_idx.get("SPK.LW")
     wide_right_idx = speaker_idx.get("SPK.RW")
-    mixed_interleaved: list[float] = []
-    sample_rate_hz: int | None = None
-    decoded_stems = 0
+    prepared_stems: list[_PreparedStem] = []
     stem_mix_modes: dict[str, str] = {}
+    sample_rate_hz: int | None = None
 
     for stem in stems:
         stem_id = _coerce_str(stem.get("stem_id")).strip() or "<unknown>"
@@ -430,16 +562,9 @@ def _mix_layout_from_intent(
         gain_vector = _gain_vector(stem_row=send_row, channel_order=normalized_channel_order)
         if not any(abs(gain) > 0.0 for gain in gain_vector):
             continue
-        front_left_gain = (
-            gain_vector[front_left_idx]
-            if isinstance(front_left_idx, int)
-            else 0.0
-        )
-        front_right_gain = (
-            gain_vector[front_right_idx]
-            if isinstance(front_right_idx, int)
-            else 0.0
-        )
+
+        front_left_gain = gain_vector[front_left_idx]
+        front_right_gain = gain_vector[front_right_idx]
         stereo_side_wrap_enabled = _stereo_side_wrap_allowed(
             stem_row=send_row,
             render_intent=render_intent,
@@ -463,14 +588,6 @@ def _mix_layout_from_intent(
                 raise ValueError("invalid_channel_count")
             if stem_sample_rate_hz is None or stem_sample_rate_hz < 1:
                 raise ValueError("invalid_sample_rate")
-            if (
-                front_left_idx is None
-                or front_right_idx is None
-                or front_left_idx < 0
-                or front_right_idx < 0
-            ):
-                raise ValueError("missing_front_lr_channels")
-
             if sample_rate_hz is None:
                 sample_rate_hz = stem_sample_rate_hz
             elif sample_rate_hz != stem_sample_rate_hz:
@@ -494,105 +611,79 @@ def _mix_layout_from_intent(
                 stem_mix_mode = f"{stem_mix_mode}_wide_wrap"
             stem_mix_modes[stem_id] = stem_mix_mode
 
-            frame_cursor = 0
-            for chunk in iter_wav_float64_samples(
-                source_path,
-                error_context="placement mixdown renderer",
-            ):
-                if not chunk:
-                    continue
-                total = len(chunk)
-                if total % stem_channels != 0:
-                    raise ValueError("decoder_returned_non_frame_aligned_data")
-                frame_count = total // stem_channels
-                if frame_count <= 0:
-                    continue
-
-                required_frames = frame_cursor + frame_count
-                existing_frames = len(mixed_interleaved) // channel_count
-                if required_frames > existing_frames:
-                    mixed_interleaved.extend(
-                        [0.0] * ((required_frames - existing_frames) * channel_count)
-                    )
-
-                source_index = 0
-                for frame_index in range(frame_count):
-                    target_base = (frame_cursor + frame_index) * channel_count
-                    if stem_channels == 1:
-                        mono = float(chunk[source_index])
-                        source_index += 1
-                        for channel_index, gain in enumerate(gain_vector):
-                            if gain == 0.0:
-                                continue
-                            mixed_interleaved[target_base + channel_index] += mono * gain
-                        continue
-
-                    if stem_channels == 2 and layout_id == "LAYOUT.2_0":
-                        left = float(chunk[source_index])
-                        right = float(chunk[source_index + 1])
-                        source_index += 2
-                        if front_left_gain != 0.0:
-                            mixed_interleaved[target_base + front_left_idx] += left * front_left_gain
-                        if front_right_gain != 0.0:
-                            mixed_interleaved[target_base + front_right_idx] += right * front_right_gain
-                        continue
-
-                    left = 0.0
-                    right = 0.0
-                    mono_sum = 0.0
-                    for source_channel_index in range(stem_channels):
-                        sample = float(chunk[source_index])
-                        source_index += 1
-                        mono_sum += sample
-                        if source_channel_index == 0:
-                            left = sample
-                        elif source_channel_index == 1:
-                            right = sample
-                    if stem_channels == 1:
-                        right = left
-
-                    mid = mono_sum / float(stem_channels)
-                    side = 0.5 * (left - right)
-
-                    for channel_index, gain in enumerate(gain_vector):
-                        if gain == 0.0:
-                            continue
-                        mixed_interleaved[target_base + channel_index] += mid * gain
-
-                    if front_left_gain != 0.0:
-                        mixed_interleaved[target_base + front_left_idx] += side * front_left_gain
-                    if front_right_gain != 0.0:
-                        mixed_interleaved[target_base + front_right_idx] -= side * front_right_gain
-
-                    if wide_wrap_left_gain != 0.0 and isinstance(wide_left_idx, int):
-                        mixed_interleaved[target_base + wide_left_idx] += side * wide_wrap_left_gain
-                    if wide_wrap_right_gain != 0.0 and isinstance(wide_right_idx, int):
-                        mixed_interleaved[target_base + wide_right_idx] -= side * wide_wrap_right_gain
-
-                frame_cursor += frame_count
-
-            decoded_stems += 1
+            prepared_stems.append(
+                _PreparedStem(
+                    stem_id=stem_id,
+                    source_path=source_path,
+                    stem_channels=stem_channels,
+                    gain_vector=tuple(gain_vector),
+                    front_left_idx=front_left_idx,
+                    front_right_idx=front_right_idx,
+                    front_left_gain=front_left_gain,
+                    front_right_gain=front_right_gain,
+                    wide_left_idx=wide_left_idx,
+                    wide_right_idx=wide_right_idx,
+                    wide_wrap_left_gain=wide_wrap_left_gain,
+                    wide_wrap_right_gain=wide_wrap_right_gain,
+                    stereo_channel_wise=(stem_channels == 2 and layout_id == "LAYOUT.2_0"),
+                )
+            )
         except Exception:
             notes.append(f"{layout_id}:{stem_id}:decode_failed")
 
-    if sample_rate_hz is None:
-        sample_rate_hz = _DEFAULT_SAMPLE_RATE_HZ
-    if not mixed_interleaved:
-        mixed_interleaved = [0.0] * (_DEFAULT_SILENCE_FRAMES * channel_count)
-        notes.append(f"{layout_id}:rendered_silence:no_decodable_stems")
+    return prepared_stems, sample_rate_hz, stem_mix_modes, notes
 
-    pre_trim_peak = max(abs(sample) for sample in mixed_interleaved) if mixed_interleaved else 0.0
-    target_peak_linear = _db_to_linear(_TARGET_PEAK_DBFS)
-    if pre_trim_peak <= 0.0:
-        trim_linear = 1.0
-    else:
-        trim_linear = min(1.0, target_peak_linear / pre_trim_peak)
-    trim_db = _linear_to_db(trim_linear)
 
-    trimmed_interleaved = [
-        _clamp_sample(sample * trim_linear)
-        for sample in mixed_interleaved
+def _update_chunk_peak_by_channel(
+    *,
+    peak_by_channel: list[float],
+    mixed_chunk: list[float],
+    frame_count: int,
+    channel_count: int,
+) -> None:
+    for frame_index in range(frame_count):
+        frame_base = frame_index * channel_count
+        for channel_index in range(channel_count):
+            sample = abs(mixed_chunk[frame_base + channel_index])
+            if sample > peak_by_channel[channel_index]:
+                peak_by_channel[channel_index] = sample
+
+
+def _write_trimmed_chunk(
+    *,
+    handle: wave.Wave_write,
+    mixed_chunk: list[float],
+    frame_count: int,
+    channel_count: int,
+    trim_linear: float,
+) -> None:
+    sample_count = frame_count * channel_count
+    trimmed = [
+        _clamp_sample(mixed_chunk[index] * trim_linear)
+        for index in range(sample_count)
     ]
+    handle.writeframes(_float_samples_to_pcm24_bytes(trimmed))
+
+
+def _mix_layout_from_intent(
+    *,
+    session: Dict[str, Any],
+    render_intent: dict[str, Any],
+    layout_id: str,
+    output_dir: Path,
+) -> tuple[dict[str, Any] | None, list[str]]:
+    notes: list[str] = []
+    channel_order = render_intent.get("channel_order")
+    if not isinstance(channel_order, list) or not channel_order:
+        return None, [f"{layout_id}:missing_channel_order"]
+
+    normalized_channel_order = [
+        speaker_id
+        for speaker_id in channel_order
+        if isinstance(speaker_id, str) and speaker_id
+    ]
+    if not normalized_channel_order:
+        return None, [f"{layout_id}:invalid_channel_order"]
 
     rel_path = _output_relative_path(output_dir=output_dir, layout_id=layout_id)
     abs_path = output_dir / rel_path
@@ -601,12 +692,83 @@ def _mix_layout_from_intent(
             f"{layout_id}:skipped_existing_output:{rel_path.as_posix()}"
         ]
 
-    _write_pcm24_wav(
-        abs_path,
-        interleaved_samples=trimmed_interleaved,
-        channel_count=channel_count,
-        sample_rate_hz=sample_rate_hz,
+    stem_sends = render_intent.get("stem_sends")
+    stem_send_rows = stem_sends if isinstance(stem_sends, list) else []
+    sends_by_stem: dict[str, dict[str, Any]] = {}
+    for row in stem_send_rows:
+        if not isinstance(row, dict):
+            continue
+        stem_id = _coerce_str(row.get("stem_id")).strip()
+        if not stem_id or stem_id in sends_by_stem:
+            continue
+        sends_by_stem[stem_id] = row
+
+    channel_count = len(normalized_channel_order)
+    prepared_stems, sample_rate_hz, stem_mix_modes, prep_notes = _prepare_layout_stems(
+        session=session,
+        render_intent=render_intent,
+        layout_id=layout_id,
+        normalized_channel_order=normalized_channel_order,
+        sends_by_stem=sends_by_stem,
     )
+    if prep_notes:
+        notes.extend(prep_notes)
+
+    if sample_rate_hz is None:
+        sample_rate_hz = _DEFAULT_SAMPLE_RATE_HZ
+    peak_by_channel = [0.0] * channel_count
+    decoded_stems, pass1_frames, pass1_notes = _run_mix_pass(
+        prepared_stems=prepared_stems,
+        channel_count=channel_count,
+        layout_id=layout_id,
+        on_chunk=lambda chunk, frame_count: _update_chunk_peak_by_channel(
+            peak_by_channel=peak_by_channel,
+            mixed_chunk=chunk,
+            frame_count=frame_count,
+            channel_count=channel_count,
+        ),
+    )
+    if pass1_notes:
+        notes.extend(pass1_notes)
+
+    rendered_audio = pass1_frames > 0
+    if not rendered_audio:
+        notes.append(f"{layout_id}:rendered_silence:no_decodable_stems")
+
+    pre_trim_peak = max(peak_by_channel) if peak_by_channel else 0.0
+    target_peak_linear = _db_to_linear(_TARGET_PEAK_DBFS)
+    if pre_trim_peak <= 0.0:
+        trim_linear = 1.0
+    else:
+        trim_linear = min(1.0, target_peak_linear / pre_trim_peak)
+    trim_db = _linear_to_db(trim_linear)
+
+    abs_path.parent.mkdir(parents=True, exist_ok=True)
+    pass2_frames = 0
+    with wave.open(str(abs_path), "wb") as handle:
+        handle.setnchannels(channel_count)
+        handle.setsampwidth(3)
+        handle.setframerate(sample_rate_hz)
+
+        if rendered_audio:
+            _, pass2_frames, pass2_notes = _run_mix_pass(
+                prepared_stems=prepared_stems,
+                channel_count=channel_count,
+                layout_id=layout_id,
+                on_chunk=lambda chunk, frame_count: _write_trimmed_chunk(
+                    handle=handle,
+                    mixed_chunk=chunk,
+                    frame_count=frame_count,
+                    channel_count=channel_count,
+                    trim_linear=trim_linear,
+                ),
+            )
+            if pass2_notes:
+                notes.extend(pass2_notes)
+        if pass2_frames <= 0:
+            silence = [0.0] * (_DEFAULT_SILENCE_FRAMES * channel_count)
+            handle.writeframes(_float_samples_to_pcm24_bytes(silence))
+
     output_sha = sha256_file(abs_path)
     layout_slug = _layout_slug(layout_id)
 
@@ -656,6 +818,9 @@ def _mix_layout_from_intent(
             "target_peak_dbfs": _TARGET_PEAK_DBFS,
             "pre_trim_peak": pre_trim_peak,
             "decoded_stem_count": decoded_stems,
+            "render_strategy": "two_pass_streaming",
+            "render_passes": _RENDER_PASS_COUNT,
+            "chunk_frames": _RENDER_CHUNK_FRAMES,
             "what_why": (
                 "Rendered one layout-agnostic scene into layout speakers using "
                 "conservative placement sends; stereo stems keep L/R imaging in "
