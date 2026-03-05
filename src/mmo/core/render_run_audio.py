@@ -44,7 +44,7 @@ except ImportError:  # pragma: no cover - optional dependency
 _STEREO_LAYOUT_ID = "LAYOUT.2_0"
 _OUTPUT_FORMAT_ORDER = tuple(LOSSLESS_OUTPUT_FORMATS)
 _WAV_EXTENSIONS = frozenset({".wav", ".wave"})
-_FFMPEG_EXTENSIONS = frozenset({".flac", ".wv", ".aif", ".aiff", ".m4a"})
+_FFMPEG_EXTENSIONS = frozenset({".flac", ".wv", ".aif", ".aiff", ".ape", ".m4a"})
 _LOSSY_EXTENSIONS = frozenset({".mp3", ".aac", ".ogg", ".opus"})
 _SOURCE_EXTENSIONS = _WAV_EXTENSIONS | _FFMPEG_EXTENSIONS | _LOSSY_EXTENSIONS
 _BIT_DEPTHS = frozenset({16, 24, 32})

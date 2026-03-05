@@ -11,8 +11,14 @@ from typing import Any, Callable, Dict, Iterator, List, Sequence
 from mmo.core.layout_negotiation import get_layout_channel_order
 from mmo.core.placement_policy import build_render_intent
 from mmo.core.scene_builder import build_scene_from_bus_plan, build_scene_from_session
-from mmo.dsp.io import read_wav_metadata, sha256_file
-from mmo.dsp.meters import iter_wav_float64_samples
+from mmo.dsp.decoders import (
+    detect_format_from_path,
+    is_lossless_format_id,
+    iter_audio_float64_samples,
+    read_audio_metadata,
+)
+from mmo.dsp.io import sha256_file
+from mmo.dsp.sample_rate import choose_render_sample_rate_hz
 from mmo.plugins.interfaces import Recommendation, RenderManifest, RendererPlugin
 
 _PLUGIN_ID = "PLUGIN.RENDERER.PLACEMENT_MIXDOWN_V1"
@@ -86,7 +92,6 @@ _DEFAULT_CHANNEL_ORDER: dict[str, tuple[str, ...]] = {
         "SPK.TBC",
     ),
 }
-_WAV_EXTENSIONS = {".wav", ".wave"}
 _DEFAULT_SAMPLE_RATE_HZ = 48_000
 _DEFAULT_SILENCE_FRAMES = 4_800
 _TARGET_PEAK_DBFS = -1.0
@@ -115,7 +120,29 @@ _SIDE_WRAP_WIDE_GAIN_RATIO = 0.12
 class _PreparedStem:
     stem_id: str
     source_path: Path
+    source_format_id: str
     stem_channels: int
+    source_sample_rate_hz: int
+    render_sample_rate_hz: int
+    gain_vector: tuple[float, ...]
+    front_left_idx: int
+    front_right_idx: int
+    front_left_gain: float
+    front_right_gain: float
+    wide_left_idx: int | None
+    wide_right_idx: int | None
+    wide_wrap_left_gain: float
+    wide_wrap_right_gain: float
+    stereo_channel_wise: bool
+
+
+@dataclass(frozen=True)
+class _StemDecodePlan:
+    stem_id: str
+    source_path: Path
+    source_format_id: str
+    stem_channels: int
+    source_sample_rate_hz: int
     gain_vector: tuple[float, ...]
     front_left_idx: int
     front_right_idx: int
@@ -188,6 +215,27 @@ def _coerce_bool(value: Any) -> bool | None:
     return None
 
 
+def _resolve_explicit_render_sample_rate_hz(
+    session: Dict[str, Any],
+    render_intent: dict[str, Any],
+) -> int | None:
+    candidates: list[Any] = [
+        session.get("render_sample_rate_hz"),
+        render_intent.get("render_sample_rate_hz"),
+        session.get("sample_rate_hz"),
+        render_intent.get("sample_rate_hz"),
+    ]
+    options_payload = session.get("options")
+    if isinstance(options_payload, dict):
+        candidates.append(options_payload.get("render_sample_rate_hz"))
+
+    for candidate in candidates:
+        value = _coerce_int(candidate)
+        if value is not None and value > 0:
+            return value
+    return None
+
+
 def _db_to_linear(gain_db: float) -> float:
     return math.pow(10.0, gain_db / 20.0)
 
@@ -246,8 +294,6 @@ def _resolve_stem_source_path(
 
     if not candidate.exists():
         return None, "missing_stem_file"
-    if candidate.suffix.lower() not in _WAV_EXTENSIONS:
-        return None, "unsupported_non_wav_source"
     return candidate, None
 
 
@@ -535,9 +581,15 @@ def _run_mix_pass(
     states = [
         _StemPassState(
             stem=stem,
-            iterator=iter_wav_float64_samples(
+            iterator=iter_audio_float64_samples(
                 stem.source_path,
                 error_context="placement mixdown renderer",
+                chunk_frames=_RENDER_CHUNK_FRAMES,
+                metadata={
+                    "channels": stem.stem_channels,
+                    "sample_rate_hz": stem.source_sample_rate_hz,
+                },
+                target_sample_rate_hz=stem.render_sample_rate_hz,
             ),
         )
         for stem in prepared_stems
@@ -611,7 +663,7 @@ def _prepare_layout_stems(
     layout_id: str,
     normalized_channel_order: list[str],
     sends_by_stem: dict[str, dict[str, Any]],
-) -> tuple[list[_PreparedStem], int | None, dict[str, str], list[str]]:
+) -> tuple[list[_PreparedStem], int | None, dict[str, str], list[str], dict[str, Any]]:
     notes: list[str] = []
     stems_dir = _resolve_stems_dir(session)
     stems = _stem_rows(session)
@@ -619,13 +671,13 @@ def _prepare_layout_stems(
     front_left_idx = speaker_idx.get("SPK.L")
     front_right_idx = speaker_idx.get("SPK.R")
     if not isinstance(front_left_idx, int) or not isinstance(front_right_idx, int):
-        return [], None, {}, [f"{layout_id}:missing_front_lr_channels"]
+        return [], None, {}, [f"{layout_id}:missing_front_lr_channels"], {}
 
     wide_left_idx = speaker_idx.get("SPK.LW")
     wide_right_idx = speaker_idx.get("SPK.RW")
-    prepared_stems: list[_PreparedStem] = []
+    decode_plans: list[_StemDecodePlan] = []
     stem_mix_modes: dict[str, str] = {}
-    sample_rate_hz: int | None = None
+    observed_sample_rates_hz: list[int] = []
 
     for stem in stems:
         stem_id = _coerce_str(stem.get("stem_id")).strip() or "<unknown>"
@@ -660,22 +712,46 @@ def _prepare_layout_stems(
             else 0.0
         )
 
+        source_format_id = detect_format_from_path(source_path)
+        if source_format_id == "unknown":
+            notes.append(f"{layout_id}:{stem_id}:unsupported_format")
+            continue
+
         try:
-            metadata = read_wav_metadata(source_path)
+            metadata: dict[str, Any] | None = None
+            try:
+                metadata = read_audio_metadata(source_path)
+            except Exception:
+                stem_channels_hint = _coerce_int(stem.get("channel_count"))
+                if stem_channels_hint is None:
+                    stem_channels_hint = _coerce_int(stem.get("channels"))
+                stem_sample_rate_hint = _coerce_int(stem.get("sample_rate_hz"))
+                if (
+                    stem_channels_hint is not None
+                    and stem_channels_hint > 0
+                    and stem_sample_rate_hint is not None
+                    and stem_sample_rate_hint > 0
+                ):
+                    metadata = {
+                        "channels": stem_channels_hint,
+                        "sample_rate_hz": stem_sample_rate_hint,
+                        "codec_name": stem.get("codec_name"),
+                    }
+                else:
+                    raise
+
+            codec_name = _coerce_str(metadata.get("codec_name")).strip().lower()
+            if not is_lossless_format_id(source_format_id, codec_name=codec_name):
+                notes.append(f"{layout_id}:{stem_id}:lossy_input")
+                continue
+
             stem_channels = _coerce_int(metadata.get("channels"))
             stem_sample_rate_hz = _coerce_int(metadata.get("sample_rate_hz"))
             if stem_channels is None or stem_channels < 1:
                 raise ValueError("invalid_channel_count")
             if stem_sample_rate_hz is None or stem_sample_rate_hz < 1:
                 raise ValueError("invalid_sample_rate")
-            if sample_rate_hz is None:
-                sample_rate_hz = stem_sample_rate_hz
-            elif sample_rate_hz != stem_sample_rate_hz:
-                notes.append(
-                    f"{layout_id}:{stem_id}:sample_rate_mismatch"
-                    f"({stem_sample_rate_hz}!={sample_rate_hz})"
-                )
-                continue
+            observed_sample_rates_hz.append(stem_sample_rate_hz)
 
             if stem_channels == 1:
                 stem_mix_mode = "mono_by_policy_gains"
@@ -694,11 +770,13 @@ def _prepare_layout_stems(
                 stem_mix_mode = f"{stem_mix_mode}_wide_wrap"
             stem_mix_modes[stem_id] = stem_mix_mode
 
-            prepared_stems.append(
-                _PreparedStem(
+            decode_plans.append(
+                _StemDecodePlan(
                     stem_id=stem_id,
                     source_path=source_path,
+                    source_format_id=source_format_id,
                     stem_channels=stem_channels,
+                    source_sample_rate_hz=stem_sample_rate_hz,
                     gain_vector=tuple(gain_vector),
                     front_left_idx=front_left_idx,
                     front_right_idx=front_right_idx,
@@ -714,7 +792,81 @@ def _prepare_layout_stems(
         except Exception:
             notes.append(f"{layout_id}:{stem_id}:decode_failed")
 
-    return prepared_stems, sample_rate_hz, stem_mix_modes, notes
+    explicit_sample_rate_hz = _resolve_explicit_render_sample_rate_hz(
+        session,
+        render_intent,
+    )
+    sample_rate_hz, selection_receipt = choose_render_sample_rate_hz(
+        observed_sample_rates_hz,
+        explicit_sample_rate_hz=explicit_sample_rate_hz,
+    )
+    if sample_rate_hz is None:
+        return [], None, stem_mix_modes, notes, {
+            "algorithm": "linear_interpolation_v1",
+            "selection": selection_receipt,
+            "target_sample_rate_hz": None,
+            "resampled_stems": [],
+            "native_rate_stems": [],
+        }
+
+    notes.append(
+        f"{layout_id}:render_sample_rate_selected:{sample_rate_hz}:"
+        f"{_coerce_str(selection_receipt.get('selection_reason'))}"
+    )
+
+    prepared_stems: list[_PreparedStem] = []
+    resampled_stems: list[dict[str, Any]] = []
+    native_rate_stems: list[dict[str, Any]] = []
+    for plan in decode_plans:
+        prepared_stems.append(
+            _PreparedStem(
+                stem_id=plan.stem_id,
+                source_path=plan.source_path,
+                source_format_id=plan.source_format_id,
+                stem_channels=plan.stem_channels,
+                source_sample_rate_hz=plan.source_sample_rate_hz,
+                render_sample_rate_hz=sample_rate_hz,
+                gain_vector=plan.gain_vector,
+                front_left_idx=plan.front_left_idx,
+                front_right_idx=plan.front_right_idx,
+                front_left_gain=plan.front_left_gain,
+                front_right_gain=plan.front_right_gain,
+                wide_left_idx=plan.wide_left_idx,
+                wide_right_idx=plan.wide_right_idx,
+                wide_wrap_left_gain=plan.wide_wrap_left_gain,
+                wide_wrap_right_gain=plan.wide_wrap_right_gain,
+                stereo_channel_wise=plan.stereo_channel_wise,
+            )
+        )
+        if plan.source_sample_rate_hz != sample_rate_hz:
+            notes.append(
+                f"{layout_id}:{plan.stem_id}:resampled"
+                f"({plan.source_sample_rate_hz}->{sample_rate_hz})"
+            )
+            resampled_stems.append(
+                {
+                    "stem_id": plan.stem_id,
+                    "from_sample_rate_hz": plan.source_sample_rate_hz,
+                    "to_sample_rate_hz": sample_rate_hz,
+                    "format": plan.source_format_id,
+                }
+            )
+        else:
+            native_rate_stems.append(
+                {
+                    "stem_id": plan.stem_id,
+                    "sample_rate_hz": sample_rate_hz,
+                    "format": plan.source_format_id,
+                }
+            )
+
+    return prepared_stems, sample_rate_hz, stem_mix_modes, notes, {
+        "algorithm": "linear_interpolation_v1",
+        "selection": selection_receipt,
+        "target_sample_rate_hz": sample_rate_hz,
+        "resampled_stems": resampled_stems,
+        "native_rate_stems": native_rate_stems,
+    }
 
 
 def _update_chunk_peak_by_channel(
@@ -787,7 +939,13 @@ def _mix_layout_from_intent(
         sends_by_stem[stem_id] = row
 
     channel_count = len(normalized_channel_order)
-    prepared_stems, sample_rate_hz, stem_mix_modes, prep_notes = _prepare_layout_stems(
+    (
+        prepared_stems,
+        sample_rate_hz,
+        stem_mix_modes,
+        prep_notes,
+        resampling_receipt,
+    ) = _prepare_layout_stems(
         session=session,
         render_intent=render_intent,
         layout_id=layout_id,
@@ -799,6 +957,9 @@ def _mix_layout_from_intent(
 
     if sample_rate_hz is None:
         sample_rate_hz = _DEFAULT_SAMPLE_RATE_HZ
+        if isinstance(resampling_receipt, dict):
+            resampling_receipt = dict(resampling_receipt)
+            resampling_receipt.setdefault("target_sample_rate_hz", sample_rate_hz)
     peak_by_channel = [0.0] * channel_count
     decoded_stems, pass1_frames, pass1_notes = _run_mix_pass(
         prepared_stems=prepared_stems,
@@ -912,6 +1073,7 @@ def _mix_layout_from_intent(
             "render_passes": _RENDER_PASS_COUNT,
             "chunk_frames": _RENDER_CHUNK_FRAMES,
             "stereo_reinterpret_allowed": stereo_reinterpret_allowed,
+            "resampling": resampling_receipt,
             "what_why": (
                 "Rendered one layout-agnostic scene into layout speakers using "
                 "conservative placement sends; stereo stems keep L/R imaging in "

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import os
 import math
 import struct
 import tempfile
 import unittest
 import wave
 from pathlib import Path
+from typing import Any
+from unittest import mock
 
 from mmo.core.downmix import enforce_rendered_surround_similarity_gate
 from mmo.core.layout_negotiation import get_layout_channel_order
@@ -62,6 +65,83 @@ def _write_stereo_wav(
         handle.setsampwidth(2)
         handle.setframerate(sample_rate_hz)
         handle.writeframes(struct.pack(f"<{len(interleaved)}h", *interleaved))
+
+
+def _write_fake_ffprobe(directory: Path) -> Path:
+    script_path = directory / "fake_ffprobe.py"
+    script_path.write_text(
+        """
+import json
+import sys
+from pathlib import Path
+
+_CODECS = {
+    ".flac": "flac",
+    ".wv": "wavpack",
+    ".aiff": "pcm_s16be",
+    ".aif": "pcm_s16be",
+    ".ape": "ape",
+    ".wav": "pcm_s16le",
+}
+
+
+def main() -> None:
+    path = Path(sys.argv[-1])
+    suffix = path.suffix.lower()
+    sample_rate = 44100 if "44k1" in path.stem.lower() else 48000
+    payload = {
+        "streams": [
+            {
+                "codec_type": "audio",
+                "codec_name": _CODECS.get(suffix, "flac"),
+                "channels": 1,
+                "sample_rate": str(sample_rate),
+                "duration": "0.25",
+                "bits_per_raw_sample": "16",
+                "channel_layout": "mono",
+            }
+        ],
+        "format": {
+            "duration": "0.25",
+            "format_name": suffix.lstrip(".") or "unknown",
+        },
+    }
+    print(json.dumps(payload))
+
+
+if __name__ == "__main__":
+    main()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    return script_path
+
+
+def _write_fake_ffmpeg(directory: Path) -> Path:
+    script_path = directory / "fake_ffmpeg.py"
+    script_path.write_text(
+        """
+import math
+import struct
+import sys
+
+
+def main() -> None:
+    sample_rate_hz = 48000
+    frame_count = 4096
+    values = [
+        0.18 * math.sin(2.0 * math.pi * 330.0 * index / sample_rate_hz)
+        for index in range(frame_count)
+    ]
+    sys.stdout.buffer.write(struct.pack(f"<{len(values)}d", *values))
+
+
+if __name__ == "__main__":
+    main()
+""".lstrip(),
+        encoding="utf-8",
+    )
+    return script_path
 
 
 def _channel_energy(path: Path) -> tuple[list[float], int]:
@@ -220,6 +300,49 @@ def _scene_payload(stems_dir: Path) -> dict:
                 "intent": {"diffuse": 0.95, "confidence": 0.88, "locks": []},
                 "notes": ["content_hint: ambience"],
             },
+        ],
+        "metadata": {},
+    }
+
+
+def _scene_payload_for_stem_ids(stems_dir: Path, stem_ids: list[str]) -> dict:
+    objects = []
+    for stem_id in stem_ids:
+        objects.append(
+            {
+                "object_id": f"OBJ.{stem_id}",
+                "stem_id": stem_id,
+                "role_id": "ROLE.SYNTH.LEAD",
+                "group_bus": "BUS.MUSIC",
+                "label": stem_id,
+                "channel_count": 1,
+                "width_hint": 0.6,
+                "depth_hint": 0.3,
+                "confidence": 0.95,
+                "intent": {"confidence": 0.95, "width": 0.6, "depth": 0.3, "locks": []},
+                "notes": [],
+            }
+        )
+    return {
+        "schema_version": "0.1.0",
+        "scene_id": "SCENE.TEST.PLACEMENT.MULTIFORMAT",
+        "source": {
+            "stems_dir": stems_dir.resolve().as_posix(),
+            "created_from": "draft",
+        },
+        "intent": {
+            "confidence": 0.0,
+            "locks": [],
+        },
+        "objects": objects,
+        "beds": [
+            {
+                "bed_id": "BED.FIELD.001",
+                "label": "Field",
+                "kind": "field",
+                "intent": {"diffuse": 0.5, "confidence": 0.0, "locks": []},
+                "notes": [],
+            }
         ],
         "metadata": {},
     }
@@ -671,6 +794,150 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
         if isinstance(attempts, list):
             self.assertEqual(len(attempts), 2)
         self.assertIn("metrics", result)
+
+    def test_renderer_decodes_mixed_lossless_formats_in_one_session(self) -> None:
+        _write_mono_wav(self.stems_dir / "stem_wav.wav", freq_hz=130.0, amplitude=0.2)
+        for extension in ("flac", "wv", "aiff", "ape"):
+            (self.stems_dir / f"stem_{extension}.{extension}").write_bytes(b"")
+
+        stem_rows = [
+            {"stem_id": "STEM.WAV", "file_path": "stem_wav.wav"},
+            {"stem_id": "STEM.FLAC", "file_path": "stem_flac.flac"},
+            {"stem_id": "STEM.WV", "file_path": "stem_wv.wv"},
+            {"stem_id": "STEM.AIFF", "file_path": "stem_aiff.aiff"},
+            {"stem_id": "STEM.APE", "file_path": "stem_ape.ape"},
+        ]
+        session = {
+            "stems_dir": self.stems_dir.resolve().as_posix(),
+            "stems": stem_rows,
+            "scene_payload": _scene_payload_for_stem_ids(
+                self.stems_dir,
+                [row["stem_id"] for row in stem_rows],
+            ),
+        }
+        fake_ffprobe = _write_fake_ffprobe(self.temp)
+        fake_ffmpeg = _write_fake_ffmpeg(self.temp)
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "MMO_FFPROBE_PATH": str(fake_ffprobe),
+                "MMO_FFMPEG_PATH": str(fake_ffmpeg),
+            },
+            clear=False,
+        ):
+            renderer = PlacementMixdownRenderer()
+            manifest = renderer.render(session, [], self.out_dir / "mixed_lossless")
+
+        by_layout = _output_by_layout(manifest)
+        stereo_row = by_layout.get("LAYOUT.2_0")
+        self.assertIsInstance(stereo_row, dict)
+        if not isinstance(stereo_row, dict):
+            return
+
+        rendered_path = self.out_dir / "mixed_lossless" / Path(stereo_row["file_path"])
+        self.assertTrue(rendered_path.exists())
+        self.assertGreater(rendered_path.stat().st_size, 44)
+
+        metadata = stereo_row.get("metadata")
+        self.assertIsInstance(metadata, dict)
+        if not isinstance(metadata, dict):
+            return
+        self.assertEqual(metadata.get("decoded_stem_count"), 5)
+        resampling = metadata.get("resampling")
+        self.assertIsInstance(resampling, dict)
+        if isinstance(resampling, dict):
+            self.assertEqual(resampling.get("target_sample_rate_hz"), 48000)
+            self.assertEqual(resampling.get("resampled_stems"), [])
+
+    def test_renderer_resampling_policy_majority_then_higher_tiebreak(self) -> None:
+        fake_ffprobe = _write_fake_ffprobe(self.temp)
+        fake_ffmpeg = _write_fake_ffmpeg(self.temp)
+
+        def _render_session(stem_rows: list[dict[str, str]], out_dir: Path) -> dict[str, Any]:
+            session = {
+                "stems_dir": self.stems_dir.resolve().as_posix(),
+                "stems": stem_rows,
+                "scene_payload": _scene_payload_for_stem_ids(
+                    self.stems_dir,
+                    [row["stem_id"] for row in stem_rows],
+                ),
+            }
+            with mock.patch.dict(
+                os.environ,
+                {
+                    "MMO_FFPROBE_PATH": str(fake_ffprobe),
+                    "MMO_FFMPEG_PATH": str(fake_ffmpeg),
+                },
+                clear=False,
+            ):
+                renderer = PlacementMixdownRenderer()
+                return renderer.render(session, [], out_dir)
+
+        _write_mono_wav(self.stems_dir / "wav_48k.wav", sample_rate_hz=48000, freq_hz=180.0)
+        for rel in ("flac_44k1.flac", "wv_44k1.wv", "flac_48k.flac", "aiff_44k1.aiff"):
+            (self.stems_dir / rel).write_bytes(b"")
+
+        majority_manifest = _render_session(
+            [
+                {"stem_id": "STEM.WAV48", "file_path": "wav_48k.wav"},
+                {"stem_id": "STEM.FLAC44", "file_path": "flac_44k1.flac"},
+                {"stem_id": "STEM.WV44", "file_path": "wv_44k1.wv"},
+            ],
+            self.out_dir / "resample_majority",
+        )
+        majority_row = _output_by_layout(majority_manifest).get("LAYOUT.2_0")
+        self.assertIsInstance(majority_row, dict)
+        if not isinstance(majority_row, dict):
+            return
+        self.assertEqual(majority_row.get("sample_rate_hz"), 44100)
+        majority_meta = majority_row.get("metadata")
+        self.assertIsInstance(majority_meta, dict)
+        if isinstance(majority_meta, dict):
+            resampling = majority_meta.get("resampling")
+            self.assertIsInstance(resampling, dict)
+            if isinstance(resampling, dict):
+                selection = resampling.get("selection")
+                self.assertIsInstance(selection, dict)
+                if isinstance(selection, dict):
+                    self.assertEqual(selection.get("selection_reason"), "majority")
+                resampled = resampling.get("resampled_stems")
+                self.assertIsInstance(resampled, list)
+                if isinstance(resampled, list):
+                    stem_ids = {
+                        item.get("stem_id")
+                        for item in resampled
+                        if isinstance(item, dict)
+                    }
+                    self.assertIn("STEM.WAV48", stem_ids)
+
+        tie_manifest = _render_session(
+            [
+                {"stem_id": "STEM.WAV48", "file_path": "wav_48k.wav"},
+                {"stem_id": "STEM.FLAC48", "file_path": "flac_48k.flac"},
+                {"stem_id": "STEM.WV44", "file_path": "wv_44k1.wv"},
+                {"stem_id": "STEM.AIFF44", "file_path": "aiff_44k1.aiff"},
+            ],
+            self.out_dir / "resample_tie",
+        )
+        tie_row = _output_by_layout(tie_manifest).get("LAYOUT.2_0")
+        self.assertIsInstance(tie_row, dict)
+        if not isinstance(tie_row, dict):
+            return
+        self.assertEqual(tie_row.get("sample_rate_hz"), 48000)
+        tie_meta = tie_row.get("metadata")
+        self.assertIsInstance(tie_meta, dict)
+        if isinstance(tie_meta, dict):
+            resampling = tie_meta.get("resampling")
+            self.assertIsInstance(resampling, dict)
+            if isinstance(resampling, dict):
+                selection = resampling.get("selection")
+                self.assertIsInstance(selection, dict)
+                if isinstance(selection, dict):
+                    self.assertEqual(
+                        selection.get("selection_reason"),
+                        "tie_higher_sample_rate",
+                    )
 
 
 if __name__ == "__main__":

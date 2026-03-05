@@ -147,6 +147,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     (`chunk_frames=4096`): pass 1 scans mixed chunk peaks, pass 2 writes
     trimmed PCM24 directly to the wave writer, avoiding full-program
     in-memory accumulation on long sessions.
+  - Placement and baseline mixdown renderers now share a lossless
+    multiformat decode abstraction (`wav`, `flac`, `wv`, `aiff`/`aif`,
+    `ape`) and no longer skip stems solely for sample-rate mismatches.
+  - Added deterministic sample-rate policy + SRC receipts:
+    explicit session override when provided, otherwise majority-rate
+    selection with higher-rate tiebreak; mismatched stems are resampled with
+    deterministic linear interpolation and decisions are recorded in renderer
+    metadata/warnings.
+  - Added regression coverage for mixed-lossless session rendering and
+    deterministic sample-rate selection/resampling behavior.
 
 ### Added
 

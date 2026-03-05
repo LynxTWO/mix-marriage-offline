@@ -254,7 +254,7 @@ def _add_basic_meter_measurements(
         if format_id == "wav":
             if "sample_rate_hz" not in stem or "bits_per_sample" not in stem:
                 continue
-        elif format_id in {"flac", "wavpack", "aiff"}:
+        elif format_id in {"flac", "wavpack", "aiff", "ape"}:
             if ffmpeg_cmd is None:
                 ffmpeg_cmd = resolve_ffmpeg_cmd()
             if ffmpeg_cmd is None:
@@ -465,7 +465,7 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
                     pair_correlations = None
                 else:
                     pair_source = "wav_reader"
-        elif format_id in {"flac", "wavpack", "aiff"}:
+        elif format_id in {"flac", "wavpack", "aiff", "ape"}:
             if ffmpeg_cmd is None:
                 ffmpeg_cmd = resolve_ffmpeg_cmd()
             if ffmpeg_cmd is None:
@@ -677,7 +677,7 @@ def _load_mix_complexity_stems(
                     mono_samples.extend(_to_mono_samples(chunk, channels))
             except ValueError:
                 continue
-        elif format_id in {"flac", "wavpack", "aiff"}:
+        elif format_id in {"flac", "wavpack", "aiff", "ape"}:
             if ffmpeg_cmd is None:
                 ffmpeg_cmd = resolve_ffmpeg_cmd()
             if ffmpeg_cmd is None:
@@ -866,7 +866,7 @@ def _collect_stem_samples(
             except ValueError:
                 return None
         return samples
-    elif format_id in {"flac", "wavpack", "aiff"}:
+    elif format_id in {"flac", "wavpack", "aiff", "ape"}:
         if ffmpeg_cmd is None:
             return None
         try:
@@ -927,7 +927,7 @@ def _add_lfe_audit_issues(
         if stem_path and not stem_path.is_absolute():
             stem_path = stems_dir / stem_path
         format_id = detect_format_from_path(stem_path) if stem_path else None
-        if format_id in {"flac", "wavpack", "aiff"} and ffmpeg_cmd is None:
+        if format_id in {"flac", "wavpack", "aiff", "ape"} and ffmpeg_cmd is None:
             ffmpeg_cmd = resolve_ffmpeg_cmd()
             if ffmpeg_cmd is None:
                 missing_ffmpeg = True

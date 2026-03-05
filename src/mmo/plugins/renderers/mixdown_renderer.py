@@ -8,8 +8,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
 from mmo.core.layout_negotiation import get_layout_channel_order
-from mmo.dsp.io import read_wav_metadata, sha256_file
-from mmo.dsp.meters import iter_wav_float64_samples
+from mmo.dsp.decoders import (
+    detect_format_from_path,
+    is_lossless_format_id,
+    iter_audio_float64_samples,
+    read_audio_metadata,
+)
+from mmo.dsp.io import sha256_file
+from mmo.dsp.sample_rate import choose_render_sample_rate_hz
 from mmo.plugins.interfaces import Recommendation, RenderManifest, RendererPlugin
 
 _SUPPORTED_LAYOUT_IDS: tuple[str, ...] = (
@@ -84,6 +90,16 @@ class _ProgramStereo:
     worst_case_peak_sum: float
     measurement_failed: bool
     notes: tuple[str, ...]
+    resampling: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class _StemDecodePlan:
+    stem_id: str
+    source_path: Path
+    source_format_id: str
+    channels: int
+    source_sample_rate_hz: int
 
 
 def _coerce_str(value: Any) -> str:
@@ -113,6 +129,22 @@ def _coerce_float(value: Any) -> float | None:
             return float(value)
         except ValueError:
             return None
+    return None
+
+
+def _resolve_explicit_render_sample_rate_hz(session: Dict[str, Any]) -> int | None:
+    candidates: list[Any] = [
+        session.get("render_sample_rate_hz"),
+        session.get("sample_rate_hz"),
+    ]
+    options_payload = session.get("options")
+    if isinstance(options_payload, dict):
+        candidates.append(options_payload.get("render_sample_rate_hz"))
+
+    for candidate in candidates:
+        value = _coerce_int(candidate)
+        if value is not None and value > 0:
+            return value
     return None
 
 
@@ -196,13 +228,14 @@ def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
     stems_dir = _resolve_stems_dir(session)
     stems = _stem_rows(session)
     notes: list[str] = []
-    sample_rate_hz: int | None = None
     left: list[float] = []
     right: list[float] = []
     decoded_stem_count = 0
     measured_stem_count = 0
     worst_case_peak_sum = 0.0
     measurement_failed = False
+    decode_plans: list[_StemDecodePlan] = []
+    observed_sample_rates_hz: list[int] = []
 
     for stem in stems:
         stem_id = _coerce_str(stem.get("stem_id")).strip() or "<unknown>"
@@ -213,7 +246,40 @@ def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
             continue
 
         try:
-            metadata = read_wav_metadata(source_path)
+            source_format_id = detect_format_from_path(source_path)
+            if source_format_id == "unknown":
+                notes.append(f"{stem_id}:unsupported_format")
+                measurement_failed = True
+                continue
+
+            metadata: dict[str, Any] | None = None
+            try:
+                metadata = read_audio_metadata(source_path)
+            except Exception:
+                stem_channels_hint = _coerce_int(stem.get("channel_count"))
+                if stem_channels_hint is None:
+                    stem_channels_hint = _coerce_int(stem.get("channels"))
+                stem_sample_rate_hint = _coerce_int(stem.get("sample_rate_hz"))
+                if (
+                    stem_channels_hint is not None
+                    and stem_channels_hint > 0
+                    and stem_sample_rate_hint is not None
+                    and stem_sample_rate_hint > 0
+                ):
+                    metadata = {
+                        "channels": stem_channels_hint,
+                        "sample_rate_hz": stem_sample_rate_hint,
+                        "codec_name": stem.get("codec_name"),
+                    }
+                else:
+                    raise
+
+            codec_name = _coerce_str(metadata.get("codec_name")).strip().lower()
+            if not is_lossless_format_id(source_format_id, codec_name=codec_name):
+                notes.append(f"{stem_id}:lossy_input")
+                measurement_failed = True
+                continue
+
             channels = _coerce_int(metadata.get("channels"))
             stem_sample_rate_hz = _coerce_int(metadata.get("sample_rate_hz"))
             if channels is None or channels < 1:
@@ -221,25 +287,72 @@ def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
             if stem_sample_rate_hz is None or stem_sample_rate_hz < 1:
                 raise ValueError("invalid sample rate")
 
-            if sample_rate_hz is None:
-                sample_rate_hz = stem_sample_rate_hz
-            elif sample_rate_hz != stem_sample_rate_hz:
-                notes.append(
-                    f"{stem_id}:sample_rate_mismatch({stem_sample_rate_hz}!={sample_rate_hz})"
+            observed_sample_rates_hz.append(stem_sample_rate_hz)
+            decode_plans.append(
+                _StemDecodePlan(
+                    stem_id=stem_id,
+                    source_path=source_path,
+                    source_format_id=source_format_id,
+                    channels=channels,
+                    source_sample_rate_hz=stem_sample_rate_hz,
                 )
-                measurement_failed = True
-                continue
+            )
+        except Exception:
+            notes.append(f"{stem_id}:decode_failed")
+            measurement_failed = True
 
-            frame_cursor = 0
-            stem_peak = 0.0
-            for chunk in iter_wav_float64_samples(
-                source_path,
+    explicit_sample_rate_hz = _resolve_explicit_render_sample_rate_hz(session)
+    sample_rate_hz, selection_receipt = choose_render_sample_rate_hz(
+        observed_sample_rates_hz,
+        explicit_sample_rate_hz=explicit_sample_rate_hz,
+    )
+    if sample_rate_hz is None:
+        sample_rate_hz = _DEFAULT_SAMPLE_RATE_HZ
+    else:
+        notes.append(
+            f"render_sample_rate_selected:{sample_rate_hz}:"
+            f"{_coerce_str(selection_receipt.get('selection_reason'))}"
+        )
+
+    resampled_stems: list[dict[str, Any]] = []
+    native_rate_stems: list[dict[str, Any]] = []
+    for plan in decode_plans:
+        frame_cursor = 0
+        stem_peak = 0.0
+        if plan.source_sample_rate_hz != sample_rate_hz:
+            notes.append(
+                f"{plan.stem_id}:resampled({plan.source_sample_rate_hz}->{sample_rate_hz})"
+            )
+            resampled_stems.append(
+                {
+                    "stem_id": plan.stem_id,
+                    "from_sample_rate_hz": plan.source_sample_rate_hz,
+                    "to_sample_rate_hz": sample_rate_hz,
+                    "format": plan.source_format_id,
+                }
+            )
+        else:
+            native_rate_stems.append(
+                {
+                    "stem_id": plan.stem_id,
+                    "sample_rate_hz": sample_rate_hz,
+                    "format": plan.source_format_id,
+                }
+            )
+        try:
+            for chunk in iter_audio_float64_samples(
+                plan.source_path,
                 error_context="baseline mixdown renderer",
+                metadata={
+                    "channels": plan.channels,
+                    "sample_rate_hz": plan.source_sample_rate_hz,
+                },
+                target_sample_rate_hz=sample_rate_hz,
             ):
                 if not chunk:
                     continue
-                frame_count = len(chunk) // channels
-                if frame_count <= 0 or frame_count * channels != len(chunk):
+                frame_count = len(chunk) // plan.channels
+                if frame_count <= 0 or frame_count * plan.channels != len(chunk):
                     raise ValueError("decoder returned non-frame-aligned data")
 
                 needed = (frame_cursor + frame_count) - len(left)
@@ -252,7 +365,7 @@ def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
                     stem_peak = chunk_peak
 
                 idx = 0
-                if channels == 1:
+                if plan.channels == 1:
                     for frame_index in range(frame_count):
                         value = chunk[idx]
                         idx += 1
@@ -263,7 +376,7 @@ def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
                     for frame_index in range(frame_count):
                         value_l = chunk[idx]
                         value_r = chunk[idx + 1]
-                        idx += channels
+                        idx += plan.channels
                         target_index = frame_cursor + frame_index
                         left[target_index] += value_l
                         right[target_index] += value_r
@@ -274,11 +387,9 @@ def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
             measured_stem_count += 1
             worst_case_peak_sum += stem_peak
         except Exception:
-            notes.append(f"{stem_id}:decode_failed")
+            notes.append(f"{plan.stem_id}:decode_failed")
             measurement_failed = True
 
-    if sample_rate_hz is None:
-        sample_rate_hz = _DEFAULT_SAMPLE_RATE_HZ
     if not left or not right:
         left = [0.0] * _DEFAULT_SILENCE_FRAMES
         right = [0.0] * _DEFAULT_SILENCE_FRAMES
@@ -294,6 +405,13 @@ def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
         worst_case_peak_sum=worst_case_peak_sum,
         measurement_failed=measurement_failed,
         notes=tuple(sorted(notes)),
+        resampling={
+            "algorithm": "linear_interpolation_v1",
+            "selection": selection_receipt,
+            "target_sample_rate_hz": sample_rate_hz,
+            "resampled_stems": resampled_stems,
+            "native_rate_stems": native_rate_stems,
+        },
     )
 
 
@@ -486,6 +604,7 @@ class MixdownRenderer(RendererPlugin):
                     "worst_case_peak_sum": program.worst_case_peak_sum,
                     "target_layout_id": layout_id,
                     "channel_order": channel_order,
+                    "resampling": program.resampling,
                     "center_policy": (
                         "0.5*(L+R)*center_reduction for SPK.C"
                         f" (center_reduction_db={_CENTER_FOLD_REDUCTION_DB:.1f})"

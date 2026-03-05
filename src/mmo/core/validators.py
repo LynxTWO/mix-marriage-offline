@@ -162,7 +162,7 @@ def validate_session(
                 }
             )
 
-        if ext in {".flac", ".wv", ".aif", ".aiff"}:
+        if ext in {".flac", ".wv", ".aif", ".aiff", ".ape"}:
             channel_count_val = stem.get("channel_count")
             if channel_count_val is None:
                 channel_count_val = stem.get("channels")

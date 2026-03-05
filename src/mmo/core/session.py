@@ -27,6 +27,7 @@ def discover_stem_files(stems_dir: Path) -> list[Path]:
         ".wv",
         ".aiff",
         ".aif",
+        ".ape",
         ".mp3",
         ".aac",
         ".ogg",
