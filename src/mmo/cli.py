@@ -1102,8 +1102,8 @@ def main(argv: list[str] | None = None) -> int:
         default=False,
         dest="scene_strict",
         help=(
-            "Fail when the selected scene references missing session stems "
-            "or unknown role IDs."
+            "When --scene is provided, fail on scene-lint errors. Also fail when "
+            "the selected scene references missing session stems or unknown role IDs."
         ),
     )
     safe_render_parser.add_argument(
@@ -3562,9 +3562,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to scene JSON.",
     )
     scene_lint_parser.add_argument(
+        "--scene-locks",
+        default=None,
+        dest="scene_locks",
+        help="Optional path to scene build locks/overrides YAML or JSON.",
+    )
+    scene_lint_parser.add_argument(
         "--locks",
         default=None,
-        help="Optional path to scene build locks/overrides YAML or JSON.",
+        dest="scene_locks",
+        help=argparse.SUPPRESS,
     )
     scene_lint_parser.add_argument(
         "--out",
@@ -7351,7 +7358,7 @@ def main(argv: list[str] | None = None) -> int:
                 return _run_scene_lint_command(
                     repo_root=None,
                     scene_path=Path(args.scene),
-                    locks_path=Path(args.locks) if args.locks else None,
+                    locks_path=Path(args.scene_locks) if args.scene_locks else None,
                     out_path=Path(args.out) if args.out else None,
                 )
             except (RuntimeError, ValueError) as exc:

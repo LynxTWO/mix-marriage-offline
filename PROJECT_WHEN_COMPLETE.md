@@ -175,9 +175,13 @@ What remains: broaden this stereo-hint fixture pattern into additional multi-ste
   provenance in scene metadata receipts (including azimuth/width/depth and
   surround/height source tracking).
 - [x] `mmo scene lint` performs deterministic pre-render scene QA with
-  explainable issue reports for missing stem refs, duplicate object/bus refs,
-  placement range violations, lock conflicts, low-confidence critical anchors
-  (warn), and immersive perspective without bed/ambient candidates (warn).
+  explainable issue reports for missing stem IDs/refs/files, duplicate
+  object/bus refs, placement range violations, lock conflicts (including
+  conflicting per-stem bus locks), low-confidence critical anchors (warn),
+  immersive perspective without bed/ambient candidates (warn), and
+  immersive perspective without template evidence (warn).
+- [x] `safe-render` preflight auto-runs scene lint for explicit `--scene`
+  inputs; `--scene-strict` fails fast when lint reports errors.
 - [x] Target selection is interchangeable across CLI/GUI flows: `TARGET.*`,
   `LAYOUT.*`, and musician shorthands (`stereo`, `5.1`, `7.1`, `7.1.4`,
   `binaural`);

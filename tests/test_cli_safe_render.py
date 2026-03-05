@@ -1058,6 +1058,52 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
             self.assertEqual(exit_code, 1, msg=stderr)
             self.assertIn("--scene-strict failed", stderr)
 
+    def test_scene_strict_rejects_scene_lint_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            report = _make_baseline_fixture_report()
+            report_path = temp / "report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            scene_payload = json.loads(
+                _SAFE_RENDER_EXPLICIT_SCENE_FIXTURE.read_text(encoding="utf-8")
+            )
+            source = scene_payload.get("source")
+            if isinstance(source, dict):
+                source["stems_dir"] = _BASELINE_STEMS_DIR.resolve().as_posix()
+            objects = scene_payload.get("objects")
+            if isinstance(objects, list) and objects:
+                first = objects[0]
+                if isinstance(first, dict):
+                    first_intent = first.get("intent")
+                    if isinstance(first_intent, dict):
+                        first_intent["width"] = 1.5
+            scene_path = temp / "scene_lint_invalid.json"
+            scene_path.write_text(
+                json.dumps(scene_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            exit_code, _stdout, stderr = _run_main(
+                [
+                    "safe-render",
+                    "--report",
+                    str(report_path),
+                    "--plugins",
+                    str(_PLUGINS_DIR),
+                    "--scene",
+                    str(scene_path),
+                    "--scene-strict",
+                    "--dry-run",
+                ]
+            )
+            self.assertEqual(exit_code, 1, msg=stderr)
+            self.assertIn("failed scene lint", stderr)
+            self.assertIn("ISSUE.SCENE_LINT.OUT_OF_RANGE_WIDTH", stderr)
+
 
 class TestSafeRenderApprove(unittest.TestCase):
     """--approve overrides blocked recs."""

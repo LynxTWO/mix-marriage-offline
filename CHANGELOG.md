@@ -105,11 +105,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     deterministic output stability, and QA-triggered auto-disable behavior.
 
 - Scene QA lint command for pre-render validation:
-  - Added `mmo scene lint --scene <scene.json> [--locks <scene_locks.yaml|json>] [--out <report.json>]`.
+  - Added `mmo scene lint --scene <scene.json> [--scene-locks <scene_locks.yaml|json>] [--out <report.json>]`.
   - Lint checks now cover missing stem references, duplicate object/bus references,
     azimuth/width/depth range issues, lock conflicts against role/bus/layout
     assumptions, low-confidence critical anchors (warn), and immersive
     perspective without bed/ambient candidates (warn).
+  - Lint now also checks missing stem IDs/files, conflicting per-stem bus locks,
+    immersive perspective with no template evidence (warn), and immersive
+    low-confidence perspective intent (warn).
+  - `safe-render` now runs scene lint automatically for explicit `--scene`
+    preflight inputs and `--scene-strict` fails fast when lint reports errors.
   - Added deterministic report generation + stable issue ordering with CLI
     exit code `2` on lint errors and `0` for warnings-only results.
   - Added CLI regression coverage for deterministic lint payload output and

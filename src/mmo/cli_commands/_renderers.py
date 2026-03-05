@@ -1078,9 +1078,15 @@ def _prepare_safe_render_scene_inputs(
         load_scene_build_locks,
     )
     from mmo.core.roles import list_roles  # noqa: WPS433
+    from mmo.core.scene_lint import (  # noqa: WPS433
+        build_scene_lint_payload,
+        render_scene_lint_text,
+        scene_lint_has_errors,
+    )
     from mmo.core.scene_builder import build_scene_from_session  # noqa: WPS433
 
     scene_payload: dict[str, Any] | None = None
+    locks_payload: dict[str, Any] | None = None
     scene_mode = "auto_built"
     scene_source_path: str | None = None
     scene_locks_source_path: str | None = None
@@ -1096,15 +1102,60 @@ def _prepare_safe_render_scene_inputs(
         scene_payload = _json_clone(scene_payload)
 
     if scene_locks_path is not None:
+        locks_payload = load_scene_build_locks(scene_locks_path)
+        scene_locks_source_path = scene_locks_path.resolve().as_posix()
+
+    if scene_path is not None and scene_payload is not None:
+        lint_payload = build_scene_lint_payload(
+            scene_payload=scene_payload,
+            scene_path=scene_path,
+            locks_payload=locks_payload,
+            locks_path=scene_locks_path,
+        )
+        summary = lint_payload.get("summary")
+        error_count = (
+            summary.get("error_count", 0)
+            if isinstance(summary, dict) and isinstance(summary.get("error_count"), int)
+            else 0
+        )
+        warn_count = (
+            summary.get("warn_count", 0)
+            if isinstance(summary, dict) and isinstance(summary.get("warn_count"), int)
+            else 0
+        )
+        print(
+            "safe-render: scene-lint "
+            f"errors={error_count} warnings={warn_count} strict={'on' if scene_strict else 'off'}",
+            file=sys.stderr,
+        )
+        if error_count > 0 or warn_count > 0:
+            print(render_scene_lint_text(lint_payload), file=sys.stderr)
+        if scene_strict and scene_lint_has_errors(lint_payload):
+            issue_ids = sorted(
+                {
+                    _coerce_str(issue.get("issue_id")).strip()
+                    for issue in lint_payload.get("issues", [])
+                    if isinstance(issue, dict) and _coerce_str(issue.get("issue_id")).strip()
+                }
+            )
+            issue_ids_label = ", ".join(issue_ids[:6])
+            if len(issue_ids) > 6:
+                issue_ids_label = f"{issue_ids_label}, +{len(issue_ids) - 6} more"
+            raise ValueError(
+                "safe-render: --scene-strict failed scene lint "
+                f"({error_count} error(s), {warn_count} warning(s); issue_ids={issue_ids_label})."
+            )
+
+    if scene_locks_path is not None:
         if scene_payload is None:
             scene_payload = build_scene_from_session(session_payload)
-        locks_payload = load_scene_build_locks(scene_locks_path)
+        if locks_payload is None:
+            locks_payload = load_scene_build_locks(scene_locks_path)
         scene_payload = apply_scene_build_locks(
             scene_payload,
             locks_payload,
             locks_path=scene_locks_path,
         )
-        scene_locks_source_path = scene_locks_path.resolve().as_posix()
 
     if scene_strict:
         if scene_payload is None:

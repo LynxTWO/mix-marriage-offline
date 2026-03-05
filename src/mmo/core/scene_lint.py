@@ -9,7 +9,9 @@ from mmo.core.scene_locks import load_scene_locks
 
 SCENE_LINT_SCHEMA_VERSION = "0.1.0"
 
+_ISSUE_MISSING_STEM_ID = "ISSUE.SCENE_LINT.MISSING_STEM_ID"
 _ISSUE_MISSING_STEM_REFERENCE = "ISSUE.SCENE_LINT.MISSING_STEM_REFERENCE"
+_ISSUE_MISSING_STEM_FILE = "ISSUE.SCENE_LINT.MISSING_STEM_FILE"
 _ISSUE_DUPLICATE_OBJECT_REFERENCE = "ISSUE.SCENE_LINT.DUPLICATE_OBJECT_REFERENCE"
 _ISSUE_DUPLICATE_BUS_REFERENCE = "ISSUE.SCENE_LINT.DUPLICATE_BUS_REFERENCE"
 _ISSUE_OUT_OF_RANGE_AZIMUTH = "ISSUE.SCENE_LINT.OUT_OF_RANGE_AZIMUTH"
@@ -29,6 +31,9 @@ _ISSUE_CRITICAL_ANCHOR_LOW_CONFIDENCE = (
 _ISSUE_IMMERSIVE_NO_BED_OR_AMBIENT = (
     "ISSUE.SCENE_LINT.IMMERSIVE_NO_BED_OR_AMBIENT"
 )
+_ISSUE_IMMERSIVE_TEMPLATE_MISSING = "ISSUE.SCENE_LINT.IMMERSIVE_TEMPLATE_MISSING"
+_ISSUE_IMMERSIVE_LOW_CONFIDENCE = "ISSUE.SCENE_LINT.IMMERSIVE_LOW_CONFIDENCE"
+_ISSUE_HEIGHT_SEND_CAPPED_TO_ZERO = "ISSUE.SCENE_LINT.HEIGHT_SEND_CAPPED_TO_ZERO"
 
 _SEVERITY_ERROR = "error"
 _SEVERITY_WARN = "warn"
@@ -36,6 +41,7 @@ _SEVERITY_WARN = "warn"
 _LOCK_NO_HEIGHT_SEND = "LOCK.NO_HEIGHT_SEND"
 _IMMERSIVE_PERSPECTIVES: frozenset[str] = frozenset({"in_band", "in_orchestra"})
 _CRITICAL_ANCHOR_CONFIDENCE_WARN_BELOW = 0.5
+_IMMERSIVE_CONFIDENCE_WARN_BELOW = 0.5
 
 _AMBIENT_TOKENS: tuple[str, ...] = (
     "ambient",
@@ -56,6 +62,9 @@ _DEFAULT_BUS_ROOTS: frozenset[str] = frozenset(
         "BUS.OTHER",
         "BUS.VOX",
     }
+)
+_AUDIO_EXTENSIONS: frozenset[str] = frozenset(
+    {".wav", ".wave", ".flac", ".wv", ".aiff", ".aif", ".ape", ".alac", ".m4a"}
 )
 
 
@@ -260,6 +269,86 @@ def _is_ambient_bed_candidate(bed: dict[str, Any]) -> bool:
     return False
 
 
+def _scene_stems_dir(scene_payload: dict[str, Any]) -> Path | None:
+    source = scene_payload.get("source")
+    if not isinstance(source, dict):
+        return None
+    stems_dir = _coerce_str(source.get("stems_dir")).strip()
+    if not stems_dir:
+        return None
+    path = Path(stems_dir)
+    return path if path.is_absolute() else None
+
+
+def _available_scene_stem_tokens(stems_dir: Path | None) -> set[str]:
+    if not isinstance(stems_dir, Path) or not stems_dir.is_dir():
+        return set()
+    tokens: set[str] = set()
+    for file_path in sorted(stems_dir.rglob("*")):
+        if not file_path.is_file():
+            continue
+        suffix = file_path.suffix.lower()
+        if suffix not in _AUDIO_EXTENSIONS:
+            continue
+        tokens.add(file_path.stem.lower())
+        tokens.add(file_path.name.lower())
+    return tokens
+
+
+def _has_template_note(value: Any) -> bool:
+    for note in _string_list(value):
+        normalized = note.strip().lower()
+        if "template" in normalized or normalized.startswith("seating:"):
+            return True
+    return False
+
+
+def _scene_has_template_evidence(
+    *,
+    scene_payload: dict[str, Any],
+    object_rows: list[tuple[int, dict[str, Any]]],
+) -> bool:
+    scene_intent = scene_payload.get("intent")
+    if isinstance(scene_intent, dict):
+        if _has_template_note(scene_intent.get("notes")):
+            return True
+    metadata = scene_payload.get("metadata")
+    if isinstance(metadata, dict) and _has_template_note(metadata.get("notes")):
+        return True
+
+    for _, obj in object_rows:
+        if _has_template_note(obj.get("notes")):
+            return True
+        intent = obj.get("intent")
+        if not isinstance(intent, dict):
+            continue
+        if _has_template_note(intent.get("notes")):
+            return True
+        position = intent.get("position")
+        if isinstance(position, dict) and _coerce_float(position.get("azimuth_deg")) is not None:
+            return True
+        if _coerce_float(obj.get("azimuth_hint")) is not None:
+            return True
+    return False
+
+
+def _height_send_caps_all_zero(intent_payload: Any) -> bool:
+    if not isinstance(intent_payload, dict):
+        return False
+    raw_caps = intent_payload.get("height_send_caps")
+    if not isinstance(raw_caps, dict) or not raw_caps:
+        return False
+    saw_numeric = False
+    for key in ("top_max_gain", "top_front_max_gain", "top_rear_max_gain"):
+        value = _coerce_float(raw_caps.get(key))
+        if value is None:
+            continue
+        saw_numeric = True
+        if value > 0.0:
+            return False
+    return saw_numeric
+
+
 def _is_ambient_object_candidate(obj: dict[str, Any]) -> bool:
     role_id = _coerce_str(obj.get("role_id")).strip().upper()
     if role_id.startswith(("ROLE.FX.", "ROLE.SFX.", "ROLE.AMB")):
@@ -386,6 +475,8 @@ def build_scene_lint_payload(
     locks_map = _scene_locks_map()
     known_roles = _known_role_ids()
     known_bus_roots = _known_bus_roots(scene_payload)
+    scene_stems_dir = _scene_stems_dir(scene_payload)
+    available_stem_tokens = _available_scene_stem_tokens(scene_stems_dir)
 
     objects = scene_payload.get("objects")
     object_rows = (
@@ -399,6 +490,20 @@ def build_scene_lint_payload(
         if isinstance(beds, list)
         else []
     )
+    stem_bus_assignments: dict[str, list[dict[str, str]]] = {}
+
+    def _add_stem_bus_assignment(*, stem_id: str, bus_id: str, path: str, source: str) -> None:
+        normalized_stem_id = _coerce_str(stem_id).strip()
+        normalized_bus_id = _coerce_str(bus_id).strip().upper()
+        if not normalized_stem_id or not normalized_bus_id:
+            return
+        stem_bus_assignments.setdefault(normalized_stem_id, []).append(
+            {
+                "bus_id": normalized_bus_id,
+                "path": path,
+                "source": source,
+            }
+        )
 
     object_ids: dict[str, list[int]] = {}
     object_stem_ids: dict[str, list[int]] = {}
@@ -457,11 +562,49 @@ def build_scene_lint_payload(
         if bus_id:
             bed_bus_ids.setdefault(bus_id, []).append(index)
 
-        stem_ids = [
-            _coerce_str(stem_id).strip()
-            for stem_id in bed.get("stem_ids", [])
-            if _coerce_str(stem_id).strip()
-        ]
+        raw_bed_stem_ids = bed.get("stem_ids")
+        stem_ids: list[str] = []
+        if isinstance(raw_bed_stem_ids, list):
+            for stem_offset, raw_stem_id in enumerate(raw_bed_stem_ids):
+                normalized_stem_id = _coerce_str(raw_stem_id).strip()
+                if not normalized_stem_id:
+                    issues.append(
+                        _issue(
+                            severity=_SEVERITY_ERROR,
+                            issue_id=_ISSUE_MISSING_STEM_ID,
+                            message="Bed stem reference is missing a stem_id.",
+                            path=f"beds[{index}].stem_ids[{stem_offset}]",
+                            evidence={"bed_id": bed_id},
+                        )
+                    )
+                    continue
+                stem_ids.append(normalized_stem_id)
+                _add_stem_bus_assignment(
+                    stem_id=normalized_stem_id,
+                    bus_id=bus_id,
+                    path=f"beds[{index}].bus_id",
+                    source="bed_bus",
+                )
+                if (
+                    available_stem_tokens
+                    and normalized_stem_id.lower() not in available_stem_tokens
+                ):
+                    issues.append(
+                        _issue(
+                            severity=_SEVERITY_ERROR,
+                            issue_id=_ISSUE_MISSING_STEM_FILE,
+                            message=(
+                                "Bed stem reference does not match any source file "
+                                "in scene.source.stems_dir."
+                            ),
+                            path=f"beds[{index}].stem_ids[{stem_offset}]",
+                            evidence={
+                                "bed_id": bed_id,
+                                "stem_id": normalized_stem_id,
+                                "stems_dir": _path_text(scene_stems_dir),
+                            },
+                        )
+                    )
         stem_counts: dict[str, int] = {}
         for stem_id in stem_ids:
             stem_counts[stem_id] = stem_counts.get(stem_id, 0) + 1
@@ -524,6 +667,8 @@ def build_scene_lint_payload(
         ]
         for stem_offset, stem_id in enumerate(stem_ids):
             if stem_id in known_object_stems:
+                continue
+            if available_stem_tokens and stem_id.lower() in available_stem_tokens:
                 continue
             issues.append(
                 _issue(
@@ -593,6 +738,48 @@ def build_scene_lint_payload(
         intent = obj.get("intent")
         normalized_intent = intent if isinstance(intent, dict) else {}
         object_lock_ids = _normalize_lock_ids(normalized_intent.get("locks"))
+
+        if not stem_id:
+            issues.append(
+                _issue(
+                    severity=_SEVERITY_ERROR,
+                    issue_id=_ISSUE_MISSING_STEM_ID,
+                    message="Object is missing stem_id.",
+                    path=f"objects[{index}].stem_id",
+                    evidence={"object_id": object_id},
+                )
+            )
+        elif available_stem_tokens and stem_id.lower() not in available_stem_tokens:
+            issues.append(
+                _issue(
+                    severity=_SEVERITY_ERROR,
+                    issue_id=_ISSUE_MISSING_STEM_FILE,
+                    message=(
+                        "Object stem_id does not match any source file in "
+                        "scene.source.stems_dir."
+                    ),
+                    path=f"objects[{index}].stem_id",
+                    evidence={
+                        "object_id": object_id,
+                        "stem_id": stem_id,
+                        "stems_dir": _path_text(scene_stems_dir),
+                    },
+                )
+            )
+        if bus_id:
+            _add_stem_bus_assignment(
+                stem_id=stem_id,
+                bus_id=bus_id,
+                path=f"objects[{index}].bus_id",
+                source="object_bus",
+            )
+        elif group_bus:
+            _add_stem_bus_assignment(
+                stem_id=stem_id,
+                bus_id=group_bus,
+                path=f"objects[{index}].group_bus",
+                source="object_group_bus",
+            )
 
         _validate_lock_ids(
             issues=issues,
@@ -724,6 +911,18 @@ def build_scene_lint_payload(
                         evidence={"object_id": object_id, "stem_id": stem_id},
                     )
                 )
+                issues.append(
+                    _issue(
+                        severity=_SEVERITY_WARN,
+                        issue_id=_ISSUE_HEIGHT_SEND_CAPPED_TO_ZERO,
+                        message=(
+                            "Height sends are requested but LOCK.NO_HEIGHT_SEND "
+                            "caps height sends to zero."
+                        ),
+                        path=f"objects[{index}].intent.height_send_caps",
+                        evidence={"object_id": object_id, "stem_id": stem_id},
+                    )
+                )
             if _LOCK_NO_HEIGHT_SEND in set(object_lock_ids):
                 issues.append(
                     _issue(
@@ -732,6 +931,18 @@ def build_scene_lint_payload(
                         message=(
                             "Object lock LOCK.NO_HEIGHT_SEND conflicts with object "
                             "height_send_caps > 0."
+                        ),
+                        path=f"objects[{index}].intent.height_send_caps",
+                        evidence={"object_id": object_id, "stem_id": stem_id},
+                    )
+                )
+                issues.append(
+                    _issue(
+                        severity=_SEVERITY_WARN,
+                        issue_id=_ISSUE_HEIGHT_SEND_CAPPED_TO_ZERO,
+                        message=(
+                            "Height sends are requested but object LOCK.NO_HEIGHT_SEND "
+                            "caps height sends to zero."
                         ),
                         path=f"objects[{index}].intent.height_send_caps",
                         evidence={"object_id": object_id, "stem_id": stem_id},
@@ -783,6 +994,18 @@ def build_scene_lint_payload(
                         evidence={"bed_id": bed_id},
                     )
                 )
+                issues.append(
+                    _issue(
+                        severity=_SEVERITY_WARN,
+                        issue_id=_ISSUE_HEIGHT_SEND_CAPPED_TO_ZERO,
+                        message=(
+                            "Height sends are requested but LOCK.NO_HEIGHT_SEND "
+                            "caps height sends to zero."
+                        ),
+                        path=f"beds[{index}].intent.height_send_caps",
+                        evidence={"bed_id": bed_id},
+                    )
+                )
             if _LOCK_NO_HEIGHT_SEND in set(bed_lock_ids):
                 issues.append(
                     _issue(
@@ -791,6 +1014,18 @@ def build_scene_lint_payload(
                         message=(
                             "Bed lock LOCK.NO_HEIGHT_SEND conflicts with bed "
                             "height_send_caps > 0."
+                        ),
+                        path=f"beds[{index}].intent.height_send_caps",
+                        evidence={"bed_id": bed_id},
+                    )
+                )
+                issues.append(
+                    _issue(
+                        severity=_SEVERITY_WARN,
+                        issue_id=_ISSUE_HEIGHT_SEND_CAPPED_TO_ZERO,
+                        message=(
+                            "Height sends are requested but bed LOCK.NO_HEIGHT_SEND "
+                            "caps height sends to zero."
                         ),
                         path=f"beds[{index}].intent.height_send_caps",
                         evidence={"bed_id": bed_id},
@@ -840,15 +1075,20 @@ def build_scene_lint_payload(
 
         bus_id = _coerce_str(override.get("bus_id")).strip().upper()
         if bus_id:
+            _add_stem_bus_assignment(
+                stem_id=normalized_stem_id,
+                bus_id=bus_id,
+                path=f"{override_path}.bus_id",
+                source="lock_override",
+            )
             bus_root = _bus_root(bus_id)
             if bus_root and bus_root not in known_bus_roots:
                 issues.append(
                     _issue(
-                        severity=_SEVERITY_WARN,
+                        severity=_SEVERITY_ERROR,
                         issue_id=_ISSUE_LOCK_OVERRIDE_BUS_ASSUMPTION_MISSING,
                         message=(
-                            f"Lock override bus root {bus_root} is not present in "
-                            "scene bus assumptions."
+                            f"Lock override bus root {bus_root} is unknown for this scene."
                         ),
                         path=f"{override_path}.bus_id",
                         evidence={
@@ -877,6 +1117,82 @@ def build_scene_lint_payload(
                         evidence={"stem_id": normalized_stem_id},
                     )
                 )
+                issues.append(
+                    _issue(
+                        severity=_SEVERITY_WARN,
+                        issue_id=_ISSUE_HEIGHT_SEND_CAPPED_TO_ZERO,
+                        message=(
+                            "Height sends are requested but LOCK.NO_HEIGHT_SEND "
+                            "caps height sends to zero."
+                        ),
+                        path=f"{override_path}.height_send_caps",
+                        evidence={"stem_id": normalized_stem_id},
+                    )
+                )
+        if _height_send_caps_all_zero(override):
+            object_intent_match = next(
+                (
+                    obj.get("intent")
+                    for _, obj in object_rows
+                    if _coerce_str(obj.get("stem_id")).strip() == normalized_stem_id
+                ),
+                None,
+            )
+            if _has_positive_height_send_caps(object_intent_match):
+                issues.append(
+                    _issue(
+                        severity=_SEVERITY_WARN,
+                        issue_id=_ISSUE_HEIGHT_SEND_CAPPED_TO_ZERO,
+                        message=(
+                            "Height sends are requested in scene intent but lock "
+                            "override caps height sends to zero."
+                        ),
+                        path=f"{override_path}.height_send_caps",
+                        evidence={"stem_id": normalized_stem_id},
+                    )
+                )
+
+    for stem_id in sorted(stem_bus_assignments.keys()):
+        assignments = stem_bus_assignments.get(stem_id, [])
+        if not assignments:
+            continue
+        bus_ids = sorted(
+            {
+                _coerce_str(item.get("bus_id")).strip().upper()
+                for item in assignments
+                if isinstance(item, dict) and _coerce_str(item.get("bus_id")).strip()
+            }
+        )
+        bus_roots = sorted({_bus_root(bus_id) for bus_id in bus_ids if _bus_root(bus_id)})
+        if len(bus_roots) <= 1:
+            continue
+        normalized_assignments = sorted(
+            [
+                {
+                    "bus_id": _coerce_str(item.get("bus_id")).strip().upper(),
+                    "path": _coerce_str(item.get("path")).strip(),
+                    "source": _coerce_str(item.get("source")).strip(),
+                }
+                for item in assignments
+                if isinstance(item, dict)
+            ],
+            key=lambda item: (item["bus_id"], item["path"], item["source"]),
+        )
+        first_path = normalized_assignments[0]["path"] if normalized_assignments else "objects"
+        issues.append(
+            _issue(
+                severity=_SEVERITY_ERROR,
+                issue_id=_ISSUE_LOCK_CONFLICT,
+                message="Same stem is assigned to multiple buses.",
+                path=first_path,
+                evidence={
+                    "stem_id": stem_id,
+                    "bus_ids": bus_ids,
+                    "bus_roots": bus_roots,
+                    "assignments": normalized_assignments,
+                },
+            )
+        )
 
     perspective = _coerce_str(normalized_scene_intent.get("perspective")).strip().lower()
     if perspective in _IMMERSIVE_PERSPECTIVES:
@@ -896,6 +1212,43 @@ def build_scene_lint_payload(
                     ),
                     path="intent.perspective",
                     evidence={"perspective": perspective},
+                )
+            )
+        has_template_evidence = _scene_has_template_evidence(
+            scene_payload=scene_payload,
+            object_rows=object_rows,
+        )
+        if not has_template_evidence:
+            issues.append(
+                _issue(
+                    severity=_SEVERITY_WARN,
+                    issue_id=_ISSUE_IMMERSIVE_TEMPLATE_MISSING,
+                    message=(
+                        "Immersive perspective is requested but no scene-template "
+                        "evidence was found."
+                    ),
+                    path="intent.perspective",
+                    evidence={"perspective": perspective},
+                )
+            )
+        perspective_confidence = _coerce_float(normalized_scene_intent.get("confidence"))
+        if (
+            perspective_confidence is not None
+            and perspective_confidence < _IMMERSIVE_CONFIDENCE_WARN_BELOW
+        ):
+            issues.append(
+                _issue(
+                    severity=_SEVERITY_WARN,
+                    issue_id=_ISSUE_IMMERSIVE_LOW_CONFIDENCE,
+                    message=(
+                        "Immersive perspective is requested with low scene confidence."
+                    ),
+                    path="intent.confidence",
+                    evidence={
+                        "perspective": perspective,
+                        "confidence": round(perspective_confidence, 6),
+                        "warn_below": _IMMERSIVE_CONFIDENCE_WARN_BELOW,
+                    },
                 )
             )
 

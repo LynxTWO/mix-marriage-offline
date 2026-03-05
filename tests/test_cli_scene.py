@@ -624,7 +624,7 @@ class TestCliScene(unittest.TestCase):
                         "lint",
                         "--scene",
                         str(scene_path),
-                        "--locks",
+                        "--scene-locks",
                         str(locks_path),
                         "--out",
                         str(report_path_a),
@@ -639,7 +639,7 @@ class TestCliScene(unittest.TestCase):
                         "lint",
                         "--scene",
                         str(scene_path),
-                        "--locks",
+                        "--scene-locks",
                         str(locks_path),
                         "--out",
                         str(report_path_b),
@@ -747,7 +747,7 @@ class TestCliScene(unittest.TestCase):
                 return
             self.assertTrue(summary.get("ok"))
             self.assertEqual(summary.get("error_count"), 0)
-            self.assertEqual(summary.get("warn_count"), 1)
+            self.assertEqual(summary.get("warn_count"), 2)
 
             issues = payload.get("issues")
             self.assertIsInstance(issues, list)
@@ -755,8 +755,88 @@ class TestCliScene(unittest.TestCase):
                 return
             self.assertEqual(
                 [item.get("issue_id") for item in issues if isinstance(item, dict)],
-                ["ISSUE.SCENE_LINT.IMMERSIVE_NO_BED_OR_AMBIENT"],
+                [
+                    "ISSUE.SCENE_LINT.IMMERSIVE_NO_BED_OR_AMBIENT",
+                    "ISSUE.SCENE_LINT.IMMERSIVE_TEMPLATE_MISSING",
+                ],
             )
+
+    def test_scene_cli_lint_detects_missing_stem_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            stems_dir.mkdir(parents=True, exist_ok=True)
+            (stems_dir / "present.wav").write_bytes(b"RIFF")
+
+            scene_path = temp_path / "scene.json"
+            report_path = temp_path / "scene_lint.json"
+            _write_json(
+                scene_path,
+                {
+                    "schema_version": "0.1.0",
+                    "scene_id": "SCENE.LINT.MISSING.FILE",
+                    "source": {
+                        "stems_dir": stems_dir.resolve().as_posix(),
+                        "created_from": "draft",
+                    },
+                    "intent": {
+                        "confidence": 0.8,
+                        "locks": [],
+                    },
+                    "objects": [
+                        {
+                            "object_id": "OBJ.PRESENT",
+                            "stem_id": "present",
+                            "label": "Present Stem",
+                            "channel_count": 1,
+                            "role_id": "ROLE.OTHER.UNKNOWN",
+                            "intent": {
+                                "confidence": 0.8,
+                                "locks": [],
+                            },
+                            "notes": [],
+                        },
+                        {
+                            "object_id": "OBJ.MISSING",
+                            "stem_id": "missing_stem",
+                            "label": "Missing Stem",
+                            "channel_count": 1,
+                            "role_id": "ROLE.OTHER.UNKNOWN",
+                            "intent": {
+                                "confidence": 0.8,
+                                "locks": [],
+                            },
+                            "notes": [],
+                        },
+                    ],
+                    "beds": [],
+                    "metadata": {},
+                },
+            )
+
+            lint_exit = main(
+                [
+                    "scene",
+                    "lint",
+                    "--scene",
+                    str(scene_path),
+                    "--out",
+                    str(report_path),
+                ]
+            )
+            self.assertEqual(lint_exit, 2)
+
+            payload = json.loads(report_path.read_text(encoding="utf-8"))
+            issues = payload.get("issues")
+            self.assertIsInstance(issues, list)
+            if not isinstance(issues, list):
+                return
+            issue_ids = {
+                row.get("issue_id")
+                for row in issues
+                if isinstance(row, dict) and isinstance(row.get("issue_id"), str)
+            }
+            self.assertIn("ISSUE.SCENE_LINT.MISSING_STEM_FILE", issue_ids)
 
     def test_scene_cli_build_unknown_templates_error_is_sorted_and_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

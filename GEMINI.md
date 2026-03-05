@@ -90,9 +90,13 @@ Non-negotiables:
   `drafts/scene.draft.json` so corrected intent can be re-rendered immediately.
 - Keep scene QA lint deterministic and explainable:
   `mmo scene lint` must emit stable issue ordering/report payloads and cover
-  missing stem refs, duplicate object/bus refs, placement range violations,
-  lock-role/bus/layout conflicts, low-confidence critical anchors, and
-  immersive-perspective bed/ambient availability warnings.
+  missing stem IDs/refs/files, duplicate object/bus refs, placement range
+  violations, lock-role/bus/layout conflicts (including per-stem bus lock
+  conflicts), low-confidence critical anchors, and immersive-perspective
+  bed/ambient + template-evidence warnings.
+- Keep explicit-scene safe-render preflight lint-first:
+  when `--scene` is provided, safe-render must run scene lint before render
+  stages, and `--scene-strict` must fail fast on lint errors.
 - Keep dual-LFE (x.2) export contracts explicit: preserve canonical SPK channel
   order in render/recall artifacts, use conservative WAV mask strategy, and
   surface validation guidance for toolchains that may drop `LFE2`.
