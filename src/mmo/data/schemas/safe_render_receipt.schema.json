@@ -12,6 +12,9 @@
     "status",
     "dry_run",
     "profile_id",
+    "scene_mode",
+    "scene_source_path",
+    "scene_locks_source_path",
     "recommendations_summary",
     "renderer_manifests",
     "qa_issues",
@@ -25,6 +28,9 @@
     "dry_run": { "type": "boolean" },
     "target": { "type": "string" },
     "profile_id": { "type": "string", "minLength": 1 },
+    "scene_mode": { "type": "string", "enum": ["explicit", "auto_built"] },
+    "scene_source_path": { "type": ["string", "null"] },
+    "scene_locks_source_path": { "type": ["string", "null"] },
     "approved_by": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 }

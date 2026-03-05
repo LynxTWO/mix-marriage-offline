@@ -25,6 +25,10 @@ Non-negotiables:
 - Keep safe-render baseline mixdown deterministic: supported
   2.0/5.1/7.1/7.1.4/9.1.6 targets must still emit conservative WAV masters
   when recommendations are not render-eligible.
+- Keep safe-render explicit scene workflows first-class and deterministic:
+  `--scene` must take precedence over hidden scene rebuilds, optional
+  `--scene-locks` must apply before placement policy, and receipt artifacts
+  must preserve scene/lock source provenance.
 - Keep scene-driven placement mixdown deterministic when enabled: one
   layout-agnostic scene should render conservative
   2.0/5.1/7.1/7.1.4/7.1.6/9.1.6 outputs with role/azimuth-driven object stage

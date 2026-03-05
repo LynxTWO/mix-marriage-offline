@@ -191,6 +191,10 @@ What remains: broaden this stereo-hint fixture pattern into additional multi-ste
   deterministic role/azimuth-aware object stage routing (perspective-gated
   side/rear/wide use) and capped confidence-gated hall/room-first bed
   surround/height sends.
+- [x] `safe-render` supports first-class explicit scene workflows:
+  `--scene` is preferred over implicit scene rebuild, optional
+  `--scene-locks` overrides are applied before placement policy, and receipts
+  always record scene source + lock source provenance (`explicit` vs `auto_built`).
 - [x] Placement scene renderer uses deterministic two-pass streaming
   (`chunk_frames=4096`): pass 1 peak scan + pass 2 trimmed PCM24 chunk writes,
   so long sessions avoid full-program in-memory mix buffers.

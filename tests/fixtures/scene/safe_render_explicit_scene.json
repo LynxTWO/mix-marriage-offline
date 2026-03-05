@@ -1,0 +1,84 @@
+{
+  "schema_version": "0.1.0",
+  "scene_id": "SCENE.TEST.SAFE_RENDER.EXPLICIT",
+  "source": {
+    "stems_dir": "__REPLACED_BY_TEST__",
+    "created_from": "draft"
+  },
+  "intent": {
+    "confidence": 0.0,
+    "locks": []
+  },
+  "objects": [
+    {
+      "object_id": "OBJ.kick_mono",
+      "stem_id": "kick_mono",
+      "role_id": "ROLE.DRUM.KICK",
+      "group_bus": "BUS.DRUMS",
+      "label": "Kick Mono",
+      "channel_count": 1,
+      "width_hint": 0.2,
+      "depth_hint": 0.25,
+      "confidence": 0.9,
+      "intent": {
+        "confidence": 0.9,
+        "width": 0.2,
+        "depth": 0.25,
+        "locks": []
+      },
+      "notes": []
+    },
+    {
+      "object_id": "OBJ.vox_mono",
+      "stem_id": "vox_mono",
+      "role_id": "ROLE.VOCAL.LEAD",
+      "group_bus": "BUS.VOX",
+      "label": "Vox Mono",
+      "channel_count": 1,
+      "width_hint": 0.35,
+      "depth_hint": 0.3,
+      "confidence": 0.88,
+      "intent": {
+        "confidence": 0.88,
+        "width": 0.35,
+        "depth": 0.3,
+        "locks": []
+      },
+      "notes": []
+    }
+  ],
+  "beds": [
+    {
+      "bed_id": "BED.FIELD.001",
+      "label": "Field",
+      "kind": "field",
+      "intent": {
+        "diffuse": 0.5,
+        "confidence": 0.0,
+        "locks": []
+      },
+      "notes": []
+    },
+    {
+      "bed_id": "BED.BUS.MUSIC",
+      "label": "Music Bed",
+      "kind": "bed",
+      "bus_id": "BUS.MUSIC",
+      "stem_ids": [
+        "music_stereo"
+      ],
+      "content_hint": "pad_texture",
+      "width_hint": 0.85,
+      "confidence": 0.82,
+      "intent": {
+        "diffuse": 0.85,
+        "confidence": 0.82,
+        "locks": []
+      },
+      "notes": []
+    }
+  ],
+  "metadata": {
+    "profile_id": "PROFILE.ASSIST"
+  }
+}

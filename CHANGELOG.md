@@ -84,6 +84,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `safe-render` now supports first-class explicit scene inputs:
+  - Added `--scene <scene.json>`, `--scene-locks <scene_locks.yaml|json>`,
+    and `--scene-strict`.
+  - Explicit scene input now takes precedence over implicit scene rebuilds.
+  - When scene locks are provided, lock overrides are applied before placement
+    policy evaluation.
+  - Safe-render receipts now record scene mode (`explicit` vs `auto_built`),
+    scene source path, and scene-locks source path.
+
 - Safe-render zero-output contract is now explicit and fail-safe:
   - Added `ISSUE.RENDER.NO_OUTPUTS` emission when full safe-render renderer
     stage writes zero outputs.

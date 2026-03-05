@@ -1080,6 +1080,33 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     safe_render_parser.add_argument(
+        "--scene",
+        default=None,
+        help=(
+            "Optional explicit scene JSON to use for placement rendering. "
+            "When provided, this scene is preferred over auto-built scene data."
+        ),
+    )
+    safe_render_parser.add_argument(
+        "--scene-locks",
+        default=None,
+        dest="scene_locks",
+        help=(
+            "Optional scene build lock overrides file (YAML or JSON). "
+            "Applied before placement policy."
+        ),
+    )
+    safe_render_parser.add_argument(
+        "--scene-strict",
+        action="store_true",
+        default=False,
+        dest="scene_strict",
+        help=(
+            "Fail when the selected scene references missing session stems "
+            "or unknown role IDs."
+        ),
+    )
+    safe_render_parser.add_argument(
         "--plugins",
         default="plugins",
         help="Path to plugins directory (default: plugins).",
@@ -5990,6 +6017,17 @@ def main(argv: list[str] | None = None) -> int:
                     if getattr(args, "cancel_file", None)
                     else None
                 ),
+                scene_path=(
+                    Path(args.scene)
+                    if getattr(args, "scene", None)
+                    else None
+                ),
+                scene_locks_path=(
+                    Path(args.scene_locks)
+                    if getattr(args, "scene_locks", None)
+                    else None
+                ),
+                scene_strict=bool(getattr(args, "scene_strict", False)),
             )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)

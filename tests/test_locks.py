@@ -95,6 +95,43 @@ def _scene_fixture() -> dict:
 
 
 class TestSceneBuildLocks(unittest.TestCase):
+    def test_load_scene_build_locks_accepts_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            locks_path = Path(temp_dir) / "scene_locks.json"
+            locks_path.write_text(
+                json.dumps(
+                    {
+                        "version": "0.1.0",
+                        "overrides": {
+                            "STEM.A": {
+                                "role_id": "ROLE.VOCAL.LEAD",
+                                "placement": {
+                                    "width": 0.25,
+                                },
+                            }
+                        },
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            loaded = load_scene_build_locks(locks_path)
+            self.assertEqual(loaded.get("version"), "0.1.0")
+            overrides = loaded.get("overrides")
+            self.assertIsInstance(overrides, dict)
+            if not isinstance(overrides, dict):
+                return
+            self.assertEqual(
+                overrides.get("STEM.A"),
+                {
+                    "placement": {"width": 0.25},
+                    "role_id": "ROLE.VOCAL.LEAD",
+                },
+            )
+
     def test_load_scene_build_locks_sorted_and_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             locks_path = Path(temp_dir) / "scene_locks.yaml"

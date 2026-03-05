@@ -31,6 +31,12 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCHEMAS_DIR = _REPO_ROOT / "schemas"
 _PLUGINS_DIR = _REPO_ROOT / "plugins"
 _BASELINE_STEMS_DIR = _REPO_ROOT / "tests" / "fixtures" / "safe_render_baseline_stems"
+_SAFE_RENDER_EXPLICIT_SCENE_FIXTURE = (
+    _REPO_ROOT / "tests" / "fixtures" / "scene" / "safe_render_explicit_scene.json"
+)
+_SAFE_RENDER_EXPLICIT_LOCKS_FIXTURE = (
+    _REPO_ROOT / "tests" / "fixtures" / "scene" / "safe_render_explicit_scene_locks.yaml"
+)
 _SANDBOX = (
     _REPO_ROOT / "sandbox_tmp" / "test_cli_safe_render" / str(os.getpid())
 )
@@ -172,6 +178,29 @@ def _write_stub_only_plugins_dir(path: Path) -> Path:
         encoding="utf-8",
     )
     return path
+
+
+def _write_placement_only_plugins_dir(path: Path) -> Path:
+    renderers_dir = path / "renderers"
+    renderers_dir.mkdir(parents=True, exist_ok=True)
+    source_manifest = _PLUGINS_DIR / "renderers" / "placement_mixdown_renderer.plugin.yaml"
+    renderers_dir.joinpath(source_manifest.name).write_text(
+        source_manifest.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _materialize_explicit_scene_fixture(*, scene_out_path: Path) -> Path:
+    payload = json.loads(_SAFE_RENDER_EXPLICIT_SCENE_FIXTURE.read_text(encoding="utf-8"))
+    source = payload.get("source")
+    if isinstance(source, dict):
+        source["stems_dir"] = _BASELINE_STEMS_DIR.resolve().as_posix()
+    scene_out_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return scene_out_path
 
 
 def _peak_abs_wav(path: Path) -> float:
@@ -784,6 +813,153 @@ class TestSafeRenderBaselineMixdown(unittest.TestCase):
                 hashes_by_run.append(run_hashes)
 
             self.assertEqual(hashes_by_run[0], hashes_by_run[1])
+
+
+class TestSafeRenderExplicitScene(unittest.TestCase):
+    def test_full_render_from_explicit_scene_records_sources_and_writes_outputs(self) -> None:
+        schema = json.loads(
+            (_SCHEMAS_DIR / "safe_render_receipt.schema.json").read_text(encoding="utf-8")
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            report = _make_baseline_fixture_report()
+            report_path = temp / "report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            scene_path = _materialize_explicit_scene_fixture(scene_out_path=temp / "scene.json")
+            scene_locks_path = temp / "scene_locks.yaml"
+            scene_locks_path.write_text(
+                _SAFE_RENDER_EXPLICIT_LOCKS_FIXTURE.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            plugins_dir = _write_placement_only_plugins_dir(temp / "plugins")
+            out_dir = temp / "renders"
+            manifest_path = temp / "render_manifest.json"
+            receipt_path = temp / "receipt.json"
+
+            exit_code, _stdout, stderr = _run_main(
+                [
+                    "safe-render",
+                    "--report",
+                    str(report_path),
+                    "--plugins",
+                    str(plugins_dir),
+                    "--scene",
+                    str(scene_path),
+                    "--scene-locks",
+                    str(scene_locks_path),
+                    "--scene-strict",
+                    "--target",
+                    "LAYOUT.2_0",
+                    "--out-dir",
+                    str(out_dir),
+                    "--out-manifest",
+                    str(manifest_path),
+                    "--receipt-out",
+                    str(receipt_path),
+                ]
+            )
+            self.assertEqual(exit_code, 0, msg=stderr)
+
+            master_path = out_dir / "LAYOUT_2_0" / "master.wav"
+            self.assertTrue(master_path.exists(), f"missing rendered output: {master_path}")
+
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator(schema).validate(receipt)
+            self.assertEqual(receipt.get("scene_mode"), "explicit")
+            self.assertEqual(
+                receipt.get("scene_source_path"),
+                scene_path.resolve().as_posix(),
+            )
+            self.assertEqual(
+                receipt.get("scene_locks_source_path"),
+                scene_locks_path.resolve().as_posix(),
+            )
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            placement_manifest = next(
+                (
+                    item
+                    for item in manifest.get("renderer_manifests", [])
+                    if isinstance(item, dict)
+                    and item.get("renderer_id") == "PLUGIN.RENDERER.PLACEMENT_MIXDOWN_V1"
+                ),
+                None,
+            )
+            self.assertIsNotNone(placement_manifest, "placement renderer manifest missing")
+            if not isinstance(placement_manifest, dict):
+                return
+
+            saw_locked_width_source = False
+            for output in placement_manifest.get("outputs", []):
+                if not isinstance(output, dict):
+                    continue
+                metadata = output.get("metadata")
+                if not isinstance(metadata, dict):
+                    continue
+                stem_rows = metadata.get("stem_send_summary")
+                if not isinstance(stem_rows, list):
+                    continue
+                for row in stem_rows:
+                    if not isinstance(row, dict):
+                        continue
+                    if row.get("stem_id") != "vox_mono":
+                        continue
+                    notes = row.get("notes")
+                    if isinstance(notes, list) and "width_source:locked" in notes:
+                        saw_locked_width_source = True
+                        break
+                if saw_locked_width_source:
+                    break
+            self.assertTrue(saw_locked_width_source, "scene locks were not applied before placement")
+
+    def test_scene_strict_rejects_missing_stems_or_roles(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            report = _make_baseline_fixture_report()
+            report_path = temp / "report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            scene_payload = json.loads(
+                _SAFE_RENDER_EXPLICIT_SCENE_FIXTURE.read_text(encoding="utf-8")
+            )
+            source = scene_payload.get("source")
+            if isinstance(source, dict):
+                source["stems_dir"] = _BASELINE_STEMS_DIR.resolve().as_posix()
+            objects = scene_payload.get("objects")
+            if isinstance(objects, list) and objects:
+                first = objects[0]
+                if isinstance(first, dict):
+                    first["stem_id"] = "missing_stem"
+                    first["role_id"] = "ROLE.MISSING.NOT_IN_REGISTRY"
+            scene_path = temp / "scene_invalid_strict.json"
+            scene_path.write_text(
+                json.dumps(scene_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            exit_code, _stdout, stderr = _run_main(
+                [
+                    "safe-render",
+                    "--report",
+                    str(report_path),
+                    "--plugins",
+                    str(_PLUGINS_DIR),
+                    "--scene",
+                    str(scene_path),
+                    "--scene-strict",
+                    "--dry-run",
+                ]
+            )
+            self.assertEqual(exit_code, 1, msg=stderr)
+            self.assertIn("--scene-strict failed", stderr)
 
 
 class TestSafeRenderApprove(unittest.TestCase):

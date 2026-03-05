@@ -667,6 +667,9 @@ def _run_render_many_targets(
     live_progress: bool = False,
     cancel_file: Path | None = None,
     cancel_token: CancelToken | None = None,
+    scene_path: Path | None = None,
+    scene_locks_path: Path | None = None,
+    scene_strict: bool = False,
 ) -> int:
     """Run safe-render for multiple targets in parallel (mix-once, render-many).
 
@@ -737,6 +740,9 @@ def _run_render_many_targets(
             live_progress=live_progress,
             cancel_file=cancel_file,
             cancel_token=token,
+            scene_path=scene_path,
+            scene_locks_path=scene_locks_path,
+            scene_strict=scene_strict,
         )
         return tgt, rc
 
@@ -932,6 +938,190 @@ def _build_blocked_rec_summaries(recs: list[dict[str, Any]]) -> list[dict[str, A
     return summaries
 
 
+def _json_clone(value: Any) -> Any:
+    return json.loads(json.dumps(value))
+
+
+def _report_session_stem_ids(report: dict[str, Any]) -> set[str]:
+    session = report.get("session")
+    if not isinstance(session, dict):
+        return set()
+    stems = session.get("stems")
+    if not isinstance(stems, list):
+        return set()
+    return {
+        stem_id
+        for stem in stems
+        if isinstance(stem, dict)
+        for stem_id in [_coerce_str(stem.get("stem_id")).strip()]
+        if stem_id
+    }
+
+
+def _scene_referenced_stem_ids(scene: dict[str, Any]) -> set[str]:
+    stem_ids: set[str] = set()
+
+    objects = scene.get("objects")
+    if isinstance(objects, list):
+        for obj in objects:
+            if not isinstance(obj, dict):
+                continue
+            stem_id = _coerce_str(obj.get("stem_id")).strip()
+            if stem_id:
+                stem_ids.add(stem_id)
+
+    beds = scene.get("beds")
+    if isinstance(beds, list):
+        for bed in beds:
+            if not isinstance(bed, dict):
+                continue
+            bed_stem_ids = bed.get("stem_ids")
+            if not isinstance(bed_stem_ids, list):
+                continue
+            for stem_id in bed_stem_ids:
+                normalized = _coerce_str(stem_id).strip()
+                if normalized:
+                    stem_ids.add(normalized)
+    return stem_ids
+
+
+def _scene_referenced_role_ids(scene: dict[str, Any]) -> set[str]:
+    objects = scene.get("objects")
+    if not isinstance(objects, list):
+        return set()
+    return {
+        role_id
+        for obj in objects
+        if isinstance(obj, dict)
+        for role_id in [_coerce_str(obj.get("role_id")).strip()]
+        if role_id
+    }
+
+
+def _augment_preflight_scene(
+    *,
+    scene_payload: dict[str, Any],
+    report: dict[str, Any],
+) -> dict[str, Any]:
+    preflight_scene = _json_clone(scene_payload)
+
+    report_recs = report.get("recommendations")
+    if isinstance(report_recs, list) and report_recs:
+        preflight_scene["recommendations"] = report_recs
+
+    report_qa = report.get("qa_issues")
+    if isinstance(report_qa, list) and report_qa:
+        preflight_scene["qa_issues"] = report_qa
+
+    report_meta = report.get("metadata")
+    if isinstance(report_meta, dict):
+        scene_meta = preflight_scene.setdefault("metadata", {})
+        for key in ("correlation", "polarity_inverted"):
+            val = report_meta.get(key)
+            if val is not None and key not in scene_meta:
+                scene_meta[key] = val
+    else:
+        report_meta = {}
+
+    scene_meta = preflight_scene.setdefault("metadata", {})
+    if "confidence" not in scene_meta:
+        rec_scores = [
+            float(rec["confidence"])
+            for rec in (report_recs if isinstance(report_recs, list) else [])
+            if isinstance(rec, dict)
+            and isinstance(rec.get("confidence"), (int, float))
+        ]
+        report_meta_conf = report_meta.get("confidence")
+        if isinstance(report_meta_conf, (int, float)):
+            scene_meta["confidence"] = float(report_meta_conf)
+        elif rec_scores:
+            scene_meta["confidence"] = sum(rec_scores) / len(rec_scores)
+        else:
+            scene_meta["confidence"] = 1.0
+
+    return preflight_scene
+
+
+def _prepare_safe_render_scene_inputs(
+    *,
+    report: dict[str, Any],
+    session_payload: dict[str, Any],
+    scene_path: Path | None,
+    scene_locks_path: Path | None,
+    scene_strict: bool,
+) -> tuple[dict[str, Any] | None, str, str | None, str | None]:
+    from mmo.core.locks import (  # noqa: WPS433
+        apply_scene_build_locks,
+        load_scene_build_locks,
+    )
+    from mmo.core.roles import list_roles  # noqa: WPS433
+    from mmo.core.scene_builder import build_scene_from_session  # noqa: WPS433
+
+    scene_payload: dict[str, Any] | None = None
+    scene_mode = "auto_built"
+    scene_source_path: str | None = None
+    scene_locks_source_path: str | None = None
+
+    if scene_path is not None:
+        scene_payload = _load_json_object(scene_path, label="Scene")
+        scene_mode = "explicit"
+        scene_source_path = scene_path.resolve().as_posix()
+    elif scene_locks_path is not None or scene_strict:
+        scene_payload = build_scene_from_session(session_payload)
+
+    if scene_payload is not None:
+        scene_payload = _json_clone(scene_payload)
+
+    if scene_locks_path is not None:
+        if scene_payload is None:
+            scene_payload = build_scene_from_session(session_payload)
+        locks_payload = load_scene_build_locks(scene_locks_path)
+        scene_payload = apply_scene_build_locks(
+            scene_payload,
+            locks_payload,
+            locks_path=scene_locks_path,
+        )
+        scene_locks_source_path = scene_locks_path.resolve().as_posix()
+
+    if scene_strict:
+        if scene_payload is None:
+            scene_payload = build_scene_from_session(session_payload)
+
+        missing_stem_refs = sorted(
+            _scene_referenced_stem_ids(scene_payload) - _report_session_stem_ids(report)
+        )
+        try:
+            known_role_ids = set(list_roles())
+        except (RuntimeError, ValueError) as exc:
+            raise ValueError(
+                f"safe-render: failed to load roles registry for --scene-strict: {exc}"
+            ) from exc
+        missing_role_refs = sorted(
+            role_id
+            for role_id in _scene_referenced_role_ids(scene_payload)
+            if role_id not in known_role_ids
+        )
+
+        if missing_stem_refs or missing_role_refs:
+            details: list[str] = []
+            if missing_stem_refs:
+                details.append("missing stems: " + ", ".join(missing_stem_refs))
+            if missing_role_refs:
+                details.append("missing roles: " + ", ".join(missing_role_refs))
+            raise ValueError(
+                "safe-render: --scene-strict failed ("
+                + "; ".join(details)
+                + ")."
+            )
+
+    return (
+        scene_payload,
+        scene_mode,
+        scene_source_path,
+        scene_locks_source_path,
+    )
+
+
 def _run_safe_render_command(
     *,
     repo_root: Path,
@@ -956,6 +1146,9 @@ def _run_safe_render_command(
     live_progress: bool = False,
     cancel_file: Path | None = None,
     cancel_token: CancelToken | None = None,
+    scene_path: Path | None = None,
+    scene_locks_path: Path | None = None,
+    scene_strict: bool = False,
 ) -> int:
     """Run the full plugin-chain render: detect → resolve → gate → render.
 
@@ -1016,6 +1209,9 @@ def _run_safe_render_command(
                 live_progress=live_progress,
                 cancel_file=cancel_file,
                 cancel_token=token,
+                scene_path=scene_path,
+                scene_locks_path=scene_locks_path,
+                scene_strict=scene_strict,
             )
         except CancelledError as exc:
             print(f"safe-render: cancelled ({exc})", file=sys.stderr)
@@ -1053,6 +1249,20 @@ def _run_safe_render_command(
         if not isinstance(session_payload, dict):
             session_payload = {}
             report["session"] = session_payload
+        (
+            scene_payload_for_render,
+            scene_mode,
+            scene_source_path,
+            scene_locks_source_path,
+        ) = _prepare_safe_render_scene_inputs(
+            report=report,
+            session_payload=session_payload,
+            scene_path=scene_path,
+            scene_locks_path=scene_locks_path,
+            scene_strict=scene_strict,
+        )
+        if isinstance(scene_payload_for_render, dict):
+            session_payload["scene_payload"] = _json_clone(scene_payload_for_render)
         session_payload["target_layout_id"] = resolved_target.layout_id
         if run_config is not None:
             normalized_run_config = normalize_run_config(run_config)
@@ -1069,43 +1279,21 @@ def _run_safe_render_command(
                     src_layout = rc.get("source_layout_id")
             if isinstance(src_layout, str) and src_layout.strip():
                 session_for_preflight["source_layout_id"] = src_layout.strip()
-            try:
-                preflight_scene = build_scene_from_session(session_payload)
-            except (ValueError, KeyError, TypeError):
-                preflight_scene = report
+            if isinstance(scene_payload_for_render, dict):
+                preflight_scene = _augment_preflight_scene(
+                    scene_payload=scene_payload_for_render,
+                    report=report,
+                )
             else:
-                report_recs = report.get("recommendations")
-                if isinstance(report_recs, list) and report_recs:
-                    preflight_scene["recommendations"] = report_recs
-                report_qa = report.get("qa_issues")
-                if isinstance(report_qa, list) and report_qa:
-                    preflight_scene["qa_issues"] = report_qa
-                report_meta = report.get("metadata")
-                if isinstance(report_meta, dict):
-                    scene_meta = preflight_scene.setdefault("metadata", {})
-                    for key in ("correlation", "polarity_inverted"):
-                        val = report_meta.get(key)
-                        if val is not None and key not in scene_meta:
-                            scene_meta[key] = val
-                scene_meta = preflight_scene.setdefault("metadata", {})
-                if "confidence" not in scene_meta:
-                    recs_for_conf = report.get("recommendations")
-                    rec_scores = [
-                        float(r["confidence"])
-                        for r in (recs_for_conf if isinstance(recs_for_conf, list) else [])
-                        if isinstance(r, dict)
-                        and isinstance(r.get("confidence"), (int, float))
-                    ]
-                    report_meta_conf = (
-                        report_meta.get("confidence")
-                        if isinstance(report_meta, dict) else None
+                try:
+                    preflight_scene = build_scene_from_session(session_payload)
+                except (ValueError, KeyError, TypeError):
+                    preflight_scene = report
+                else:
+                    preflight_scene = _augment_preflight_scene(
+                        scene_payload=preflight_scene,
+                        report=report,
                     )
-                    if isinstance(report_meta_conf, (int, float)):
-                        scene_meta["confidence"] = float(report_meta_conf)
-                    elif rec_scores:
-                        scene_meta["confidence"] = sum(rec_scores) / len(rec_scores)
-                    else:
-                        scene_meta["confidence"] = 1.0
         else:
             preflight_scene = report
 
@@ -1166,6 +1354,9 @@ def _run_safe_render_command(
                     "dry_run": False,
                     "target": target,
                     "profile_id": profile_id,
+                    "scene_mode": scene_mode,
+                    "scene_source_path": scene_source_path,
+                    "scene_locks_source_path": scene_locks_source_path,
                     "approved_by": [],
                     "recommendations_summary": {
                         "total": 0,
@@ -1327,6 +1518,9 @@ def _run_safe_render_command(
                 "dry_run": True,
                 "target": target,
                 "profile_id": profile_id,
+                "scene_mode": scene_mode,
+                "scene_source_path": scene_source_path,
+                "scene_locks_source_path": scene_locks_source_path,
                 "approved_by": approve_list,
                 "recommendations_summary": {
                     "total": len(recs),
@@ -1559,6 +1753,9 @@ def _run_safe_render_command(
             "dry_run": False,
             "target": target,
             "profile_id": profile_id,
+            "scene_mode": scene_mode,
+            "scene_source_path": scene_source_path,
+            "scene_locks_source_path": scene_locks_source_path,
             "approved_by": approve_list,
             "recommendations_summary": {
                 "total": len(recs),

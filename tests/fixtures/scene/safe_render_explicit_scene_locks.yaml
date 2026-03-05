@@ -1,0 +1,9 @@
+version: "0.1.0"
+overrides:
+  vox_mono:
+    role_id: "ROLE.VOCAL.LEAD"
+    bus_id: "BUS.VOX.LEAD"
+    placement:
+      azimuth_deg: 0.0
+      width: 0.1
+      depth: 0.2

@@ -77,6 +77,24 @@ def _load_yaml_object(path: Path, *, label: str) -> dict[str, Any]:
     return payload
 
 
+def _load_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise ValueError(f"Failed to read {label} JSON from {path}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{label} JSON is not valid: {path}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} JSON root must be an object: {path}")
+    return payload
+
+
+def _load_locks_object(path: Path, *, label: str) -> dict[str, Any]:
+    if path.suffix.lower() == ".json":
+        return _load_json_object(path, label=label)
+    return _load_yaml_object(path, label=label)
+
+
 def _load_json_schema(schema_path: Path) -> dict[str, Any]:
     try:
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
@@ -192,7 +210,7 @@ def _normalize_override(stem_id: str, payload: dict[str, Any]) -> dict[str, Any]
 
 
 def load_scene_build_locks(path: Path) -> dict[str, Any]:
-    payload = _load_yaml_object(path, label="Scene build locks")
+    payload = _load_locks_object(path, label="Scene build locks")
     _validate_payload_against_schema(
         payload,
         schema_path=schemas_dir() / "scene_locks.schema.json",
