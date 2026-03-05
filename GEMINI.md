@@ -42,6 +42,10 @@ Non-negotiables:
 - Keep placement mixdown memory bounded for long sessions by using
   deterministic two-pass streaming (fixed-size chunk peak scan, then trimmed
   PCM24 chunk writes) instead of whole-program in-memory accumulation.
+- Keep optional immersive bed decorrelation deterministic and QA-bounded:
+  seeded decorrelated bed widening may run only for qualified bed content, and
+  if rendered surround similarity fails after one bounded backoff retry, the
+  renderer must auto-disable and rerender without that plugin stage.
 - Keep placement and baseline mixdown ingest multiformat-lossless-safe:
   decode `wav`/`flac`/`wv`/`aiff`/`aif`/`ape` through the shared decoder
   abstraction and apply deterministic sample-rate policy/resampling with

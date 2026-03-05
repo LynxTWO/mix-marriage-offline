@@ -795,6 +795,119 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
             self.assertEqual(len(attempts), 2)
         self.assertIn("metrics", result)
 
+    def test_decorrelated_bed_widening_respects_confidence_threshold(self) -> None:
+        session = dict(self.session)
+        session["render_export_options"] = {
+            "decorrelated_bed_widening": {
+                "enabled": True,
+                "confidence_threshold": 0.9,
+                "mix": 0.5,
+                "qa_disable_on_fail": False,
+            }
+        }
+
+        renderer = PlacementMixdownRenderer()
+        manifest = renderer.render(session, [], self.out_dir / "decorrelated_threshold")
+        by_layout = _output_by_layout(manifest)
+        immersive_row = by_layout.get("LAYOUT.7_1_4")
+        self.assertIsInstance(immersive_row, dict)
+        if not isinstance(immersive_row, dict):
+            return
+        metadata = immersive_row.get("metadata")
+        self.assertIsInstance(metadata, dict)
+        if not isinstance(metadata, dict):
+            return
+        plugin_meta = metadata.get("bed_decorrelated_widening")
+        self.assertIsInstance(plugin_meta, dict)
+        if not isinstance(plugin_meta, dict):
+            return
+        active_stem_ids = plugin_meta.get("active_stem_ids")
+        self.assertIsInstance(active_stem_ids, list)
+        if not isinstance(active_stem_ids, list):
+            return
+        self.assertIn("STEM.PAD", active_stem_ids)
+        self.assertNotIn("STEM.SFX", active_stem_ids)
+
+    def test_decorrelated_bed_widening_is_deterministic_and_changes_immersive_sha(self) -> None:
+        plugin_session = dict(self.session)
+        plugin_session["render_export_options"] = {
+            "decorrelated_bed_widening": {
+                "enabled": True,
+                "mix": 0.6,
+                "qa_disable_on_fail": False,
+            }
+        }
+        renderer = PlacementMixdownRenderer()
+        manifest_a = renderer.render(plugin_session, [], self.out_dir / "decorrelated_a")
+        manifest_b = renderer.render(plugin_session, [], self.out_dir / "decorrelated_b")
+        manifest_base = renderer.render(self.session, [], self.out_dir / "decorrelated_base")
+
+        row_a = _output_by_layout(manifest_a).get("LAYOUT.7_1_4")
+        row_b = _output_by_layout(manifest_b).get("LAYOUT.7_1_4")
+        row_base = _output_by_layout(manifest_base).get("LAYOUT.7_1_4")
+        self.assertIsInstance(row_a, dict)
+        self.assertIsInstance(row_b, dict)
+        self.assertIsInstance(row_base, dict)
+        if not isinstance(row_a, dict) or not isinstance(row_b, dict) or not isinstance(row_base, dict):
+            return
+
+        self.assertEqual(row_a.get("sha256"), row_b.get("sha256"))
+        self.assertNotEqual(row_a.get("sha256"), row_base.get("sha256"))
+
+        metadata = row_a.get("metadata")
+        self.assertIsInstance(metadata, dict)
+        if not isinstance(metadata, dict):
+            return
+        plugin_meta = metadata.get("bed_decorrelated_widening")
+        self.assertIsInstance(plugin_meta, dict)
+        if not isinstance(plugin_meta, dict):
+            return
+        self.assertTrue(bool(plugin_meta.get("requested")))
+        self.assertTrue(bool(plugin_meta.get("active_stem_ids")))
+
+    def test_decorrelated_bed_widening_auto_disables_after_similarity_gate_fail(self) -> None:
+        session = dict(self.session)
+        session["render_export_options"] = {
+            "decorrelated_bed_widening": {
+                "enabled": True,
+                "mix": 0.7,
+                "qa_disable_on_fail": True,
+            }
+        }
+        forced_fail = {
+            "gate_id": "GATE.DOWNMIX_SIMILARITY_RENDER_COMPARE",
+            "passed": False,
+            "risk_level": "high",
+            "matrix_id": "MATRIX.TEST.FORCED_FAIL",
+            "metrics": {},
+            "thresholds": {},
+            "attempts": [{"passed": False}],
+        }
+        with mock.patch(
+            "mmo.plugins.renderers.placement_mixdown_renderer.enforce_rendered_surround_similarity_gate",
+            return_value=forced_fail,
+        ):
+            renderer = PlacementMixdownRenderer()
+            manifest = renderer.render(session, [], self.out_dir / "decorrelated_disable")
+
+        immersive_row = _output_by_layout(manifest).get("LAYOUT.5_1")
+        self.assertIsInstance(immersive_row, dict)
+        if not isinstance(immersive_row, dict):
+            return
+        metadata = immersive_row.get("metadata")
+        self.assertIsInstance(metadata, dict)
+        if not isinstance(metadata, dict):
+            return
+        plugin_meta = metadata.get("bed_decorrelated_widening")
+        self.assertIsInstance(plugin_meta, dict)
+        if not isinstance(plugin_meta, dict):
+            return
+        self.assertTrue(bool(plugin_meta.get("requested")))
+        self.assertFalse(bool(plugin_meta.get("active")))
+        self.assertTrue(bool(plugin_meta.get("disabled_by_qa")))
+        self.assertIn("qa_gate_before_disable", plugin_meta)
+        self.assertIn("qa_gate_after_disable", plugin_meta)
+
     def test_renderer_decodes_mixed_lossless_formats_in_one_session(self) -> None:
         _write_mono_wav(self.stems_dir / "stem_wav.wav", freq_hz=130.0, amplitude=0.2)
         for extension in ("flac", "wv", "aiff", "ape"):

@@ -195,6 +195,10 @@ What remains: broaden this stereo-hint fixture pattern into additional multi-ste
   deterministic role/azimuth-aware object stage routing (perspective-gated
   side/rear/wide use) and capped confidence-gated hall/room-first bed
   surround/height sends.
+- [x] Optional seeded decorrelated bed widening is available for immersive
+  placement renders with confidence/content gating (`BED.*` + hint/threshold),
+  and is hard-bounded by rendered surround similarity QA with bounded
+  backoff and auto-disable/rerender fallback when gate failure persists.
 - [x] `safe-render` supports first-class explicit scene workflows:
   `--scene` is preferred over implicit scene rebuild, optional
   `--scene-locks` overrides are applied before placement policy, and receipts

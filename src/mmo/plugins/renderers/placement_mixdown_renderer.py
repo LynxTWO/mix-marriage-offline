@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import shutil
 import struct
 import wave
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Sequence
 
+from mmo.core.downmix import enforce_rendered_surround_similarity_gate
 from mmo.core.layout_negotiation import get_layout_channel_order
 from mmo.core.placement_policy import build_render_intent
 from mmo.core.scene_builder import build_scene_from_bus_plan, build_scene_from_session
@@ -112,9 +114,25 @@ _SURROUND_CHANNEL_IDS: frozenset[str] = frozenset(
 _OVERHEAD_CHANNEL_IDS: frozenset[str] = frozenset(
     {"SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR", "SPK.TFC", "SPK.TBC"}
 )
+_BED_DECORRELATED_CHANNEL_IDS: frozenset[str] = _SURROUND_CHANNEL_IDS | _OVERHEAD_CHANNEL_IDS
+_BED_DECORRELATED_CONTENT_HINTS: frozenset[str] = frozenset(
+    {"ambience", "pad_texture", "reverb_return", "crowd"}
+)
 _IMMERSIVE_WRAP_PERSPECTIVES: frozenset[str] = frozenset({"in_band", "in_orchestra"})
 _SIDE_WRAP_CONFIDENCE_MIN = 0.8
 _SIDE_WRAP_WIDE_GAIN_RATIO = 0.12
+_BED_DECORRELATION_PLUGIN_ID = "decorrelated_bed_widening_v0"
+_BED_DECORRELATION_MIN_DELAY_MS = 1.0
+_BED_DECORRELATION_MAX_DELAY_MS = 40.0
+_BED_DECORRELATION_DEFAULT_MIN_DELAY_MS = 3.0
+_BED_DECORRELATION_DEFAULT_MAX_DELAY_MS = 12.0
+_BED_DECORRELATION_DEFAULT_MIX = 0.32
+_BED_DECORRELATION_DEFAULT_CONFIDENCE_THRESHOLD = 0.85
+_BED_DECORRELATION_DEFAULT_SEED = 0
+_BED_DECORRELATION_DEFAULT_QA_DISABLE_ON_FAIL = True
+_BED_DECORRELATION_DEFAULT_QA_SURROUND_BACKOFF_DB = -3.0
+_BED_DECORRELATION_MIN_BACKOFF_DB = -36.0
+_BED_DECORRELATION_MAX_BACKOFF_DB = 0.0
 _DEFAULT_SUBBUS_EXPORT_IDS: tuple[str, ...] = (
     "BUS.DRUMS",
     "BUS.BASS",
@@ -139,6 +157,37 @@ _STEM_COPY_SUFFIX_BY_FORMAT: dict[str, str] = {
 
 
 @dataclass(frozen=True)
+class _BedDecorrelatedQaConfig:
+    disable_on_fail: bool
+    surround_backoff_db: float
+
+
+@dataclass(frozen=True)
+class _BedDecorrelatedOptions:
+    enabled: bool
+    seed: int
+    confidence_threshold: float
+    mix: float
+    min_delay_ms: float
+    max_delay_ms: float
+    qa: _BedDecorrelatedQaConfig
+
+
+@dataclass(frozen=True)
+class _BedDecorrelationTap:
+    channel_index: int
+    delay_samples: int
+    polarity: float
+    mix: float
+
+
+@dataclass
+class _BedDecorrelationDelayState:
+    buffer: list[float]
+    index: int = 0
+
+
+@dataclass(frozen=True)
 class _PreparedStem:
     stem_id: str
     source_path: Path
@@ -156,6 +205,7 @@ class _PreparedStem:
     wide_wrap_left_gain: float
     wide_wrap_right_gain: float
     stereo_channel_wise: bool
+    bed_decorrelation_taps: tuple[_BedDecorrelationTap, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -175,6 +225,9 @@ class _StemDecodePlan:
     wide_wrap_left_gain: float
     wide_wrap_right_gain: float
     stereo_channel_wise: bool
+    bed_decorrelation_candidate_channels: tuple[int, ...] = ()
+    bed_decorrelation_seed: int | None = None
+    bed_decorrelation_mix: float = 0.0
 
 
 @dataclass
@@ -183,6 +236,10 @@ class _StemPassState:
     iterator: Iterator[list[float]]
     active: bool = True
     failed: bool = False
+    bed_decorrelation_taps: dict[int, _BedDecorrelationTap] = field(default_factory=dict)
+    bed_decorrelation_state: dict[int, _BedDecorrelationDelayState] = field(
+        default_factory=dict
+    )
 
 
 @dataclass(frozen=True)
@@ -260,6 +317,137 @@ def _normalize_layout_ids(value: Any) -> tuple[str, ...]:
         for layout_id in _SUPPORTED_LAYOUT_IDS
         if layout_id in normalized
     )
+
+
+def _clamp_float(
+    value: float,
+    *,
+    minimum: float,
+    maximum: float,
+) -> float:
+    if value < minimum:
+        return minimum
+    if value > maximum:
+        return maximum
+    return value
+
+
+def _default_bed_decorrelated_options() -> _BedDecorrelatedOptions:
+    return _BedDecorrelatedOptions(
+        enabled=False,
+        seed=_BED_DECORRELATION_DEFAULT_SEED,
+        confidence_threshold=_BED_DECORRELATION_DEFAULT_CONFIDENCE_THRESHOLD,
+        mix=_BED_DECORRELATION_DEFAULT_MIX,
+        min_delay_ms=_BED_DECORRELATION_DEFAULT_MIN_DELAY_MS,
+        max_delay_ms=_BED_DECORRELATION_DEFAULT_MAX_DELAY_MS,
+        qa=_BedDecorrelatedQaConfig(
+            disable_on_fail=_BED_DECORRELATION_DEFAULT_QA_DISABLE_ON_FAIL,
+            surround_backoff_db=_BED_DECORRELATION_DEFAULT_QA_SURROUND_BACKOFF_DB,
+        ),
+    )
+
+
+def _resolve_bed_decorrelated_options(session: Dict[str, Any]) -> _BedDecorrelatedOptions:
+    defaults = _default_bed_decorrelated_options()
+    raw_export_options = session.get("render_export_options")
+    if not isinstance(raw_export_options, dict):
+        return defaults
+
+    raw_config = raw_export_options.get("decorrelated_bed_widening")
+    if isinstance(raw_config, bool):
+        return _BedDecorrelatedOptions(
+            enabled=raw_config,
+            seed=defaults.seed,
+            confidence_threshold=defaults.confidence_threshold,
+            mix=defaults.mix,
+            min_delay_ms=defaults.min_delay_ms,
+            max_delay_ms=defaults.max_delay_ms,
+            qa=defaults.qa,
+        )
+    if not isinstance(raw_config, dict):
+        return defaults
+
+    enabled_value = _coerce_bool(raw_config.get("enabled"))
+    enabled = defaults.enabled if enabled_value is None else enabled_value
+
+    seed_value = _coerce_int(raw_config.get("seed"))
+    if seed_value is None:
+        seed = defaults.seed
+    else:
+        seed = max(0, min(seed_value, 2_147_483_647))
+
+    confidence_raw = _coerce_float(raw_config.get("confidence_threshold"))
+    confidence_threshold = (
+        defaults.confidence_threshold
+        if confidence_raw is None
+        else _clamp_float(confidence_raw, minimum=0.0, maximum=1.0)
+    )
+
+    mix_raw = _coerce_float(raw_config.get("mix"))
+    mix = defaults.mix if mix_raw is None else _clamp_float(mix_raw, minimum=0.0, maximum=1.0)
+
+    min_delay_raw = _coerce_float(raw_config.get("min_delay_ms"))
+    max_delay_raw = _coerce_float(raw_config.get("max_delay_ms"))
+    min_delay_ms = (
+        defaults.min_delay_ms
+        if min_delay_raw is None
+        else _clamp_float(
+            min_delay_raw,
+            minimum=_BED_DECORRELATION_MIN_DELAY_MS,
+            maximum=_BED_DECORRELATION_MAX_DELAY_MS,
+        )
+    )
+    max_delay_ms = (
+        defaults.max_delay_ms
+        if max_delay_raw is None
+        else _clamp_float(
+            max_delay_raw,
+            minimum=_BED_DECORRELATION_MIN_DELAY_MS,
+            maximum=_BED_DECORRELATION_MAX_DELAY_MS,
+        )
+    )
+    if max_delay_ms < min_delay_ms:
+        min_delay_ms, max_delay_ms = max_delay_ms, min_delay_ms
+
+    qa_disable_raw = _coerce_bool(raw_config.get("qa_disable_on_fail"))
+    qa_disable_on_fail = (
+        defaults.qa.disable_on_fail
+        if qa_disable_raw is None
+        else qa_disable_raw
+    )
+    qa_backoff_raw = _coerce_float(raw_config.get("qa_surround_backoff_db"))
+    qa_surround_backoff_db = (
+        defaults.qa.surround_backoff_db
+        if qa_backoff_raw is None
+        else _clamp_float(
+            qa_backoff_raw,
+            minimum=_BED_DECORRELATION_MIN_BACKOFF_DB,
+            maximum=_BED_DECORRELATION_MAX_BACKOFF_DB,
+        )
+    )
+
+    return _BedDecorrelatedOptions(
+        enabled=enabled,
+        seed=seed,
+        confidence_threshold=confidence_threshold,
+        mix=mix,
+        min_delay_ms=min_delay_ms,
+        max_delay_ms=max_delay_ms,
+        qa=_BedDecorrelatedQaConfig(
+            disable_on_fail=qa_disable_on_fail,
+            surround_backoff_db=qa_surround_backoff_db,
+        ),
+    )
+
+
+def _stable_hash_u32(*parts: str) -> int:
+    joined = "|".join(parts)
+    digest = hashlib.sha256(joined.encode("utf-8")).digest()
+    return int.from_bytes(digest[:4], byteorder="big", signed=False)
+
+
+def _stable_unit_value(*parts: str) -> float:
+    return _stable_hash_u32(*parts) / float(0xFFFFFFFF)
 
 
 def _resolve_export_options(session: Dict[str, Any]) -> _ExportOptions:
@@ -684,14 +872,151 @@ def _float_samples_to_pcm24_bytes(samples: Sequence[float]) -> bytes:
     return bytes(out)
 
 
+def _bed_content_hint_from_send_row(send_row: dict[str, Any]) -> str:
+    notes_payload = send_row.get("notes")
+    notes = notes_payload if isinstance(notes_payload, list) else []
+    for note in notes:
+        if not isinstance(note, str):
+            continue
+        normalized = note.strip().lower()
+        if not normalized.startswith("content_hint:"):
+            continue
+        return normalized.split(":", 1)[1].strip()
+    return ""
+
+
+def _bed_decorrelation_candidate_channels(
+    *,
+    send_row: dict[str, Any],
+    channel_order: list[str],
+) -> tuple[int, ...]:
+    gains_payload = send_row.get("gains")
+    gains = gains_payload if isinstance(gains_payload, dict) else {}
+    indices: list[int] = []
+    for index, speaker_id in enumerate(channel_order):
+        if speaker_id not in _BED_DECORRELATED_CHANNEL_IDS:
+            continue
+        gain = _coerce_float(gains.get(speaker_id))
+        if gain is None or gain <= 0.0:
+            continue
+        indices.append(index)
+    return tuple(sorted(set(indices)))
+
+
+def _bed_decorrelation_eligible(
+    *,
+    send_row: dict[str, Any],
+    channel_order: list[str],
+    options: _BedDecorrelatedOptions,
+) -> tuple[bool, tuple[int, ...]]:
+    policy_class = _coerce_str(send_row.get("policy_class")).strip().upper()
+    if not policy_class.startswith("BED."):
+        return False, ()
+    confidence = _coerce_float(send_row.get("confidence")) or 0.0
+    if confidence < options.confidence_threshold:
+        return False, ()
+    content_hint = _bed_content_hint_from_send_row(send_row)
+    if content_hint not in _BED_DECORRELATED_CONTENT_HINTS:
+        return False, ()
+    candidate_channels = _bed_decorrelation_candidate_channels(
+        send_row=send_row,
+        channel_order=channel_order,
+    )
+    return bool(candidate_channels), candidate_channels
+
+
+def _build_bed_decorrelation_taps(
+    *,
+    stem_id: str,
+    layout_id: str,
+    sample_rate_hz: int,
+    seed: int,
+    mix: float,
+    min_delay_ms: float,
+    max_delay_ms: float,
+    candidate_channels: tuple[int, ...],
+) -> tuple[_BedDecorrelationTap, ...]:
+    if sample_rate_hz <= 0 or mix <= 0.0 or not candidate_channels:
+        return ()
+    delay_span_ms = max(0.0, max_delay_ms - min_delay_ms)
+    taps: list[_BedDecorrelationTap] = []
+    for channel_index in candidate_channels:
+        channel_token = str(channel_index)
+        delay_unit = _stable_unit_value(
+            str(seed),
+            stem_id,
+            layout_id,
+            channel_token,
+            "delay_ms",
+        )
+        delay_ms = min_delay_ms + (delay_span_ms * delay_unit)
+        delay_samples = max(1, int(round((delay_ms / 1000.0) * float(sample_rate_hz))))
+        polarity_hash = _stable_hash_u32(
+            str(seed),
+            stem_id,
+            layout_id,
+            channel_token,
+            "polarity",
+        )
+        polarity = -1.0 if (polarity_hash & 0x1) else 1.0
+        mix_unit = _stable_unit_value(
+            str(seed),
+            stem_id,
+            layout_id,
+            channel_token,
+            "mix",
+        )
+        channel_mix = _clamp_float(mix * (0.85 + (0.3 * mix_unit)), minimum=0.0, maximum=1.0)
+        taps.append(
+            _BedDecorrelationTap(
+                channel_index=channel_index,
+                delay_samples=delay_samples,
+                polarity=polarity,
+                mix=channel_mix,
+            )
+        )
+    taps.sort(key=lambda tap: tap.channel_index)
+    return tuple(taps)
+
+
+def _init_bed_decorrelation_state(
+    taps: dict[int, _BedDecorrelationTap],
+) -> dict[int, _BedDecorrelationDelayState]:
+    state: dict[int, _BedDecorrelationDelayState] = {}
+    for channel_index, tap in taps.items():
+        state[channel_index] = _BedDecorrelationDelayState(
+            buffer=[0.0] * tap.delay_samples,
+            index=0,
+        )
+    return state
+
+
+def _apply_bed_decorrelation(
+    *,
+    dry_sample: float,
+    tap: _BedDecorrelationTap | None,
+    delay_state: _BedDecorrelationDelayState | None,
+) -> float:
+    if tap is None or delay_state is None:
+        return dry_sample
+    if not delay_state.buffer:
+        return dry_sample
+    read_sample = delay_state.buffer[delay_state.index]
+    delay_state.buffer[delay_state.index] = dry_sample
+    delay_state.index = (delay_state.index + 1) % len(delay_state.buffer)
+    wet_sample = read_sample * tap.polarity
+    return (dry_sample * (1.0 - tap.mix)) + (wet_sample * tap.mix)
+
+
 def _mix_stem_chunk_into_buffer(
     *,
     destination_chunk: list[float],
     source_chunk: list[float],
     frame_count: int,
     channel_count: int,
-    stem: _PreparedStem,
+    state: _StemPassState,
 ) -> None:
+    stem = state.stem
     source_index = 0
     for frame_index in range(frame_count):
         target_base = frame_index * channel_count
@@ -701,7 +1026,14 @@ def _mix_stem_chunk_into_buffer(
             for channel_index, gain in enumerate(stem.gain_vector):
                 if gain == 0.0:
                     continue
-                destination_chunk[target_base + channel_index] += mono * gain
+                decorrelation_tap = state.bed_decorrelation_taps.get(channel_index)
+                decorrelation_state = state.bed_decorrelation_state.get(channel_index)
+                sample = _apply_bed_decorrelation(
+                    dry_sample=mono,
+                    tap=decorrelation_tap,
+                    delay_state=decorrelation_state,
+                )
+                destination_chunk[target_base + channel_index] += sample * gain
             continue
 
         if stem.stereo_channel_wise:
@@ -732,7 +1064,14 @@ def _mix_stem_chunk_into_buffer(
         for channel_index, gain in enumerate(stem.gain_vector):
             if gain == 0.0:
                 continue
-            destination_chunk[target_base + channel_index] += mid * gain
+            decorrelation_tap = state.bed_decorrelation_taps.get(channel_index)
+            decorrelation_state = state.bed_decorrelation_state.get(channel_index)
+            sample = _apply_bed_decorrelation(
+                dry_sample=mid,
+                tap=decorrelation_tap,
+                delay_state=decorrelation_state,
+            )
+            destination_chunk[target_base + channel_index] += sample * gain
 
         if stem.front_left_gain != 0.0:
             destination_chunk[target_base + stem.front_left_idx] += side * stem.front_left_gain
@@ -765,9 +1104,17 @@ def _run_mix_pass(
                 },
                 target_sample_rate_hz=stem.render_sample_rate_hz,
             ),
+            bed_decorrelation_taps={
+                tap.channel_index: tap for tap in stem.bed_decorrelation_taps
+            },
         )
         for stem in prepared_stems
     ]
+    for state in states:
+        if state.bed_decorrelation_taps:
+            state.bed_decorrelation_state = _init_bed_decorrelation_state(
+                state.bed_decorrelation_taps
+            )
     notes: list[str] = []
     total_frames = 0
 
@@ -816,7 +1163,7 @@ def _run_mix_pass(
                 source_chunk=chunk,
                 frame_count=frame_count,
                 channel_count=channel_count,
-                stem=state.stem,
+                state=state,
             )
 
         if mixed_frame_count > 0:
@@ -837,15 +1184,44 @@ def _prepare_layout_stems(
     layout_id: str,
     normalized_channel_order: list[str],
     sends_by_stem: dict[str, dict[str, Any]],
-) -> tuple[list[_PreparedStem], int | None, dict[str, str], list[str], dict[str, Any]]:
+    bed_decorrelation_options: _BedDecorrelatedOptions,
+    enable_bed_decorrelation: bool,
+) -> tuple[
+    list[_PreparedStem],
+    int | None,
+    dict[str, str],
+    list[str],
+    dict[str, Any],
+    dict[str, Any],
+]:
     notes: list[str] = []
+    plugin_requested = bool(bed_decorrelation_options.enabled)
+    plugin_enabled = bool(plugin_requested and enable_bed_decorrelation)
+    empty_decorrelation_receipt = {
+        "plugin_id": _BED_DECORRELATION_PLUGIN_ID,
+        "requested": plugin_requested,
+        "active": False,
+        "active_stem_ids": [],
+        "seed": int(bed_decorrelation_options.seed),
+        "mix": round(float(bed_decorrelation_options.mix), 6),
+        "confidence_threshold": round(float(bed_decorrelation_options.confidence_threshold), 6),
+        "min_delay_ms": round(float(bed_decorrelation_options.min_delay_ms), 6),
+        "max_delay_ms": round(float(bed_decorrelation_options.max_delay_ms), 6),
+    }
     stems_dir = _resolve_stems_dir(session)
     stems = _stem_rows(session)
     speaker_idx = _speaker_index(normalized_channel_order)
     front_left_idx = speaker_idx.get("SPK.L")
     front_right_idx = speaker_idx.get("SPK.R")
     if not isinstance(front_left_idx, int) or not isinstance(front_right_idx, int):
-        return [], None, {}, [f"{layout_id}:missing_front_lr_channels"], {}
+        return (
+            [],
+            None,
+            {},
+            [f"{layout_id}:missing_front_lr_channels"],
+            {},
+            empty_decorrelation_receipt,
+        )
 
     wide_left_idx = speaker_idx.get("SPK.LW")
     wide_right_idx = speaker_idx.get("SPK.RW")
@@ -885,6 +1261,24 @@ def _prepare_layout_stems(
             if stereo_side_wrap_enabled and isinstance(wide_right_idx, int)
             else 0.0
         )
+        bed_candidate_channels: tuple[int, ...] = ()
+        bed_seed: int | None = None
+        bed_mix = 0.0
+        if plugin_enabled:
+            eligible, candidate_channels = _bed_decorrelation_eligible(
+                send_row=send_row,
+                channel_order=normalized_channel_order,
+                options=bed_decorrelation_options,
+            )
+            if eligible:
+                bed_candidate_channels = candidate_channels
+                bed_seed = _stable_hash_u32(
+                    str(bed_decorrelation_options.seed),
+                    layout_id,
+                    stem_id,
+                    _BED_DECORRELATION_PLUGIN_ID,
+                )
+                bed_mix = bed_decorrelation_options.mix
 
         source_format_id = detect_format_from_path(source_path)
         if source_format_id == "unknown":
@@ -961,6 +1355,9 @@ def _prepare_layout_stems(
                     wide_wrap_left_gain=wide_wrap_left_gain,
                     wide_wrap_right_gain=wide_wrap_right_gain,
                     stereo_channel_wise=(stem_channels == 2 and layout_id == "LAYOUT.2_0"),
+                    bed_decorrelation_candidate_channels=bed_candidate_channels,
+                    bed_decorrelation_seed=bed_seed,
+                    bed_decorrelation_mix=bed_mix,
                 )
             )
         except Exception:
@@ -975,13 +1372,20 @@ def _prepare_layout_stems(
         explicit_sample_rate_hz=explicit_sample_rate_hz,
     )
     if sample_rate_hz is None:
-        return [], None, stem_mix_modes, notes, {
-            "algorithm": "linear_interpolation_v1",
-            "selection": selection_receipt,
-            "target_sample_rate_hz": None,
-            "resampled_stems": [],
-            "native_rate_stems": [],
-        }
+        return (
+            [],
+            None,
+            stem_mix_modes,
+            notes,
+            {
+                "algorithm": "linear_interpolation_v1",
+                "selection": selection_receipt,
+                "target_sample_rate_hz": None,
+                "resampled_stems": [],
+                "native_rate_stems": [],
+            },
+            empty_decorrelation_receipt,
+        )
 
     notes.append(
         f"{layout_id}:render_sample_rate_selected:{sample_rate_hz}:"
@@ -991,7 +1395,27 @@ def _prepare_layout_stems(
     prepared_stems: list[_PreparedStem] = []
     resampled_stems: list[dict[str, Any]] = []
     native_rate_stems: list[dict[str, Any]] = []
+    active_decorrelation_stem_ids: list[str] = []
     for plan in decode_plans:
+        bed_taps: tuple[_BedDecorrelationTap, ...] = ()
+        if (
+            plugin_enabled
+            and plan.bed_decorrelation_seed is not None
+            and plan.bed_decorrelation_mix > 0.0
+            and plan.bed_decorrelation_candidate_channels
+        ):
+            bed_taps = _build_bed_decorrelation_taps(
+                stem_id=plan.stem_id,
+                layout_id=layout_id,
+                sample_rate_hz=sample_rate_hz,
+                seed=plan.bed_decorrelation_seed,
+                mix=plan.bed_decorrelation_mix,
+                min_delay_ms=bed_decorrelation_options.min_delay_ms,
+                max_delay_ms=bed_decorrelation_options.max_delay_ms,
+                candidate_channels=plan.bed_decorrelation_candidate_channels,
+            )
+            if bed_taps:
+                active_decorrelation_stem_ids.append(plan.stem_id)
         prepared_stems.append(
             _PreparedStem(
                 stem_id=plan.stem_id,
@@ -1010,6 +1434,7 @@ def _prepare_layout_stems(
                 wide_wrap_left_gain=plan.wide_wrap_left_gain,
                 wide_wrap_right_gain=plan.wide_wrap_right_gain,
                 stereo_channel_wise=plan.stereo_channel_wise,
+                bed_decorrelation_taps=bed_taps,
             )
         )
         if plan.source_sample_rate_hz != sample_rate_hz:
@@ -1034,13 +1459,32 @@ def _prepare_layout_stems(
                 }
             )
 
-    return prepared_stems, sample_rate_hz, stem_mix_modes, notes, {
-        "algorithm": "linear_interpolation_v1",
-        "selection": selection_receipt,
-        "target_sample_rate_hz": sample_rate_hz,
-        "resampled_stems": resampled_stems,
-        "native_rate_stems": native_rate_stems,
+    decorrelation_receipt = {
+        "plugin_id": _BED_DECORRELATION_PLUGIN_ID,
+        "requested": plugin_requested,
+        "active": bool(active_decorrelation_stem_ids),
+        "active_stem_ids": sorted(active_decorrelation_stem_ids),
+        "seed": int(bed_decorrelation_options.seed),
+        "mix": round(float(bed_decorrelation_options.mix), 6),
+        "confidence_threshold": round(float(bed_decorrelation_options.confidence_threshold), 6),
+        "min_delay_ms": round(float(bed_decorrelation_options.min_delay_ms), 6),
+        "max_delay_ms": round(float(bed_decorrelation_options.max_delay_ms), 6),
     }
+
+    return (
+        prepared_stems,
+        sample_rate_hz,
+        stem_mix_modes,
+        notes,
+        {
+            "algorithm": "linear_interpolation_v1",
+            "selection": selection_receipt,
+            "target_sample_rate_hz": sample_rate_hz,
+            "resampled_stems": resampled_stems,
+            "native_rate_stems": native_rate_stems,
+        },
+        decorrelation_receipt,
+    )
 
 
 def _update_chunk_peak_by_channel(
@@ -1315,6 +1759,8 @@ def _mix_layout_from_intent(
     output_dir: Path,
     export_options: _ExportOptions,
     stem_scene_refs: dict[str, dict[str, list[str]]],
+    bed_decorrelation_options: _BedDecorrelatedOptions,
+    enable_bed_decorrelation: bool,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     notes: list[str] = []
     channel_order = render_intent.get("channel_order")
@@ -1347,12 +1793,15 @@ def _mix_layout_from_intent(
         stem_mix_modes,
         prep_notes,
         resampling_receipt,
+        decorrelation_receipt,
     ) = _prepare_layout_stems(
         session=session,
         render_intent=render_intent,
         layout_id=layout_id,
         normalized_channel_order=normalized_channel_order,
         sends_by_stem=sends_by_stem,
+        bed_decorrelation_options=bed_decorrelation_options,
+        enable_bed_decorrelation=enable_bed_decorrelation,
     )
     if prep_notes:
         notes.extend(prep_notes)
@@ -1485,6 +1934,7 @@ def _mix_layout_from_intent(
                         "chunk_frames": _RENDER_CHUNK_FRAMES,
                         "stereo_reinterpret_allowed": stereo_reinterpret_allowed,
                         "resampling": resampling_receipt,
+                        "bed_decorrelated_widening": dict(decorrelation_receipt),
                         "what_why": (
                             "Rendered one layout-agnostic scene into layout speakers using "
                             "conservative placement sends; stereo stems keep L/R imaging in "
@@ -1519,6 +1969,76 @@ def _mix_layout_from_intent(
     return outputs, notes
 
 
+def _master_output_row_for_layout(
+    *,
+    layout_outputs: list[dict[str, Any]],
+    layout_id: str,
+) -> dict[str, Any] | None:
+    for row in layout_outputs:
+        if not isinstance(row, dict):
+            continue
+        if _coerce_str(row.get("layout_id")).strip() != layout_id:
+            continue
+        metadata = row.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        if _coerce_str(metadata.get("artifact_role")).strip().lower() != "master":
+            continue
+        return row
+    return None
+
+
+def _master_output_path(
+    *,
+    output_dir: Path,
+    output_row: dict[str, Any] | None,
+) -> Path | None:
+    if not isinstance(output_row, dict):
+        return None
+    file_path = _coerce_str(output_row.get("file_path")).strip()
+    if not file_path:
+        return None
+    return (output_dir / Path(file_path)).resolve()
+
+
+def _remove_layout_output_files(
+    *,
+    output_dir: Path,
+    layout_outputs: list[dict[str, Any]],
+) -> None:
+    for row in layout_outputs:
+        if not isinstance(row, dict):
+            continue
+        file_path = _coerce_str(row.get("file_path")).strip()
+        if not file_path:
+            continue
+        abs_path = (output_dir / Path(file_path)).resolve()
+        try:
+            if abs_path.exists() and abs_path.is_file():
+                abs_path.unlink()
+        except OSError:
+            continue
+
+
+def _bed_decorrelated_metadata(output_row: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(output_row, dict):
+        return None
+    metadata = output_row.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    plugin_meta = metadata.get("bed_decorrelated_widening")
+    if isinstance(plugin_meta, dict):
+        return plugin_meta
+    payload = {
+        "plugin_id": _BED_DECORRELATION_PLUGIN_ID,
+        "requested": False,
+        "active": False,
+        "active_stem_ids": [],
+    }
+    metadata["bed_decorrelated_widening"] = payload
+    return payload
+
+
 class PlacementMixdownRenderer(RendererPlugin):
     plugin_id = _PLUGIN_ID
 
@@ -1545,12 +2065,14 @@ class PlacementMixdownRenderer(RendererPlugin):
 
         stereo_reinterpret_allowed = _scene_stereo_reinterpret_allowed(scene)
         export_options = _resolve_export_options(session)
+        bed_decorrelation_options = _resolve_bed_decorrelated_options(session)
         selected_layouts = _selected_layout_ids(export_options)
         out_dir = Path(output_dir)
         stem_scene_refs = _scene_stem_reference_map(scene)
         outputs: list[dict[str, Any]] = []
         notes: list[str] = []
         stem_bus_by_id: dict[str, str] = {}
+        stereo_master_path: Path | None = None
 
         for layout_id in selected_layouts:
             channel_order = _layout_channel_order(layout_id)
@@ -1578,6 +2100,12 @@ class PlacementMixdownRenderer(RendererPlugin):
             if not (export_options.export_master or export_options.export_buses):
                 continue
 
+            enable_bed_decorrelation = (
+                bed_decorrelation_options.enabled
+                and layout_id != "LAYOUT.2_0"
+                and export_options.export_master
+                and isinstance(stereo_master_path, Path)
+            )
             layout_outputs, layout_notes = _mix_layout_from_intent(
                 session=session,
                 render_intent=render_intent,
@@ -1585,9 +2113,140 @@ class PlacementMixdownRenderer(RendererPlugin):
                 output_dir=out_dir,
                 export_options=export_options,
                 stem_scene_refs=stem_scene_refs,
+                bed_decorrelation_options=bed_decorrelation_options,
+                enable_bed_decorrelation=enable_bed_decorrelation,
             )
             if layout_notes:
                 notes.extend(layout_notes)
+            layout_master_row = _master_output_row_for_layout(
+                layout_outputs=layout_outputs,
+                layout_id=layout_id,
+            )
+            layout_master_path = _master_output_path(
+                output_dir=out_dir,
+                output_row=layout_master_row,
+            )
+            if (
+                layout_id == "LAYOUT.2_0"
+                and isinstance(layout_master_path, Path)
+                and layout_master_path.exists()
+            ):
+                stereo_master_path = layout_master_path
+
+            if (
+                layout_id != "LAYOUT.2_0"
+                and bed_decorrelation_options.enabled
+                and export_options.export_master
+            ):
+                plugin_meta = _bed_decorrelated_metadata(layout_master_row)
+                if isinstance(plugin_meta, dict) and not enable_bed_decorrelation:
+                    plugin_meta["requested"] = True
+                    plugin_meta["active"] = False
+                    if not isinstance(stereo_master_path, Path):
+                        plugin_meta["disabled_reason"] = "missing_stereo_reference"
+                    else:
+                        plugin_meta["disabled_reason"] = "qa_gate_not_enabled"
+
+                should_run_gate = (
+                    isinstance(stereo_master_path, Path)
+                    and isinstance(layout_master_path, Path)
+                    and layout_master_path.exists()
+                    and isinstance(plugin_meta, dict)
+                    and bool(plugin_meta.get("active_stem_ids"))
+                    and enable_bed_decorrelation
+                )
+                gate_result: dict[str, Any] | None = None
+                gate_error: str | None = None
+                if should_run_gate:
+                    try:
+                        gate_result = enforce_rendered_surround_similarity_gate(
+                            stereo_render_file=stereo_master_path,
+                            surround_render_file=layout_master_path,
+                            source_layout_id=layout_id,
+                            surround_backoff_db=bed_decorrelation_options.qa.surround_backoff_db,
+                        )
+                    except (RuntimeError, ValueError, OSError) as exc:
+                        gate_error = str(exc)
+
+                    if gate_result is not None:
+                        plugin_meta["qa_gate"] = _json_clone(gate_result)
+                    elif gate_error is not None:
+                        plugin_meta["qa_gate"] = {
+                            "passed": False,
+                            "gate_error": gate_error,
+                        }
+
+                    gate_failed = (
+                        gate_error is not None
+                        or (
+                            isinstance(gate_result, dict)
+                            and not bool(gate_result.get("passed"))
+                        )
+                    )
+                    if gate_failed and bed_decorrelation_options.qa.disable_on_fail:
+                        notes.append(
+                            f"{layout_id}:decorrelated_bed_widening_disabled_after_qa_fail"
+                        )
+                        _remove_layout_output_files(
+                            output_dir=out_dir,
+                            layout_outputs=layout_outputs,
+                        )
+                        layout_outputs, rerender_notes = _mix_layout_from_intent(
+                            session=session,
+                            render_intent=render_intent,
+                            layout_id=layout_id,
+                            output_dir=out_dir,
+                            export_options=export_options,
+                            stem_scene_refs=stem_scene_refs,
+                            bed_decorrelation_options=bed_decorrelation_options,
+                            enable_bed_decorrelation=False,
+                        )
+                        if rerender_notes:
+                            notes.extend(rerender_notes)
+                        layout_master_row = _master_output_row_for_layout(
+                            layout_outputs=layout_outputs,
+                            layout_id=layout_id,
+                        )
+                        layout_master_path = _master_output_path(
+                            output_dir=out_dir,
+                            output_row=layout_master_row,
+                        )
+                        rerender_meta = _bed_decorrelated_metadata(layout_master_row)
+                        if isinstance(rerender_meta, dict):
+                            rerender_meta["requested"] = True
+                            rerender_meta["active"] = False
+                            rerender_meta["disabled_by_qa"] = True
+                            if gate_result is not None:
+                                rerender_meta["qa_gate_before_disable"] = _json_clone(
+                                    gate_result
+                                )
+                            if gate_error is not None:
+                                rerender_meta["qa_gate_error"] = gate_error
+                        if (
+                            isinstance(stereo_master_path, Path)
+                            and isinstance(layout_master_path, Path)
+                            and layout_master_path.exists()
+                            and isinstance(rerender_meta, dict)
+                        ):
+                            try:
+                                rerender_gate = enforce_rendered_surround_similarity_gate(
+                                    stereo_render_file=stereo_master_path,
+                                    surround_render_file=layout_master_path,
+                                    source_layout_id=layout_id,
+                                    surround_backoff_db=(
+                                        bed_decorrelation_options.qa.surround_backoff_db
+                                    ),
+                                )
+                            except (RuntimeError, ValueError, OSError) as exc:
+                                rerender_meta["qa_gate_after_disable"] = {
+                                    "passed": False,
+                                    "gate_error": str(exc),
+                                }
+                            else:
+                                rerender_meta["qa_gate_after_disable"] = _json_clone(
+                                    rerender_gate
+                                )
+
             if layout_outputs:
                 outputs.extend(layout_outputs)
 

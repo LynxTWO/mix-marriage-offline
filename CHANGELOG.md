@@ -94,6 +94,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Recall sheet CSV now includes `stem_subbus_main_scene_map`
     (`stem -> subbus -> BUS.MAIN -> object/bed`) derived from render intent +
     scene context.
+- Optional deterministic immersive bed decorrelation plugin:
+  - Added renderer option `render_export_options.decorrelated_bed_widening`
+    for seeded decorrelated widening on qualifying bed stems
+    (`BED.*` + content hints + confidence threshold).
+  - Added hard QA gate integration against rendered stereo reference:
+    run rendered surround similarity gate, apply bounded backoff retry, and
+    auto-disable/rerender without the plugin when gate failure persists.
+  - Added placement renderer regression coverage for confidence gating,
+    deterministic output stability, and QA-triggered auto-disable behavior.
 
 - Scene QA lint command for pre-render validation:
   - Added `mmo scene lint --scene <scene.json> [--locks <scene_locks.yaml|json>] [--out <report.json>]`.
