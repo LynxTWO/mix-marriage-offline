@@ -84,6 +84,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Immersive golden-path small fixture + hash tripwire:
+  - Added `fixtures/golden_path_small/` with deterministic generated stems
+    (`kick`, `snare`, `bass_di`, `pad_stereo_wide`, `sfx_stereo`) plus
+    expected per-layout WAV hash snapshots for
+    `LAYOUT.2_0/5_1/7_1/7_1_4/9_1_6`.
+  - Added `tests/test_cli_immersive_golden_path_small.py` to enforce
+    `stems classify -> stems bus-plan -> scene build -> scene template apply
+    (audience) -> safe-render --render-many` determinism, channel-count
+    contracts, and rendered downmix-similarity pass/backoff assertions when
+    optional truth-meter dependencies are installed.
+
 - Scene-aware safe-render debug artifact exports:
   - Added `safe-render` flags `--export-stems`, `--export-buses`,
     `--export-master/--no-export-master` (default export on), and

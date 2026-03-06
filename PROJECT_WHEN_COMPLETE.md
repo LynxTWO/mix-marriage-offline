@@ -158,6 +158,9 @@ What remains: expand fixture-session coverage for front/quad render variants in 
 - [x] Fixture for “stereo stems with baked pan/width” validates inference is advisory and confidence-gated.
 - [x] Determinism tests exist (byte-stable or numerically stable within documented tolerance).
 - [x] Downmix similarity tests exist and fail CI when gates regress.
+- [x] Tiny immersive golden-path fixture validates
+  `classify -> bus-plan -> scene -> safe-render --render-many` with stable
+  per-layout channel-count and WAV-hash tripwires.
 - [x] CI runs on Windows, Linux, macOS (or documents any limitations).
 What remains: broaden this stereo-hint fixture pattern into additional multi-stem and mixed confidence edge cases.
 

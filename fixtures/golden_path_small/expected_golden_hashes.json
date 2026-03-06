@@ -1,0 +1,26 @@
+{
+  "schema_version": "0.1.0",
+  "fixture_id": "golden_path_small",
+  "scene_template_id": "TEMPLATE.SEATING.ORCHESTRA_AUDIENCE",
+  "targets": [
+    "LAYOUT.2_0",
+    "LAYOUT.5_1",
+    "LAYOUT.7_1",
+    "LAYOUT.7_1_4",
+    "LAYOUT.9_1_6"
+  ],
+  "expected_channel_counts": {
+    "LAYOUT.2_0": 2,
+    "LAYOUT.5_1": 6,
+    "LAYOUT.7_1": 8,
+    "LAYOUT.7_1_4": 12,
+    "LAYOUT.9_1_6": 16
+  },
+  "expected_master_wav_sha256": {
+    "LAYOUT.2_0": "60396d50307635ba070fd5f890666e190a9c231c77a268f9bf59e2d1817f89b3",
+    "LAYOUT.5_1": "8b3b48737b77e453b31ae82da8c0a5e3f406bf949d8ae18f18f0042f75fad738",
+    "LAYOUT.7_1": "68241c47fb7c57840c31c24f0606854e7a9fe7f5f44e9b8a7563de0a43b834b3",
+    "LAYOUT.7_1_4": "78132b874168cb87bb0e8e9961315447cb24f5322701016c7c3c70a5239ba5d9",
+    "LAYOUT.9_1_6": "3762703da1ffe4c1ca4d751a5345ecc7fc8edc66e3a3e1fe4df1837a6de7a624"
+  }
+}

@@ -7,6 +7,9 @@ Fixtures are deterministic inputs used for tests and CI.
 - `fixtures/public_session/`: public 7.1.4 example session fixture used by
   `tests/test_full_determinism.py` to verify byte-stable safe-render outputs
   for SMPTE and FILM ordering.
+- `fixtures/golden_path_small/`: tiny generated stem fixture (mixed mono/stereo)
+  with expected channel-count and WAV-hash snapshots for immersive
+  `classify -> bus-plan -> scene -> safe-render --render-many` CI coverage.
 - `fixtures/stems_small/`: compact, redistributable stem-name corpus modeled
   from real-world naming patterns (numeric suffixes, compound instrument/vocal
   tokens, synth/SFX variants) used for stems->bus-plan->scene regression tests.

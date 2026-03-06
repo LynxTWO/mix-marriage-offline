@@ -17,6 +17,9 @@ Non-negotiables:
   and keep ETA/runtime diagnostics out of deterministic persisted artifacts.
 - Keep `fixtures/public_session/report.7_1_4.json` and
   `tests/test_full_determinism.py` in sync for full-pipeline byte-stability checks.
+- Keep `fixtures/golden_path_small/expected_golden_hashes.json` and
+  `tests/test_cli_immersive_golden_path_small.py` in sync for the immersive
+  classify->bus-plan->scene->safe-render render-many determinism tripwire.
 - Keep watch-folder automation deterministic: debounce event bursts, detect
   changed stem sets by signature, and launch install-safe `python -m mmo run`
   render-many batches.
