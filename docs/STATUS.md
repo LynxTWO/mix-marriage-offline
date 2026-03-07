@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-02-26
+Last updated: 2026-03-06
 
 This is the single-page milestone checklist for current delivery phases.
 
@@ -10,6 +10,10 @@ This is the single-page milestone checklist for current delivery phases.
 
 ## Contribution Rule
 PRs must keep status tracking current: update `docs/STATUS.md` and `docs/milestones.yaml` when milestone state actually changes, and update `CHANGELOG.md` under `## [Unreleased]` when user-facing behavior changes.
+
+## Roadmap Pointer
+- Near-term completion work lives in `docs/06-roadmap.md#now`.
+- Post-complete track lives in `docs/06-roadmap.md#later`.
 
 ## MVP-CLI
 State: `in_progress`

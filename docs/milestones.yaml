@@ -4,13 +4,14 @@ milestones:
     state: in_progress
     links:
       - docs/STATUS.md#mvp-cli
-      - docs/06-roadmap.md#v03-cli-skeleton
+      - docs/06-roadmap.md#now
 
   - id: MVP.GUI
     title: MVP GUI
     state: planned
     links:
       - docs/STATUS.md#mvp-gui
+      - docs/06-roadmap.md#tauri-desktop-app-parity-checklist
       - docs/11-gui-vision.md#rollout-milestones
 
   - id: DSP.PHASE1

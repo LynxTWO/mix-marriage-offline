@@ -40,8 +40,7 @@ Note: numbered docs (`docs/00-*` through `docs/20-*`) are canonical; this checkl
 - [x] docs/04-plugin-api.md + docs/13-plugin-authoring.md define plugin contracts (channel_mode, link groups, latency, determinism seeds).
 - [x] docs/05-fixtures-and-ci.md documents fixtures, CI gates, and determinism expectations.
 - [x] docs/07-export-guides.md documents how users should export stems for best results.
-- [ ] docs/06-roadmap.md clearly separates “now” vs “later.”
-What remains: split roadmap sections into explicit near-term vs later tracks and align them with `docs/STATUS.md` + `docs/milestones.yaml`.
+- [x] docs/06-roadmap.md clearly separates “now” vs “later.”
 
 ### 4.2 Ontology is stable and versioned
 - [x] ontology/*.yaml covers roles, features, issues, actions, params, units, evidence.

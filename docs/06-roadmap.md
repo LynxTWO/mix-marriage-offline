@@ -1,207 +1,94 @@
 # Roadmap
 
-This roadmap is a practical build plan for MMO. It is not a promise of dates. The priority is a stable, deterministic core first, then fast-evolving plugins.
-
-## Guiding rules
-
-- Core is deterministic: same inputs and settings produce the same outputs.
-- Core is strict: schemas and ontology IDs are enforced at every boundary.
-- Plugins can be creative, but gates are final.
-- Every result must be explainable: what, why, where, confidence.
-
-## Milestones
-
-### v0.1 Foundation
-
-Goal: agree on vocabulary and contracts before writing “mixing logic”.
-
-Definition of done:
-
-- Ontology YAMLs exist for roles, features, issues, actions, params, units, evidence, layouts, speakers.
-- Policy validation exists for downmix and safety gates.
-- Fixtures and CI run deterministically.
-
-Deliverables:
-
-- `ontology/` YAML source of truth
-- `ontology/policies/` downmix registry + packs
-- `tools/validate_policies.py` and `tools/run_policy_fixtures.py`
-- `schemas/validation_result.schema.json`
-
-### v0.2 Schema contracts
-
-Goal: lock down I/O so implementation cannot drift.
-
-Definition of done:
-
-- JSON schemas exist for:
-  - project input
-  - plugin manifest
-  - report output
-- All schemas are strict (no unknown fields by default) and use ontology IDs.
-- Docs reference schemas as the canonical contract.
-
-Deliverables:
-
-- `schemas/project.schema.json`
-- `schemas/plugin.schema.json`
-- `schemas/report.schema.json`
-
-### v0.3 Session ingest and validation
-
-Goal: load a stem folder into a session object with reproducible checksums.
-
-Definition of done:
-
-- Stem folder ingest produces:
-  - file list, durations, channel counts
-  - SHA-256 hashes for reproducibility
-  - consistent stem ordering rules
-- Validation catches common export failures:
-  - mismatched length
-  - missing tails
-  - inconsistent sample rate or channel layouts
-- Output is a validated “session manifest” JSON.
-
-Deliverables:
-
-- Core ingest module
-- Session manifest JSON output
-- Fixtures for bad exports (fail fast)
-
-### v0.4 Truth meters
-
-Goal: compute trusted, testable meters that every plugin can rely on.
-
-Definition of done:
-
-- Per stem and mix-sum meters:
-  - peak (dBFS)
-  - true peak (dBTP)
-  - loudness (LUFS-I) and LRA where available
-  - crest factor
-- All meters have:
-  - evidence objects with units
-  - versioned algorithm metadata
-  - deterministic outputs
-
-Deliverables:
-
-- Meter implementations (core)
-- Tests with fixture audio
-- Report JSON includes meter evidence
-
-### v0.5 First detectors and resolvers
-
-Goal: demonstrate the full loop: features -> issues -> actions -> gated plan.
-
-Definition of done:
-
-- At least one detector that emits issues with evidence.
-- At least one resolver that emits action recommendations with parameters.
-- Gates block unsafe actions by default.
-- Output includes a recall sheet that a human can apply in any DAW.
-
-Deliverables:
-
-- Reference detector: resonance or mud/harshness
-- Reference resolver: conservative EQ suggestions
-- Gated action plan output
-- Recall sheet exporter (CSV or TXT)
-
-### v0.6 Translation checks
-
-Goal: measure “will this survive real life” without guesswork.
-
-Definition of done:
-
-- Translation profiles simulated and re-measured:
-  - mono collapse
-  - phone-like band limiting
-  - earbuds fatigue risk
-  - car-like curve
-  - downmix translation (surround to stereo/mono)
-- Translation results include scores and evidence.
-
-Deliverables:
-
-- Translation profile definitions
-- Translation results in report JSON
-
-### v0.7 Optional safe rendering
-
-Goal: render conservative stem variants inside strict limits.
-
-Definition of done:
-
-- Rendering is opt-in.
-- Default is “never clip” and “no mix bus processing”.
-- Render manifests include applied actions and output checksums.
-
-Deliverables:
-
-- Safe renderer plugin reference implementation
-- Render manifest schema coverage
-- Render fixtures
-
-### v0.8 Immersive render targets and height support
-
-Goal: full immersive bed pipeline — 7.1.4 render targets, height detection, downmix QA.
-
-Definition of done:
-
-- Render targets registered for all four immersive layouts (5.1.2, 5.1.4, 7.1.2, 7.1.4).
-- Scene builder detects height bed candidates from channel count and emits advisory notes.
-- Downmix QA covers 7.1.4 → 5.1 and 7.1.4 → 2.0 composed fold-down paths.
-- Export guide documents immersive channel ordering and height air guidance.
-
-Deliverables:
-
-- `ontology/render_targets.yaml` — four `TARGET.IMMERSIVE.*` entries
-- `src/mmo/core/scene_builder.py` — `height_bed_714_candidate`, `height_bed_10ch_candidate` notes
-- `docs/07-export-guides.md` — immersive height section with table, CLI example
-- Tests: `test_immersive_render_targets.py` (registry + scene builder + downmix QA smoke)
-
-### v1.0 Stable core
-
-Goal: freeze the core contracts so the ecosystem can grow safely.
-
-Definition of done:
-
-- Public schema contracts are stable.
-- Ontology versioning and deprecation rules exist.
-- Plugins can evolve without breaking the core.
-
-## Ongoing work tracks
-
-### Fixtures and regression protection
-
-- Every new detector or resolver should land with a fixture.
-- Fixes must add a test so regressions cannot return.
-
-### Ontology governance
-
-- Additions require:
-  - clear label and description
-  - consistent naming and patterns
-  - minimal duplication
-- Deprecations must include a replacement plan.
-
-### Safety and bounded authority
-
-- Auto-apply stays conservative.
-- Approval-required actions remain approval-required unless a policy explicitly allows them.
-
-## Contribution sizing
-
-Good first contributions:
-
-- export guides and DAW checklists
-- small ontology additions with examples
-- new fixtures that catch real export failures
-
-Bigger contributions:
-
-- meter implementations with tests
-- plugin host and schema validation in runtime
-- translation profile work
+This roadmap is split into two tracks:
+
+- `NOW`: work required to reach `PROJECT_WHEN_COMPLETE.md`.
+- `LATER`: post-complete enhancements that do not block the completion gate.
+
+## NOW
+
+Top priorities:
+
+- Tauri desktop app + parity checklist
+- Plugin audio contract completion
+- Fallback sequencer + LFE approvals
+- Golden fixtures and tests
+
+PR placeholder convention used below:
+
+- Replace `OWNER/REPO` and `TBD` when opening a real PR.
+- Placeholder: [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+
+### Tauri Desktop App Parity Checklist
+
+- Goal: deliver a cross-platform Tauri desktop workflow that is parity-safe with CLI contracts and design guidance.
+- Open checklist references:
+- [PWC: loudness-compensated preview/A-B plus disclosed compensation](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: feature-driven presets without loudness jump surprises](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: GUI workflow parity with CLI](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: GUI design-system alignment](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: numeric controls support direct text entry](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: drag controls support fine-adjust modifier](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: units always visible with consistent rounding/display](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: A/B compare loudness compensation by default](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: control family coverage (knob/fader/toggle/etc.)](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: metering coverage (peak/RMS/true-peak/LUFS/multichannel)](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: visualizer coverage (waveform/spectrum/spectrogram/EQ)](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: dynamics/spatial views (GR/phase/vectorscope/transfer)](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: explainability overlays and change summary](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: macro controls with disclosed parameter mapping](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: mood/texture selector strategies](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: safe mode toggle for bounded creativity](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: reference matcher plus track/bus ranking guidance](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: A/B/C/D morphing controls](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: optional history scrub/timeline view](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: optional soundstage plus masking views](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: GUI layout validator CI coverage](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: global GUI scale / responsive scaling](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+
+### Plugin Audio Contract Completion
+
+- Goal: finish plugin/runtime contracts so channel semantics, determinism, and bounded-authority behavior are explicit and enforceable.
+- Open checklist references:
+- [PWC: plugin routing uses `ProcessContext.channel_order`](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: plugins cannot override explicit user intent](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: support at least 32 channels end-to-end](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: processing decisions must be approved/disclosed/undoable as required](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: typed plugin buffers with explicit channel semantics](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: plugin determinism purity constraints](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: medium/high-impact changes emitted as recommendations](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: object-vs-bed routing changes treated as high-impact](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: plugins declare multichannel/layout safety class](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: enforced fallback when plugin multichannel safety is not guaranteed](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+
+### Fallback Sequencer and LFE Approvals
+
+- Goal: complete the fallback sequence and explicit LFE approval path with deterministic reporting and safety re-checks.
+- Open checklist references:
+- [PWC: corrective-filter recommendations require approval and re-QA/backoff](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: explicit LFE stems are never silently retuned to mains](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: deterministic export finalization policy](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: explicit sample-rate handling policy](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: stable documented stage graph](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: per-stage evidence plus timing in render report](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: documented fallback strategy when gates fail](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: non-silent failure reporting with fallback attempts](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: rendered-file metadata traceability](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+
+### Golden Fixtures and Tests
+
+- Goal: close remaining CI and fixture-based completeness gates.
+- Open checklist references:
+- [PWC: ontology change policy is additive or version-bumped with migrations](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: golden fixtures prove required contracts](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: golden-audio test matrix coverage](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+- [PWC: regression test for failed downmix-gate fallback sequence](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
+
+## LATER
+
+Post-complete work that should not block `PROJECT_WHEN_COMPLETE.md`:
+
+- advanced spatial polish and psychoacoustic refinement beyond deterministic safety baselines
+- fancy UI extras and experimental visualization layers that exceed parity requirements
+- DAW hosting and deeper integration surfaces beyond current offline contract needs
+- additional exploratory workflows that trade strict scope for creative expansion
