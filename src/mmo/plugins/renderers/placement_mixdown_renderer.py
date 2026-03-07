@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, Iterator, List, Sequence
 from mmo.core.downmix import enforce_rendered_surround_similarity_gate
 from mmo.core.placement_policy import build_render_intent
 from mmo.core.scene_builder import build_scene_from_bus_plan, build_scene_from_session
+from mmo.dsp.buffer import AudioBufferF64, generic_channel_order
 from mmo.dsp.decoders import (
     detect_format_from_path,
     is_lossless_format_id,
@@ -943,18 +944,21 @@ def _apply_bed_decorrelation(
 
 def _mix_stem_chunk_into_buffer(
     *,
-    destination_chunk: list[float],
-    source_chunk: list[float],
-    frame_count: int,
-    channel_count: int,
+    destination_chunk: AudioBufferF64,
+    source_chunk: AudioBufferF64,
     state: _StemPassState,
 ) -> None:
+    if destination_chunk.sample_rate_hz != source_chunk.sample_rate_hz:
+        raise ValueError("source and destination buffers must share a sample rate")
+    if destination_chunk.frame_count < source_chunk.frame_count:
+        raise ValueError("destination chunk is smaller than source chunk")
+
     stem = state.stem
     source_index = 0
-    for frame_index in range(frame_count):
-        target_base = frame_index * channel_count
+    for frame_index in range(source_chunk.frame_count):
+        target_base = frame_index * destination_chunk.channels
         if stem.stem_channels == 1:
-            mono = float(source_chunk[source_index])
+            mono = float(source_chunk.data[source_index])
             source_index += 1
             for channel_index, gain in enumerate(stem.gain_vector):
                 if gain == 0.0:
@@ -966,24 +970,28 @@ def _mix_stem_chunk_into_buffer(
                     tap=decorrelation_tap,
                     delay_state=decorrelation_state,
                 )
-                destination_chunk[target_base + channel_index] += sample * gain
+                destination_chunk.data[target_base + channel_index] += sample * gain
             continue
 
         if stem.stereo_channel_wise:
-            left = float(source_chunk[source_index])
-            right = float(source_chunk[source_index + 1])
+            left = float(source_chunk.data[source_index])
+            right = float(source_chunk.data[source_index + 1])
             source_index += 2
             if stem.front_left_gain != 0.0:
-                destination_chunk[target_base + stem.front_left_idx] += left * stem.front_left_gain
+                destination_chunk.data[target_base + stem.front_left_idx] += (
+                    left * stem.front_left_gain
+                )
             if stem.front_right_gain != 0.0:
-                destination_chunk[target_base + stem.front_right_idx] += right * stem.front_right_gain
+                destination_chunk.data[target_base + stem.front_right_idx] += (
+                    right * stem.front_right_gain
+                )
             continue
 
         left = 0.0
         right = 0.0
         mono_sum = 0.0
         for source_channel_index in range(stem.stem_channels):
-            sample = float(source_chunk[source_index])
+            sample = float(source_chunk.data[source_index])
             source_index += 1
             mono_sum += sample
             if source_channel_index == 0:
@@ -1004,26 +1012,37 @@ def _mix_stem_chunk_into_buffer(
                 tap=decorrelation_tap,
                 delay_state=decorrelation_state,
             )
-            destination_chunk[target_base + channel_index] += sample * gain
+            destination_chunk.data[target_base + channel_index] += sample * gain
 
         if stem.front_left_gain != 0.0:
-            destination_chunk[target_base + stem.front_left_idx] += side * stem.front_left_gain
+            destination_chunk.data[target_base + stem.front_left_idx] += (
+                side * stem.front_left_gain
+            )
         if stem.front_right_gain != 0.0:
-            destination_chunk[target_base + stem.front_right_idx] -= side * stem.front_right_gain
+            destination_chunk.data[target_base + stem.front_right_idx] -= (
+                side * stem.front_right_gain
+            )
 
         if stem.wide_wrap_left_gain != 0.0 and isinstance(stem.wide_left_idx, int):
-            destination_chunk[target_base + stem.wide_left_idx] += side * stem.wide_wrap_left_gain
+            destination_chunk.data[target_base + stem.wide_left_idx] += (
+                side * stem.wide_wrap_left_gain
+            )
         if stem.wide_wrap_right_gain != 0.0 and isinstance(stem.wide_right_idx, int):
-            destination_chunk[target_base + stem.wide_right_idx] -= side * stem.wide_wrap_right_gain
+            destination_chunk.data[target_base + stem.wide_right_idx] -= (
+                side * stem.wide_wrap_right_gain
+            )
 
 
 def _run_mix_pass(
     *,
     prepared_stems: list[_PreparedStem],
-    channel_count: int,
+    channel_order: Sequence[str],
+    sample_rate_hz: int,
     layout_id: str,
-    on_chunk: Callable[[list[float], int], None],
+    on_chunk: Callable[[AudioBufferF64], None],
 ) -> tuple[int, int, list[str]]:
+    normalized_channel_order = tuple(channel_order)
+    channel_count = len(normalized_channel_order)
     states = [
         _StemPassState(
             stem=stem,
@@ -1053,7 +1072,12 @@ def _run_mix_pass(
 
     while True:
         any_active = False
-        mixed_chunk = [0.0] * (_RENDER_CHUNK_FRAMES * channel_count)
+        mixed_chunk = AudioBufferF64(
+            data=[0.0] * (_RENDER_CHUNK_FRAMES * channel_count),
+            channels=channel_count,
+            channel_order=normalized_channel_order,
+            sample_rate_hz=sample_rate_hz,
+        )
         mixed_frame_count = 0
 
         for state in states:
@@ -1075,14 +1099,20 @@ def _run_mix_pass(
             if not chunk:
                 continue
 
-            sample_count = len(chunk)
-            if sample_count % state.stem.stem_channels != 0:
+            try:
+                source_chunk = AudioBufferF64(
+                    data=chunk,
+                    channels=state.stem.stem_channels,
+                    channel_order=generic_channel_order(state.stem.stem_channels),
+                    sample_rate_hz=state.stem.render_sample_rate_hz,
+                )
+            except ValueError:
                 state.active = False
                 state.failed = True
                 notes.append(f"{layout_id}:{state.stem.stem_id}:decode_failed")
                 continue
 
-            frame_count = sample_count // state.stem.stem_channels
+            frame_count = source_chunk.frame_count
             if frame_count <= 0 or frame_count > _RENDER_CHUNK_FRAMES:
                 state.active = False
                 state.failed = True
@@ -1093,14 +1123,12 @@ def _run_mix_pass(
                 mixed_frame_count = frame_count
             _mix_stem_chunk_into_buffer(
                 destination_chunk=mixed_chunk,
-                source_chunk=chunk,
-                frame_count=frame_count,
-                channel_count=channel_count,
+                source_chunk=source_chunk,
                 state=state,
             )
 
         if mixed_frame_count > 0:
-            on_chunk(mixed_chunk, mixed_frame_count)
+            on_chunk(mixed_chunk.slice_frames(0, mixed_frame_count))
             total_frames += mixed_frame_count
 
         if not any_active:
@@ -1423,31 +1451,21 @@ def _prepare_layout_stems(
 def _update_chunk_peak_by_channel(
     *,
     peak_by_channel: list[float],
-    mixed_chunk: list[float],
-    frame_count: int,
-    channel_count: int,
+    mixed_chunk: AudioBufferF64,
 ) -> None:
-    for frame_index in range(frame_count):
-        frame_base = frame_index * channel_count
-        for channel_index in range(channel_count):
-            sample = abs(mixed_chunk[frame_base + channel_index])
-            if sample > peak_by_channel[channel_index]:
-                peak_by_channel[channel_index] = sample
+    for channel_index, sample in enumerate(mixed_chunk.peak_per_channel()):
+        if sample > peak_by_channel[channel_index]:
+            peak_by_channel[channel_index] = sample
 
 
 def _write_trimmed_chunk(
     *,
     handle: wave.Wave_write,
-    mixed_chunk: list[float],
-    frame_count: int,
-    channel_count: int,
+    mixed_chunk: AudioBufferF64,
     trim_linear: float,
 ) -> None:
-    sample_count = frame_count * channel_count
-    trimmed = [
-        _clamp_sample(mixed_chunk[index] * trim_linear)
-        for index in range(sample_count)
-    ]
+    trimmed_buffer = mixed_chunk.apply_gain_scalar(trim_linear)
+    trimmed = [_clamp_sample(sample) for sample in trimmed_buffer.data]
     handle.writeframes(_float_samples_to_pcm24_bytes(trimmed))
 
 
@@ -1459,12 +1477,13 @@ def _render_subbus_output(
     prepared_stems: list[_PreparedStem],
     trim_linear: float,
     sample_rate_hz: int,
-    channel_count: int,
+    channel_order: Sequence[str],
     bus_trim_db: float,
     stem_scene_refs: dict[str, dict[str, list[str]]],
 ) -> tuple[dict[str, Any] | None, list[str]]:
     if not prepared_stems:
         return None, []
+    channel_count = len(tuple(channel_order))
     rel_path = _bus_output_relative_path(
         output_dir=output_dir,
         layout_id=layout_id,
@@ -1483,21 +1502,25 @@ def _render_subbus_output(
         handle.setframerate(sample_rate_hz)
         _, pass_frames, pass_notes = _run_mix_pass(
             prepared_stems=prepared_stems,
-            channel_count=channel_count,
+            channel_order=channel_order,
+            sample_rate_hz=sample_rate_hz,
             layout_id=layout_id,
-            on_chunk=lambda chunk, frame_count: _write_trimmed_chunk(
+            on_chunk=lambda chunk: _write_trimmed_chunk(
                 handle=handle,
                 mixed_chunk=chunk,
-                frame_count=frame_count,
-                channel_count=channel_count,
                 trim_linear=trim_linear,
             ),
         )
         if pass_notes:
             notes.extend(pass_notes)
         if pass_frames <= 0:
-            silence = [0.0] * (_DEFAULT_SILENCE_FRAMES * channel_count)
-            handle.writeframes(_float_samples_to_pcm24_bytes(silence))
+            silence_buffer = AudioBufferF64(
+                data=[0.0] * (_DEFAULT_SILENCE_FRAMES * channel_count),
+                channels=channel_count,
+                channel_order=tuple(channel_order),
+                sample_rate_hz=sample_rate_hz,
+            )
+            handle.writeframes(_float_samples_to_pcm24_bytes(silence_buffer.data))
 
     output_sha = sha256_file(abs_path)
     stem_ids = sorted(stem.stem_id for stem in prepared_stems)
@@ -1545,7 +1568,7 @@ def _export_subbus_outputs(
     sends_by_stem: dict[str, dict[str, Any]],
     trim_linear: float,
     sample_rate_hz: int,
-    channel_count: int,
+    channel_order: Sequence[str],
     render_intent: dict[str, Any],
     stem_scene_refs: dict[str, dict[str, list[str]]],
 ) -> tuple[list[dict[str, Any]], list[str]]:
@@ -1585,7 +1608,7 @@ def _export_subbus_outputs(
             prepared_stems=bus_stems,
             trim_linear=trim_linear,
             sample_rate_hz=sample_rate_hz,
-            channel_count=channel_count,
+            channel_order=channel_order,
             bus_trim_db=bus_trim_db if bus_trim_db is not None else 0.0,
             stem_scene_refs=stem_scene_refs,
         )
@@ -1747,13 +1770,12 @@ def _mix_layout_from_intent(
     peak_by_channel = [0.0] * channel_count
     decoded_stems, pass1_frames, pass1_notes = _run_mix_pass(
         prepared_stems=prepared_stems,
-        channel_count=channel_count,
+        channel_order=normalized_channel_order,
+        sample_rate_hz=sample_rate_hz,
         layout_id=layout_id,
-        on_chunk=lambda chunk, frame_count: _update_chunk_peak_by_channel(
+        on_chunk=lambda chunk: _update_chunk_peak_by_channel(
             peak_by_channel=peak_by_channel,
             mixed_chunk=chunk,
-            frame_count=frame_count,
-            channel_count=channel_count,
         ),
     )
     if pass1_notes:
@@ -1822,21 +1844,25 @@ def _mix_layout_from_intent(
                 if rendered_audio:
                     _, pass2_frames, pass2_notes = _run_mix_pass(
                         prepared_stems=prepared_stems,
-                        channel_count=channel_count,
+                        channel_order=normalized_channel_order,
+                        sample_rate_hz=sample_rate_hz,
                         layout_id=layout_id,
-                        on_chunk=lambda chunk, frame_count: _write_trimmed_chunk(
+                        on_chunk=lambda chunk: _write_trimmed_chunk(
                             handle=handle,
                             mixed_chunk=chunk,
-                            frame_count=frame_count,
-                            channel_count=channel_count,
                             trim_linear=trim_linear,
                         ),
                     )
                     if pass2_notes:
                         notes.extend(pass2_notes)
                 if pass2_frames <= 0:
-                    silence = [0.0] * (_DEFAULT_SILENCE_FRAMES * channel_count)
-                    handle.writeframes(_float_samples_to_pcm24_bytes(silence))
+                    silence_buffer = AudioBufferF64(
+                        data=[0.0] * (_DEFAULT_SILENCE_FRAMES * channel_count),
+                        channels=channel_count,
+                        channel_order=tuple(normalized_channel_order),
+                        sample_rate_hz=sample_rate_hz,
+                    )
+                    handle.writeframes(_float_samples_to_pcm24_bytes(silence_buffer.data))
 
             output_sha = sha256_file(master_abs_path)
             outputs.append(
@@ -1886,7 +1912,7 @@ def _mix_layout_from_intent(
             sends_by_stem=sends_by_stem,
             trim_linear=trim_linear,
             sample_rate_hz=sample_rate_hz,
-            channel_count=channel_count,
+            channel_order=normalized_channel_order,
             render_intent=render_intent,
             stem_scene_refs=stem_scene_refs,
         )

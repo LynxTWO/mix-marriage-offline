@@ -15,6 +15,10 @@ Non-negotiables:
 - Keep DSP execution routed by ontology-backed `ProcessContext.channel_order`
   and semantic `SPK.*` IDs; do not reintroduce hard-coded slot assumptions or
   partial preset layout maps.
+- Keep chunk-level renderer and plugin-boundary audio transport on
+  `mmo.dsp.buffer.AudioBufferF64` so interleaved data keeps explicit
+  `channel_order` and `sample_rate_hz` metadata instead of reverting to raw
+  list math at conversion boundaries.
 - Keep GUI dashboard rendering deterministic (frame + surface snapshot signatures).
 - Route runtime progress/cancel/live-log wiring through `mmo.core.progress`
   and keep ETA/runtime diagnostics out of deterministic persisted artifacts.

@@ -84,6 +84,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Typed `AudioBufferF64` transport for renderer/plugin-chain audio boundaries:
+  baseline mixdown, placement mixdown, and gain-trim renderer chunk handling
+  now use explicit interleaved buffer metadata (`channel_order`,
+  `channel_count`, `sample_rate_hz`) instead of ad hoc raw-list math, and the
+  stereo plugin-chain runner now centralizes deterministic typed-buffer
+  conversion at the plugin boundary.
+
 - DSP `ProcessContext` routing contract:
   - Added `src/mmo/dsp/process_context.py` as the ontology-backed DSP truth
     object (`layout_id`, `layout_standard`, `channel_order`, `sample_rate_hz`,

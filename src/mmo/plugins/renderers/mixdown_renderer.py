@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
+from mmo.dsp.buffer import AudioBufferF64, generic_channel_order
 from mmo.dsp.decoders import (
     detect_format_from_path,
     is_lossless_format_id,
@@ -289,6 +290,7 @@ def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
                 }
             )
         try:
+            source_channel_order = generic_channel_order(plan.channels)
             for chunk in iter_audio_float64_samples(
                 plan.source_path,
                 error_context="baseline mixdown renderer",
@@ -300,35 +302,39 @@ def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
             ):
                 if not chunk:
                     continue
-                frame_count = len(chunk) // plan.channels
-                if frame_count <= 0 or frame_count * plan.channels != len(chunk):
-                    raise ValueError("decoder returned non-frame-aligned data")
+                chunk_buffer = AudioBufferF64(
+                    data=chunk,
+                    channels=plan.channels,
+                    channel_order=source_channel_order,
+                    sample_rate_hz=sample_rate_hz,
+                )
+                frame_count = chunk_buffer.frame_count
+                if frame_count <= 0:
+                    continue
 
                 needed = (frame_cursor + frame_count) - len(left)
                 if needed > 0:
                     left.extend([0.0] * needed)
                     right.extend([0.0] * needed)
 
-                chunk_peak = max(abs(sample) for sample in chunk)
+                chunk_peak = max(chunk_buffer.peak_per_channel())
                 if chunk_peak > stem_peak:
                     stem_peak = chunk_peak
 
-                idx = 0
+                planar_chunk = chunk_buffer.to_planar_lists()
                 if plan.channels == 1:
-                    for frame_index in range(frame_count):
-                        value = chunk[idx]
-                        idx += 1
+                    mono_samples = planar_chunk[0]
+                    for frame_index, value in enumerate(mono_samples):
                         target_index = frame_cursor + frame_index
                         left[target_index] += value
                         right[target_index] += value
                 else:
+                    left_channel = planar_chunk[0]
+                    right_channel = planar_chunk[1]
                     for frame_index in range(frame_count):
-                        value_l = chunk[idx]
-                        value_r = chunk[idx + 1]
-                        idx += plan.channels
                         target_index = frame_cursor + frame_index
-                        left[target_index] += value_l
-                        right[target_index] += value_r
+                        left[target_index] += left_channel[frame_index]
+                        right[target_index] += right_channel[frame_index]
 
                 frame_cursor += frame_count
 
@@ -398,13 +404,14 @@ def _speaker_sample(
     return 0.0
 
 
-def _layout_interleaved_samples(
+def _layout_audio_buffer(
     layout_channel_order: Sequence[str],
     *,
     left: Sequence[float],
     right: Sequence[float],
     trim_linear: float,
-) -> list[float]:
+    sample_rate_hz: int,
+) -> AudioBufferF64:
     interleaved: list[float] = []
     frame_count = min(len(left), len(right))
     for frame_index in range(frame_count):
@@ -420,7 +427,12 @@ def _layout_interleaved_samples(
                     center=sample_c,
                 )
             )
-    return interleaved
+    return AudioBufferF64(
+        data=interleaved,
+        channels=len(layout_channel_order),
+        channel_order=tuple(layout_channel_order),
+        sample_rate_hz=sample_rate_hz,
+    )
 
 
 def _float_samples_to_pcm24_bytes(samples: Sequence[float]) -> bytes:
@@ -442,16 +454,14 @@ def _float_samples_to_pcm24_bytes(samples: Sequence[float]) -> bytes:
 def _write_pcm24_wav(
     output_path: Path,
     *,
-    interleaved_samples: Sequence[float],
-    channel_count: int,
-    sample_rate_hz: int,
+    buffer: AudioBufferF64,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(output_path), "wb") as handle:
-        handle.setnchannels(channel_count)
+        handle.setnchannels(buffer.channels)
         handle.setsampwidth(3)
-        handle.setframerate(sample_rate_hz)
-        handle.writeframes(_float_samples_to_pcm24_bytes(interleaved_samples))
+        handle.setframerate(buffer.sample_rate_hz)
+        handle.writeframes(_float_samples_to_pcm24_bytes(buffer.data))
 
 
 def _layout_slug(layout_id: str) -> str:
@@ -513,19 +523,18 @@ class MixdownRenderer(RendererPlugin):
             if not channel_order:
                 continue
 
-            interleaved = _layout_interleaved_samples(
+            output_buffer = _layout_audio_buffer(
                 channel_order,
                 left=program.left,
                 right=program.right,
                 trim_linear=trim_linear,
+                sample_rate_hz=program.sample_rate_hz,
             )
             rel_path = _output_relative_path(output_dir=out_dir, layout_id=layout_id)
             abs_path = out_dir / rel_path
             _write_pcm24_wav(
                 abs_path,
-                interleaved_samples=interleaved,
-                channel_count=len(channel_order),
-                sample_rate_hz=program.sample_rate_hz,
+                buffer=output_buffer,
             )
             output_sha = sha256_file(abs_path)
             layout_slug = _layout_slug(layout_id)
@@ -534,9 +543,9 @@ class MixdownRenderer(RendererPlugin):
                 "file_path": rel_path.as_posix(),
                 "layout_id": layout_id,
                 "format": "wav",
-                "sample_rate_hz": program.sample_rate_hz,
+                "sample_rate_hz": output_buffer.sample_rate_hz,
                 "bit_depth": 24,
-                "channel_count": len(channel_order),
+                "channel_count": output_buffer.channels,
                 "sha256": output_sha,
                 "notes": (
                     f"baseline_mixdown trim_db={trim_db:.4f}"
@@ -552,7 +561,7 @@ class MixdownRenderer(RendererPlugin):
                     "measured_stem_count": program.measured_stem_count,
                     "worst_case_peak_sum": program.worst_case_peak_sum,
                     "target_layout_id": layout_id,
-                    "channel_order": channel_order,
+                    "channel_order": list(output_buffer.channel_order),
                     "resampling": program.resampling,
                     "center_policy": (
                         "0.5*(L+R)*center_reduction for SPK.C"

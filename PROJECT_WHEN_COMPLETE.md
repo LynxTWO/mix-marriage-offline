@@ -384,6 +384,10 @@ What remains: the core DSP path is functional, but formalized fallback sequencin
 - [x] Renderer manifests include measurable truth contracts via
   `capabilities.dsp_traits.measurable_claims`.
 - [ ] Plugins operate on typed buffers with explicit channel semantics (not “raw arrays”).
+  Progress note: renderer chunk transport now uses `mmo.dsp.buffer.AudioBufferF64`
+  for explicit interleaved/channel-order/sample-rate semantics, and the
+  stereo plugin-chain runner now centralizes deterministic typed-buffer
+  adapters at the plugin boundary.
 - [ ] Plugins must be pure with respect to determinism:
   - [ ] No internal randomness unless seeded from the provided seed.
   - [ ] No wall-clock/time-based behavior.

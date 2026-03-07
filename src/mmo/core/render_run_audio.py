@@ -16,6 +16,7 @@ from mmo.core.media_tags import TagBag, empty_tag_bag, merge_tag_bags, tag_bag_f
 from mmo.core.render_execute import resolve_ffmpeg_version
 from mmo.core.render_reporting import build_render_report_from_plan
 from mmo.core.tag_export import build_ffmpeg_tag_export_args, metadata_receipt_mapping
+from mmo.dsp.buffer import AudioBufferF64
 from mmo.dsp.backends.ffmpeg_decode import (
     build_ffmpeg_decode_command,
     iter_ffmpeg_float64_samples,
@@ -51,6 +52,7 @@ _SOURCE_EXTENSIONS = _WAV_EXTENSIONS | _FFMPEG_EXTENSIONS | _LOSSY_EXTENSIONS
 _BIT_DEPTHS = frozenset({16, 24, 32})
 _INTERMEDIATE_ROOT = ".mmo_tmp/render_run"
 _FLOAT_MAX = math.nextafter(1.0, 0.0)
+_STEREO_CHANNEL_ORDER = ("SPK.L", "SPK.R")
 _GAIN_V0_PLUGIN_ID = "gain_v0"
 _TILT_EQ_V0_PLUGIN_ID = "tilt_eq_v0"
 _SIMPLE_COMPRESSOR_V0_PLUGIN_ID = "simple_compressor_v0"
@@ -1846,22 +1848,17 @@ def _render_wav_with_plugin_chain(
 
     source_where: list[str] = []
     if source_samples_interleaved is None:
-        stereo_samples = _read_stereo_source_samples(
+        rendered_buffer = _read_stereo_source_buffer(
             source_path,
             ffmpeg_cmd=ffmpeg_cmd_for_decode,
-            dtype=processing_dtype,
+            sample_rate_hz=sample_rate_hz,
         )
         source_where = [source_path.resolve().as_posix()]
     else:
-        if len(source_samples_interleaved) % 2 != 0:
-            raise RenderRunRefusalError(
-                issue_id=ISSUE_RENDER_RUN_DECODE_FAILED,
-                message="Decoded sample stream is not frame-aligned for stereo.",
-            )
-        stereo_samples = np.asarray(
+        rendered_buffer = _stereo_audio_buffer_from_interleaved_samples(
             source_samples_interleaved,
-            dtype=processing_dtype,
-        ).reshape(-1, 2)
+            sample_rate_hz=sample_rate_hz,
+        )
         source_where = [
             _coerce_str(path).strip()
             for path in (source_evidence_paths or [])
@@ -1869,7 +1866,7 @@ def _render_wav_with_plugin_chain(
         ]
         if not source_where:
             source_where = [source_path.resolve().as_posix()]
-    frame_count = int(stereo_samples.shape[0])
+    frame_count = rendered_buffer.frame_count
 
     output_posix = output_path.resolve().as_posix()
     process_ctx = build_process_context(
@@ -1899,7 +1896,6 @@ def _render_wav_with_plugin_chain(
         },
     ]
 
-    rendered = stereo_samples
     for stage_index, stage in enumerate(plugin_chain, start=1):
         plugin_id = _coerce_str(stage.get("plugin_id")).strip().lower()
         params = _coerce_dict(stage.get("params"))
@@ -1922,12 +1918,22 @@ def _render_wav_with_plugin_chain(
             stage_index=stage_index,
         )
         try:
-            rendered = plugin_impl.process_stereo(
-                rendered,
+            rendered_matrix = _audio_buffer_to_numpy_frame_matrix(
+                rendered_buffer,
+                np=np,
+                dtype=processing_dtype,
+            )
+            rendered_matrix = plugin_impl.process_stereo(
+                rendered_matrix,
                 sample_rate_hz,
                 params,
                 plugin_context,
                 process_ctx,
+            )
+            rendered_buffer = _numpy_frame_matrix_to_audio_buffer(
+                rendered_matrix,
+                np=np,
+                template=rendered_buffer,
             )
         except PluginValidationError as exc:
             raise RenderRunRefusalError(
@@ -1955,10 +1961,9 @@ def _render_wav_with_plugin_chain(
             },
         )
 
-    _write_stereo_pcm_wav_from_float_samples(
-        float_samples=rendered,
+    _write_stereo_pcm_wav_from_audio_buffer(
+        audio_buffer=rendered_buffer,
         output_path=output_path,
-        sample_rate_hz=sample_rate_hz,
         bit_depth=bit_depth,
     )
     step_events.append(
@@ -1986,14 +1991,31 @@ def _render_wav_with_plugin_chain(
     return step_events
 
 
-def _read_stereo_source_samples(
-    path: Path,
+def _stereo_audio_buffer_from_interleaved_samples(
+    float_samples: Sequence[float],
     *,
-    ffmpeg_cmd: Sequence[str] | None,
+    sample_rate_hz: int,
+) -> AudioBufferF64:
+    try:
+        return AudioBufferF64(
+            data=[float(sample) for sample in float_samples],
+            channels=2,
+            channel_order=_STEREO_CHANNEL_ORDER,
+            sample_rate_hz=sample_rate_hz,
+        )
+    except ValueError as exc:
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_DECODE_FAILED,
+            message="Decoded sample stream is not frame-aligned for stereo.",
+        ) from exc
+
+
+def _audio_buffer_to_numpy_frame_matrix(
+    audio_buffer: AudioBufferF64,
+    *,
+    np: Any,
     dtype: Any,
 ) -> Any:
-    import numpy as np
-
     requested_dtype = np.dtype(dtype)
     if requested_dtype not in {np.dtype(np.float32), np.dtype(np.float64)}:
         raise RenderRunRefusalError(
@@ -2003,7 +2025,40 @@ def _read_stereo_source_samples(
                 f"{requested_dtype.name}. Expected float32 or float64."
             ),
         )
+    return np.asarray(audio_buffer.data, dtype=requested_dtype).reshape(
+        audio_buffer.frame_count,
+        audio_buffer.channels,
+    )
 
+
+def _numpy_frame_matrix_to_audio_buffer(
+    frame_matrix: Any,
+    *,
+    np: Any,
+    template: AudioBufferF64,
+) -> AudioBufferF64:
+    samples = np.asarray(frame_matrix)
+    if samples.ndim != 2 or samples.shape[1] != template.channels:
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+            message=(
+                "Plugin-chain runner expects a stereo float32/float64 sample matrix."
+            ),
+        )
+    return AudioBufferF64(
+        data=[float(sample) for sample in samples.reshape(-1)],
+        channels=template.channels,
+        channel_order=template.channel_order,
+        sample_rate_hz=template.sample_rate_hz,
+    )
+
+
+def _read_stereo_source_buffer(
+    path: Path,
+    *,
+    ffmpeg_cmd: Sequence[str] | None,
+    sample_rate_hz: int,
+) -> AudioBufferF64:
     source_extension = path.suffix.lower()
     float_samples_iter: Iterator[list[float]]
     if source_extension in _WAV_EXTENSIONS:
@@ -2019,53 +2074,47 @@ def _read_stereo_source_samples(
             )
         float_samples_iter = iter_ffmpeg_float64_samples(path, ffmpeg_cmd)
 
-    chunks: list[Any] = []
+    interleaved: list[float] = []
     for float_samples in float_samples_iter:
-        if len(float_samples) % 2 != 0:
-            raise RenderRunRefusalError(
-                issue_id=ISSUE_RENDER_RUN_DECODE_FAILED,
-                message="Decoded sample stream is not frame-aligned for stereo.",
-            )
         if not float_samples:
             continue
-        chunk = np.asarray(float_samples, dtype=requested_dtype).reshape(-1, 2)
-        chunks.append(chunk)
-    if not chunks:
-        return np.zeros((0, 2), dtype=requested_dtype)
-    return np.concatenate(chunks, axis=0).astype(requested_dtype, copy=False)
+        chunk_buffer = _stereo_audio_buffer_from_interleaved_samples(
+            float_samples,
+            sample_rate_hz=sample_rate_hz,
+        )
+        interleaved.extend(chunk_buffer.data)
+    return _stereo_audio_buffer_from_interleaved_samples(
+        interleaved,
+        sample_rate_hz=sample_rate_hz,
+    )
 
 
-def _write_stereo_pcm_wav_from_float_samples(
+def _write_stereo_pcm_wav_from_audio_buffer(
     *,
-    float_samples: Any,
+    audio_buffer: AudioBufferF64,
     output_path: Path,
-    sample_rate_hz: int,
     bit_depth: int,
 ) -> None:
-    import numpy as np
-
     if bit_depth not in _BIT_DEPTHS:
         raise RenderRunRefusalError(
             issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
             message=f"Unsupported output bit depth: {bit_depth}",
         )
 
-    samples = np.asarray(float_samples, dtype=np.float64)
-    if samples.ndim != 2 or samples.shape[1] != 2:
+    if audio_buffer.channels != 2:
         raise RenderRunRefusalError(
             issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
             message=(
                 "Plugin-chain runner expects a stereo float32/float64 sample matrix."
             ),
         )
-    interleaved = samples.reshape(-1)
-    pcm_bytes = _float_samples_to_pcm_bytes(interleaved, bit_depth)
+    pcm_bytes = _float_samples_to_pcm_bytes(audio_buffer.data, bit_depth)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(output_path), "wb") as handle:
         handle.setnchannels(2)
         handle.setsampwidth(bit_depth // 8)
-        handle.setframerate(sample_rate_hz)
+        handle.setframerate(audio_buffer.sample_rate_hz)
         handle.writeframes(pcm_bytes)
 
 

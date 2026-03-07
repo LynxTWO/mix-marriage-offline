@@ -7,6 +7,7 @@ import wave
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Sequence
 
+from mmo.dsp.buffer import AudioBufferF64, generic_channel_order
 from mmo.core.layout_export import (
     dual_lfe_wav_export_warnings,
     ffmpeg_layout_string_from_channel_order,
@@ -257,23 +258,35 @@ def _route_mapping_entries(
     return entries
 
 
+def _buffer_channel_order(layout_id: str, channels: int) -> tuple[str, ...]:
+    layout_channel_order = tuple(_layout_channel_order(layout_id))
+    if len(layout_channel_order) == channels:
+        return layout_channel_order
+    return generic_channel_order(channels)
+
+
 def _apply_route_mapping(
-    aligned_samples: list[float],
+    aligned_buffer: AudioBufferF64,
     *,
-    source_channels: int,
-    target_channels: int,
+    target_channel_order: Sequence[str],
     mapping: List[tuple[int, int, float]],
-) -> list[float]:
-    frame_count = len(aligned_samples) // source_channels
-    routed_samples = [0.0] * (frame_count * target_channels)
-    for frame_index in range(frame_count):
-        source_offset = frame_index * source_channels
+) -> AudioBufferF64:
+    normalized_target_channel_order = tuple(target_channel_order)
+    target_channels = len(normalized_target_channel_order)
+    routed_samples = [0.0] * (aligned_buffer.frame_count * target_channels)
+    for frame_index in range(aligned_buffer.frame_count):
+        source_offset = frame_index * aligned_buffer.channels
         target_offset = frame_index * target_channels
         for src_ch, dst_ch, gain_scalar in mapping:
             routed_samples[target_offset + dst_ch] += (
-                aligned_samples[source_offset + src_ch] * gain_scalar
+                aligned_buffer.data[source_offset + src_ch] * gain_scalar
             )
-    return routed_samples
+    return AudioBufferF64(
+        data=routed_samples,
+        channels=target_channels,
+        channel_order=normalized_target_channel_order,
+        sample_rate_hz=aligned_buffer.sample_rate_hz,
+    )
 
 
 def _iter_wav_samples_for_render(source_path: Path) -> Iterator[list[float]]:
@@ -294,8 +307,10 @@ def _render_gain_trim(
     *,
     bits_per_sample: int,
     channels: int,
+    source_channel_order: Sequence[str],
     sample_rate_hz: int,
     target_channels: int | None = None,
+    target_channel_order: Sequence[str] | None = None,
     route_mapping: List[tuple[int, int, float]] | None = None,
 ) -> None:
     gain_scalar = _db_to_linear(gain_db)
@@ -303,10 +318,20 @@ def _render_gain_trim(
     pending_samples: list[float] = []
     source_frame_width = channels
     output_frame_width = channels if target_channels is None else target_channels
+    normalized_source_channel_order = tuple(source_channel_order)
     if output_frame_width <= 0:
         raise ValueError("target channel count must be > 0")
+    if len(normalized_source_channel_order) != source_frame_width:
+        raise ValueError("source_channel_order length must match channels")
     if route_mapping is None and output_frame_width != source_frame_width:
         raise ValueError("target channel count mismatch without route mapping")
+    normalized_target_channel_order = (
+        tuple(target_channel_order)
+        if target_channel_order is not None
+        else normalized_source_channel_order
+    )
+    if len(normalized_target_channel_order) != output_frame_width:
+        raise ValueError("target_channel_order length must match output channels")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(output_path), "wb") as out_handle:
@@ -315,26 +340,38 @@ def _render_gain_trim(
         out_handle.setframerate(sample_rate_hz)
 
         for float_samples in float_samples_iter:
-            pending_samples.extend(float_samples)
+            incoming_buffer = AudioBufferF64(
+                data=float_samples,
+                channels=source_frame_width,
+                channel_order=normalized_source_channel_order,
+                sample_rate_hz=sample_rate_hz,
+            )
+            pending_samples.extend(incoming_buffer.data)
             aligned_sample_count = (
                 len(pending_samples) // source_frame_width
             ) * source_frame_width
             if aligned_sample_count <= 0:
                 continue
-            aligned_samples = pending_samples[:aligned_sample_count]
+            aligned_buffer = AudioBufferF64(
+                data=pending_samples[:aligned_sample_count],
+                channels=source_frame_width,
+                channel_order=normalized_source_channel_order,
+                sample_rate_hz=sample_rate_hz,
+            )
             pending_samples = pending_samples[aligned_sample_count:]
+            output_buffer = aligned_buffer
             if route_mapping is not None:
-                aligned_samples = _apply_route_mapping(
-                    aligned_samples,
-                    source_channels=source_frame_width,
-                    target_channels=output_frame_width,
+                output_buffer = _apply_route_mapping(
+                    aligned_buffer,
+                    target_channel_order=normalized_target_channel_order,
                     mapping=route_mapping,
                 )
+            output_buffer = output_buffer.apply_gain_scalar(gain_scalar)
 
             int_samples = _dithered_int_samples(
-                aligned_samples,
+                output_buffer.data,
                 bits_per_sample,
-                gain_scalar,
+                1.0,
                 rng,
             )
             out_handle.writeframes(_int_samples_to_bytes(int_samples, bits_per_sample))
@@ -574,6 +611,10 @@ class GainTrimRenderer(RendererPlugin):
                 _append_skipped(skipped, contributions, "unsupported_format")
                 continue
 
+            source_channel_order = _buffer_channel_order(
+                routing_source_layout_id.strip() or session_source_layout_id,
+                channels,
+            )
             output_channels = channels
             route_mapping: List[tuple[int, int, float]] | None = None
             route_notes: List[str] = []
@@ -606,6 +647,16 @@ class GainTrimRenderer(RendererPlugin):
                     route_notes = _route_notes(route)
                     routing_applied = True
 
+            output_layout_id = (
+                routing_target_layout_id.strip()
+                if routing_applied and routing_target_layout_id.strip()
+                else session_source_layout_id
+            )
+            output_channel_order_for_buffer = _buffer_channel_order(
+                output_layout_id,
+                output_channels,
+            )
+
             try:
                 _render_gain_trim(
                     render_samples_iter,
@@ -613,8 +664,10 @@ class GainTrimRenderer(RendererPlugin):
                     applied_gain_db,
                     bits_per_sample=bits_per_sample,
                     channels=channels,
+                    source_channel_order=source_channel_order,
                     sample_rate_hz=sample_rate_hz,
                     target_channels=output_channels,
+                    target_channel_order=output_channel_order_for_buffer,
                     route_mapping=route_mapping,
                 )
             except ValueError:
@@ -645,11 +698,6 @@ class GainTrimRenderer(RendererPlugin):
                 if route_notes:
                     metadata["routing_notes"] = route_notes
 
-            output_layout_id = (
-                routing_target_layout_id.strip()
-                if routing_applied and routing_target_layout_id.strip()
-                else session_source_layout_id
-            )
             output_channel_order = _layout_channel_order(output_layout_id)
             if len(output_channel_order) != output_channels:
                 output_layout_id = ""
