@@ -129,12 +129,15 @@ __all__ = [
     "_render_plugin_market_update_text",
     "_render_plugin_market_install_text",
     "_build_plugins_list_payload",
+    "_build_plugins_validate_payload",
     "_build_plugins_ui_lint_payload",
     "_build_plugins_show_payload",
     "_build_plugins_self_test_payload",
     "_render_plugins_list_text",
+    "_render_plugins_validate_text",
     "_render_plugins_ui_lint_text",
     "_render_plugins_show_text",
+    "_plugins_validate_has_errors",
     "_plugins_ui_lint_has_errors",
     "_print_lock_verify_summary",
 ]
@@ -1743,6 +1746,21 @@ def _build_plugins_list_payload(*, plugins_dir: Path) -> list[dict[str, Any]]:
     return payload
 
 
+def _build_plugins_validate_payload(
+    *,
+    plugins_dir: Path | None,
+    bundled_only: bool,
+) -> dict[str, Any]:
+    from mmo.core.plugin_validation import (  # noqa: WPS433
+        build_plugin_validation_payload,
+    )
+
+    return build_plugin_validation_payload(
+        plugins_dir=plugins_dir,
+        bundled_only=bundled_only,
+    )
+
+
 def _build_plugin_market_list_payload(
     *,
     plugins_dir: Path,
@@ -1869,6 +1887,48 @@ def _plugins_ui_lint_has_errors(payload: dict[str, Any]) -> bool:
         return False
     error_count = issue_counts.get("error")
     return isinstance(error_count, int) and error_count > 0
+
+
+def _plugins_validate_has_errors(payload: dict[str, Any]) -> bool:
+    issue_counts = payload.get("issue_counts")
+    if not isinstance(issue_counts, dict):
+        return False
+    error_count = issue_counts.get("error")
+    return isinstance(error_count, int) and error_count > 0
+
+
+def _render_plugins_validate_text(payload: dict[str, Any]) -> str:
+    plugin_count = payload.get("plugin_count")
+    plugins_dir = _coerce_str(payload.get("plugins_dir")).strip() or "-"
+    issues = payload.get("issues")
+    plugins = payload.get("plugins")
+    if (
+        not isinstance(plugin_count, int)
+        or not isinstance(issues, list)
+        or not isinstance(plugins, list)
+    ):
+        return "(invalid payload)"
+
+    header = "Plugin validation OK" if payload.get("ok") is True else "Plugin validation failed"
+    lines = [f"{header} ({plugin_count} plugin(s)) from {plugins_dir}."]
+
+    if payload.get("ok") is True:
+        for plugin in plugins:
+            if not isinstance(plugin, dict):
+                continue
+            plugin_id = _coerce_str(plugin.get("plugin_id")).strip()
+            plugin_type = _coerce_str(plugin.get("plugin_type")).strip() or "-"
+            version = _coerce_str(plugin.get("version")).strip() or "-"
+            lines.append(f"- {plugin_id} [{plugin_type}] v{version}")
+        return "\n".join(lines)
+
+    for issue in issues:
+        if not isinstance(issue, dict):
+            continue
+        path = _coerce_str(issue.get("path")).strip() or "-"
+        message = _coerce_str(issue.get("message")).strip() or "Validation failed."
+        lines.append(f"- {path}: {message}")
+    return "\n".join(lines)
 
 
 def _render_plugins_ui_lint_text(payload: dict[str, Any]) -> str:

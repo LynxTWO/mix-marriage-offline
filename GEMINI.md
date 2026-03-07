@@ -99,6 +99,10 @@ Non-negotiables:
 - Keep the isolated Tauri desktop scaffold install-safe:
   `gui/desktop-tauri` should remain self-contained, Vite-based, and free of
   repo-root path assumptions.
+- Keep the Tauri desktop app sidecar-driven and offline:
+  stage the frozen `mmo` CLI via the repo's binary builder, bundle it through
+  `externalBin`, and use the Doctor screen to verify sidecar execution plus
+  bundled data/plugin path resolution without system Python/Node installs.
 - Keep desktop Tauri CI building release binaries on Linux, macOS, and Windows:
   frontend lint/test steps should stay install-safe, and artifact uploads
   should come from `gui/desktop-tauri/src-tauri/target/release/`.

@@ -199,3 +199,23 @@ def load_registered_plugins(
         loaded_by_root,
         built_in_root=packaged_plugins_dir(),
     )
+
+
+def load_plugin_root_entries(plugins_dir: Path) -> list["PluginEntry"]:
+    """Validate and load plugins from exactly one plugin root."""
+    from mmo.core.pipeline import PluginEntry, _load_plugins_from_dir  # noqa: WPS433
+
+    resolved_plugins_dir = plugins_dir.expanduser().resolve()
+    if not resolved_plugins_dir.exists():
+        raise ValueError(
+            f"Plugins directory does not exist: {resolved_plugins_dir.as_posix()}"
+        )
+    if not resolved_plugins_dir.is_dir():
+        raise ValueError(
+            f"Plugins path is not a directory: {resolved_plugins_dir.as_posix()}"
+        )
+
+    _validate_plugin_root(resolved_plugins_dir)
+    with _plugin_import_paths(resolved_plugins_dir):
+        entries: list[PluginEntry] = _load_plugins_from_dir(resolved_plugins_dir)
+    return entries

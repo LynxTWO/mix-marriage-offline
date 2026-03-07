@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
+from mmo import __version__ as _MMO_VERSION
+
 # ── Transcode constants (stdlib-only dep, always safe) ──────────────────────
 try:
     from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS
@@ -205,6 +207,11 @@ def _resolve_user_profile_arg(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="MMO command-line tools.")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {_MMO_VERSION}",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     scan_parser = subparsers.add_parser("scan", help="Scan stems and write a report JSON.")
@@ -1849,6 +1856,26 @@ def main(argv: list[str] | None = None) -> int:
         choices=["json", "text"],
         default="text",
         help="Output format for the plugin list.",
+    )
+    plugins_validate_parser = plugins_subparsers.add_parser(
+        "validate",
+        help="Validate a plugin root or the bundled plugin set.",
+    )
+    plugins_validate_parser.add_argument(
+        "--plugins",
+        default="plugins",
+        help="Path to plugins directory.",
+    )
+    plugins_validate_parser.add_argument(
+        "--bundled-only",
+        action="store_true",
+        help="Validate only the packaged built-in plugin directory.",
+    )
+    plugins_validate_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format for plugin validation.",
     )
     plugins_ui_lint_parser = plugins_subparsers.add_parser(
         "ui-lint",
@@ -6399,6 +6426,26 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(_render_plugins_list_text(payload))
             return 0
+
+        if args.plugins_command == "validate":
+            try:
+                payload = _build_plugins_validate_payload(
+                    plugins_dir=(
+                        None
+                        if bool(getattr(args, "bundled_only", False))
+                        else Path(args.plugins)
+                    ),
+                    bundled_only=bool(getattr(args, "bundled_only", False)),
+                )
+            except (RuntimeError, ValueError, AttributeError, ImportError, OSError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            if args.format == "json":
+                print(json.dumps(payload, indent=2, sort_keys=True))
+            else:
+                print(_render_plugins_validate_text(payload))
+            return 2 if _plugins_validate_has_errors(payload) else 0
 
         if args.plugins_command == "ui-lint":
             try:

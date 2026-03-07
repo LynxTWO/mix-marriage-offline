@@ -93,6 +93,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - CI now uploads one desktop binary artifact per OS from
     `gui/desktop-tauri/src-tauri/target/release/`.
 
+- Tauri MMO sidecar packaging + Doctor screen:
+  - Added a Tauri sidecar preparation flow that freezes the `mmo` CLI with
+    bundled `mmo.data` using the existing Python binary builder, then stages
+    the result under `gui/desktop-tauri/src-tauri/binaries/` using the exact
+    Rust target triple that Tauri expects for `bundle.externalBin`.
+  - Wired `tauri.conf.json`, Rust plugin initialization, capabilities, and the
+    desktop package scripts so `tauri dev` / `tauri build` can execute the
+    packaged `mmo` sidecar through `@tauri-apps/plugin-shell`.
+  - Replaced the scaffold handshake UI with a Doctor screen that runs
+    `mmo --version`, `mmo plugins validate --bundled-only`, and
+    `mmo env doctor --format json`, then displays the bundled plugins path and
+    resolved runtime data/cache/temp paths reported by the sidecar itself.
+  - Added `mmo --version` plus a deterministic `mmo plugins validate`
+    contract so packaged desktop flows can verify bundled plugin manifests and
+    entrypoints without relying on external Python installs.
+
 - Ontology additive-change enforcement:
   - Added `tools/validate_ontology_changes.py` to diff ontology IDs against
     `main` and fail on removals without required guards.
