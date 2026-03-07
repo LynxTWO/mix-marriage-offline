@@ -172,6 +172,59 @@ button:hover {
   margin-top: 0.65rem;
 }
 
+.dashboard-visual-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 0.85rem;
+}
+
+.dashboard-visual-card {
+  border: 1px solid #d6e2e9;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 15% 15%, rgba(4, 89, 130, 0.08), transparent 36%),
+    linear-gradient(160deg, #fbfdff 0%, #f2f6f9 100%);
+  padding: 0.75rem;
+}
+
+.dashboard-canvas {
+  width: 100%;
+  display: block;
+  border: 1px solid #d7e2ea;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #0d1317 0%, #162127 100%);
+}
+
+.dashboard-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+
+.dashboard-summary-chip {
+  border: 1px solid #d2dde5;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 0.45rem 0.55rem;
+}
+
+.dashboard-summary-label {
+  display: block;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #61717d;
+}
+
+.dashboard-summary-value {
+  display: block;
+  margin-top: 0.16rem;
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: #20303a;
+}
+
 .chain-container {
   display: grid;
   gap: 0.75rem;
@@ -205,19 +258,29 @@ button:hover {
   padding: 0.55rem;
   margin-bottom: 0.55rem;
   overflow: auto;
+  position: relative;
 }
 
-.scene-preview-svg {
+.scene-preview-stage-canvas {
   width: 100%;
-  min-width: 560px;
-  height: 300px;
   display: block;
 }
 
 .scene-preview-stage-empty {
   margin: 0;
+  position: absolute;
+  inset: 0.55rem;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   color: var(--muted);
   font-size: 0.9rem;
+  pointer-events: none;
+}
+
+.scene-preview-stage-empty.visible {
+  display: flex;
 }
 
 .scene-locks-container {
@@ -415,6 +478,32 @@ button:hover {
   );
   box-shadow: 0 0 7px rgba(241, 152, 70, 0.42);
   transition: width 88ms linear;
+}
+
+.audition-overlay-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.7rem;
+  margin-top: 0.9rem;
+}
+
+.audition-overlay-card {
+  border: 1px solid #d6e2e9;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f3f7fa 100%);
+  padding: 0.7rem;
+}
+
+.audition-overlay-card h3 {
+  margin-top: 0;
+}
+
+.audition-overlay-canvas {
+  width: 100%;
+  display: block;
+  border: 1px solid #d7e2ea;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #0d1317 0%, #142026 100%);
 }
 
 .toggle-inline {

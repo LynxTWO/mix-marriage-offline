@@ -60,6 +60,25 @@
       </section>
 
       <section class="panel">
+        <h2>Dashboard Visuals</h2>
+        <p class="subtle">
+          Canvas2D baseline for meter bridge, layout distribution, and render-safe audition cues.
+        </p>
+        <div class="dashboard-visual-grid">
+          <article class="dashboard-visual-card">
+            <h3>Meter Bridge</h3>
+            <canvas id="dashboard-meter-canvas" class="dashboard-canvas" height="340"></canvas>
+            <div id="dashboard-meter-summary" class="dashboard-summary-grid"></div>
+          </article>
+          <article class="dashboard-visual-card">
+            <h3>Distribution</h3>
+            <canvas id="dashboard-distribution-canvas" class="dashboard-canvas" height="220"></canvas>
+            <div id="dashboard-distribution-summary" class="dashboard-summary-grid"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="panel">
         <h2>Plugin Forms</h2>
         <p class="subtle">
           Uses plugin <code>config_schema</code>, <code>ui_hints</code>, and computed
@@ -119,7 +138,14 @@
           </label>
         </div>
         <div id="scene-preview-warnings" class="scene-preview-warnings"></div>
-        <div id="scene-preview-stage" class="scene-preview-stage"></div>
+        <div id="scene-preview-stage" class="scene-preview-stage">
+          <canvas
+            id="scene-preview-stage-canvas"
+            class="scene-preview-stage-canvas"
+            height="320"
+          ></canvas>
+          <p id="scene-preview-stage-empty" class="scene-preview-stage-empty"></p>
+        </div>
         <pre id="scene-preview-output" class="code-block"></pre>
         <h3>Scene Lock Editor</h3>
         <p class="subtle">
@@ -229,6 +255,19 @@
             </div>
           </div>
         </div>
+        <div class="audition-overlay-grid">
+          <article class="audition-overlay-card">
+            <h3>Waveform Overlay</h3>
+            <canvas id="audition-waveform-canvas" class="audition-overlay-canvas" height="180"></canvas>
+          </article>
+          <article class="audition-overlay-card">
+            <h3>Spectrum Overlay</h3>
+            <canvas id="audition-spectrum-canvas" class="audition-overlay-canvas" height="180"></canvas>
+          </article>
+        </div>
+        <p id="audition-overlay-status" class="subtle">
+          Select a render job to inspect pre/post audition overlays.
+        </p>
         <p id="audition-status" class="subtle">No audio selected.</p>
       </section>
 

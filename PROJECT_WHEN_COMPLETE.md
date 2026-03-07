@@ -300,8 +300,8 @@ Interaction standards (non-negotiable):
 
 Reusable component library (minimum set for v1 GUI parity):
 - [ ] Controls: knob/rotary, fader/slider, toggle/button, segmented selector, XY pad, preset browser with search/tags, A/B toggle, value readout.
-- [ ] Metering: peak/RMS, true-peak, LUFS, multi-channel meters (surround/immersive energy distribution).
-- [ ] Visualizers (offline-rendered is acceptable): waveform (pre/post overlay), spectrum (FFT), optional spectrogram, EQ curve editor.
+- [x] Metering: peak/RMS, true-peak, LUFS, multi-channel meters (surround/immersive energy distribution).
+- [x] Visualizers (offline-rendered is acceptable): waveform (pre/post overlay), spectrum (FFT), optional spectrogram, EQ curve editor.
 - [ ] Dynamics/spatial views (offline-rendered is acceptable): gain reduction meter, phase correlation, goniometer/vectorscope, optional transfer curve.
 - [ ] Explainability: hint overlays (“what/why”), confidence indicator for recommendations, and a compact “what changed” summary.
 

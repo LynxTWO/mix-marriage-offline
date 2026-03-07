@@ -84,6 +84,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Web GUI dashboard meter bridge + Canvas2D stage/audition visualizers:
+  - Added a Canvas2D meter bridge in `gui/web` that extracts peak, RMS,
+    true-peak, and LUFS rows from scan reports and render QA artifacts, with
+    a compact LUFS spread view and scene-distribution summary.
+  - Replaced the web scene preview SVG with a Canvas2D stage view that shows
+    objects vs. bed energy, confidence-weighted object labels, selected layout
+    speakers, and audience/on-stage/band/orchestra perspective changes.
+  - Added audition waveform and spectrum overlays for selected input/output
+    pointers, preferring `render_qa.json` spectral data and falling back to
+    bounded local audio decode for waveform extraction when possible.
+  - Added GUI regression coverage for the new dashboard/audition helper
+    modules in `gui/tests/dashboard_visuals.test.mjs` and
+    `gui/tests/audition_overlays.test.mjs`.
+
 - GUI parity checklist + CI contract:
   - Added `docs/gui_parity.md` as the canonical Tauri parity checklist for the
     required `validate -> analyze -> scene -> render -> results -> compare`

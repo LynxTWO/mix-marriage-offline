@@ -2,11 +2,15 @@ import { run as runPluginFormsTests } from "./plugin_forms.test.mjs";
 import { run as runMmoCliRunnerTests } from "./mmo_cli_runner.test.mjs";
 import { run as runRpcClientTests } from "./rpc_process_client.test.mjs";
 import { run as runAuditionLoudnessTests } from "./audition_loudness.test.mjs";
+import { run as runAuditionOverlayTests } from "./audition_overlays.test.mjs";
+import { run as runDashboardVisualsTests } from "./dashboard_visuals.test.mjs";
 import { run as runHeadphonePreviewMeterTests } from "./headphone_preview_meter.test.mjs";
 import { run as runServerAudioStreamTests } from "./server_audio_stream.test.mjs";
 
 const suites = [
   { name: "audition_loudness", run: runAuditionLoudnessTests },
+  { name: "audition_overlays", run: runAuditionOverlayTests },
+  { name: "dashboard_visuals", run: runDashboardVisualsTests },
   { name: "headphone_preview_meter", run: runHeadphonePreviewMeterTests },
   { name: "mmo_cli_runner", run: runMmoCliRunnerTests },
   { name: "plugin_forms", run: runPluginFormsTests },

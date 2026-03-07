@@ -11,6 +11,20 @@ import {
   meterLevelFromDbfs,
   rmsToDbfs,
 } from "/lib/headphone_preview_meter.mjs";
+import {
+  buildSpectrumProfile,
+  buildWaveformEnvelope,
+  mixChannelsToMono,
+  normalizeSpectralProfile,
+} from "/lib/audition_overlays.mjs";
+import {
+  buildMeterHistogram,
+  buildMeterRowsFromRenderQa,
+  buildMeterRowsFromReport,
+  buildMeterSummary,
+  buildSceneDistribution,
+  resolveAuditionQaComparison,
+} from "/lib/dashboard_visuals.mjs";
 
 const discoverButton = document.getElementById("discover-button");
 const doctorButton = document.getElementById("doctor-button");
@@ -24,6 +38,10 @@ const methodsList = document.getElementById("methods-list");
 const doctorOutput = document.getElementById("doctor-output");
 const projectOutput = document.getElementById("project-output");
 const statusOutput = document.getElementById("status-output");
+const dashboardMeterCanvas = document.getElementById("dashboard-meter-canvas");
+const dashboardMeterSummary = document.getElementById("dashboard-meter-summary");
+const dashboardDistributionCanvas = document.getElementById("dashboard-distribution-canvas");
+const dashboardDistributionSummary = document.getElementById("dashboard-distribution-summary");
 const pluginsContainer = document.getElementById("plugins-container");
 const pluginMarketContainer = document.getElementById("plugin-market-container");
 const pluginMarketListButton = document.getElementById("plugin-market-list-button");
@@ -35,6 +53,8 @@ const intentOutput = document.getElementById("intent-output");
 const sceneLayoutSelect = document.getElementById("scene-layout-select");
 const scenePreviewWarnings = document.getElementById("scene-preview-warnings");
 const scenePreviewStage = document.getElementById("scene-preview-stage");
+const scenePreviewStageCanvas = document.getElementById("scene-preview-stage-canvas");
+const scenePreviewStageEmpty = document.getElementById("scene-preview-stage-empty");
 const scenePreviewOutput = document.getElementById("scene-preview-output");
 const scenePerspectiveSelect = document.getElementById("scene-perspective-select");
 const sceneLocksReloadButton = document.getElementById("scene-locks-reload-button");
@@ -68,6 +88,9 @@ const headphonePreviewWaveform = document.getElementById("headphone-preview-wave
 const headphonePreviewPeak = document.getElementById("headphone-preview-peak");
 const headphonePreviewMeterLeft = document.getElementById("headphone-preview-meter-left");
 const headphonePreviewMeterRight = document.getElementById("headphone-preview-meter-right");
+const auditionWaveformCanvas = document.getElementById("audition-waveform-canvas");
+const auditionSpectrumCanvas = document.getElementById("audition-spectrum-canvas");
+const auditionOverlayStatus = document.getElementById("audition-overlay-status");
 
 const projectDirInput = document.getElementById("project-dir-input");
 const stemsRootInput = document.getElementById("stems-root-input");
@@ -79,6 +102,7 @@ const fineModeIndicator = document.getElementById("fine-mode-indicator");
 
 const state = {
   projectShow: null,
+  uiBundle: null,
   sceneLayoutId: "",
   scenePreview: null,
   sceneLocks: {
@@ -119,6 +143,15 @@ const state = {
     jobId: "",
     loudnessMatchEnabled: true,
     outputSlot: 0,
+    overlays: {
+      inputSpectrum: null,
+      inputWaveform: null,
+      outputSpectrum: null,
+      outputWaveform: null,
+      status: "Select a render job to inspect pre/post audition overlays.",
+      spectrumSource: "",
+      waveformSource: "",
+    },
   },
   modifierState: {
     shift: false,
@@ -129,6 +162,9 @@ const state = {
 };
 const AUDITION_ALLOW_BOOST = false;
 const HEADPHONE_PREVIEW_BAR_COUNT = 28;
+const AUDITION_OVERLAY_MAX_DECODE_BYTES = 20 * 1024 * 1024;
+const auditionOverlayCache = new Map();
+let auditionOverlayRequestVersion = 0;
 let auditionAudioContext = null;
 let auditionAudioGainNode = null;
 let auditionAudioSourceNode = null;
@@ -184,6 +220,100 @@ function _clampUnit(value, fallback = 1) {
     return 1;
   }
   return numeric;
+}
+
+function _formatMetricValue(value, suffix = "", digits = 1) {
+  if (!Number.isFinite(value)) {
+    return "n/a";
+  }
+  return `${Number(value).toFixed(digits)}${suffix}`;
+}
+
+function _renderSummaryChips(container, items) {
+  if (!container) {
+    return;
+  }
+  container.innerHTML = "";
+  const rows = Array.isArray(items) ? items : [];
+  for (const item of rows) {
+    if (!_isObject(item)) {
+      continue;
+    }
+    const labelText = typeof item.label === "string" ? item.label.trim() : "";
+    const valueText = typeof item.value === "string" ? item.value.trim() : "";
+    if (!labelText || !valueText) {
+      continue;
+    }
+    const chip = document.createElement("div");
+    chip.className = "dashboard-summary-chip";
+
+    const label = document.createElement("span");
+    label.className = "dashboard-summary-label";
+    label.textContent = labelText;
+    chip.appendChild(label);
+
+    const value = document.createElement("span");
+    value.className = "dashboard-summary-value";
+    value.textContent = valueText;
+    chip.appendChild(value);
+
+    container.appendChild(chip);
+  }
+}
+
+function _prepareCanvasFrame(canvas, fallbackHeight = 220) {
+  if (!canvas) {
+    return null;
+  }
+  const rect = canvas.getBoundingClientRect();
+  const cssWidth = Math.max(1, Math.round(rect.width || canvas.clientWidth || 320));
+  const cssHeight = Math.max(
+    1,
+    Number.parseInt(canvas.getAttribute("height") || "", 10) || Math.round(rect.height || fallbackHeight),
+  );
+  const devicePixelRatio = typeof window !== "undefined" && Number.isFinite(window.devicePixelRatio)
+    ? window.devicePixelRatio
+    : 1;
+  const targetWidth = Math.max(1, Math.round(cssWidth * devicePixelRatio));
+  const targetHeight = Math.max(1, Math.round(cssHeight * devicePixelRatio));
+  if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+  }
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return null;
+  }
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  return {
+    ctx,
+    height: cssHeight,
+    width: cssWidth,
+  };
+}
+
+function _drawEmptyCanvasState(canvas, message, fallbackHeight = 220) {
+  const frame = _prepareCanvasFrame(canvas, fallbackHeight);
+  if (!frame) {
+    return;
+  }
+  const { ctx, width, height } = frame;
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#0f171d";
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "rgba(244, 248, 251, 0.82)";
+  ctx.font = '14px "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(message, width / 2, height / 2);
+}
+
+function _valuePosition(value, minValue, maxValue, width) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  const ratio = (value - minValue) / Math.max(1e-9, maxValue - minValue);
+  return _clampUnit(ratio, 0) * width;
 }
 
 function _normalizeModifierKey(value) {
@@ -318,10 +448,12 @@ async function loadUiBundle(uiBundlePath) {
   }
   const plugins = Array.isArray(payload.plugins) ? payload.plugins : [];
   const bundle = _isObject(payload.ui_bundle) ? payload.ui_bundle : {};
+  state.uiBundle = _deepClone(bundle);
   state.scenePreview = _isObject(bundle.scene_preview) ? _deepClone(bundle.scene_preview) : null;
   renderPluginForms(plugins);
   _setEditablePlugins(plugins);
   _renderScenePreview();
+  _renderDashboardVisuals();
 }
 
 async function loadRenderRequest(renderRequestPath) {
@@ -1392,6 +1524,317 @@ async function _applyAuditionCompensation(streamKind, selectedJob) {
   _renderAuditionReceipt(selectedJob, streamKind);
 }
 
+function _drawWaveformOverlayCanvas() {
+  if (!auditionWaveformCanvas) {
+    return;
+  }
+  const overlays = _isObject(state.audition.overlays) ? state.audition.overlays : {};
+  const inputWaveform = Array.isArray(overlays.inputWaveform) ? overlays.inputWaveform : [];
+  const outputWaveform = Array.isArray(overlays.outputWaveform) ? overlays.outputWaveform : [];
+  if (inputWaveform.length === 0 && outputWaveform.length === 0) {
+    _drawEmptyCanvasState(auditionWaveformCanvas, "Waveform overlay unavailable.", 180);
+    return;
+  }
+  const frame = _prepareCanvasFrame(auditionWaveformCanvas, 180);
+  if (!frame) {
+    return;
+  }
+  const { ctx, width, height } = frame;
+  ctx.clearRect(0, 0, width, height);
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "#0d1419");
+  gradient.addColorStop(1, "#16232a");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  const centerY = height * 0.53;
+  ctx.strokeStyle = "rgba(202, 219, 228, 0.16)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, centerY);
+  ctx.lineTo(width, centerY);
+  ctx.stroke();
+
+  const drawEnvelope = (envelope, fillStyle, strokeStyle) => {
+    if (!Array.isArray(envelope) || envelope.length === 0) {
+      return;
+    }
+    const maxHeight = height * 0.34;
+    ctx.beginPath();
+    for (let index = 0; index < envelope.length; index += 1) {
+      const x = (index / Math.max(1, envelope.length - 1)) * width;
+      const y = centerY - ((_clampUnit(envelope[index], 0) || 0) * maxHeight);
+      if (index === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    }
+    for (let index = envelope.length - 1; index >= 0; index -= 1) {
+      const x = (index / Math.max(1, envelope.length - 1)) * width;
+      const y = centerY + ((_clampUnit(envelope[index], 0) || 0) * maxHeight);
+      ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = fillStyle;
+    ctx.fill();
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  };
+
+  drawEnvelope(inputWaveform, "rgba(90, 180, 199, 0.24)", "#6bd0de");
+  drawEnvelope(outputWaveform, "rgba(223, 148, 74, 0.26)", "#f0b663");
+
+  ctx.fillStyle = "#e5eef2";
+  ctx.font = '12px "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+  ctx.fillText("Input", 14, 18);
+  ctx.fillText("Output", 74, 18);
+}
+
+function _drawSpectrumOverlayCanvas() {
+  if (!auditionSpectrumCanvas) {
+    return;
+  }
+  const overlays = _isObject(state.audition.overlays) ? state.audition.overlays : {};
+  const inputSpectrum = _isObject(overlays.inputSpectrum) ? overlays.inputSpectrum : {};
+  const outputSpectrum = _isObject(overlays.outputSpectrum) ? overlays.outputSpectrum : {};
+  const inputCenters = Array.isArray(inputSpectrum.centersHz) ? inputSpectrum.centersHz : [];
+  const outputCenters = Array.isArray(outputSpectrum.centersHz) ? outputSpectrum.centersHz : [];
+  if (inputCenters.length === 0 && outputCenters.length === 0) {
+    _drawEmptyCanvasState(auditionSpectrumCanvas, "Spectrum overlay unavailable.", 180);
+    return;
+  }
+  const frame = _prepareCanvasFrame(auditionSpectrumCanvas, 180);
+  if (!frame) {
+    return;
+  }
+  const { ctx, width, height } = frame;
+  ctx.clearRect(0, 0, width, height);
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "#0d1419");
+  gradient.addColorStop(1, "#16232a");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  const pairs = [];
+  const appendPairs = (spectrum) => {
+    const centersHz = Array.isArray(spectrum.centersHz) ? spectrum.centersHz : [];
+    const levelsDb = Array.isArray(spectrum.levelsDb) ? spectrum.levelsDb : [];
+    for (let index = 0; index < Math.min(centersHz.length, levelsDb.length); index += 1) {
+      const centerHz = centersHz[index];
+      const levelDb = levelsDb[index];
+      if (Number.isFinite(centerHz) && Number.isFinite(levelDb)) {
+        pairs.push({ centerHz, levelDb });
+      }
+    }
+  };
+  appendPairs(inputSpectrum);
+  appendPairs(outputSpectrum);
+
+  const minHz = Math.max(20, Math.min(...pairs.map((row) => row.centerHz)));
+  const maxHz = Math.max(minHz + 1, Math.max(...pairs.map((row) => row.centerHz)));
+  const maxLevel = Math.max(...pairs.map((row) => row.levelDb));
+  const minLevel = Math.min(maxLevel - 72, ...pairs.map((row) => row.levelDb));
+  const top = 20;
+  const bottom = height - 18;
+  const plotHeight = bottom - top;
+
+  const drawSpectrum = (spectrum, strokeStyle) => {
+    const centersHz = Array.isArray(spectrum.centersHz) ? spectrum.centersHz : [];
+    const levelsDb = Array.isArray(spectrum.levelsDb) ? spectrum.levelsDb : [];
+    if (centersHz.length === 0 || levelsDb.length === 0) {
+      return;
+    }
+    ctx.beginPath();
+    for (let index = 0; index < Math.min(centersHz.length, levelsDb.length); index += 1) {
+      const centerHz = centersHz[index];
+      const levelDb = levelsDb[index];
+      if (!Number.isFinite(centerHz) || !Number.isFinite(levelDb)) {
+        continue;
+      }
+      const x = (
+        (Math.log10(centerHz) - Math.log10(minHz))
+        / Math.max(1e-9, Math.log10(maxHz) - Math.log10(minHz))
+      ) * (width - 28) + 14;
+      const y = top + ((maxLevel - levelDb) / Math.max(1e-9, maxLevel - minLevel)) * plotHeight;
+      if (index === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    }
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  };
+
+  ctx.strokeStyle = "rgba(196, 212, 222, 0.14)";
+  ctx.lineWidth = 1;
+  for (const markerHz of [40, 100, 250, 1000, 4000, 16000]) {
+    if (markerHz < minHz || markerHz > maxHz) {
+      continue;
+    }
+    const x = (
+      (Math.log10(markerHz) - Math.log10(minHz))
+      / Math.max(1e-9, Math.log10(maxHz) - Math.log10(minHz))
+    ) * (width - 28) + 14;
+    ctx.beginPath();
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.stroke();
+  }
+
+  drawSpectrum(inputSpectrum, "#6bd0de");
+  drawSpectrum(outputSpectrum, "#f0b663");
+  ctx.fillStyle = "#e5eef2";
+  ctx.font = '12px "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+  ctx.fillText("Input", 14, 16);
+  ctx.fillText("Output", 74, 16);
+}
+
+function _renderAuditionVisualOverlays() {
+  _drawWaveformOverlayCanvas();
+  _drawSpectrumOverlayCanvas();
+  if (auditionOverlayStatus) {
+    const overlays = _isObject(state.audition.overlays) ? state.audition.overlays : {};
+    auditionOverlayStatus.textContent = overlays.status
+      || "Select a render job to inspect pre/post audition overlays.";
+  }
+}
+
+async function _decodeAuditionPointerSummary(jobId, streamKind, slot, sha256) {
+  const cacheKey = sha256 || `${jobId}:${streamKind}:${slot}`;
+  if (auditionOverlayCache.has(cacheKey)) {
+    return auditionOverlayCache.get(cacheKey);
+  }
+  const task = (async () => {
+    if (typeof fetch !== "function") {
+      return null;
+    }
+    const AudioContextCtor = _audioContextConstructor();
+    if (!AudioContextCtor) {
+      return null;
+    }
+    if (!auditionAudioContext) {
+      auditionAudioContext = new AudioContextCtor();
+    }
+    const url = _auditionUrlFor(jobId, streamKind, slot);
+    try {
+      const headResponse = await fetch(url, { method: "HEAD" });
+      if (!headResponse.ok) {
+        return null;
+      }
+      const byteLength = Number(headResponse.headers.get("content-length"));
+      if (Number.isFinite(byteLength) && byteLength > AUDITION_OVERLAY_MAX_DECODE_BYTES) {
+        return {
+          skipped: "oversize",
+          spectrum: null,
+          waveform: null,
+        };
+      }
+      const response = await fetch(url);
+      if (!response.ok) {
+        return null;
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      const decoded = await auditionAudioContext.decodeAudioData(arrayBuffer.slice(0));
+      const channels = [];
+      for (let index = 0; index < Math.min(decoded.numberOfChannels, 2); index += 1) {
+        channels.push(decoded.getChannelData(index));
+      }
+      const mono = mixChannelsToMono(channels);
+      return {
+        spectrum: buildSpectrumProfile(mono, decoded.sampleRate, { bandCount: 40 }),
+        waveform: buildWaveformEnvelope(mono, { pointCount: 96 }),
+      };
+    } catch {
+      return null;
+    }
+  })();
+  auditionOverlayCache.set(cacheKey, task);
+  return task;
+}
+
+async function _refreshAuditionOverlays() {
+  const selectedJob = _selectedAuditionJobOrNull();
+  const inputPointer = _selectedPointerOrNull(selectedJob, "input", state.audition.inputSlot);
+  const outputPointer = _selectedPointerOrNull(selectedJob, "output", state.audition.outputSlot);
+  if (!selectedJob || !inputPointer || !outputPointer) {
+    state.audition.overlays = {
+      inputSpectrum: null,
+      inputWaveform: null,
+      outputSpectrum: null,
+      outputWaveform: null,
+      spectrumSource: "",
+      status: "Select both input and output pointers to inspect overlays.",
+      waveformSource: "",
+    };
+    _renderAuditionVisualOverlays();
+    return;
+  }
+
+  const requestVersion = auditionOverlayRequestVersion + 1;
+  auditionOverlayRequestVersion = requestVersion;
+  state.audition.overlays = {
+    ...state.audition.overlays,
+    status: `Loading overlays for ${state.audition.jobId}...`,
+  };
+  _renderAuditionVisualOverlays();
+
+  const qaMatch = resolveAuditionQaComparison(
+    state.renderArtifacts.qa,
+    state.audition.jobId,
+    outputPointer.path,
+  );
+  const [inputSummary, outputSummary] = await Promise.all([
+    _decodeAuditionPointerSummary(
+      state.audition.jobId,
+      "input",
+      state.audition.inputSlot,
+      inputPointer.sha256,
+    ),
+    _decodeAuditionPointerSummary(
+      state.audition.jobId,
+      "output",
+      state.audition.outputSlot,
+      outputPointer.sha256,
+    ),
+  ]);
+  if (requestVersion !== auditionOverlayRequestVersion) {
+    return;
+  }
+
+  const qaInputSpectrum = normalizeSpectralProfile(qaMatch?.input?.spectral);
+  const qaOutputSpectrum = normalizeSpectralProfile(qaMatch?.output?.spectral);
+  const decodedInputSpectrum = normalizeSpectralProfile(inputSummary?.spectrum);
+  const decodedOutputSpectrum = normalizeSpectralProfile(outputSummary?.spectrum);
+  const inputSpectrum = qaInputSpectrum.centersHz.length > 0 ? qaInputSpectrum : decodedInputSpectrum;
+  const outputSpectrum = qaOutputSpectrum.centersHz.length > 0 ? qaOutputSpectrum : decodedOutputSpectrum;
+  const waveformSource = (
+    Array.isArray(inputSummary?.waveform) && inputSummary.waveform.length > 0
+    && Array.isArray(outputSummary?.waveform) && outputSummary.waveform.length > 0
+  ) ? "audio decode" : "unavailable";
+  const spectrumSource = (
+    inputSpectrum.centersHz.length > 0 && outputSpectrum.centersHz.length > 0
+      ? (qaInputSpectrum.centersHz.length > 0 && qaOutputSpectrum.centersHz.length > 0
+          ? "render_qa"
+          : "audio decode")
+      : "unavailable"
+  );
+
+  state.audition.overlays = {
+    inputSpectrum,
+    inputWaveform: Array.isArray(inputSummary?.waveform) ? inputSummary.waveform : null,
+    outputSpectrum,
+    outputWaveform: Array.isArray(outputSummary?.waveform) ? outputSummary.waveform : null,
+    spectrumSource,
+    status: `Waveform: ${waveformSource}. Spectrum: ${spectrumSource}.`,
+    waveformSource,
+  };
+  _renderAuditionVisualOverlays();
+}
+
 function _renderAuditionPanel() {
   if (
     !auditionJobSelect
@@ -1430,6 +1873,7 @@ function _renderAuditionPanel() {
     _stopHeadphonePreviewAnimation();
     _renderHeadphonePreviewIdle();
     _setAuditionStatus("No render_execute jobs available for audition.");
+    void _refreshAuditionOverlays();
     return;
   }
 
@@ -1493,21 +1937,26 @@ function _renderAuditionPanel() {
   const previewStream = state.audition.activeStream === "input" ? "input" : "output";
   _renderAuditionReceipt(selectedJob, previewStream);
   _setAuditionStatus(`Ready: ${state.audition.jobId}`);
+  void _refreshAuditionOverlays();
 }
 
-function _auditionUrl(streamKind) {
+function _auditionUrlFor(jobId, streamKind, slot) {
   const projectDir = normalizePath(projectDirInput?.value || "");
   if (!projectDir) {
     throw new Error("Project directory is required before auditioning.");
   }
-  const slot = streamKind === "input" ? state.audition.inputSlot : state.audition.outputSlot;
   const query = new URLSearchParams({
-    job_id: state.audition.jobId,
+    job_id: jobId,
     project_dir: projectDir,
     slot: String(slot),
     stream: streamKind,
   });
   return `/api/audio-stream?${query.toString()}`;
+}
+
+function _auditionUrl(streamKind) {
+  const slot = streamKind === "input" ? state.audition.inputSlot : state.audition.outputSlot;
+  return _auditionUrlFor(state.audition.jobId, streamKind, slot);
 }
 
 async function _playAudition(streamKind) {
@@ -2035,6 +2484,7 @@ async function refreshRenderArtifactsFromProjectShow(projectShow) {
     qa: qaPayload,
     report: reportPayload,
   };
+  _renderDashboardVisuals();
   renderRenderArtifactsViewer();
 }
 
@@ -2114,6 +2564,305 @@ function _sceneConfidenceColor(confidence) {
   return `hsl(${hue.toFixed(1)} 72% 42%)`;
 }
 
+function _setScenePreviewStageEmpty(message = "") {
+  if (!scenePreviewStageEmpty) {
+    return;
+  }
+  const text = typeof message === "string" ? message.trim() : "";
+  scenePreviewStageEmpty.textContent = text;
+  scenePreviewStageEmpty.classList.toggle("visible", Boolean(text));
+}
+
+function _scenePerspectiveSettings(perspective) {
+  switch (perspective) {
+    case "on_stage":
+      return { radialScale: 0.95, rotationDeg: 180, xScale: 1.0, yScale: 1.0 };
+    case "in_band":
+      return { radialScale: 0.82, rotationDeg: 0, xScale: 1.12, yScale: 0.86 };
+    case "in_orchestra":
+      return { radialScale: 0.88, rotationDeg: 0, xScale: 1.22, yScale: 0.92 };
+    default:
+      return { radialScale: 1.0, rotationDeg: 0, xScale: 1.0, yScale: 1.0 };
+  }
+}
+
+function _transformStagePoint(point, centerX, centerY, perspective) {
+  const settings = _scenePerspectiveSettings(perspective);
+  const dx = point.x - centerX;
+  const dy = point.y - centerY;
+  const radians = settings.rotationDeg * (Math.PI / 180);
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const rotatedX = (dx * cos) - (dy * sin);
+  const rotatedY = (dx * sin) + (dy * cos);
+  return {
+    x: centerX + (rotatedX * settings.xScale * settings.radialScale),
+    y: centerY + (rotatedY * settings.yScale * settings.radialScale),
+  };
+}
+
+function _renderDashboardMeterCanvas(rows) {
+  if (!dashboardMeterCanvas) {
+    return;
+  }
+  const visibleRows = rows.slice(0, 12);
+  if (visibleRows.length === 0) {
+    _drawEmptyCanvasState(dashboardMeterCanvas, "No peak / RMS / true-peak / LUFS data.", 300);
+    return;
+  }
+  dashboardMeterCanvas.setAttribute("height", String(Math.max(260, 90 + (visibleRows.length * 34))));
+  const frame = _prepareCanvasFrame(dashboardMeterCanvas, 300);
+  if (!frame) {
+    return;
+  }
+  const { ctx, width, height } = frame;
+  ctx.clearRect(0, 0, width, height);
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "#0c1217");
+  gradient.addColorStop(1, "#17242b");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "rgba(236, 244, 248, 0.92)";
+  ctx.font = '13px "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+  ctx.textBaseline = "top";
+  ctx.fillText("Peak / RMS / TP", 16, 14);
+  ctx.fillText("LUFS", width - 128, 14);
+
+  const labelWidth = 116;
+  const valuesWidth = 122;
+  const trackGap = 18;
+  const peakTrackX = 18 + labelWidth;
+  const lufsTrackWidth = 78;
+  const lufsTrackX = width - valuesWidth - lufsTrackWidth - 22;
+  const peakTrackWidth = Math.max(80, lufsTrackX - peakTrackX - trackGap);
+  const startY = 42;
+  const rowHeight = 34;
+
+  for (let index = 0; index < visibleRows.length; index += 1) {
+    const row = visibleRows[index];
+    const top = startY + (index * rowHeight);
+    const peakY = top + 6;
+    const lufsY = top + 19;
+    const trackHeight = 8;
+    const label = row.label.length > 16 ? `${row.label.slice(0, 13)}...` : row.label;
+
+    ctx.fillStyle = index % 2 === 0 ? "rgba(255, 255, 255, 0.025)" : "rgba(255, 255, 255, 0.05)";
+    ctx.fillRect(10, top - 2, width - 20, rowHeight - 2);
+
+    ctx.fillStyle = "#d8e7ee";
+    ctx.font = '12px "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+    ctx.fillText(label, 16, top + 2);
+
+    ctx.fillStyle = "rgba(150, 172, 185, 0.18)";
+    ctx.fillRect(peakTrackX, peakY, peakTrackWidth, trackHeight);
+    ctx.fillRect(lufsTrackX, lufsY, lufsTrackWidth, trackHeight);
+
+    const peakX = _valuePosition(row.peak_dbfs, -60, 3, peakTrackWidth);
+    const rmsX = _valuePosition(row.rms_dbfs, -60, 3, peakTrackWidth);
+    const tpX = _valuePosition(row.true_peak_dbtp, -60, 3, peakTrackWidth);
+    const lufsX = _valuePosition(row.integrated_lufs, -36, -6, lufsTrackWidth);
+
+    if (peakX !== null) {
+      const peakGradient = ctx.createLinearGradient(peakTrackX, 0, peakTrackX + peakTrackWidth, 0);
+      peakGradient.addColorStop(0, "#346b7a");
+      peakGradient.addColorStop(0.6, "#d59042");
+      peakGradient.addColorStop(1, "#e16041");
+      ctx.fillStyle = peakGradient;
+      ctx.fillRect(peakTrackX, peakY, peakX, trackHeight);
+    }
+    if (rmsX !== null) {
+      ctx.fillStyle = "rgba(82, 189, 184, 0.95)";
+      ctx.fillRect(peakTrackX, peakY + 1, Math.max(0, rmsX), trackHeight - 2);
+    }
+    if (tpX !== null) {
+      ctx.strokeStyle = "#f4f6f8";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(peakTrackX + tpX, peakY - 2);
+      ctx.lineTo(peakTrackX + tpX, peakY + trackHeight + 2);
+      ctx.stroke();
+    }
+    if (lufsX !== null) {
+      ctx.fillStyle = "#f7c96d";
+      ctx.beginPath();
+      ctx.arc(lufsTrackX + lufsX, lufsY + (trackHeight * 0.5), 4.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = "#a8c0cc";
+    ctx.font = '11px Consolas, "Courier New", monospace';
+    ctx.fillText(
+      [
+        _formatMetricValue(row.peak_dbfs, "", 1),
+        _formatMetricValue(row.rms_dbfs, "", 1),
+        _formatMetricValue(row.true_peak_dbtp, "", 1),
+        _formatMetricValue(row.integrated_lufs, "", 1),
+      ].join(" / "),
+      width - valuesWidth,
+      top + 1,
+    );
+  }
+}
+
+function _renderDashboardDistributionCanvas(rows, histogram, distribution, selectedLayout) {
+  if (!dashboardDistributionCanvas) {
+    return;
+  }
+  if (histogram.bins.length === 0 && distribution.length === 0) {
+    _drawEmptyCanvasState(
+      dashboardDistributionCanvas,
+      "Build GUI or render QA artifacts to inspect distribution.",
+      220,
+    );
+    return;
+  }
+  const frame = _prepareCanvasFrame(dashboardDistributionCanvas, 220);
+  if (!frame) {
+    return;
+  }
+  const { ctx, width, height } = frame;
+  ctx.clearRect(0, 0, width, height);
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "#0b1115");
+  gradient.addColorStop(1, "#142127");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  const topPanelHeight = distribution.length > 0 ? Math.floor(height * 0.48) : height - 20;
+  const bottomPanelTop = topPanelHeight + 18;
+
+  if (histogram.bins.length > 0) {
+    ctx.fillStyle = "rgba(235, 244, 248, 0.92)";
+    ctx.font = '12px "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+    ctx.fillText("LUFS spread", 14, 14);
+
+    const maxCount = Math.max(1, ...histogram.bins.map((row) => row.count));
+    const chartX = 14;
+    const chartY = 34;
+    const chartWidth = width - 28;
+    const chartHeight = Math.max(40, topPanelHeight - 48);
+    const barWidth = chartWidth / histogram.bins.length;
+    histogram.bins.forEach((bin, index) => {
+      const ratio = bin.count / maxCount;
+      const barHeight = ratio * chartHeight;
+      const x = chartX + (index * barWidth) + 2;
+      const y = chartY + chartHeight - barHeight;
+      ctx.fillStyle = "rgba(84, 171, 196, 0.22)";
+      ctx.fillRect(x, chartY, Math.max(3, barWidth - 4), chartHeight);
+      ctx.fillStyle = "#d79b48";
+      ctx.fillRect(x, y, Math.max(3, barWidth - 4), barHeight);
+    });
+  }
+
+  if (distribution.length > 0) {
+    ctx.fillStyle = "rgba(235, 244, 248, 0.92)";
+    ctx.font = '12px "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+    ctx.fillText(
+      `Scene distribution${selectedLayout ? ` · ${selectedLayout.layout_id}` : ""}`,
+      14,
+      bottomPanelTop,
+    );
+    const maxValue = Math.max(0.5, ...distribution.map((row) => row.value));
+    const barX = 110;
+    const barWidth = width - barX - 18;
+    distribution.forEach((row, index) => {
+      const y = bottomPanelTop + 18 + (index * 24);
+      const ratio = row.value / maxValue;
+      ctx.fillStyle = "#c8d6dd";
+      ctx.font = '11px "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+      ctx.fillText(row.label, 14, y + 3);
+      ctx.fillStyle = "rgba(115, 142, 156, 0.18)";
+      ctx.fillRect(barX, y, barWidth, 10);
+      ctx.fillStyle = row.id === "bed" ? "#d99044" : "#57b8b1";
+      ctx.fillRect(barX, y, barWidth * ratio, 10);
+      ctx.fillStyle = "#9eb5c1";
+      ctx.fillText(String(row.count), barX + barWidth + 4, y + 2);
+    });
+  }
+}
+
+function _renderDashboardVisuals() {
+  const report = _isObject(state.uiBundle?.report) ? state.uiBundle.report : null;
+  const reportRows = buildMeterRowsFromReport(report);
+  const qaRows = buildMeterRowsFromRenderQa(state.renderArtifacts.qa);
+  const activeRows = qaRows.length > 0 ? qaRows : reportRows;
+  const summary = buildMeterSummary(activeRows);
+  const histogram = buildMeterHistogram(activeRows, "integrated_lufs", {
+    bins: 10,
+    max: -6,
+    min: -36,
+  });
+  const preview = _isObject(state.scenePreview) ? state.scenePreview : null;
+  const layoutRows = _scenePreviewLayoutOptions(preview);
+  const selectedLayoutId = _ensureSceneLayoutSelection(layoutRows, preview);
+  const selectedLayout = layoutRows.find((row) => row.layout_id === selectedLayoutId) || null;
+  const distribution = buildSceneDistribution(preview, selectedLayoutId);
+
+  _renderDashboardMeterCanvas(activeRows);
+  _renderDashboardDistributionCanvas(activeRows, histogram, distribution, selectedLayout);
+
+  _renderSummaryChips(
+    dashboardMeterSummary,
+    [
+      {
+        label: "Source",
+        value: qaRows.length > 0 ? "Render QA" : (reportRows.length > 0 ? "Scan Report" : "Unavailable"),
+      },
+      {
+        label: "Rows",
+        value: activeRows.length > 0 ? String(activeRows.length) : "0",
+      },
+      {
+        label: "Peak Max",
+        value: _formatMetricValue(summary.peak_max_dbfs, " dBFS"),
+      },
+      {
+        label: "RMS Median",
+        value: _formatMetricValue(summary.rms_median_dbfs, " dBFS"),
+      },
+      {
+        label: "True Peak",
+        value: _formatMetricValue(summary.true_peak_max_dbtp, " dBTP"),
+      },
+      {
+        label: "LUFS Span",
+        value: _formatMetricValue(summary.lufs_span, " LU"),
+      },
+    ],
+  );
+
+  _renderSummaryChips(
+    dashboardDistributionSummary,
+    [
+      {
+        label: "Layout",
+        value: selectedLayout ? selectedLayout.layout_id : "n/a",
+      },
+      {
+        label: "Perspective",
+        value: state.sceneLocks.perspective || "audience",
+      },
+      {
+        label: "Objects",
+        value: _isObject(preview?.totals) ? String(preview.totals.object_count ?? 0) : "0",
+      },
+      {
+        label: "Warnings",
+        value: Array.isArray(preview?.warnings) ? String(preview.warnings.length) : "0",
+      },
+      {
+        label: "Bed",
+        value: _formatMetricValue(Number(preview?.bed_energy) * 100, "%", 0),
+      },
+      {
+        label: "LUFS Bins",
+        value: histogram.bins.length > 0 ? String(histogram.bins.length) : "0",
+      },
+    ],
+  );
+}
+
 function _renderScenePreviewWarnings(preview) {
   if (!scenePreviewWarnings) {
     return;
@@ -2146,87 +2895,75 @@ function _renderScenePreviewWarnings(preview) {
 }
 
 function _renderScenePreviewStage(preview, selectedLayout) {
-  if (!scenePreviewStage) {
+  if (!scenePreviewStageCanvas) {
     return;
   }
-  scenePreviewStage.innerHTML = "";
   if (!_isObject(preview) || !_isObject(selectedLayout)) {
-    const empty = document.createElement("p");
-    empty.className = "scene-preview-stage-empty";
-    empty.textContent = "Scene preview is not available for the current project state.";
-    scenePreviewStage.appendChild(empty);
+    _setScenePreviewStageEmpty("Scene preview is not available for the current project state.");
+    _drawEmptyCanvasState(
+      scenePreviewStageCanvas,
+      "Scene preview is not available for the current project state.",
+      320,
+    );
     return;
   }
-
-  const svg = _svgNode("svg", {
-    class: "scene-preview-svg",
-    role: "img",
-    viewBox: "0 0 900 520",
-    "aria-label": `Scene preview top-down layout ${selectedLayout.layout_id}`,
-  });
+  _setScenePreviewStageEmpty("");
+  const frame = _prepareCanvasFrame(scenePreviewStageCanvas, 320);
+  if (!frame) {
+    return;
+  }
+  const { ctx, width, height } = frame;
   const centerX = 450;
   const centerY = 280;
   const speakerRadius = 228;
+  const scaleX = width / 900;
+  const scaleY = height / 520;
+  const perspective = state.sceneLocks.perspective || "audience";
 
-  svg.appendChild(
-    _svgNode("rect", {
-      x: 1,
-      y: 1,
-      width: 898,
-      height: 518,
-      fill: "#f5f9fc",
-      stroke: "#d5e1e8",
-      "stroke-width": 1,
-      rx: 16,
-    }),
-  );
+  ctx.clearRect(0, 0, width, height);
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "#f7fbfd");
+  gradient.addColorStop(1, "#e8eff4");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
 
-  svg.appendChild(_svgNode("circle", {
-    cx: centerX,
-    cy: centerY,
-    r: speakerRadius,
-    fill: "none",
-    stroke: "#b8c8d6",
-    "stroke-width": 2,
-    "stroke-dasharray": "8 8",
-  }));
-  svg.appendChild(_svgNode("line", {
-    x1: centerX,
-    y1: centerY - speakerRadius - 20,
-    x2: centerX,
-    y2: centerY + speakerRadius + 20,
-    stroke: "#d1dde6",
-    "stroke-width": 1,
-  }));
-  svg.appendChild(_svgNode("line", {
-    x1: centerX - speakerRadius - 20,
-    y1: centerY,
-    x2: centerX + speakerRadius + 20,
-    y2: centerY,
-    stroke: "#d1dde6",
-    "stroke-width": 1,
-  }));
+  ctx.strokeStyle = "#cfdae2";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(1, 1, width - 2, height - 2);
+
+  ctx.save();
+  ctx.scale(scaleX, scaleY);
+  ctx.strokeStyle = "#b8c8d6";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 8]);
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, speakerRadius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.strokeStyle = "#d1dde6";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(centerX, centerY - speakerRadius - 20);
+  ctx.lineTo(centerX, centerY + speakerRadius + 20);
+  ctx.moveTo(centerX - speakerRadius - 20, centerY);
+  ctx.lineTo(centerX + speakerRadius + 20, centerY);
+  ctx.stroke();
 
   const bedEnergy = Number(preview.bed_energy);
   const safeBedEnergy = Number.isFinite(bedEnergy) ? Math.max(0, Math.min(1, bedEnergy)) : 0;
   const bedRingRadius = 96 + (safeBedEnergy * 118);
-  svg.appendChild(_svgNode("circle", {
-    cx: centerX,
-    cy: centerY,
-    r: bedRingRadius,
-    fill: "none",
-    stroke: "#c28332",
-    "stroke-opacity": (0.2 + (safeBedEnergy * 0.65)).toFixed(3),
-    "stroke-width": (10 + (safeBedEnergy * 11)).toFixed(1),
-  }));
-  svg.appendChild(_svgNode("text", {
-    x: centerX,
-    y: centerY + 5,
-    "text-anchor": "middle",
-    "font-size": 13,
-    "font-weight": 700,
-    fill: "#8a4a17",
-  })).textContent = `Bed halo ${(safeBedEnergy * 100).toFixed(0)}%`;
+  ctx.strokeStyle = "#c28332";
+  ctx.lineWidth = 10 + (safeBedEnergy * 11);
+  ctx.globalAlpha = 0.2 + (safeBedEnergy * 0.65);
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, bedRingRadius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#8a4a17";
+  ctx.font = '700 13px "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+  ctx.textAlign = "center";
+  ctx.fillText(`Bed halo ${(safeBedEnergy * 100).toFixed(0)}%`, centerX, centerY + 4);
 
   const speakers = Array.isArray(selectedLayout.speakers) ? selectedLayout.speakers : [];
   for (const speaker of speakers) {
@@ -2234,27 +2971,25 @@ function _renderScenePreviewStage(preview, selectedLayout) {
     const elevation = Number(speaker.elevation_deg);
     const isHeight = Number.isFinite(elevation) && elevation > 0;
     const name = typeof speaker.name === "string" ? speaker.name : "?";
-    const point = _pointFromAzimuth(azimuth, speakerRadius, centerX, centerY);
+    const point = _transformStagePoint(
+      _pointFromAzimuth(azimuth, speakerRadius, centerX, centerY),
+      centerX,
+      centerY,
+      perspective,
+    );
     const fill = name === "LFE"
       ? "#b94a34"
       : (isHeight ? "#2e7f9f" : "#4f6574");
-    svg.appendChild(_svgNode("circle", {
-      cx: point.x.toFixed(2),
-      cy: point.y.toFixed(2),
-      r: isHeight ? 5 : 4.4,
-      fill,
-      stroke: "#ffffff",
-      "stroke-width": 1.3,
-    }));
-    const label = _svgNode("text", {
-      x: point.x.toFixed(2),
-      y: (point.y - 10).toFixed(2),
-      "text-anchor": "middle",
-      "font-size": 10.5,
-      fill: "#50606e",
-    });
-    label.textContent = name;
-    svg.appendChild(label);
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, isHeight ? 5 : 4.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#50606e";
+    ctx.font = '10.5px "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+    ctx.fillText(name, point.x, point.y - 10);
   }
 
   const objectRows = Array.isArray(preview.objects) ? preview.objects : [];
@@ -2262,55 +2997,52 @@ function _renderScenePreviewStage(preview, selectedLayout) {
     if (!_isObject(row)) {
       continue;
     }
-    const point = _sceneObjectPoint(row, centerX, centerY);
+    const point = _transformStagePoint(
+      _sceneObjectPoint(row, centerX, centerY),
+      centerX,
+      centerY,
+      perspective,
+    );
     const confidence = Number(row.confidence);
     const safeConfidence = Number.isFinite(confidence)
       ? Math.max(0, Math.min(1, confidence))
       : 0;
     const dotRadius = 4.5 + (safeConfidence * 4.5);
     const color = _sceneConfidenceColor(safeConfidence);
-    svg.appendChild(_svgNode("line", {
-      x1: centerX,
-      y1: centerY,
-      x2: point.x.toFixed(2),
-      y2: point.y.toFixed(2),
-      stroke: "#d4dee6",
-      "stroke-width": 1,
-    }));
-    svg.appendChild(_svgNode("circle", {
-      cx: point.x.toFixed(2),
-      cy: point.y.toFixed(2),
-      r: dotRadius.toFixed(2),
-      fill: color,
-      stroke: "#ffffff",
-      "stroke-width": 1.5,
-      "stroke-dasharray": row.inferred_position === true ? "2 2" : "",
-    }));
+    ctx.strokeStyle = "#d4dee6";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(point.x, point.y);
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash(row.inferred_position === true ? [2, 2] : []);
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, dotRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.setLineDash([]);
     const labelRaw = typeof row.label === "string" && row.label.trim()
       ? row.label.trim()
       : (typeof row.object_id === "string" ? row.object_id : "Object");
     const label = labelRaw.length > 16 ? `${labelRaw.slice(0, 13)}...` : labelRaw;
-    const text = _svgNode("text", {
-      x: (point.x + 8).toFixed(2),
-      y: (point.y - 8).toFixed(2),
-      "font-size": 11,
-      fill: "#33424f",
-    });
-    text.textContent = `${label} ${(safeConfidence * 100).toFixed(0)}%`;
-    svg.appendChild(text);
+    ctx.fillStyle = "#33424f";
+    ctx.font = '11px "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+    ctx.textAlign = "left";
+    ctx.fillText(`${label} ${(safeConfidence * 100).toFixed(0)}%`, point.x + 8, point.y - 8);
   }
 
-  const header = _svgNode("text", {
-    x: 18,
-    y: 28,
-    "font-size": 15,
-    "font-weight": 700,
-    fill: "#2a3a47",
-  });
-  header.textContent = `Top-down plan · ${selectedLayout.label} (${selectedLayout.layout_id})`;
-  svg.appendChild(header);
-
-  scenePreviewStage.appendChild(svg);
+  ctx.fillStyle = "#2a3a47";
+  ctx.font = '700 15px "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+  ctx.textAlign = "left";
+  ctx.fillText(
+    `Stage view · ${selectedLayout.label} (${selectedLayout.layout_id}) · ${perspective}`,
+    18,
+    28,
+  );
+  ctx.restore();
 }
 
 function _renderScenePreview() {
@@ -2652,6 +3384,7 @@ async function refreshSceneLocks() {
   if (_isObject(result.scene_preview)) {
     state.scenePreview = _deepClone(result.scene_preview);
     _renderScenePreview();
+    _renderDashboardVisuals();
   }
   if (sceneLocksOutput) {
     sceneLocksOutput.textContent = JSON.stringify(
@@ -2691,6 +3424,7 @@ async function saveSceneLocks() {
   if (_isObject(saveResult.scene_preview)) {
     state.scenePreview = _deepClone(saveResult.scene_preview);
     _renderScenePreview();
+    _renderDashboardVisuals();
   }
   if (sceneLocksOutput) {
     sceneLocksOutput.textContent = JSON.stringify(saveResult, null, 2);
@@ -2711,6 +3445,7 @@ function _renderIntentPreview() {
     2,
   );
   _renderScenePreview();
+  _renderDashboardVisuals();
 }
 
 function _syncMaxTheoreticalQualityToggle() {
@@ -3342,10 +4077,12 @@ async function refreshProjectShow() {
     await loadUiBundle(uiBundlePath);
     setStatus("ui_bundle loaded. Reading render_request...");
   } else {
+    state.uiBundle = null;
     state.scenePreview = null;
     renderPluginForms([]);
     _setEditablePlugins([]);
     _renderScenePreview();
+    _renderDashboardVisuals();
     setStatus("ui_bundle missing. Reading render_request...");
   }
 
@@ -3533,6 +4270,7 @@ if (sceneLayoutSelect) {
   sceneLayoutSelect.addEventListener("change", () => {
     state.sceneLayoutId = sceneLayoutSelect.value;
     _renderScenePreview();
+    _renderDashboardVisuals();
   });
 }
 
@@ -3542,6 +4280,8 @@ if (scenePerspectiveSelect) {
       ...state.sceneLocks,
       perspective: scenePerspectiveSelect.value,
     };
+    _renderScenePreview();
+    _renderDashboardVisuals();
   });
 }
 
@@ -3678,6 +4418,12 @@ window.addEventListener("blur", () => {
   });
 });
 
+window.addEventListener("resize", () => {
+  _renderDashboardVisuals();
+  _renderScenePreview();
+  _renderAuditionVisualOverlays();
+});
+
 projectDirInput.addEventListener("change", maybeSeedPackOut);
 projectDirInput.addEventListener("blur", maybeSeedPackOut);
 
@@ -3692,7 +4438,9 @@ renderRenderArtifactsViewer();
 _syncMaxTheoreticalQualityToggle();
 _renderFineModeIndicator();
 _refreshFineSteps();
+_renderDashboardVisuals();
 _renderScenePreview();
 _renderSceneLocksEditor();
 _renderHeadphonePreviewIdle();
+_renderAuditionVisualOverlays();
 setStatus("Ready. Start with rpc.discover.");
