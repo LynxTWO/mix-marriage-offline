@@ -1,8 +1,16 @@
 # MMO Desktop Tauri Scaffold
 
-This directory contains the isolated Tauri 2 desktop app for MMO. The app now
-ships a frozen `mmo` CLI as a Tauri sidecar and exposes a Doctor screen that
-proves the bundled runtime can execute offline.
+This directory contains the isolated Tauri 2 desktop app for MMO. The app
+ships a frozen `mmo` CLI as a Tauri sidecar and now exposes a direct workflow
+screen for:
+
+- `Doctor` sidecar verification,
+- `Prepare` project scaffold creation,
+- `Validate` project artifact checks,
+- `Analyze` stems into `report.json`,
+- `Render` via `safe-render --live-progress` with live timeline logs.
+
+Desktop production builds do not require the Node `gui/server.mjs` runtime.
 
 ## Local development
 
@@ -18,6 +26,15 @@ proves the bundled runtime can execute offline.
    `npm run prepare-sidecar`
 6. Run the desktop app:
    `npm run tauri dev`
+
+In the app:
+
+1. Paste a stems folder path.
+2. Paste a workspace folder path.
+3. Run `Doctor` if you want to verify the packaged runtime first.
+4. Run `Run All` to execute prepare -> validate -> analyze -> render directly
+   through the sidecar.
+5. Use `Reveal Workspace` to open the artifact folder after the run.
 
 `tauri dev` and `tauri build` automatically call `npm run prepare-sidecar`
 through `beforeDevCommand` / `beforeBuildCommand`. The prepare step skips the

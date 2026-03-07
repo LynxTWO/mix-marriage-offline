@@ -12,73 +12,175 @@
     <main class="shell">
       <section class="hero">
         <p class="eyebrow">Mix Marriage Offline</p>
-        <h1>Portable offline doctor</h1>
+        <h1>Direct sidecar workflow</h1>
         <p class="lede">
-          The desktop app now ships a frozen <code>mmo</code> sidecar with
-          bundled plugins, presets, schemas, and ontology data. This screen
-          proves the packaged runtime can execute without a system Python or
-          Node install.
+          Production desktop builds call the bundled <code>mmo</code> sidecar
+          directly. No Node server is launched. The UI prepares a workspace,
+          validates project artifacts, analyzes stems, and runs
+          <code>safe-render</code> with live stdout/stderr streaming into the
+          timeline.
         </p>
 
         <dl class="signal-grid">
           <div class="signal-card">
-            <dt>Check 01</dt>
-            <dd><code>mmo --version</code></dd>
+            <dt>Short Commands</dt>
+            <dd><code>execute()</code> for doctor, prepare, and validate</dd>
           </div>
           <div class="signal-card">
-            <dt>Check 02</dt>
-            <dd><code>mmo plugins validate --bundled-only</code></dd>
+            <dt>Live Workflows</dt>
+            <dd><code>spawn()</code> for analyze and safe-render</dd>
           </div>
           <div class="signal-card">
-            <dt>Check 03</dt>
-            <dd><code>mmo env doctor --format json</code></dd>
+            <dt>Artifacts</dt>
+            <dd>User-chosen workspace folder, stable sidecar output paths</dd>
           </div>
         </dl>
       </section>
 
       <section class="panel">
         <div class="panel-header">
-          <p class="eyebrow eyebrow-panel">Doctor</p>
-          <h2>Run the packaged sidecar</h2>
+          <p class="eyebrow eyebrow-panel">Workflow</p>
+          <h2>Validate, analyze, render</h2>
         </div>
         <p class="panel-copy">
-          The doctor uses Tauri shell sidecars directly, then renders the exact
-          runtime paths reported by the bundled CLI.
+          Paste absolute paths for your stems folder and artifact workspace.
+          The render step runs <code>safe-render --live-progress</code> so the
+          Tauri timeline can show real-time sidecar stderr events.
         </p>
-        <div class="doctor-actions">
-          <button type="button" id="doctor-run-button">Run Doctor</button>
-          <p id="doctor-summary" class="runtime-message" role="status" aria-live="polite">
-            Waiting for a Tauri runtime.
+
+        <div class="field-grid">
+          <label class="field">
+            <span class="field-label">Stems folder</span>
+            <input
+              id="stems-dir-input"
+              class="field-input"
+              type="text"
+              placeholder="/Users/me/stems or C:/Users/me/stems"
+            />
+          </label>
+          <label class="field">
+            <span class="field-label">Workspace folder</span>
+            <input
+              id="workspace-dir-input"
+              class="field-input"
+              type="text"
+              placeholder="/Users/me/mmo-workspace or C:/Users/me/mmo-workspace"
+            />
+          </label>
+          <label class="field">
+            <span class="field-label">Render target</span>
+            <select id="render-target-select" class="field-input">
+              <option value="stereo">Stereo (2.0)</option>
+              <option value="5.1">Surround (5.1)</option>
+              <option value="7.1.4">Immersive (7.1.4)</option>
+              <option value="binaural">Binaural</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field-label">Layout standard</span>
+            <select id="layout-standard-select" class="field-input">
+              <option value="SMPTE">SMPTE</option>
+              <option value="FILM">FILM</option>
+              <option value="LOGIC_PRO">LOGIC_PRO</option>
+              <option value="VST3">VST3</option>
+              <option value="AAF">AAF</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="button-row">
+          <button type="button" id="doctor-run-button">Doctor</button>
+          <button type="button" id="workflow-prepare-button">Prepare</button>
+          <button type="button" id="workflow-validate-button">Validate</button>
+          <button type="button" id="workflow-analyze-button">Analyze</button>
+          <button type="button" id="workflow-render-button">Render</button>
+          <button type="button" id="workflow-run-all-button">Run All</button>
+        </div>
+
+        <div class="button-row button-row-secondary">
+          <button type="button" id="workspace-reveal-button" class="button-secondary">
+            Reveal Workspace
+          </button>
+          <p id="runtime-message" class="runtime-message" role="status" aria-live="polite">
+            Waiting for paths.
           </p>
         </div>
-        <div class="doctor-grid">
-          <article class="doctor-card" id="card-version">
-            <div class="doctor-card-header">
-              <p class="doctor-label">Version</p>
-              <span class="doctor-status doctor-status-idle" id="status-version">Idle</span>
+      </section>
+
+      <section class="panel panel-paths">
+        <div class="panel-header">
+          <p class="eyebrow eyebrow-panel">Artifacts</p>
+          <h2>Workspace outputs</h2>
+        </div>
+        <p class="panel-copy">
+          The desktop app writes deterministic artifacts into the workspace root
+          you provide. Project validation stays under
+          <code>workspace/project/</code>. Analyze and render outputs stay at
+          stable top-level paths.
+        </p>
+        <dl class="path-list" id="artifact-paths">
+          <div class="path-row">
+            <dt>workspace</dt>
+            <dd>Enter a workspace folder to preview artifact paths.</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="panel panel-stages">
+        <div class="panel-header">
+          <p class="eyebrow eyebrow-panel">Stages</p>
+          <h2>Sidecar results</h2>
+        </div>
+        <div class="stage-grid">
+          <article class="stage-card">
+            <div class="stage-card-header">
+              <p class="stage-label">Doctor</p>
+              <span class="stage-status stage-status-idle" id="status-doctor">Idle</span>
             </div>
-            <pre class="doctor-output" id="output-version">No result yet.</pre>
+            <pre class="stage-output" id="output-doctor">Run doctor to verify the bundled MMO sidecar.</pre>
           </article>
-          <article class="doctor-card" id="card-plugins">
-            <div class="doctor-card-header">
-              <p class="doctor-label">Bundled Plugins</p>
-              <span class="doctor-status doctor-status-idle" id="status-plugins">Idle</span>
+          <article class="stage-card">
+            <div class="stage-card-header">
+              <p class="stage-label">Prepare</p>
+              <span class="stage-status stage-status-idle" id="status-prepare">Idle</span>
             </div>
-            <pre class="doctor-output" id="output-plugins">No result yet.</pre>
+            <pre class="stage-output" id="output-prepare">Prepare writes a project scaffold under workspace/project.</pre>
           </article>
-          <article class="doctor-card doctor-card-paths" id="card-paths">
-            <div class="doctor-card-header">
-              <p class="doctor-label">Runtime Paths</p>
-              <span class="doctor-status doctor-status-idle" id="status-paths">Idle</span>
+          <article class="stage-card">
+            <div class="stage-card-header">
+              <p class="stage-label">Validate</p>
+              <span class="stage-status stage-status-idle" id="status-validate">Idle</span>
             </div>
-            <dl class="path-list" id="output-paths">
-              <div class="path-row">
-                <dt>Waiting</dt>
-                <dd>No path report yet.</dd>
-              </div>
-            </dl>
+            <pre class="stage-output" id="output-validate">Validate checks the project scaffold using MMO CLI contracts.</pre>
+          </article>
+          <article class="stage-card">
+            <div class="stage-card-header">
+              <p class="stage-label">Analyze</p>
+              <span class="stage-status stage-status-idle" id="status-analyze">Idle</span>
+            </div>
+            <pre class="stage-output" id="output-analyze">Analyze writes report.json and keeps report.scan.json in the workspace.</pre>
+          </article>
+          <article class="stage-card stage-card-wide">
+            <div class="stage-card-header">
+              <p class="stage-label">Render</p>
+              <span class="stage-status stage-status-idle" id="status-render">Idle</span>
+            </div>
+            <pre class="stage-output" id="output-render">Render runs safe-render with live progress and writes receipt, manifest, QA, and audio outputs.</pre>
           </article>
         </div>
+      </section>
+
+      <section class="panel panel-timeline">
+        <div class="panel-header">
+          <p class="eyebrow eyebrow-panel">Timeline</p>
+          <h2>Live stdout / stderr</h2>
+        </div>
+        <p class="panel-copy">
+          Spawned workflows stream every sidecar line into this timeline. Live
+          progress events emitted as <code>[MMO-LIVE]</code> are reformatted for
+          fast scanning.
+        </p>
+        <div class="timeline-list" id="timeline-list"></div>
       </section>
     </main>
   </body>

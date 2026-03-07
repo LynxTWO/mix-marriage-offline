@@ -278,6 +278,10 @@ What remains: make loudness-matched A/B compensation visible in report artifacts
   ships bundled MMO packaged data through that sidecar, and includes a Doctor
   screen that verifies `mmo --version`, bundled plugin validation, and runtime
   path resolution without system Python/Node installs.
+- [x] The Tauri desktop app now runs prepare/validate/analyze/render directly
+  through the packaged sidecar, streams live stdout/stderr into a desktop
+  timeline, and writes deterministic artifacts under a user-provided workspace
+  folder without requiring the Node `gui/server.mjs` runtime in production.
 - [ ] A GUI exists (local web app is fine) that exposes the same workflow as the CLI: validate → analyze → scene → render → results → compare.
 - [ ] GUI copy and structure follow the design system in ontology/gui_design.yaml (theme tokens, screen templates, and progressive disclosure).
 - [x] Any plugin/config UI is generated from JSON Schema with optional UI hints (example: x_mmo_ui or a dedicated ui_hints registry) so agents do not hand-build one-off forms.

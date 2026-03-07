@@ -108,6 +108,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Added `mmo --version` plus a deterministic `mmo plugins validate`
     contract so packaged desktop flows can verify bundled plugin manifests and
     entrypoints without relying on external Python installs.
+  - Replaced the doctor-only desktop surface with a direct sidecar workflow
+    screen that prepares a project scaffold, validates project artifacts,
+    analyzes stems into a user-chosen workspace folder, and runs
+    `safe-render --live-progress` while streaming stdout/stderr into a Tauri
+    timeline.
+  - Added a small TypeScript sidecar wrapper that centralizes
+    `Command.sidecar(...)` `execute()`/`spawn()` calls, line-buffered log
+    streaming, and deterministic workspace artifact path construction for the
+    desktop app.
+  - Expanded the Tauri shell capability contract so the desktop app explicitly
+    allowlists both `shell:allow-execute` and `shell:allow-spawn` for the MMO
+    sidecar.
 
 - Ontology additive-change enforcement:
   - Added `tools/validate_ontology_changes.py` to diff ontology IDs against
