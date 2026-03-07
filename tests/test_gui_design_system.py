@@ -64,6 +64,40 @@ class TestGuiDesignSystem(unittest.TestCase):
         duration_ms = payload["micro_interactions"]["animations"]["duration_ms"]
         self.assertEqual(duration_ms, 200)
 
+    def test_gui_design_lists_required_control_family(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        payload = load_gui_design(repo_root / "ontology" / "gui_design.yaml")
+        controls = set(payload["components"]["controls"])
+        required_controls = {
+            "KNOB",
+            "SLIDER",
+            "TOGGLE",
+            "SEGMENTED",
+            "XY",
+            "PRESET_BROWSER",
+            "AB_TOGGLE",
+            "VALUE_READOUT",
+        }
+        self.assertTrue(required_controls.issubset(controls))
+
+    def test_gui_design_non_negotiable_interaction_standards_are_enabled(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        payload = load_gui_design(repo_root / "ontology" / "gui_design.yaml")
+        interaction_standards = payload["interaction_standards"]
+        self.assertTrue(interaction_standards["numeric_text_entry"])
+        self.assertTrue(interaction_standards["fine_adjust_modifier_feedback"])
+        self.assertTrue(interaction_standards["units_always_visible"])
+        self.assertTrue(interaction_standards["global_scale_control"])
+
+    def test_gui_design_scaling_presets_include_standard_default(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        payload = load_gui_design(repo_root / "ontology" / "gui_design.yaml")
+        scaling = payload["scaling"]
+        presets = scaling["presets"]
+        preset_ids = {row["scale_id"] for row in presets}
+        self.assertEqual(scaling["default_scale_id"], "standard")
+        self.assertTrue({"compact", "standard", "comfort"}.issubset(preset_ids))
+
 
 if __name__ == "__main__":
     unittest.main()

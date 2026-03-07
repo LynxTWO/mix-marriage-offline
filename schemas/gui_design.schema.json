@@ -10,6 +10,8 @@
     "layout_rules",
     "copy_rules",
     "components",
+    "interaction_standards",
+    "scaling",
     "examples",
     "screen_templates",
     "glossary",
@@ -21,6 +23,8 @@
     "layout_rules": { "$ref": "#/$defs/layout_rules" },
     "copy_rules": { "$ref": "#/$defs/copy_rules" },
     "components": { "$ref": "#/$defs/components" },
+    "interaction_standards": { "$ref": "#/$defs/interaction_standards" },
+    "scaling": { "$ref": "#/$defs/scaling" },
     "examples": { "$ref": "#/$defs/examples" },
     "screen_templates": { "$ref": "#/$defs/screen_templates" },
     "glossary": { "$ref": "#/$defs/glossary" },
@@ -150,10 +154,54 @@
     "components": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["badges", "panels"],
+      "required": ["badges", "panels", "controls"],
       "properties": {
         "badges": { "$ref": "#/$defs/nonempty_string_array" },
-        "panels": { "$ref": "#/$defs/nonempty_string_array" }
+        "panels": { "$ref": "#/$defs/nonempty_string_array" },
+        "controls": { "$ref": "#/$defs/nonempty_string_array" }
+      }
+    },
+    "interaction_standards": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "numeric_text_entry",
+        "fine_adjust_modifier_feedback",
+        "units_always_visible",
+        "global_scale_control"
+      ],
+      "properties": {
+        "numeric_text_entry": { "type": "boolean" },
+        "fine_adjust_modifier_feedback": { "type": "boolean" },
+        "units_always_visible": { "type": "boolean" },
+        "global_scale_control": { "type": "boolean" }
+      }
+    },
+    "scale_preset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scale_id", "label", "factor"],
+      "properties": {
+        "scale_id": { "$ref": "#/$defs/nonempty_string" },
+        "label": { "$ref": "#/$defs/nonempty_string" },
+        "factor": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "scaling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["global_control", "default_scale_id", "presets"],
+      "properties": {
+        "global_control": { "type": "boolean" },
+        "default_scale_id": { "$ref": "#/$defs/nonempty_string" },
+        "presets": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/scale_preset" }
+        }
       }
     },
     "examples": {

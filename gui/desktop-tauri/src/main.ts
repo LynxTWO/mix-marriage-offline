@@ -1,5 +1,6 @@
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
+import { initDesignSystem } from "./design-system";
 import {
   buildWorkflowPaths,
   executeMmo,
@@ -701,6 +702,7 @@ async function runWithBusy(ui: AppUi, action: () => Promise<void>, clearLogs = f
 }
 
 window.addEventListener("DOMContentLoaded", () => {
+  initDesignSystem();
   const ui = checkElements();
 
   for (const stage of Object.values(ui.stages)) {

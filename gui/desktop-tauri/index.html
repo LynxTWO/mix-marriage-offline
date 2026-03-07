@@ -10,75 +10,408 @@
 
   <body>
     <main class="shell">
-      <section class="hero">
-        <p class="eyebrow">Mix Marriage Offline</p>
-        <h1>Direct sidecar workflow</h1>
-        <p class="lede">
-          Production desktop builds call the bundled <code>mmo</code> sidecar
-          directly. No Node server is launched. The UI prepares a workspace,
-          validates project artifacts, analyzes stems, and runs
-          <code>safe-render</code> with live stdout/stderr streaming into the
-          timeline.
-        </p>
+      <section class="hero" data-section-id="header">
+        <div class="hero-copy">
+          <p class="eyebrow">Mix Marriage Offline</p>
+          <h1>Workflow-safe controls, not mystery meat.</h1>
+          <p class="lede">
+            The desktop surface now follows the canonical GUI design contract:
+            direct numeric entry, visible units, fine-adjust feedback, and a
+            global scale control without hiding the CLI-backed workflow.
+          </p>
+        </div>
 
-        <dl class="signal-grid">
-          <div class="signal-card">
-            <dt>Short Commands</dt>
-            <dd><code>execute()</code> for doctor, prepare, and validate</dd>
-          </div>
-          <div class="signal-card">
-            <dt>Live Workflows</dt>
-            <dd><code>spawn()</code> for analyze and safe-render</dd>
-          </div>
-          <div class="signal-card">
-            <dt>Artifacts</dt>
-            <dd>User-chosen workspace folder, stable sidecar output paths</dd>
-          </div>
-        </dl>
+        <div class="hero-tools">
+          <article
+            class="widget compact-widget"
+            data-widget-id="widget.header.scale"
+            data-control-kind="SEGMENTED"
+            data-scale-control="true"
+            data-scale-count="3"
+          >
+            <p class="field-label">GUI Scale</p>
+            <div
+              id="gui-scale-control"
+              class="segmented-control"
+              role="group"
+              aria-label="GUI scale presets"
+            >
+              <button type="button" class="segmented-button" data-scale-id="compact" data-scale="0.9">
+                90%
+              </button>
+              <button type="button" class="segmented-button" data-scale-id="standard" data-scale="1.0">
+                100%
+              </button>
+              <button type="button" class="segmented-button" data-scale-id="comfort" data-scale="1.15">
+                115%
+              </button>
+            </div>
+            <p id="gui-scale-label" class="control-caption">Scale set to 100%.</p>
+          </article>
+
+          <article class="widget compact-widget" data-widget-id="widget.header.fine_adjust">
+            <p class="field-label">Fine Adjust</p>
+            <p id="fine-adjust-indicator" class="status-pill">Hold Shift or Ctrl for fine adjust.</p>
+          </article>
+
+          <article class="widget compact-widget" data-widget-id="widget.header.tabs">
+            <p class="field-label">Screens</p>
+            <nav class="screen-tabs" aria-label="Primary screens">
+              <button type="button" class="screen-tab" data-screen-target="dashboard" aria-pressed="true">
+                Dashboard
+              </button>
+              <button type="button" class="screen-tab" data-screen-target="presets" aria-pressed="false">
+                Presets
+              </button>
+              <button type="button" class="screen-tab" data-screen-target="run" aria-pressed="false">
+                Run
+              </button>
+              <button type="button" class="screen-tab" data-screen-target="compare" aria-pressed="false">
+                Compare
+              </button>
+            </nav>
+          </article>
+        </div>
       </section>
 
-      <section class="panel">
+      <section
+        id="screen-dashboard"
+        class="panel screen-panel"
+        data-screen-panel="dashboard"
+        data-section-id="dashboard"
+      >
         <div class="panel-header">
-          <p class="eyebrow eyebrow-panel">Workflow</p>
-          <h2>Validate, analyze, render</h2>
+          <p class="eyebrow eyebrow-panel">Dashboard</p>
+          <h2>Signals first, controls right beside them</h2>
         </div>
         <p class="panel-copy">
-          Paste absolute paths for your stems folder and artifact workspace.
-          The render step runs <code>safe-render --live-progress</code> so the
-          Tauri timeline can show real-time sidecar stderr events.
+          Dashboard keeps the “why” near the control, shows units on every
+          numeric move, and still lets you type exact values.
         </p>
 
-        <div class="field-grid">
-          <label class="field">
+        <div class="dashboard-grid">
+          <article class="signal-card widget" data-widget-id="widget.dashboard.signal_vibe">
+            <p class="signal-label">Vibe</p>
+            <p class="signal-value">Warm with controlled width</p>
+            <p class="signal-note">The active preset keeps choruses open without scooping the vocal.</p>
+          </article>
+
+          <article class="signal-card widget" data-widget-id="widget.dashboard.signal_safety">
+            <p class="signal-label">Safety</p>
+            <p class="signal-value">SAFE</p>
+            <p class="signal-note">Trim and focus controls stay inside bounded-authority ranges.</p>
+          </article>
+
+          <article class="signal-card widget" data-widget-id="widget.dashboard.signal_deliverables">
+            <p class="signal-label">Deliverables</p>
+            <p class="signal-value">Render-ready</p>
+            <p class="signal-note">Run tab keeps the staged sidecar path and artifact outputs visible.</p>
+          </article>
+
+          <article
+            class="control-card widget"
+            data-widget-id="widget.dashboard.knob_width"
+            data-control-kind="KNOB"
+            data-numeric-control="true"
+            data-direct-entry="true"
+            data-fine-adjust="true"
+            data-units="dB"
+          >
+            <div class="control-head">
+              <div>
+                <p class="control-label">Width</p>
+                <p class="control-why">Dial stereo spread and still type the exact dB move.</p>
+              </div>
+              <span class="control-unit">dB</span>
+            </div>
+            <button
+              id="width-knob"
+              class="knob-surface"
+              type="button"
+              aria-label="Width knob"
+              aria-valuemin="-12"
+              aria-valuemax="12"
+              aria-valuenow="1.5"
+              data-hit-target="true"
+            >
+              <span class="knob-face">
+                <span class="knob-pointer"></span>
+              </span>
+            </button>
+            <label class="value-entry">
+              <span class="value-entry-label">Exact value</span>
+              <span class="value-entry-row">
+                <input id="width-knob-input" class="value-input" type="number" step="0.1" inputmode="decimal" />
+                <span class="control-unit control-unit-inline">dB</span>
+              </span>
+            </label>
+            <p id="width-knob-value" class="control-caption"></p>
+          </article>
+
+          <article
+            class="control-card widget"
+            data-widget-id="widget.dashboard.slider_trim"
+            data-control-kind="SLIDER"
+            data-numeric-control="true"
+            data-direct-entry="true"
+            data-fine-adjust="true"
+            data-units="dB"
+          >
+            <div class="control-head">
+              <div>
+                <p class="control-label">Trim</p>
+                <p class="control-why">Use the slider for quick moves and direct entry for precise gain.</p>
+              </div>
+              <span class="control-unit">dB</span>
+            </div>
+            <button
+              id="trim-slider"
+              class="slider-surface"
+              type="button"
+              aria-label="Trim slider"
+              aria-valuemin="-18"
+              aria-valuemax="6"
+              aria-valuenow="-3.2"
+              data-hit-target="true"
+            >
+              <span id="trim-slider-fill" class="slider-fill"></span>
+              <span id="trim-slider-thumb" class="slider-thumb"></span>
+            </button>
+            <label class="value-entry">
+              <span class="value-entry-label">Exact value</span>
+              <span class="value-entry-row">
+                <input id="trim-slider-input" class="value-input" type="number" step="0.1" inputmode="decimal" />
+                <span class="control-unit control-unit-inline">dB</span>
+              </span>
+            </label>
+            <p id="trim-slider-value" class="control-caption"></p>
+          </article>
+
+          <article
+            class="control-card widget"
+            data-widget-id="widget.dashboard.toggle_safe_mode"
+            data-control-kind="TOGGLE"
+          >
+            <div class="control-head">
+              <div>
+                <p class="control-label">Safe mode</p>
+                <p class="control-why">Keep exploratory moves inside bounded-authority limits.</p>
+              </div>
+              <span id="safe-mode-state" class="status-chip status-chip-ok">On</span>
+            </div>
+            <button id="safe-mode-toggle" type="button" class="toggle-button" data-hit-target="true">
+              Safe mode enabled
+            </button>
+            <p class="control-caption">Toggle remains explicit so creative exploration never silently clips.</p>
+          </article>
+
+          <article
+            class="control-card widget"
+            data-widget-id="widget.dashboard.segmented_perspective"
+            data-control-kind="SEGMENTED"
+          >
+            <div class="control-head">
+              <div>
+                <p class="control-label">Perspective</p>
+                <p class="control-why">Switch context without changing the underlying analysis result.</p>
+              </div>
+            </div>
+            <div
+              id="perspective-segmented"
+              class="segmented-control segmented-control-wide"
+              role="group"
+              aria-label="Perspective selector"
+            >
+              <button type="button" class="segmented-button" data-perspective="audience" data-hit-target="true">
+                Audience
+              </button>
+              <button type="button" class="segmented-button" data-perspective="band" data-hit-target="true">
+                Band
+              </button>
+              <button type="button" class="segmented-button" data-perspective="orchestra" data-hit-target="true">
+                Orchestra
+              </button>
+            </div>
+            <p id="perspective-caption" class="control-caption"></p>
+          </article>
+
+          <article
+            class="control-card widget"
+            data-widget-id="widget.dashboard.xy_focus"
+            data-control-kind="XY"
+            data-numeric-control="true"
+            data-direct-entry="true"
+            data-fine-adjust="true"
+            data-units="deg,%"
+          >
+            <div class="control-head">
+              <div>
+                <p class="control-label">Focus map</p>
+                <p class="control-why">Move pan and depth together, then lock exact axis values below.</p>
+              </div>
+              <span class="control-unit">deg / %</span>
+            </div>
+            <button id="focus-xy-pad" type="button" class="xy-pad" aria-label="Focus XY pad" data-hit-target="true">
+              <span class="xy-grid"></span>
+              <span id="focus-xy-dot" class="xy-dot"></span>
+            </button>
+            <div class="xy-inputs">
+              <label class="value-entry">
+                <span class="value-entry-label">Pan</span>
+                <span class="value-entry-row">
+                  <input id="focus-pan-input" class="value-input" type="number" step="1" inputmode="numeric" />
+                  <span class="control-unit control-unit-inline">deg</span>
+                </span>
+              </label>
+              <label class="value-entry">
+                <span class="value-entry-label">Depth</span>
+                <span class="value-entry-row">
+                  <input id="focus-depth-input" class="value-input" type="number" step="1" inputmode="numeric" />
+                  <span class="control-unit control-unit-inline">%</span>
+                </span>
+              </label>
+            </div>
+            <p id="focus-caption" class="control-caption"></p>
+          </article>
+
+          <article
+            class="control-card readout-card widget"
+            data-widget-id="widget.dashboard.value_readout"
+            data-control-kind="VALUE_READOUT"
+            data-units="LUFS"
+          >
+            <div class="control-head">
+              <div>
+                <p class="control-label">Value readout</p>
+                <p class="control-why">Critical numbers stay legible with units and stable rounding.</p>
+              </div>
+              <span class="control-unit">LUFS</span>
+            </div>
+            <p id="value-readout-lufs" class="readout-primary">-14.0 LUFS</p>
+            <p id="value-readout-focus" class="readout-secondary">Pan 8 deg · Depth 62%</p>
+            <p id="value-readout-note" class="control-caption">Render-safe by default and easy to compare.</p>
+          </article>
+        </div>
+      </section>
+
+      <section
+        id="screen-presets"
+        class="panel screen-panel"
+        data-screen-panel="presets"
+        data-section-id="presets"
+        hidden
+      >
+        <div class="panel-header">
+          <p class="eyebrow eyebrow-panel">Presets</p>
+          <h2>Preset browser with search, tags, and clear deltas</h2>
+        </div>
+        <p class="panel-copy">
+          Search is preferred over deep menus. Tag chips filter instantly, and
+          the preview explains what the preset changes before you commit it.
+        </p>
+
+        <article
+          class="preset-browser widget"
+          data-widget-id="widget.presets.browser"
+          data-control-kind="PRESET_BROWSER"
+        >
+          <div class="preset-browser-top">
+            <label class="field field-search">
+              <span class="field-label">Preset search</span>
+              <input
+                id="preset-search"
+                class="field-input"
+                type="search"
+                placeholder="Search width, warmth, safety..."
+                data-hit-target="true"
+              />
+            </label>
+            <div class="tag-row" id="preset-tag-row" role="group" aria-label="Preset tags">
+              <button type="button" class="tag-chip" data-preset-tag="ALL" data-hit-target="true">
+                All
+              </button>
+              <button type="button" class="tag-chip" data-preset-tag="Warm" data-hit-target="true">
+                Warm
+              </button>
+              <button type="button" class="tag-chip" data-preset-tag="Wide" data-hit-target="true">
+                Wide
+              </button>
+              <button type="button" class="tag-chip" data-preset-tag="Safe" data-hit-target="true">
+                Safe
+              </button>
+              <button type="button" class="tag-chip" data-preset-tag="Punch" data-hit-target="true">
+                Punch
+              </button>
+            </div>
+          </div>
+
+          <div class="preset-browser-body">
+            <div id="preset-browser-list" class="preset-list" aria-live="polite"></div>
+            <div class="preset-preview">
+              <p class="field-label">Preview</p>
+              <h3 id="preset-preview-name">Translation Safe</h3>
+              <p id="preset-preview-summary" class="preset-preview-summary">
+                Keeps loudness stable while tightening the stereo image.
+              </p>
+              <p id="preset-preview-delta" class="control-caption"></p>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section
+        id="screen-run"
+        class="panel screen-panel"
+        data-screen-panel="run"
+        data-section-id="run"
+        hidden
+      >
+        <div class="panel-header">
+          <p class="eyebrow eyebrow-panel">Run</p>
+          <h2>Direct sidecar workflow with progressive disclosure</h2>
+        </div>
+        <p class="panel-copy">
+          The core workflow still prepares, validates, analyzes, and renders
+          through the packaged MMO sidecar. Dense logs live below the fold in
+          disclosure panels so the primary action path stays visible.
+        </p>
+
+        <div class="run-grid">
+          <label class="field widget" data-widget-id="widget.run.stems_folder">
             <span class="field-label">Stems folder</span>
             <input
               id="stems-dir-input"
               class="field-input"
               type="text"
               placeholder="/Users/me/stems or C:/Users/me/stems"
+              data-hit-target="true"
             />
           </label>
-          <label class="field">
+
+          <label class="field widget" data-widget-id="widget.run.workspace_folder">
             <span class="field-label">Workspace folder</span>
             <input
               id="workspace-dir-input"
               class="field-input"
               type="text"
               placeholder="/Users/me/mmo-workspace or C:/Users/me/mmo-workspace"
+              data-hit-target="true"
             />
           </label>
-          <label class="field">
+
+          <label class="field widget" data-widget-id="widget.run.render_target">
             <span class="field-label">Render target</span>
-            <select id="render-target-select" class="field-input">
+            <select id="render-target-select" class="field-input" data-hit-target="true">
               <option value="stereo">Stereo (2.0)</option>
               <option value="5.1">Surround (5.1)</option>
               <option value="7.1.4">Immersive (7.1.4)</option>
               <option value="binaural">Binaural</option>
             </select>
           </label>
-          <label class="field">
+
+          <label class="field widget" data-widget-id="widget.run.layout_standard">
             <span class="field-label">Layout standard</span>
-            <select id="layout-standard-select" class="field-input">
+            <select id="layout-standard-select" class="field-input" data-hit-target="true">
               <option value="SMPTE">SMPTE</option>
               <option value="FILM">FILM</option>
               <option value="LOGIC_PRO">LOGIC_PRO</option>
@@ -86,101 +419,177 @@
               <option value="AAF">AAF</option>
             </select>
           </label>
-        </div>
 
-        <div class="button-row">
-          <button type="button" id="doctor-run-button">Doctor</button>
-          <button type="button" id="workflow-prepare-button">Prepare</button>
-          <button type="button" id="workflow-validate-button">Validate</button>
-          <button type="button" id="workflow-analyze-button">Analyze</button>
-          <button type="button" id="workflow-render-button">Render</button>
-          <button type="button" id="workflow-run-all-button">Run All</button>
-        </div>
+          <article class="action-card widget" data-widget-id="widget.run.actions">
+            <p class="field-label">Actions</p>
+            <div class="button-row">
+              <button type="button" id="doctor-run-button" data-hit-target="true">Doctor</button>
+              <button type="button" id="workflow-prepare-button" data-hit-target="true">Prepare</button>
+              <button type="button" id="workflow-validate-button" data-hit-target="true">Validate</button>
+              <button type="button" id="workflow-analyze-button" data-hit-target="true">Analyze</button>
+              <button type="button" id="workflow-render-button" data-hit-target="true">Render</button>
+              <button type="button" id="workflow-run-all-button" data-hit-target="true">Run All</button>
+              <button
+                type="button"
+                id="workspace-reveal-button"
+                class="button-secondary"
+                data-hit-target="true"
+              >
+                Reveal Workspace
+              </button>
+            </div>
+          </article>
 
-        <div class="button-row button-row-secondary">
-          <button type="button" id="workspace-reveal-button" class="button-secondary">
-            Reveal Workspace
-          </button>
-          <p id="runtime-message" class="runtime-message" role="status" aria-live="polite">
-            Waiting for paths.
-          </p>
+          <article class="action-card widget" data-widget-id="widget.run.status">
+            <p class="field-label">Runtime</p>
+            <p id="runtime-message" class="runtime-message" role="status" aria-live="polite">
+              Waiting for paths.
+            </p>
+          </article>
+
+          <article class="stage-strip widget" data-widget-id="widget.run.stages">
+            <p class="field-label">Stage strip</p>
+            <div class="stage-strip-grid">
+              <div class="stage-chip">
+                <span class="stage-label">Doctor</span>
+                <span class="stage-status stage-status-idle" id="status-doctor">Idle</span>
+              </div>
+              <div class="stage-chip">
+                <span class="stage-label">Prepare</span>
+                <span class="stage-status stage-status-idle" id="status-prepare">Idle</span>
+              </div>
+              <div class="stage-chip">
+                <span class="stage-label">Validate</span>
+                <span class="stage-status stage-status-idle" id="status-validate">Idle</span>
+              </div>
+              <div class="stage-chip">
+                <span class="stage-label">Analyze</span>
+                <span class="stage-status stage-status-idle" id="status-analyze">Idle</span>
+              </div>
+              <div class="stage-chip">
+                <span class="stage-label">Render</span>
+                <span class="stage-status stage-status-idle" id="status-render">Idle</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="details-stack widget" data-widget-id="widget.run.details">
+            <details class="details-block">
+              <summary>Workspace outputs</summary>
+              <dl class="path-list" id="artifact-paths">
+                <div class="path-row">
+                  <dt>workspace</dt>
+                  <dd>Enter a workspace folder to preview artifact paths.</dd>
+                </div>
+              </dl>
+            </details>
+
+            <details class="details-block">
+              <summary>Stage outputs</summary>
+              <div class="stage-output-grid">
+                <article class="stage-card">
+                  <div class="stage-card-header">
+                    <p class="stage-label">Doctor</p>
+                  </div>
+                  <pre class="stage-output" id="output-doctor">Run doctor to verify the bundled MMO sidecar.</pre>
+                </article>
+                <article class="stage-card">
+                  <div class="stage-card-header">
+                    <p class="stage-label">Prepare</p>
+                  </div>
+                  <pre class="stage-output" id="output-prepare">Prepare writes a project scaffold under workspace/project.</pre>
+                </article>
+                <article class="stage-card">
+                  <div class="stage-card-header">
+                    <p class="stage-label">Validate</p>
+                  </div>
+                  <pre class="stage-output" id="output-validate">Validate checks the project scaffold using MMO CLI contracts.</pre>
+                </article>
+                <article class="stage-card">
+                  <div class="stage-card-header">
+                    <p class="stage-label">Analyze</p>
+                  </div>
+                  <pre class="stage-output" id="output-analyze">Analyze writes report.json and keeps report.scan.json in the workspace.</pre>
+                </article>
+                <article class="stage-card">
+                  <div class="stage-card-header">
+                    <p class="stage-label">Render</p>
+                  </div>
+                  <pre class="stage-output" id="output-render">Render runs safe-render with live progress and writes receipt, manifest, QA, and audio outputs.</pre>
+                </article>
+              </div>
+            </details>
+
+            <details class="details-block">
+              <summary>Live stdout / stderr</summary>
+              <div class="timeline-list" id="timeline-list"></div>
+            </details>
+          </article>
         </div>
       </section>
 
-      <section class="panel panel-paths">
+      <section
+        id="screen-compare"
+        class="panel screen-panel"
+        data-screen-panel="compare"
+        data-section-id="compare"
+        hidden
+      >
         <div class="panel-header">
-          <p class="eyebrow eyebrow-panel">Artifacts</p>
-          <h2>Workspace outputs</h2>
+          <p class="eyebrow eyebrow-panel">Compare</p>
+          <h2>A/B toggle with disclosed loudness compensation</h2>
         </div>
         <p class="panel-copy">
-          The desktop app writes deterministic artifacts into the workspace root
-          you provide. Project validation stays under
-          <code>workspace/project/</code>. Analyze and render outputs stay at
-          stable top-level paths.
+          Compare keeps “louder is better” bias in check by showing the
+          compensation up front and leaving the outcome summary in plain language.
         </p>
-        <dl class="path-list" id="artifact-paths">
-          <div class="path-row">
-            <dt>workspace</dt>
-            <dd>Enter a workspace folder to preview artifact paths.</dd>
-          </div>
-        </dl>
-      </section>
 
-      <section class="panel panel-stages">
-        <div class="panel-header">
-          <p class="eyebrow eyebrow-panel">Stages</p>
-          <h2>Sidecar results</h2>
-        </div>
-        <div class="stage-grid">
-          <article class="stage-card">
-            <div class="stage-card-header">
-              <p class="stage-label">Doctor</p>
-              <span class="stage-status stage-status-idle" id="status-doctor">Idle</span>
+        <div class="compare-grid">
+          <article
+            class="control-card widget"
+            data-widget-id="widget.compare.ab_toggle"
+            data-control-kind="AB_TOGGLE"
+          >
+            <div class="control-head">
+              <div>
+                <p class="control-label">A/B state</p>
+                <p class="control-why">Switch contexts without changing the source analysis.</p>
+              </div>
             </div>
-            <pre class="stage-output" id="output-doctor">Run doctor to verify the bundled MMO sidecar.</pre>
-          </article>
-          <article class="stage-card">
-            <div class="stage-card-header">
-              <p class="stage-label">Prepare</p>
-              <span class="stage-status stage-status-idle" id="status-prepare">Idle</span>
+            <div id="ab-toggle" class="segmented-control segmented-control-wide" role="group" aria-label="A B toggle">
+              <button type="button" class="segmented-button" data-ab-state="A" data-hit-target="true">
+                A
+              </button>
+              <button type="button" class="segmented-button" data-ab-state="B" data-hit-target="true">
+                B
+              </button>
             </div>
-            <pre class="stage-output" id="output-prepare">Prepare writes a project scaffold under workspace/project.</pre>
+            <p id="ab-compensation" class="control-caption"></p>
           </article>
-          <article class="stage-card">
-            <div class="stage-card-header">
-              <p class="stage-label">Validate</p>
-              <span class="stage-status stage-status-idle" id="status-validate">Idle</span>
-            </div>
-            <pre class="stage-output" id="output-validate">Validate checks the project scaffold using MMO CLI contracts.</pre>
-          </article>
-          <article class="stage-card">
-            <div class="stage-card-header">
-              <p class="stage-label">Analyze</p>
-              <span class="stage-status stage-status-idle" id="status-analyze">Idle</span>
-            </div>
-            <pre class="stage-output" id="output-analyze">Analyze writes report.json and keeps report.scan.json in the workspace.</pre>
-          </article>
-          <article class="stage-card stage-card-wide">
-            <div class="stage-card-header">
-              <p class="stage-label">Render</p>
-              <span class="stage-status stage-status-idle" id="status-render">Idle</span>
-            </div>
-            <pre class="stage-output" id="output-render">Render runs safe-render with live progress and writes receipt, manifest, QA, and audio outputs.</pre>
-          </article>
-        </div>
-      </section>
 
-      <section class="panel panel-timeline">
-        <div class="panel-header">
-          <p class="eyebrow eyebrow-panel">Timeline</p>
-          <h2>Live stdout / stderr</h2>
+          <article
+            class="control-card readout-card widget"
+            data-widget-id="widget.compare.value_readout"
+            data-control-kind="VALUE_READOUT"
+            data-units="LUFS"
+          >
+            <div class="control-head">
+              <div>
+                <p class="control-label">Matched readout</p>
+                <p class="control-why">A single loudness line keeps the comparison honest.</p>
+              </div>
+              <span class="control-unit">LUFS</span>
+            </div>
+            <p id="compare-readout-primary" class="readout-primary">-14.0 LUFS</p>
+            <p id="compare-readout-secondary" class="readout-secondary">Stereo width and headroom stay disclosed.</p>
+          </article>
+
+          <article class="signal-card widget" data-widget-id="widget.compare.summary">
+            <p class="signal-label">What changed</p>
+            <p id="compare-summary" class="signal-value">Version A stays tighter with slightly more center focus.</p>
+            <p id="compare-summary-note" class="signal-note">Compensation is displayed so the summary stays about tone, not volume.</p>
+          </article>
         </div>
-        <p class="panel-copy">
-          Spawned workflows stream every sidecar line into this timeline. Live
-          progress events emitted as <code>[MMO-LIVE]</code> are reformatted for
-          fast scanning.
-        </p>
-        <div class="timeline-list" id="timeline-list"></div>
       </section>
     </main>
   </body>

@@ -288,18 +288,18 @@ What remains: make loudness-matched A/B compensation visible in report artifacts
   timeline, and writes deterministic artifacts under a user-provided workspace
   folder without requiring the Node `gui/server.mjs` runtime in production.
 - [ ] The primary Tauri GUI exposes the same workflow as the CLI: validate → analyze → scene → render → results → compare.
-- [ ] GUI copy and structure follow the design system in ontology/gui_design.yaml (theme tokens, screen templates, and progressive disclosure).
+- [x] GUI copy and structure follow the design system in ontology/gui_design.yaml (theme tokens, screen templates, and progressive disclosure).
 - [x] Any plugin/config UI is generated from JSON Schema with optional UI hints (example: x_mmo_ui or a dedicated ui_hints registry) so agents do not hand-build one-off forms.
-What remains: finish the open Tauri screens/behaviors tracked in `docs/gui_parity.md` and enforce design-system conformance at screen composition level, not only ontology/schema level.
+What remains: finish the open Tauri screens/behaviors tracked in `docs/gui_parity.md`, especially full results/scene parity and loudness-matched live compare behavior.
 
 Interaction standards (non-negotiable):
-- [ ] Every numeric control supports direct text entry (exact value).
-- [ ] Every drag control supports a fine-adjust modifier (Shift/Ctrl is fine) with visible on-screen feedback while engaged.
-- [ ] Units are always visible (Hz, dB, ms, LUFS, degrees, samples) and rounding/display rules are consistent.
+- [x] Every numeric control supports direct text entry (exact value).
+- [x] Every drag control supports a fine-adjust modifier (Shift/Ctrl is fine) with visible on-screen feedback while engaged.
+- [x] Units are always visible (Hz, dB, ms, LUFS, degrees, samples) and rounding/display rules are consistent.
 - [ ] A/B compare is loudness-compensated by default so “louder is better” bias is reduced (compare-to-silence style behavior).
 
 Reusable component library (minimum set for v1 GUI parity):
-- [ ] Controls: knob/rotary, fader/slider, toggle/button, segmented selector, XY pad, preset browser with search/tags, A/B toggle, value readout.
+- [x] Controls: knob/rotary, fader/slider, toggle/button, segmented selector, XY pad, preset browser with search/tags, A/B toggle, value readout.
 - [x] Metering: peak/RMS, true-peak, LUFS, multi-channel meters (surround/immersive energy distribution).
 - [x] Visualizers (offline-rendered is acceptable): waveform (pre/post overlay), spectrum (FFT), optional spectrogram, EQ curve editor.
 - [ ] Dynamics/spatial views (offline-rendered is acceptable): gain reduction meter, phase correlation, goniometer/vectorscope, optional transfer curve.
@@ -324,12 +324,12 @@ AI-readable layout export + validation (prevents overlaps/off-screen UI):
   - per-widget param_ref (when applicable),
   - bounding boxes (x_px, y_px, width_px, height_px),
   - per-widget minimum sizes.
-- [ ] A layout validator runs in CI and fails on:
+- [x] A layout validator runs in CI and fails on:
   - overlapping interactive hit targets,
   - controls rendered off-screen at supported breakpoints,
   - missing labels/units for numeric controls,
   - insufficient spacing versus the declared spacing tokens.
-- [ ] A global GUI scale control exists (or responsive scaling equivalent) for laptop vs 4K displays.
+- [x] A global GUI scale control exists (or responsive scaling equivalent) for laptop vs 4K displays.
 
 
 ## 4.9 DSP engine and plugin execution (Definition of Done)

@@ -260,6 +260,16 @@ jobs:
         working-directory: gui/desktop-tauri
         run: npm ci
 
+      - name: Install Playwright browser (Linux)
+        if: runner.os == 'Linux'
+        working-directory: gui/desktop-tauri
+        run: npx playwright install --with-deps firefox
+
+      - name: Install Playwright browser (non-Linux)
+        if: runner.os != 'Linux'
+        working-directory: gui/desktop-tauri
+        run: npx playwright install firefox
+
       - name: Run desktop frontend lint
         working-directory: gui/desktop-tauri
         run: npm run lint --if-present

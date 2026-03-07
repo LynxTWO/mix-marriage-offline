@@ -49,6 +49,33 @@ components:
     - "Actions"
     - "Deliverables"
     - "Compare"
+  controls:
+    - "KNOB"
+    - "SLIDER"
+    - "TOGGLE"
+    - "SEGMENTED"
+    - "XY"
+    - "PRESET_BROWSER"
+    - "AB_TOGGLE"
+    - "VALUE_READOUT"
+interaction_standards:
+  numeric_text_entry: true
+  fine_adjust_modifier_feedback: true
+  units_always_visible: true
+  global_scale_control: true
+scaling:
+  global_control: true
+  default_scale_id: "standard"
+  presets:
+    - scale_id: "compact"
+      label: "90%"
+      factor: 0.9
+    - scale_id: "standard"
+      label: "100%"
+      factor: 1.0
+    - scale_id: "comfort"
+      label: "115%"
+      factor: 1.15
 examples:
   chips:
     - "Warm"

@@ -84,6 +84,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Tauri desktop design-system + ergonomics CI:
+  - Reworked `gui/desktop-tauri` into explicit `Dashboard` / `Presets` /
+    `Run` / `Compare` screens with machine-readable widget ids, ontology-driven
+    theme tokens, and the required control family:
+    knob, slider, toggle, segmented selector, XY pad, preset browser, A/B
+    toggle, and value readout.
+  - Added direct numeric entry for drag controls, visible units on numeric
+    widgets, fine-adjust modifier feedback, and a global GUI scale control with
+    `90% / 100% / 115%` presets.
+  - Added authored Tauri layout manifests under `gui/desktop-tauri/layouts/`
+    plus `tools/validate_tauri_design_system.py`, which validates ontology/CSS
+    token parity and fails CI on layout overlaps, off-screen widgets, missing
+    numeric units/direct-entry metadata, or spacing below the declared design
+    tokens.
+  - Added Playwright desktop UI tests for breakpoint visibility, overlap
+    tripwires, units visibility, direct numeric entry, fine-adjust behavior,
+    and global scale switching, and wired browser installation into the desktop
+    CI job.
+
 - Web GUI dashboard meter bridge + Canvas2D stage/audition visualizers:
   - Added a Canvas2D meter bridge in `gui/web` that extracts peak, RMS,
     true-peak, and LUFS rows from scan reports and render QA artifacts, with

@@ -22,19 +22,23 @@ Desktop production builds do not require the Node `gui/server.mjs` runtime.
    `python3 -m pip install -e ".[truth,pdf,gui]" pyinstaller`
 4. Run the frontend only:
    `npm run dev`
-5. Prepare the MMO sidecar manually if you want:
+5. Run the desktop UI tests:
+   `npm test`
+6. Prepare the MMO sidecar manually if you want:
    `npm run prepare-sidecar`
-6. Run the desktop app:
+7. Run the desktop app:
    `npm run tauri dev`
 
 In the app:
 
-1. Paste a stems folder path.
-2. Paste a workspace folder path.
-3. Run `Doctor` if you want to verify the packaged runtime first.
-4. Run `Run All` to execute prepare -> validate -> analyze -> render directly
+1. Use the `Dashboard` and `Presets` screens to exercise the design-system
+   controls and scale presets.
+2. Paste a stems folder path on `Run`.
+3. Paste a workspace folder path on `Run`.
+4. Run `Doctor` if you want to verify the packaged runtime first.
+5. Run `Run All` to execute prepare -> validate -> analyze -> render directly
    through the sidecar.
-5. Use `Reveal Workspace` to open the artifact folder after the run.
+6. Use `Reveal Workspace` to open the artifact folder after the run.
 
 `tauri dev` and `tauri build` automatically call `npm run prepare-sidecar`
 through `beforeDevCommand` / `beforeBuildCommand`. The prepare step skips the
@@ -48,6 +52,6 @@ GitHub Actions builds this app on Windows, macOS, and Linux. The workflow:
 - installs Python + PyInstaller so the frozen MMO sidecar can be built,
 - installs Node and Rust toolchains,
 - runs `npm run lint`,
-- runs `npm test --if-present`,
+- installs the Playwright browser bundle and runs `npm test`,
 - builds a release binary with `npm run tauri build -- --no-bundle`,
 - uploads the resulting platform binary from `src-tauri/target/release/`.
