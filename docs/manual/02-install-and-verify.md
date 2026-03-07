@@ -21,7 +21,8 @@ mmo --help
 
 Verify the GUI entry point:
 mmo-gui --help
-(If you installed with `.[gui]`, you can launch the GUI as `mmo-gui`.)
+(If you installed with `.[gui]`, you can launch the fallback CustomTkinter GUI
+as `mmo-gui` until Tauri parity lands. It is deprecated after parity lands.)
 
 FFmpeg and ffprobe (recommended).
 MMO can run without FFmpeg for WAV-only workflows.

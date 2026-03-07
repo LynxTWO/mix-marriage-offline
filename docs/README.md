@@ -65,6 +65,9 @@ The numeric prefixes reflect a recommended reading order. Gaps may exist as docu
   Guide vs Assist vs Full send, hard stops vs taste gates, safety rules.
 - [11-gui-vision.md](11-gui-vision.md)  
   Musician-first GUI principles, nerd toggle, screens, and rollout milestones.
+- [gui_parity.md](gui_parity.md)
+  Canonical Tauri parity checklist: primary plan, fallback plan, required
+  screens, required behaviors, and CI gate.
 - [12-gui-dev.md](12-gui-dev.md)
   First runnable GUI dev shell (thin client over `mmo gui rpc`) and cross-platform smoke steps.
 - [17-stem-discovery.md](17-stem-discovery.md)  

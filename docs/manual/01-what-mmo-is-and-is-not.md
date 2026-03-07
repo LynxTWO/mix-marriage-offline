@@ -23,7 +23,9 @@ It can run translation checks (phone, earbuds, car, mono collapse) when a stereo
 It can compute downmix matrices and QA a downmix against a reference.
 It can scaffold projects, save sessions, and build GUI payload bundles.
 It can browse an offline plugin marketplace and install plugins into the user plugin directory.
-It includes a desktop GUI (CustomTkinter) plus an interactive terminal UI launcher.
+It includes a Tauri desktop GUI plan in active parity work and a fallback
+desktop GUI (`mmo-gui`, CustomTkinter) plus an interactive terminal UI launcher.
+The CustomTkinter GUI is deprecated after Tauri parity lands.
 
 The design constraints are intentional.
 Determinism prevents “works on my machine” drift.

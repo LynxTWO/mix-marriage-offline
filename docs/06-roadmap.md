@@ -22,6 +22,11 @@ PR placeholder convention used below:
 ### Tauri Desktop App Parity Checklist
 
 - Goal: deliver a cross-platform Tauri desktop workflow that is parity-safe with CLI contracts and design guidance.
+- Canonical checklist: [gui_parity.md](gui_parity.md)
+- Primary GUI plan: Tauri desktop app.
+- Fallback plan until parity: CustomTkinter `mmo-gui`, deprecated after parity lands.
+- CI gate: `tools/validate_gui_parity.py` fails when `docs/gui_parity.md`
+  is missing required links, screens, or behaviors.
 - Open checklist references:
 - [PWC: loudness-compensated preview/A-B plus disclosed compensation](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
 - [PWC: feature-driven presets without loudness jump surprises](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)

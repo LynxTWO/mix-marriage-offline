@@ -141,6 +141,8 @@ Minimum CI checks:
 - unit tests (pytest)
 - fixture tests (pytest)
 - ontology validation (YAML consistency + ID uniqueness)
+- docs contract validation (including `docs/gui_parity.md` required links,
+  screens, and behaviors)
 
 ---
 

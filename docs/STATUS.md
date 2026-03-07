@@ -29,6 +29,10 @@ State: `in_progress`
 
 Definition of done:
 - [x] GUI contract docs and wireframes are documented.
+- [x] GUI delivery names one primary plan (Tauri) and one fallback plan
+  (CustomTkinter) until parity.
+- [x] `docs/gui_parity.md` defines required Tauri screens/behaviors and is
+  validated in CI.
 - [x] Tauri desktop scaffold builds in CI and uploads per-OS binaries.
 - [ ] GUI shell can load/write the same project artifacts as CLI.
 - [ ] GUI actions map 1:1 to existing deterministic contracts.

@@ -247,9 +247,14 @@ What remains: broaden this stereo-hint fixture pattern into additional multi-ste
 What remains: make loudness-matched A/B compensation visible in report artifacts and add preset-preview loudness-jump guards for all shipped preset packs.
 
 ### 4.8.1 GUI is ergonomically safe and AI-readable (a work of art in itself, so creatives and nerds alike love it. Strong typography, cinematic color contrast, and intentional spacing/visual hierarchy so it feels crafted, not utilitarian, while still staying cross-platform and deterministic)
+- [x] GUI delivery has one primary plan and one fallback until parity:
+  Tauri is the primary GUI plan, and CustomTkinter is the single fallback until
+  parity lands. The fallback is deprecated after parity lands.
+- [x] `docs/gui_parity.md` defines the required Tauri screens/behaviors and CI
+  fails when the checklist loses required links, screens, or behaviors.
 - [x] Minimal desktop CustomTkinter shell exists for stems drop, target/layout selection,
   live logs, and bounded-authority approval flow before final safe-render.
-- [x] Visualization Dashboard v1.1 exists as the primary GUI surface with deterministic
+- [x] Visualization Dashboard v1.1 exists as the current CustomTkinter fallback GUI surface with deterministic
   spectrum/vectorscope/correlation visuals, cinematic 3D speaker/object views, and
   explainable per-object intent cards (`what/why/where/confidence`).
 - [x] GUI includes a bounded-authority `Preview on Headphones` action that
@@ -282,10 +287,10 @@ What remains: make loudness-matched A/B compensation visible in report artifacts
   through the packaged sidecar, streams live stdout/stderr into a desktop
   timeline, and writes deterministic artifacts under a user-provided workspace
   folder without requiring the Node `gui/server.mjs` runtime in production.
-- [ ] A GUI exists (local web app is fine) that exposes the same workflow as the CLI: validate → analyze → scene → render → results → compare.
+- [ ] The primary Tauri GUI exposes the same workflow as the CLI: validate → analyze → scene → render → results → compare.
 - [ ] GUI copy and structure follow the design system in ontology/gui_design.yaml (theme tokens, screen templates, and progressive disclosure).
 - [x] Any plugin/config UI is generated from JSON Schema with optional UI hints (example: x_mmo_ui or a dedicated ui_hints registry) so agents do not hand-build one-off forms.
-What remains: finish full CLI parity across GUI screens and enforce design-system conformance at screen composition level, not only ontology/schema level.
+What remains: finish the open Tauri screens/behaviors tracked in `docs/gui_parity.md` and enforce design-system conformance at screen composition level, not only ontology/schema level.
 
 Interaction standards (non-negotiable):
 - [ ] Every numeric control supports direct text entry (exact value).

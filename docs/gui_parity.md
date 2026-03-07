@@ -1,0 +1,58 @@
+# GUI parity checklist
+
+This file is the canonical GUI parity contract for MMO.
+Parity is complete only when the primary Tauri desktop app covers every required
+screen and behavior listed here.
+
+## Primary Plan
+
+Tauri is the primary GUI plan for MMO.
+It is the only GUI path that should gain new parity work.
+
+- Primary implementation: [Tauri desktop README](../gui/desktop-tauri/README.md)
+- Product roadmap: [Roadmap](06-roadmap.md)
+- Completion gate: [Project When Complete](../PROJECT_WHEN_COMPLETE.md)
+
+## Fallback Plan Until Parity
+
+CustomTkinter `mmo-gui` is the single fallback plan until Tauri parity lands.
+It remains available for bounded desktop workflows during the transition, but it
+is deprecated after parity lands.
+
+- Fallback walkthrough: [CustomTkinter GUI walkthrough](manual/10-gui-walkthrough.md)
+
+## Required Links
+
+- [Roadmap](06-roadmap.md)
+- [Project When Complete](../PROJECT_WHEN_COMPLETE.md)
+- [Tauri desktop README](../gui/desktop-tauri/README.md)
+- [CustomTkinter GUI walkthrough](manual/10-gui-walkthrough.md)
+
+## Required Screens
+
+- [ ] Validate: open project or workspace, run deterministic project/stem checks,
+  and surface actionable validation failures before later stages.
+- [ ] Analyze: run CLI-backed analysis, persist artifacts, and expose the same
+  deterministic receipts and logs that the CLI writes.
+- [ ] Scene: inspect generated scene intent, preview routing/object-vs-bed
+  context, and keep scene artifacts explainable.
+- [ ] Render: run deterministic render workflows from the GUI against the same
+  CLI contracts, including progress and cancellation surfaces.
+- [ ] Results: show the written artifacts, final receipts, and what changed in a
+  way that maps back to generated files.
+- [ ] Compare: provide post-render or post-analysis comparison workflow entry
+  points so users can review outcomes before committing changes.
+
+## Required Behaviors
+
+- [ ] A/B loudness-comp compare: comparison defaults must loudness-match the two
+  audition states and disclose any compensation used.
+- [ ] Scene locks edit: the GUI must support deterministic scene lock editing and
+  save the resulting lock artifact for repeatable reruns.
+
+## Exit Rule
+
+Parity lands when every required screen and required behavior above is complete
+in the Tauri app.
+At that point the CustomTkinter fallback remains documented only as a legacy
+path and is deprecated after parity lands.

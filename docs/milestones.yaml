@@ -12,7 +12,7 @@ milestones:
     links:
       - docs/STATUS.md#mvp-gui
       - docs/06-roadmap.md#tauri-desktop-app-parity-checklist
-      - docs/11-gui-vision.md#rollout-milestones
+      - docs/gui_parity.md#required-screens
 
   - id: DSP.PHASE1
     title: DSP Phase 1

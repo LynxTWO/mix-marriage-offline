@@ -19,6 +19,7 @@ REQUIRED_CHECK_IDS = [
     "PLUGINS.UI",
     "PKG.MIRROR",
     "DOCS.MILESTONES",
+    "DOCS.GUI_PARITY",
     "DOCS.USER_MANUAL",
     "SCENE.REGISTRIES",
     "TRANSLATION.REGISTRIES",
@@ -38,6 +39,7 @@ REQUIRED_TOOL_SCRIPTS = [
     "validate_plugins_ui.py",
     "validate_packaged_data_mirror.py",
     "validate_milestones.py",
+    "validate_gui_parity.py",
     "validate_user_manual.py",
 ]
 

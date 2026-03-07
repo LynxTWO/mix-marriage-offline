@@ -8,6 +8,12 @@ MMO remains offline-first and deterministic. The GUI is a front-end to the same 
 - exports (PDF/CSV)
 - render manifest JSON (schema-valid)
 
+Implementation plan note:
+
+- Tauri is the primary GUI plan.
+- CustomTkinter is the fallback plan until parity lands, then it is deprecated.
+- The enforceable rollout checklist lives in [gui_parity.md](gui_parity.md).
+
 ## Scene-first / render-many note
 
 The GUI should center one scene and multiple render targets. Stereo should be presented as one target alongside others, not as the only truth when scene intent is present.

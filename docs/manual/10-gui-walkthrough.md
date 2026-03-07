@@ -3,6 +3,11 @@
 The GUI exists to reduce friction, not to hide the truth.
 It wraps the same CLI behaviors and keeps receipts.
 
+This chapter documents the fallback CustomTkinter GUI (`mmo-gui`).
+The primary GUI plan is the Tauri desktop app tracked in
+[../gui_parity.md](../gui_parity.md); this walkthrough is deprecated after
+Tauri parity lands.
+
 Launch the GUI.
 mmo-gui
 (Or run: python -m mmo.gui.main)

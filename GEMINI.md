@@ -99,6 +99,9 @@ Non-negotiables:
 - Keep the isolated Tauri desktop scaffold install-safe:
   `gui/desktop-tauri` should remain self-contained, Vite-based, and free of
   repo-root path assumptions.
+- Treat Tauri as the only primary GUI plan:
+  parity requirements live in `docs/gui_parity.md`, and `mmo-gui`
+  (CustomTkinter) remains fallback-only until those Tauri checklist items land.
 - Keep the Tauri desktop app sidecar-driven and offline:
   stage the frozen `mmo` CLI via the repo's binary builder, bundle it through
   `externalBin`, avoid a production dependency on `gui/server.mjs`, and keep

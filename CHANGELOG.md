@@ -84,6 +84,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- GUI parity checklist + CI contract:
+  - Added `docs/gui_parity.md` as the canonical Tauri parity checklist for the
+    required `validate -> analyze -> scene -> render -> results -> compare`
+    workflow plus scene-lock editing and loudness-compensated A/B compare.
+  - Added `tools/validate_gui_parity.py` plus regression tests and umbrella
+    contract integration so CI fails when the parity doc is missing required
+    links, screens, or behaviors.
+  - Declared Tauri as the primary GUI plan and CustomTkinter as the single
+    fallback until parity; the fallback is deprecated after parity lands.
+
 - Tauri desktop scaffold + CI release binaries:
   - Added `gui/desktop-tauri/` via `create-tauri-app` using the Vite
     `vanilla-ts` template, then rebranded the starter shell as `MMO Desktop`.

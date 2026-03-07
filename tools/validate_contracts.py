@@ -57,6 +57,7 @@ EXTERNAL_CHECKS: tuple[ExternalCheckSpec, ...] = (
     ),
     ExternalCheckSpec("PKG.MIRROR", "tools/validate_packaged_data_mirror.py", ()),
     ExternalCheckSpec("DOCS.MILESTONES", "tools/validate_milestones.py", ("--repo-root", ".")),
+    ExternalCheckSpec("DOCS.GUI_PARITY", "tools/validate_gui_parity.py", ("--repo-root", ".")),
     ExternalCheckSpec("DOCS.USER_MANUAL", "tools/validate_user_manual.py", ("--repo-root", ".")),
 )
 
