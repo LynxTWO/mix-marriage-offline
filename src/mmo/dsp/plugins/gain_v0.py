@@ -6,6 +6,7 @@ import math
 from typing import Any
 
 from mmo.dsp.plugins.base import (
+    ProcessContext,
     PluginContext,
     PluginValidationError,
     coerce_float,
@@ -27,8 +28,9 @@ class GainV0Plugin:
         sample_rate: int,
         params: dict[str, Any],
         ctx: PluginContext,
+        process_ctx: ProcessContext | None = None,
     ) -> Any:
-        del sample_rate
+        del sample_rate, process_ctx
         import numpy as np
 
         gain_db = coerce_float(params.get("gain_db"))
@@ -100,4 +102,3 @@ class GainV0Plugin:
             ],
         )
         return rendered
-

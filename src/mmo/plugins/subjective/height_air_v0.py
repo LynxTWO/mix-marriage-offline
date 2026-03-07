@@ -28,6 +28,7 @@ from typing import Any
 
 from mmo.dsp.plugins.base import (
     LayoutContext,
+    ProcessContext,
     PluginContext,
     PluginValidationError,
     coerce_float,
@@ -110,6 +111,7 @@ class HeightAirV0Plugin:
         params: dict[str, Any],
         ctx: PluginContext,
         layout_ctx: LayoutContext,
+        process_ctx: ProcessContext | None = None,
     ) -> Any:
         """Process multichannel buffer: air-band shelf on height channels only.
 
@@ -127,6 +129,7 @@ class HeightAirV0Plugin:
         ctx : PluginContext
         layout_ctx : LayoutContext
         """
+        del process_ctx
         import numpy as np
 
         # ---- parameter parsing -------------------------------------------

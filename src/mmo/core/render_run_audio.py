@@ -30,6 +30,7 @@ from mmo.dsp.plugins.base import (
     PluginValidationError,
 )
 from mmo.dsp.plugins.registry import get_stereo_plugin
+from mmo.dsp.process_context import build_process_context
 from mmo.dsp.transcode import (
     LOSSLESS_OUTPUT_FORMATS,
     ffmpeg_determinism_flags,
@@ -1871,6 +1872,11 @@ def _render_wav_with_plugin_chain(
     frame_count = int(stereo_samples.shape[0])
 
     output_posix = output_path.resolve().as_posix()
+    process_ctx = build_process_context(
+        _STEREO_LAYOUT_ID,
+        sample_rate_hz=sample_rate_hz,
+        seed=0,
+    )
     step_events: list[dict[str, Any]] = [
         {
             "kind": "action",
@@ -1886,7 +1892,7 @@ def _render_wav_with_plugin_chain(
                 "codes": ["RENDER.RUN.PLUGIN.SOURCE_LOADED"],
                 "paths": source_where,
                 "metrics": [
-                    {"name": "channel_count", "value": 2},
+                    {"name": "channel_count", "value": process_ctx.num_channels},
                     {"name": "frame_count", "value": frame_count},
                 ],
             },
@@ -1921,6 +1927,7 @@ def _render_wav_with_plugin_chain(
                 sample_rate_hz,
                 params,
                 plugin_context,
+                process_ctx,
             )
         except PluginValidationError as exc:
             raise RenderRunRefusalError(

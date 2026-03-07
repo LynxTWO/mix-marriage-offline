@@ -272,8 +272,8 @@ def _execute_job(
         notes.append(f"using {active_standard or DEFAULT_CHANNEL_STANDARD} channel order (SMPTE/ITU-R default).")
 
     # Stem dispatch: layout-aware, seeded, parallel (stems → plugins phase).
-    # Each stem is processed with the target layout's LayoutContext so that
-    # plugin chains receive the correct channel slot assignments.
+    # Each stem is processed with the target layout's ProcessContext so that
+    # downstream DSP sees the semantic channel order for the current buffer.
     stem_ids: list[str] = list(options.get("stem_ids") or [])
     if stem_ids:
         cancel_token.raise_if_cancelled()
@@ -289,6 +289,7 @@ def _execute_job(
                     standard=active_standard,
                     params={},
                     render_seed=0,
+                    sample_rate_hz=int(contract.get("sample_rate_hz") or 48_000),
                 )
                 for sid in stem_ids  # already sorted by _normalize_options
             ]

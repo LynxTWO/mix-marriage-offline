@@ -38,6 +38,7 @@ from typing import Any
 from mmo.core.speaker_layout import SpeakerPosition
 from mmo.dsp.plugins.base import (
     LayoutContext,
+    ProcessContext,
     PluginContext,
     optional_float_param,
     parse_bypass_for_stage,
@@ -64,6 +65,7 @@ class StereoWidenerV0Plugin:
         params: dict[str, Any],
         ctx: PluginContext,
         layout_ctx: LayoutContext,
+        process_ctx: ProcessContext | None = None,
     ) -> Any:
         """Process multichannel buffer: M/S width on FL/FR only.
 
@@ -80,6 +82,7 @@ class StereoWidenerV0Plugin:
         ctx : PluginContext
         layout_ctx : LayoutContext
         """
+        del process_ctx
         import numpy as np
 
         del sample_rate  # not used

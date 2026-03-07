@@ -30,6 +30,7 @@ from mmo.dsp.io import read_wav_metadata, sha256_file
 from mmo.dsp.meters import iter_wav_float64_samples
 from mmo.dsp.plugins.base import (
     LayoutContext,
+    ProcessContext,
     PluginContext,
     PluginEvidenceCollector,
     optional_float_param,
@@ -466,7 +467,9 @@ class BinauralPreviewV0Plugin:
         params: dict[str, Any],
         ctx: PluginContext,
         layout_ctx: LayoutContext,
+        process_ctx: ProcessContext | None = None,
     ) -> Any:
+        del process_ctx
         import numpy as np
 
         gate_rms_dbfs = optional_float_param(

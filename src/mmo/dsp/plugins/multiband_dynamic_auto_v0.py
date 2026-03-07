@@ -8,7 +8,7 @@ from mmo.dsp.plugins._multiband_common import (
     OPERATION_AUTO,
     process_multiband_plugin,
 )
-from mmo.dsp.plugins.base import PluginContext
+from mmo.dsp.plugins.base import PluginContext, ProcessContext
 
 PLUGIN_ID = "multiband_dynamic_auto_v0"
 
@@ -24,7 +24,9 @@ class MultibandDynamicAutoV0Plugin:
         sample_rate: int,
         params: dict[str, Any],
         ctx: PluginContext,
+        process_ctx: ProcessContext | None = None,
     ) -> Any:
+        del process_ctx
         return process_multiband_plugin(
             plugin_id=PLUGIN_ID,
             operation_mode=OPERATION_AUTO,
@@ -33,4 +35,3 @@ class MultibandDynamicAutoV0Plugin:
             params=params,
             ctx=ctx,
         )
-

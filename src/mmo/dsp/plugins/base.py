@@ -13,10 +13,10 @@ Two channel-ordering worlds collide in daily studio work:
 A DSP plugin that blindly assumes "channel 3 is always center" will apply
 the wrong curve to dialogue in Film order and wrong EQ to the LFE in SMPTE
 order.  The ``MultichannelPlugin`` protocol below enforces layout awareness at
-the API level: every plugin receives a ``LayoutContext`` that carries the
-``SpeakerLayout`` for the current buffer.  Plugins must use
-``layout_ctx.index_of(SpeakerPosition.FC)`` to find the centre channel rather
-than hard-coding a slot number.
+the API level: every plugin receives a ``ProcessContext`` for the current
+buffer plus a ``LayoutContext`` compatibility adapter for legacy
+``SpeakerLayout``-style access.  Plugins must use semantic speaker IDs instead
+of hard-coding a slot number.
 
 See also: ``mmo.core.speaker_layout`` for the canonical ``SpeakerPosition``
 enum, preset ``SpeakerLayout`` constants, and the ``remap_channels_fill()``
@@ -28,6 +28,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+from mmo.dsp.process_context import ProcessContext
 
 if TYPE_CHECKING:
     from mmo.core.speaker_layout import SpeakerLayout, SpeakerPosition
@@ -70,6 +72,15 @@ class PluginContext:
     stage_index: int
 
 
+def _process_ctx_speaker_id(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    raw_value = getattr(value, "value", value)
+    if isinstance(raw_value, str):
+        return raw_value.strip()
+    return ""
+
+
 @runtime_checkable
 class StereoPlugin(Protocol):
     """Interface for deterministic stereo plugin processors."""
@@ -82,8 +93,57 @@ class StereoPlugin(Protocol):
         sample_rate: int,
         params: dict[str, Any],
         ctx: PluginContext,
+        process_ctx: ProcessContext | None = None,
     ) -> Any:
         """Process stereo buffer and populate ``ctx.evidence_collector``."""
+
+
+@dataclass(frozen=True)
+class _LayoutStandardView:
+    value: str
+
+
+@dataclass(frozen=True)
+class _ProcessLayoutView:
+    process_ctx: ProcessContext
+    layout_id: str
+    standard: Any
+    channel_order: tuple[Any, ...]
+
+    def __init__(self, process_ctx: ProcessContext) -> None:
+        from mmo.core.speaker_layout import LayoutStandard, SpeakerPosition  # noqa: PLC0415
+
+        channel_order: list[Any] = []
+        for speaker_id in process_ctx.channel_order:
+            try:
+                channel_order.append(SpeakerPosition(speaker_id))
+            except ValueError:
+                channel_order.append(speaker_id)
+
+        try:
+            standard: Any = LayoutStandard[process_ctx.layout_standard]
+        except KeyError:
+            standard = _LayoutStandardView(process_ctx.layout_standard)
+
+        object.__setattr__(self, "process_ctx", process_ctx)
+        object.__setattr__(self, "layout_id", process_ctx.layout_id)
+        object.__setattr__(self, "standard", standard)
+        object.__setattr__(self, "channel_order", tuple(channel_order))
+
+    @property
+    def num_channels(self) -> int:
+        return self.process_ctx.num_channels
+
+    def index_of(self, position: Any) -> int | None:
+        return self.process_ctx.index_of(_process_ctx_speaker_id(position))
+
+    @property
+    def lfe_slots(self) -> list[int]:
+        return self.process_ctx.lfe_indices
+
+    @property
+    def height_slots(self) -> list[int]:
+        return self.process_ctx.height_indices
 
 
 # ---------------------------------------------------------------------------
@@ -119,24 +179,42 @@ class LayoutContext:
     # Import deferred to avoid circular dependency at module load time.
     # Callers can import SpeakerLayout from mmo.core.speaker_layout directly.
     layout: Any  # SpeakerLayout — typed as Any here to avoid the circular import
+    process_ctx: ProcessContext | None = None
+
+    @classmethod
+    def from_process_context(cls, process_ctx: ProcessContext) -> LayoutContext:
+        """Create a legacy layout adapter backed by a ProcessContext."""
+
+        return cls(
+            layout=_ProcessLayoutView(process_ctx),
+            process_ctx=process_ctx,
+        )
 
     def index_of(self, position: Any) -> int | None:
         """Return the 0-based slot index of ``position``, or ``None`` if absent."""
+        if self.process_ctx is not None:
+            return self.process_ctx.index_of(_process_ctx_speaker_id(position))
         return self.layout.index_of(position)
 
     @property
     def lfe_slots(self) -> list[int]:
         """Return sorted list of LFE PCM slot indices."""
+        if self.process_ctx is not None:
+            return self.process_ctx.lfe_indices
         return self.layout.lfe_slots
 
     @property
     def height_slots(self) -> list[int]:
         """Return sorted list of height-channel PCM slot indices."""
+        if self.process_ctx is not None:
+            return self.process_ctx.height_indices
         return self.layout.height_slots
 
     @property
     def num_channels(self) -> int:
         """Number of channels in the associated layout."""
+        if self.process_ctx is not None:
+            return self.process_ctx.num_channels
         return self.layout.num_channels
 
 
@@ -181,6 +259,7 @@ class MultichannelPlugin(Protocol):
         params: dict[str, Any],
         ctx: PluginContext,
         layout_ctx: LayoutContext,
+        process_ctx: ProcessContext | None = None,
     ) -> Any:
         """Process a multichannel audio buffer with full layout awareness.
 
@@ -196,8 +275,12 @@ class MultichannelPlugin(Protocol):
         ctx:
             Execution context (precision mode, evidence collector, stage index).
         layout_ctx:
-            Speaker-layout context.  Use ``layout_ctx.index_of(position)`` to
-            look up a speaker by semantic name; never assume fixed slot indices.
+            Speaker-layout compatibility context derived from ``process_ctx``
+            when needed. Use ``layout_ctx.index_of(position)`` to look up a
+            speaker by semantic name; never assume fixed slot indices.
+        process_ctx:
+            Canonical DSP truth object for the current buffer. Prefer
+            ``process_ctx.index_of("SPK.C")`` and related helpers in new code.
         """
 
 
@@ -345,4 +428,3 @@ def optional_float_param(
             f"[{minimum_value}, {maximum_value}].",
         )
     return float(value)
-

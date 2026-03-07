@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
-from mmo.core.layout_negotiation import get_layout_channel_order
 from mmo.dsp.decoders import (
     detect_format_from_path,
     is_lossless_format_id,
@@ -15,6 +14,7 @@ from mmo.dsp.decoders import (
     read_audio_metadata,
 )
 from mmo.dsp.io import sha256_file
+from mmo.dsp.process_context import build_process_context
 from mmo.dsp.sample_rate import choose_render_sample_rate_hz
 from mmo.plugins.interfaces import Recommendation, RenderManifest, RendererPlugin
 
@@ -25,52 +25,6 @@ _SUPPORTED_LAYOUT_IDS: tuple[str, ...] = (
     "LAYOUT.7_1_4",
     "LAYOUT.9_1_6",
 )
-_DEFAULT_CHANNEL_ORDER: dict[str, tuple[str, ...]] = {
-    "LAYOUT.2_0": ("SPK.L", "SPK.R"),
-    "LAYOUT.5_1": ("SPK.L", "SPK.R", "SPK.C", "SPK.LFE", "SPK.LS", "SPK.RS"),
-    "LAYOUT.7_1": (
-        "SPK.L",
-        "SPK.R",
-        "SPK.C",
-        "SPK.LFE",
-        "SPK.LS",
-        "SPK.RS",
-        "SPK.LRS",
-        "SPK.RRS",
-    ),
-    "LAYOUT.7_1_4": (
-        "SPK.L",
-        "SPK.R",
-        "SPK.C",
-        "SPK.LFE",
-        "SPK.LS",
-        "SPK.RS",
-        "SPK.LRS",
-        "SPK.RRS",
-        "SPK.TFL",
-        "SPK.TFR",
-        "SPK.TRL",
-        "SPK.TRR",
-    ),
-    "LAYOUT.9_1_6": (
-        "SPK.L",
-        "SPK.R",
-        "SPK.C",
-        "SPK.LFE",
-        "SPK.LS",
-        "SPK.RS",
-        "SPK.LRS",
-        "SPK.RRS",
-        "SPK.LW",
-        "SPK.RW",
-        "SPK.TFL",
-        "SPK.TFR",
-        "SPK.TRL",
-        "SPK.TRR",
-        "SPK.TFC",
-        "SPK.TBC",
-    ),
-}
 _DEFAULT_SAMPLE_RATE_HZ = 48_000
 _DEFAULT_SILENCE_FRAMES = 4_800
 _TARGET_PEAK_DBFS = -1.0
@@ -212,16 +166,11 @@ def _selected_layout_ids() -> list[str]:
 
 
 def _layout_channel_order(layout_id: str) -> list[str]:
-    order = get_layout_channel_order(layout_id)
-    if isinstance(order, list):
-        cleaned = [
-            item.strip()
-            for item in order
-            if isinstance(item, str) and item.strip()
-        ]
-        if cleaned:
-            return cleaned
-    return list(_DEFAULT_CHANNEL_ORDER.get(layout_id, ()))
+    try:
+        process_ctx = build_process_context(layout_id)
+    except ValueError:
+        return []
+    return list(process_ctx.channel_order)
 
 
 def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:

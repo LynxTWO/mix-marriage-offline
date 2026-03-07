@@ -23,6 +23,7 @@ from typing import Any
 from mmo.core.speaker_layout import SpeakerPosition
 from mmo.dsp.plugins.base import (
     LayoutContext,
+    ProcessContext,
     PluginContext,
     optional_float_param,
     parse_bypass_for_stage,
@@ -131,7 +132,9 @@ class EqSafetyV0Plugin:
         params: dict[str, Any],
         ctx: PluginContext,
         layout_ctx: LayoutContext,
+        process_ctx: ProcessContext | None = None,
     ) -> Any:
+        del process_ctx
         import numpy as np
 
         low_mid_center_hz = optional_float_param(

@@ -84,6 +84,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- DSP `ProcessContext` routing contract:
+  - Added `src/mmo/dsp/process_context.py` as the ontology-backed DSP truth
+    object (`layout_id`, `layout_standard`, `channel_order`, `sample_rate_hz`,
+    `seed`) with semantic speaker/group lookup helpers.
+  - Refactored `src/mmo/core/dsp_dispatch.py` to build per-stem processing
+    context from layout metadata instead of a hard-coded preset layout map,
+    and to emit `StemResult.channel_order` alongside derived LFE/height
+    indices.
+  - Extended plugin contracts so DSP stages can receive `process_ctx` while
+    preserving `LayoutContext` compatibility for existing multichannel plugins.
+  - Removed fallback renderer layout-order maps in the baseline and placement
+    mixdown renderers so target channel routing now resolves through ontology
+    channel order consistently, including 9.1.6.
+
 - Tauri desktop design-system + ergonomics CI:
   - Reworked `gui/desktop-tauri` into explicit `Dashboard` / `Presets` /
     `Run` / `Compare` screens with machine-readable widget ids, ontology-driven

@@ -8,7 +8,7 @@ from mmo.dsp.plugins._multiband_common import (
     OPERATION_EXPAND,
     process_multiband_plugin,
 )
-from mmo.dsp.plugins.base import PluginContext
+from mmo.dsp.plugins.base import PluginContext, ProcessContext
 
 PLUGIN_ID = "multiband_expander_v0"
 
@@ -24,7 +24,9 @@ class MultibandExpanderV0Plugin:
         sample_rate: int,
         params: dict[str, Any],
         ctx: PluginContext,
+        process_ctx: ProcessContext | None = None,
     ) -> Any:
+        del process_ctx
         return process_multiband_plugin(
             plugin_id=PLUGIN_ID,
             operation_mode=OPERATION_EXPAND,
@@ -33,4 +35,3 @@ class MultibandExpanderV0Plugin:
             params=params,
             ctx=ctx,
         )
-

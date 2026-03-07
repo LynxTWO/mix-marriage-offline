@@ -39,6 +39,7 @@ from typing import Any
 from mmo.core.speaker_layout import SpeakerPosition
 from mmo.dsp.plugins.base import (
     LayoutContext,
+    ProcessContext,
     PluginContext,
     optional_float_param,
     parse_bypass_for_stage,
@@ -97,6 +98,7 @@ class EarlyReflectionsV0Plugin:
         params: dict[str, Any],
         ctx: PluginContext,
         layout_ctx: LayoutContext,
+        process_ctx: ProcessContext | None = None,
     ) -> Any:
         """Process multichannel buffer: add early-reflection taps to surrounds/heights.
 
@@ -114,6 +116,7 @@ class EarlyReflectionsV0Plugin:
         ctx : PluginContext
         layout_ctx : LayoutContext
         """
+        del process_ctx
         import numpy as np
 
         # ---- parameter parsing -------------------------------------------

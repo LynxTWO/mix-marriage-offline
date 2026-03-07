@@ -6,6 +6,7 @@ import math
 from typing import Any
 
 from mmo.dsp.plugins.base import (
+    ProcessContext,
     PluginContext,
     PluginValidationError,
     parse_bypass_for_stage,
@@ -129,7 +130,9 @@ class SimpleCompressorV0Plugin:
         sample_rate: int,
         params: dict[str, Any],
         ctx: PluginContext,
+        process_ctx: ProcessContext | None = None,
     ) -> Any:
+        del process_ctx
         import numpy as np
 
         threshold_db = require_finite_float_param(
@@ -236,4 +239,3 @@ class SimpleCompressorV0Plugin:
             notes=[f"detector_mode={detector_mode}"],
         )
         return rendered
-

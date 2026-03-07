@@ -5,7 +5,7 @@ It is responsible for:
 
 1. Assigning a deterministic per-stem seed derived from ``stem_id + render_seed``
    (never from time or environment state).
-2. Building an immutable ``LayoutContext`` for each stem from its ``LAYOUT.*`` ID
+2. Building an immutable ``ProcessContext`` for each stem from its ``LAYOUT.*`` ID
    and channel ordering standard.
 3. Dispatching plugin chains in parallel (bounded ``ThreadPoolExecutor``) with
    one thread per stem and strictly sequential plugins within each stem.
@@ -15,7 +15,7 @@ Thread safety
 -------------
 - Each stem gets its own ``PluginEvidenceCollector``; no shared mutable state.
 - Seeds are derived deterministically; no global PRNG state is mutated.
-- ``LayoutContext`` is an immutable frozen dataclass.
+- ``ProcessContext`` is an immutable frozen dataclass.
 - Result list is sorted by ``stem_id`` before return.
 
 Typical flow
@@ -42,99 +42,50 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from mmo.dsp.plugins.base import LayoutContext, PluginEvidenceCollector
+from mmo.dsp.process_context import ProcessContext, build_process_context as _build_process_context
 
 _DEFAULT_STEM_WORKERS = 4
+_DEFAULT_SAMPLE_RATE_HZ = 48_000
 
 
 # ---------------------------------------------------------------------------
-# Layout context factory
+# Process context factory
 # ---------------------------------------------------------------------------
 
-# Lazy singleton: populated on first call to _get_layout_map().
-# CPython dict update is GIL-protected; initialising twice from concurrent
-# threads produces identical contents, so no lock is required.
-_LAYOUT_MAP: dict[tuple[str, str], Any] | None = None
 
+def build_process_context(
+    layout_id: str,
+    standard: str = "SMPTE",
+    *,
+    sample_rate_hz: int = _DEFAULT_SAMPLE_RATE_HZ,
+    seed: int = 0,
+) -> ProcessContext:
+    """Return a ProcessContext for the given ``LAYOUT.*`` ID and standard."""
 
-def _get_layout_map() -> dict[tuple[str, str], Any]:
-    global _LAYOUT_MAP
-    if _LAYOUT_MAP is not None:
-        return _LAYOUT_MAP
-    from mmo.core.speaker_layout import (
-        FILM_2_0,
-        FILM_2_1,
-        FILM_5_1,
-        FILM_5_1_2,
-        FILM_5_1_4,
-        FILM_7_1,
-        FILM_7_1_2,
-        FILM_7_1_4,
-        SMPTE_2_0,
-        SMPTE_2_1,
-        SMPTE_5_1,
-        SMPTE_5_1_2,
-        SMPTE_5_1_4,
-        SMPTE_7_1,
-        SMPTE_7_1_2,
-        SMPTE_7_1_4,
+    return _build_process_context(
+        layout_id,
+        layout_standard=standard,
+        sample_rate_hz=sample_rate_hz,
+        seed=seed,
     )
 
-    _LAYOUT_MAP = {
-        ("LAYOUT.2_0", "SMPTE"): SMPTE_2_0,
-        ("LAYOUT.2_0", "FILM"): FILM_2_0,
-        ("LAYOUT.2_1", "SMPTE"): SMPTE_2_1,
-        ("LAYOUT.2_1", "FILM"): FILM_2_1,
-        ("LAYOUT.5_1", "SMPTE"): SMPTE_5_1,
-        ("LAYOUT.5_1", "FILM"): FILM_5_1,
-        ("LAYOUT.5_1_2", "SMPTE"): SMPTE_5_1_2,
-        ("LAYOUT.5_1_2", "FILM"): FILM_5_1_2,
-        ("LAYOUT.5_1_4", "SMPTE"): SMPTE_5_1_4,
-        ("LAYOUT.5_1_4", "FILM"): FILM_5_1_4,
-        ("LAYOUT.7_1", "SMPTE"): SMPTE_7_1,
-        ("LAYOUT.7_1", "FILM"): FILM_7_1,
-        ("LAYOUT.7_1_2", "SMPTE"): SMPTE_7_1_2,
-        ("LAYOUT.7_1_2", "FILM"): FILM_7_1_2,
-        ("LAYOUT.7_1_4", "SMPTE"): SMPTE_7_1_4,
-        ("LAYOUT.7_1_4", "FILM"): FILM_7_1_4,
-    }
-    return _LAYOUT_MAP
 
+def build_layout_context(
+    layout_id: str,
+    standard: str = "SMPTE",
+    *,
+    sample_rate_hz: int = _DEFAULT_SAMPLE_RATE_HZ,
+    seed: int = 0,
+) -> LayoutContext:
+    """Compatibility wrapper that adapts ProcessContext into LayoutContext."""
 
-def build_layout_context(layout_id: str, standard: str = "SMPTE") -> LayoutContext:
-    """Return a ``LayoutContext`` for the given ``LAYOUT.*`` ID and ordering standard.
-
-    Looks up the matching preset ``SpeakerLayout`` and wraps it in an immutable
-    ``LayoutContext``.  Raises ``ValueError`` for unknown layout_id / standard pairs.
-
-    Parameters
-    ----------
-    layout_id:
-        Canonical ``LAYOUT.*`` ID, e.g. ``"LAYOUT.7_1_4"``.
-    standard:
-        Channel ordering standard: ``"SMPTE"`` (default) or ``"FILM"``.
-
-    Returns
-    -------
-    LayoutContext:
-        Frozen context; use ``.index_of(SpeakerPosition.LFE)`` etc. to
-        look up speaker slots by semantic name.
-
-    Raises
-    ------
-    ValueError:
-        If the layout_id / standard combination has no preset.
-    """
-    key = (layout_id.strip(), standard.strip().upper())
-    layout_map = _get_layout_map()
-    speaker_layout = layout_map.get(key)
-    if speaker_layout is None:
-        available = sorted(layout_map.keys())
-        raise ValueError(
-            f"No preset SpeakerLayout for layout_id={layout_id!r}, "
-            f"standard={standard!r}. "
-            f"Available: {available}"
-        )
-    return LayoutContext(layout=speaker_layout)
+    process_ctx = build_process_context(
+        layout_id,
+        standard,
+        sample_rate_hz=sample_rate_hz,
+        seed=seed,
+    )
+    return LayoutContext.from_process_context(process_ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +144,8 @@ class StemJob:
     render_seed:
         Top-level render seed; combined with ``stem_id`` for per-stem seeding.
         Default ``0`` for deterministic production renders.
+    sample_rate_hz:
+        Buffer sample rate in Hz; carried into ``ProcessContext``.
     """
 
     stem_id: str
@@ -200,6 +153,7 @@ class StemJob:
     standard: str = "SMPTE"
     params: dict[str, Any] = field(default_factory=dict)
     render_seed: int = 0
+    sample_rate_hz: int = _DEFAULT_SAMPLE_RATE_HZ
 
 
 @dataclass
@@ -216,10 +170,14 @@ class StemResult:
         Layout ID (mirrored from input for traceability).
     standard:
         Channel ordering standard (mirrored from input).
-    lfe_slots:
-        LFE channel slot indices in the resolved layout.
-    height_slots:
-        Height-channel slot indices in the resolved layout.
+    process_ctx:
+        Canonical DSP execution context for this stem.
+    channel_order:
+        Semantic channel IDs in the current buffer order.
+    lfe_indices:
+        LFE channel indices in the resolved layout.
+    height_indices:
+        Height-channel indices in the resolved layout.
     num_channels:
         Total channel count.
     evidence:
@@ -232,11 +190,21 @@ class StemResult:
     seed: int
     layout_id: str
     standard: str
-    lfe_slots: list[int]
-    height_slots: list[int]
+    process_ctx: ProcessContext
+    channel_order: tuple[str, ...]
+    lfe_indices: list[int]
+    height_indices: list[int]
     num_channels: int
     evidence: PluginEvidenceCollector
     notes: list[str]
+
+    @property
+    def lfe_slots(self) -> list[int]:
+        return self.lfe_indices
+
+    @property
+    def height_slots(self) -> list[int]:
+        return self.height_indices
 
 
 # ---------------------------------------------------------------------------
@@ -245,16 +213,21 @@ class StemResult:
 
 
 def _dispatch_one_stem(job: StemJob) -> StemResult:
-    """Resolve layout context and collect evidence for a single stem.
+    """Resolve process context and collect evidence for a single stem.
 
     This function runs in a worker thread.  Every object it creates is local
     to this call; no shared mutable state is accessed or written.
     """
     seed = make_stem_seed(job.stem_id, job.render_seed)
-    layout_ctx = build_layout_context(job.layout_id, job.standard)
+    process_ctx = build_process_context(
+        job.layout_id,
+        job.standard,
+        sample_rate_hz=job.sample_rate_hz,
+        seed=seed,
+    )
     evidence = PluginEvidenceCollector()
     evidence.set(
-        stage_what="dsp_dispatch: layout context resolved",
+        stage_what="dsp_dispatch: process context resolved",
         stage_why=(
             f"stem {job.stem_id!r} dispatched with layout "
             f"{job.layout_id} ({job.standard})"
@@ -262,18 +235,18 @@ def _dispatch_one_stem(job: StemJob) -> StemResult:
         metrics=[
             {
                 "key": "num_channels",
-                "value": layout_ctx.num_channels,
+                "value": process_ctx.num_channels,
                 "unit": "channels",
             },
             {
-                "key": "lfe_slot_count",
-                "value": len(layout_ctx.lfe_slots),
-                "unit": "slots",
+                "key": "lfe_index_count",
+                "value": len(process_ctx.lfe_indices),
+                "unit": "indices",
             },
             {
-                "key": "height_slot_count",
-                "value": len(layout_ctx.height_slots),
-                "unit": "slots",
+                "key": "height_index_count",
+                "value": len(process_ctx.height_indices),
+                "unit": "indices",
             },
         ],
     )
@@ -281,19 +254,22 @@ def _dispatch_one_stem(job: StemJob) -> StemResult:
         f"seed={seed} stem_id={job.stem_id!r} render_seed={job.render_seed}",
         (
             f"layout={job.layout_id} standard={job.standard} "
-            f"channels={layout_ctx.num_channels} "
-            f"lfe={layout_ctx.lfe_slots} "
-            f"height={layout_ctx.height_slots}"
+            f"channels={process_ctx.num_channels} "
+            f"lfe={process_ctx.lfe_indices} "
+            f"height={process_ctx.height_indices}"
         ),
+        f"channel_order={list(process_ctx.channel_order)}",
     ]
     return StemResult(
         stem_id=job.stem_id,
         seed=seed,
         layout_id=job.layout_id,
         standard=job.standard,
-        lfe_slots=layout_ctx.lfe_slots,
-        height_slots=layout_ctx.height_slots,
-        num_channels=layout_ctx.num_channels,
+        process_ctx=process_ctx,
+        channel_order=process_ctx.channel_order,
+        lfe_indices=process_ctx.lfe_indices,
+        height_indices=process_ctx.height_indices,
+        num_channels=process_ctx.num_channels,
         evidence=evidence,
         notes=notes,
     )

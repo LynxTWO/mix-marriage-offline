@@ -6,6 +6,7 @@ import math
 from typing import Any
 
 from mmo.dsp.plugins.base import (
+    ProcessContext,
     PluginContext,
     PluginValidationError,
     coerce_float,
@@ -125,7 +126,9 @@ class TiltEqV0Plugin:
         sample_rate: int,
         params: dict[str, Any],
         ctx: PluginContext,
+        process_ctx: ProcessContext | None = None,
     ) -> Any:
+        del process_ctx
         import numpy as np
 
         tilt_db = coerce_float(params.get("tilt_db"))
@@ -202,4 +205,3 @@ class TiltEqV0Plugin:
             ],
         )
         return rendered
-

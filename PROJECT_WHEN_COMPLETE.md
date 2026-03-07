@@ -84,7 +84,7 @@ Note: schema contracts use `schemas/*.schema.json` naming (not `schemas/*.json`)
 - [x] `schemas/render_report.schema.json` `render_job.layout_standard` field present.
 - [x] `schemas/plugin.schema.json` `capabilities.supported_standards` and `capabilities.preferred_standard` fields present.
 - [x] Every downmix matrix and QA gate is order-aware (uses channel IDs, not fixed indices).
-- [ ] Plugin channel routing uses `ProcessContext.channel_order` (list of `SPK.*` IDs) instead of hard-coded indices.
+- [x] Plugin channel routing uses `ProcessContext.channel_order` (list of `SPK.*` IDs) instead of hard-coded indices.
 
 #### 4.4.1 Loudness and layout mapping (meter contract)
 - [x] Program loudness uses ITU-R BS.1770-5 weighting with explicit, tested channel mapping.
