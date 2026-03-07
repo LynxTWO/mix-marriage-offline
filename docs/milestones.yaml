@@ -8,7 +8,7 @@ milestones:
 
   - id: MVP.GUI
     title: MVP GUI
-    state: planned
+    state: in_progress
     links:
       - docs/STATUS.md#mvp-gui
       - docs/06-roadmap.md#tauri-desktop-app-parity-checklist

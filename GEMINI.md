@@ -96,6 +96,12 @@ Non-negotiables:
   `stems_map`/`bus_plan` with stable ordering, and the Scene tab should display
   perspective, object-vs-bed context, and warning-level lint issues without
   mutating scene artifacts.
+- Keep the isolated Tauri desktop scaffold install-safe:
+  `gui/desktop-tauri` should remain self-contained, Vite-based, and free of
+  repo-root path assumptions.
+- Keep desktop Tauri CI building release binaries on Linux, macOS, and Windows:
+  frontend lint/test steps should stay install-safe, and artifact uploads
+  should come from `gui/desktop-tauri/src-tauri/target/release/`.
 - Keep scene QA lint deterministic and explainable:
   `mmo scene lint` must emit stable issue ordering/report payloads and cover
   missing stem IDs/refs/files, duplicate object/bus refs, placement range

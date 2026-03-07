@@ -84,6 +84,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Tauri desktop scaffold + CI release binaries:
+  - Added `gui/desktop-tauri/` via `create-tauri-app` using the Vite
+    `vanilla-ts` template, then rebranded the starter shell as `MMO Desktop`.
+  - Added a GitHub Actions matrix job that installs Tauri prerequisites, runs
+    desktop frontend lint/tests when present, and builds a release binary on
+    Linux, macOS, and Windows.
+  - CI now uploads one desktop binary artifact per OS from
+    `gui/desktop-tauri/src-tauri/target/release/`.
+
 - Ontology additive-change enforcement:
   - Added `tools/validate_ontology_changes.py` to diff ontology IDs against
     `main` and fail on removals without required guards.

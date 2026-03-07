@@ -1,0 +1,241 @@
+:root {
+  color-scheme: dark;
+  font-family: "Trebuchet MS", "Avenir Next", "Segoe UI Variable", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #f1ebdf;
+  background:
+    radial-gradient(circle at top, rgba(110, 221, 204, 0.18), transparent 34%),
+    linear-gradient(160deg, #071418 0%, #102229 48%, #26160f 100%);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+body,
+button,
+input {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+code,
+.eyebrow,
+.runtime-message,
+.field span {
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 1fr);
+  gap: 1.5rem;
+  padding: clamp(1.5rem, 4vw, 3rem);
+}
+
+.hero,
+.panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 28px;
+  background: rgba(8, 17, 20, 0.72);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(18px);
+}
+
+.hero {
+  padding: clamp(1.75rem, 4vw, 3.5rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.hero::after,
+.panel::after {
+  content: "";
+  position: absolute;
+  inset: auto -12% -18% auto;
+  width: 220px;
+  height: 220px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(240, 123, 63, 0.22), transparent 72%);
+  pointer-events: none;
+}
+
+.eyebrow {
+  margin: 0 0 0.6rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #84e4d4;
+}
+
+.eyebrow-panel {
+  color: #f2b175;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  max-width: 10ch;
+  font-size: clamp(2.8rem, 7vw, 5rem);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  color: #fff7eb;
+}
+
+.lede,
+.panel-copy {
+  max-width: 38rem;
+  color: #d7cec2;
+}
+
+.logo-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+}
+
+.logo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.9rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.logo-chip:hover {
+  transform: translateY(-2px);
+  border-color: rgba(132, 228, 212, 0.45);
+  background: rgba(132, 228, 212, 0.08);
+}
+
+.logo {
+  width: 2rem;
+  height: 2rem;
+}
+
+.panel {
+  padding: 1.6rem;
+  display: grid;
+  gap: 1rem;
+  align-self: end;
+}
+
+.panel-header {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.panel-copy {
+  max-width: none;
+}
+
+.runtime-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.field span {
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #f2b175;
+}
+
+input,
+button {
+  border: 0;
+  outline: none;
+  border-radius: 18px;
+}
+
+input {
+  padding: 0.95rem 1rem;
+  color: #fff7eb;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+input::placeholder {
+  color: rgba(241, 235, 223, 0.45);
+}
+
+button {
+  cursor: pointer;
+  padding: 1rem 1.2rem;
+  font-weight: 700;
+  color: #102229;
+  background: linear-gradient(135deg, #f07b3f, #f2c56c);
+  box-shadow: 0 16px 32px rgba(240, 123, 63, 0.25);
+  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 20px 40px rgba(240, 123, 63, 0.34);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+.runtime-form[aria-busy="true"] button {
+  opacity: 0.72;
+}
+
+.runtime-message {
+  min-height: 3.25rem;
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  color: #eef6f4;
+  background: rgba(132, 228, 212, 0.08);
+  border: 1px solid rgba(132, 228, 212, 0.18);
+}
+
+@media (max-width: 920px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  h1 {
+    max-width: none;
+  }
+
+  .panel {
+    align-self: stretch;
+  }
+}

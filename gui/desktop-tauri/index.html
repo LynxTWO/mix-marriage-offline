@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MMO Desktop</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">Mix Marriage Offline</p>
+        <h1>Tauri desktop scaffold</h1>
+        <p class="lede">
+          Official <code>create-tauri-app</code> bootstrap kept isolated under
+          <code>gui/desktop-tauri</code>, with a Vite frontend and CI release
+          builds for Linux, macOS, and Windows.
+        </p>
+
+        <div class="logo-strip">
+          <a
+            class="logo-chip"
+            href="https://tauri.app/start/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <img src="/src/assets/tauri.svg" class="logo" alt="Tauri logo" />
+            <span>Tauri 2 runtime</span>
+          </a>
+          <a
+            class="logo-chip"
+            href="https://vite.dev/guide/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <img src="/src/assets/vite.svg" class="logo" alt="Vite logo" />
+            <span>Vite frontend</span>
+          </a>
+          <a
+            class="logo-chip"
+            href="https://www.typescriptlang.org/docs/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <img
+              src="/src/assets/typescript.svg"
+              class="logo"
+              alt="TypeScript logo"
+            />
+            <span>Typed UI scaffold</span>
+          </a>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <p class="eyebrow eyebrow-panel">Runtime check</p>
+          <h2>Frontend-to-Rust handshake</h2>
+        </div>
+        <p class="panel-copy">
+          Keep the generated command bridge as a cheap smoke test that the Vite
+          app and the Rust core are wired together correctly.
+        </p>
+        <form class="runtime-form" id="runtime-check-form">
+          <label class="field">
+            <span>Operator name</span>
+            <input
+              id="runtime-check-name"
+              name="name"
+              placeholder="Enter a name"
+            />
+          </label>
+          <button type="submit">Ping Rust</button>
+        </form>
+        <p id="runtime-check-message" class="runtime-message" role="status" aria-live="polite">
+          Waiting for a Tauri runtime.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

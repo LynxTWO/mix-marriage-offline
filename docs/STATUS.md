@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-03-06
+Last updated: 2026-03-07
 
 This is the single-page milestone checklist for current delivery phases.
 
@@ -25,10 +25,11 @@ Definition of done:
 - [ ] End-to-end golden-path project walkthrough is fully CI-covered.
 
 ## MVP-GUI
-State: `planned`
+State: `in_progress`
 
 Definition of done:
 - [x] GUI contract docs and wireframes are documented.
+- [x] Tauri desktop scaffold builds in CI and uploads per-OS binaries.
 - [ ] GUI shell can load/write the same project artifacts as CLI.
 - [ ] GUI actions map 1:1 to existing deterministic contracts.
 - [ ] Cross-platform desktop smoke tests are green.

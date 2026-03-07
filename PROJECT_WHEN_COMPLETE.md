@@ -271,6 +271,9 @@ What remains: make loudness-matched A/B compensation visible in report artifacts
   `_mmo_gui/scene.json` + `_mmo_gui/scene_lint.json` are generated, and the tab
   surfaces perspective, object azimuth/width/depth/confidence rows, bed-bus
   classification context, and lint warnings for object-vs-bed explainability.
+- [x] An isolated Tauri desktop scaffold now exists under `gui/desktop-tauri`,
+  using a Vite frontend with cross-platform CI release-binary builds on
+  Windows, macOS, and Linux.
 - [ ] A GUI exists (local web app is fine) that exposes the same workflow as the CLI: validate → analyze → scene → render → results → compare.
 - [ ] GUI copy and structure follow the design system in ontology/gui_design.yaml (theme tokens, screen templates, and progressive disclosure).
 - [x] Any plugin/config UI is generated from JSON Schema with optional UI hints (example: x_mmo_ui or a dedicated ui_hints registry) so agents do not hand-build one-off forms.
