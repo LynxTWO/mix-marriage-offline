@@ -141,6 +141,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Added GUI RPC regression coverage for inspect/save round-trips and lock
     field preservation.
 
+- Desktop GUI Scene Preview v1 (read-only):
+  - Desktop GUI post-analyze flow now runs deterministic `scene build` + `scene lint`
+    from `_mmo_gui/stems_map.json` + `_mmo_gui/bus_plan.json` and writes
+    `_mmo_gui/scene.json` + `_mmo_gui/scene_lint.json`.
+  - Added a read-only `Scene` tab that surfaces scene perspective, object
+    azimuth/width/depth/confidence rows, bed-bus listing (with content hints),
+    and warning-level scene-lint issues for explainable object-vs-bed intent review.
+  - Added GUI smoke coverage for scene CLI argv wiring and deterministic
+    scene-summary rendering.
+
 ### Fixed
 
 - GUI `-m mmo*` passthrough no longer executes modules via `runpy`:

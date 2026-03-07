@@ -19,6 +19,8 @@ from mmo.gui.main import (
     _try_cli_passthrough,
     GuiPipelinePaths,
     GuiRunConfig,
+    build_scene_build_cli_argv,
+    build_scene_lint_cli_argv,
     build_stems_bus_plan_cli_argv,
     build_stems_classify_cli_argv,
     build_plugin_discover_cards,
@@ -29,12 +31,15 @@ from mmo.gui.main import (
     bus_plan_role_count_items,
     gui_bus_plan_csv_path,
     gui_bus_plan_path,
+    gui_scene_lint_path,
+    gui_scene_path,
     gui_stems_map_path,
     has_high_risk_blocked_recommendations,
     has_no_outputs_issue,
     main as gui_main,
     normalize_render_many_layout_ids,
     render_bus_plan_summary_text,
+    render_scene_summary_text,
     render_target_layout_map,
 )
 
@@ -230,6 +235,55 @@ class TestGuiSmoke(unittest.TestCase):
                 ],
             )
 
+    def test_post_analyze_cli_args_write_scene_artifacts_in_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            temp_root = Path(td)
+            config = GuiRunConfig(
+                stems_dir=temp_root / "stems",
+                out_dir=temp_root / "out",
+                target_id="TARGET.STEREO.2_0",
+                render_many=False,
+                render_many_target_ids=(),
+                layout_standard="SMPTE",
+                preview_headphones=False,
+                plugins_dir=_PLUGINS_DIR,
+                profile_id="PROFILE.ASSIST",
+            )
+            workspace = temp_root / "_mmo_gui"
+
+            scene_build_argv = build_scene_build_cli_argv(
+                config,
+                workspace_dir=workspace,
+            )
+            scene_lint_argv = build_scene_lint_cli_argv(workspace_dir=workspace)
+
+            self.assertEqual(
+                scene_build_argv,
+                [
+                    "scene",
+                    "build",
+                    "--map",
+                    gui_stems_map_path(workspace).resolve().as_posix(),
+                    "--bus",
+                    gui_bus_plan_path(workspace).resolve().as_posix(),
+                    "--out",
+                    gui_scene_path(workspace).resolve().as_posix(),
+                    "--profile",
+                    "PROFILE.ASSIST",
+                ],
+            )
+            self.assertEqual(
+                scene_lint_argv,
+                [
+                    "scene",
+                    "lint",
+                    "--scene",
+                    gui_scene_path(workspace).resolve().as_posix(),
+                    "--out",
+                    gui_scene_lint_path(workspace).resolve().as_posix(),
+                ],
+            )
+
     def test_bus_plan_summary_render_includes_role_counts_and_tree(self) -> None:
         payload = {
             "summary": {
@@ -287,6 +341,92 @@ class TestGuiSmoke(unittest.TestCase):
         self.assertIn("- ROLE.DRUM.KICK: 2", summary_text)
         self.assertIn("Bus tree:", summary_text)
         self.assertIn("- BUS.MASTER (3 stems)", summary_text)
+
+    def test_scene_summary_render_includes_objects_beds_and_lint_warnings(self) -> None:
+        scene_payload = {
+            "intent": {
+                "perspective": "in_orchestra",
+                "confidence": 0.74,
+            },
+            "objects": [
+                {
+                    "object_id": "OBJ.VOX",
+                    "label": "Vox",
+                    "role_id": "ROLE.VOCAL.LEAD",
+                    "group_bus": "BUS.VOX",
+                    "azimuth_hint": 0.0,
+                    "width_hint": 0.35,
+                    "depth_hint": 0.30,
+                    "confidence": 0.88,
+                    "intent": {
+                        "confidence": 0.91,
+                        "width": 0.40,
+                        "depth": 0.25,
+                        "position": {"azimuth_deg": -5.0},
+                    },
+                },
+                {
+                    "object_id": "OBJ.GTR",
+                    "label": "Guitar",
+                    "role_id": "ROLE.GTR.ELECTRIC",
+                    "group_bus": "BUS.MUSIC",
+                    "intent": {
+                        "confidence": 0.66,
+                        "width": 0.30,
+                        "depth": 0.42,
+                        "position": {"azimuth_deg": 24.0},
+                    },
+                },
+            ],
+            "beds": [
+                {
+                    "bed_id": "BED.BUS.MUSIC",
+                    "bus_id": "BUS.MUSIC",
+                    "label": "Music Bed",
+                    "kind": "bed",
+                    "content_hint": "pad_texture",
+                    "confidence": 0.82,
+                    "intent": {
+                        "confidence": 0.82,
+                    },
+                    "notes": ["content_hint: pad_texture"],
+                }
+            ],
+        }
+        lint_payload = {
+            "summary": {
+                "error_count": 1,
+                "warn_count": 2,
+            },
+            "issues": [
+                {
+                    "severity": "warn",
+                    "issue_id": "ISSUE.SCENE_LINT.IMMERSIVE_LOW_CONFIDENCE",
+                    "path": "intent.confidence",
+                    "message": "Immersive perspective is requested with low scene confidence.",
+                },
+                {
+                    "severity": "error",
+                    "issue_id": "ISSUE.SCENE_LINT.OUT_OF_RANGE_WIDTH",
+                    "path": "objects[0].intent.width",
+                    "message": "Width must be in [0, 1].",
+                },
+            ],
+        }
+
+        summary_text = render_scene_summary_text(
+            scene_payload,
+            lint_payload=lint_payload,
+        )
+        self.assertIn("Perspective:", summary_text)
+        self.assertIn("- in_orchestra (confidence=0.74)", summary_text)
+        self.assertIn("Vox [OBJ.VOX] | azimuth=-5.0 deg | width=0.40 | depth=0.25 | confidence=0.91", summary_text)
+        self.assertIn("BUS.MUSIC <- Music Bed [BED.BUS.MUSIC]", summary_text)
+        self.assertIn("hint=pad_texture", summary_text)
+        self.assertIn("Scene lint warnings:", summary_text)
+        self.assertIn("summary: 1 error(s), 2 warning(s)", summary_text)
+        self.assertIn("ISSUE.SCENE_LINT.IMMERSIVE_LOW_CONFIDENCE intent.confidence", summary_text)
+        self.assertNotIn("ISSUE.SCENE_LINT.OUT_OF_RANGE_WIDTH", summary_text)
 
     def test_plugin_discover_cards_are_sorted_and_deterministic(self) -> None:
         payload = {

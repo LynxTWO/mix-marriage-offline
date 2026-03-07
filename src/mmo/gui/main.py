@@ -40,6 +40,8 @@ _DEFAULT_GUI_WORKSPACE = "_mmo_gui"
 _DEFAULT_GUI_STEMS_MAP = "stems_map.json"
 _DEFAULT_GUI_BUS_PLAN = "bus_plan.json"
 _DEFAULT_GUI_BUS_PLAN_CSV = "bus_plan.summary.csv"
+_DEFAULT_GUI_SCENE = "scene.json"
+_DEFAULT_GUI_SCENE_LINT = "scene_lint.json"
 _DEFAULT_RENDER_MANY_TARGET_IDS: tuple[str, ...] = (
     "TARGET.STEREO.2_0",
     "TARGET.SURROUND.5_1",
@@ -48,6 +50,16 @@ _DEFAULT_RENDER_MANY_TARGET_IDS: tuple[str, ...] = (
 _ISSUE_RENDER_NO_OUTPUTS = "ISSUE.RENDER.NO_OUTPUTS"
 _NO_OUTPUTS_BANNER_TEXT = (
     "No audio outputs were written. This build may not include a mixdown renderer yet."
+)
+_DEFAULT_SCENE_SUMMARY_TEXT = (
+    "Perspective:\n"
+    "- (pending analyze)\n\n"
+    "Objects (azimuth/width/depth/confidence):\n"
+    "- (pending analyze)\n\n"
+    "Bed buses:\n"
+    "- (pending analyze)\n\n"
+    "Scene lint warnings:\n"
+    "- (pending analyze)"
 )
 _STUDIO_THEME: Mapping[str, str] = {
     "bg": "#0A0A09",
@@ -379,6 +391,14 @@ def gui_bus_plan_csv_path(workspace_dir: Path) -> Path:
     return workspace_dir / _DEFAULT_GUI_BUS_PLAN_CSV
 
 
+def gui_scene_path(workspace_dir: Path) -> Path:
+    return workspace_dir / _DEFAULT_GUI_SCENE
+
+
+def gui_scene_lint_path(workspace_dir: Path) -> Path:
+    return workspace_dir / _DEFAULT_GUI_SCENE_LINT
+
+
 def build_stems_classify_cli_argv(
     config: GuiRunConfig,
     *,
@@ -407,6 +427,39 @@ def build_stems_bus_plan_cli_argv(
         _as_posix(gui_bus_plan_path(workspace_dir)),
         "--csv",
         _as_posix(gui_bus_plan_csv_path(workspace_dir)),
+    ]
+
+
+def build_scene_build_cli_argv(
+    config: GuiRunConfig,
+    *,
+    workspace_dir: Path,
+) -> list[str]:
+    return [
+        "scene",
+        "build",
+        "--map",
+        _as_posix(gui_stems_map_path(workspace_dir)),
+        "--bus",
+        _as_posix(gui_bus_plan_path(workspace_dir)),
+        "--out",
+        _as_posix(gui_scene_path(workspace_dir)),
+        "--profile",
+        config.profile_id,
+    ]
+
+
+def build_scene_lint_cli_argv(
+    *,
+    workspace_dir: Path,
+) -> list[str]:
+    return [
+        "scene",
+        "lint",
+        "--scene",
+        _as_posix(gui_scene_path(workspace_dir)),
+        "--out",
+        _as_posix(gui_scene_lint_path(workspace_dir)),
     ]
 
 
@@ -522,6 +575,253 @@ def render_bus_plan_summary_text(bus_plan_payload: Mapping[str, Any]) -> str:
     lines.append("Bus tree:")
     if tree_rows:
         lines.extend(tree_rows)
+    else:
+        lines.append("- (none)")
+    return "\n".join(lines)
+
+
+def _scene_numeric_value(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _scene_str(value: Any) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _scene_mapping(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def _scene_fmt(value: float | None, *, digits: int = 2, suffix: str = "") -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:.{digits}f}{suffix}"
+
+
+def _scene_first_numeric(*values: Any) -> float | None:
+    for value in values:
+        numeric = _scene_numeric_value(value)
+        if numeric is not None:
+            return numeric
+    return None
+
+
+def _scene_object_rows(scene_payload: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:
+    objects_payload = scene_payload.get("objects")
+    if not isinstance(objects_payload, list):
+        return ()
+
+    rows: list[dict[str, Any]] = []
+    for item in objects_payload:
+        if not isinstance(item, Mapping):
+            continue
+        object_id = _scene_str(item.get("object_id"))
+        if not object_id:
+            continue
+        intent_payload = _scene_mapping(item.get("intent"))
+        position_payload = _scene_mapping(intent_payload.get("position"))
+        rows.append(
+            {
+                "object_id": object_id,
+                "label": _scene_str(item.get("label")) or object_id,
+                "role_id": _scene_str(item.get("role_id")),
+                "group_bus": _scene_str(item.get("group_bus")),
+                "azimuth": _scene_first_numeric(
+                    position_payload.get("azimuth_deg"),
+                    item.get("azimuth_hint"),
+                ),
+                "width": _scene_first_numeric(
+                    intent_payload.get("width"),
+                    item.get("width_hint"),
+                ),
+                "depth": _scene_first_numeric(
+                    intent_payload.get("depth"),
+                    item.get("depth_hint"),
+                ),
+                "confidence": _scene_first_numeric(
+                    intent_payload.get("confidence"),
+                    item.get("confidence"),
+                ),
+            }
+        )
+    rows.sort(key=lambda row: (_scene_str(row.get("object_id")), _scene_str(row.get("label"))))
+    return tuple(rows)
+
+
+def _scene_bed_rows(scene_payload: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:
+    beds_payload = scene_payload.get("beds")
+    if not isinstance(beds_payload, list):
+        return ()
+
+    rows: list[dict[str, Any]] = []
+    for item in beds_payload:
+        if not isinstance(item, Mapping):
+            continue
+        bed_id = _scene_str(item.get("bed_id"))
+        bus_id = _scene_str(item.get("bus_id"))
+        if not bed_id and not bus_id:
+            continue
+        intent_payload = _scene_mapping(item.get("intent"))
+        notes_payload = item.get("notes")
+        note = ""
+        if isinstance(notes_payload, list):
+            note = next(
+                (
+                    _scene_str(raw_note)
+                    for raw_note in notes_payload
+                    if isinstance(raw_note, str) and _scene_str(raw_note)
+                ),
+                "",
+            )
+        rows.append(
+            {
+                "bed_id": bed_id or bus_id,
+                "bus_id": bus_id,
+                "label": _scene_str(item.get("label")) or (bed_id or bus_id),
+                "kind": _scene_str(item.get("kind")),
+                "confidence": _scene_first_numeric(
+                    intent_payload.get("confidence"),
+                    item.get("confidence"),
+                ),
+                "content_hint": _scene_str(item.get("content_hint")),
+                "note": note,
+            }
+        )
+    rows.sort(
+        key=lambda row: (
+            _scene_str(row.get("bus_id")),
+            _scene_str(row.get("bed_id")),
+            _scene_str(row.get("label")),
+        )
+    )
+    return tuple(rows)
+
+
+def _scene_lint_warning_rows(lint_payload: Mapping[str, Any]) -> tuple[dict[str, str], ...]:
+    issues_payload = lint_payload.get("issues")
+    if not isinstance(issues_payload, list):
+        return ()
+
+    rows: list[dict[str, str]] = []
+    for issue in issues_payload:
+        if not isinstance(issue, Mapping):
+            continue
+        severity = _scene_str(issue.get("severity")).casefold()
+        if severity not in {"warn", "warning"}:
+            continue
+        issue_id = _scene_str(issue.get("issue_id"))
+        message = _scene_str(issue.get("message"))
+        path = _scene_str(issue.get("path"))
+        if not issue_id:
+            continue
+        rows.append(
+            {
+                "issue_id": issue_id,
+                "path": path,
+                "message": message,
+            }
+        )
+    rows.sort(
+        key=lambda row: (
+            _scene_str(row.get("issue_id")),
+            _scene_str(row.get("path")),
+            _scene_str(row.get("message")),
+        )
+    )
+    return tuple(rows)
+
+
+def render_scene_summary_text(
+    scene_payload: Mapping[str, Any],
+    *,
+    lint_payload: Mapping[str, Any] | None = None,
+) -> str:
+    scene_intent = _scene_mapping(scene_payload.get("intent"))
+    perspective = _scene_str(scene_intent.get("perspective")) or "(unspecified)"
+    perspective_confidence = _scene_numeric_value(scene_intent.get("confidence"))
+    object_rows = _scene_object_rows(scene_payload)
+    bed_rows = _scene_bed_rows(scene_payload)
+    lint_summary = _scene_mapping(lint_payload.get("summary")) if isinstance(lint_payload, Mapping) else {}
+    lint_warning_rows = (
+        _scene_lint_warning_rows(lint_payload)
+        if isinstance(lint_payload, Mapping)
+        else ()
+    )
+
+    lines = ["Perspective:"]
+    perspective_line = f"- {perspective}"
+    if perspective_confidence is not None:
+        perspective_line = (
+            f"{perspective_line} (confidence={_scene_fmt(perspective_confidence, digits=2)})"
+        )
+    lines.append(perspective_line)
+
+    lines.extend(["", "Objects (azimuth/width/depth/confidence):"])
+    if object_rows:
+        for row in object_rows:
+            parts = [
+                f"{row['label']} [{row['object_id']}]",
+                f"azimuth={_scene_fmt(row.get('azimuth'), digits=1, suffix=' deg')}",
+                f"width={_scene_fmt(row.get('width'), digits=2)}",
+                f"depth={_scene_fmt(row.get('depth'), digits=2)}",
+                f"confidence={_scene_fmt(row.get('confidence'), digits=2)}",
+            ]
+            role_id = _scene_str(row.get("role_id"))
+            if role_id:
+                parts.append(f"role={role_id}")
+            group_bus = _scene_str(row.get("group_bus"))
+            if group_bus:
+                parts.append(f"bus={group_bus}")
+            lines.append(f"- {' | '.join(parts)}")
+    else:
+        lines.append("- (none)")
+
+    lines.extend(["", "Bed buses:"])
+    if bed_rows:
+        for row in bed_rows:
+            bus_id = _scene_str(row.get("bus_id")) or "(no bus)"
+            parts = [
+                f"{bus_id} <- {row['label']} [{row['bed_id']}]",
+                f"confidence={_scene_fmt(row.get('confidence'), digits=2)}",
+            ]
+            kind = _scene_str(row.get("kind"))
+            if kind:
+                parts.append(f"kind={kind}")
+            content_hint = _scene_str(row.get("content_hint"))
+            if content_hint:
+                parts.append(f"hint={content_hint}")
+            note = _scene_str(row.get("note"))
+            if note:
+                parts.append(f"note={note}")
+            lines.append(f"- {' | '.join(parts)}")
+    else:
+        lines.append("- (none)")
+
+    lines.extend(["", "Scene lint warnings:"])
+    error_count = lint_summary.get("error_count")
+    warn_count = lint_summary.get("warn_count")
+    if isinstance(error_count, int) and isinstance(warn_count, int):
+        lines.append(f"- summary: {error_count} error(s), {warn_count} warning(s)")
+    if lint_payload is None:
+        lines.append("- (scene lint report unavailable)")
+    elif lint_warning_rows:
+        for row in lint_warning_rows:
+            path = _scene_str(row.get("path"))
+            prefix = f"{row['issue_id']} {path}".strip()
+            message = _scene_str(row.get("message"))
+            if message:
+                lines.append(f"- {prefix}: {message}")
+            else:
+                lines.append(f"- {prefix}")
     else:
         lines.append("- (none)")
     return "\n".join(lines)
@@ -1053,6 +1353,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         self._surfaces_tabs.grid(row=1, column=0, padx=12, pady=(0, 12), sticky="nsew")
         self._surfaces_tabs.add("Dashboard")
         self._surfaces_tabs.add("Live Log")
+        self._surfaces_tabs.add("Scene")
         self._surfaces_tabs.add("Discover")
 
         dashboard_tab = self._surfaces_tabs.tab("Dashboard")
@@ -1077,6 +1378,34 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             font=(_FONT_MONO, 12),
         )
         self._log_box.grid(row=0, column=0, padx=8, pady=8, sticky="nsew")
+
+        scene_tab = self._surfaces_tabs.tab("Scene")
+        scene_tab.grid_columnconfigure(0, weight=1)
+        scene_tab.grid_rowconfigure(1, weight=1)
+        _ctk.CTkLabel(
+            scene_tab,
+            text=(
+                "Read-only scene intent preview from _mmo_gui artifacts "
+                "(scene.json + scene_lint.json)."
+            ),
+            font=(_FONT_UI, 12),
+            text_color=_STUDIO_THEME["text_muted"],
+            justify="left",
+            wraplength=560,
+        ).grid(row=0, column=0, padx=10, pady=(10, 0), sticky="w")
+        self._scene_box = _ctk.CTkTextbox(
+            scene_tab,
+            fg_color=_STUDIO_THEME["panel"],
+            text_color=_STUDIO_THEME["text"],
+            border_color=_STUDIO_THEME["panel_edge"],
+            border_width=1,
+            corner_radius=10,
+            font=(_FONT_MONO, 12),
+        )
+        self._scene_box.grid(row=1, column=0, padx=8, pady=8, sticky="nsew")
+        self._scene_box.configure(state="normal")
+        self._scene_box.insert("end", _DEFAULT_SCENE_SUMMARY_TEXT)
+        self._scene_box.configure(state="disabled")
 
         discover_tab = self._surfaces_tabs.tab("Discover")
         discover_tab.grid_columnconfigure(0, weight=1)
@@ -1430,6 +1759,17 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
 
         self.after(0, _apply)
 
+    def _set_scene_summary_threadsafe(self, summary_text: str) -> None:
+        def _apply() -> None:
+            if not hasattr(self, "_scene_box"):
+                return
+            self._scene_box.configure(state="normal")
+            self._scene_box.delete("1.0", "end")
+            self._scene_box.insert("end", summary_text.strip() or _DEFAULT_SCENE_SUMMARY_TEXT)
+            self._scene_box.configure(state="disabled")
+
+        self.after(0, _apply)
+
     def _set_running_threadsafe(self, running: bool) -> None:
         def _apply() -> None:
             self._run_button.configure(state="disabled" if running else "normal")
@@ -1574,6 +1914,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         self._set_bus_plan_summary_threadsafe(
             "Role counts:\n- (pending analyze)\n\nBus tree:\n- (pending analyze)"
         )
+        self._set_scene_summary_threadsafe(_DEFAULT_SCENE_SUMMARY_TEXT)
         workspace_dir = config.out_dir / _DEFAULT_GUI_WORKSPACE
         workspace_dir.mkdir(parents=True, exist_ok=True)
         self._cancel_file_path = build_pipeline_paths(workspace_dir).cancel_token_path
@@ -1818,8 +2159,75 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
             for line in bus_summary.splitlines():
                 log_line = line if line else "-"
                 self._append_log_threadsafe(f"[BUS.PLAN] {log_line}")
-            self._set_status_threadsafe("Analyze complete. Bus plan ready.")
-            self._set_progress_threadsafe(0.2)
+            self._set_status_threadsafe("Building scene intent preview...")
+            scene_summary = (
+                "Perspective:\n"
+                "- (unavailable)\n\n"
+                "Objects (azimuth/width/depth/confidence):\n"
+                "- (scene build unavailable)\n\n"
+                "Bed buses:\n"
+                "- (scene build unavailable)\n\n"
+                "Scene lint warnings:\n"
+                "- (scene build unavailable)"
+            )
+            scene_ready = False
+            scene_build_argv = build_scene_build_cli_argv(
+                config,
+                workspace_dir=workspace_dir,
+            )
+            scene_build_rc = self._run_command(scene_build_argv, stage="scene-build")
+            if scene_build_rc != 0 and self._cancel_requested():
+                self._set_status_threadsafe("Cancelled during scene preview generation.")
+                return
+            if scene_build_rc == 0:
+                scene_out_path = gui_scene_path(workspace_dir)
+                scene_payload: Mapping[str, Any] | None = None
+                if scene_out_path.exists():
+                    try:
+                        loaded_scene = json.loads(scene_out_path.read_text(encoding="utf-8"))
+                        if isinstance(loaded_scene, Mapping):
+                            scene_payload = loaded_scene
+                    except (OSError, json.JSONDecodeError):
+                        scene_payload = None
+                if scene_payload is None:
+                    self._append_log_threadsafe(
+                        "Scene preview unavailable: scene.json is missing or unreadable."
+                    )
+                else:
+                    lint_payload: Mapping[str, Any] | None = None
+                    scene_lint_argv = build_scene_lint_cli_argv(workspace_dir=workspace_dir)
+                    scene_lint_rc = self._run_command(scene_lint_argv, stage="scene-lint")
+                    if scene_lint_rc != 0 and self._cancel_requested():
+                        self._set_status_threadsafe("Cancelled during scene lint.")
+                        return
+                    if scene_lint_rc not in (0, 2):
+                        self._append_log_threadsafe(
+                            "Scene lint failed unexpectedly; showing scene preview without lint warnings."
+                        )
+                    lint_out_path = gui_scene_lint_path(workspace_dir)
+                    if lint_out_path.exists():
+                        try:
+                            loaded_lint = json.loads(lint_out_path.read_text(encoding="utf-8"))
+                            if isinstance(loaded_lint, Mapping):
+                                lint_payload = loaded_lint
+                        except (OSError, json.JSONDecodeError):
+                            lint_payload = None
+                    scene_summary = render_scene_summary_text(
+                        scene_payload,
+                        lint_payload=lint_payload,
+                    )
+                    scene_ready = True
+            else:
+                self._append_log_threadsafe(
+                    "Scene build failed; continuing with bus-plan summary and render stages."
+                )
+
+            self._set_scene_summary_threadsafe(scene_summary)
+            if scene_ready:
+                self._set_status_threadsafe("Analyze complete. Bus plan + scene preview ready.")
+            else:
+                self._set_status_threadsafe("Analyze complete. Bus plan ready (scene preview unavailable).")
+            self._set_progress_threadsafe(0.25)
 
             dry_rc = self._run_command(dry_run_argv, stage="safe-render(dry)")
             if dry_rc != 0 and self._cancel_requested():

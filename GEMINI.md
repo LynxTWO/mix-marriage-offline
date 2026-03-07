@@ -91,6 +91,11 @@ Non-negotiables:
   `scene.locks.inspect/save` should round-trip stable stem/object ordering,
   persist `scene_locks.yaml`, preserve non-UI override fields, and update
   `drafts/scene.draft.json` so corrected intent can be re-rendered immediately.
+- Keep Desktop GUI post-analyze scene preview deterministic and read-only:
+  `_mmo_gui/scene.json` + `_mmo_gui/scene_lint.json` should be regenerated from
+  `stems_map`/`bus_plan` with stable ordering, and the Scene tab should display
+  perspective, object-vs-bed context, and warning-level lint issues without
+  mutating scene artifacts.
 - Keep scene QA lint deterministic and explainable:
   `mmo scene lint` must emit stable issue ordering/report payloads and cover
   missing stem IDs/refs/files, duplicate object/bus refs, placement range
