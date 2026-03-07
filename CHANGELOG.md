@@ -84,6 +84,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Ontology additive-change enforcement:
+  - Added `tools/validate_ontology_changes.py` to diff ontology IDs against
+    `main` and fail on removals without required guards.
+  - Added migration-note scaffolding under `docs/ontology_migrations/`
+    (`README.md` + `TEMPLATE.md`).
+  - Wired ontology-change validation into umbrella contracts validation and CI
+    (`tools/validate_contracts.py`, `.github/workflows/ci.yml`).
+
 - Immersive golden-path small fixture + hash tripwire:
   - Added `fixtures/golden_path_small/` with deterministic generated stems
     (`kick`, `snare`, `bass_di`, `pad_stereo_wide`, `sfx_stereo`) plus

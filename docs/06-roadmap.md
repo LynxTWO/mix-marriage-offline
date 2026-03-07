@@ -79,7 +79,6 @@ PR placeholder convention used below:
 
 - Goal: close remaining CI and fixture-based completeness gates.
 - Open checklist references:
-- [PWC: ontology change policy is additive or version-bumped with migrations](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
 - [PWC: golden fixtures prove required contracts](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
 - [PWC: golden-audio test matrix coverage](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)
 - [PWC: regression test for failed downmix-gate fallback sequence](../PROJECT_WHEN_COMPLETE.md) - [PR: TBD](https://github.com/OWNER/REPO/pull/TBD)

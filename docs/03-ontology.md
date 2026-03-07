@@ -98,6 +98,15 @@ Instead:
 - add `replaced_by: NEW.ID`
 - keep support for at least one major version cycle
 
+### 4.3 Migration note requirement for removals
+
+If an ontology ID is removed (or effectively renamed by removing old ID + adding
+new ID), contributors must:
+
+- bump `ontology.ontology_version` in `ontology/ontology.yaml`
+- add `docs/ontology_migrations/<new_version>.md`
+- document each removed ID and replacement/retirement guidance
+
 ---
 
 ## 5) Ontology file map

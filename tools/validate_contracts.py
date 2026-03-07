@@ -41,6 +41,11 @@ EXTERNAL_CHECKS: tuple[ExternalCheckSpec, ...] = (
     ExternalCheckSpec("UI.EXAMPLES", "tools/validate_ui_examples.py", ("--repo-root", ".")),
     ExternalCheckSpec("ONTOLOGY.REFS", "tools/validate_ontology_refs.py", ("--ontology", "ontology")),
     ExternalCheckSpec(
+        "ONTOLOGY.CHANGES",
+        "tools/validate_ontology_changes.py",
+        ("--repo-root", ".", "--base-ref", "main"),
+    ),
+    ExternalCheckSpec(
         "PLUGINS",
         "tools/validate_plugins.py",
         ("plugins", "--schema", "schemas/plugin.schema.json"),

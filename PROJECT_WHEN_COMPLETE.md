@@ -47,8 +47,7 @@ Note: numbered docs (`docs/00-*` through `docs/20-*`) are canonical; this checkl
 - [x] ontology/layouts.yaml defines all supported layouts + canonical channel naming and order.
 - [x] ontology/downmix.yaml defines explicit, versioned downmix matrices/policies.
 - [x] ontology/gates.yaml defines QA thresholds and fallback behaviors.
-- [ ] Ontology changes are additive unless a version bump is made and migration notes exist.
-What remains: add enforced ontology versioning/deprecation policy with CI checks for migration-note requirements.
+- [x] Ontology changes are additive unless a version bump is made and migration notes exist.
 
 ### 4.3 Schemas are complete and enforced
 Note: schema contracts use `schemas/*.schema.json` naming (not `schemas/*.json`).

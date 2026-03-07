@@ -21,6 +21,12 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,truth,pdf]"
 
+      - name: Fetch base branch for ontology diff
+        run: git fetch --no-tags --depth=1 origin main
+
+      - name: Validate ontology additive-change policy
+        run: python tools/validate_ontology_changes.py --repo-root . --base-ref origin/main --require-base-ref
+
       - name: Validate contracts
         run: python tools/validate_contracts.py
 
@@ -42,6 +48,12 @@ jobs:
 
       - name: Install dependencies
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,truth,pdf]"
+
+      - name: Fetch base branch for ontology diff
+        run: git fetch --no-tags --depth=1 origin main
+
+      - name: Validate ontology additive-change policy
+        run: python tools/validate_ontology_changes.py --repo-root . --base-ref origin/main --require-base-ref
 
       - name: Validate contracts
         run: python tools/validate_contracts.py
@@ -67,6 +79,12 @@ jobs:
 
       - name: Install dependencies
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,truth,pdf]"
+
+      - name: Fetch base branch for ontology diff
+        run: git fetch --no-tags --depth=1 origin main
+
+      - name: Validate ontology additive-change policy
+        run: python tools/validate_ontology_changes.py --repo-root . --base-ref origin/main --require-base-ref
 
       - name: Validate contracts
         run: python tools/validate_contracts.py
