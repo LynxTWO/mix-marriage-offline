@@ -44,8 +44,9 @@ Non-negotiables:
   when recommendations are not render-eligible.
 - Keep safe-render explicit scene workflows first-class and deterministic:
   `--scene` must take precedence over hidden scene rebuilds, optional
-  `--scene-locks` must apply before placement policy, and receipt artifacts
-  must preserve scene/lock source provenance.
+  `--scene-locks` must apply before placement policy and be re-applied before
+  authority/eligibility checks, and receipt artifacts must preserve canonical
+  scene/lock source provenance.
 - Keep scene-aware safe-render export artifacts deterministic and explainable:
   `--export-stems`, `--export-buses`, `--export-master/--no-export-master`,
   and `--export-layouts` must emit stable file paths + SHA-256 hashes in
@@ -99,9 +100,11 @@ Non-negotiables:
   classification with conservative low-confidence fallback behavior.
 - Keep scene-build locks deterministic and precedence-safe:
   `mmo scene build --locks ...` must apply per-stem overrides with
-  `locks > explicit metadata > inference`, including role/bus/placement
+  one centralized precedence rule:
+  `locks > explicit scene fields > explicit CLI flags > plugin/template suggestions > inference defaults`,
+  including scene perspective plus role/bus/placement
   (`azimuth_deg`/`width`/`depth`) and surround/height send caps, and emit
-  stable locked-vs-inferred provenance receipts in scene metadata.
+  stable `locked|explicit|suggested|inferred` provenance receipts in scene metadata.
 - Keep GUI scene-lock editing deterministic and project-local:
   `scene.locks.inspect/save` should round-trip stable stem/object ordering,
   persist `scene_locks.yaml`, preserve non-UI override fields, and update

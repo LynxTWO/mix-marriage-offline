@@ -132,6 +132,31 @@ class TestSceneBuildLocks(unittest.TestCase):
                 },
             )
 
+    def test_load_scene_build_locks_accepts_scene_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            locks_path = Path(temp_dir) / "scene_locks.yaml"
+            locks_path.write_text(
+                "\n".join(
+                    [
+                        'version: "0.1.0"',
+                        "scene:",
+                        '  perspective: "audience"',
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            loaded = load_scene_build_locks(locks_path)
+            self.assertEqual(
+                loaded,
+                {
+                    "version": "0.1.0",
+                    "scene": {"perspective": "audience"},
+                    "overrides": {},
+                },
+            )
+
     def test_load_scene_build_locks_sorted_and_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             locks_path = Path(temp_dir) / "scene_locks.yaml"
@@ -276,9 +301,9 @@ class TestSceneBuildLocks(unittest.TestCase):
             for row in rows
             if isinstance(row, dict) and isinstance(row.get("stem_id"), str)
         }
-        self.assertEqual(by_stem["STEM.A"].get("width_source"), "explicit_metadata")
-        self.assertEqual(by_stem["STEM.A"].get("azimuth_source"), "explicit_metadata")
-        self.assertEqual(by_stem["STEM.A"].get("depth_source"), "explicit_metadata")
+        self.assertEqual(by_stem["STEM.A"].get("width_source"), "explicit")
+        self.assertEqual(by_stem["STEM.A"].get("azimuth_source"), "explicit")
+        self.assertEqual(by_stem["STEM.A"].get("depth_source"), "explicit")
         self.assertEqual(by_stem["STEM.A"].get("height_send_caps_source"), "inferred")
         self.assertEqual(by_stem["STEM.B"].get("role_source"), "locked")
         self.assertEqual(by_stem["STEM.B"].get("bus_source"), "locked")

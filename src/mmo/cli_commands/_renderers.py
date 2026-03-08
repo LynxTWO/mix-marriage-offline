@@ -142,6 +142,7 @@ def _run_render_command(
         is_binaural_layout,
     )
     from mmo.core.gates import apply_gates_to_report  # noqa: WPS433
+    from mmo.core.precedence import apply_recommendation_precedence  # noqa: WPS433
     from mmo.core.pipeline import (  # noqa: WPS433
         build_deliverables_for_renderer_manifests,
         load_plugins,
@@ -166,6 +167,18 @@ def _run_render_command(
     recs: list[dict[str, Any]] = []
     if isinstance(recommendations, list):
         recs = [rec for rec in recommendations if isinstance(rec, dict)]
+    session = report.get("session")
+    scene_payload = (
+        session.get("scene_payload")
+        if isinstance(session, dict)
+        else None
+    )
+    if not isinstance(scene_payload, dict) and isinstance(session, dict):
+        candidate_scene = session.get("scene")
+        if isinstance(candidate_scene, dict):
+            scene_payload = candidate_scene
+    if isinstance(scene_payload, dict):
+        apply_recommendation_precedence(scene_payload, recs)
 
     eligible = [rec for rec in recs if rec.get("eligible_render") is True]
     blocked = [rec for rec in recs if rec.get("eligible_render") is not True]
@@ -287,6 +300,7 @@ def _run_apply_command(
     run_config: dict[str, Any] | None = None,
 ) -> int:
     from mmo.core.gates import apply_gates_to_report  # noqa: WPS433
+    from mmo.core.precedence import apply_recommendation_precedence  # noqa: WPS433
     from mmo.core.pipeline import (  # noqa: WPS433
         build_deliverables_for_renderer_manifests,
         load_plugins,
@@ -310,6 +324,18 @@ def _run_apply_command(
     recs: list[dict[str, Any]] = []
     if isinstance(recommendations, list):
         recs = [rec for rec in recommendations if isinstance(rec, dict)]
+    session_payload = report.get("session")
+    scene_payload = (
+        session_payload.get("scene_payload")
+        if isinstance(session_payload, dict)
+        else None
+    )
+    if not isinstance(scene_payload, dict) and isinstance(session_payload, dict):
+        candidate_scene = session_payload.get("scene")
+        if isinstance(candidate_scene, dict):
+            scene_payload = candidate_scene
+    if isinstance(scene_payload, dict):
+        apply_recommendation_precedence(scene_payload, recs)
 
     eligible = [rec for rec in recs if rec.get("eligible_auto_apply") is True]
     blocked = [rec for rec in recs if rec.get("eligible_auto_apply") is not True]
@@ -818,6 +844,13 @@ def _apply_approve_overrides(
         return 0
     count = 0
     for rec in recs:
+        precedence_conflicts = rec.get("precedence_conflicts")
+        if isinstance(precedence_conflicts, list) and any(
+            isinstance(conflict, dict)
+            and _coerce_str(conflict.get("severity")).strip().lower() == "hard"
+            for conflict in precedence_conflicts
+        ):
+            continue
         if rec.get("eligible_render") is True:
             continue  # already eligible
         if approve == "all":
@@ -1072,11 +1105,11 @@ def _prepare_safe_render_scene_inputs(
     scene_path: Path | None,
     scene_locks_path: Path | None,
     scene_strict: bool,
-) -> tuple[dict[str, Any] | None, str, str | None, str | None]:
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str, str | None, str | None]:
     from mmo.core.locks import (  # noqa: WPS433
-        apply_scene_build_locks,
         load_scene_build_locks,
     )
+    from mmo.core.precedence import apply_precedence  # noqa: WPS433
     from mmo.core.roles import list_roles  # noqa: WPS433
     from mmo.core.scene_lint import (  # noqa: WPS433
         build_scene_lint_payload,
@@ -1146,14 +1179,11 @@ def _prepare_safe_render_scene_inputs(
                 f"({error_count} error(s), {warn_count} warning(s); issue_ids={issue_ids_label})."
             )
 
-    if scene_locks_path is not None:
-        if scene_payload is None:
-            scene_payload = build_scene_from_session(session_payload)
-        if locks_payload is None:
-            locks_payload = load_scene_build_locks(scene_locks_path)
-        scene_payload = apply_scene_build_locks(
+    if scene_payload is not None:
+        scene_payload = apply_precedence(
             scene_payload,
             locks_payload,
+            None,
             locks_path=scene_locks_path,
         )
 
@@ -1190,6 +1220,7 @@ def _prepare_safe_render_scene_inputs(
 
     return (
         scene_payload,
+        locks_payload,
         scene_mode,
         scene_source_path,
         scene_locks_source_path,
@@ -1252,6 +1283,10 @@ def _run_safe_render_command(
         run_detectors,
         run_renderers,
         run_resolvers,
+    )
+    from mmo.core.precedence import (  # noqa: WPS433
+        apply_precedence,
+        apply_recommendation_precedence,
     )
     from mmo.core.preflight import evaluate_preflight, preflight_receipt_blocks  # noqa: WPS433
     from mmo.core.render_qa import build_safe_render_qa  # noqa: WPS433
@@ -1334,6 +1369,7 @@ def _run_safe_render_command(
             report["session"] = session_payload
         (
             scene_payload_for_render,
+            scene_locks_payload,
             scene_mode,
             scene_source_path,
             scene_locks_source_path,
@@ -1346,6 +1382,8 @@ def _run_safe_render_command(
         )
         if isinstance(scene_payload_for_render, dict):
             session_payload["scene_payload"] = _json_clone(scene_payload_for_render)
+        if isinstance(scene_locks_payload, dict):
+            session_payload["scene_locks_payload"] = _json_clone(scene_locks_payload)
         session_payload["render_export_options"] = {
             "export_stems": bool(export_stems),
             "export_buses": bool(export_buses),
@@ -1544,6 +1582,14 @@ def _run_safe_render_command(
 
         _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
         run_resolvers(report, plugins)
+        if isinstance(scene_payload_for_render, dict):
+            scene_payload_for_render = apply_precedence(
+                scene_payload_for_render,
+                scene_locks_payload,
+                None,
+                locks_path=scene_locks_path,
+            )
+            session_payload["scene_payload"] = _json_clone(scene_payload_for_render)
         progress.advance(
             phase="resolve",
             what="resolvers completed",
@@ -1565,6 +1611,8 @@ def _run_safe_render_command(
         recs: list[dict[str, Any]] = []
         if isinstance(recommendations, list):
             recs = [rec for rec in recommendations if isinstance(rec, dict)]
+        if isinstance(scene_payload_for_render, dict):
+            apply_recommendation_precedence(scene_payload_for_render, recs)
 
         parsed_approve = _parse_approve_arg(approve)
         approved_by_user_count = _apply_approve_overrides(recs, parsed_approve)
@@ -1713,6 +1761,14 @@ def _run_safe_render_command(
             return 1
 
         _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
+        if isinstance(scene_payload_for_render, dict):
+            scene_payload_for_render = apply_precedence(
+                scene_payload_for_render,
+                scene_locks_payload,
+                None,
+                locks_path=scene_locks_path,
+            )
+            session_payload["scene_payload"] = _json_clone(scene_payload_for_render)
         renderer_output_formats = ["wav"] if binaural_target_requested else output_formats
         source_manifests = run_renderers(
             report,

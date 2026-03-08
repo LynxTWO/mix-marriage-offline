@@ -600,7 +600,7 @@ class TestPlacementPolicy(unittest.TestCase):
                     {
                         "stem_id": "STEM.KICK",
                         "role_source": "locked",
-                        "bus_source": "explicit_metadata",
+                        "bus_source": "explicit",
                         "azimuth_source": "inferred",
                         "width_source": "locked",
                         "surround_send_caps_source": "locked",
@@ -686,7 +686,7 @@ class TestPlacementPolicy(unittest.TestCase):
         if not isinstance(notes, list):
             return
         self.assertIn("immersive_perspective:in_band", notes)
-        self.assertIn("immersive_perspective_source:scene.intent.perspective", notes)
+        self.assertIn("immersive_perspective_source:explicit", notes)
 
         scene["intent"] = {
             "confidence": 0.0,

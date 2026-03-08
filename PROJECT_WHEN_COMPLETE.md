@@ -125,11 +125,14 @@ What remains: wire corrective-filter recommendations into an approval + re-QA/ba
 ### 4.5 Subjective Plugins system exists (without breaking core contracts)
 - [x] Plugin interface supports max_channels ≥ 32 and declares channel_mode + link groups.
 - [x] Plugins report latency (fixed/dynamic) and host delay-comp policy.
-- [ ] Plugins may suggest actions with confidence, but cannot override explicit user intent.
+- [x] Plugins may suggest actions with confidence, but cannot override explicit user intent.
 - [x] High-impact moves require explicit approval in the workflow contract.
 - [x] Installed package plugin loading does not rely on repo-root imports; bundled
   manifests under `mmo.data/plugins` are discovered from any working directory.
-What remains: tighten user-intent/lock precedence guarantees across all resolver/plugin paths with explicit regression coverage.
+Done: precedence is centralized in `src/mmo/core/precedence.py`, safe-render
+re-applies it before placement and authority checks, and
+`tests/test_lock_precedence_matrix.py` pins the lock-vs-suggestion contract
+across scene build, placement, renderer application, and plugin eligibility.
 
 ### 4.6 Rendering targets are supported (minimum viable set)
 - [x] Stereo (2.0) render contract is correct and validated.
@@ -175,10 +178,11 @@ What remains: broaden this stereo-hint fixture pattern into additional multi-ste
 - [x] `mmo scene build --locks <scene_locks.yaml>` applies deterministic
   per-stem user overrides (role/bus/placement depth/surround caps/height caps), preserves full
   locked `bus_id` identity (for example `BUS.DRUMS.KICK`) plus derived
-  `group_bus`, with precedence
-  `locks > explicit metadata > inference`, and records locked-vs-inferred
-  provenance in scene metadata receipts (including azimuth/width/depth and
-  surround/height source tracking).
+  `group_bus`, with centralized precedence
+  `locks > explicit scene fields > explicit CLI flags > plugin/template suggestions > inference defaults`,
+  and records canonical source provenance (`locked` / `explicit` /
+  `suggested` / `inferred`) in scene metadata receipts (including
+  original/applied values plus lock IDs for locked fields).
 - [x] `mmo scene lint` performs deterministic pre-render scene QA with
   explainable issue reports for missing stem IDs/refs/files, duplicate
   object/bus refs, placement range violations, lock conflicts (including

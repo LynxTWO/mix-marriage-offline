@@ -18,7 +18,8 @@ from mmo.cli_commands._helpers import (
 )
 from mmo.core.intent_params import load_intent_params, validate_scene_intent
 from mmo.core.event_log import new_event_id, write_event_log
-from mmo.core.locks import load_and_apply_scene_build_locks
+from mmo.core.locks import load_scene_build_locks
+from mmo.core.precedence import apply_precedence
 from mmo.core.registries.render_targets_registry import load_render_targets_registry
 from mmo.core.render_plan import build_render_plan
 from mmo.core.render_plan_bridge import render_plan_to_variant_plan
@@ -194,24 +195,32 @@ def _run_scene_build_command(
         payload_name="Report",
     )
     timeline_payload = _load_timeline_payload(timeline_path)
-    scene_payload = _build_validated_scene_payload(
+    base_scene_payload = _build_validated_scene_payload(
         repo_root=None,
         report=report,
         timeline_payload=timeline_payload,
         lock_hash=None,
         created_from="analyze",
     )
-    scene_payload = _apply_scene_templates_to_payload(
+    templated_scene_payload = _apply_scene_templates_to_payload(
         repo_root=None,
-        scene_payload=scene_payload,
+        scene_payload=base_scene_payload,
         template_ids=template_ids or [],
         force=force_templates,
     )
-    if isinstance(locks_path, Path):
-        scene_payload = load_and_apply_scene_build_locks(
+    locks_payload = load_scene_build_locks(locks_path) if isinstance(locks_path, Path) else None
+    scene_payload = (
+        templated_scene_payload
+        if templated_scene_payload != base_scene_payload
+        else base_scene_payload
+    )
+    if isinstance(locks_payload, dict):
+        scene_payload = apply_precedence(
             scene_payload,
+            locks_payload,
             locks_path=locks_path,
         )
+    if isinstance(locks_path, Path):
         _validate_scene_schema(repo_root=None, scene_payload=scene_payload)
         _validate_scene_intent_rules(repo_root=None, scene_payload=scene_payload)
     _write_json_file(out_path, scene_payload)
@@ -239,16 +248,20 @@ def _run_scene_build_from_bus_plan_command(
         schema_path=schemas_dir() / "bus_plan.schema.json",
         payload_name="Bus plan",
     )
-    scene_payload = build_scene_from_bus_plan(
+    base_scene_payload = build_scene_from_bus_plan(
         stems_map_payload,
         bus_plan_payload,
         profile_id=profile_id,
         stems_map_ref=stems_map_path.resolve().as_posix(),
         bus_plan_ref=bus_plan_path.resolve().as_posix(),
     )
-    if isinstance(locks_path, Path):
-        scene_payload = load_and_apply_scene_build_locks(
-            scene_payload,
+    locks_payload = load_scene_build_locks(locks_path) if isinstance(locks_path, Path) else None
+    scene_payload = base_scene_payload
+    if isinstance(locks_payload, dict):
+        scene_payload = apply_precedence(
+            base_scene_payload,
+            locks_payload,
+            None,
             locks_path=locks_path,
         )
     _validate_json_payload(

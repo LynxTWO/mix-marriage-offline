@@ -12,6 +12,7 @@ from mmo.core.deliverables import (
 from mmo.core.layout_export import ffmpeg_layout_string_from_channel_order
 from mmo.core.layout_negotiation import get_layout_channel_order
 from mmo.core.media_tags import TagBag, empty_tag_bag, tag_bag_from_mapping
+from mmo.core.precedence import apply_precedence, has_precedence_receipt
 from mmo.core.tag_export import build_ffmpeg_tag_export_args, metadata_receipt_mapping
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.io import sha256_file
@@ -825,6 +826,26 @@ def run_renderers(
         session_for_plugins["report_id"] = report_id
     if "render_seed" not in session_for_plugins:
         session_for_plugins["render_seed"] = _report_render_seed(report)
+    scene_locks_payload = session_for_plugins.get("scene_locks_payload")
+    normalized_scene_locks_payload = (
+        scene_locks_payload if isinstance(scene_locks_payload, dict) else None
+    )
+    for scene_key in ("scene_payload", "scene"):
+        payload = session_for_plugins.get(scene_key)
+        if not isinstance(payload, dict):
+            continue
+        metadata = payload.get("metadata")
+        has_legacy_locks_receipt = (
+            isinstance(metadata, dict) and isinstance(metadata.get("locks_receipt"), dict)
+        )
+        should_reapply = normalized_scene_locks_payload is not None
+        if not should_reapply and (has_precedence_receipt(payload) or has_legacy_locks_receipt):
+            continue
+        session_for_plugins[scene_key] = apply_precedence(
+            payload,
+            normalized_scene_locks_payload,
+            None,
+        )
     routing_plan = report.get("routing_plan") if isinstance(report, dict) else None
     if isinstance(routing_plan, dict):
         session_for_plugins["routing_plan"] = routing_plan

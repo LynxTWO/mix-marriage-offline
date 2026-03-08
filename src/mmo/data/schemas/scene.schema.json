@@ -298,7 +298,7 @@
     },
     "locks_receipt_source": {
       "type": "string",
-      "enum": ["locked", "explicit_metadata", "inferred"]
+      "enum": ["locked", "explicit", "suggested", "inferred"]
     },
     "locks_receipt_row": {
       "type": "object",
@@ -354,6 +354,45 @@
         }
       }
     },
+    "precedence_scope": {
+      "type": "string",
+      "enum": ["scene", "object", "bed"]
+    },
+    "precedence_value": true,
+    "precedence_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "field", "source", "original_value", "applied_value"],
+      "properties": {
+        "scope": { "$ref": "#/$defs/precedence_scope" },
+        "scene_id": { "type": "string", "minLength": 1 },
+        "object_id": { "type": "string", "minLength": 1 },
+        "stem_id": { "type": "string", "minLength": 1 },
+        "bed_id": { "type": "string", "minLength": 1 },
+        "field": { "type": "string", "minLength": 1 },
+        "source": { "$ref": "#/$defs/locks_receipt_source" },
+        "original_value": { "$ref": "#/$defs/precedence_value" },
+        "applied_value": { "$ref": "#/$defs/precedence_value" },
+        "lock_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "precedence_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "entries", "unmatched_stem_ids"],
+      "properties": {
+        "version": { "const": "0.1.0" },
+        "locks_path": { "type": "string", "pattern": "^[^\\\\]+$", "minLength": 1 },
+        "entries": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/precedence_entry" }
+        },
+        "unmatched_stem_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "stereo_hint_metric": {
       "type": "object",
       "additionalProperties": false,
@@ -397,6 +436,7 @@
         "vibe": { "$ref": "#/$defs/vibe_snapshot" },
         "metering": { "$ref": "#/$defs/scene_metering" },
         "locks_receipt": { "$ref": "#/$defs/locks_receipt" },
+        "precedence_receipt": { "$ref": "#/$defs/precedence_receipt" },
         "stereo_hints": {
           "type": "array",
           "items": { "$ref": "#/$defs/stereo_hint_evidence_row" }

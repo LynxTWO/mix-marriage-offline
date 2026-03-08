@@ -84,6 +84,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Lock-precedence single source of truth + regression matrix:
+  - Added `src/mmo/core/precedence.py` as the shared lock/explicit/suggested/
+    inferred merge path with canonical receipt sources
+    `locked | explicit | suggested | inferred`, plus
+    `original_value` / `applied_value` / `lock_id` receipt fields.
+  - `scene build`, `safe-render`, placement-policy receipt propagation, and
+    renderer entrypoints now re-apply precedence so locks win across templated
+    scene suggestions, explicit scene payloads, resolver/plugin eligibility
+    checks, and final placement rendering.
+  - Added `tests/test_lock_precedence_matrix.py` to pin locked role, bus,
+    azimuth, bed-cap, and scene-perspective cases end-to-end through render
+    manifests and recommendation gating.
+
 - 32-channel render regression contract:
   - Added `LAYOUT.32CH` plus generic `SPK.CH01..SPK.CH32` ontology entries so
     MMO can resolve a deterministic 32-channel placeholder layout through the
@@ -221,6 +234,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Expanded the Tauri shell capability contract so the desktop app explicitly
     allowlists both `shell:allow-execute` and `shell:allow-spawn` for the MMO
     sidecar.
+
+### Fixed
+
+- Placement scene safe-render regressions:
+  - `scene build --templates` now preserves template-authored fields outside
+    the precedence-merged subset (for example `loudness_bias`) and applies
+    locks on top of the fully templated scene instead of discarding
+    non-precedence template data.
+  - Placement subbus export now threads the renderer `session` through the
+    subbus helper so explicit-scene `safe-render --export-buses` no longer
+    raises a `NameError`.
+
+### Added
 
 - Ontology additive-change enforcement:
   - Added `tools/validate_ontology_changes.py` to diff ontology IDs against

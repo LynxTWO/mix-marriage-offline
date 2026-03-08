@@ -143,6 +143,18 @@
       },
       "minProperties": 1
     },
+    "scene_perspective": {
+      "type": "string",
+      "enum": ["audience", "on_stage", "in_band", "in_orchestra"]
+    },
+    "scene_override": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "perspective": { "$ref": "#/$defs/scene_perspective" }
+      },
+      "minProperties": 1
+    },
     "stem_override": {
       "type": "object",
       "additionalProperties": false,
@@ -168,15 +180,20 @@
     "scene_build_overrides": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["version", "overrides"],
+      "required": ["version"],
       "properties": {
         "version": { "const": "0.1.0" },
+        "scene": { "$ref": "#/$defs/scene_override" },
         "overrides": {
           "type": "object",
           "propertyNames": { "$ref": "#/$defs/stem_id" },
           "additionalProperties": { "$ref": "#/$defs/stem_override" }
         }
-      }
+      },
+      "anyOf": [
+        { "required": ["scene"] },
+        { "required": ["overrides"] }
+      ]
     }
   }
 }

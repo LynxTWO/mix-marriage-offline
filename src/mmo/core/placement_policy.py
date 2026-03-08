@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from mmo.core.precedence import apply_precedence, has_precedence_receipt
 from mmo.dsp.downmix import load_layouts
 from mmo.resources import ontology_dir
 
@@ -214,6 +215,36 @@ def _scene_locks_receipt_index(scene: dict[str, Any]) -> dict[str, dict[str, str
     metadata = scene.get("metadata")
     if not isinstance(metadata, dict):
         return {}
+    precedence_receipt = metadata.get("precedence_receipt")
+    if isinstance(precedence_receipt, dict):
+        entries = precedence_receipt.get("entries")
+        if isinstance(entries, list):
+            index: dict[str, dict[str, str]] = {}
+            field_to_note_key = {
+                "role_id": "role_source",
+                "bus_id": "bus_source",
+                "azimuth_deg": "azimuth_source",
+                "width": "width_source",
+                "surround_send_caps": "surround_send_caps_source",
+                "depth": "depth_source",
+                "height_send_caps": "height_send_caps_source",
+            }
+            for row in entries:
+                if not isinstance(row, dict):
+                    continue
+                if _coerce_str(row.get("scope")).strip() != "object":
+                    continue
+                stem_id = _coerce_str(row.get("stem_id")).strip()
+                field = _coerce_str(row.get("field")).strip()
+                source = _coerce_str(row.get("source")).strip()
+                if source == "explicit_metadata":
+                    source = "explicit"
+                note_key = field_to_note_key.get(field)
+                if not stem_id or not note_key or not source:
+                    continue
+                index.setdefault(stem_id, {})[note_key] = source
+            if index:
+                return index
     locks_receipt = metadata.get("locks_receipt")
     if not isinstance(locks_receipt, dict):
         return {}
@@ -229,7 +260,11 @@ def _scene_locks_receipt_index(scene: dict[str, Any]) -> dict[str, dict[str, str
         if not stem_id:
             continue
         index[stem_id] = {
-            key: _coerce_str(row.get(key)).strip()
+            key: (
+                "explicit"
+                if _coerce_str(row.get(key)).strip() == "explicit_metadata"
+                else _coerce_str(row.get(key)).strip()
+            )
             for key in (
                 "role_source",
                 "bus_source",
@@ -244,11 +279,34 @@ def _scene_locks_receipt_index(scene: dict[str, Any]) -> dict[str, dict[str, str
     return index
 
 
+def _scene_precedence_source(scene: dict[str, Any], *, field: str) -> str | None:
+    metadata = scene.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    precedence_receipt = metadata.get("precedence_receipt")
+    if not isinstance(precedence_receipt, dict):
+        return None
+    entries = precedence_receipt.get("entries")
+    if not isinstance(entries, list):
+        return None
+    for row in entries:
+        if not isinstance(row, dict):
+            continue
+        if _coerce_str(row.get("scope")).strip() != "scene":
+            continue
+        if _coerce_str(row.get("field")).strip() != field:
+            continue
+        source = _coerce_str(row.get("source")).strip()
+        if source:
+            return source
+    return None
+
+
 def _scene_immersive_perspective(scene: dict[str, Any]) -> tuple[str, str] | None:
     scene_intent = _scene_intent_payload(scene)
     perspective = _coerce_str(scene_intent.get("perspective")).strip().lower()
     if perspective in _IMMERSIVE_PERSPECTIVES:
-        return perspective, "scene.intent.perspective"
+        return perspective, _scene_precedence_source(scene, field="perspective") or "scene.intent.perspective"
 
     for note in _string_list(scene_intent.get("notes")):
         normalized_note = note.strip().lower().replace("-", "_").replace(" ", "_")
@@ -1246,6 +1304,13 @@ def build_render_intent(
     """Build conservative scene->layout placement sends for renderer consumption."""
     if not isinstance(scene, dict):
         raise ValueError("scene must be an object.")
+    if not has_precedence_receipt(scene):
+        metadata = scene.get("metadata")
+        has_legacy_locks_receipt = (
+            isinstance(metadata, dict) and isinstance(metadata.get("locks_receipt"), dict)
+        )
+        if not has_legacy_locks_receipt:
+            scene = apply_precedence(scene, None, None)
 
     normalized_layout_id = _coerce_str(target_layout_id).strip().upper()
     if normalized_layout_id not in _SUPPORTED_LAYOUT_IDS:

@@ -1730,6 +1730,7 @@ def _render_subbus_output(
 
 def _export_subbus_outputs(
     *,
+    session: Dict[str, Any],
     layout_id: str,
     output_dir: Path,
     prepared_stems: list[_PreparedStem],
@@ -2103,6 +2104,7 @@ def _mix_layout_from_intent(
 
     if export_options.export_buses:
         bus_outputs, bus_notes = _export_subbus_outputs(
+            session=session,
             layout_id=layout_id,
             output_dir=output_dir,
             prepared_stems=prepared_stems,

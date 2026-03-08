@@ -14,14 +14,10 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     yaml = None
 
+from mmo.core.precedence import apply_precedence
 from mmo.resources import schemas_dir
 
 SCENE_BUILD_LOCKS_VERSION = "0.1.0"
-LOCKS_RECEIPT_VERSION = "0.1.0"
-
-_SOURCE_LOCKED = "locked"
-_SOURCE_EXPLICIT = "explicit_metadata"
-_SOURCE_INFERRED = "inferred"
 
 
 def _json_clone(value: Any) -> Any:
@@ -209,6 +205,18 @@ def _normalize_override(stem_id: str, payload: dict[str, Any]) -> dict[str, Any]
     return normalized
 
 
+def _normalize_scene_override(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    normalized: dict[str, Any] = {}
+
+    perspective = _coerce_str(payload.get("perspective")).strip().lower()
+    if perspective:
+        normalized["perspective"] = perspective
+
+    return normalized
+
+
 def load_scene_build_locks(path: Path) -> dict[str, Any]:
     payload = _load_locks_object(path, label="Scene build locks")
     _validate_payload_against_schema(
@@ -218,14 +226,25 @@ def load_scene_build_locks(path: Path) -> dict[str, Any]:
     )
 
     version = _coerce_str(payload.get("version")).strip()
+    scene_payload = _normalize_scene_override(payload.get("scene"))
     overrides = payload.get("overrides")
-    if not version or not isinstance(overrides, dict):
+    if not version:
         raise ValueError(
-            "Scene build locks must use overrides format with top-level keys: version, overrides."
+            "Scene build locks must include a supported top-level version."
         )
     if version != SCENE_BUILD_LOCKS_VERSION:
         raise ValueError(
             f"Unsupported scene build locks version {version!r}; expected {SCENE_BUILD_LOCKS_VERSION}."
+        )
+    if overrides is None:
+        overrides = {}
+    if not isinstance(overrides, dict):
+        raise ValueError(
+            "Scene build locks overrides must be an object when provided."
+        )
+    if not scene_payload and not overrides:
+        raise ValueError(
+            "Scene build locks must include at least one scene override or stem override."
         )
 
     _validate_sorted_stem_ids(overrides, path=path)
@@ -238,10 +257,13 @@ def load_scene_build_locks(path: Path) -> dict[str, Any]:
             continue
         normalized_overrides[stem_id_value] = _normalize_override(stem_id_value, entry)
 
-    return {
+    normalized_payload = {
         "version": SCENE_BUILD_LOCKS_VERSION,
         "overrides": normalized_overrides,
     }
+    if scene_payload:
+        normalized_payload["scene"] = scene_payload
+    return normalized_payload
 
 
 def _resolve_group_bus(bus_id: str) -> str:
@@ -281,21 +303,6 @@ def _ensure_hint_locks(obj: dict[str, Any]) -> dict[str, bool]:
     return normalized
 
 
-def _resolve_number_value(
-    *,
-    locked: float | None,
-    explicit: float | None,
-    inferred: float | None,
-) -> tuple[float | None, str]:
-    if locked is not None:
-        return locked, _SOURCE_LOCKED
-    if explicit is not None:
-        return explicit, _SOURCE_EXPLICIT
-    if inferred is not None:
-        return inferred, _SOURCE_INFERRED
-    return None, _SOURCE_INFERRED
-
-
 def apply_scene_build_locks(
     scene_payload: dict[str, Any],
     locks_payload: dict[str, Any],
@@ -310,212 +317,12 @@ def apply_scene_build_locks(
     overrides = locks_payload.get("overrides")
     if not isinstance(overrides, dict):
         raise ValueError("locks_payload.overrides must be an object.")
-
-    scene = _json_clone(scene_payload)
-    objects = scene.get("objects")
-    if not isinstance(objects, list):
-        return scene
-
-    matched_stem_ids: set[str] = set()
-    receipt_rows: list[dict[str, Any]] = []
-
-    for obj in objects:
-        if not isinstance(obj, dict):
-            continue
-
-        stem_id = _coerce_str(obj.get("stem_id")).strip()
-        if not stem_id:
-            continue
-        object_id = _coerce_str(obj.get("object_id")).strip() or f"OBJ.{stem_id}"
-        intent = _ensure_intent_payload(obj)
-
-        override = overrides.get(stem_id)
-        override_payload = override if isinstance(override, dict) else {}
-        if override_payload:
-            matched_stem_ids.add(stem_id)
-
-        # role_id
-        locked_role_id = _coerce_str(override_payload.get("role_id")).strip()
-        current_role_id = _coerce_str(obj.get("role_id")).strip()
-        if locked_role_id:
-            obj["role_id"] = locked_role_id
-            role_id = locked_role_id
-            role_source = _SOURCE_LOCKED
-        elif current_role_id:
-            role_id = current_role_id
-            role_source = _SOURCE_EXPLICIT
-        else:
-            role_id = ""
-            role_source = _SOURCE_INFERRED
-
-        # bus routing identity (bus_id + derived group_bus)
-        locked_bus_id = _normalize_bus_id(override_payload.get("bus_id"))
-        current_bus_id = _normalize_bus_id(obj.get("bus_id"))
-        current_group_bus = _coerce_str(obj.get("group_bus")).strip().upper()
-        if locked_bus_id:
-            bus_id = locked_bus_id
-            obj["bus_id"] = bus_id
-            group_bus = _resolve_group_bus(locked_bus_id)
-            if group_bus:
-                obj["group_bus"] = group_bus
-            bus_source = _SOURCE_LOCKED
-        elif current_bus_id:
-            bus_id = current_bus_id
-            obj["bus_id"] = bus_id
-            group_bus = _resolve_group_bus(current_bus_id)
-            if group_bus:
-                obj["group_bus"] = group_bus
-            elif current_group_bus:
-                group_bus = current_group_bus
-            bus_source = _SOURCE_EXPLICIT
-        elif current_group_bus:
-            bus_id = ""
-            group_bus = current_group_bus
-            bus_source = _SOURCE_EXPLICIT
-        else:
-            bus_id = ""
-            group_bus = ""
-            bus_source = _SOURCE_INFERRED
-
-        placement = override_payload.get("placement")
-        placement_payload = placement if isinstance(placement, dict) else {}
-
-        # width lock + precedence
-        locked_width = _coerce_float(placement_payload.get("width"))
-        explicit_width = _coerce_float(intent.get("width"))
-        inferred_width = _coerce_float(obj.get("width_hint"))
-        resolved_width, width_source = _resolve_number_value(
-            locked=locked_width,
-            explicit=explicit_width,
-            inferred=inferred_width,
-        )
-        if resolved_width is not None:
-            width_value = _round_unit(resolved_width)
-            obj["width_hint"] = width_value
-            intent["width"] = width_value
-        else:
-            width_value = None
-        if locked_width is not None:
-            hint_locks = _ensure_hint_locks(obj)
-            hint_locks["width_hint"] = True
-
-        # azimuth lock + precedence
-        locked_azimuth = _coerce_float(placement_payload.get("azimuth_deg"))
-        current_position = intent.get("position")
-        position = current_position if isinstance(current_position, dict) else {}
-        explicit_azimuth = _coerce_float(position.get("azimuth_deg"))
-        inferred_azimuth = _coerce_float(obj.get("azimuth_hint"))
-        resolved_azimuth, azimuth_source = _resolve_number_value(
-            locked=locked_azimuth,
-            explicit=explicit_azimuth,
-            inferred=inferred_azimuth,
-        )
-        if resolved_azimuth is not None:
-            azimuth_value = _round_azimuth(resolved_azimuth)
-            obj["azimuth_hint"] = azimuth_value
-            position["azimuth_deg"] = azimuth_value
-            intent["position"] = position
-        else:
-            azimuth_value = None
-        if locked_azimuth is not None:
-            hint_locks = _ensure_hint_locks(obj)
-            hint_locks["azimuth_hint"] = True
-
-        # depth lock + precedence
-        locked_depth = _coerce_float(placement_payload.get("depth"))
-        explicit_depth = _coerce_float(intent.get("depth"))
-        inferred_depth = _coerce_float(obj.get("depth_hint"))
-        resolved_depth, depth_source = _resolve_number_value(
-            locked=locked_depth,
-            explicit=explicit_depth,
-            inferred=inferred_depth,
-        )
-        if resolved_depth is not None:
-            depth_value = _round_unit(resolved_depth)
-            obj["depth_hint"] = depth_value
-            intent["depth"] = depth_value
-        else:
-            depth_value = None
-        if locked_depth is not None:
-            hint_locks = _ensure_hint_locks(obj)
-            hint_locks["depth_hint"] = True
-
-        # surround send caps
-        locked_caps = _normalize_surround_send_caps(override_payload.get("surround_send_caps"))
-        explicit_caps = _normalize_surround_send_caps(intent.get("surround_send_caps"))
-        if locked_caps is not None:
-            intent["surround_send_caps"] = locked_caps
-            surround_send_caps = locked_caps
-            surround_send_caps_source = _SOURCE_LOCKED
-        elif explicit_caps is not None:
-            intent["surround_send_caps"] = explicit_caps
-            surround_send_caps = explicit_caps
-            surround_send_caps_source = _SOURCE_EXPLICIT
-        else:
-            intent.pop("surround_send_caps", None)
-            surround_send_caps = None
-            surround_send_caps_source = _SOURCE_INFERRED
-
-        # height send caps
-        locked_height_caps = _normalize_height_send_caps(override_payload.get("height_send_caps"))
-        explicit_height_caps = _normalize_height_send_caps(intent.get("height_send_caps"))
-        if locked_height_caps is not None:
-            intent["height_send_caps"] = locked_height_caps
-            height_send_caps = locked_height_caps
-            height_send_caps_source = _SOURCE_LOCKED
-        elif explicit_height_caps is not None:
-            intent["height_send_caps"] = explicit_height_caps
-            height_send_caps = explicit_height_caps
-            height_send_caps_source = _SOURCE_EXPLICIT
-        else:
-            intent.pop("height_send_caps", None)
-            height_send_caps = None
-            height_send_caps_source = _SOURCE_INFERRED
-
-        receipt_row: dict[str, Any] = {
-            "object_id": object_id,
-            "stem_id": stem_id,
-            "role_source": role_source,
-            "bus_source": bus_source,
-            "azimuth_source": azimuth_source,
-            "width_source": width_source,
-            "surround_send_caps_source": surround_send_caps_source,
-            "depth_source": depth_source,
-            "height_send_caps_source": height_send_caps_source,
-            "azimuth_deg": azimuth_value,
-            "width": width_value,
-            "depth": depth_value,
-        }
-        if role_id:
-            receipt_row["role_id"] = role_id
-        if bus_id:
-            receipt_row["bus_id"] = bus_id
-        if group_bus:
-            receipt_row["group_bus"] = group_bus
-        if surround_send_caps is not None:
-            receipt_row["surround_send_caps"] = surround_send_caps
-        if height_send_caps is not None:
-            receipt_row["height_send_caps"] = height_send_caps
-        receipt_rows.append(receipt_row)
-
-    receipt_rows.sort(key=lambda row: (row.get("stem_id", ""), row.get("object_id", "")))
-    unmatched_stem_ids = sorted(
-        stem_id for stem_id in overrides.keys()
-        if isinstance(stem_id, str) and stem_id not in matched_stem_ids
+    return apply_precedence(
+        scene_payload,
+        locks_payload,
+        None,
+        locks_path=locks_path,
     )
-
-    metadata = scene.get("metadata")
-    metadata_payload = metadata if isinstance(metadata, dict) else {}
-    locks_receipt: dict[str, Any] = {
-        "version": LOCKS_RECEIPT_VERSION,
-        "objects": receipt_rows,
-        "unmatched_stem_ids": unmatched_stem_ids,
-    }
-    if isinstance(locks_path, Path):
-        locks_receipt["locks_path"] = locks_path.resolve().as_posix()
-    metadata_payload["locks_receipt"] = locks_receipt
-    scene["metadata"] = metadata_payload
-    return scene
 
 
 def load_and_apply_scene_build_locks(
