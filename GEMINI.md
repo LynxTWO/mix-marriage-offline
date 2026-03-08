@@ -22,6 +22,9 @@ Non-negotiables:
 - Keep GUI dashboard rendering deterministic (frame + surface snapshot signatures).
 - Route runtime progress/cancel/live-log wiring through `mmo.core.progress`
   and keep ETA/runtime diagnostics out of deterministic persisted artifacts.
+  `render_report.stage_metrics` / `stage_evidence` must stay deterministic; use
+  opt-in `wall_clock` only when a caller explicitly requests non-deterministic
+  elapsed-time diagnostics.
 - Keep `fixtures/public_session/report.7_1_4.json` and
   `tests/test_full_determinism.py` in sync for full-pipeline byte-stability checks.
 - Keep `fixtures/golden_path_small/expected_golden_hashes.json` and

@@ -84,6 +84,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Deterministic `render_report` stage reporting:
+  - Added optional top-level `stage_metrics` and `stage_evidence` sections to
+    `render_report` with stable `(job_id, stage_id, where)` ordering, covering
+    `planning`, `resampling`, `dsp_hooks`, `export_finalize`, and `qa_gates`.
+  - Extended the render-report builders so plan-derived reports emit
+    deterministic stage placeholders while the runtime render engine now
+    threads DSP dispatch/hook evidence and stage-like metrics into the final
+    report payload.
+  - Added opt-in `wall_clock` report support with an explicit non-deterministic
+    disclaimer; default report generation remains wall-clock free so golden
+    determinism tests stay byte-stable.
+
 - Typed `AudioBufferF64` transport for renderer/plugin-chain audio boundaries:
   baseline mixdown, placement mixdown, and gain-trim renderer chunk handling
   now use explicit interleaved buffer metadata (`channel_order`,

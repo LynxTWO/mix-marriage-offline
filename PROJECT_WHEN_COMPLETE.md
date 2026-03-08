@@ -367,7 +367,7 @@ What remains: the core DSP path is functional, but formalized fallback sequencin
 - [x] Deterministic DSP hook scaffold exists for the corrective-pass boundary:
   `pre_bus_stem` (per-stem), `bus` (per-bus group), and `post_master`
   stage hooks with bounded-authority enforcement and explainable event output.
-- [ ] Each stage emits evidence and timing into the render report.
+- [x] Each stage emits evidence and timing into the render report.
 
 ### 4.9.3 Plugin API: audio processing contract
 - [x] A plugin manifest declares:

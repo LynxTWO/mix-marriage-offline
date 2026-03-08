@@ -139,6 +139,19 @@ def _render_plan_with_render_intent(scene_path: str) -> dict:
     return payload
 
 
+def _render_plan_with_stage_inputs(scene_path: str) -> dict:
+    payload = _render_plan_with_policies(scene_path)
+    payload["request"]["options"] = {"sample_rate_hz": 48000}
+    payload["jobs"][0]["outputs"] = [
+        {"path": "renders/job_001.wav", "format": "wav"},
+    ]
+    payload["jobs"][1]["outputs"] = [
+        {"path": "renders/job_002.wav", "format": "wav"},
+        {"path": "renders/job_002.flac", "format": "flac"},
+    ]
+    return payload
+
+
 class TestRenderReportCli(unittest.TestCase):
     def test_produces_schema_valid_render_report(self) -> None:
         validator = _schema_validator("render_report.schema.json")
@@ -329,6 +342,73 @@ class TestRenderReportCli(unittest.TestCase):
             joined_warnings = " ".join(receipt["warnings"])
             self.assertIn("informational playback normalization guidance", joined_warnings)
 
+    def test_report_includes_deterministic_stage_sections(self) -> None:
+        validator = _schema_validator("render_report.schema.json")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            plan_path = temp_path / "render_plan.json"
+            out_path = temp_path / "render_report.json"
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            _write_json(plan_path, _render_plan_with_stage_inputs(scene_posix))
+
+            exit_code = main([
+                "render-report",
+                "--plan", str(plan_path),
+                "--out", str(out_path),
+            ])
+            self.assertEqual(exit_code, 0)
+
+            payload = json.loads(out_path.read_text(encoding="utf-8"))
+            validator.validate(payload)
+
+            self.assertIn("stage_metrics", payload)
+            self.assertIn("stage_evidence", payload)
+            self.assertNotIn("wall_clock", payload)
+
+            required_stage_ids = {
+                "planning",
+                "resampling",
+                "dsp_hooks",
+                "export_finalize",
+                "qa_gates",
+            }
+            self.assertTrue(
+                required_stage_ids.issubset({row["stage_id"] for row in payload["stage_metrics"]})
+            )
+            self.assertTrue(
+                required_stage_ids.issubset({row["stage_id"] for row in payload["stage_evidence"]})
+            )
+
+    def test_stage_sections_are_sorted_by_job_then_stage_then_where(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            plan_path = temp_path / "render_plan.json"
+            out_path = temp_path / "render_report.json"
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            payload = _render_plan_with_stage_inputs(scene_posix)
+            payload["jobs"] = list(reversed(payload["jobs"]))
+            _write_json(plan_path, payload)
+
+            exit_code = main([
+                "render-report",
+                "--plan", str(plan_path),
+                "--out", str(out_path),
+            ])
+            self.assertEqual(exit_code, 0)
+
+            report_payload = json.loads(out_path.read_text(encoding="utf-8"))
+
+            for key in ("stage_metrics", "stage_evidence"):
+                rows = report_payload[key]
+                actual = [
+                    (row["where"][0], row["stage_id"], tuple(row["where"]))
+                    for row in rows
+                ]
+                self.assertEqual(actual, sorted(actual))
+
 
 class TestRenderReportOverwrite(unittest.TestCase):
     def test_refuses_overwrite_without_force(self) -> None:
@@ -407,6 +487,8 @@ class TestRenderReportDeterminism(unittest.TestCase):
         plan = _minimal_render_plan("scenes/test/scene.json")
         first = build_render_report_from_plan(plan)
         second = build_render_report_from_plan(plan)
+        self.assertNotIn("wall_clock", first)
+        self.assertNotIn("wall_clock", second)
         self.assertEqual(
             json.dumps(first, indent=2, sort_keys=True),
             json.dumps(second, indent=2, sort_keys=True),

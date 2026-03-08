@@ -28,6 +28,7 @@ Guarantees
 from __future__ import annotations
 
 import concurrent.futures
+import time
 from typing import Any
 
 from mmo.core.downmix import predict_fold_similarity, resolve_preflight_matrix
@@ -43,6 +44,17 @@ from mmo.core.loudness_profiles import (
 from mmo.core.progress import CancelToken, CancelledError, ProgressTracker
 from mmo.core.render_contract import contracts_to_render_targets
 from mmo.core.render_plan import build_render_plan
+from mmo.core.render_reporting import (
+    STAGE_ID_DSP_HOOKS,
+    STAGE_ID_EXPORT_FINALIZE,
+    STAGE_ID_PLANNING,
+    STAGE_ID_QA_GATES,
+    STAGE_ID_RESAMPLING,
+    build_stage_evidence_entry,
+    build_stage_metric_entry,
+    build_wall_clock_report,
+    sort_stage_entries,
+)
 
 RENDER_ENGINE_VERSION = "0.1.0"
 RENDER_REPORT_SCHEMA_VERSION = "0.1.0"
@@ -66,6 +78,14 @@ def _coerce_float(value: Any) -> float | None:
         return None
     if isinstance(value, (int, float)):
         return float(value)
+    return None
+
+
+def _coerce_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
     return None
 
 
@@ -103,6 +123,7 @@ def _normalize_options(options: dict[str, Any] | None) -> dict[str, Any]:
         "dsp_stems": normalized_dsp_stems,
         "enable_bus_dsp": bool(options.get("enable_bus_dsp", False)),
         "enable_post_master_dsp": bool(options.get("enable_post_master_dsp", False)),
+        "include_wall_clock": bool(options.get("include_wall_clock", False)),
         "progress_listener": options.get("progress_listener"),
         "log_listener": options.get("log_listener"),
         "cancel_token": options.get("cancel_token"),
@@ -148,6 +169,43 @@ def _aggregate_qa_status(statuses: list[str]) -> str:
     if all(s == "pass" for s in statuses):
         return "pass"
     return "not_run"
+
+
+def _job_stage_where(
+    job_id: str,
+    *,
+    target_layout_id: str | None = None,
+    target_id: str | None = None,
+    extra_where: list[str] | tuple[str, ...] | None = None,
+) -> list[str]:
+    where: list[str] = []
+    clean_job_id = _coerce_str(job_id).strip()
+    if clean_job_id:
+        where.append(clean_job_id)
+    clean_layout_id = _coerce_str(target_layout_id).strip()
+    if clean_layout_id:
+        where.append(clean_layout_id)
+    clean_target_id = _coerce_str(target_id).strip()
+    if clean_target_id and clean_target_id not in where:
+        where.append(clean_target_id)
+    for item in extra_where or []:
+        text = _coerce_str(item).strip()
+        if text and text not in where:
+            where.append(text)
+    return where or ["(report)"]
+
+
+def _job_base_stage_metrics(contract: dict[str, Any]) -> list[dict[str, Any]]:
+    metrics: list[dict[str, Any]] = []
+    channel_count = _coerce_int(contract.get("channel_count"))
+    if channel_count is not None and channel_count > 0:
+        metrics.append({"name": "channel_count", "value": float(channel_count)})
+    sample_rate_hz = _coerce_int(contract.get("sample_rate_hz"))
+    if sample_rate_hz is not None and sample_rate_hz > 0:
+        metrics.append(
+            {"name": "sample_rate_hz", "value": float(sample_rate_hz), "unit": "Hz"}
+        )
+    return metrics
 
 
 # ---------------------------------------------------------------------------
@@ -261,6 +319,46 @@ def _execute_job(
     notes: list[str] = list(contract.get("notes") or [])
     dsp_receipt: dict[str, Any] | None = None
     dsp_events: list[dict[str, Any]] = []
+    job_stage_metrics: list[dict[str, Any]] = []
+    job_stage_evidence: list[dict[str, Any]] = []
+    target_layout_id = _coerce_str(contract.get("target_layout_id")).strip()
+    target_id = _coerce_str(contract.get("target_id")).strip()
+    stage_where = _job_stage_where(
+        job_id,
+        target_layout_id=target_layout_id,
+        target_id=target_id,
+    )
+    base_stage_metrics = _job_base_stage_metrics(contract)
+
+    job_stage_metrics.append(
+        build_stage_metric_entry(
+            stage_id=STAGE_ID_RESAMPLING,
+            scope="job",
+            where=stage_where,
+            metrics=[
+                *base_stage_metrics,
+                {"name": "resample_ratio", "value": 1.0},
+            ],
+            notes=[
+                "No resampling receipt is attached; deterministic engine path kept the contract sample rate.",
+            ],
+        )
+    )
+    job_stage_evidence.append(
+        build_stage_evidence_entry(
+            stage_id=STAGE_ID_RESAMPLING,
+            scope="job",
+            where=stage_where,
+            codes=["RENDER.ENGINE.RESAMPLING.NOT_REQUIRED"],
+            metrics=[
+                *base_stage_metrics,
+                {"name": "resample_ratio", "value": 1.0},
+            ],
+            notes=[
+                "No resampling receipt is attached; deterministic engine path kept the contract sample rate.",
+            ],
+        )
+    )
 
     # Explainability: record which channel ordering standard was used.
     contract_standard = _coerce_str(contract.get("layout_standard")).strip()
@@ -280,7 +378,6 @@ def _execute_job(
         try:
             from mmo.core.dsp_dispatch import StemJob, dispatch_stems
 
-            target_layout_id = _coerce_str(contract.get("target_layout_id")).strip()
             stem_workers = max(1, int(options.get("stem_max_workers") or 2))
             stem_jobs = [
                 StemJob(
@@ -297,6 +394,32 @@ def _execute_job(
             notes.append(
                 f"stem_dispatch: {len(stem_results)} stem(s) ({active_standard})."
             )
+            for stem_result in stem_results:
+                evidence = getattr(stem_result, "evidence", None)
+                evidence_metrics = list(getattr(evidence, "metrics", []) or [])
+                evidence_notes = [
+                    _coerce_str(getattr(evidence, "stage_what", "")).strip(),
+                    _coerce_str(getattr(evidence, "stage_why", "")).strip(),
+                    *list(getattr(stem_result, "notes", []) or []),
+                ]
+                job_stage_evidence.append(
+                    build_stage_evidence_entry(
+                        stage_id=STAGE_ID_DSP_HOOKS,
+                        scope="stem",
+                        where=_job_stage_where(
+                            job_id,
+                            target_layout_id=target_layout_id,
+                            target_id=target_id,
+                            extra_where=[_coerce_str(getattr(stem_result, "stem_id", "")).strip()],
+                        ),
+                        codes=["RENDER.ENGINE.DSP_DISPATCH.EVIDENCE"],
+                        metrics=[
+                            *base_stage_metrics,
+                            *evidence_metrics,
+                        ],
+                        notes=evidence_notes,
+                    )
+                )
             dsp_receipt = run_dsp_pipeline_hooks(
                 stem_results=stem_results,
                 stem_specs=list(options.get("dsp_stems") or []),
@@ -316,6 +439,65 @@ def _execute_job(
                 post_actions = int(
                     ((stages.get("post_master") or {}).get("action_count") or 0)
                 )
+            job_stage_metrics.append(
+                build_stage_metric_entry(
+                    stage_id=STAGE_ID_DSP_HOOKS,
+                    scope="job",
+                    where=stage_where,
+                    metrics=[
+                        *base_stage_metrics,
+                        {"name": "stem_count", "value": float(len(stem_results))},
+                        {"name": "action_count", "value": float(len(dsp_receipt.get("actions") or []))},
+                        {"name": "pre_bus_action_count", "value": float(pre_actions)},
+                        {"name": "bus_action_count", "value": float(bus_actions)},
+                        {"name": "post_master_action_count", "value": float(post_actions)},
+                    ],
+                    notes=["DSP dispatch + hook receipt collected deterministically."],
+                )
+            )
+            job_stage_evidence.append(
+                build_stage_evidence_entry(
+                    stage_id=STAGE_ID_DSP_HOOKS,
+                    scope="job",
+                    where=stage_where,
+                    codes=["RENDER.ENGINE.DSP_HOOKS.RECEIPT"],
+                    metrics=[
+                        *base_stage_metrics,
+                        {"name": "stem_count", "value": float(len(stem_results))},
+                        {"name": "action_count", "value": float(len(dsp_receipt.get("actions") or []))},
+                    ],
+                    notes=["DSP dispatch + hook receipt collected deterministically."],
+                )
+            )
+            for raw_event in dsp_events:
+                if not isinstance(raw_event, dict):
+                    continue
+                event_evidence = raw_event.get("evidence")
+                evidence_dict = event_evidence if isinstance(event_evidence, dict) else {}
+                event_codes = list(evidence_dict.get("codes") or [])
+                event_metrics = list(evidence_dict.get("metrics") or [])
+                event_notes = [
+                    _coerce_str(raw_event.get("what")).strip(),
+                    _coerce_str(raw_event.get("why")).strip(),
+                    *list(evidence_dict.get("notes") or []),
+                ]
+                raw_where = raw_event.get("where")
+                extra_where = raw_where if isinstance(raw_where, list) else []
+                job_stage_evidence.append(
+                    build_stage_evidence_entry(
+                        stage_id=STAGE_ID_DSP_HOOKS,
+                        scope=_coerce_str(raw_event.get("stage_scope")).strip() or "dsp",
+                        where=_job_stage_where(
+                            job_id,
+                            target_layout_id=target_layout_id,
+                            target_id=target_id,
+                            extra_where=extra_where,
+                        ),
+                        codes=event_codes or ["RENDER.ENGINE.DSP_HOOKS.EVENT"],
+                        metrics=[*base_stage_metrics, *event_metrics],
+                        notes=event_notes,
+                    )
+                )
             notes.append(
                 "dsp_hooks: "
                 f"actions={len(dsp_receipt.get('actions') or [])}, "
@@ -323,6 +505,57 @@ def _execute_job(
             )
         except (ValueError, ImportError) as exc:
             notes.append(f"stem_dispatch skipped: {exc}")
+            job_stage_metrics.append(
+                build_stage_metric_entry(
+                    stage_id=STAGE_ID_DSP_HOOKS,
+                    scope="job",
+                    where=stage_where,
+                    metrics=[
+                        *base_stage_metrics,
+                        {"name": "stem_count", "value": float(len(stem_ids))},
+                    ],
+                    notes=[f"stem_dispatch skipped: {exc}"],
+                )
+            )
+            job_stage_evidence.append(
+                build_stage_evidence_entry(
+                    stage_id=STAGE_ID_DSP_HOOKS,
+                    scope="job",
+                    where=stage_where,
+                    codes=["RENDER.ENGINE.DSP_HOOKS.SKIPPED"],
+                    metrics=[
+                        *base_stage_metrics,
+                        {"name": "stem_count", "value": float(len(stem_ids))},
+                    ],
+                    notes=[f"stem_dispatch skipped: {exc}"],
+                )
+            )
+    else:
+        job_stage_metrics.append(
+            build_stage_metric_entry(
+                stage_id=STAGE_ID_DSP_HOOKS,
+                scope="job",
+                where=stage_where,
+                metrics=[
+                    *base_stage_metrics,
+                    {"name": "stem_count", "value": 0.0},
+                ],
+                notes=["DSP hooks were not requested for this job."],
+            )
+        )
+        job_stage_evidence.append(
+            build_stage_evidence_entry(
+                stage_id=STAGE_ID_DSP_HOOKS,
+                scope="job",
+                where=stage_where,
+                codes=["RENDER.ENGINE.DSP_HOOKS.NOT_REQUESTED"],
+                metrics=[
+                    *base_stage_metrics,
+                    {"name": "stem_count", "value": 0.0},
+                ],
+                notes=["DSP hooks were not requested for this job."],
+            )
+        )
 
     if dry_run:
         cancel_token.raise_if_cancelled()
@@ -351,6 +584,40 @@ def _execute_job(
         if qa_note not in notes:
             notes.append(qa_note)
 
+    export_metrics = [
+        *base_stage_metrics,
+        {"name": "output_file_count", "value": float(len(output_files))},
+    ]
+    export_code = "RENDER.ENGINE.EXPORT_FINALIZE.SKIPPED"
+    export_notes = [f"status={status}"]
+    if status == "completed":
+        export_code = "RENDER.ENGINE.EXPORT_FINALIZE.COMPLETED"
+        export_notes.append("Deterministic export finalization completed.")
+    elif status == "failed":
+        export_code = "RENDER.ENGINE.EXPORT_FINALIZE.FAILED"
+        export_notes.append("Export finalization did not complete.")
+    else:
+        export_notes.append("Export finalization did not emit output artifacts.")
+    job_stage_metrics.append(
+        build_stage_metric_entry(
+            stage_id=STAGE_ID_EXPORT_FINALIZE,
+            scope="job",
+            where=stage_where,
+            metrics=export_metrics,
+            notes=export_notes,
+        )
+    )
+    job_stage_evidence.append(
+        build_stage_evidence_entry(
+            stage_id=STAGE_ID_EXPORT_FINALIZE,
+            scope="job",
+            where=stage_where,
+            codes=[export_code],
+            metrics=export_metrics,
+            notes=export_notes,
+        )
+    )
+
     return {
         "job_id": job_id,
         "status": status,
@@ -360,6 +627,8 @@ def _execute_job(
         "_qa": job_qa,
         "_dsp_receipt": dsp_receipt or {},
         "_dsp_events": dsp_events,
+        "_stage_metrics": job_stage_metrics,
+        "_stage_evidence": job_stage_evidence,
     }
 
 
@@ -375,6 +644,7 @@ def _build_render_report(
     plan: dict[str, Any],
     job_results: list[dict[str, Any]],
     options: dict[str, Any],
+    wall_clock: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble a schema-valid ``render_report`` payload."""
     # Derive request summary.
@@ -397,6 +667,7 @@ def _build_render_report(
         request_summary["routing_plan_path"] = routing_plan_path
 
     # Collect policies from plan, then from contracts, then from options.
+    contract_index = _build_contract_index(contracts)
     policies_applied: dict[str, Any] = {}
     plan_policies = plan.get("policies") or {}
     if plan_policies.get("downmix_policy_id"):
@@ -461,6 +732,13 @@ def _build_render_report(
     sorted_results = sorted(
         job_results, key=lambda r: _coerce_str(r.get("job_id"))
     )
+    plan_jobs_by_job_id: dict[str, dict[str, Any]] = {}
+    for plan_job in list(plan.get("jobs") or []):
+        if not isinstance(plan_job, dict):
+            continue
+        plan_job_id = _coerce_str(plan_job.get("job_id")).strip()
+        if plan_job_id:
+            plan_jobs_by_job_id[plan_job_id] = plan_job
     report_jobs: list[dict[str, Any]] = [
         {
             "job_id": result["job_id"],
@@ -471,7 +749,89 @@ def _build_render_report(
         for result in sorted_results
     ]
 
-    return {
+    stage_metrics: list[dict[str, Any]] = []
+    stage_evidence: list[dict[str, Any]] = []
+    for result in sorted_results:
+        job_id = _coerce_str(result.get("job_id")).strip()
+        plan_job = plan_jobs_by_job_id.get(job_id) or {}
+        target_id = _coerce_str(plan_job.get("target_id")).strip()
+        contract = contract_index.get(target_id) or {}
+        target_layout_id = (
+            _coerce_str(contract.get("target_layout_id")).strip()
+            or _coerce_str(plan_job.get("target_layout_id")).strip()
+        )
+        stage_where = _job_stage_where(
+            job_id,
+            target_layout_id=target_layout_id,
+            target_id=target_id,
+        )
+        base_metrics = _job_base_stage_metrics(contract)
+        planning_metrics = [
+            *base_metrics,
+            {"name": "output_format_count", "value": float(len(list(plan_job.get("output_formats") or [])))},
+            {"name": "context_count", "value": float(len(list(plan_job.get("contexts") or [])))},
+        ]
+        planning_notes = list(plan_job.get("notes") or [])
+        stage_metrics.append(
+            build_stage_metric_entry(
+                stage_id=STAGE_ID_PLANNING,
+                scope="job",
+                where=stage_where,
+                metrics=planning_metrics,
+                notes=planning_notes,
+            )
+        )
+        stage_evidence.append(
+            build_stage_evidence_entry(
+                stage_id=STAGE_ID_PLANNING,
+                scope="job",
+                where=stage_where,
+                codes=["RENDER.ENGINE.PLANNING.BUILT"],
+                metrics=planning_metrics,
+                notes=planning_notes,
+            )
+        )
+        stage_metrics.extend(list(result.get("_stage_metrics") or []))
+        stage_evidence.extend(list(result.get("_stage_evidence") or []))
+
+        job_qa = result.get("_qa") or {}
+        qa_status = _coerce_str(job_qa.get("qa_status")).strip() or "not_run"
+        qa_gate_rows = list(job_qa.get("gates") or [])
+        qa_metrics = [{"name": "gate_count", "value": float(len(qa_gate_rows))}]
+        qa_notes = [f"qa_status={qa_status}"]
+        qa_notes.extend(
+            _coerce_str(note).strip()
+            for note in list(job_qa.get("notes") or [])
+            if _coerce_str(note).strip()
+        )
+        for gate in qa_gate_rows:
+            if not isinstance(gate, dict):
+                continue
+            gate_id = _coerce_str(gate.get("gate_id")).strip()
+            outcome = _coerce_str(gate.get("outcome")).strip()
+            if gate_id and outcome:
+                qa_notes.append(f"{gate_id}={outcome}")
+        stage_metrics.append(
+            build_stage_metric_entry(
+                stage_id=STAGE_ID_QA_GATES,
+                scope="job",
+                where=stage_where,
+                metrics=qa_metrics,
+                notes=qa_notes,
+            )
+        )
+        stage_evidence.append(
+            build_stage_evidence_entry(
+                stage_id=STAGE_ID_QA_GATES,
+                scope="job",
+                where=stage_where,
+                codes=[f"RENDER.ENGINE.QA_GATES.{qa_status.upper()}"],
+                metrics=qa_metrics,
+                notes=qa_notes,
+            )
+        )
+
+    report: dict[str, Any] = {
         "schema_version": RENDER_REPORT_SCHEMA_VERSION,
         "request": request_summary,
         "jobs": report_jobs,
@@ -479,6 +839,11 @@ def _build_render_report(
         "policies_applied": policies_applied,
         "qa_gates": qa_gates,
     }
+    report["stage_metrics"] = sort_stage_entries(stage_metrics)
+    report["stage_evidence"] = sort_stage_entries(stage_evidence)
+    if isinstance(wall_clock, dict) and wall_clock:
+        report["wall_clock"] = wall_clock
+    return report
 
 
 # ---------------------------------------------------------------------------
@@ -547,6 +912,8 @@ def render_scene_to_targets(
         raise ValueError("contracts must be a non-empty list.")
 
     opts = _normalize_options(options)
+    include_wall_clock = bool(opts.get("include_wall_clock", False))
+    wall_clock_stage_rows: list[dict[str, Any]] = []
     progress_tracker = opts.get("progress_tracker")
     if isinstance(progress_tracker, ProgressTracker):
         progress = progress_tracker
@@ -562,6 +929,7 @@ def render_scene_to_targets(
         )
 
     cancel_token.raise_if_cancelled()
+    plan_started_at = time.monotonic()
     progress.set_phase("plan")
     progress.emit_log(
         kind="info",
@@ -615,9 +983,19 @@ def render_scene_to_targets(
             "metrics": [{"name": "job_count", "value": float(len(plan_jobs))}],
         },
     )
+    if include_wall_clock:
+        wall_clock_stage_rows.append(
+            {
+                "stage_id": STAGE_ID_PLANNING,
+                "scope": "report",
+                "where": [_coerce_str(scene.get("scene_path")).strip() or "scene.json"],
+                "elapsed_seconds": time.monotonic() - plan_started_at,
+            }
+        )
 
     # Dispatch jobs — parallel when more than one job and max_workers > 1.
     max_workers: int = int(opts.get("max_workers") or _DEFAULT_MAX_WORKERS)
+    execute_started_at = time.monotonic()
 
     def _run_job(plan_job: dict[str, Any]) -> dict[str, Any]:
         cancel_token.raise_if_cancelled()
@@ -701,13 +1079,26 @@ def render_scene_to_targets(
 
     # Sort deterministically — as_completed order is non-deterministic.
     job_results.sort(key=lambda r: _coerce_str(r.get("job_id")))
+    if include_wall_clock:
+        wall_clock_stage_rows.append(
+            {
+                "stage_id": "execution",
+                "scope": "report",
+                "where": [_coerce_str(scene.get("scene_path")).strip() or "scene.json"],
+                "elapsed_seconds": time.monotonic() - execute_started_at,
+            }
+        )
 
+    report_started_at = time.monotonic()
     report = _build_render_report(
         scene=scene,
         contracts=contracts,
         plan=plan,
         job_results=job_results,
         options=opts,
+        wall_clock=build_wall_clock_report(
+            stages=wall_clock_stage_rows if include_wall_clock else None,
+        ),
     )
     progress.advance(
         phase="report",
@@ -717,4 +1108,14 @@ def render_scene_to_targets(
         confidence=1.0,
         evidence={"codes": ["RENDER.ENGINE.REPORT.BUILT"]},
     )
+    if include_wall_clock:
+        wall_clock_stage_rows.append(
+            {
+                "stage_id": "report",
+                "scope": "report",
+                "where": [_coerce_str(scene.get("scene_path")).strip() or "scene.json"],
+                "elapsed_seconds": time.monotonic() - report_started_at,
+            }
+        )
+        report["wall_clock"] = build_wall_clock_report(stages=wall_clock_stage_rows)
     return report

@@ -106,6 +106,25 @@ class TestRenderEngineDspHooks(unittest.TestCase):
 
         self.assertEqual(_signature(first_capture), _signature(second_capture))
 
+    def test_render_report_carries_required_stage_ids_without_wall_clock_by_default(self) -> None:
+        captured: list[ExplainableLogEvent] = []
+        report = render_scene_to_targets(_scene(), [_contract()], _dsp_options(captured))
+
+        required_stage_ids = {
+            "planning",
+            "resampling",
+            "dsp_hooks",
+            "export_finalize",
+            "qa_gates",
+        }
+        self.assertTrue(
+            required_stage_ids.issubset({row["stage_id"] for row in report["stage_metrics"]})
+        )
+        self.assertTrue(
+            required_stage_ids.issubset({row["stage_id"] for row in report["stage_evidence"]})
+        )
+        self.assertNotIn("wall_clock", report)
+
 
 if __name__ == "__main__":
     unittest.main()
