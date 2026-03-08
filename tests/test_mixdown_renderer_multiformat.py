@@ -171,6 +171,12 @@ class TestMixdownRendererMultiformat(unittest.TestCase):
             self.assertIsInstance(selection, dict)
             if isinstance(selection, dict):
                 self.assertEqual(selection.get("selection_reason"), "majority")
+            export_receipt = stereo_row.get("export_finalization_receipt")
+            self.assertIsInstance(export_receipt, dict)
+            if isinstance(export_receipt, dict):
+                self.assertEqual(export_receipt.get("bit_depth"), 24)
+                self.assertEqual(export_receipt.get("dither_policy"), "none")
+                self.assertEqual(export_receipt.get("target_peak_dbfs"), -1.0)
 
 
 if __name__ == "__main__":

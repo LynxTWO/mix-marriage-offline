@@ -757,6 +757,12 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
         self.assertEqual(metadata.get("render_strategy"), "two_pass_streaming")
         self.assertEqual(metadata.get("render_passes"), 2)
         self.assertEqual(metadata.get("chunk_frames"), 4096)
+        export_receipt = row_a.get("export_finalization_receipt")
+        self.assertIsInstance(export_receipt, dict)
+        if isinstance(export_receipt, dict):
+            self.assertEqual(export_receipt.get("bit_depth"), 24)
+            self.assertEqual(export_receipt.get("dither_policy"), "none")
+            self.assertEqual(export_receipt.get("target_peak_dbfs"), -1.0)
 
     def test_similarity_gate_supports_rendered_fallback_after_placement_render(self) -> None:
         renderer = PlacementMixdownRenderer()

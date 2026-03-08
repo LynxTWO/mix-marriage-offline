@@ -380,6 +380,17 @@ class TestRenderReportCli(unittest.TestCase):
             self.assertTrue(
                 required_stage_ids.issubset({row["stage_id"] for row in payload["stage_evidence"]})
             )
+            export_rows = [
+                row
+                for row in payload["stage_evidence"]
+                if row["stage_id"] == "export_finalize"
+            ]
+            self.assertTrue(export_rows)
+            first_export = export_rows[0]["evidence"].get("export_finalization_receipt")
+            self.assertIsInstance(first_export, dict)
+            if isinstance(first_export, dict):
+                self.assertEqual(first_export.get("bit_depth"), 24)
+                self.assertEqual(first_export.get("dither_policy"), "none")
 
     def test_stage_sections_are_sorted_by_job_then_stage_then_where(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

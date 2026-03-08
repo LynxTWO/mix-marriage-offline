@@ -64,6 +64,7 @@ Note: schema contracts use `schemas/*.schema.json` naming (not `schemas/*.json`)
 ### 4.4 Objective Core is implemented and tested
 - [x] Validators: folder/session validation, channel semantics checks, layout negotiation (including FFmpeg layout alias handling).
 - [x] Determinism: seeded operations are reproducible across platforms (document any numeric tolerances).
+- [x] Export finalization is centralized and disclosed: renderer WAV outputs use one deterministic float64 -> PCM policy for bit depth, dither, clamping, and receipt metadata.
 - [x] Meters: loudness, peaks/true-peak, crest factor, correlation/phase-risk, headroom, plus LFE-specific validation and metering.
 - [x] Safety gates: hard failures and “fallback to safer routing” behavior are implemented.
 - [x] Downmix QA: renders pass similarity gates to stereo (and optional additional downmix targets).

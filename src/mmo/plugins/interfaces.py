@@ -92,6 +92,7 @@ class RenderOutput(TypedDict, total=False):
     channel_count: int
     sha256: str
     notes: str
+    export_finalization_receipt: Dict[str, Any]
     metadata: Dict[str, Any]
 
 

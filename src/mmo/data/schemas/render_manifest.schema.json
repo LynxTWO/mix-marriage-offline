@@ -57,6 +57,36 @@
         }
       }
     },
+    "export_finalization_seed_derivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "job_id", "layout_id", "render_seed"],
+      "properties": {
+        "algorithm": { "type": "string", "minLength": 1 },
+        "job_id": { "type": "string", "minLength": 1 },
+        "layout_id": { "type": "string", "minLength": 1 },
+        "stem_id": { "type": "string", "minLength": 1 },
+        "render_seed": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "export_finalization_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bit_depth",
+        "dither_policy",
+        "seed_derivation",
+        "clamp_behavior",
+        "target_peak_dbfs"
+      ],
+      "properties": {
+        "bit_depth": { "type": "integer", "enum": [16, 24, 32] },
+        "dither_policy": { "type": "string", "enum": ["none", "tpdf", "tpdf_hp"] },
+        "seed_derivation": { "$ref": "#/$defs/export_finalization_seed_derivation" },
+        "clamp_behavior": { "type": "string", "minLength": 1 },
+        "target_peak_dbfs": { "type": ["number", "null"] }
+      }
+    },
     "renderer_manifest": {
       "type": "object",
       "additionalProperties": false,
@@ -97,6 +127,7 @@
         "channel_count": { "type": "integer", "minimum": 1 },
         "sha256": { "type": "string", "minLength": 16 },
         "notes": { "type": "string" },
+        "export_finalization_receipt": { "$ref": "#/$defs/export_finalization_receipt" },
         "metadata": {
           "oneOf": [
             { "$ref": "#/$defs/tag_bag" },

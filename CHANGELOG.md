@@ -84,6 +84,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Deterministic export finalization policy for renderer WAV outputs:
+  - Added `mmo.dsp.export_finalize` as the shared float64 -> PCM finalization
+    path for renderer WAV writing, with centralized PCM bit-depth handling,
+    deterministic seeded TPDF / high-pass TPDF dither support, and explicit
+    no-dither defaults for 24-bit exports.
+  - Gain-trim, baseline mixdown, and placement mixdown renderer manifests now
+    disclose `export_finalization_receipt` metadata (`bit_depth`,
+    `dither_policy`, seed-derivation inputs, clamp behavior, and
+    `target_peak_dbfs` when applicable).
+  - `render_report.stage_evidence[*].evidence` now carries the planned/exported
+    finalization receipt for the `export_finalize` stage so bit depth and
+    dither policy are disclosed in the deterministic report contract.
+
 - Deterministic `render_report` stage reporting:
   - Added optional top-level `stage_metrics` and `stage_evidence` sections to
     `render_report` with stable `(job_id, stage_id, where)` ordering, covering

@@ -55,6 +55,7 @@ from mmo.core.render_reporting import (
     build_wall_clock_report,
     sort_stage_entries,
 )
+from mmo.dsp.export_finalize import build_export_finalization_receipt
 
 RENDER_ENGINE_VERSION = "0.1.0"
 RENDER_REPORT_SCHEMA_VERSION = "0.1.0"
@@ -588,6 +589,16 @@ def _execute_job(
         *base_stage_metrics,
         {"name": "output_file_count", "value": float(len(output_files))},
     ]
+    export_bit_depth = _coerce_int(contract.get("bit_depth")) or 24
+    export_metrics.append({"name": "bit_depth", "value": float(export_bit_depth)})
+    export_receipt = build_export_finalization_receipt(
+        bit_depth=export_bit_depth,
+        dither_policy="tpdf" if export_bit_depth == 16 else "none",
+        job_id=job_id or "JOB.UNKNOWN",
+        layout_id=target_layout_id or "LAYOUT.UNKNOWN",
+        render_seed=_coerce_int(options.get("render_seed")) or 0,
+        target_peak_dbfs=None,
+    )
     export_code = "RENDER.ENGINE.EXPORT_FINALIZE.SKIPPED"
     export_notes = [f"status={status}"]
     if status == "completed":
@@ -615,6 +626,7 @@ def _execute_job(
             codes=[export_code],
             metrics=export_metrics,
             notes=export_notes,
+            export_finalization_receipt=export_receipt,
         )
     )
 

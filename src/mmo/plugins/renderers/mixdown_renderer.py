@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import struct
 import wave
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,11 +13,18 @@ from mmo.dsp.decoders import (
     iter_audio_float64_samples,
     read_audio_metadata,
 )
+from mmo.dsp.export_finalize import (
+    build_export_finalization_receipt,
+    derive_export_finalization_seed,
+    export_finalize_interleaved_f64,
+    resolve_dither_policy_for_bit_depth,
+)
 from mmo.dsp.io import sha256_file
 from mmo.dsp.process_context import build_process_context
 from mmo.dsp.sample_rate import choose_target_rate_for_session
 from mmo.plugins.interfaces import Recommendation, RenderManifest, RendererPlugin
 
+_PLUGIN_ID = "PLUGIN.RENDERER.MIXDOWN_BASELINE"
 _SUPPORTED_LAYOUT_IDS: tuple[str, ...] = (
     "LAYOUT.2_0",
     "LAYOUT.5_1",
@@ -85,6 +91,25 @@ def _coerce_float(value: Any) -> float | None:
         except ValueError:
             return None
     return None
+
+
+def _session_render_seed(session: Dict[str, Any]) -> int:
+    candidates: list[Any] = [session.get("render_seed")]
+    options = session.get("options")
+    if isinstance(options, dict):
+        candidates.append(options.get("render_seed"))
+        export_cfg = options.get("export_finalization")
+        if isinstance(export_cfg, dict):
+            candidates.append(export_cfg.get("render_seed"))
+    for candidate in candidates:
+        value = _coerce_int(candidate)
+        if value is not None:
+            return value
+    return 0
+
+
+def _export_job_id(session: Dict[str, Any]) -> str:
+    return _coerce_str(session.get("report_id")).strip() or _PLUGIN_ID
 
 
 def _resolve_explicit_render_sample_rate_hz(session: Dict[str, Any]) -> int | None:
@@ -550,33 +575,27 @@ def _layout_audio_buffer(
     )
 
 
-def _float_samples_to_pcm24_bytes(samples: Sequence[float]) -> bytes:
-    scale = 8_388_607.0
-    min_int = -8_388_608
-    max_int = 8_388_607
-    out = bytearray()
-    for sample in samples:
-        value = _clamp_sample(sample)
-        quantized = int(round(value * scale))
-        if quantized < min_int:
-            quantized = min_int
-        elif quantized > max_int:
-            quantized = max_int
-        out.extend(struct.pack("<i", quantized)[:3])
-    return bytes(out)
-
-
-def _write_pcm24_wav(
+def _write_pcm_wav(
     output_path: Path,
     *,
     buffer: AudioBufferF64,
+    bit_depth: int,
+    dither_policy: str,
+    seed: int,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    pcm_bytes = export_finalize_interleaved_f64(
+        list(buffer.data),
+        channels=buffer.channels,
+        bit_depth=bit_depth,
+        dither_policy=dither_policy,
+        seed=seed,
+    )
     with wave.open(str(output_path), "wb") as handle:
         handle.setnchannels(buffer.channels)
-        handle.setsampwidth(3)
+        handle.setsampwidth(bit_depth // 8)
         handle.setframerate(buffer.sample_rate_hz)
-        handle.writeframes(_float_samples_to_pcm24_bytes(buffer.data))
+        handle.writeframes(pcm_bytes)
 
 
 def _layout_slug(layout_id: str) -> str:
@@ -608,7 +627,7 @@ def _received_recommendation_ids(
 
 
 class MixdownRenderer(RendererPlugin):
-    plugin_id = "PLUGIN.RENDERER.MIXDOWN_BASELINE"
+    plugin_id = _PLUGIN_ID
 
     def render(
         self,
@@ -637,6 +656,14 @@ class MixdownRenderer(RendererPlugin):
             channel_order = _layout_channel_order(layout_id)
             if not channel_order:
                 continue
+            bit_depth = 24
+            dither_policy = resolve_dither_policy_for_bit_depth(bit_depth)
+            render_seed = _session_render_seed(session)
+            export_seed = derive_export_finalization_seed(
+                job_id=_export_job_id(session),
+                layout_id=layout_id,
+                render_seed=render_seed,
+            )
 
             output_buffer = _layout_audio_buffer(
                 channel_order,
@@ -647,9 +674,12 @@ class MixdownRenderer(RendererPlugin):
             )
             rel_path = _output_relative_path(output_dir=out_dir, layout_id=layout_id)
             abs_path = out_dir / rel_path
-            _write_pcm24_wav(
+            _write_pcm_wav(
                 abs_path,
                 buffer=output_buffer,
+                bit_depth=bit_depth,
+                dither_policy=dither_policy,
+                seed=export_seed,
             )
             output_sha = sha256_file(abs_path)
             layout_slug = _layout_slug(layout_id)
@@ -659,12 +689,20 @@ class MixdownRenderer(RendererPlugin):
                 "layout_id": layout_id,
                 "format": "wav",
                 "sample_rate_hz": output_buffer.sample_rate_hz,
-                "bit_depth": 24,
+                "bit_depth": bit_depth,
                 "channel_count": output_buffer.channels,
                 "sha256": output_sha,
                 "notes": (
                     f"baseline_mixdown trim_db={trim_db:.4f}"
                     f" policy={trim_reason}"
+                ),
+                "export_finalization_receipt": build_export_finalization_receipt(
+                    bit_depth=bit_depth,
+                    dither_policy=dither_policy,
+                    job_id=_export_job_id(session),
+                    layout_id=layout_id,
+                    render_seed=render_seed,
+                    target_peak_dbfs=_TARGET_PEAK_DBFS,
                 ),
                 "metadata": {
                     "headroom_policy": "worst_case_sum_to_-1dBFS",

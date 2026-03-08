@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import math
-import random
-import struct
 import wave
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Sequence
@@ -15,11 +13,19 @@ from mmo.core.layout_export import (
 from mmo.core.layout_negotiation import get_layout_channel_order
 from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
+from mmo.dsp.export_finalize import (
+    UNKNOWN_EXPORT_LAYOUT_ID,
+    StreamingExportFinalizer,
+    build_export_finalization_receipt,
+    derive_export_finalization_seed,
+    resolve_dither_policy_for_bit_depth,
+)
 from mmo.dsp.io import read_wav_metadata, sha256_file
 from mmo.dsp.meters import iter_wav_float64_samples
 from mmo.plugins.interfaces import Recommendation, RenderManifest, RendererPlugin
 
 
+_PLUGIN_ID = "PLUGIN.RENDERER.GAIN_TRIM"
 _ALLOWED_ACTIONS = {
     "ACTION.UTILITY.GAIN": "PARAM.GAIN.DB",
     "ACTION.UTILITY.TRIM": "PARAM.GAIN.TRIM_DB",
@@ -28,7 +34,6 @@ _WAV_EXTENSIONS = {".wav", ".wave"}
 _LOSSLESS_FFMPEG_EXTENSIONS = {".flac", ".wv", ".aif", ".aiff"}
 _LOSSY_EXTENSIONS = {".mp3", ".aac", ".ogg", ".opus", ".m4a"}
 _VALID_OUTPUT_BIT_DEPTHS = {16, 24, 32}
-_FLOAT_MAX = math.nextafter(1.0, 0.0)
 
 
 def _coerce_str(value: Any) -> str:
@@ -118,55 +123,6 @@ def _iter_applicable_recommendations(
     )
     return applicable
 
-
-def _clamp_sample(value: float) -> float:
-    if value < -1.0:
-        return -1.0
-    if value > _FLOAT_MAX:
-        return _FLOAT_MAX
-    return value
-
-
-def _dithered_int_samples(
-    float_samples: list[float],
-    bits_per_sample: int,
-    gain_scalar: float,
-    rng: random.Random,
-) -> list[int]:
-    divisor = float(2 ** (bits_per_sample - 1))
-    min_int = -int(divisor)
-    max_int = int(divisor) - 1
-    output: list[int] = []
-    for sample in float_samples:
-        value = _clamp_sample(sample * gain_scalar)
-        noise = (rng.random() - rng.random()) / divisor
-        value = _clamp_sample(value + noise)
-        scaled = int(round(value * divisor))
-        if scaled < min_int:
-            scaled = min_int
-        elif scaled > max_int:
-            scaled = max_int
-        output.append(scaled)
-    return output
-
-
-def _int_samples_to_bytes(samples: list[int], bits_per_sample: int) -> bytes:
-    if bits_per_sample == 16:
-        return struct.pack(f"<{len(samples)}h", *samples)
-    if bits_per_sample == 24:
-        data = bytearray(len(samples) * 3)
-        for index, sample in enumerate(samples):
-            value = sample & 0xFFFFFF
-            offset = index * 3
-            data[offset : offset + 3] = bytes(
-                (value & 0xFF, (value >> 8) & 0xFF, (value >> 16) & 0xFF)
-            )
-        return bytes(data)
-    if bits_per_sample == 32:
-        return struct.pack(f"<{len(samples)}i", *samples)
-    raise ValueError(f"Unsupported bits per sample: {bits_per_sample}")
-
-
 def _output_bit_depth(input_bits_per_sample: Any) -> int:
     bits = _coerce_int(input_bits_per_sample)
     if bits in _VALID_OUTPUT_BIT_DEPTHS:
@@ -176,6 +132,25 @@ def _output_bit_depth(input_bits_per_sample: Any) -> int:
 
 def _db_to_linear(gain_db: float) -> float:
     return math.pow(10.0, gain_db / 20.0)
+
+
+def _session_render_seed(session: Dict[str, Any]) -> int:
+    candidates: list[Any] = [session.get("render_seed")]
+    options = session.get("options")
+    if isinstance(options, dict):
+        candidates.append(options.get("render_seed"))
+        export_cfg = options.get("export_finalization")
+        if isinstance(export_cfg, dict):
+            candidates.append(export_cfg.get("render_seed"))
+    for candidate in candidates:
+        value = _coerce_int(candidate)
+        if value is not None:
+            return value
+    return 0
+
+
+def _export_job_id(session: Dict[str, Any]) -> str:
+    return _coerce_str(session.get("report_id")).strip() or _PLUGIN_ID
 
 
 def _routing_plan(session: Dict[str, Any]) -> Dict[str, Any] | None:
@@ -312,9 +287,10 @@ def _render_gain_trim(
     target_channels: int | None = None,
     target_channel_order: Sequence[str] | None = None,
     route_mapping: List[tuple[int, int, float]] | None = None,
+    dither_policy: str,
+    seed: int,
 ) -> None:
     gain_scalar = _db_to_linear(gain_db)
-    rng = random.Random(0)
     pending_samples: list[float] = []
     source_frame_width = channels
     output_frame_width = channels if target_channels is None else target_channels
@@ -334,6 +310,12 @@ def _render_gain_trim(
         raise ValueError("target_channel_order length must match output channels")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    finalizer = StreamingExportFinalizer(
+        channels=output_frame_width,
+        bit_depth=bits_per_sample,
+        dither_policy=dither_policy,
+        seed=seed,
+    )
     with wave.open(str(output_path), "wb") as out_handle:
         out_handle.setnchannels(output_frame_width)
         out_handle.setsampwidth(bits_per_sample // 8)
@@ -367,14 +349,7 @@ def _render_gain_trim(
                     mapping=route_mapping,
                 )
             output_buffer = output_buffer.apply_gain_scalar(gain_scalar)
-
-            int_samples = _dithered_int_samples(
-                output_buffer.data,
-                bits_per_sample,
-                1.0,
-                rng,
-            )
-            out_handle.writeframes(_int_samples_to_bytes(int_samples, bits_per_sample))
+            out_handle.writeframes(finalizer.finalize_chunk(output_buffer.data))
 
         if pending_samples:
             raise ValueError("decoder returned non-frame-aligned sample data")
@@ -468,7 +443,7 @@ def _sorted_skipped(skipped: List[Dict[str, str]]) -> List[Dict[str, str]]:
 
 
 class GainTrimRenderer(RendererPlugin):
-    plugin_id = "PLUGIN.RENDERER.GAIN_TRIM"
+    plugin_id = _PLUGIN_ID
 
     def render(
         self,
@@ -652,9 +627,18 @@ class GainTrimRenderer(RendererPlugin):
                 if routing_applied and routing_target_layout_id.strip()
                 else session_source_layout_id
             )
+            receipt_layout_id = output_layout_id or UNKNOWN_EXPORT_LAYOUT_ID
             output_channel_order_for_buffer = _buffer_channel_order(
                 output_layout_id,
                 output_channels,
+            )
+            render_seed = _session_render_seed(session)
+            dither_policy = resolve_dither_policy_for_bit_depth(bits_per_sample)
+            export_seed = derive_export_finalization_seed(
+                job_id=_export_job_id(session),
+                layout_id=receipt_layout_id,
+                stem_id=stem_id,
+                render_seed=render_seed,
             )
 
             try:
@@ -669,6 +653,8 @@ class GainTrimRenderer(RendererPlugin):
                     target_channels=output_channels,
                     target_channel_order=output_channel_order_for_buffer,
                     route_mapping=route_mapping,
+                    dither_policy=dither_policy,
+                    seed=export_seed,
                 )
             except ValueError:
                 _append_skipped(skipped, contributions, "unsupported_format")
@@ -734,6 +720,15 @@ class GainTrimRenderer(RendererPlugin):
                 "channel_count": output_channels,
                 "sha256": output_sha256,
                 "notes": notes,
+                "export_finalization_receipt": build_export_finalization_receipt(
+                    bit_depth=bits_per_sample,
+                    dither_policy=dither_policy,
+                    job_id=_export_job_id(session),
+                    layout_id=receipt_layout_id,
+                    stem_id=stem_id,
+                    render_seed=render_seed,
+                    target_peak_dbfs=None,
+                ),
                 "metadata": metadata,
             }
             if output_layout_id:

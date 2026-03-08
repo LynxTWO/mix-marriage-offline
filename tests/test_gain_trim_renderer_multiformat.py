@@ -182,6 +182,16 @@ class TestGainTrimRendererMultiformat(unittest.TestCase):
                     metadata.get("contributing_recommendation_ids"),
                     ["REC.RENDER.GAIN.TRIM.FLAC.001"],
                 )
+            export_receipt = output.get("export_finalization_receipt")
+            self.assertIsInstance(export_receipt, dict)
+            if isinstance(export_receipt, dict):
+                self.assertEqual(export_receipt.get("bit_depth"), 16)
+                self.assertEqual(export_receipt.get("dither_policy"), "tpdf")
+                seed_derivation = export_receipt.get("seed_derivation")
+                self.assertIsInstance(seed_derivation, dict)
+                if isinstance(seed_derivation, dict):
+                    self.assertEqual(seed_derivation.get("layout_id"), "LAYOUT.UNKNOWN")
+                    self.assertEqual(seed_derivation.get("stem_id"), "tone")
 
     def test_render_skips_lossy_mp3_input(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]

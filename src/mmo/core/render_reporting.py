@@ -13,6 +13,7 @@ from mmo.core.loudness_profiles import (
     DEFAULT_LOUDNESS_PROFILE_ID,
     resolve_loudness_profile_receipt,
 )
+from mmo.dsp.export_finalize import build_export_finalization_receipt
 
 
 def _coerce_str(value: Any) -> str:
@@ -135,8 +136,9 @@ def build_stage_evidence_entry(
     codes: list[str] | None = None,
     metrics: list[dict[str, Any]] | None = None,
     notes: list[str] | None = None,
+    export_finalization_receipt: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "stage_id": _coerce_str(stage_id).strip(),
         "scope": _coerce_str(scope).strip() or "job",
         "where": _normalize_where_list(list(where or [])),
@@ -146,6 +148,11 @@ def build_stage_evidence_entry(
             "notes": _normalize_note_list(notes or []),
         },
     }
+    if isinstance(export_finalization_receipt, dict):
+        payload["evidence"]["export_finalization_receipt"] = _json_clone(
+            export_finalization_receipt
+        )
+    return payload
 
 
 def _stage_job_id(where: list[str]) -> str:
@@ -286,6 +293,51 @@ def _requested_sample_rate_hz(plan: dict[str, Any]) -> int | None:
     if sample_rate_hz is None or sample_rate_hz <= 0:
         return None
     return sample_rate_hz
+
+
+def _requested_bit_depth(plan: dict[str, Any]) -> int:
+    request_echo = plan.get("request")
+    if isinstance(request_echo, dict):
+        options = request_echo.get("options")
+        if isinstance(options, dict):
+            bit_depth = _coerce_int(options.get("bit_depth"))
+            if bit_depth in (16, 24, 32):
+                return bit_depth
+    return 24
+
+
+def _requested_render_seed(plan: dict[str, Any]) -> int:
+    request_echo = plan.get("request")
+    if isinstance(request_echo, dict):
+        options = request_echo.get("options")
+        if isinstance(options, dict):
+            render_seed = _coerce_int(options.get("render_seed"))
+            if render_seed is not None:
+                return render_seed
+    return 0
+
+
+def _planned_export_finalization_receipt(
+    *,
+    plan: dict[str, Any],
+    plan_job: dict[str, Any],
+) -> dict[str, Any] | None:
+    if not _job_writes_wav(plan_job):
+        return None
+    job_id = _coerce_str(plan_job.get("job_id")).strip()
+    layout_id = _coerce_str(plan_job.get("target_layout_id")).strip()
+    if not job_id or not layout_id:
+        return None
+    bit_depth = _requested_bit_depth(plan)
+    render_seed = _requested_render_seed(plan)
+    return build_export_finalization_receipt(
+        bit_depth=bit_depth,
+        dither_policy="tpdf" if bit_depth == 16 else "none",
+        job_id=job_id,
+        layout_id=layout_id,
+        render_seed=render_seed,
+        target_peak_dbfs=None,
+    )
 
 
 def _normalize_resampling_warning_rows(value: Any) -> list[dict[str, Any]]:
@@ -613,6 +665,7 @@ def _append_stage_pair(
     metrics: list[dict[str, Any]] | None,
     notes: list[str] | None,
     codes: list[str] | None,
+    export_finalization_receipt: dict[str, Any] | None = None,
 ) -> None:
     stage_metrics.append(
         build_stage_metric_entry(
@@ -631,6 +684,7 @@ def _append_stage_pair(
             codes=codes,
             metrics=metrics,
             notes=notes,
+            export_finalization_receipt=export_finalization_receipt,
         )
     )
 
@@ -881,10 +935,33 @@ def build_render_report_from_plan(
             *common_metrics,
             {"name": "planned_output_count", "value": float(planned_output_count)},
         ]
-        export_notes = [
-            "No export finalization receipt is attached; outputs are inferred from the render_plan.",
-            f"status={status}",
-        ]
+        export_receipt = _planned_export_finalization_receipt(plan=plan, plan_job=plan_job)
+        if isinstance(export_receipt, dict):
+            export_metrics.append(
+                {
+                    "name": "bit_depth",
+                    "value": float(_coerce_int(export_receipt.get("bit_depth")) or 0),
+                }
+            )
+            target_peak_dbfs = _coerce_float(export_receipt.get("target_peak_dbfs"))
+            if target_peak_dbfs is not None:
+                export_metrics.append(
+                    {
+                        "name": "target_peak_dbfs",
+                        "value": target_peak_dbfs,
+                        "unit": "dBFS",
+                    }
+                )
+            export_notes = [
+                f"dither_policy={_coerce_str(export_receipt.get('dither_policy')).strip()}",
+                f"clamp_behavior={_coerce_str(export_receipt.get('clamp_behavior')).strip()}",
+                f"status={status}",
+            ]
+        else:
+            export_notes = [
+                "No export finalization receipt is attached; outputs are inferred from the render_plan.",
+                f"status={status}",
+            ]
         export_notes.extend(f"output_path={path}" for path in planned_output_paths)
         _append_stage_pair(
             stage_metrics=stage_metrics,
@@ -894,7 +971,14 @@ def build_render_report_from_plan(
             where=job_where,
             metrics=export_metrics,
             notes=export_notes,
-            codes=["RENDER.REPORT.EXPORT_FINALIZE.NOT_ATTACHED"],
+            codes=[
+                (
+                    "RENDER.REPORT.EXPORT_FINALIZE.RECEIPT_ATTACHED"
+                    if isinstance(export_receipt, dict)
+                    else "RENDER.REPORT.EXPORT_FINALIZE.NOT_ATTACHED"
+                )
+            ],
+            export_finalization_receipt=export_receipt,
         )
 
         qa_metrics = [{"name": "gate_count", "value": 0.0}]

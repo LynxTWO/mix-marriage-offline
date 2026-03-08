@@ -223,6 +223,28 @@ def _coerce_int(value: Any) -> int | None:
     return None
 
 
+def _report_render_seed(report: Dict[str, Any]) -> int:
+    candidates: list[Any] = [
+        report.get("render_seed"),
+    ]
+    session = report.get("session")
+    if isinstance(session, dict):
+        candidates.append(session.get("render_seed"))
+    run_config = report.get("run_config")
+    if isinstance(run_config, dict):
+        render_cfg = run_config.get("render")
+        if isinstance(render_cfg, dict):
+            candidates.append(render_cfg.get("render_seed"))
+            candidates.append(render_cfg.get("seed"))
+        candidates.append(run_config.get("render_seed"))
+
+    for candidate in candidates:
+        value = _coerce_int(candidate)
+        if value is not None:
+            return value
+    return 0
+
+
 def _call_detector(detector: Any, session: Dict[str, Any], features: Dict[str, Any]) -> List[Dict[str, Any]]:
     if hasattr(detector, "detect"):
         return detector.detect(session, features) or []
@@ -797,10 +819,14 @@ def run_renderers(
     session = report.get("session") if isinstance(report, dict) else {}
     if not isinstance(session, dict):
         session = {}
-    session_for_plugins = session
+    session_for_plugins = dict(session)
+    report_id = _coerce_str(report.get("report_id")) if isinstance(report, dict) else ""
+    if report_id and "report_id" not in session_for_plugins:
+        session_for_plugins["report_id"] = report_id
+    if "render_seed" not in session_for_plugins:
+        session_for_plugins["render_seed"] = _report_render_seed(report)
     routing_plan = report.get("routing_plan") if isinstance(report, dict) else None
     if isinstance(routing_plan, dict):
-        session_for_plugins = dict(session)
         session_for_plugins["routing_plan"] = routing_plan
     recommendations = report.get("recommendations") if isinstance(report, dict) else []
     recs = _coerce_list(recommendations)

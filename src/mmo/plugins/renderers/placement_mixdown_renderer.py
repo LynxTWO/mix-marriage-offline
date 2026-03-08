@@ -4,7 +4,6 @@ import hashlib
 import json
 import math
 import shutil
-import struct
 import wave
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,6 +18,12 @@ from mmo.dsp.decoders import (
     is_lossless_format_id,
     iter_audio_float64_samples,
     read_audio_metadata,
+)
+from mmo.dsp.export_finalize import (
+    StreamingExportFinalizer,
+    build_export_finalization_receipt,
+    derive_export_finalization_seed,
+    resolve_dither_policy_for_bit_depth,
 )
 from mmo.dsp.io import sha256_file
 from mmo.dsp.process_context import build_process_context
@@ -239,6 +244,29 @@ def _coerce_bool(value: Any) -> bool | None:
         if normalized in {"0", "false", "no", "off"}:
             return False
     return None
+
+
+def _session_render_seed(session: Dict[str, Any]) -> int:
+    candidates: list[Any] = [session.get("render_seed")]
+    options = session.get("options")
+    if isinstance(options, dict):
+        candidates.append(options.get("render_seed"))
+        export_cfg = options.get("export_finalization")
+        if isinstance(export_cfg, dict):
+            candidates.append(export_cfg.get("render_seed"))
+    for candidate in candidates:
+        value = _coerce_int(candidate)
+        if value is not None:
+            return value
+    return 0
+
+
+def _export_job_id(session: Dict[str, Any], *, artifact_id: str | None = None) -> str:
+    base = _coerce_str(session.get("report_id")).strip() or _PLUGIN_ID
+    suffix = _coerce_str(artifact_id).strip()
+    if suffix:
+        return f"{base}:{suffix}"
+    return base
 
 
 def _normalize_layout_ids(value: Any) -> tuple[str, ...]:
@@ -806,22 +834,6 @@ def _stereo_side_wrap_allowed(
     if perspective is None:
         perspective = _perspective_from_notes(render_intent.get("notes"))
     return perspective in _IMMERSIVE_WRAP_PERSPECTIVES
-
-
-def _float_samples_to_pcm24_bytes(samples: Sequence[float]) -> bytes:
-    scale = 8_388_607.0
-    min_int = -8_388_608
-    max_int = 8_388_607
-    out = bytearray()
-    for sample in samples:
-        value = _clamp_sample(sample)
-        quantized = int(round(value * scale))
-        if quantized < min_int:
-            quantized = min_int
-        elif quantized > max_int:
-            quantized = max_int
-        out.extend(struct.pack("<i", quantized)[:3])
-    return bytes(out)
 
 
 def _bed_content_hint_from_send_row(send_row: dict[str, Any]) -> str:
@@ -1568,14 +1580,16 @@ def _write_trimmed_chunk(
     handle: wave.Wave_write,
     mixed_chunk: AudioBufferF64,
     trim_linear: float,
+    finalizer: StreamingExportFinalizer,
 ) -> None:
     trimmed_buffer = mixed_chunk.apply_gain_scalar(trim_linear)
     trimmed = [_clamp_sample(sample) for sample in trimmed_buffer.data]
-    handle.writeframes(_float_samples_to_pcm24_bytes(trimmed))
+    handle.writeframes(finalizer.finalize_chunk(trimmed))
 
 
 def _render_subbus_output(
     *,
+    session: Dict[str, Any],
     layout_id: str,
     output_dir: Path,
     bus_id: str,
@@ -1599,11 +1613,26 @@ def _render_subbus_output(
         return None, [f"{layout_id}:{bus_id}:skipped_existing_output:{rel_path.as_posix()}"]
 
     notes: list[str] = []
+    bit_depth = 24
+    dither_policy = resolve_dither_policy_for_bit_depth(bit_depth)
+    render_seed = _session_render_seed(session)
+    export_job_id = _export_job_id(session, artifact_id=bus_id)
+    export_seed = derive_export_finalization_seed(
+        job_id=export_job_id,
+        layout_id=layout_id,
+        render_seed=render_seed,
+    )
+    finalizer = StreamingExportFinalizer(
+        channels=channel_count,
+        bit_depth=bit_depth,
+        dither_policy=dither_policy,
+        seed=export_seed,
+    )
     abs_path.parent.mkdir(parents=True, exist_ok=True)
     pass_frames = 0
     with wave.open(str(abs_path), "wb") as handle:
         handle.setnchannels(channel_count)
-        handle.setsampwidth(3)
+        handle.setsampwidth(bit_depth // 8)
         handle.setframerate(sample_rate_hz)
         _, pass_frames, pass_notes = _run_mix_pass(
             prepared_stems=prepared_stems,
@@ -1614,6 +1643,7 @@ def _render_subbus_output(
                 handle=handle,
                 mixed_chunk=chunk,
                 trim_linear=trim_linear,
+                finalizer=finalizer,
             ),
         )
         if pass_notes:
@@ -1625,7 +1655,7 @@ def _render_subbus_output(
                 channel_order=tuple(channel_order),
                 sample_rate_hz=sample_rate_hz,
             )
-            handle.writeframes(_float_samples_to_pcm24_bytes(silence_buffer.data))
+            handle.writeframes(finalizer.finalize_chunk(silence_buffer.data))
 
     output_sha = sha256_file(abs_path)
     stem_ids = sorted(stem.stem_id for stem in prepared_stems)
@@ -1645,12 +1675,20 @@ def _render_subbus_output(
         "target_bus_id": bus_id,
         "format": "wav",
         "sample_rate_hz": sample_rate_hz,
-        "bit_depth": 24,
+        "bit_depth": bit_depth,
         "channel_count": channel_count,
         "sha256": output_sha,
         "notes": (
             "scene_subbus_export "
             f"trim_linear_from_master={trim_linear:.6f}"
+        ),
+        "export_finalization_receipt": build_export_finalization_receipt(
+            bit_depth=bit_depth,
+            dither_policy=dither_policy,
+            job_id=export_job_id,
+            layout_id=layout_id,
+            render_seed=render_seed,
+            target_peak_dbfs=_TARGET_PEAK_DBFS,
         ),
         "metadata": {
             "artifact_role": "subbus",
@@ -1707,6 +1745,7 @@ def _export_subbus_outputs(
             continue
         bus_trim_db = _coerce_float(group_trims.get(bus_id)) if isinstance(group_trims, dict) else None
         output_row, output_notes = _render_subbus_output(
+            session=session,
             layout_id=layout_id,
             output_dir=output_dir,
             bus_id=bus_id,
@@ -1943,11 +1982,26 @@ def _mix_layout_from_intent(
         if master_abs_path.exists():
             notes.append(f"{layout_id}:skipped_existing_output:{master_rel_path.as_posix()}")
         else:
+            bit_depth = 24
+            dither_policy = resolve_dither_policy_for_bit_depth(bit_depth)
+            render_seed = _session_render_seed(session)
+            export_job_id = _export_job_id(session, artifact_id="master")
+            export_seed = derive_export_finalization_seed(
+                job_id=export_job_id,
+                layout_id=layout_id,
+                render_seed=render_seed,
+            )
+            finalizer = StreamingExportFinalizer(
+                channels=channel_count,
+                bit_depth=bit_depth,
+                dither_policy=dither_policy,
+                seed=export_seed,
+            )
             master_abs_path.parent.mkdir(parents=True, exist_ok=True)
             pass2_frames = 0
             with wave.open(str(master_abs_path), "wb") as handle:
                 handle.setnchannels(channel_count)
-                handle.setsampwidth(3)
+                handle.setsampwidth(bit_depth // 8)
                 handle.setframerate(sample_rate_hz)
 
                 if rendered_audio:
@@ -1960,6 +2014,7 @@ def _mix_layout_from_intent(
                             handle=handle,
                             mixed_chunk=chunk,
                             trim_linear=trim_linear,
+                            finalizer=finalizer,
                         ),
                     )
                     if pass2_notes:
@@ -1971,7 +2026,7 @@ def _mix_layout_from_intent(
                         channel_order=tuple(normalized_channel_order),
                         sample_rate_hz=sample_rate_hz,
                     )
-                    handle.writeframes(_float_samples_to_pcm24_bytes(silence_buffer.data))
+                    handle.writeframes(finalizer.finalize_chunk(silence_buffer.data))
 
             output_sha = sha256_file(master_abs_path)
             outputs.append(
@@ -1981,12 +2036,20 @@ def _mix_layout_from_intent(
                     "layout_id": layout_id,
                     "format": "wav",
                     "sample_rate_hz": sample_rate_hz,
-                    "bit_depth": 24,
+                    "bit_depth": bit_depth,
                     "channel_count": channel_count,
                     "sha256": output_sha,
                     "notes": (
                         "scene_placement_mixdown stereo_imaging_preserved"
                         f" trim_db={trim_db:.4f}"
+                    ),
+                    "export_finalization_receipt": build_export_finalization_receipt(
+                        bit_depth=bit_depth,
+                        dither_policy=dither_policy,
+                        job_id=export_job_id,
+                        layout_id=layout_id,
+                        render_seed=render_seed,
+                        target_peak_dbfs=_TARGET_PEAK_DBFS,
                     ),
                     "metadata": {
                         "artifact_role": "master",

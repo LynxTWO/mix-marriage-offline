@@ -5,13 +5,15 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import random
-import struct
 import sys
 import wave
 from pathlib import Path
 from typing import Iterable
 
+from mmo.dsp.export_finalize import (
+    StreamingExportFinalizer,
+    resolve_dither_policy_for_bit_depth,
+)
 from mmo.dsp.io import read_wav_metadata
 from mmo.dsp.meters import iter_wav_float64_samples
 
@@ -20,9 +22,6 @@ _ALLOWED_ACTIONS = {
     "ACTION.UTILITY.GAIN": "PARAM.GAIN.DB",
     "ACTION.UTILITY.TRIM": "PARAM.GAIN.TRIM_DB",
 }
-_FLOAT_MAX = math.nextafter(1.0, 0.0)
-
-
 def _load_report(path: Path) -> dict:
     try:
         with path.open("r", encoding="utf-8") as handle:
@@ -95,54 +94,6 @@ def _iter_safe_recommendations(report: dict) -> Iterable[tuple[str, float]]:
         yield stem_id, gain_db
 
 
-def _clamp_sample(value: float) -> float:
-    if value < -1.0:
-        return -1.0
-    if value > _FLOAT_MAX:
-        return _FLOAT_MAX
-    return value
-
-
-def _dithered_int_samples(
-    float_samples: list[float],
-    bits_per_sample: int,
-    gain_scalar: float,
-    rng: random.Random,
-) -> list[int]:
-    divisor = float(2 ** (bits_per_sample - 1))
-    min_int = -int(divisor)
-    max_int = int(divisor) - 1
-    output: list[int] = []
-    for sample in float_samples:
-        value = _clamp_sample(sample * gain_scalar)
-        noise = (rng.random() - rng.random()) / divisor
-        value = _clamp_sample(value + noise)
-        scaled = int(round(value * divisor))
-        if scaled < min_int:
-            scaled = min_int
-        elif scaled > max_int:
-            scaled = max_int
-        output.append(scaled)
-    return output
-
-
-def _int_samples_to_bytes(samples: list[int], bits_per_sample: int) -> bytes:
-    if bits_per_sample == 16:
-        return struct.pack(f"<{len(samples)}h", *samples)
-    if bits_per_sample == 24:
-        data = bytearray(len(samples) * 3)
-        for index, sample in enumerate(samples):
-            value = sample & 0xFFFFFF
-            offset = index * 3
-            data[offset : offset + 3] = bytes(
-                (value & 0xFF, (value >> 8) & 0xFF, (value >> 16) & 0xFF)
-            )
-        return bytes(data)
-    if bits_per_sample == 32:
-        return struct.pack(f"<{len(samples)}i", *samples)
-    raise ValueError(f"Unsupported bits per sample: {bits_per_sample}")
-
-
 def _render_gain_trim(path: Path, out_path: Path, gain_db: float) -> None:
     metadata = read_wav_metadata(path)
     audio_format = metadata["audio_format_resolved"]
@@ -156,7 +107,12 @@ def _render_gain_trim(path: Path, out_path: Path, gain_db: float) -> None:
         raise ValueError(f"Unsupported bits per sample: {bits_per_sample}")
 
     gain_scalar = math.pow(10.0, gain_db / 20.0)
-    rng = random.Random(0)
+    finalizer = StreamingExportFinalizer(
+        channels=channels,
+        bit_depth=bits_per_sample,
+        dither_policy=resolve_dither_policy_for_bit_depth(bits_per_sample),
+        seed=0,
+    )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(out_path), "wb") as out_handle:
@@ -167,10 +123,8 @@ def _render_gain_trim(path: Path, out_path: Path, gain_db: float) -> None:
         for float_samples in iter_wav_float64_samples(
             path, error_context="render gain/trim"
         ):
-            int_samples = _dithered_int_samples(
-                float_samples, bits_per_sample, gain_scalar, rng
-            )
-            out_handle.writeframes(_int_samples_to_bytes(int_samples, bits_per_sample))
+            gained = [sample * gain_scalar for sample in float_samples]
+            out_handle.writeframes(finalizer.finalize_chunk(gained))
 
 
 def main() -> int:

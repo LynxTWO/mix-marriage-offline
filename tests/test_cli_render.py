@@ -128,6 +128,12 @@ class TestCliRender(unittest.TestCase):
                 output["metadata"].get("contributing_recommendation_ids"),
                 ["REC.RENDER.GAIN.001"],
             )
+            export_receipt = output.get("export_finalization_receipt")
+            self.assertIsInstance(export_receipt, dict)
+            if isinstance(export_receipt, dict):
+                self.assertEqual(export_receipt.get("bit_depth"), 16)
+                self.assertEqual(export_receipt.get("dither_policy"), "tpdf")
+                self.assertIsNone(export_receipt.get("target_peak_dbfs"))
 
     def test_render_without_out_dir_adds_plugin_skip_and_keeps_gate_skip(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
