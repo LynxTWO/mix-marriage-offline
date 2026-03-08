@@ -33,6 +33,7 @@ from mmo.plugins.interfaces import Recommendation, RenderManifest, RendererPlugi
 _PLUGIN_ID = "PLUGIN.RENDERER.PLACEMENT_MIXDOWN_V1"
 _SUPPORTED_LAYOUT_IDS: tuple[str, ...] = (
     "LAYOUT.2_0",
+    "LAYOUT.32CH",
     "LAYOUT.5_1",
     "LAYOUT.7_1",
     "LAYOUT.7_1_4",
@@ -741,6 +742,21 @@ def _speaker_index(channel_order: list[str]) -> dict[str, int]:
     }
 
 
+def _front_safe_pair_indices(
+    channel_order: list[str],
+) -> tuple[int, int] | None:
+    speaker_idx = _speaker_index(channel_order)
+    front_left_idx = speaker_idx.get("SPK.L")
+    front_right_idx = speaker_idx.get("SPK.R")
+    if isinstance(front_left_idx, int) and isinstance(front_right_idx, int):
+        return front_left_idx, front_right_idx
+    if len(channel_order) >= 2:
+        return 0, 1
+    if len(channel_order) == 1:
+        return 0, 0
+    return None
+
+
 def _perspective_from_notes(notes_payload: Any) -> str | None:
     notes = notes_payload if isinstance(notes_payload, list) else []
     for note in notes:
@@ -1202,9 +1218,8 @@ def _prepare_layout_stems(
     stems_dir = _resolve_stems_dir(session)
     stems = _stem_rows(session)
     speaker_idx = _speaker_index(normalized_channel_order)
-    front_left_idx = speaker_idx.get("SPK.L")
-    front_right_idx = speaker_idx.get("SPK.R")
-    if not isinstance(front_left_idx, int) or not isinstance(front_right_idx, int):
+    front_pair = _front_safe_pair_indices(normalized_channel_order)
+    if front_pair is None:
         return (
             [],
             None,
@@ -1212,6 +1227,16 @@ def _prepare_layout_stems(
             [f"{layout_id}:missing_front_lr_channels"],
             {},
             empty_decorrelation_receipt,
+        )
+    front_left_idx, front_right_idx = front_pair
+    if (
+        "SPK.L" not in speaker_idx
+        or "SPK.R" not in speaker_idx
+    ):
+        notes.append(
+            f"{layout_id}:using_front_safe_pair:"
+            f"{normalized_channel_order[front_left_idx]},"
+            f"{normalized_channel_order[front_right_idx]}"
         )
 
     wide_left_idx = speaker_idx.get("SPK.LW")

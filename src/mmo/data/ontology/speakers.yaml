@@ -296,3 +296,262 @@ speakers:
     azimuth_deg: 0
     elevation_deg: 0
     aliases: ["OBJ", "OBJECT", "ATMOS_OBJECT", "IMMERSIVE_OBJECT"]
+
+  # -------------------------
+  # Generic large-format placeholders
+  # -------------------------
+  SPK.CH01:
+    label: "Channel 01"
+    description: "Generic channel 01 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH02:
+    label: "Channel 02"
+    description: "Generic channel 02 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH03:
+    label: "Channel 03"
+    description: "Generic channel 03 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH04:
+    label: "Channel 04"
+    description: "Generic channel 04 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH05:
+    label: "Channel 05"
+    description: "Generic channel 05 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH06:
+    label: "Channel 06"
+    description: "Generic channel 06 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH07:
+    label: "Channel 07"
+    description: "Generic channel 07 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH08:
+    label: "Channel 08"
+    description: "Generic channel 08 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH09:
+    label: "Channel 09"
+    description: "Generic channel 09 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH10:
+    label: "Channel 10"
+    description: "Generic channel 10 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH11:
+    label: "Channel 11"
+    description: "Generic channel 11 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH12:
+    label: "Channel 12"
+    description: "Generic channel 12 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH13:
+    label: "Channel 13"
+    description: "Generic channel 13 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH14:
+    label: "Channel 14"
+    description: "Generic channel 14 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH15:
+    label: "Channel 15"
+    description: "Generic channel 15 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH16:
+    label: "Channel 16"
+    description: "Generic channel 16 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH17:
+    label: "Channel 17"
+    description: "Generic channel 17 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH18:
+    label: "Channel 18"
+    description: "Generic channel 18 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH19:
+    label: "Channel 19"
+    description: "Generic channel 19 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH20:
+    label: "Channel 20"
+    description: "Generic channel 20 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH21:
+    label: "Channel 21"
+    description: "Generic channel 21 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH22:
+    label: "Channel 22"
+    description: "Generic channel 22 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH23:
+    label: "Channel 23"
+    description: "Generic channel 23 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH24:
+    label: "Channel 24"
+    description: "Generic channel 24 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH25:
+    label: "Channel 25"
+    description: "Generic channel 25 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH26:
+    label: "Channel 26"
+    description: "Generic channel 26 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH27:
+    label: "Channel 27"
+    description: "Generic channel 27 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH28:
+    label: "Channel 28"
+    description: "Generic channel 28 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH29:
+    label: "Channel 29"
+    description: "Generic channel 29 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH30:
+    label: "Channel 30"
+    description: "Generic channel 30 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH31:
+    label: "Channel 31"
+    description: "Generic channel 31 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0
+
+  SPK.CH32:
+    label: "Channel 32"
+    description: "Generic channel 32 for non-semantic large-format layouts."
+    channel_group: "objects"
+    bed_or_height: "objects"
+    azimuth_deg: 0
+    elevation_deg: 0

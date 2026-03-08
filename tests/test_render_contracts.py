@@ -635,7 +635,7 @@ class TestLayoutsAndDownmixOntologyPresent(unittest.TestCase):
         data = yaml.safe_load(layouts_path.read_text(encoding="utf-8"))
         layouts = data.get("layouts", {})
 
-        required = ["LAYOUT.2_0", "LAYOUT.5_1", "LAYOUT.7_1", "LAYOUT.7_1_4"]
+        required = ["LAYOUT.2_0", "LAYOUT.5_1", "LAYOUT.7_1", "LAYOUT.7_1_4", "LAYOUT.32CH"]
         for layout_id in required:
             with self.subTest(layout_id=layout_id):
                 self.assertIn(layout_id, layouts)

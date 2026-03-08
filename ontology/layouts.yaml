@@ -985,3 +985,91 @@ layouts:
       default_downmix_treatment: "drop"
     recommended_downmix_targets: ["LAYOUT.7_1_4", "LAYOUT.7_1", "LAYOUT.5_1", "LAYOUT.2_0"]
     aliases: ["9.1.6", "9_1_6", "immersive916"]
+
+  # -------------------------
+  # Generic large-format placeholder: 32.0
+  # Uses non-semantic channel IDs so the render path can prove >=32-channel
+  # export without implying a real-world speaker standard.
+  # -------------------------
+  LAYOUT.32CH:
+    label: "Generic 32-channel (32.0)"
+    description: "Generic 32-channel placeholder layout for high-channel-count render/export contract tests."
+    family: "immersive"
+    channel_count: 32
+    ordering_standard: "SMPTE"
+    channel_order:
+      - "SPK.CH01"
+      - "SPK.CH02"
+      - "SPK.CH03"
+      - "SPK.CH04"
+      - "SPK.CH05"
+      - "SPK.CH06"
+      - "SPK.CH07"
+      - "SPK.CH08"
+      - "SPK.CH09"
+      - "SPK.CH10"
+      - "SPK.CH11"
+      - "SPK.CH12"
+      - "SPK.CH13"
+      - "SPK.CH14"
+      - "SPK.CH15"
+      - "SPK.CH16"
+      - "SPK.CH17"
+      - "SPK.CH18"
+      - "SPK.CH19"
+      - "SPK.CH20"
+      - "SPK.CH21"
+      - "SPK.CH22"
+      - "SPK.CH23"
+      - "SPK.CH24"
+      - "SPK.CH25"
+      - "SPK.CH26"
+      - "SPK.CH27"
+      - "SPK.CH28"
+      - "SPK.CH29"
+      - "SPK.CH30"
+      - "SPK.CH31"
+      - "SPK.CH32"
+    channel_groups:
+      objects:
+        - "SPK.CH01"
+        - "SPK.CH02"
+        - "SPK.CH03"
+        - "SPK.CH04"
+        - "SPK.CH05"
+        - "SPK.CH06"
+        - "SPK.CH07"
+        - "SPK.CH08"
+        - "SPK.CH09"
+        - "SPK.CH10"
+        - "SPK.CH11"
+        - "SPK.CH12"
+        - "SPK.CH13"
+        - "SPK.CH14"
+        - "SPK.CH15"
+        - "SPK.CH16"
+        - "SPK.CH17"
+        - "SPK.CH18"
+        - "SPK.CH19"
+        - "SPK.CH20"
+        - "SPK.CH21"
+        - "SPK.CH22"
+        - "SPK.CH23"
+        - "SPK.CH24"
+        - "SPK.CH25"
+        - "SPK.CH26"
+        - "SPK.CH27"
+        - "SPK.CH28"
+        - "SPK.CH29"
+        - "SPK.CH30"
+        - "SPK.CH31"
+        - "SPK.CH32"
+    bed_speakers: []
+    height_speakers: []
+    has_lfe: false
+    lfe_policy:
+      has_lfe: false
+      lfe_channels: []
+      excluded_from_program_loudness: true
+      default_downmix_treatment: "n/a"
+    aliases: ["32ch", "32.0", "32_0", "generic32"]

@@ -12,6 +12,7 @@ PLACEMENT_POLICY_SCHEMA_VERSION = "0.1.0"
 _SUPPORTED_LAYOUT_IDS: frozenset[str] = frozenset(
     {
         "LAYOUT.2_0",
+        "LAYOUT.32CH",
         "LAYOUT.5_1",
         "LAYOUT.7_1",
         "LAYOUT.7_1_4",
@@ -80,6 +81,7 @@ _AZIMUTH_WIDE_MAX_DEG = 70.0
 _AZIMUTH_FRONT_EDGE_DEG = 75.0
 _AZIMUTH_SIDE_EDGE_DEG = 125.0
 _AZIMUTH_REAR_EDGE_DEG = 165.0
+_GENERIC_FRONT_SAFE_POLICY_CLASS = "GENERIC.FRONT_SAFE_V1"
 
 
 def _coerce_str(value: Any) -> str:
@@ -375,6 +377,68 @@ def _set_heights(
 
 def _nonzero_channels(gains: dict[str, float], channel_order: list[str]) -> list[str]:
     return [speaker_id for speaker_id in channel_order if gains.get(speaker_id, 0.0) > 0.0]
+
+
+def _needs_generic_front_safe_fallback(channel_order: list[str]) -> bool:
+    return _FRONT_LEFT not in channel_order or _FRONT_RIGHT not in channel_order
+
+
+def _generic_front_safe_gains(channel_order: list[str]) -> dict[str, float]:
+    gains = _empty_gains(channel_order)
+    if not channel_order:
+        return gains
+    if len(channel_order) == 1:
+        gains[channel_order[0]] = 1.0
+        return gains
+    gains[channel_order[0]] = 0.5
+    gains[channel_order[1]] = 0.5
+    return gains
+
+
+def _generic_front_safe_send(
+    *,
+    stem_id: str,
+    role_id: str,
+    group_bus: str,
+    confidence: float,
+    width_hint: float,
+    depth_hint: float,
+    locks: set[str],
+    channel_order: list[str],
+    extra_notes: list[str] | None = None,
+    source_receipt_row: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    gains = _generic_front_safe_gains(channel_order)
+    notes = [
+        "generic_front_safe_layout_fallback",
+        "semantic_front_channels_unavailable",
+    ]
+    nonzero = _nonzero_channels(gains, channel_order)
+    if nonzero:
+        if len(nonzero) == 1:
+            notes.append(f"front_safe_channel:{nonzero[0]}")
+        else:
+            notes.append(f"front_safe_pair:{nonzero[0]},{nonzero[1]}")
+    if isinstance(extra_notes, list):
+        notes.extend(note for note in extra_notes if isinstance(note, str) and note.strip())
+    _append_source_notes(notes, source_receipt_row)
+    return {
+        "stem_id": stem_id,
+        "role_id": role_id,
+        "group_bus": group_bus,
+        "policy_class": _GENERIC_FRONT_SAFE_POLICY_CLASS,
+        "confidence": confidence,
+        "width_hint": width_hint,
+        "depth_hint": depth_hint,
+        "locks": sorted(locks),
+        "bus_trim_db": _bus_trim_db_for_class(_GENERIC_FRONT_SAFE_POLICY_CLASS),
+        "gains": {
+            speaker_id: _round_gain(gains.get(speaker_id, 0.0))
+            for speaker_id in channel_order
+        },
+        "nonzero_channels": nonzero,
+        "notes": sorted(notes),
+    }
 
 
 def _db_to_linear(db_value: float) -> float:
@@ -1204,6 +1268,7 @@ def build_render_intent(
         if isinstance(immersive_perspective_marker, tuple)
         else None
     )
+    generic_front_safe_layout = _needs_generic_front_safe_fallback(channel_order)
 
     group_counts: dict[str, int] = {}
     object_group_keys: list[str] = []
@@ -1219,6 +1284,36 @@ def build_render_intent(
     for obj, group_key in zip(objects, object_group_keys):
         slot_index = group_offsets.get(group_key, 0)
         group_offsets[group_key] = slot_index + 1
+        if generic_front_safe_layout:
+            role_id = _coerce_str(obj.get("role_id")).strip().upper() or _ROLE_UNKNOWN
+            intent_payload = obj.get("intent")
+            intent_payload = intent_payload if isinstance(intent_payload, dict) else {}
+            object_rows.append(
+                _generic_front_safe_send(
+                    stem_id=_coerce_str(obj.get("stem_id")).strip(),
+                    role_id=role_id,
+                    group_bus=_group_bus_from_object(obj, role_id),
+                    confidence=_clamp_unit(
+                        obj.get("confidence", intent_payload.get("confidence")),
+                        default=0.0,
+                    ),
+                    width_hint=_clamp_unit(
+                        obj.get("width_hint", intent_payload.get("width")),
+                        default=0.5,
+                    ),
+                    depth_hint=_clamp_unit(
+                        obj.get("depth_hint", intent_payload.get("depth")),
+                        default=0.5,
+                    ),
+                    locks=scene_locks | _object_lock_ids(obj),
+                    channel_order=channel_order,
+                    extra_notes=["source_kind:object"],
+                    source_receipt_row=source_receipt_index.get(
+                        _coerce_str(obj.get("stem_id")).strip()
+                    ),
+                )
+            )
+            continue
         object_rows.append(
             _object_send(
                 obj=obj,
@@ -1237,6 +1332,37 @@ def build_render_intent(
     bed_rows: list[dict[str, Any]] = []
     for bed in beds:
         for stem_id in _bed_stem_ids(bed):
+            if generic_front_safe_layout:
+                intent_payload = bed.get("intent")
+                intent_payload = intent_payload if isinstance(intent_payload, dict) else {}
+                content_hint = _coerce_str(bed.get("content_hint")).strip()
+                bed_id = _coerce_str(bed.get("bed_id")).strip()
+                bus_id = _coerce_str(bed.get("bus_id")).strip().upper() or _BUS_UNKNOWN
+                notes: list[str] = ["source_kind:bed"]
+                if bed_id:
+                    notes.append(f"bed_id:{bed_id}")
+                if content_hint:
+                    notes.append(f"content_hint:{content_hint}")
+                bed_rows.append(
+                    _generic_front_safe_send(
+                        stem_id=stem_id,
+                        role_id=_bed_role_from_content_hint(content_hint),
+                        group_bus=bus_id,
+                        confidence=_clamp_unit(
+                            bed.get("confidence", intent_payload.get("confidence")),
+                            default=0.0,
+                        ),
+                        width_hint=_clamp_unit(
+                            bed.get("width_hint", intent_payload.get("diffuse")),
+                            default=0.75,
+                        ),
+                        depth_hint=0.7,
+                        locks=scene_locks | _bed_lock_ids(bed),
+                        channel_order=channel_order,
+                        extra_notes=notes,
+                    )
+                )
+                continue
             bed_rows.append(
                 _bed_send(
                     bed=bed,
@@ -1287,6 +1413,10 @@ def build_render_intent(
         perspective_value, source_label = immersive_perspective_marker
         notes.append(f"immersive_perspective:{perspective_value}")
         notes.append(f"immersive_perspective_source:{source_label}")
+    if generic_front_safe_layout:
+        notes.append(
+            "Layouts without semantic SPK.L/SPK.R channels fall back to a deterministic front-safe pair."
+        )
 
     return {
         "schema_version": PLACEMENT_POLICY_SCHEMA_VERSION,

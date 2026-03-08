@@ -160,6 +160,9 @@ What remains: expand fixture-session coverage for front/quad render variants in 
 - [x] Tiny immersive golden-path fixture validates
   `classify -> bus-plan -> scene -> safe-render --render-many` with stable
   per-layout channel-count and WAV-hash tripwires.
+- [x] A dedicated 32-channel render contract fixture proves MMO can export a
+  deterministic `LAYOUT.32CH` artifact end-to-end (`nchannels == 32`,
+  manifest `channel_order` length `32`, stable SHA-256 across two runs).
 - [x] CI runs on Windows, Linux, macOS (or documents any limitations).
 What remains: broaden this stereo-hint fixture pattern into additional multi-stem and mixed confidence edge cases.
 

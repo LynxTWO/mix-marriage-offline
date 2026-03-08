@@ -84,6 +84,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- 32-channel render regression contract:
+  - Added `LAYOUT.32CH` plus generic `SPK.CH01..SPK.CH32` ontology entries so
+    MMO can resolve a deterministic 32-channel placeholder layout through the
+    packaged data path.
+  - Placement policy/rendering now falls back to a deterministic front-safe
+    pair when a high-channel-count layout has no semantic `SPK.L`/`SPK.R`
+    speakers, allowing end-to-end `LAYOUT.32CH` export without inventing a
+    fake speaker standard.
+  - Added `tests/test_32ch_end_to_end.py` as a byte-stable regression tripwire
+    that renders a 32-channel WAV, asserts `nchannels == 32`, checks manifest
+    `channel_order` length `32`, and pins SHA-256 stability across two runs.
+
 - Deterministic export finalization policy for renderer WAV outputs:
   - Added `mmo.dsp.export_finalize` as the shared float64 -> PCM finalization
     path for renderer WAV writing, with centralized PCM bit-depth handling,
