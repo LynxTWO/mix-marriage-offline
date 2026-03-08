@@ -61,8 +61,9 @@ Non-negotiables:
   renderer must auto-disable and rerender without that plugin stage.
 - Keep placement and baseline mixdown ingest multiformat-lossless-safe:
   decode `wav`/`flac`/`wv`/`aiff`/`aif`/`ape` through the shared decoder
-  abstraction and apply deterministic sample-rate policy/resampling with
-  explainable receipts instead of silently skipping mismatched stems.
+  abstraction and apply deterministic family-aware sample-rate
+  policy/resampling with explainable receipts and per-job `render_report`
+  disclosure instead of silently skipping mismatched stems.
 - Preserve stereo imaging in placement render paths: stereo stems should not
   collapse to mono in `LAYOUT.2_0`, scene stereo hints (`width_hint`,
   `azimuth_hint`) must remain evidence-backed/deterministic, and any optional

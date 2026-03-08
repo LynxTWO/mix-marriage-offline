@@ -335,11 +335,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Placement and baseline mixdown renderers now share a lossless
     multiformat decode abstraction (`wav`, `flac`, `wv`, `aiff`/`aif`,
     `ape`) and no longer skip stems solely for sample-rate mismatches.
-  - Added deterministic sample-rate policy + SRC receipts:
-    explicit session override when provided, otherwise majority-rate
-    selection with higher-rate tiebreak; mismatched stems are resampled with
-    deterministic linear interpolation and decisions are recorded in renderer
-    metadata/warnings.
+- Added deterministic sample-rate policy + SRC receipts:
+    explicit session override when provided, otherwise deterministic
+    `44.1k`-family vs `48k`-family selection followed by exact-rate majority
+    with upward tiebreak inside the winning family; mismatched stems are
+    resampled with deterministic linear interpolation and decisions are
+    recorded in renderer metadata/warnings and promoted into per-job
+    `render_report` `resampling_receipt` payloads.
   - Added regression coverage for mixed-lossless session rendering and
     deterministic sample-rate selection/resampling behavior.
 

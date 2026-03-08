@@ -1048,8 +1048,8 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
                 self.assertIsInstance(selection, dict)
                 if isinstance(selection, dict):
                     self.assertEqual(
-                        selection.get("selection_reason"),
-                        "tie_higher_sample_rate",
+                        selection.get("selected_family_reason"),
+                        "tie_higher_sample_rate_family",
                     )
 
 

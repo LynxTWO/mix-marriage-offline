@@ -288,6 +288,305 @@ def _requested_sample_rate_hz(plan: dict[str, Any]) -> int | None:
     return sample_rate_hz
 
 
+def _normalize_resampling_warning_rows(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        warning = _coerce_str(item.get("warning")).strip()
+        if not warning:
+            continue
+        row: dict[str, Any] = {"warning": warning}
+        stem_id = _coerce_str(item.get("stem_id")).strip()
+        if stem_id:
+            row["stem_id"] = stem_id
+        format_id = _coerce_str(item.get("format")).strip().lower()
+        if format_id:
+            row["format"] = format_id
+        detail = _coerce_str(item.get("detail")).strip()
+        if detail:
+            row["detail"] = detail
+        rows.append(row)
+    rows.sort(
+        key=lambda row: (
+            _coerce_str(row.get("stem_id")).strip(),
+            _coerce_str(row.get("warning")).strip(),
+            _coerce_str(row.get("format")).strip(),
+            _coerce_str(row.get("detail")).strip(),
+        )
+    )
+    return rows
+
+
+def _normalize_exact_sample_rate_counts(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        sample_rate_hz = _coerce_int(item.get("sample_rate_hz"))
+        stem_count = _coerce_int(item.get("stem_count"))
+        if sample_rate_hz is None or sample_rate_hz <= 0:
+            continue
+        if stem_count is None or stem_count < 0:
+            continue
+        rows.append(
+            {
+                "sample_rate_hz": sample_rate_hz,
+                "stem_count": stem_count,
+            }
+        )
+    rows.sort(key=lambda row: (int(row["sample_rate_hz"]), int(row["stem_count"])))
+    return rows
+
+
+def _normalize_family_sample_rate_counts(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        family_sample_rate_hz = _coerce_int(item.get("family_sample_rate_hz"))
+        stem_count = _coerce_int(item.get("stem_count"))
+        max_sample_rate_hz = _coerce_int(item.get("max_sample_rate_hz"))
+        if family_sample_rate_hz is None or family_sample_rate_hz <= 0:
+            continue
+        if stem_count is None or stem_count < 0:
+            continue
+        if max_sample_rate_hz is None or max_sample_rate_hz <= 0:
+            max_sample_rate_hz = family_sample_rate_hz
+        rows.append(
+            {
+                "family_sample_rate_hz": family_sample_rate_hz,
+                "stem_count": stem_count,
+                "max_sample_rate_hz": max_sample_rate_hz,
+            }
+        )
+    rows.sort(
+        key=lambda row: (
+            int(row["family_sample_rate_hz"]),
+            int(row["stem_count"]),
+            int(row["max_sample_rate_hz"]),
+        )
+    )
+    return rows
+
+
+def _normalize_stem_sample_rate_rows(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        stem_id = _coerce_str(item.get("stem_id")).strip()
+        if not stem_id:
+            continue
+        row: dict[str, Any] = {"stem_id": stem_id}
+        sample_rate_hz = _coerce_int(item.get("sample_rate_hz"))
+        row["sample_rate_hz"] = sample_rate_hz if sample_rate_hz is not None and sample_rate_hz > 0 else None
+        sample_rate_source = _coerce_str(item.get("sample_rate_source")).strip()
+        if sample_rate_source:
+            row["sample_rate_source"] = sample_rate_source
+        rows.append(row)
+    rows.sort(
+        key=lambda row: (
+            _coerce_str(row.get("stem_id")).strip(),
+            int(row.get("sample_rate_hz") or 0),
+            _coerce_str(row.get("sample_rate_source")).strip(),
+        )
+    )
+    return rows
+
+
+def _normalize_resampled_stem_rows(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        stem_id = _coerce_str(item.get("stem_id")).strip()
+        from_sample_rate_hz = _coerce_int(item.get("from_sample_rate_hz"))
+        to_sample_rate_hz = _coerce_int(item.get("to_sample_rate_hz"))
+        if not stem_id:
+            continue
+        if from_sample_rate_hz is None or from_sample_rate_hz <= 0:
+            continue
+        if to_sample_rate_hz is None or to_sample_rate_hz <= 0:
+            continue
+        row: dict[str, Any] = {
+            "stem_id": stem_id,
+            "from_sample_rate_hz": from_sample_rate_hz,
+            "to_sample_rate_hz": to_sample_rate_hz,
+        }
+        format_id = _coerce_str(item.get("format")).strip().lower()
+        if format_id:
+            row["format"] = format_id
+        rows.append(row)
+    rows.sort(
+        key=lambda row: (
+            _coerce_str(row.get("stem_id")).strip(),
+            int(row["from_sample_rate_hz"]),
+            int(row["to_sample_rate_hz"]),
+            _coerce_str(row.get("format")).strip(),
+        )
+    )
+    return rows
+
+
+def _normalize_native_rate_stem_rows(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        stem_id = _coerce_str(item.get("stem_id")).strip()
+        sample_rate_hz = _coerce_int(item.get("sample_rate_hz"))
+        if not stem_id:
+            continue
+        if sample_rate_hz is None or sample_rate_hz <= 0:
+            continue
+        row: dict[str, Any] = {
+            "stem_id": stem_id,
+            "sample_rate_hz": sample_rate_hz,
+        }
+        format_id = _coerce_str(item.get("format")).strip().lower()
+        if format_id:
+            row["format"] = format_id
+        rows.append(row)
+    rows.sort(
+        key=lambda row: (
+            _coerce_str(row.get("stem_id")).strip(),
+            int(row["sample_rate_hz"]),
+            _coerce_str(row.get("format")).strip(),
+        )
+    )
+    return rows
+
+
+def _normalize_resampling_counts(value: Any) -> dict[str, int]:
+    counts = value if isinstance(value, dict) else {}
+
+    def _value(key: str) -> int:
+        candidate = _coerce_int(counts.get(key))
+        if candidate is None or candidate < 0:
+            return 0
+        return candidate
+
+    return {
+        "input_stem_count": _value("input_stem_count"),
+        "planned_stem_count": _value("planned_stem_count"),
+        "decoded_stem_count": _value("decoded_stem_count"),
+        "resampled_stem_count": _value("resampled_stem_count"),
+        "native_rate_stem_count": _value("native_rate_stem_count"),
+        "skipped_stem_count": _value("skipped_stem_count"),
+        "decoder_warning_count": _value("decoder_warning_count"),
+    }
+
+
+def _normalize_resampling_selection(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    selection_policy = _coerce_str(value.get("selection_policy")).strip()
+    selection_reason = _coerce_str(value.get("selection_reason")).strip()
+    selected_sample_rate_hz = _coerce_int(value.get("selected_sample_rate_hz"))
+    if not selection_policy or not selection_reason:
+        return None
+    if selected_sample_rate_hz is None or selected_sample_rate_hz <= 0:
+        return None
+
+    default_sample_rate_hz = _coerce_int(value.get("default_sample_rate_hz"))
+    if default_sample_rate_hz is None or default_sample_rate_hz <= 0:
+        default_sample_rate_hz = selected_sample_rate_hz
+
+    selected_family_sample_rate_hz = _coerce_int(value.get("selected_family_sample_rate_hz"))
+    if selected_family_sample_rate_hz is None or selected_family_sample_rate_hz <= 0:
+        selected_family_sample_rate_hz = selected_sample_rate_hz
+
+    selected_family_reason = _coerce_str(value.get("selected_family_reason")).strip()
+    if not selected_family_reason:
+        selected_family_reason = selection_reason
+
+    sample_rate_counts = _normalize_exact_sample_rate_counts(value.get("sample_rate_counts"))
+    family_sample_rate_counts = _normalize_family_sample_rate_counts(
+        value.get("family_sample_rate_counts")
+    )
+    selected_family_sample_rate_counts = _normalize_exact_sample_rate_counts(
+        value.get("selected_family_sample_rate_counts")
+    )
+    stem_count_considered = _coerce_int(value.get("stem_count_considered"))
+    if stem_count_considered is None or stem_count_considered < 0:
+        stem_count_considered = sum(
+            int(row.get("stem_count") or 0) for row in sample_rate_counts
+        )
+
+    return {
+        "selection_policy": selection_policy,
+        "selection_reason": selection_reason,
+        "selected_sample_rate_hz": selected_sample_rate_hz,
+        "selected_family_sample_rate_hz": selected_family_sample_rate_hz,
+        "selected_family_reason": selected_family_reason,
+        "sample_rate_counts": sample_rate_counts,
+        "family_sample_rate_counts": family_sample_rate_counts,
+        "selected_family_sample_rate_counts": selected_family_sample_rate_counts,
+        "default_sample_rate_hz": default_sample_rate_hz,
+        "stem_count_considered": stem_count_considered,
+        "stem_sample_rates": _normalize_stem_sample_rate_rows(value.get("stem_sample_rates")),
+        "decoder_warnings": _normalize_resampling_warning_rows(value.get("decoder_warnings")),
+    }
+
+
+def _normalize_resampling_receipt(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+
+    selection = _normalize_resampling_selection(value.get("selection"))
+    if selection is None:
+        return None
+
+    target_sample_rate_hz = _coerce_int(value.get("target_sample_rate_hz"))
+    if target_sample_rate_hz is None or target_sample_rate_hz <= 0:
+        target_sample_rate_hz = int(selection["selected_sample_rate_hz"])
+
+    algorithm = _coerce_str(value.get("algorithm")).strip() or "linear_interpolation_v1"
+    resampled_stems = _normalize_resampled_stem_rows(value.get("resampled_stems"))
+    native_rate_stems = _normalize_native_rate_stem_rows(value.get("native_rate_stems"))
+    decoder_warnings = _normalize_resampling_warning_rows(value.get("decoder_warnings"))
+    if not decoder_warnings:
+        decoder_warnings = list(selection.get("decoder_warnings") or [])
+
+    counts = _normalize_resampling_counts(value.get("counts"))
+    if counts["planned_stem_count"] <= 0:
+        counts["planned_stem_count"] = int(selection.get("stem_count_considered") or 0)
+    if counts["input_stem_count"] <= 0:
+        counts["input_stem_count"] = max(
+            counts["planned_stem_count"] + counts["skipped_stem_count"],
+            counts["planned_stem_count"],
+        )
+    if counts["decoder_warning_count"] <= 0:
+        counts["decoder_warning_count"] = len(decoder_warnings)
+    if counts["resampled_stem_count"] <= 0:
+        counts["resampled_stem_count"] = len(resampled_stems)
+    if counts["native_rate_stem_count"] <= 0:
+        counts["native_rate_stem_count"] = len(native_rate_stems)
+
+    return {
+        "algorithm": algorithm,
+        "selection": selection,
+        "target_sample_rate_hz": target_sample_rate_hz,
+        "counts": counts,
+        "resampled_stems": resampled_stems,
+        "native_rate_stems": native_rate_stems,
+        "decoder_warnings": decoder_warnings,
+    }
+
+
 def _job_output_rows(plan_job: dict[str, Any]) -> list[dict[str, Any]]:
     raw_outputs = plan_job.get("outputs")
     if not isinstance(raw_outputs, list):
@@ -430,6 +729,10 @@ def build_render_report_from_plan(
         if isinstance(lfe_receipt, dict):
             report_job["lfe_receipt"] = _json_clone(lfe_receipt)
 
+        resampling_receipt = _normalize_resampling_receipt(plan_job.get("resampling_receipt"))
+        if isinstance(resampling_receipt, dict):
+            report_job["resampling_receipt"] = resampling_receipt
+
         resolved_layout = resolved_by_layout.get(target_layout_id)
         channel_count = 0
         if resolved_layout is not None:
@@ -486,23 +789,78 @@ def build_render_report_from_plan(
             codes=["RENDER.REPORT.PLANNING.DERIVED_FROM_PLAN"],
         )
 
-        resampling_metrics = list(common_metrics)
-        if requested_sample_rate_hz is not None:
-            resampling_metrics.append({"name": "resample_ratio", "value": 1.0})
-        resampling_notes = [
-            "No resampling receipt is attached; metrics reflect the planned target state only.",
-            f"status={status}",
-        ]
-        _append_stage_pair(
-            stage_metrics=stage_metrics,
-            stage_evidence=stage_evidence,
-            stage_id=STAGE_ID_RESAMPLING,
-            scope="job",
-            where=job_where,
-            metrics=resampling_metrics,
-            notes=resampling_notes,
-            codes=["RENDER.REPORT.RESAMPLING.NOT_ATTACHED"],
-        )
+        if isinstance(resampling_receipt, dict):
+            selection = resampling_receipt.get("selection") or {}
+            counts = resampling_receipt.get("counts") or {}
+            target_sample_rate_hz = _coerce_int(resampling_receipt.get("target_sample_rate_hz"))
+            resampling_metrics = list(common_metrics)
+            if target_sample_rate_hz is not None and target_sample_rate_hz > 0:
+                resampling_metrics.append(
+                    {"name": "sample_rate_hz", "value": float(target_sample_rate_hz), "unit": "Hz"}
+                )
+            resampling_metrics.extend(
+                [
+                    {"name": "planned_stem_count", "value": float(_coerce_int(counts.get("planned_stem_count")) or 0)},
+                    {"name": "decoded_stem_count", "value": float(_coerce_int(counts.get("decoded_stem_count")) or 0)},
+                    {"name": "resampled_stem_count", "value": float(_coerce_int(counts.get("resampled_stem_count")) or 0)},
+                    {"name": "native_rate_stem_count", "value": float(_coerce_int(counts.get("native_rate_stem_count")) or 0)},
+                    {"name": "skipped_stem_count", "value": float(_coerce_int(counts.get("skipped_stem_count")) or 0)},
+                    {"name": "decoder_warning_count", "value": float(_coerce_int(counts.get("decoder_warning_count")) or 0)},
+                ]
+            )
+            resampling_notes = [
+                f"selection_policy={_coerce_str(selection.get('selection_policy')).strip()}",
+                f"selection_reason={_coerce_str(selection.get('selection_reason')).strip()}",
+                f"selected_family_sample_rate_hz={_coerce_int(selection.get('selected_family_sample_rate_hz')) or 0}",
+                f"status={status}",
+            ]
+            resampling_notes.extend(
+                (
+                    "resampled:"
+                    f"{_coerce_str(row.get('stem_id')).strip()}:"
+                    f"{_coerce_int(row.get('from_sample_rate_hz')) or 0}->"
+                    f"{_coerce_int(row.get('to_sample_rate_hz')) or 0}"
+                )
+                for row in list(resampling_receipt.get("resampled_stems") or [])
+                if isinstance(row, dict)
+            )
+            resampling_notes.extend(
+                (
+                    "decoder_warning:"
+                    f"{_coerce_str(row.get('stem_id')).strip()}:"
+                    f"{_coerce_str(row.get('warning')).strip()}"
+                )
+                for row in list(resampling_receipt.get("decoder_warnings") or [])
+                if isinstance(row, dict)
+            )
+            _append_stage_pair(
+                stage_metrics=stage_metrics,
+                stage_evidence=stage_evidence,
+                stage_id=STAGE_ID_RESAMPLING,
+                scope="job",
+                where=job_where,
+                metrics=resampling_metrics,
+                notes=resampling_notes,
+                codes=["RENDER.REPORT.RESAMPLING.RECEIPT_ATTACHED"],
+            )
+        else:
+            resampling_metrics = list(common_metrics)
+            if requested_sample_rate_hz is not None:
+                resampling_metrics.append({"name": "resample_ratio", "value": 1.0})
+            resampling_notes = [
+                "No resampling receipt is attached; metrics reflect the planned target state only.",
+                f"status={status}",
+            ]
+            _append_stage_pair(
+                stage_metrics=stage_metrics,
+                stage_evidence=stage_evidence,
+                stage_id=STAGE_ID_RESAMPLING,
+                scope="job",
+                where=job_where,
+                metrics=resampling_metrics,
+                notes=resampling_notes,
+                codes=["RENDER.REPORT.RESAMPLING.NOT_ATTACHED"],
+            )
 
         dsp_notes = [
             "No DSP hook execution evidence is attached to this render_plan job.",

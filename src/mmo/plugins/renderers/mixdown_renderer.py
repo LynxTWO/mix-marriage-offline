@@ -16,7 +16,7 @@ from mmo.dsp.decoders import (
 )
 from mmo.dsp.io import sha256_file
 from mmo.dsp.process_context import build_process_context
-from mmo.dsp.sample_rate import choose_render_sample_rate_hz
+from mmo.dsp.sample_rate import choose_target_rate_for_session
 from mmo.plugins.interfaces import Recommendation, RenderManifest, RendererPlugin
 
 _SUPPORTED_LAYOUT_IDS: tuple[str, ...] = (
@@ -103,6 +103,24 @@ def _resolve_explicit_render_sample_rate_hz(session: Dict[str, Any]) -> int | No
     return None
 
 
+def _resampling_warning_row(
+    *,
+    stem_id: str,
+    warning: str,
+    format_id: str | None = None,
+    detail: str | None = None,
+) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "stem_id": stem_id,
+        "warning": warning,
+    }
+    if isinstance(format_id, str) and format_id.strip():
+        row["format"] = format_id.strip().lower()
+    if isinstance(detail, str) and detail.strip():
+        row["detail"] = detail.strip()
+    return row
+
+
 def _db_to_linear(gain_db: float) -> float:
     return math.pow(10.0, gain_db / 20.0)
 
@@ -185,14 +203,32 @@ def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
     worst_case_peak_sum = 0.0
     measurement_failed = False
     decode_plans: list[_StemDecodePlan] = []
-    observed_sample_rates_hz: list[int] = []
+    stem_meta_rows: list[dict[str, Any]] = []
 
     for stem in stems:
         stem_id = _coerce_str(stem.get("stem_id")).strip() or "<unknown>"
+        source_format_id = ""
+        stem_warning_rows: list[dict[str, Any]] = []
+        if "sample_rate_hz" in stem:
+            declared_sample_rate_hz = _coerce_int(stem.get("sample_rate_hz"))
+            if declared_sample_rate_hz is None or declared_sample_rate_hz < 1:
+                stem_warning_rows.append(
+                    _resampling_warning_row(
+                        stem_id=stem_id,
+                        warning="metadata_sample_rate_invalid",
+                        detail=f"stem.sample_rate_hz={stem.get('sample_rate_hz')!r}",
+                    )
+                )
         source_path, resolve_reason = _resolve_stem_source_path(stem, stems_dir)
         if resolve_reason is not None or source_path is None:
             notes.append(f"{stem_id}:{resolve_reason or 'unresolved_path'}")
             measurement_failed = True
+            stem_meta_rows.append(
+                {
+                    "stem_id": stem_id,
+                    "decoder_warnings": stem_warning_rows,
+                }
+            )
             continue
 
         try:
@@ -200,9 +236,16 @@ def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
             if source_format_id == "unknown":
                 notes.append(f"{stem_id}:unsupported_format")
                 measurement_failed = True
+                stem_meta_rows.append(
+                    {
+                        "stem_id": stem_id,
+                        "decoder_warnings": stem_warning_rows,
+                    }
+                )
                 continue
 
             metadata: dict[str, Any] | None = None
+            metadata_source = "decoder_metadata"
             try:
                 metadata = read_audio_metadata(source_path)
             except Exception:
@@ -221,23 +264,81 @@ def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
                         "sample_rate_hz": stem_sample_rate_hint,
                         "codec_name": stem.get("codec_name"),
                     }
+                    metadata_source = "stem_hints"
+                    stem_warning_rows.append(
+                        _resampling_warning_row(
+                            stem_id=stem_id,
+                            warning="decoder_metadata_unavailable_used_stem_hints",
+                            format_id=source_format_id,
+                        )
+                    )
                 else:
+                    stem_warning_rows.append(
+                        _resampling_warning_row(
+                            stem_id=stem_id,
+                            warning="missing_metadata",
+                            format_id=source_format_id,
+                            detail="decoder metadata unavailable and no valid stem hints",
+                        )
+                    )
                     raise
 
             codec_name = _coerce_str(metadata.get("codec_name")).strip().lower()
             if not is_lossless_format_id(source_format_id, codec_name=codec_name):
                 notes.append(f"{stem_id}:lossy_input")
-                measurement_failed = True
-                continue
+                stem_warning_rows.append(
+                    _resampling_warning_row(
+                        stem_id=stem_id,
+                        warning="lossy_source",
+                        format_id=source_format_id,
+                    )
+                )
 
             channels = _coerce_int(metadata.get("channels"))
             stem_sample_rate_hz = _coerce_int(metadata.get("sample_rate_hz"))
             if channels is None or channels < 1:
                 raise ValueError("invalid channel count")
             if stem_sample_rate_hz is None or stem_sample_rate_hz < 1:
+                stem_warning_rows.append(
+                    _resampling_warning_row(
+                        stem_id=stem_id,
+                        warning="missing_sample_rate_metadata",
+                        format_id=source_format_id,
+                    )
+                )
                 raise ValueError("invalid sample rate")
+            if metadata_source == "decoder_metadata" and "sample_rate_hz" in stem:
+                declared_sample_rate_hz = _coerce_int(stem.get("sample_rate_hz"))
+                if declared_sample_rate_hz is None or declared_sample_rate_hz < 1:
+                    stem_warning_rows.append(
+                        _resampling_warning_row(
+                            stem_id=stem_id,
+                            warning="metadata_sample_rate_invalid_used_decoder_rate",
+                            format_id=source_format_id,
+                            detail=f"decoder_sample_rate_hz={stem_sample_rate_hz}",
+                        )
+                    )
+                elif declared_sample_rate_hz != stem_sample_rate_hz:
+                    stem_warning_rows.append(
+                        _resampling_warning_row(
+                            stem_id=stem_id,
+                            warning="metadata_sample_rate_mismatch_used_decoder_rate",
+                            format_id=source_format_id,
+                            detail=(
+                                f"stem.sample_rate_hz={declared_sample_rate_hz}, "
+                                f"decoder_sample_rate_hz={stem_sample_rate_hz}"
+                            ),
+                        )
+                    )
 
-            observed_sample_rates_hz.append(stem_sample_rate_hz)
+            stem_meta_rows.append(
+                {
+                    "stem_id": stem_id,
+                    "sample_rate_hz": stem_sample_rate_hz,
+                    "sample_rate_source": metadata_source,
+                    "decoder_warnings": stem_warning_rows,
+                }
+            )
             decode_plans.append(
                 _StemDecodePlan(
                     stem_id=stem_id,
@@ -250,19 +351,23 @@ def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
         except Exception:
             notes.append(f"{stem_id}:decode_failed")
             measurement_failed = True
+            stem_meta_rows.append(
+                {
+                    "stem_id": stem_id,
+                    "decoder_warnings": stem_warning_rows,
+                }
+            )
 
     explicit_sample_rate_hz = _resolve_explicit_render_sample_rate_hz(session)
-    sample_rate_hz, selection_receipt = choose_render_sample_rate_hz(
-        observed_sample_rates_hz,
-        explicit_sample_rate_hz=explicit_sample_rate_hz,
+    sample_rate_hz, selection_receipt = choose_target_rate_for_session(
+        stem_meta_rows,
+        explicit_rate=explicit_sample_rate_hz,
+        default=_DEFAULT_SAMPLE_RATE_HZ,
     )
-    if sample_rate_hz is None:
-        sample_rate_hz = _DEFAULT_SAMPLE_RATE_HZ
-    else:
-        notes.append(
-            f"render_sample_rate_selected:{sample_rate_hz}:"
-            f"{_coerce_str(selection_receipt.get('selection_reason'))}"
-        )
+    notes.append(
+        f"render_sample_rate_selected:{sample_rate_hz}:"
+        f"{_coerce_str(selection_receipt.get('selection_reason'))}"
+    )
 
     resampled_stems: list[dict[str, Any]] = []
     native_rate_stems: list[dict[str, Any]] = []
@@ -364,8 +469,18 @@ def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
             "algorithm": "linear_interpolation_v1",
             "selection": selection_receipt,
             "target_sample_rate_hz": sample_rate_hz,
+            "counts": {
+                "input_stem_count": len(stems),
+                "planned_stem_count": len(decode_plans),
+                "decoded_stem_count": decoded_stem_count,
+                "resampled_stem_count": len(resampled_stems),
+                "native_rate_stem_count": len(native_rate_stems),
+                "skipped_stem_count": max(0, len(stems) - len(decode_plans)),
+                "decoder_warning_count": len(list(selection_receipt.get("decoder_warnings") or [])),
+            },
             "resampled_stems": resampled_stems,
             "native_rate_stems": native_rate_stems,
+            "decoder_warnings": list(selection_receipt.get("decoder_warnings") or []),
         },
     )
 

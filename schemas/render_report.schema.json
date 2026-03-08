@@ -285,6 +285,7 @@
         },
         "render_intent": { "$ref": "#/$defs/render_intent" },
         "lfe_receipt": { "$ref": "#/$defs/lfe_derivation_receipt" },
+        "resampling_receipt": { "$ref": "#/$defs/resampling_receipt" },
         "output_files": {
           "type": "array",
           "items": { "$ref": "#/$defs/output_file" }
@@ -412,6 +413,167 @@
         },
         "delta_db": { "type": "number", "minimum": 0.0 },
         "delta_threshold_db": { "type": "number", "minimum": 0.0 }
+      }
+    },
+    "resampling_warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["warning"],
+      "properties": {
+        "stem_id": { "type": "string", "minLength": 1 },
+        "warning": { "type": "string", "minLength": 1 },
+        "format": { "type": "string", "minLength": 1 },
+        "detail": { "type": "string", "minLength": 1 }
+      }
+    },
+    "sample_rate_count": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sample_rate_hz", "stem_count"],
+      "properties": {
+        "sample_rate_hz": { "type": "integer", "minimum": 1 },
+        "stem_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "family_sample_rate_count": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family_sample_rate_hz", "stem_count", "max_sample_rate_hz"],
+      "properties": {
+        "family_sample_rate_hz": { "type": "integer", "minimum": 1 },
+        "stem_count": { "type": "integer", "minimum": 0 },
+        "max_sample_rate_hz": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "stem_sample_rate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stem_id", "sample_rate_hz"],
+      "properties": {
+        "stem_id": { "type": "string", "minLength": 1 },
+        "sample_rate_hz": { "type": ["integer", "null"], "minimum": 1 },
+        "sample_rate_source": { "type": "string", "minLength": 1 }
+      }
+    },
+    "resampled_stem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stem_id", "from_sample_rate_hz", "to_sample_rate_hz"],
+      "properties": {
+        "stem_id": { "type": "string", "minLength": 1 },
+        "from_sample_rate_hz": { "type": "integer", "minimum": 1 },
+        "to_sample_rate_hz": { "type": "integer", "minimum": 1 },
+        "format": { "type": "string", "minLength": 1 }
+      }
+    },
+    "native_rate_stem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stem_id", "sample_rate_hz"],
+      "properties": {
+        "stem_id": { "type": "string", "minLength": 1 },
+        "sample_rate_hz": { "type": "integer", "minimum": 1 },
+        "format": { "type": "string", "minLength": 1 }
+      }
+    },
+    "resampling_selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection_policy",
+        "selection_reason",
+        "selected_sample_rate_hz",
+        "selected_family_sample_rate_hz",
+        "selected_family_reason",
+        "sample_rate_counts",
+        "family_sample_rate_counts",
+        "selected_family_sample_rate_counts",
+        "default_sample_rate_hz",
+        "stem_count_considered",
+        "stem_sample_rates",
+        "decoder_warnings"
+      ],
+      "properties": {
+        "selection_policy": { "type": "string", "minLength": 1 },
+        "selection_reason": { "type": "string", "minLength": 1 },
+        "selected_sample_rate_hz": { "type": "integer", "minimum": 1 },
+        "selected_family_sample_rate_hz": { "type": "integer", "minimum": 1 },
+        "selected_family_reason": { "type": "string", "minLength": 1 },
+        "sample_rate_counts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sample_rate_count" }
+        },
+        "family_sample_rate_counts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/family_sample_rate_count" }
+        },
+        "selected_family_sample_rate_counts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sample_rate_count" }
+        },
+        "default_sample_rate_hz": { "type": "integer", "minimum": 1 },
+        "stem_count_considered": { "type": "integer", "minimum": 0 },
+        "stem_sample_rates": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stem_sample_rate" }
+        },
+        "decoder_warnings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/resampling_warning" }
+        }
+      }
+    },
+    "resampling_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_stem_count",
+        "planned_stem_count",
+        "decoded_stem_count",
+        "resampled_stem_count",
+        "native_rate_stem_count",
+        "skipped_stem_count",
+        "decoder_warning_count"
+      ],
+      "properties": {
+        "input_stem_count": { "type": "integer", "minimum": 0 },
+        "planned_stem_count": { "type": "integer", "minimum": 0 },
+        "decoded_stem_count": { "type": "integer", "minimum": 0 },
+        "resampled_stem_count": { "type": "integer", "minimum": 0 },
+        "native_rate_stem_count": { "type": "integer", "minimum": 0 },
+        "skipped_stem_count": { "type": "integer", "minimum": 0 },
+        "decoder_warning_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "resampling_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "selection",
+        "target_sample_rate_hz",
+        "counts",
+        "resampled_stems",
+        "native_rate_stems",
+        "decoder_warnings"
+      ],
+      "properties": {
+        "algorithm": { "type": "string", "minLength": 1 },
+        "selection": { "$ref": "#/$defs/resampling_selection" },
+        "target_sample_rate_hz": { "type": "integer", "minimum": 1 },
+        "counts": { "$ref": "#/$defs/resampling_counts" },
+        "resampled_stems": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/resampled_stem" }
+        },
+        "native_rate_stems": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/native_rate_stem" }
+        },
+        "decoder_warnings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/resampling_warning" }
+        }
       }
     },
     "qa_gates": {

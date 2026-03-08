@@ -213,8 +213,9 @@ What remains: broaden this stereo-hint fixture pattern into additional multi-ste
   so long sessions avoid full-program in-memory mix buffers.
 - [x] Placement + baseline safe-render mixdown paths now use a shared lossless
   decode abstraction (`wav`/`flac`/`wv`/`aiff`/`aif`/`ape`) with deterministic
-  sample-rate policy (`explicit override` or `majority with higher-rate tiebreak`)
-  and deterministic linear resampling receipts in output metadata.
+  sample-rate policy (`explicit override`, otherwise dominant `44.1k` vs `48k`
+  family, then exact-rate majority with upward tiebreak) and deterministic
+  linear resampling receipts in output metadata and `render_report` jobs.
 - [x] Stem-role inference now includes broad uncommon/rare instrument aliases
   (world strings/winds/brass/percussion/keys/guitars), and those roles feed the
   same deterministic template + placement path so large mixed ensembles still
@@ -345,8 +346,8 @@ What remains: the core DSP path is functional, but formalized fallback sequencin
   - optional noise shaping.
   Experimental “no-noise” or ML-based approaches are allowed only as explicitly selected plugins, never as a silent default.
 - [x] All DSP is offline-render capable (no realtime assumptions).
-- [ ] Sample rate handling is explicit:
-  - [ ] Either a single project sample rate is enforced, or resampling is done with a declared algorithm and deterministic settings.
+- [x] Sample rate handling is explicit:
+  - [x] Session target sample rate selection is deterministic and explainable, and any resampling uses a declared algorithm with deterministic settings plus per-job receipts.
 - [ ] Channel counts up to at least 32 are supported end-to-end.
 - [x] Plugin order is deterministic and serialized in reports.
 - [ ] Every processing decision that can affect tone/balance/spatialization is either:
