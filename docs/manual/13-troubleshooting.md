@@ -11,11 +11,12 @@ Install the PDF extra:
 pip install .[pdf]
 
 Truth meters fail.
-Install the truth extra:
-pip install .[truth]
+NumPy is part of the base install now.
+Repair the source environment:
+pip install .
 
 FLAC or WavPack metadata warnings.
-Install FFmpeg, or set MMO_FFPROBE_PATH.
+Install FFmpeg/ffprobe, or set MMO_FFMPEG_PATH and MMO_FFPROBE_PATH.
 
 Scan reports “stems not aligned.”
 Re-export stems with consistent start time and duration.

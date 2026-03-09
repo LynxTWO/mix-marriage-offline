@@ -1832,7 +1832,7 @@ def _render_wav_with_plugin_chain(
             issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
             message=(
                 "options.plugin_chain requires numpy runtime support. "
-                "Install numpy or remove plugin_chain from the request."
+                "Reinstall MMO base deps or remove plugin_chain from the request."
             ),
         ) from exc
 

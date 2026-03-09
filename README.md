@@ -82,7 +82,6 @@ Optional extras:
 
 ```sh
 pip install .[pdf]
-pip install .[truth]
 ```
 
 Verify signatures/checksums:
@@ -125,7 +124,7 @@ mmo analyze ./stems --out-report out/report.json
 # Analyze with peak metering
 mmo scan ./stems --meters peak --out-report out/report.json
 
-# Analyze with truth metering (requires pip install .[truth])
+# Analyze with truth metering
 mmo scan ./stems --meters truth --out-report out/report.json
 ```
 

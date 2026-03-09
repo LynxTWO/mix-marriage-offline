@@ -14,7 +14,6 @@ pip install .
 Optional extras:
 
 ```bash
-pip install .[truth]
 pip install .[pdf]
 pip install .[gui]
 pip install .[watch]
@@ -26,7 +25,7 @@ Verify the CLI is available:
 python -m mmo --help
 ```
 
-Run the environment doctor to confirm optional dependencies:
+Run the environment doctor to confirm required runtime tools and optional PDF support:
 
 ```bash
 python -m mmo env doctor --format text
@@ -134,7 +133,7 @@ python -m mmo project load ./project --session out/session.json
 
 ## 9. Troubleshooting
 
-- If truth metering fails: `pip install .[truth]`
+- If truth metering fails in a source checkout: repair the base install with `pip install .`
 - If PDF export fails: `pip install .[pdf]`
 - For watch-folder automation: `pip install .[watch]`
 - For deterministic checks in development:

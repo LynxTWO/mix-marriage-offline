@@ -1381,7 +1381,7 @@ def build_report(
             _add_optional_dep_issue(
                 issues,
                 dep_name="numpy",
-                hint="Install: pip install .[truth]",
+                hint="Reinstall base MMO deps or install numpy: pip install .",
             )
         else:
             missing_ffmpeg = _add_truth_meter_measurements(session, stems_dir) or missing_ffmpeg
@@ -1394,7 +1394,7 @@ def build_report(
             _add_optional_dep_issue(
                 issues,
                 dep_name="numpy",
-                hint="Install: pip install .[truth]",
+                hint="Reinstall base MMO deps or install numpy: pip install .",
             )
 
     # LFE content audit — always attempt when numpy is available
@@ -1404,7 +1404,7 @@ def build_report(
         _add_optional_dep_issue(
             issues,
             dep_name="numpy",
-            hint="Install: pip install .[truth]",
+            hint="Reinstall base MMO deps or install numpy: pip install .",
         )
 
     # Build metering summary when meters were run

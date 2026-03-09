@@ -16,8 +16,8 @@ The human stays artistic.
 
 What MMO can do today (v1.1.0).
 It can scan and validate a stem folder.
-It can run meters (basic, and “truth” meters with the optional dependency).
-It can generate a report JSON, a CSV recall sheet, and a PDF report (PDF requires the optional dependency).
+It can run meters (basic and truth meters in the base install).
+It can generate a report JSON, a CSV recall sheet, and a PDF report (PDF still requires the optional dependency).
 It can render conservative outputs using `safe-render`, including render-many targets and multiple channel-ordering standards.
 It can run translation checks (phone, earbuds, car, mono collapse) when a stereo deliverable exists.
 It can compute downmix matrices and QA a downmix against a reference.

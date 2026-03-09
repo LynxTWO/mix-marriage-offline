@@ -14,19 +14,21 @@ For deeper detail on any step, see the cross-references at the end.
 
 **Supported Python versions:** 3.12, 3.13, 3.14.
 
-**FFmpeg** is optional but recommended.
-It is required for decoding non-WAV audio formats (MP3, FLAC, OGG, etc.)
-and for some QA features such as loudness metering.
+**FFmpeg** and **ffprobe** are required for MMO's core audio workflows.
+They are used for decoding non-WAV audio formats, render/export metadata,
+and QA features such as loudness and translation checks.
 If FFmpeg is not on your `PATH`, you can point MMO at it with the
-`MMO_FFMPEG_PATH` environment variable:
+`MMO_FFMPEG_PATH` and `MMO_FFPROBE_PATH` environment variables:
 
 ```bash
 export MMO_FFMPEG_PATH=/usr/local/bin/ffmpeg   # Linux / macOS
+export MMO_FFPROBE_PATH=/usr/local/bin/ffprobe # Linux / macOS
 set MMO_FFMPEG_PATH=C:\ffmpeg\bin\ffmpeg.exe   # Windows cmd
+set MMO_FFPROBE_PATH=C:\ffmpeg\bin\ffprobe.exe # Windows cmd
 ```
 
-MMO will detect whether FFmpeg is available and gate features accordingly,
-with clear messages explaining how to enable them.
+MMO will report both tools in `mmo env doctor --format text`, and core
+audio commands should be treated as misconfigured when either tool is absent.
 
 ---
 
@@ -38,7 +40,7 @@ python -m mmo --help
 ```
 
 You should see the top-level command list.
-Optional extras (`pip install .[pdf]`, `pip install .[truth]`) are not needed for this guide.
+Optional extras such as `pip install .[pdf]` are not needed for this guide.
 
 ---
 

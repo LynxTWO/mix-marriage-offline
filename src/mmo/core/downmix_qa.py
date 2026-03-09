@@ -153,7 +153,7 @@ def _truth_metrics_from_interleaved(samples: List[float], sample_rate_hz: int) -
         from mmo.dsp import meters_truth
     except ImportError as exc:
         raise RuntimeError(
-            "Truth meters require numpy, or choose --meters basic"
+            "Truth meters require numpy; reinstall MMO base deps or choose --meters basic"
         ) from exc
 
     total = (len(samples) // 2) * 2
@@ -687,7 +687,7 @@ def run_downmix_qa(
                 from mmo.dsp import meters_truth
             except ImportError as exc:
                 raise RuntimeError(
-                    "Truth meters require numpy, or choose --meters basic"
+                    "Truth meters require numpy; reinstall MMO base deps or choose --meters basic"
                 ) from exc
 
             fold_lufs = meters_truth.OnlineLufsIntegrated(
@@ -751,7 +751,7 @@ def run_downmix_qa(
             {"evidence_id": "EVID.VALIDATION.MISSING_OPTIONAL_DEP", "value": "numpy"},
             {
                 "evidence_id": "EVID.VALIDATION.MISSING_OPTIONAL_DEP_HINT",
-                "value": "Install numpy (truth meters) or use --meters basic",
+                "value": "Reinstall MMO base deps (numpy) or use --meters basic",
             },
         ]
         issues.append(

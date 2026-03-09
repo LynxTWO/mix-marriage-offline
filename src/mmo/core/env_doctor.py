@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import importlib.util
 import os
 import platform
 import sys
 from pathlib import Path
 from typing import Any
 
+from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd, resolve_ffprobe_cmd
 from mmo.resources import (
     data_root,
     default_cache_dir,
@@ -20,6 +22,7 @@ _ENV_OVERRIDE_KEYS: tuple[str, ...] = (
     "MMO_CACHE_DIR",
     "MMO_TEMP_DIR",
     "MMO_FFMPEG_PATH",
+    "MMO_FFPROBE_PATH",
 )
 
 
@@ -60,6 +63,13 @@ def _is_readable_directory(path: Path) -> bool:
             next(entries, None)
         return True
     except OSError:
+        return False
+
+
+def _module_available(module_name: str) -> bool:
+    try:
+        return importlib.util.find_spec(module_name) is not None
+    except (ImportError, ValueError):
         return False
 
 
@@ -119,6 +129,10 @@ def build_env_doctor_report() -> dict[str, Any]:
             "cache_dir_writable": _is_writable_directory(resolved_cache_dir),
             "data_root_readable": _is_readable_directory(resolved_data_root),
             "temp_dir_writable": _is_writable_directory(resolved_temp_dir),
+            "numpy_available": _module_available("numpy"),
+            "ffmpeg_available": resolve_ffmpeg_cmd() is not None,
+            "ffprobe_available": resolve_ffprobe_cmd() is not None,
+            "reportlab_available": _module_available("reportlab"),
         },
         "env_overrides": env_overrides,
     }
@@ -154,6 +168,10 @@ def render_env_doctor_text(report: dict[str, Any]) -> str:
         f"checks.cache_dir_writable={_as_bool_text(checks_payload.get('cache_dir_writable'))}",
         f"checks.temp_dir_writable={_as_bool_text(checks_payload.get('temp_dir_writable'))}",
         f"checks.data_root_readable={_as_bool_text(checks_payload.get('data_root_readable'))}",
+        f"checks.numpy_available={_as_bool_text(checks_payload.get('numpy_available'))}",
+        f"checks.ffmpeg_available={_as_bool_text(checks_payload.get('ffmpeg_available'))}",
+        f"checks.ffprobe_available={_as_bool_text(checks_payload.get('ffprobe_available'))}",
+        f"checks.reportlab_available={_as_bool_text(checks_payload.get('reportlab_available'))}",
     ]
 
     for name in _ENV_OVERRIDE_KEYS:

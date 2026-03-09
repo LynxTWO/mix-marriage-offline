@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +10,7 @@ from mmo.core.loudness_profiles import (
     DEFAULT_LOUDNESS_PROFILE_ID,
     resolve_loudness_profile_receipt,
 )
+from mmo.dsp.backends.ffmpeg_discovery import resolve_ffprobe_cmd
 
 
 RENDER_PREFLIGHT_SCHEMA_VERSION = "0.1.0"
@@ -38,45 +38,11 @@ def _normalize_role(value: Any) -> str:
     return normalized if normalized else "unknown"
 
 
-def _command_for_path(path: Path) -> tuple[str, ...]:
-    if path.suffix.lower() == ".py":
-        return (sys.executable, os.fspath(path))
-    return (os.fspath(path),)
-
-
 def _ffprobe_command_from_env() -> tuple[str, ...] | None:
-    ffmpeg_raw = _coerce_str(os.environ.get("MMO_FFMPEG_PATH")).strip()
-    if not ffmpeg_raw:
+    resolved = resolve_ffprobe_cmd()
+    if resolved is None:
         return None
-
-    ffprobe_raw = _coerce_str(os.environ.get("MMO_FFPROBE_PATH")).strip()
-    if ffprobe_raw:
-        ffprobe_path = Path(ffprobe_raw)
-        if ffprobe_path.exists():
-            return _command_for_path(ffprobe_path)
-        return None
-
-    ffmpeg_path = Path(ffmpeg_raw)
-    if not ffmpeg_path.exists():
-        return None
-
-    candidate_paths: list[Path] = []
-    renamed = ffmpeg_path.name.replace("ffmpeg", "ffprobe", 1)
-    if renamed != ffmpeg_path.name:
-        candidate_paths.append(ffmpeg_path.with_name(renamed))
-    if ffmpeg_path.suffix:
-        candidate_paths.append(ffmpeg_path.with_name(f"ffprobe{ffmpeg_path.suffix}"))
-    candidate_paths.append(ffmpeg_path.with_name("ffprobe"))
-
-    seen: set[str] = set()
-    for candidate in candidate_paths:
-        key = candidate.as_posix()
-        if key in seen:
-            continue
-        seen.add(key)
-        if candidate.exists():
-            return _command_for_path(candidate)
-    return None
+    return tuple(resolved)
 
 
 def _parse_int(value: Any) -> int | None:
