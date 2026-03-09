@@ -22,6 +22,11 @@ reasons:
     kind: "authority"
     description: "The action/plan requires explicit user approval before auto-apply or render is permitted."
 
+  REASON.SPATIAL_LOCK_OR_APPROVAL_REQUIRED:
+    label: "Spatial lock or approval required"
+    kind: "authority"
+    description: "Spatial routing/object-bed changes require an explicit intent lock, a permissive profile, or direct user approval before auto-apply/render."
+
   REASON.DIAGNOSTIC_SUGGEST_ONLY:
     label: "Diagnostic actions are suggest-only"
     kind: "authority"

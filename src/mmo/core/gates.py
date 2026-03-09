@@ -5,6 +5,13 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
+from mmo.core.impact_rules import (
+    is_permissive_spatial_profile,
+    is_spatial_change,
+    spatial_change_lock_satisfied,
+    spatial_change_note,
+    spatial_change_required_lock_ids,
+)
 from mmo.core.recommendations import (
     normalize_recommendation_contract,
     recommendation_requires_user_approval,
@@ -104,6 +111,17 @@ def _coerce_str(value: Any) -> str | None:
     return None
 
 
+def _merge_notes(existing: Any, addition: str) -> str:
+    base = _coerce_str(existing) or ""
+    if not addition:
+        return base
+    if addition in base:
+        return base
+    if not base:
+        return addition
+    return f"{base} {addition}"
+
+
 def _iter_params(rec: Dict[str, Any]) -> List[Dict[str, Any]]:
     params = rec.get("params")
     if isinstance(params, list):
@@ -157,7 +175,7 @@ def _evaluate_requires_approval(
     rec_id = _coerce_str(rec.get("recommendation_id"))
     if approvals is not None and rec_id and rec_id in approvals:
         return []
-    reason_id = gate.get("violation_reason_id")
+    reason_id = _coerce_str(rec.get("requires_approval_reason_id")) or gate.get("violation_reason_id")
     results: List[GateResult] = []
     for context in contexts:
         if context == "suggest":
@@ -910,6 +928,7 @@ def apply_gates_to_report(
     approvals: set[str] | None = None,
     profile_id: str | None = None,
     profiles_path: Path | None = None,
+    scene_payload: Dict[str, Any] | None = None,
 ) -> None:
     policy = load_gates_policy(policy_path)
     selected_profile_id = _coerce_str(profile_id)
@@ -918,6 +937,17 @@ def apply_gates_to_report(
         profiles_policy = load_authority_profiles(resolved_profiles_path)
         policy = apply_profile_overrides(policy, selected_profile_id, profiles_policy)
         report["profile_id"] = selected_profile_id
+
+    resolved_scene_payload = scene_payload if isinstance(scene_payload, dict) else None
+    if resolved_scene_payload is None:
+        session_payload = report.get("session")
+        if isinstance(session_payload, dict):
+            candidate_scene_payload = session_payload.get("scene_payload")
+            if isinstance(candidate_scene_payload, dict):
+                resolved_scene_payload = candidate_scene_payload
+            elif isinstance(session_payload.get("scene"), dict):
+                resolved_scene_payload = session_payload.get("scene")
+
     recommendations = report.get("recommendations")
     if not isinstance(recommendations, list):
         return
@@ -925,6 +955,34 @@ def apply_gates_to_report(
         if not isinstance(rec, dict):
             continue
         normalize_recommendation_contract(rec)
+        if is_spatial_change(rec):
+            rec["spatial_change"] = True
+            rec["required_lock_ids"] = spatial_change_required_lock_ids(rec)
+            permissive_profile = is_permissive_spatial_profile(selected_profile_id)
+            lock_satisfied, _matched_lock_ids = spatial_change_lock_satisfied(
+                rec,
+                scene_payload=resolved_scene_payload,
+            )
+            rec["notes"] = _merge_notes(
+                rec.get("notes"),
+                spatial_change_note(
+                    rec,
+                    profile_id=selected_profile_id,
+                    lock_satisfied=lock_satisfied,
+                    permissive_profile=permissive_profile,
+                ),
+            )
+            if not permissive_profile and not lock_satisfied:
+                rec["impact"] = "high"
+                rec["risk"] = "high"
+                rec["requires_approval"] = True
+                rec["requires_approval_reason_id"] = "REASON.SPATIAL_LOCK_OR_APPROVAL_REQUIRED"
+            else:
+                rec.pop("requires_approval_reason_id", None)
+        else:
+            rec.pop("spatial_change", None)
+            rec.pop("required_lock_ids", None)
+            rec.pop("requires_approval_reason_id", None)
         (
             gate_results,
             eligible_auto_apply,

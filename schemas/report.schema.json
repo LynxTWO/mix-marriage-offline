@@ -384,6 +384,11 @@
         },
         "eligible_auto_apply": { "type": "boolean" },
         "eligible_render": { "type": "boolean" },
+        "spatial_change": { "type": "boolean" },
+        "required_lock_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
         "extreme": { "type": "boolean" },
         "extreme_reasons": {
           "type": "array",

@@ -889,6 +889,10 @@ def _has_hard_precedence_conflict(rec: dict[str, Any]) -> bool:
 
 
 def _blocked_by_non_approval_gate(rec: dict[str, Any]) -> bool:
+    approval_reason_ids = {
+        "REASON.APPROVAL_REQUIRED",
+        "REASON.SPATIAL_LOCK_OR_APPROVAL_REQUIRED",
+    }
     gate_results = rec.get("gate_results")
     if not isinstance(gate_results, list):
         return False
@@ -899,7 +903,7 @@ def _blocked_by_non_approval_gate(rec: dict[str, Any]) -> bool:
             continue
         if _coerce_str(result.get("outcome")).strip().lower() == "allow":
             continue
-        if _coerce_str(result.get("reason_id")).strip() != "REASON.APPROVAL_REQUIRED":
+        if _coerce_str(result.get("reason_id")).strip() not in approval_reason_ids:
             return True
     return False
 

@@ -39,6 +39,19 @@ def _coerce_float(value: Any) -> float | None:
     return None
 
 
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    normalized = sorted(
+        {
+            item.strip()
+            for item in value
+            if isinstance(item, str) and item.strip()
+        }
+    )
+    return normalized
+
+
 def recommendation_impact(rec: Mapping[str, Any]) -> str:
     for key in ("impact", "risk"):
         candidate = _coerce_str(rec.get(key)).strip().lower()
@@ -374,6 +387,14 @@ def recommendation_gate_summary(rec: Mapping[str, Any]) -> str:
 
     reason_id = _coerce_str(selected.get("reason_id")).strip()
     gate_id = _coerce_str(selected.get("gate_id")).strip()
+    if reason_id in {
+        "REASON.APPROVAL_REQUIRED",
+        "REASON.SPATIAL_LOCK_OR_APPROVAL_REQUIRED",
+    } and rec.get("spatial_change") is True:
+        required_lock_ids = _string_list(rec.get("required_lock_ids"))
+        if required_lock_ids:
+            return f"{reason_id} ({gate_id}; add lock or approve)"
+        return f"{reason_id} ({gate_id}; spatial change)"
     if reason_id and gate_id:
         return f"{reason_id} ({gate_id})"
     return reason_id or gate_id
@@ -405,6 +426,10 @@ def recommendation_snapshot(rec: Mapping[str, Any]) -> dict[str, Any]:
     for key in ("eligible_auto_apply", "eligible_render", "approved_by_user"):
         if isinstance(rec.get(key), bool):
             snapshot[key] = bool(rec.get(key))
+
+    if rec.get("spatial_change") is True:
+        snapshot["spatial_change"] = True
+        snapshot["required_lock_ids"] = _string_list(rec.get("required_lock_ids"))
 
     return snapshot
 

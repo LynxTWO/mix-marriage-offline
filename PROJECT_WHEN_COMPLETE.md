@@ -415,7 +415,7 @@ What remains: the core DSP path is functional, but formalized fallback sequencin
   - what/why/where/confidence
   - the exact parameter deltas proposed
   - rollback notes (how to undo)
-- [ ] Any change to object vs bed classification or spatial routing is treated as high-impact unless explicitly user-locked.
+- [x] Any change to object vs bed classification or spatial routing is treated as high-impact unless explicitly user-locked.
 
 ### 4.9.5 Multichannel and layout safety rules (DSP-level)
 - [ ] Plugins must declare whether they are:

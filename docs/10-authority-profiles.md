@@ -106,6 +106,8 @@ Behavior:
 - Auto-apply only low-risk actions within strict limits.
 - If something exceeds limits, it becomes suggest-only.
 - Render is allowed when gated as safe.
+- Spatial routing, object/bed reclassification, and perspective moves stay
+  approval-required unless the matching scene intent was explicitly locked.
 
 Examples of "safe" auto-apply candidates (project-specific and configurable):
 
@@ -130,6 +132,8 @@ Behavior:
 - Still respects hard stops unless the user explicitly forces unsafe behavior.
 - Labels "extreme" changes clearly and records them in an audit trail.
 - Preserves originals and supports undo (via manifests and non-destructive outputs).
+- Explicitly opting into `Full send` (and more permissive authority modes such
+  as `Turbo`) can permit otherwise lock-gated spatial moves; `Assist` does not.
 
 Best for:
 

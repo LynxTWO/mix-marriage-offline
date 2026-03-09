@@ -97,6 +97,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     alongside rollback steps.
   - Added `tests/test_authority_gates.py` to pin the medium-impact approval
     gate, receipt delta disclosure, and approval-file flow.
+  - Spatial routing/object-bed recommendations now carry
+    `spatial_change` + `required_lock_ids`, escalate to high-impact under
+    `PROFILE.ASSIST` unless matching scene-build locks are present, and stay
+    approval-unblockable through the existing `--approve-rec` flow.
+  - Added `tests/test_spatial_high_impact.py` to pin object-to-bed
+    reclassification, surround-send threshold blocking, explicit lock
+    linkage, and permissive-profile behavior.
 
 - Lock-precedence single source of truth + regression matrix:
   - Added `src/mmo/core/precedence.py` as the shared lock/explicit/suggested/
