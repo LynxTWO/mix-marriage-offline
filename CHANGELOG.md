@@ -84,6 +84,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Install/runtime dependency contract hardening:
+  - NumPy now ships in the base Python dependency set, while the legacy
+    `.[truth]` extra remains as a compatibility alias for older install docs.
+  - `mmo env doctor` now reports deterministic availability checks for NumPy,
+    FFmpeg, ffprobe, and ReportLab, and includes `MMO_FFPROBE_PATH` in the
+    stable override report.
+  - Shared FFmpeg discovery now resolves ffprobe consistently for doctor and
+    render preflight paths.
+  - User-facing install/troubleshooting guidance now treats FFmpeg/ffprobe as
+    required core audio runtime tools and stops directing source installs to
+    `pip install .[truth]`.
+
+- Approval-gated LFE corrective filtering:
+  - Added `ACTION.FILTER.HPF`, `ACTION.FILTER.LPF`, `ACTION.FILTER.BELL`, `ACTION.LFE.CORRECTIVE_FILTER`, and `PARAM.EQ.PHASE_MODE` to the ontology and packaged data copies.
+  - Safe-render now treats LFE corrective filters as explicit-approval actions, applies them only in a post-render LFE-only pass, re-runs deterministic translation QA, and records refused step-down attempts when QA gets worse.
+  - Added `PLUGIN.DETECTOR.LFE_CORRECTIVE` and `PLUGIN.RESOLVER.LFE_CORRECTIVE` so measured LFE out-of-band / infrasonic / excessive low-band content produces high-impact corrective recommendations with rollback metadata.
+  - Added deterministic `fixtures/lfe_explicit/` and `fixtures/lfe_out_of_band/` WAV inputs plus `tests/test_lfe_corrective_approval.py` to pin blocked-without-approval, applied-with-approval-and-re-QA, and explicit-LFE no-silent-fix behavior.
+
 - Medium/high recommendation contract + approval receipts:
   - Safe-render recommendations now carry explicit `impact`, `scope`,
     `deltas`, and rollback metadata in the report/receipt contract, with

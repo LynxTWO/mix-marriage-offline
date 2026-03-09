@@ -113,13 +113,13 @@ Note: schema contracts use `schemas/*.schema.json` naming (not `schemas/*.json`)
   - phase-max test (`L+R` vs `L-R`) with stable `0.1 dB` threshold,
   - dual-LFE default mirrored mono with optional explicit stereo-LFE mode,
   - structured receipts in render plan/report (`status`, selected mode/profile, measured delta, threshold, and reason).
-- [ ] If a corrective filter is recommended, the system must:
+- [x] If a corrective filter is recommended, the system must:
   - explain what/why in musician language,
   - require explicit approval before applying,
   - re-run downmix/mono compatibility checks after the change,
   - back off (or refuse) if fold-down similarity or phase-risk gates get worse.
-- [ ] If the user supplies explicit LFE stems, the system must not silently “fix” tone by moving content to mains; it may only recommend options (LPF/HPF, split-and-route, or leave as-is) with confidence and tradeoffs.
-What remains: wire corrective-filter recommendations into an approval + re-QA/backoff loop and harden explicit-LFE no-silent-fix behavior with dedicated integration fixtures.
+- [x] If the user supplies explicit LFE stems, the system must not silently “fix” tone by moving content to mains; it may only recommend options (LPF/HPF, split-and-route, or leave as-is) with confidence and tradeoffs.
+What remains: continue broadening regression coverage around other corrective-action families, but the explicit-LFE approval/backoff path is now wired and fixture-covered.
 
 
 ### 4.5 Subjective Plugins system exists (without breaking core contracts)
@@ -201,6 +201,8 @@ What remains: broaden this stereo-hint fixture pattern into additional multi-ste
 - [x] Errors are actionable (tell the user what/why/where/how to fix).
 - [x] Reports include: issues, actions taken, actions suggested, confidence, and evidence references.
 - [x] A “dry-run” mode exists for suggestions without applying changes.
+- [x] Base source installs include NumPy, and `mmo env doctor` reports required
+  runtime audio tool availability (`ffmpeg`/`ffprobe`) explicitly.
 - [x] `safe-render` supports live explainable progress logging (`what/why/where/confidence`)
   and cooperative cancellation (`--cancel-file`) for CLI/GUI runs.
 - [x] `safe-render` always produces baseline WAV outputs for supported
