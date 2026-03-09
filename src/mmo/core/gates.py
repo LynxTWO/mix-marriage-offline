@@ -5,6 +5,11 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
+from mmo.core.recommendations import (
+    normalize_recommendation_contract,
+    recommendation_requires_user_approval,
+)
+
 try:
     import yaml
 except ImportError:  # pragma: no cover - environment issue
@@ -147,8 +152,7 @@ def _evaluate_requires_approval(
     contexts: Sequence[Context],
     approvals: set[str] | None,
 ) -> List[GateResult]:
-    requires_approval = bool(rec.get("requires_approval"))
-    if not requires_approval:
+    if not recommendation_requires_user_approval(rec):
         return []
     rec_id = _coerce_str(rec.get("recommendation_id"))
     if approvals is not None and rec_id and rec_id in approvals:
@@ -920,6 +924,7 @@ def apply_gates_to_report(
     for rec in recommendations:
         if not isinstance(rec, dict):
             continue
+        normalize_recommendation_contract(rec)
         (
             gate_results,
             eligible_auto_apply,

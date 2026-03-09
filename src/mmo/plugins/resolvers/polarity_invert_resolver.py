@@ -116,10 +116,37 @@ class PolarityInvertResolver(ResolverPlugin):
                     "recommendation_id": f"REC.POLARITY_INVERT.{index:03d}",
                     "issue_id": "ISSUE.IMAGING.NEGATIVE_CORRELATION",
                     "action_id": "ACTION.UTILITY.POLARITY_INVERT",
+                    "impact": "medium",
                     "risk": "medium",
                     "requires_approval": True,
                     "target": _stem_target(stem_id),
-                    "params": [],
+                    "scope": {"stem_id": stem_id} if isinstance(stem_id, str) and stem_id else {"global": True},
+                    "params": [
+                        {
+                            "param_id": "PARAM.POLARITY.INVERT",
+                            "value": True,
+                            "unit_id": "UNIT.NONE",
+                        }
+                    ],
+                    "deltas": [
+                        {
+                            "param_id": "PARAM.POLARITY.INVERT",
+                            "from": None,
+                            "to": True,
+                            "unit": "UNIT.NONE",
+                            "confidence": 0.8,
+                            "evidence_ref": CORRELATION_EVIDENCE_ID,
+                        }
+                    ],
+                    "rollback": [
+                        {
+                            "action": "capture_and_restore_parameter",
+                            "details": (
+                                "Capture the current PARAM.POLARITY.INVERT value before "
+                                "applying the inversion, then restore it to roll back."
+                            ),
+                        }
+                    ],
                     "evidence": evidence,
                 }
             )

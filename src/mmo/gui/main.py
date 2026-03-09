@@ -974,8 +974,10 @@ def has_high_risk_blocked_recommendations(receipt_payload: Mapping[str, Any]) ->
     for row in blocked:
         if not isinstance(row, Mapping):
             continue
-        risk = row.get("risk")
-        if isinstance(risk, str) and risk.strip().casefold() == "high":
+        risk = row.get("impact")
+        if not isinstance(risk, str):
+            risk = row.get("risk")
+        if isinstance(risk, str) and risk.strip().casefold() in {"medium", "high"}:
             return True
     return False
 
@@ -2071,8 +2073,10 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         for row in blocked:
             if not isinstance(row, Mapping):
                 continue
-            risk = row.get("risk")
-            if isinstance(risk, str) and risk.strip().casefold() == "high":
+            risk = row.get("impact")
+            if not isinstance(risk, str):
+                risk = row.get("risk")
+            if isinstance(risk, str) and risk.strip().casefold() in {"medium", "high"}:
                 rec_id = row.get("recommendation_id")
                 if isinstance(rec_id, str) and rec_id.strip():
                     high_risk_ids.append(rec_id.strip())
@@ -2081,9 +2085,9 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         if len(high_risk_ids) > 4:
             preview = f"{preview}, ..."
         message = (
-            f"Detected {len(high_risk_ids)} high-risk recommendation(s).\n\n"
+            f"Detected {len(high_risk_ids)} medium/high-impact recommendation(s).\n\n"
             f"{preview}\n\n"
-            "Approve all high-risk actions for the final render?"
+            "Approve all blocked impact recommendations for the final render?"
         )
 
         decision: dict[str, bool] = {"approve": False}
@@ -2092,7 +2096,7 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
         def _prompt() -> None:
             decision["approve"] = bool(
                 messagebox.askyesno(
-                    "High-risk approval required",
+                    "Approval required",
                     message,
                 )
             )
@@ -2251,14 +2255,14 @@ class _MMOGuiApp(_DropEnabledCTk):  # pragma: no cover - GUI runtime path
                     and has_high_risk_blocked_recommendations(receipt_payload)
                 ):
                     self._set_status_threadsafe(
-                        "High-risk actions detected. Awaiting approval dialog..."
+                        "Blocked impact recommendations detected. Awaiting approval dialog..."
                     )
                     if self._approve_high_risk_prompt(receipt_payload):
                         approve_value = "all"
-                        self._append_log_threadsafe("User approved high-risk actions: --approve all")
+                        self._append_log_threadsafe("User approved blocked actions: --approve all")
                     else:
                         self._append_log_threadsafe(
-                            "User declined high-risk approval; continuing with bounded defaults."
+                            "User declined blocked-action approval; continuing with bounded defaults."
                         )
 
             _, _, final_argv, _ = build_pipeline_cli_argvs(

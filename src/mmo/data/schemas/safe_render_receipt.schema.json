@@ -16,10 +16,91 @@
     "scene_source_path",
     "scene_locks_source_path",
     "recommendations_summary",
+    "eligible_recommendations",
+    "approved_by_user",
+    "blocked_recommendations",
+    "applied_recommendations",
     "renderer_manifests",
     "qa_issues",
     "notes"
   ],
+  "$defs": {
+    "recommendation_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stem_id": { "type": "string", "minLength": 1 },
+        "bus_id": { "type": "string", "minLength": 1 },
+        "layout_id": { "type": "string", "minLength": 1 },
+        "global": { "type": "boolean", "const": true }
+      },
+      "oneOf": [
+        { "required": ["stem_id"] },
+        { "required": ["bus_id"] },
+        { "required": ["layout_id"] },
+        { "required": ["global"] }
+      ]
+    },
+    "recommendation_delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["param_id", "from", "to", "unit", "confidence", "evidence_ref"],
+      "properties": {
+        "param_id": { "type": "string", "pattern": "^PARAM\\." },
+        "from": {},
+        "to": {},
+        "unit": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence_ref": { "type": ["string", "null"] }
+      }
+    },
+    "rollback_step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "details"],
+      "properties": {
+        "action": { "type": "string", "minLength": 1 },
+        "details": { "type": "string", "minLength": 1 }
+      }
+    },
+    "recommendation_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recommendation_id",
+        "action_id",
+        "impact",
+        "risk",
+        "requires_approval",
+        "scope",
+        "deltas",
+        "rollback",
+        "gate_summary"
+      ],
+      "properties": {
+        "recommendation_id": { "type": "string", "minLength": 1 },
+        "issue_id": { "type": "string" },
+        "action_id": { "type": "string", "minLength": 1 },
+        "impact": { "type": "string", "enum": ["low", "medium", "high"] },
+        "risk": { "type": "string", "enum": ["low", "medium", "high"] },
+        "requires_approval": { "type": "boolean" },
+        "scope": { "$ref": "#/$defs/recommendation_scope" },
+        "deltas": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/recommendation_delta" }
+        },
+        "rollback": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/rollback_step" }
+        },
+        "gate_summary": { "type": "string" },
+        "notes": { "type": "string" },
+        "eligible_auto_apply": { "type": "boolean" },
+        "eligible_render": { "type": "boolean" },
+        "approved_by_user": { "type": "boolean" }
+      }
+    }
+  },
   "properties": {
     "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
     "receipt_id": { "type": "string", "minLength": 1 },
@@ -38,29 +119,31 @@
     "recommendations_summary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["total", "auto_eligible", "approved_by_user", "blocked"],
+      "required": ["total", "eligible", "auto_eligible", "approved_by_user", "blocked", "applied"],
       "properties": {
         "total": { "type": "integer", "minimum": 0 },
+        "eligible": { "type": "integer", "minimum": 0 },
         "auto_eligible": { "type": "integer", "minimum": 0 },
         "approved_by_user": { "type": "integer", "minimum": 0 },
-        "blocked": { "type": "integer", "minimum": 0 }
+        "blocked": { "type": "integer", "minimum": 0 },
+        "applied": { "type": "integer", "minimum": 0 }
       }
+    },
+    "eligible_recommendations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/recommendation_entry" }
+    },
+    "approved_by_user": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/recommendation_entry" }
     },
     "blocked_recommendations": {
       "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": true,
-        "required": ["recommendation_id", "risk"],
-        "properties": {
-          "recommendation_id": { "type": "string", "minLength": 1 },
-          "issue_id": { "type": "string" },
-          "action_id": { "type": "string" },
-          "risk": { "type": "string", "enum": ["low", "medium", "high"] },
-          "requires_approval": { "type": "boolean" },
-          "gate_summary": { "type": "string" }
-        }
-      }
+      "items": { "$ref": "#/$defs/recommendation_entry" }
+    },
+    "applied_recommendations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/recommendation_entry" }
     },
     "renderer_manifests": {
       "type": "array",

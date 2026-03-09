@@ -59,15 +59,19 @@ class PolarityCheckGuidanceResolver(ResolverPlugin):
                     evidence_id = entry.get("evidence_id")
                     if evidence_id in EVIDENCE_IDS:
                         evidence_out.append(entry)
+            target = issue.get("target") if isinstance(issue.get("target"), dict) else {}
+            stem_id = target.get("stem_id")
 
             recommendations.append(
                 {
                     "recommendation_id": f"REC.DIAGNOSTIC.CHECK_POLARITY.{index:03d}",
                     "issue_id": ISSUE_ID,
                     "action_id": ACTION_ID,
+                    "impact": "low",
                     "risk": "low",
                     "requires_approval": False,
-                    "target": _copy_target(issue.get("target")),
+                    "target": _copy_target(target),
+                    "scope": {"stem_id": stem_id} if isinstance(stem_id, str) and stem_id else {"global": True},
                     "params": [],
                     "evidence": evidence_out,
                     "notes": NOTES,

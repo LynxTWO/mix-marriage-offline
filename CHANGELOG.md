@@ -84,6 +84,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Medium/high recommendation contract + approval receipts:
+  - Safe-render recommendations now carry explicit `impact`, `scope`,
+    `deltas`, and rollback metadata in the report/receipt contract, with
+    medium/high items normalized to include exact parameter deltas even when
+    the original report only supplied legacy `risk` + `params`.
+  - Medium/high recommendations no longer auto-apply by default; safe-render
+    now requires explicit per-recommendation approval via `--approve-rec` or
+    `--approve-file` (while retaining legacy `--approve` compatibility).
+  - Safe-render receipts now list `eligible`, `blocked`, `approved_by_user`,
+    and `applied` recommendation entries so approval outcomes are explainable
+    alongside rollback steps.
+  - Added `tests/test_authority_gates.py` to pin the medium-impact approval
+    gate, receipt delta disclosure, and approval-file flow.
+
 - Lock-precedence single source of truth + regression matrix:
   - Added `src/mmo/core/precedence.py` as the shared lock/explicit/suggested/
     inferred merge path with canonical receipt sources

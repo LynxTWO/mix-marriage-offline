@@ -603,7 +603,7 @@ class TestGuiSmoke(unittest.TestCase):
                 {"blocked_recommendations": [{"risk": "high"}]}
             )
         )
-        self.assertFalse(
+        self.assertTrue(
             has_high_risk_blocked_recommendations(
                 {"blocked_recommendations": [{"risk": "medium"}]}
             )

@@ -1070,7 +1070,7 @@ def main(argv: list[str] | None = None) -> int:
             "safe-render",
             help=(
                 "Full plugin-chain render: detect -> resolve -> gate -> render. "
-                "Bounded authority: low-risk auto-applied, high-risk require --approve. "
+                "Bounded authority: low-impact auto-applied, medium/high require explicit approval. "
                 "Produces safe-run receipt + optional QA report with spectral slopes."
             ),
         )
@@ -1162,9 +1162,27 @@ def main(argv: list[str] | None = None) -> int:
         "--approve",
         default=None,
         help=(
-            "Override authority for blocked recommendations. "
-            "Use 'all' to approve everything, 'none' to approve nothing, "
-            "or a comma-separated list of recommendation_id / issue_id values."
+            "Legacy approval override for blocked recommendations. "
+            "Prefer --approve-rec / --approve-file. "
+            "Use 'all' to approve every approval-blocked recommendation, 'none' "
+            "to approve nothing, or a comma-separated list of recommendation_id / issue_id values."
+        ),
+    )
+    safe_render_parser.add_argument(
+        "--approve-rec",
+        action="append",
+        dest="approve_rec_ids",
+        default=None,
+        help=(
+            "Explicitly approve one recommendation_id for render. "
+            "Repeat the flag to approve multiple recommendations."
+        ),
+    )
+    safe_render_parser.add_argument(
+        "--approve-file",
+        default=None,
+        help=(
+            "Path to a JSON file containing a list of approved recommendation_id values."
         ),
     )
     safe_render_parser.add_argument(
@@ -6096,6 +6114,12 @@ def main(argv: list[str] | None = None) -> int:
                 target=getattr(args, "target", "stereo"),
                 dry_run=bool(getattr(args, "dry_run", False)),
                 approve=getattr(args, "approve", None),
+                approve_rec_ids=getattr(args, "approve_rec_ids", None),
+                approve_file=(
+                    Path(args.approve_file)
+                    if getattr(args, "approve_file", None)
+                    else None
+                ),
                 output_formats=safe_render_formats,
                 run_config=merged_run_config,
                 force=bool(getattr(args, "force", False)),

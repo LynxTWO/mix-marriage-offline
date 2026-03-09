@@ -14,6 +14,11 @@ from mmo.core.deliverables_index import (
     build_deliverables_index_variants,
 )
 from mmo.core.listen_pack import build_listen_pack
+from mmo.core.recommendations import (
+    normalize_recommendation_contract,
+    recommendation_requires_user_approval,
+    recommendation_snapshot,
+)
 from mmo.core.routing import (
     apply_routing_plan_to_report,
     routing_layout_ids_from_run_config,
@@ -683,6 +688,8 @@ def _run_render_many_targets(
     profile_id: str,
     dry_run: bool,
     approve: str | None,
+    approve_rec_ids: list[str] | None,
+    approve_file: Path | None,
     output_formats: list[str] | None = None,
     run_config: dict[str, Any] | None = None,
     force: bool = False,
@@ -759,6 +766,8 @@ def _run_render_many_targets(
             target=tgt,
             dry_run=dry_run,
             approve=approve,
+            approve_rec_ids=approve_rec_ids,
+            approve_file=approve_file,
             output_formats=output_formats,
             run_config=run_config,
             force=force,
@@ -815,54 +824,114 @@ def _run_render_many_targets(
     return 0 if not failed else 1
 
 
-def _parse_approve_arg(approve_arg: str | None) -> set[str] | str | None:
-    """Parse the --approve argument into a usable form.
-
-    Returns:
-      ``"all"``        – approve every blocked rec.
-      ``"none"``       – approve nothing (gate decisions are final).
-      A ``set[str]``   – set of recommendation_id / issue_id values to approve.
-      ``None``         – no --approve flag given; same as "none".
-    """
+def _parse_approve_arg(approve_arg: str | None) -> tuple[bool, set[str]]:
+    """Parse the legacy --approve argument."""
     if approve_arg is None:
-        return None
-    stripped = approve_arg.strip().lower()
-    if stripped in ("all", "none", ""):
-        return stripped
-    return {part.strip() for part in approve_arg.split(",") if part.strip()}
+        return False, set()
+    stripped = approve_arg.strip()
+    normalized = stripped.lower()
+    if normalized in {"", "none"}:
+        return False, set()
+    if normalized == "all":
+        return True, set()
+    return False, {part.strip() for part in approve_arg.split(",") if part.strip()}
+
+
+def _load_approved_ids_from_file(approve_file: Path | None) -> set[str]:
+    if approve_file is None:
+        return set()
+    payload = json.loads(approve_file.read_text(encoding="utf-8"))
+    if isinstance(payload, list):
+        source = payload
+    elif isinstance(payload, dict) and isinstance(payload.get("recommendation_ids"), list):
+        source = payload["recommendation_ids"]
+    else:
+        raise ValueError("--approve-file must be a JSON list of recommendation_id values.")
+    return {
+        _coerce_str(item).strip()
+        for item in source
+        if _coerce_str(item).strip()
+    }
+
+
+def _collect_approval_inputs(
+    *,
+    approve: str | None,
+    approve_rec_ids: list[str] | None,
+    approve_file: Path | None,
+) -> tuple[bool, set[str], list[str]]:
+    approve_all, legacy_ids = _parse_approve_arg(approve)
+    explicit_ids = set(legacy_ids)
+    if isinstance(approve_rec_ids, list):
+        explicit_ids.update(
+            _coerce_str(rec_id).strip()
+            for rec_id in approve_rec_ids
+            if _coerce_str(rec_id).strip()
+        )
+    explicit_ids.update(_load_approved_ids_from_file(approve_file))
+
+    raw_inputs: list[str] = []
+    if approve_all:
+        raw_inputs.append("all")
+    raw_inputs.extend(sorted(explicit_ids))
+    return approve_all, explicit_ids, raw_inputs
+
+
+def _has_hard_precedence_conflict(rec: dict[str, Any]) -> bool:
+    precedence_conflicts = rec.get("precedence_conflicts")
+    if not isinstance(precedence_conflicts, list):
+        return False
+    return any(
+        isinstance(conflict, dict)
+        and _coerce_str(conflict.get("severity")).strip().lower() == "hard"
+        for conflict in precedence_conflicts
+    )
+
+
+def _blocked_by_non_approval_gate(rec: dict[str, Any]) -> bool:
+    gate_results = rec.get("gate_results")
+    if not isinstance(gate_results, list):
+        return False
+    for result in gate_results:
+        if not isinstance(result, dict):
+            continue
+        if _coerce_str(result.get("context")).strip().lower() != "render":
+            continue
+        if _coerce_str(result.get("outcome")).strip().lower() == "allow":
+            continue
+        if _coerce_str(result.get("reason_id")).strip() != "REASON.APPROVAL_REQUIRED":
+            return True
+    return False
 
 
 def _apply_approve_overrides(
     recs: list[dict[str, Any]],
-    approve: set[str] | str | None,
-) -> int:
-    """Mutate eligible_render=True for recs covered by the approval.
-
-    Returns the count of recs that were approved this way.
-    """
-    if approve is None or approve == "none":
-        return 0
-    count = 0
+    *,
+    approve_all: bool,
+    approved_ids: set[str],
+) -> list[dict[str, Any]]:
+    """Mutate eligible_render=True for approval-gated recs explicitly approved by the user."""
+    approved_recs: list[dict[str, Any]] = []
     for rec in recs:
-        precedence_conflicts = rec.get("precedence_conflicts")
-        if isinstance(precedence_conflicts, list) and any(
-            isinstance(conflict, dict)
-            and _coerce_str(conflict.get("severity")).strip().lower() == "hard"
-            for conflict in precedence_conflicts
-        ):
+        rec["approved_by_user"] = False
+        if _has_hard_precedence_conflict(rec):
             continue
         if rec.get("eligible_render") is True:
-            continue  # already eligible
-        if approve == "all":
-            rec["eligible_render"] = True
-            count += 1
-        elif isinstance(approve, set):
-            rec_id = _coerce_str(rec.get("recommendation_id"))
-            issue_id = _coerce_str(rec.get("issue_id"))
-            if rec_id in approve or issue_id in approve:
-                rec["eligible_render"] = True
-                count += 1
-    return count
+            continue
+        if not recommendation_requires_user_approval(rec):
+            continue
+        if _blocked_by_non_approval_gate(rec):
+            continue
+
+        rec_id = _coerce_str(rec.get("recommendation_id")).strip()
+        issue_id = _coerce_str(rec.get("issue_id")).strip()
+        if not approve_all and rec_id not in approved_ids and issue_id not in approved_ids:
+            continue
+
+        rec["eligible_render"] = True
+        rec["approved_by_user"] = True
+        approved_recs.append(rec)
+    return approved_recs
 
 
 def _build_receipt_id(report_id: str, target: str) -> str:
@@ -965,33 +1034,38 @@ def _build_no_outputs_issue(
 
 
 def _build_blocked_rec_summaries(recs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    blocked = [
-        rec for rec in recs
-        if rec.get("eligible_render") is not True
-        and rec.get("requires_approval") is True
+    blocked = [rec for rec in recs if rec.get("eligible_render") is not True]
+    return [recommendation_snapshot(rec) for rec in blocked]
+
+
+def _build_eligible_rec_summaries(recs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    eligible = [rec for rec in recs if rec.get("eligible_render") is True]
+    return [recommendation_snapshot(rec) for rec in eligible]
+
+
+def _build_applied_rec_summaries(
+    recs: list[dict[str, Any]],
+    manifests: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    received_ids: set[str] = set()
+    for manifest in manifests:
+        if not isinstance(manifest, dict):
+            continue
+        raw_received_ids = manifest.get("received_recommendation_ids")
+        if not isinstance(raw_received_ids, list):
+            continue
+        for raw_id in raw_received_ids:
+            rec_id = _coerce_str(raw_id).strip()
+            if rec_id:
+                received_ids.add(rec_id)
+
+    applied = [
+        rec
+        for rec in recs
+        if rec.get("eligible_render") is True
+        and _coerce_str(rec.get("recommendation_id")).strip() in received_ids
     ]
-    summaries: list[dict[str, Any]] = []
-    for rec in blocked:
-        gate_results = rec.get("gate_results")
-        gate_summary = ""
-        if isinstance(gate_results, list):
-            for gr in gate_results:
-                if isinstance(gr, dict) and gr.get("eligible") is False:
-                    reason = _coerce_str(gr.get("reason"))
-                    if reason:
-                        gate_summary = reason
-                        break
-        summaries.append(
-            {
-                "recommendation_id": _coerce_str(rec.get("recommendation_id")),
-                "issue_id": _coerce_str(rec.get("issue_id")),
-                "action_id": _coerce_str(rec.get("action_id")),
-                "risk": _coerce_str(rec.get("risk")),
-                "requires_approval": bool(rec.get("requires_approval")),
-                "gate_summary": gate_summary,
-            }
-        )
-    return summaries
+    return [recommendation_snapshot(rec) for rec in applied]
 
 
 def _json_clone(value: Any) -> Any:
@@ -1240,6 +1314,8 @@ def _run_safe_render_command(
     target: str,
     dry_run: bool,
     approve: str | None,
+    approve_rec_ids: list[str] | None = None,
+    approve_file: Path | None = None,
     output_formats: list[str] | None = None,
     run_config: dict[str, Any] | None = None,
     force: bool = False,
@@ -1262,8 +1338,8 @@ def _run_safe_render_command(
     """Run the full plugin-chain render: detect → resolve → gate → render.
 
     Bounded authority:
-    - Low-risk (requires_approval=False, risk=low): auto-applied.
-    - Medium/high (requires_approval=True): blocked unless covered by --approve.
+    - Low-impact recommendations may auto-apply within configured limits.
+    - Medium/high-impact recommendations stay blocked unless explicitly approved.
 
     Produces a safe-run receipt JSON and optionally a QA report with spectral
     slope metrics.
@@ -1312,6 +1388,8 @@ def _run_safe_render_command(
                 profile_id=profile_id,
                 dry_run=dry_run,
                 approve=approve,
+                approve_rec_ids=approve_rec_ids,
+                approve_file=approve_file,
                 output_formats=output_formats,
                 run_config=run_config,
                 force=force,
@@ -1610,15 +1688,31 @@ def _run_safe_render_command(
         recommendations = report.get("recommendations")
         recs: list[dict[str, Any]] = []
         if isinstance(recommendations, list):
-            recs = [rec for rec in recommendations if isinstance(rec, dict)]
+            recs = [
+                normalize_recommendation_contract(rec)
+                for rec in recommendations
+                if isinstance(rec, dict)
+            ]
         if isinstance(scene_payload_for_render, dict):
             apply_recommendation_precedence(scene_payload_for_render, recs)
 
-        parsed_approve = _parse_approve_arg(approve)
-        approved_by_user_count = _apply_approve_overrides(recs, parsed_approve)
+        approve_all, explicit_approved_ids, approve_list = _collect_approval_inputs(
+            approve=approve,
+            approve_rec_ids=approve_rec_ids,
+            approve_file=approve_file,
+        )
+        approved_by_user = _apply_approve_overrides(
+            recs,
+            approve_all=approve_all,
+            approved_ids=explicit_approved_ids,
+        )
+        approved_by_user_summaries = [recommendation_snapshot(rec) for rec in approved_by_user]
         eligible = [rec for rec in recs if rec.get("eligible_render") is True]
+        eligible_summaries = _build_eligible_rec_summaries(recs)
         blocked_summaries = _build_blocked_rec_summaries(recs)
+        blocked = [rec for rec in recs if rec.get("eligible_render") is not True]
         blocked_count = len(blocked_summaries)
+        approved_by_user_count = len(approved_by_user_summaries)
 
         print(
             f"safe-render:"
@@ -1643,19 +1737,13 @@ def _run_safe_render_command(
                 ],
             },
         )
-
-        approve_list: list[str] = (
-            [approve] if isinstance(approve, str) and approve
-            else sorted(parsed_approve) if isinstance(parsed_approve, set)
-            else []
-        )
         receipt_id = _build_receipt_id(
             _coerce_str(report.get("report_id")),
             target,
         )
 
         if dry_run:
-            status = "blocked" if blocked_count > 0 and len(eligible) == 0 else "dry_run_only"
+            status = "blocked" if blocked and not eligible else "dry_run_only"
             receipt: dict[str, Any] = {
                 "schema_version": "0.1.0",
                 "receipt_id": receipt_id,
@@ -1670,11 +1758,16 @@ def _run_safe_render_command(
                 "approved_by": approve_list,
                 "recommendations_summary": {
                     "total": len(recs),
-                    "auto_eligible": len(eligible) - approved_by_user_count,
+                    "eligible": len(eligible_summaries),
+                    "auto_eligible": max(0, len(eligible) - approved_by_user_count),
                     "approved_by_user": approved_by_user_count,
                     "blocked": blocked_count,
+                    "applied": 0,
                 },
+                "eligible_recommendations": eligible_summaries,
+                "approved_by_user": approved_by_user_summaries,
                 "blocked_recommendations": blocked_summaries,
+                "applied_recommendations": [],
                 "renderer_manifests": [],
                 "qa_issues": [],
                 "notes": [
@@ -1908,6 +2001,7 @@ def _run_safe_render_command(
             if no_outputs_issue is not None and not allow_empty_outputs
             else "completed"
         )
+        applied_summaries = _build_applied_rec_summaries(recs, manifests)
         receipt = {
             "schema_version": "0.1.0",
             "receipt_id": receipt_id,
@@ -1922,11 +2016,16 @@ def _run_safe_render_command(
             "approved_by": approve_list,
             "recommendations_summary": {
                 "total": len(recs),
+                "eligible": len(eligible_summaries),
                 "auto_eligible": max(0, len(eligible) - approved_by_user_count),
                 "approved_by_user": approved_by_user_count,
                 "blocked": blocked_count,
+                "applied": len(applied_summaries),
             },
+            "eligible_recommendations": eligible_summaries,
+            "approved_by_user": approved_by_user_summaries,
             "blocked_recommendations": blocked_summaries,
+            "applied_recommendations": applied_summaries,
             "renderer_manifests": manifests,
             "qa_issues": qa_issues,
             "notes": [
@@ -2090,6 +2189,8 @@ def _run_safe_render_demo(
             target="7.1.4",
             dry_run=True,  # demo always dry-run — no audio required
             approve=None,
+            approve_rec_ids=None,
+            approve_file=None,
             output_formats=None,
             run_config=run_config,
             force=force,

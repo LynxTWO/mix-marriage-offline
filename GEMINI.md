@@ -10,6 +10,10 @@ Read these first (source of truth):
 
 Non-negotiables:
 - Offline-first, deterministic behavior, explainability, bounded authority.
+- Keep medium/high recommendation contracts explicit: recommendation payloads
+  and safe-render receipts must disclose exact deltas, scope, and rollback
+  steps, and those recommendations must not become render-eligible unless the
+  user explicitly approves the concrete `recommendation_id`.
 - Objective Core contracts cannot be broken by plugins.
 - Layout safety and downmix QA gates must be preserved.
 - Keep DSP execution routed by ontology-backed `ProcessContext.channel_order`

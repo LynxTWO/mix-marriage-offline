@@ -315,6 +315,44 @@
         "unit_id": { "type": "string", "pattern": "^UNIT\\." }
       }
     },
+    "recommendation_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stem_id": { "type": "string", "minLength": 1 },
+        "bus_id": { "type": "string", "minLength": 1 },
+        "layout_id": { "type": "string", "minLength": 1 },
+        "global": { "type": "boolean", "const": true }
+      },
+      "oneOf": [
+        { "required": ["stem_id"] },
+        { "required": ["bus_id"] },
+        { "required": ["layout_id"] },
+        { "required": ["global"] }
+      ]
+    },
+    "recommendation_delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["param_id", "from", "to", "unit", "confidence", "evidence_ref"],
+      "properties": {
+        "param_id": { "type": "string", "pattern": "^PARAM\\." },
+        "from": {},
+        "to": {},
+        "unit": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence_ref": { "type": ["string", "null"] }
+      }
+    },
+    "rollback_step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "details"],
+      "properties": {
+        "action": { "type": "string", "minLength": 1 },
+        "details": { "type": "string", "minLength": 1 }
+      }
+    },
     "recommendation": {
       "type": "object",
       "additionalProperties": false,
@@ -323,12 +361,22 @@
         "recommendation_id": { "type": "string", "minLength": 1 },
         "issue_id": { "type": "string", "pattern": "^ISSUE\\." },
         "action_id": { "type": "string", "pattern": "^ACTION\\." },
+        "impact": { "type": "string", "enum": ["low", "medium", "high"] },
         "risk": { "type": "string", "enum": ["low", "medium", "high"] },
         "requires_approval": { "type": "boolean" },
+        "scope": { "$ref": "#/$defs/recommendation_scope" },
         "target": { "$ref": "#/$defs/target" },
         "params": {
           "type": "array",
           "items": { "$ref": "#/$defs/param" }
+        },
+        "deltas": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/recommendation_delta" }
+        },
+        "rollback": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/rollback_step" }
         },
         "gate_results": {
           "type": "array",
@@ -346,7 +394,24 @@
           "type": "array",
           "items": { "$ref": "#/$defs/evidence" }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["impact"],
+            "properties": {
+              "impact": { "enum": ["medium", "high"] }
+            }
+          },
+          "then": {
+            "required": ["scope", "deltas", "rollback"],
+            "properties": {
+              "deltas": { "minItems": 1 },
+              "rollback": { "minItems": 1 }
+            }
+          }
+        }
+      ]
     },
     "extreme_reason": {
       "type": "object",

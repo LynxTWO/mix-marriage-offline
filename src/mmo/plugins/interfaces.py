@@ -69,10 +69,14 @@ class Recommendation(TypedDict, total=False):
     recommendation_id: str
     issue_id: str
     action_id: str
+    impact: str
     risk: str
     requires_approval: bool
     target: Dict[str, Any]
+    scope: Dict[str, Any]
     params: List[Dict[str, Any]]
+    deltas: List[Dict[str, Any]]
+    rollback: List[Dict[str, str]]
     notes: str
     evidence: List[Dict[str, Any]]
 

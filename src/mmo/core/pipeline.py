@@ -13,6 +13,7 @@ from mmo.core.layout_export import ffmpeg_layout_string_from_channel_order
 from mmo.core.layout_negotiation import get_layout_channel_order
 from mmo.core.media_tags import TagBag, empty_tag_bag, tag_bag_from_mapping
 from mmo.core.precedence import apply_precedence, has_precedence_receipt
+from mmo.core.recommendations import normalize_recommendation_contract
 from mmo.core.tag_export import build_ffmpeg_tag_export_args, metadata_receipt_mapping
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.io import sha256_file
@@ -804,7 +805,11 @@ def run_resolvers(session_report: Dict[str, Any], plugins: Sequence[PluginEntry]
             continue
         plugin_recs = _call_resolver(plugin.instance, session, features, issues)
         if plugin_recs:
-            recommendations.extend(plugin_recs)
+            recommendations.extend(
+                normalize_recommendation_contract(rec)
+                for rec in plugin_recs
+                if isinstance(rec, dict)
+            )
     session_report["recommendations"] = recommendations
 
 

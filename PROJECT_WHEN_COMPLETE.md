@@ -133,6 +133,9 @@ Done: precedence is centralized in `src/mmo/core/precedence.py`, safe-render
 re-applies it before placement and authority checks, and
 `tests/test_lock_precedence_matrix.py` pins the lock-vs-suggestion contract
 across scene build, placement, renderer application, and plugin eligibility.
+Done: medium/high recommendation receipts now disclose exact parameter deltas,
+scope, and rollback notes, and safe-render requires explicit per-rec user
+approval before those actions become render-eligible.
 
 ### 4.6 Rendering targets are supported (minimum viable set)
 - [x] Stereo (2.0) render contract is correct and validated.

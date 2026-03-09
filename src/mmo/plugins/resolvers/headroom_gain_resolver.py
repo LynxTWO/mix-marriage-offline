@@ -78,14 +78,26 @@ class HeadroomGainResolver(ResolverPlugin):
                     "recommendation_id": f"REC.HEADROOM_GAIN.{index:03d}",
                     "issue_id": issue_id,
                     "action_id": "ACTION.UTILITY.GAIN",
+                    "impact": "low",
                     "risk": "low",
                     "requires_approval": False,
                     "target": _stem_target(stem_id),
+                    "scope": {"stem_id": stem_id} if isinstance(stem_id, str) and stem_id else {"global": True},
                     "params": [
                         {
                             "param_id": "PARAM.GAIN.DB",
                             "value": gain_db,
                             "unit_id": "UNIT.DB",
+                        }
+                    ],
+                    "deltas": [
+                        {
+                            "param_id": "PARAM.GAIN.DB",
+                            "from": None,
+                            "to": gain_db,
+                            "unit": "UNIT.DB",
+                            "confidence": 1.0,
+                            "evidence_ref": issue_id,
                         }
                     ],
                 }
