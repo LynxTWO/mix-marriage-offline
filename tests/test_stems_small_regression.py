@@ -50,11 +50,11 @@ _EXPECTED_SCENE_SHA256 = {
     "surround_7_1_catalog": "d68a66c22991d817fedee89af3504a67b704084b06ba04ace31f4478017831ed",
 }
 _EXPECTED_RENDER_PLAN_SHA256 = {
-    "immersive_7_1_4_catalog": "6e14193563aaeb235364110a1c558a67903f79922d11de092af40b29df35cfa4",
-    "immersive_9_1_6_catalog": "9eddf73860b21fbca89dfdd94cc727e5e130128e59af820f69acc425a67bd316",
-    "stereo_catalog": "84e1c26764dbb5f463b61e2ffb9b26770460256c6b8e72b77cbac5119a30d351",
-    "surround_5_1_catalog": "fe642876cef07239b268722efd21b4d0a9faecf9ed7d0ab3ffa34a1a1bdac827",
-    "surround_7_1_catalog": "9b1d662b343baeb719efec824430b5c4bb43a69de5648760c3e9dcd013e27921",
+    "immersive_7_1_4_catalog": "312752ab718e2abcade547390e0de27376c0de6ba8928be8cea3a8439ed30f20",
+    "immersive_9_1_6_catalog": "f8586870089d9420ab243bee9633926b8d3f5c4edb0610546c3d91b781292a9c",
+    "stereo_catalog": "4a68b2c6c5e4139a88b75d6df363dcc76934cc762cdb25d33b9cc3421ce8e6d1",
+    "surround_5_1_catalog": "304558ff30d2db1bd42c7c1b6dc51a786f5df673cb97245dc7109701853a946b",
+    "surround_7_1_catalog": "903596d9a982ebb4f2a9a2df2e5b40087a94842e37349538c4476f8877223c4d",
 }
 
 

@@ -20,6 +20,7 @@ REQUIRED_CHECK_IDS = [
     "PKG.MIRROR",
     "DOCS.MILESTONES",
     "DOCS.GUI_PARITY",
+    "GUI.TAURI_DESIGN",
     "DOCS.USER_MANUAL",
     "SCENE.REGISTRIES",
     "TRANSLATION.REGISTRIES",
@@ -40,12 +41,14 @@ REQUIRED_TOOL_SCRIPTS = [
     "validate_packaged_data_mirror.py",
     "validate_milestones.py",
     "validate_gui_parity.py",
+    "validate_tauri_design_system.py",
     "validate_user_manual.py",
 ]
 
 REQUIRED_REPO_DIRS = [
     "docs",
     "examples",
+    "gui",
     "ontology",
     "plugins",
     "presets",

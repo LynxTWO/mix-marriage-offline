@@ -58,6 +58,32 @@ def _normalize_seed(seed: int) -> int:
 
 
 @lru_cache(maxsize=1)
+def _known_ordering_standards() -> frozenset[str]:
+    try:
+        payload = load_ontology_yaml("layouts.yaml")
+    except (FileNotFoundError, ImportError, RuntimeError, OSError, ValueError):
+        return frozenset({DEFAULT_CHANNEL_STANDARD})
+    if not isinstance(payload, dict):
+        return frozenset({DEFAULT_CHANNEL_STANDARD})
+    layouts_payload = payload.get("layouts")
+    if not isinstance(layouts_payload, dict):
+        return frozenset({DEFAULT_CHANNEL_STANDARD})
+    meta = layouts_payload.get("_meta")
+    if not isinstance(meta, dict):
+        return frozenset({DEFAULT_CHANNEL_STANDARD})
+    ordering_standards = meta.get("ordering_standards")
+    if not isinstance(ordering_standards, list):
+        return frozenset({DEFAULT_CHANNEL_STANDARD})
+    normalized = {
+        str(item).strip().upper()
+        for item in ordering_standards
+        if isinstance(item, str) and item.strip()
+    }
+    normalized.add(DEFAULT_CHANNEL_STANDARD)
+    return frozenset(sorted(normalized))
+
+
+@lru_cache(maxsize=1)
 def _speaker_groups_from_ontology() -> dict[str, frozenset[str]]:
     try:
         payload = load_ontology_yaml("speakers.yaml")
@@ -181,6 +207,11 @@ class ProcessContext:
             raise ValueError(f"Unknown layout_id: {layout_id!r}")
 
         normalized_standard = _normalize_standard(layout_standard)
+        if normalized_standard not in _known_ordering_standards():
+            raise ValueError(
+                f"Unsupported layout standard {normalized_standard!r} for "
+                f"layout {normalized_layout_id!r}."
+            )
         channel_order = get_channel_order(
             normalized_layout_id,
             normalized_standard,

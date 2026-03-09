@@ -704,6 +704,9 @@
         "notes": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
+        },
+        "export_finalization_receipt": {
+          "$ref": "#/$defs/export_finalization_receipt"
         }
       }
     },

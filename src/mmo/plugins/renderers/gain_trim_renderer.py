@@ -322,13 +322,7 @@ def _render_gain_trim(
         out_handle.setframerate(sample_rate_hz)
 
         for float_samples in float_samples_iter:
-            incoming_buffer = AudioBufferF64(
-                data=float_samples,
-                channels=source_frame_width,
-                channel_order=normalized_source_channel_order,
-                sample_rate_hz=sample_rate_hz,
-            )
-            pending_samples.extend(incoming_buffer.data)
+            pending_samples.extend(float_samples)
             aligned_sample_count = (
                 len(pending_samples) // source_frame_width
             ) * source_frame_width

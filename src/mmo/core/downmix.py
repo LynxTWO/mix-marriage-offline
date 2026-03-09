@@ -618,6 +618,8 @@ def _pearson(a: Any, b: Any, np_module: Any) -> float:
         )
     )
     if denom <= 0.0:
+        if bool(np_module.all(np_module.abs(a - b) <= 1e-12)):
+            return 1.0
         return 0.0
     corr = float(np_module.sum(a_centered * b_centered) / denom)
     if corr > 1.0:
@@ -961,8 +963,8 @@ def compare_rendered_surround_to_stereo_reference(
         "source_layout_id": source_layout_id,
         "target_layout_id": _TARGET_STEREO_LAYOUT_ID,
         "matrix_id": str(matrix.get("matrix_id") or ""),
-        "stereo_render_path": str(Path(stereo_render_file)),
-        "surround_render_path": str(Path(surround_render_file)),
+        "stereo_render_path": "",
+        "surround_render_path": "",
         "metrics": metrics,
         "thresholds": {
             "loudness_delta_warn_abs": float(loudness_delta_warn_abs),
@@ -1137,8 +1139,8 @@ def enforce_rendered_surround_similarity_gate(
         "gate_version": RENDERED_SIMILARITY_GATE_VERSION,
         "source_layout_id": source_layout_id,
         "target_layout_id": _TARGET_STEREO_LAYOUT_ID,
-        "stereo_render_path": str(Path(stereo_render_file)),
-        "surround_render_path": str(Path(surround_render_file)),
+        "stereo_render_path": "",
+        "surround_render_path": "",
         "fallback_applied": fallback_applied,
         "surround_backoff_db": float(surround_backoff_db) if fallback_applied else None,
         "attempts": attempts,
