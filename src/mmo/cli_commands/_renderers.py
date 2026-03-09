@@ -1037,6 +1037,141 @@ def _build_no_outputs_issue(
     return issue
 
 
+def _default_fallback_final(*, final_outcome: str) -> dict[str, Any]:
+    return {
+        "applied_steps": [],
+        "final_outcome": final_outcome,
+        "safety_collapse_applied": False,
+        "passed_layout_ids": [],
+        "failed_layout_ids": [],
+    }
+
+
+def _output_similarity_metadata(output: dict[str, Any]) -> dict[str, Any] | None:
+    metadata = output.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+    similarity = metadata.get("downmix_similarity_qa")
+    if isinstance(similarity, dict):
+        return similarity
+    return None
+
+
+def _collect_fallback_reporting(
+    *,
+    manifests: list[dict[str, Any]],
+    out_dir: Path | None,
+) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]]]:
+    attempts: list[dict[str, Any]] = []
+    applied_steps: list[str] = []
+    seen_steps: set[str] = set()
+    passed_layout_ids: list[str] = []
+    failed_layout_ids: list[str] = []
+    layout_summaries: list[dict[str, Any]] = []
+    safety_collapse_applied = False
+    saw_similarity_checks = False
+    saw_fallback_applied = False
+    issues: list[dict[str, Any]] = []
+
+    for manifest in manifests:
+        if not isinstance(manifest, dict):
+            continue
+        outputs = manifest.get("outputs")
+        if not isinstance(outputs, list):
+            continue
+        for output in outputs:
+            if not isinstance(output, dict):
+                continue
+            similarity = _output_similarity_metadata(output)
+            if not isinstance(similarity, dict):
+                continue
+            saw_similarity_checks = True
+            layout_id = (
+                _coerce_str(similarity.get("source_layout_id")).strip()
+                or _coerce_str(output.get("layout_id")).strip()
+            )
+            output_path = _coerce_str(output.get("file_path")).strip()
+            if output_path and out_dir is not None:
+                output_path = (out_dir / output_path).resolve().as_posix()
+            fallback_attempts = similarity.get("fallback_attempts")
+            if isinstance(fallback_attempts, list):
+                for attempt in fallback_attempts:
+                    if not isinstance(attempt, dict):
+                        continue
+                    row = json.loads(json.dumps(attempt))
+                    if layout_id and not _coerce_str(row.get("layout_id")).strip():
+                        row["layout_id"] = layout_id
+                    attempts.append(row)
+            fallback_final = similarity.get("fallback_final")
+            if isinstance(fallback_final, dict):
+                applied = fallback_final.get("applied_steps")
+                if isinstance(applied, list):
+                    for raw_step in applied:
+                        step_id = _coerce_str(raw_step).strip()
+                        if step_id and step_id not in seen_steps:
+                            seen_steps.add(step_id)
+                            applied_steps.append(step_id)
+                if fallback_final.get("safety_collapse_applied") is True:
+                    safety_collapse_applied = True
+                summary = {"layout_id": layout_id} if layout_id else {}
+                for key in ("final_outcome", "stop_reason", "applied_steps"):
+                    if key in fallback_final:
+                        summary[key] = fallback_final[key]
+                if summary:
+                    layout_summaries.append(summary)
+            if similarity.get("fallback_applied") is True:
+                saw_fallback_applied = True
+            if similarity.get("passed") is True:
+                if layout_id:
+                    passed_layout_ids.append(layout_id)
+                continue
+            if layout_id:
+                failed_layout_ids.append(layout_id)
+            issue: dict[str, Any] = {
+                "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
+                "severity": "error",
+                "message": (
+                    "Rendered surround similarity gate failed after deterministic fallback "
+                    f"for {layout_id or 'unknown_layout'}."
+                ),
+                "metric": "downmix_similarity_gate",
+                "value": "fail",
+                "threshold": "pass",
+            }
+            if layout_id:
+                issue["layout_id"] = layout_id
+            if output_path:
+                issue["output_path"] = output_path
+            issues.append(issue)
+
+    final_outcome = "not_run"
+    if failed_layout_ids:
+        final_outcome = "fail"
+    elif safety_collapse_applied:
+        final_outcome = "pass_with_safety_collapse"
+    elif saw_fallback_applied:
+        final_outcome = "pass"
+    elif saw_similarity_checks:
+        final_outcome = "not_needed"
+
+    fallback_final: dict[str, Any] = {
+        "applied_steps": applied_steps,
+        "final_outcome": final_outcome,
+        "safety_collapse_applied": safety_collapse_applied,
+        "passed_layout_ids": sorted(set(passed_layout_ids)),
+        "failed_layout_ids": sorted(set(failed_layout_ids)),
+    }
+    if layout_summaries:
+        fallback_final["layouts"] = sorted(
+            layout_summaries,
+            key=lambda row: (
+                _coerce_str(row.get("layout_id")).strip(),
+                _coerce_str(row.get("final_outcome")).strip(),
+            ),
+        )
+    return attempts, fallback_final, issues
+
+
 def _build_blocked_rec_summaries(recs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     blocked = [rec for rec in recs if rec.get("eligible_render") is not True]
     return [recommendation_snapshot(rec) for rec in blocked]
@@ -1938,6 +2073,8 @@ def _run_safe_render_command(
                     "applied_recommendations": [],
                     "renderer_manifests": [],
                     "qa_issues": [],
+                    "fallback_attempts": [],
+                    "fallback_final": _default_fallback_final(final_outcome="not_run"),
                     "notes": [
                         "preflight_blocked=true",
                         f"blocked_gates={', '.join(blocked_gates)}",
@@ -2148,6 +2285,8 @@ def _run_safe_render_command(
                 "applied_recommendations": [],
                 "renderer_manifests": [],
                 "qa_issues": [],
+                "fallback_attempts": [],
+                "fallback_final": _default_fallback_final(final_outcome="not_run"),
                 "notes": [
                     "dry_run=true: no audio was written",
                     f"target={target}",
@@ -2361,6 +2500,8 @@ def _run_safe_render_command(
         _check_cancel_requested(cancel_token=token, cancel_file=cancel_file)
         qa_payload: dict[str, Any] = {}
         qa_issues: list[dict[str, Any]] = []
+        fallback_attempts: list[dict[str, Any]] = []
+        fallback_final: dict[str, Any] = _default_fallback_final(final_outcome="not_run")
         if qa_out_path is not None or receipt_out_path is not None:
             output_entries = _collect_output_entries_from_manifests(manifests, out_dir)
             if output_entries:
@@ -2373,6 +2514,18 @@ def _run_safe_render_command(
                     "issues": [],
                     "thresholds": {},
                 }
+        fallback_attempts, fallback_final, fallback_issues = _collect_fallback_reporting(
+            manifests=manifests,
+            out_dir=out_dir,
+        )
+        if fallback_issues:
+            qa_issues.extend(fallback_issues)
+            qa_payload_issues = qa_payload.get("issues")
+            if isinstance(qa_payload_issues, list):
+                qa_payload_issues.extend(json.loads(json.dumps(fallback_issues)))
+        if qa_payload:
+            qa_payload["fallback_attempts"] = json.loads(json.dumps(fallback_attempts))
+            qa_payload["fallback_final"] = json.loads(json.dumps(fallback_final))
         if no_outputs_issue is not None:
             qa_issues.append(dict(no_outputs_issue))
             qa_payload_issues = qa_payload.get("issues")
@@ -2407,7 +2560,10 @@ def _run_safe_render_command(
 
         render_status = (
             "blocked"
-            if no_outputs_issue is not None and not allow_empty_outputs
+            if (
+                (no_outputs_issue is not None and not allow_empty_outputs)
+                or fallback_final.get("final_outcome") == "fail"
+            )
             else "completed"
         )
         applied_summaries = _build_applied_rec_summaries(
@@ -2445,6 +2601,8 @@ def _run_safe_render_command(
             "applied_recommendations": applied_summaries,
             "renderer_manifests": manifests,
             "qa_issues": qa_issues,
+            "fallback_attempts": fallback_attempts,
+            "fallback_final": fallback_final,
             "notes": [
                 f"target={target}",
                 f"profile_id={profile_id}",
@@ -2495,6 +2653,14 @@ def _run_safe_render_command(
             "lfe_corrective_refused="
             f"{len(lfe_corrective_summary.get('refused_recommendation_ids', []))}"
         )
+        if fallback_attempts:
+            receipt["notes"].append("fallback_applied=true")
+        if fallback_final.get("safety_collapse_applied") is True:
+            receipt["notes"].append("safety_collapse_applied=true")
+        receipt["notes"].append(
+            "fallback_final_outcome="
+            f"{_coerce_str(fallback_final.get('final_outcome')).strip() or 'not_run'}"
+        )
         if no_outputs_issue is not None:
             receipt["notes"].append(f"{ISSUE_RENDER_NO_OUTPUTS}: {_NO_OUTPUTS_WARNING_MESSAGE}")
         if binaural_target_requested and binaural_source_selection is not None:
@@ -2527,6 +2693,13 @@ def _run_safe_render_command(
             print(
                 "safe-render: failing because outputs=0"
                 " (override with --allow-empty-outputs).",
+                file=sys.stderr,
+            )
+            exit_code = 1
+        elif fallback_final.get("final_outcome") == "fail":
+            print(
+                "safe-render: failing because deterministic fallback sequence exhausted"
+                " without passing similarity QA.",
                 file=sys.stderr,
             )
             exit_code = 1

@@ -21,6 +21,7 @@ import tempfile
 import unittest
 import wave
 from pathlib import Path
+from unittest import mock
 
 import jsonschema
 
@@ -1013,6 +1014,145 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
                 self.assertIn("/buses/", file_path, f"unexpected bus path: {file_path}")
                 self.assertEqual(len(sha256), 64, "expected sha256 on bus artifact")
                 self.assertTrue((out_dir / file_path).is_file(), f"missing bus artifact: {file_path}")
+
+    def test_receipt_reports_deterministic_fallback_attempts(self) -> None:
+        schema = json.loads(
+            (_SCHEMAS_DIR / "safe_render_receipt.schema.json").read_text(encoding="utf-8")
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            report = _make_baseline_fixture_report()
+            report_path = temp / "report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            scene_path = _materialize_explicit_scene_fixture(scene_out_path=temp / "scene.json")
+            plugins_dir = _write_placement_only_plugins_dir(temp / "plugins")
+            out_dir = temp / "renders"
+            manifest_path = temp / "render_manifest.json"
+            receipt_path = temp / "receipt.json"
+
+            fail_result = {
+                "gate_id": "GATE.DOWNMIX_SIMILARITY_RENDER_COMPARE",
+                "gate_version": "1.0.0",
+                "source_layout_id": "LAYOUT.5_1",
+                "target_layout_id": "LAYOUT.2_0",
+                "matrix_id": "MATRIX.TEST.FAIL",
+                "passed": False,
+                "risk_level": "high",
+                "metrics": {
+                    "loudness_delta_lufs": 3.0,
+                    "correlation_over_time_min": 0.0,
+                    "spectral_distance_db": 8.0,
+                    "peak_delta_dbfs": 4.0,
+                    "true_peak_delta_dbtp": 3.0,
+                },
+                "thresholds": {
+                    "loudness_delta_warn_abs": 1.0,
+                    "correlation_time_warn_lte": 0.5,
+                    "spectral_distance_warn_db": 3.0,
+                    "peak_delta_warn_abs": 1.5,
+                    "true_peak_delta_warn_abs": 1.0,
+                },
+                "notes": ["forced_fail"],
+            }
+            pass_result = {
+                "gate_id": "GATE.DOWNMIX_SIMILARITY_RENDER_COMPARE",
+                "gate_version": "1.0.0",
+                "source_layout_id": "LAYOUT.5_1",
+                "target_layout_id": "LAYOUT.2_0",
+                "matrix_id": "MATRIX.TEST.PASS",
+                "passed": True,
+                "risk_level": "low",
+                "metrics": {
+                    "loudness_delta_lufs": 0.1,
+                    "correlation_over_time_min": 0.9,
+                    "spectral_distance_db": 0.2,
+                    "peak_delta_dbfs": 0.1,
+                    "true_peak_delta_dbtp": 0.1,
+                },
+                "thresholds": {
+                    "loudness_delta_warn_abs": 1.0,
+                    "correlation_time_warn_lte": 0.5,
+                    "spectral_distance_warn_db": 3.0,
+                    "peak_delta_warn_abs": 1.5,
+                    "true_peak_delta_warn_abs": 1.0,
+                },
+                "notes": ["forced_pass"],
+            }
+
+            with mock.patch(
+                "mmo.plugins.renderers.placement_mixdown_renderer.compare_rendered_surround_to_stereo_reference",
+                side_effect=[fail_result, pass_result],
+            ):
+                exit_code, _stdout, stderr = _run_main(
+                    [
+                        "safe-render",
+                        "--report",
+                        str(report_path),
+                        "--plugins",
+                        str(plugins_dir),
+                        "--scene",
+                        str(scene_path),
+                        "--target",
+                        "LAYOUT.2_0",
+                        "--out-dir",
+                        str(out_dir),
+                        "--out-manifest",
+                        str(manifest_path),
+                        "--receipt-out",
+                        str(receipt_path),
+                        "--export-layouts",
+                        "stereo,5.1",
+                    ]
+                )
+            self.assertEqual(exit_code, 0, msg=stderr)
+
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator(schema).validate(receipt)
+            self.assertEqual(receipt["fallback_final"]["final_outcome"], "pass")
+            attempts = receipt.get("fallback_attempts")
+            self.assertIsInstance(attempts, list)
+            if not isinstance(attempts, list):
+                return
+            self.assertGreaterEqual(len(attempts), 1)
+            self.assertEqual(attempts[0]["step_id"], "reduce_surround_and_wide")
+            self.assertIn("fallback_applied=true", receipt.get("notes", []))
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            placement_manifest = next(
+                (
+                    item
+                    for item in manifest.get("renderer_manifests", [])
+                    if isinstance(item, dict)
+                    and item.get("renderer_id") == "PLUGIN.RENDERER.PLACEMENT_MIXDOWN_V1"
+                ),
+                None,
+            )
+            self.assertIsInstance(placement_manifest, dict)
+            if not isinstance(placement_manifest, dict):
+                return
+            outputs = placement_manifest.get("outputs", [])
+            immersive_row = next(
+                (
+                    row
+                    for row in outputs
+                    if isinstance(row, dict)
+                    and row.get("layout_id") == "LAYOUT.5_1"
+                    and str(row.get("file_path", "")).endswith("/master.wav")
+                ),
+                None,
+            )
+            self.assertIsInstance(immersive_row, dict)
+            if not isinstance(immersive_row, dict):
+                return
+            metadata = immersive_row.get("metadata", {})
+            self.assertIsInstance(metadata, dict)
+            if not isinstance(metadata, dict):
+                return
+            self.assertIn("fallback_applied=true", metadata.get("manifest_tags", []))
 
     def test_scene_strict_rejects_missing_stems_or_roles(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

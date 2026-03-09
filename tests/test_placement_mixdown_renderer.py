@@ -878,20 +878,84 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
                 "enabled": True,
                 "mix": 0.7,
                 "qa_disable_on_fail": True,
-            }
+            },
+            "export_layout_ids": ["LAYOUT.2_0", "LAYOUT.5_1"],
         }
         forced_fail = {
             "gate_id": "GATE.DOWNMIX_SIMILARITY_RENDER_COMPARE",
+            "gate_version": "1.0.0",
+            "source_layout_id": "LAYOUT.5_1",
+            "target_layout_id": "LAYOUT.2_0",
             "passed": False,
             "risk_level": "high",
             "matrix_id": "MATRIX.TEST.FORCED_FAIL",
-            "metrics": {},
-            "thresholds": {},
-            "attempts": [{"passed": False}],
+            "metrics": {
+                "loudness_delta_lufs": 3.0,
+                "correlation_over_time_min": 0.0,
+                "spectral_distance_db": 8.0,
+                "peak_delta_dbfs": 4.0,
+                "true_peak_delta_dbtp": 3.0,
+            },
+            "thresholds": {
+                "loudness_delta_warn_abs": 1.0,
+                "correlation_time_warn_lte": 0.5,
+                "spectral_distance_warn_db": 3.0,
+                "peak_delta_warn_abs": 1.5,
+                "true_peak_delta_warn_abs": 1.0,
+            },
+            "notes": ["forced_fail"],
+        }
+        forced_fail_mid = {
+            **forced_fail,
+            "matrix_id": "MATRIX.TEST.FORCED_FAIL_MID",
+            "metrics": {
+                "loudness_delta_lufs": 2.0,
+                "correlation_over_time_min": 0.1,
+                "spectral_distance_db": 6.0,
+                "peak_delta_dbfs": 3.0,
+                "true_peak_delta_dbtp": 2.0,
+            },
+            "notes": ["forced_fail_mid"],
+        }
+        forced_fail_low = {
+            **forced_fail,
+            "matrix_id": "MATRIX.TEST.FORCED_FAIL_LOW",
+            "metrics": {
+                "loudness_delta_lufs": 1.2,
+                "correlation_over_time_min": 0.2,
+                "spectral_distance_db": 4.0,
+                "peak_delta_dbfs": 2.0,
+                "true_peak_delta_dbtp": 1.2,
+            },
+            "notes": ["forced_fail_low"],
+        }
+        forced_pass = {
+            "gate_id": "GATE.DOWNMIX_SIMILARITY_RENDER_COMPARE",
+            "gate_version": "1.0.0",
+            "source_layout_id": "LAYOUT.5_1",
+            "target_layout_id": "LAYOUT.2_0",
+            "passed": True,
+            "risk_level": "low",
+            "matrix_id": "MATRIX.TEST.FORCED_PASS",
+            "metrics": {
+                "loudness_delta_lufs": 0.1,
+                "correlation_over_time_min": 0.9,
+                "spectral_distance_db": 0.2,
+                "peak_delta_dbfs": 0.1,
+                "true_peak_delta_dbtp": 0.1,
+            },
+            "thresholds": {
+                "loudness_delta_warn_abs": 1.0,
+                "correlation_time_warn_lte": 0.5,
+                "spectral_distance_warn_db": 3.0,
+                "peak_delta_warn_abs": 1.5,
+                "true_peak_delta_warn_abs": 1.0,
+            },
+            "notes": ["forced_pass"],
         }
         with mock.patch(
-            "mmo.plugins.renderers.placement_mixdown_renderer.enforce_rendered_surround_similarity_gate",
-            return_value=forced_fail,
+            "mmo.plugins.renderers.placement_mixdown_renderer.compare_rendered_surround_to_stereo_reference",
+            side_effect=[forced_fail, forced_fail_mid, forced_fail_low, forced_pass],
         ):
             renderer = PlacementMixdownRenderer()
             manifest = renderer.render(session, [], self.out_dir / "decorrelated_disable")
@@ -911,8 +975,11 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
         self.assertTrue(bool(plugin_meta.get("requested")))
         self.assertFalse(bool(plugin_meta.get("active")))
         self.assertTrue(bool(plugin_meta.get("disabled_by_qa")))
-        self.assertIn("qa_gate_before_disable", plugin_meta)
-        self.assertIn("qa_gate_after_disable", plugin_meta)
+        qa_gate = plugin_meta.get("qa_gate")
+        self.assertIsInstance(qa_gate, dict)
+        if isinstance(qa_gate, dict):
+            fallback_final = qa_gate.get("fallback_final", {})
+            self.assertIn("disable_bed_polish", fallback_final.get("applied_steps", []))
 
     def test_renderer_decodes_mixed_lossless_formats_in_one_session(self) -> None:
         _write_mono_wav(self.stems_dir / "stem_wav.wav", freq_hz=130.0, amplitude=0.2)

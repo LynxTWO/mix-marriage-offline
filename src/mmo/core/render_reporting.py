@@ -1019,6 +1019,14 @@ def build_render_report_from_plan(
         "loudness_profile_receipt": loudness_profile_receipt,
         "policies_applied": policies_applied,
         "qa_gates": qa_gates,
+        "fallback_attempts": [],
+        "fallback_final": {
+            "applied_steps": [],
+            "final_outcome": "not_run",
+            "safety_collapse_applied": False,
+            "passed_layout_ids": [],
+            "failed_layout_ids": [],
+        },
         "request": request_summary,
         "schema_version": "0.1.0",
     }

@@ -84,6 +84,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Deterministic multi-step similarity fallback sequencing:
+  - Added `src/mmo/core/fallback_sequencer.py` and replaced the old one-shot rendered-similarity retry with an ordered, deterministic backoff sequence plus stop rules.
+  - Placement safe-render now records every fallback attempt with before/after QA metrics, aggregates those attempts into the safe-render receipt, tags manifests with `fallback_applied=true`, and hard-fails when the sequence is exhausted without a passing similarity result.
+  - Added focused regression coverage for sequencer stop conditions, rendered similarity fallback ordering, and safe-render receipt reporting.
+
 - Install/runtime dependency contract hardening:
   - NumPy now ships in the base Python dependency set, while the legacy
     `.[truth]` extra remains as a compatibility alias for older install docs.

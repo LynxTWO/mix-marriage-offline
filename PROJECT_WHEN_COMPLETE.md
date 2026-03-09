@@ -69,6 +69,7 @@ Note: schema contracts use `schemas/*.schema.json` naming (not `schemas/*.json`)
 - [x] Safety gates: hard failures and “fallback to safer routing” behavior are implemented.
 - [x] Downmix QA: renders pass similarity gates to stereo (and optional additional downmix targets).
 - [x] “Do no harm” defaults exist and are used when confidence is low.
+Done: rendered similarity fallback now uses a deterministic multi-step sequencer with explicit per-step reporting, receipt aggregation, and hard failure when safe backoffs are exhausted.
 
 #### 4.4.5 Five channel-ordering standards support (boundary convert + internal SMPTE)
 - [x] `ontology/layouts.yaml` has explicit `ordering_variants` for the 5 supported standards where applicable: SMPTE, FILM, LOGIC_PRO, VST3, AAF.

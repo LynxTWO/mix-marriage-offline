@@ -5,11 +5,16 @@ import json
 import math
 import shutil
 import wave
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Sequence
 
-from mmo.core.downmix import enforce_rendered_surround_similarity_gate
+from mmo.core.downmix import (
+    RENDERED_SIMILARITY_GATE_VERSION,
+    compare_rendered_surround_to_stereo_reference,
+    similarity_gate_score,
+)
+from mmo.core.fallback_sequencer import run_fallback_sequence
 from mmo.core.placement_policy import build_render_intent
 from mmo.core.scene_builder import build_scene_from_bus_plan, build_scene_from_session
 from mmo.dsp.buffer import AudioBufferF64, generic_channel_order
@@ -78,6 +83,13 @@ _BED_DECORRELATION_DEFAULT_QA_DISABLE_ON_FAIL = True
 _BED_DECORRELATION_DEFAULT_QA_SURROUND_BACKOFF_DB = -3.0
 _BED_DECORRELATION_MIN_BACKOFF_DB = -36.0
 _BED_DECORRELATION_MAX_BACKOFF_DB = 0.0
+_SIMILARITY_FALLBACK_SURROUND_STEP_DB = -3.0
+_SIMILARITY_FALLBACK_HEIGHT_STEP_DB = -3.0
+_SIMILARITY_FALLBACK_REAR_STEP_DB = -6.0
+_SIMILARITY_FALLBACK_DECORRELATION_MIX_DELTA = 0.16
+_SIMILARITY_FALLBACK_STOP_EPSILON = 0.01
+_SIMILARITY_FALLBACK_STOP_STAGNATION_LIMIT = 2
+_SIMILARITY_FALLBACK_MAX_STEPS = 6
 _DEFAULT_SUBBUS_EXPORT_IDS: tuple[str, ...] = (
     "BUS.DRUMS",
     "BUS.BASS",
@@ -193,6 +205,17 @@ class _ExportOptions:
     export_buses: bool
     export_master: bool
     export_layout_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class _LayoutFallbackState:
+    render_intent: dict[str, Any]
+    bed_decorrelation_options: _BedDecorrelatedOptions
+    enable_bed_decorrelation: bool
+    layout_outputs: tuple[dict[str, Any], ...] = ()
+    layout_notes: tuple[str, ...] = ()
+    needs_rerender: bool = False
+    safety_collapse_applied: bool = False
 
 
 def _json_clone(value: Any) -> Any:
@@ -2197,6 +2220,458 @@ def _bed_decorrelated_metadata(output_row: dict[str, Any] | None) -> dict[str, A
     return payload
 
 
+def _round_fallback_gain(value: float) -> float:
+    if value <= 0.0:
+        return 0.0
+    return round(float(value), 6)
+
+
+def _send_row_notes(row: dict[str, Any]) -> list[str]:
+    notes = row.get("notes")
+    if not isinstance(notes, list):
+        return []
+    return [
+        _coerce_str(item).strip()
+        for item in notes
+        if _coerce_str(item).strip()
+    ]
+
+
+def _send_row_is_bed(row: dict[str, Any]) -> bool:
+    return "source_kind:bed" in set(_send_row_notes(row))
+
+
+def _refresh_nonzero_channels(row: dict[str, Any], *, channel_order: list[str]) -> None:
+    gains = row.get("gains")
+    if not isinstance(gains, dict):
+        row["nonzero_channels"] = []
+        return
+    row["nonzero_channels"] = [
+        speaker_id
+        for speaker_id in channel_order
+        if _coerce_float(gains.get(speaker_id)) not in (None, 0.0)
+    ]
+
+
+def _step_scale_render_intent_gains(
+    state: _LayoutFallbackState,
+    *,
+    speaker_ids: frozenset[str],
+    gain_db: float,
+    change_kind: str,
+    row_filter: Callable[[dict[str, Any]], bool] | None = None,
+) -> tuple[_LayoutFallbackState, list[dict[str, Any]]]:
+    render_intent = _json_clone(state.render_intent)
+    channel_order = render_intent.get("channel_order")
+    if not isinstance(channel_order, list):
+        return state, []
+    stem_rows = render_intent.get("stem_sends")
+    if not isinstance(stem_rows, list):
+        return state, []
+
+    linear = _db_to_linear(gain_db)
+    changes: list[dict[str, Any]] = []
+    for row in stem_rows:
+        if not isinstance(row, dict):
+            continue
+        if row_filter is not None and not row_filter(row):
+            continue
+        gains = row.get("gains")
+        if not isinstance(gains, dict):
+            continue
+        stem_id = _coerce_str(row.get("stem_id")).strip()
+        for speaker_id in sorted(speaker_ids):
+            value = _coerce_float(gains.get(speaker_id))
+            if value is None or value <= 0.0:
+                continue
+            updated = _round_fallback_gain(value * linear)
+            if abs(updated - value) <= 1e-9:
+                continue
+            gains[speaker_id] = updated
+            changes.append(
+                {
+                    "change_kind": change_kind,
+                    "stem_id": stem_id,
+                    "speaker_id": speaker_id,
+                    "from": round(float(value), 6),
+                    "to": updated,
+                    "unit": "linear_gain",
+                }
+            )
+        _refresh_nonzero_channels(row, channel_order=channel_order)
+    if not changes:
+        return state, []
+    return (
+        replace(
+            state,
+            render_intent=render_intent,
+            needs_rerender=True,
+        ),
+        changes,
+    )
+
+
+def _step_zero_render_intent_gains(
+    state: _LayoutFallbackState,
+    *,
+    speaker_ids: frozenset[str],
+    change_kind: str,
+    row_filter: Callable[[dict[str, Any]], bool] | None = None,
+) -> tuple[_LayoutFallbackState, list[dict[str, Any]]]:
+    render_intent = _json_clone(state.render_intent)
+    channel_order = render_intent.get("channel_order")
+    if not isinstance(channel_order, list):
+        return state, []
+    stem_rows = render_intent.get("stem_sends")
+    if not isinstance(stem_rows, list):
+        return state, []
+
+    changes: list[dict[str, Any]] = []
+    for row in stem_rows:
+        if not isinstance(row, dict):
+            continue
+        if row_filter is not None and not row_filter(row):
+            continue
+        gains = row.get("gains")
+        if not isinstance(gains, dict):
+            continue
+        stem_id = _coerce_str(row.get("stem_id")).strip()
+        for speaker_id in sorted(speaker_ids):
+            value = _coerce_float(gains.get(speaker_id))
+            if value is None or value <= 0.0:
+                continue
+            gains[speaker_id] = 0.0
+            changes.append(
+                {
+                    "change_kind": change_kind,
+                    "stem_id": stem_id,
+                    "speaker_id": speaker_id,
+                    "from": round(float(value), 6),
+                    "to": 0.0,
+                    "unit": "linear_gain",
+                }
+            )
+        _refresh_nonzero_channels(row, channel_order=channel_order)
+    if not changes:
+        return state, []
+    return (
+        replace(
+            state,
+            render_intent=render_intent,
+            needs_rerender=True,
+        ),
+        changes,
+    )
+
+
+def _step_reduce_decorrelation_amount(
+    state: _LayoutFallbackState,
+) -> tuple[_LayoutFallbackState, list[dict[str, Any]]]:
+    if not state.enable_bed_decorrelation or state.bed_decorrelation_options.mix <= 0.0:
+        return state, []
+    reduced_mix = max(
+        0.0,
+        round(
+            state.bed_decorrelation_options.mix - _SIMILARITY_FALLBACK_DECORRELATION_MIX_DELTA,
+            6,
+        ),
+    )
+    if abs(reduced_mix - state.bed_decorrelation_options.mix) <= 1e-9:
+        return state, []
+    return (
+        replace(
+            state,
+            bed_decorrelation_options=replace(
+                state.bed_decorrelation_options,
+                mix=reduced_mix,
+            ),
+            enable_bed_decorrelation=reduced_mix > 0.0,
+            needs_rerender=True,
+        ),
+        [
+            {
+                "change_kind": "bed_decorrelation_mix",
+                "from": round(float(state.bed_decorrelation_options.mix), 6),
+                "to": reduced_mix,
+                "unit": "mix_ratio",
+            }
+        ],
+    )
+
+
+def _step_disable_bed_polish(
+    state: _LayoutFallbackState,
+) -> tuple[_LayoutFallbackState, list[dict[str, Any]]]:
+    if not state.enable_bed_decorrelation:
+        return state, []
+    return (
+        replace(
+            state,
+            enable_bed_decorrelation=False,
+            needs_rerender=True,
+        ),
+        [
+            {
+                "change_kind": "bed_decorrelation_enabled",
+                "from": True,
+                "to": False,
+                "unit": "boolean",
+            }
+        ],
+    )
+
+
+def _step_collapse_bed_to_front_only(
+    state: _LayoutFallbackState,
+) -> tuple[_LayoutFallbackState, list[dict[str, Any]]]:
+    collapsed_state, changes = _step_zero_render_intent_gains(
+        state,
+        speaker_ids=_SURROUND_CHANNEL_IDS | _OVERHEAD_CHANNEL_IDS,
+        change_kind="collapse_bed_to_front_only",
+        row_filter=_send_row_is_bed,
+    )
+    if not changes:
+        return collapsed_state, changes
+    return replace(collapsed_state, safety_collapse_applied=True), changes
+
+
+def _render_layout_fallback_state(
+    *,
+    state: _LayoutFallbackState,
+    session: Dict[str, Any],
+    layout_id: str,
+    output_dir: Path,
+    export_options: _ExportOptions,
+    stem_scene_refs: dict[str, dict[str, list[str]]],
+) -> _LayoutFallbackState:
+    if not state.needs_rerender and state.layout_outputs:
+        return state
+    if state.layout_outputs:
+        _remove_layout_output_files(
+            output_dir=output_dir,
+            layout_outputs=list(state.layout_outputs),
+        )
+    layout_outputs, layout_notes = _mix_layout_from_intent(
+        session=session,
+        render_intent=state.render_intent,
+        layout_id=layout_id,
+        output_dir=output_dir,
+        export_options=export_options,
+        stem_scene_refs=stem_scene_refs,
+        bed_decorrelation_options=state.bed_decorrelation_options,
+        enable_bed_decorrelation=state.enable_bed_decorrelation,
+    )
+    return replace(
+        state,
+        layout_outputs=tuple(layout_outputs),
+        layout_notes=tuple(layout_notes),
+        needs_rerender=False,
+    )
+
+
+def _layout_similarity_result(
+    *,
+    layout_id: str,
+    stereo_master_path: Path,
+    surround_master_path: Path,
+    sequence_report: dict[str, Any],
+    final_state: _LayoutFallbackState,
+) -> dict[str, Any]:
+    initial_qa = dict(sequence_report.get("initial_qa") or {})
+    fallback_attempts = [
+        dict(item)
+        for item in list(sequence_report.get("fallback_attempts") or [])
+        if isinstance(item, dict)
+    ]
+    fallback_final = dict(sequence_report.get("fallback_final") or {})
+    final_qa = dict(fallback_final.get("final_qa") or initial_qa)
+    attempts = [initial_qa] if initial_qa else []
+    attempts.extend(
+        dict(item.get("qa_after") or {})
+        for item in fallback_attempts
+        if isinstance(item, dict)
+    )
+    fallback_final["safety_collapse_applied"] = bool(final_state.safety_collapse_applied)
+    if (
+        fallback_final.get("final_outcome") == "pass"
+        and final_state.safety_collapse_applied
+    ):
+        fallback_final["final_outcome"] = "pass_with_safety_collapse"
+    return {
+        "gate_id": "GATE.DOWNMIX_SIMILARITY_RENDER_COMPARE",
+        "gate_version": RENDERED_SIMILARITY_GATE_VERSION,
+        "source_layout_id": layout_id,
+        "target_layout_id": "LAYOUT.2_0",
+        "stereo_render_path": stereo_master_path.resolve().as_posix(),
+        "surround_render_path": surround_master_path.resolve().as_posix(),
+        "fallback_applied": bool(sequence_report.get("fallback_applied")),
+        "attempts": attempts,
+        "fallback_attempts": fallback_attempts,
+        "fallback_final": fallback_final,
+        "passed": bool(final_qa.get("passed")),
+        "risk_level": _coerce_str(final_qa.get("risk_level")).strip() or "high",
+        "matrix_id": _coerce_str(final_qa.get("matrix_id")).strip(),
+        "metrics": dict(final_qa.get("metrics") or {}),
+        "thresholds": dict(final_qa.get("thresholds") or {}),
+        "notes": list(final_qa.get("notes") or []),
+    }
+
+
+def _attach_similarity_metadata(
+    *,
+    output_row: dict[str, Any] | None,
+    similarity_result: dict[str, Any],
+) -> None:
+    if not isinstance(output_row, dict):
+        return
+    metadata = output_row.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
+        output_row["metadata"] = metadata
+    metadata["downmix_similarity_qa"] = _json_clone(similarity_result)
+    manifest_tags = metadata.get("manifest_tags")
+    if isinstance(manifest_tags, list):
+        tags = [
+            _coerce_str(tag).strip()
+            for tag in manifest_tags
+            if _coerce_str(tag).strip()
+        ]
+    else:
+        tags = []
+    if similarity_result.get("fallback_applied") is True:
+        tags.append("fallback_applied=true")
+    fallback_final = similarity_result.get("fallback_final")
+    if isinstance(fallback_final, dict) and fallback_final.get("safety_collapse_applied") is True:
+        tags.append("safety_collapse_applied=true")
+    if tags:
+        metadata["manifest_tags"] = sorted(set(tags))
+
+
+def _run_layout_similarity_fallback_sequence(
+    *,
+    session: Dict[str, Any],
+    layout_id: str,
+    output_dir: Path,
+    export_options: _ExportOptions,
+    stem_scene_refs: dict[str, dict[str, list[str]]],
+    render_intent: dict[str, Any],
+    bed_decorrelation_options: _BedDecorrelatedOptions,
+    enable_bed_decorrelation: bool,
+    initial_layout_outputs: list[dict[str, Any]],
+    initial_layout_notes: list[str],
+    stereo_master_path: Path,
+) -> tuple[list[dict[str, Any]], list[str], dict[str, Any]]:
+    initial_state = _LayoutFallbackState(
+        render_intent=_json_clone(render_intent),
+        bed_decorrelation_options=bed_decorrelation_options,
+        enable_bed_decorrelation=enable_bed_decorrelation,
+        layout_outputs=tuple(_json_clone(initial_layout_outputs)),
+        layout_notes=tuple(initial_layout_notes),
+    )
+
+    def _render_fn(state: _LayoutFallbackState) -> _LayoutFallbackState:
+        return _render_layout_fallback_state(
+            state=state,
+            session=session,
+            layout_id=layout_id,
+            output_dir=output_dir,
+            export_options=export_options,
+            stem_scene_refs=stem_scene_refs,
+        )
+
+    def _qa_fn(state: _LayoutFallbackState) -> dict[str, Any]:
+        master_row = _master_output_row_for_layout(
+            layout_outputs=list(state.layout_outputs),
+            layout_id=layout_id,
+        )
+        master_path = _master_output_path(output_dir=output_dir, output_row=master_row)
+        if not isinstance(master_path, Path) or not master_path.exists():
+            raise ValueError(f"Missing master output for similarity QA: {layout_id}")
+        return compare_rendered_surround_to_stereo_reference(
+            stereo_render_file=stereo_master_path,
+            surround_render_file=master_path,
+            source_layout_id=layout_id,
+        )
+
+    final_state, sequence_report = run_fallback_sequence(
+        render_fn=_render_fn,
+        qa_fn=_qa_fn,
+        initial_state=initial_state,
+        steps=[
+            {
+                "step_id": "reduce_surround_and_wide",
+                "apply": lambda state: _step_scale_render_intent_gains(
+                    state,
+                    speaker_ids=_SURROUND_CHANNEL_IDS,
+                    gain_db=_SIMILARITY_FALLBACK_SURROUND_STEP_DB,
+                    change_kind="attenuate_surround_and_wide",
+                ),
+            },
+            {
+                "step_id": "reduce_height",
+                "apply": lambda state: _step_scale_render_intent_gains(
+                    state,
+                    speaker_ids=_OVERHEAD_CHANNEL_IDS,
+                    gain_db=_SIMILARITY_FALLBACK_HEIGHT_STEP_DB,
+                    change_kind="attenuate_height",
+                ),
+            },
+            {
+                "step_id": "reduce_decorrelation_amount",
+                "apply": _step_reduce_decorrelation_amount,
+            },
+            {
+                "step_id": "disable_bed_polish",
+                "apply": _step_disable_bed_polish,
+            },
+            {
+                "step_id": "front_bias_ambiguous_beds",
+                "apply": lambda state: _step_scale_render_intent_gains(
+                    state,
+                    speaker_ids=frozenset({"SPK.LRS", "SPK.RRS"}),
+                    gain_db=_SIMILARITY_FALLBACK_REAR_STEP_DB,
+                    change_kind="front_bias_ambiguous_beds",
+                    row_filter=_send_row_is_bed,
+                ),
+            },
+            {
+                "step_id": "collapse_bed_to_front_only",
+                "apply": _step_collapse_bed_to_front_only,
+            },
+        ],
+        stop_rule={
+            "max_steps": _SIMILARITY_FALLBACK_MAX_STEPS,
+            "improvement_epsilon": _SIMILARITY_FALLBACK_STOP_EPSILON,
+            "stagnation_limit": _SIMILARITY_FALLBACK_STOP_STAGNATION_LIMIT,
+            "score_fn": similarity_gate_score,
+        },
+    )
+    final_outputs = list(final_state.layout_outputs)
+    final_notes = list(final_state.layout_notes)
+    master_row = _master_output_row_for_layout(
+        layout_outputs=final_outputs,
+        layout_id=layout_id,
+    )
+    master_path = _master_output_path(output_dir=output_dir, output_row=master_row)
+    if not isinstance(master_path, Path) or not master_path.exists():
+        raise ValueError(f"Missing master output after fallback sequence: {layout_id}")
+    similarity_result = _layout_similarity_result(
+        layout_id=layout_id,
+        stereo_master_path=stereo_master_path,
+        surround_master_path=master_path,
+        sequence_report=sequence_report,
+        final_state=final_state,
+    )
+    _attach_similarity_metadata(output_row=master_row, similarity_result=similarity_result)
+    plugin_meta = _bed_decorrelated_metadata(master_row)
+    if isinstance(plugin_meta, dict):
+        plugin_meta["qa_gate"] = _json_clone(similarity_result)
+        applied_steps = set(similarity_result.get("fallback_final", {}).get("applied_steps", []))
+        if "disable_bed_polish" in applied_steps:
+            plugin_meta["disabled_by_qa"] = True
+    return final_outputs, final_notes, similarity_result
+
+
 class PlacementMixdownRenderer(RendererPlugin):
     plugin_id = _PLUGIN_ID
 
@@ -2291,119 +2766,72 @@ class PlacementMixdownRenderer(RendererPlugin):
             ):
                 stereo_master_path = layout_master_path
 
+            plugin_meta = _bed_decorrelated_metadata(layout_master_row)
             if (
                 layout_id != "LAYOUT.2_0"
                 and bed_decorrelation_options.enabled
                 and export_options.export_master
+                and isinstance(plugin_meta, dict)
+                and not enable_bed_decorrelation
             ):
-                plugin_meta = _bed_decorrelated_metadata(layout_master_row)
-                if isinstance(plugin_meta, dict) and not enable_bed_decorrelation:
-                    plugin_meta["requested"] = True
-                    plugin_meta["active"] = False
-                    if not isinstance(stereo_master_path, Path):
-                        plugin_meta["disabled_reason"] = "missing_stereo_reference"
-                    else:
-                        plugin_meta["disabled_reason"] = "qa_gate_not_enabled"
+                plugin_meta["requested"] = True
+                plugin_meta["active"] = False
+                if not isinstance(stereo_master_path, Path):
+                    plugin_meta["disabled_reason"] = "missing_stereo_reference"
+                else:
+                    plugin_meta["disabled_reason"] = "qa_gate_not_enabled"
 
-                should_run_gate = (
-                    isinstance(stereo_master_path, Path)
-                    and isinstance(layout_master_path, Path)
-                    and layout_master_path.exists()
-                    and isinstance(plugin_meta, dict)
-                    and bool(plugin_meta.get("active_stem_ids"))
-                    and enable_bed_decorrelation
-                )
-                gate_result: dict[str, Any] | None = None
-                gate_error: str | None = None
-                if should_run_gate:
-                    try:
-                        gate_result = enforce_rendered_surround_similarity_gate(
-                            stereo_render_file=stereo_master_path,
-                            surround_render_file=layout_master_path,
-                            source_layout_id=layout_id,
-                            surround_backoff_db=bed_decorrelation_options.qa.surround_backoff_db,
-                        )
-                    except (RuntimeError, ValueError, OSError) as exc:
-                        gate_error = str(exc)
-
-                    if gate_result is not None:
-                        plugin_meta["qa_gate"] = _json_clone(gate_result)
-                    elif gate_error is not None:
-                        plugin_meta["qa_gate"] = {
-                            "passed": False,
-                            "gate_error": gate_error,
-                        }
-
-                    gate_failed = (
-                        gate_error is not None
-                        or (
-                            isinstance(gate_result, dict)
-                            and not bool(gate_result.get("passed"))
-                        )
-                    )
-                    if gate_failed and bed_decorrelation_options.qa.disable_on_fail:
-                        notes.append(
-                            f"{layout_id}:decorrelated_bed_widening_disabled_after_qa_fail"
-                        )
-                        _remove_layout_output_files(
-                            output_dir=out_dir,
-                            layout_outputs=layout_outputs,
-                        )
-                        layout_outputs, rerender_notes = _mix_layout_from_intent(
+            if (
+                layout_id != "LAYOUT.2_0"
+                and export_options.export_master
+                and isinstance(stereo_master_path, Path)
+                and isinstance(layout_master_path, Path)
+                and layout_master_path.exists()
+            ):
+                try:
+                    layout_outputs, final_layout_notes, similarity_result = (
+                        _run_layout_similarity_fallback_sequence(
                             session=session,
-                            render_intent=render_intent,
                             layout_id=layout_id,
                             output_dir=out_dir,
                             export_options=export_options,
                             stem_scene_refs=stem_scene_refs,
+                            render_intent=render_intent,
                             bed_decorrelation_options=bed_decorrelation_options,
-                            enable_bed_decorrelation=False,
+                            enable_bed_decorrelation=enable_bed_decorrelation,
+                            initial_layout_outputs=layout_outputs,
+                            initial_layout_notes=layout_notes,
+                            stereo_master_path=stereo_master_path,
                         )
-                        if rerender_notes:
-                            notes.extend(rerender_notes)
-                        layout_master_row = _master_output_row_for_layout(
-                            layout_outputs=layout_outputs,
-                            layout_id=layout_id,
-                        )
-                        layout_master_path = _master_output_path(
-                            output_dir=out_dir,
-                            output_row=layout_master_row,
-                        )
-                        rerender_meta = _bed_decorrelated_metadata(layout_master_row)
-                        if isinstance(rerender_meta, dict):
-                            rerender_meta["requested"] = True
-                            rerender_meta["active"] = False
-                            rerender_meta["disabled_by_qa"] = True
-                            if gate_result is not None:
-                                rerender_meta["qa_gate_before_disable"] = _json_clone(
-                                    gate_result
-                                )
-                            if gate_error is not None:
-                                rerender_meta["qa_gate_error"] = gate_error
-                        if (
-                            isinstance(stereo_master_path, Path)
-                            and isinstance(layout_master_path, Path)
-                            and layout_master_path.exists()
-                            and isinstance(rerender_meta, dict)
-                        ):
-                            try:
-                                rerender_gate = enforce_rendered_surround_similarity_gate(
-                                    stereo_render_file=stereo_master_path,
-                                    surround_render_file=layout_master_path,
-                                    source_layout_id=layout_id,
-                                    surround_backoff_db=(
-                                        bed_decorrelation_options.qa.surround_backoff_db
-                                    ),
-                                )
-                            except (RuntimeError, ValueError, OSError) as exc:
-                                rerender_meta["qa_gate_after_disable"] = {
-                                    "passed": False,
-                                    "gate_error": str(exc),
-                                }
-                            else:
-                                rerender_meta["qa_gate_after_disable"] = _json_clone(
-                                    rerender_gate
-                                )
+                    )
+                except (RuntimeError, ValueError, OSError) as exc:
+                    if isinstance(plugin_meta, dict):
+                        plugin_meta["qa_gate"] = {
+                            "passed": False,
+                            "gate_error": str(exc),
+                        }
+                    notes.append(f"{layout_id}:downmix_similarity_qa_error")
+                else:
+                    if final_layout_notes:
+                        notes.extend(final_layout_notes)
+                    layout_master_row = _master_output_row_for_layout(
+                        layout_outputs=layout_outputs,
+                        layout_id=layout_id,
+                    )
+                    layout_master_path = _master_output_path(
+                        output_dir=out_dir,
+                        output_row=layout_master_row,
+                    )
+                    if similarity_result.get("fallback_applied") is True:
+                        notes.append(f"{layout_id}:fallback_applied")
+                    fallback_final = similarity_result.get("fallback_final")
+                    if (
+                        isinstance(fallback_final, dict)
+                        and fallback_final.get("safety_collapse_applied") is True
+                    ):
+                        notes.append(f"{layout_id}:safety_collapse_applied")
+                    if not bool(similarity_result.get("passed")):
+                        notes.append(f"{layout_id}:downmix_similarity_gate_failed_after_fallback")
 
             if layout_outputs:
                 outputs.extend(layout_outputs)

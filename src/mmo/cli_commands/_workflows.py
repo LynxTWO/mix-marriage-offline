@@ -825,6 +825,8 @@ def _run_render_many_downmix_similarity_gates(
             "metrics": gate_result.get("metrics"),
             "thresholds": gate_result.get("thresholds"),
             "attempts": gate_result.get("attempts"),
+            "fallback_attempts": gate_result.get("fallback_attempts"),
+            "fallback_final": gate_result.get("fallback_final"),
         }
         variant_id = _coerce_str(row.get("variant_id")).strip()
         if variant_id:

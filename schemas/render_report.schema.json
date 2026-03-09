@@ -10,7 +10,9 @@
     "request",
     "jobs",
     "policies_applied",
-    "qa_gates"
+    "qa_gates",
+    "fallback_attempts",
+    "fallback_final"
   ],
   "properties": {
     "schema_version": { "const": "0.1.0" },
@@ -22,6 +24,11 @@
     "loudness_profile_receipt": { "$ref": "#/$defs/loudness_profile_receipt" },
     "policies_applied": { "$ref": "#/$defs/policies_applied" },
     "qa_gates": { "$ref": "#/$defs/qa_gates" },
+    "fallback_attempts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/fallback_attempt" }
+    },
+    "fallback_final": { "$ref": "#/$defs/fallback_final" },
     "stage_metrics": {
       "type": "array",
       "items": { "$ref": "#/$defs/stage_metric_entry" }
@@ -641,6 +648,50 @@
         "details": {
           "type": "object",
           "additionalProperties": true
+        }
+      }
+    },
+    "fallback_attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["step_id", "changes", "qa_before", "qa_after", "result"],
+      "properties": {
+        "layout_id": { "$ref": "#/$defs/layout_id" },
+        "step_id": { "type": "string", "minLength": 1 },
+        "changes": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        },
+        "qa_before": { "type": "object", "additionalProperties": true },
+        "qa_after": { "type": "object", "additionalProperties": true },
+        "result": {
+          "type": "string",
+          "enum": ["pass", "improved", "no_improvement"]
+        },
+        "improvement": { "type": "number" }
+      }
+    },
+    "fallback_final": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["applied_steps", "final_outcome", "safety_collapse_applied"],
+      "properties": {
+        "applied_steps": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "final_outcome": {
+          "type": "string",
+          "enum": ["not_run", "not_needed", "pass", "pass_with_safety_collapse", "fail"]
+        },
+        "safety_collapse_applied": { "type": "boolean" },
+        "passed_layout_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/layout_id" }
+        },
+        "failed_layout_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/layout_id" }
         }
       }
     },

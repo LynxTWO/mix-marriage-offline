@@ -26,6 +26,7 @@ import wave
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+from mmo.core.fallback_sequencer import run_fallback_sequence
 from mmo.core.loudness_methods import DEFAULT_LOUDNESS_METHOD_ID
 from mmo.dsp.downmix import (
     apply_matrix_to_audio,
@@ -59,6 +60,14 @@ _BACKOFF_SPK_IDS: frozenset[str] = frozenset(
         "SPK.RW",
     }
 )
+_SURROUND_AND_WIDE_SPK_IDS: frozenset[str] = frozenset(
+    {"SPK.LS", "SPK.RS", "SPK.LRS", "SPK.RRS", "SPK.LW", "SPK.RW"}
+)
+_HEIGHT_SPK_IDS: frozenset[str] = frozenset(
+    {"SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR", "SPK.TFC", "SPK.TBC"}
+)
+_REAR_SPK_IDS: frozenset[str] = frozenset({"SPK.LRS", "SPK.RRS"})
+_FRONT_SAFE_SPK_IDS: frozenset[str] = frozenset({"SPK.L", "SPK.R", "SPK.C"})
 _SUPPORTED_SURROUND_FALLBACK_LAYOUTS: frozenset[str] = frozenset(
     {
         "LAYOUT.5_1",
@@ -817,6 +826,40 @@ def _compute_rendered_similarity_metrics(
     }
 
 
+def similarity_gate_score(result: Dict[str, Any]) -> float:
+    metrics = result.get("metrics")
+    thresholds = result.get("thresholds")
+    if not isinstance(metrics, dict) or not isinstance(thresholds, dict):
+        return 0.0 if bool(result.get("passed")) else 1.0
+
+    penalty = 0.0
+    loudness_delta = metrics.get("loudness_delta_lufs")
+    loudness_warn = thresholds.get("loudness_delta_warn_abs")
+    if isinstance(loudness_delta, (int, float)) and isinstance(loudness_warn, (int, float)):
+        penalty += max(0.0, abs(float(loudness_delta)) - float(loudness_warn))
+
+    corr_min = metrics.get("correlation_over_time_min")
+    corr_warn = thresholds.get("correlation_time_warn_lte")
+    if isinstance(corr_min, (int, float)) and isinstance(corr_warn, (int, float)):
+        penalty += max(0.0, float(corr_warn) - float(corr_min))
+
+    spectral_distance = metrics.get("spectral_distance_db")
+    spectral_warn = thresholds.get("spectral_distance_warn_db")
+    if isinstance(spectral_distance, (int, float)) and isinstance(spectral_warn, (int, float)):
+        penalty += max(0.0, float(spectral_distance) - float(spectral_warn))
+
+    peak_delta = metrics.get("peak_delta_dbfs")
+    peak_warn = thresholds.get("peak_delta_warn_abs")
+    if isinstance(peak_delta, (int, float)) and isinstance(peak_warn, (int, float)):
+        penalty += max(0.0, abs(float(peak_delta)) - float(peak_warn))
+
+    true_peak_delta = metrics.get("true_peak_delta_dbtp")
+    true_peak_warn = thresholds.get("true_peak_delta_warn_abs")
+    if isinstance(true_peak_delta, (int, float)) and isinstance(true_peak_warn, (int, float)):
+        penalty += max(0.0, abs(float(true_peak_delta)) - float(true_peak_warn))
+    return round(float(penalty), 6)
+
+
 def compare_rendered_surround_to_stereo_reference(
     *,
     stereo_render_file: Path,
@@ -984,7 +1027,12 @@ def compare_rendered_surround_to_stereo_reference(
     }
 
 
-def _surround_channel_indices(layout_id: str, channel_count: int) -> List[int]:
+def _layout_channel_indices(
+    layout_id: str,
+    channel_count: int,
+    *,
+    speaker_ids: frozenset[str],
+) -> List[int]:
     from mmo.core.layout_negotiation import get_layout_channel_order
 
     order = get_layout_channel_order(layout_id)
@@ -994,14 +1042,32 @@ def _surround_channel_indices(layout_id: str, channel_count: int) -> List[int]:
         index
         for index, speaker_id in enumerate(order)
         if isinstance(speaker_id, str)
-        and speaker_id in _BACKOFF_SPK_IDS
+        and speaker_id in speaker_ids
         and index < channel_count
     ]
+    return sorted(indices)
+
+
+def _surround_channel_indices(layout_id: str, channel_count: int) -> List[int]:
+    indices = _layout_channel_indices(
+        layout_id,
+        channel_count,
+        speaker_ids=_BACKOFF_SPK_IDS,
+    )
     if not indices:
         raise ValueError(
             f"Layout {layout_id} has no fallback backoff channel indices within {channel_count} channels."
         )
-    return sorted(indices)
+    return indices
+
+
+def _layout_channel_order(layout_id: str) -> List[str]:
+    from mmo.core.layout_negotiation import get_layout_channel_order
+
+    order = get_layout_channel_order(layout_id)
+    if not isinstance(order, list) or not order:
+        raise ValueError(f"Unable to resolve channel order for layout: {layout_id}")
+    return [str(item) for item in order if isinstance(item, str)]
 
 
 def _attenuate_wav_channels_inplace(
@@ -1058,6 +1124,72 @@ def _attenuate_wav_channels_inplace(
         raise
 
 
+def _zero_wav_channels_inplace(
+    *,
+    wav_path: Path,
+    channel_indices: List[int],
+) -> None:
+    from mmo.dsp.io import read_wav_metadata
+    from mmo.dsp.meters import iter_wav_float64_samples
+
+    metadata = read_wav_metadata(wav_path)
+    channels = int(metadata.get("channels", 0) or 0)
+    sample_rate_hz = int(metadata.get("sample_rate_hz", 0) or 0)
+    if channels <= 0 or sample_rate_hz <= 0:
+        raise ValueError(f"Invalid WAV metadata for attenuation: {wav_path}")
+    target_indices = {index for index in channel_indices if 0 <= index < channels}
+    if not target_indices:
+        raise ValueError("No valid surround channels available for attenuation.")
+
+    tmp_path = wav_path.parent / f"{wav_path.name}.mmo_retry.tmp"
+    try:
+        with wave.open(str(tmp_path), "wb") as handle:
+            handle.setnchannels(channels)
+            handle.setsampwidth(3)
+            handle.setframerate(sample_rate_hz)
+            for chunk in iter_wav_float64_samples(
+                wav_path,
+                error_context="downmix similarity fallback zero",
+            ):
+                if not chunk:
+                    continue
+                total = len(chunk) - (len(chunk) % channels)
+                if total <= 0:
+                    continue
+                adjusted: List[float] = list(chunk[:total])
+                frames = total // channels
+                for frame_index in range(frames):
+                    base = frame_index * channels
+                    for channel_index in target_indices:
+                        adjusted[base + channel_index] = 0.0
+                handle.writeframes(_float_samples_to_pcm24_bytes(adjusted))
+        tmp_path.replace(wav_path)
+    except Exception:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def _fallback_step_row(
+    *,
+    channel_ids: list[str],
+    change_kind: str,
+    gain_db_delta: float | None = None,
+) -> list[dict[str, Any]]:
+    if not channel_ids:
+        return []
+    payload: dict[str, Any] = {
+        "change_kind": change_kind,
+        "channel_ids": channel_ids,
+    }
+    if gain_db_delta is not None:
+        payload["gain_db_delta"] = round(float(gain_db_delta), 6)
+    return [payload]
+
+
 def enforce_rendered_surround_similarity_gate(
     *,
     stereo_render_file: Path,
@@ -1065,6 +1197,8 @@ def enforce_rendered_surround_similarity_gate(
     source_layout_id: str,
     policy_id: Optional[str] = None,
     surround_backoff_db: float = -3.0,
+    height_backoff_db: float | None = None,
+    rear_backoff_db: float | None = None,
     loudness_delta_warn_abs: float = 1.0,
     loudness_delta_error_abs: float = 2.0,
     correlation_time_warn_lte: float = 0.5,
@@ -1076,64 +1210,194 @@ def enforce_rendered_surround_similarity_gate(
     true_peak_delta_warn_abs: float = 1.0,
     true_peak_delta_error_abs: float = 2.0,
 ) -> Dict[str, Any]:
-    """Run rendered similarity gate and apply a single deterministic fallback pass.
-
-    Fallback is layout-scoped to 5.1/7.1/7.1.4/7.1.6/9.1.6 and attenuates one pass of
-    surround/height/wide channels.
-    """
-    first = compare_rendered_surround_to_stereo_reference(
-        stereo_render_file=stereo_render_file,
-        surround_render_file=surround_render_file,
-        source_layout_id=source_layout_id,
-        policy_id=policy_id,
-        loudness_delta_warn_abs=loudness_delta_warn_abs,
-        loudness_delta_error_abs=loudness_delta_error_abs,
-        correlation_time_warn_lte=correlation_time_warn_lte,
-        correlation_time_error_lte=correlation_time_error_lte,
-        spectral_distance_warn_db=spectral_distance_warn_db,
-        spectral_distance_error_db=spectral_distance_error_db,
-        peak_delta_warn_abs=peak_delta_warn_abs,
-        peak_delta_error_abs=peak_delta_error_abs,
-        true_peak_delta_warn_abs=true_peak_delta_warn_abs,
-        true_peak_delta_error_abs=true_peak_delta_error_abs,
+    """Run rendered similarity gate with a deterministic multi-step fallback sequence."""
+    resolved_height_backoff_db = (
+        float(surround_backoff_db)
+        if height_backoff_db is None
+        else float(height_backoff_db)
     )
-    attempts = [dict(first)]
-    fallback_applied = False
+    resolved_rear_backoff_db = (
+        float(surround_backoff_db)
+        if rear_backoff_db is None
+        else float(rear_backoff_db)
+    )
 
+    qa_kwargs = {
+        "stereo_render_file": stereo_render_file,
+        "surround_render_file": surround_render_file,
+        "source_layout_id": source_layout_id,
+        "policy_id": policy_id,
+        "loudness_delta_warn_abs": loudness_delta_warn_abs,
+        "loudness_delta_error_abs": loudness_delta_error_abs,
+        "correlation_time_warn_lte": correlation_time_warn_lte,
+        "correlation_time_error_lte": correlation_time_error_lte,
+        "spectral_distance_warn_db": spectral_distance_warn_db,
+        "spectral_distance_error_db": spectral_distance_error_db,
+        "peak_delta_warn_abs": peak_delta_warn_abs,
+        "peak_delta_error_abs": peak_delta_error_abs,
+        "true_peak_delta_warn_abs": true_peak_delta_warn_abs,
+        "true_peak_delta_error_abs": true_peak_delta_error_abs,
+    }
+
+    surround_data = _load_wav_frames_float64(Path(surround_render_file))
+    channel_count = int(surround_data["channels"])
+    channel_order = _layout_channel_order(source_layout_id)
+
+    state = {
+        "stereo_render_file": Path(stereo_render_file),
+        "surround_render_file": Path(surround_render_file),
+        "source_layout_id": source_layout_id,
+        "channel_count": channel_count,
+        "channel_order": channel_order,
+        "safety_collapse_applied": False,
+    }
+
+    def _qa_fn(_: dict[str, Any]) -> dict[str, Any]:
+        return compare_rendered_surround_to_stereo_reference(**qa_kwargs)
+
+    def _render_fn(current_state: dict[str, Any]) -> dict[str, Any]:
+        return current_state
+
+    def _channel_ids_for_indices(indices: List[int]) -> list[str]:
+        order = state["channel_order"]
+        return [
+            str(order[index])
+            for index in indices
+            if 0 <= index < len(order)
+        ]
+
+    def _make_attenuation_step(
+        *,
+        step_id: str,
+        speaker_ids: frozenset[str],
+        gain_db: float,
+        change_kind: str,
+    ) -> dict[str, Any]:
+        def _apply(current_state: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+            indices = _layout_channel_indices(
+                source_layout_id,
+                int(current_state["channel_count"]),
+                speaker_ids=speaker_ids,
+            )
+            if not indices:
+                return current_state, []
+            _attenuate_wav_channels_inplace(
+                wav_path=Path(current_state["surround_render_file"]),
+                channel_indices=indices,
+                gain_db=gain_db,
+            )
+            return current_state, _fallback_step_row(
+                channel_ids=_channel_ids_for_indices(indices),
+                change_kind=change_kind,
+                gain_db_delta=gain_db,
+            )
+
+        return {"step_id": step_id, "apply": _apply}
+
+    def _collapse_to_front_only(
+        current_state: dict[str, Any],
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        indices = [
+            index
+            for index in range(int(current_state["channel_count"]))
+            if index >= len(current_state["channel_order"])
+            or current_state["channel_order"][index] not in _FRONT_SAFE_SPK_IDS
+            and not _is_lfe_speaker_id(current_state["channel_order"][index])
+        ]
+        if not indices:
+            return current_state, []
+        _zero_wav_channels_inplace(
+            wav_path=Path(current_state["surround_render_file"]),
+            channel_indices=indices,
+        )
+        next_state = dict(current_state)
+        next_state["safety_collapse_applied"] = True
+        return next_state, _fallback_step_row(
+            channel_ids=_channel_ids_for_indices(indices),
+            change_kind="zero_channels",
+        )
+
+    sequence_report: dict[str, Any]
+    final_state: dict[str, Any] = dict(state)
+    if source_layout_id in _SUPPORTED_SURROUND_FALLBACK_LAYOUTS:
+        final_state, sequence_report = run_fallback_sequence(
+            render_fn=_render_fn,
+            qa_fn=_qa_fn,
+            initial_state=state,
+            steps=[
+                _make_attenuation_step(
+                    step_id="reduce_surround_and_wide",
+                    speaker_ids=_SURROUND_AND_WIDE_SPK_IDS,
+                    gain_db=float(surround_backoff_db),
+                    change_kind="attenuate_surround_and_wide",
+                ),
+                _make_attenuation_step(
+                    step_id="reduce_height",
+                    speaker_ids=_HEIGHT_SPK_IDS,
+                    gain_db=resolved_height_backoff_db,
+                    change_kind="attenuate_height",
+                ),
+                _make_attenuation_step(
+                    step_id="front_bias_ambiguous_beds",
+                    speaker_ids=_REAR_SPK_IDS,
+                    gain_db=resolved_rear_backoff_db,
+                    change_kind="attenuate_rear",
+                ),
+                {
+                    "step_id": "collapse_bed_to_front_only",
+                    "apply": _collapse_to_front_only,
+                },
+            ],
+            stop_rule={
+                "max_steps": 4,
+                "improvement_epsilon": 0.01,
+                "stagnation_limit": 2,
+                "score_fn": similarity_gate_score,
+            },
+        )
+    else:
+        first = _qa_fn(state)
+        sequence_report = {
+            "initial_qa": first,
+            "fallback_applied": False,
+            "fallback_attempts": [],
+            "fallback_final": {
+                "applied_steps": [],
+                "final_outcome": "not_needed" if bool(first.get("passed")) else "fail",
+                "stop_reason": "layout_not_supported",
+                "attempt_count": 0,
+                "final_qa": first,
+                "safety_collapse_applied": False,
+            },
+        }
+
+    fallback_attempts = list(sequence_report.get("fallback_attempts") or [])
+    final = dict(sequence_report.get("fallback_final", {}).get("final_qa") or {})
+    if not final:
+        final = dict(sequence_report.get("initial_qa") or {})
+    attempts = [dict(sequence_report.get("initial_qa") or final)]
+    attempts.extend(
+        dict(item.get("qa_after") or {})
+        for item in fallback_attempts
+        if isinstance(item, dict)
+    )
+    fallback_applied = bool(sequence_report.get("fallback_applied"))
+    fallback_final = dict(sequence_report.get("fallback_final") or {})
+    fallback_final["safety_collapse_applied"] = bool(
+        final_state.get("safety_collapse_applied")
+        or fallback_final.get("safety_collapse_applied")
+        or any(
+            isinstance(item, dict)
+            and str(item.get("step_id") or "").strip() == "collapse_bed_to_front_only"
+            for item in fallback_attempts
+        )
+    )
     if (
-        not bool(first.get("passed"))
-        and source_layout_id in _SUPPORTED_SURROUND_FALLBACK_LAYOUTS
+        fallback_final.get("final_outcome") == "pass"
+        and bool(fallback_final.get("safety_collapse_applied"))
     ):
-        surround_data = _load_wav_frames_float64(Path(surround_render_file))
-        channel_indices = _surround_channel_indices(
-            source_layout_id,
-            int(surround_data["channels"]),
-        )
-        _attenuate_wav_channels_inplace(
-            wav_path=Path(surround_render_file),
-            channel_indices=channel_indices,
-            gain_db=surround_backoff_db,
-        )
-        fallback_applied = True
-        second = compare_rendered_surround_to_stereo_reference(
-            stereo_render_file=stereo_render_file,
-            surround_render_file=surround_render_file,
-            source_layout_id=source_layout_id,
-            policy_id=policy_id,
-            loudness_delta_warn_abs=loudness_delta_warn_abs,
-            loudness_delta_error_abs=loudness_delta_error_abs,
-            correlation_time_warn_lte=correlation_time_warn_lte,
-            correlation_time_error_lte=correlation_time_error_lte,
-            spectral_distance_warn_db=spectral_distance_warn_db,
-            spectral_distance_error_db=spectral_distance_error_db,
-            peak_delta_warn_abs=peak_delta_warn_abs,
-            peak_delta_error_abs=peak_delta_error_abs,
-            true_peak_delta_warn_abs=true_peak_delta_warn_abs,
-            true_peak_delta_error_abs=true_peak_delta_error_abs,
-        )
-        attempts.append(dict(second))
+        fallback_final["final_outcome"] = "pass_with_safety_collapse"
 
-    final = attempts[-1]
     return {
         "gate_id": "GATE.DOWNMIX_SIMILARITY_RENDER_COMPARE",
         "gate_version": RENDERED_SIMILARITY_GATE_VERSION,
@@ -1150,4 +1414,6 @@ def enforce_rendered_surround_similarity_gate(
         "metrics": dict(final.get("metrics") or {}),
         "thresholds": dict(final.get("thresholds") or {}),
         "notes": list(final.get("notes") or []),
+        "fallback_attempts": fallback_attempts,
+        "fallback_final": fallback_final,
     }
