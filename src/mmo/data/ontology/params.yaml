@@ -130,6 +130,16 @@ params:
         - "high_pass"
         - "band_pass"
 
+  PARAM.EQ.PHASE_MODE:
+    label: "Phase mode"
+    description: "Filter phase mode for deterministic corrective filtering."
+    value_type: "string"
+    unit_id: "UNIT.NONE"
+    constraints:
+      enum:
+        - "minimum_phase"
+        - "linear_phase"
+
   PARAM.EQ.FREQ_HZ:
     label: "Frequency"
     description: "Center/cutoff frequency of the EQ band."

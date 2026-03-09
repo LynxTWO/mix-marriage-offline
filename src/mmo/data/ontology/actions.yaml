@@ -257,6 +257,48 @@ actions:
     allowed_granularity: ["full", "time_range"]
     gates: ["GATE.REQUIRES_APPROVAL", "GATE.MAX_EQ_BANDS"]
 
+  ACTION.FILTER.HPF:
+    label: "Corrective HPF"
+    description: "Apply an approval-gated corrective high-pass filter with explicit phase mode."
+    required_params: ["PARAM.EQ.FREQ_HZ", "PARAM.EQ.SLOPE_DB_PER_OCT", "PARAM.EQ.PHASE_MODE"]
+    optional_params: ["PARAM.EQ.Q", "PARAM.EQ.GAIN_DB", "PARAM.SURROUND.SPEAKER_ID", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "medium"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["channel", "full", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.MAX_EQ_BANDS"]
+    notes:
+      - "Post-apply QA must re-check translation before the filter is accepted."
+
+  ACTION.FILTER.LPF:
+    label: "Corrective LPF"
+    description: "Apply an approval-gated corrective low-pass filter with explicit phase mode."
+    required_params: ["PARAM.EQ.FREQ_HZ", "PARAM.EQ.SLOPE_DB_PER_OCT", "PARAM.EQ.PHASE_MODE"]
+    optional_params: ["PARAM.EQ.Q", "PARAM.EQ.GAIN_DB", "PARAM.SURROUND.SPEAKER_ID", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "medium"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["channel", "full", "time_range"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.MAX_EQ_BANDS"]
+    notes:
+      - "Post-apply QA must re-check translation before the filter is accepted."
+
+  ACTION.FILTER.BELL:
+    label: "Corrective bell filter"
+    description: "Apply an approval-gated corrective bell filter with explicit phase mode."
+    required_params: ["PARAM.EQ.FREQ_HZ", "PARAM.EQ.Q", "PARAM.EQ.GAIN_DB", "PARAM.EQ.PHASE_MODE"]
+    optional_params: ["PARAM.EQ.SLOPE_DB_PER_OCT", "PARAM.SURROUND.SPEAKER_ID", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "medium"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["channel", "full", "time_range", "band"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.MAX_EQ_BANDS", "GATE.MAX_EQ_GAIN_DB"]
+    notes:
+      - "Post-apply QA must re-check translation before the filter is accepted."
+
   ACTION.EQ.LOW_SHELF:
     label: "Low shelf"
     description: "Apply a low-shelf boost or cut."
@@ -562,6 +604,25 @@ actions:
       - "Positive gain raises LFE; negative gain trims it."
       - "Check that post-gain true-peak stays within LFE ceiling (GATE.LFE_TRUEPEAK_CEILING)."
       - "Consider +10 dB LFE playback boost on consumer systems when setting target level."
+
+  ACTION.LFE.CORRECTIVE_FILTER:
+    label: "LFE corrective filter"
+    description: >
+      Apply an approval-gated corrective filter to explicit LFE content only.
+      MMO must re-run translation QA after applying and refuse or step down the
+      filter if the downmix result gets worse.
+    required_params: ["PARAM.EQ.TYPE", "PARAM.EQ.FREQ_HZ", "PARAM.EQ.SLOPE_DB_PER_OCT", "PARAM.EQ.Q", "PARAM.EQ.GAIN_DB", "PARAM.EQ.PHASE_MODE"]
+    optional_params: ["PARAM.SURROUND.SPEAKER_ID", "PARAM.TIME.START_S", "PARAM.TIME.END_S"]
+    default_risk: "high"
+    requires_approval_default: true
+    auto_apply_eligible: false
+    allowed_scopes: ["stem", "bus"]
+    allowed_granularity: ["channel", "full"]
+    gates: ["GATE.REQUIRES_APPROVAL", "GATE.MAX_EQ_BANDS", "GATE.MAX_EQ_GAIN_DB"]
+    notes:
+      - "Never silently fold or reroute explicit LFE program into mains."
+      - "Explain the correction in musician language and include rollback details."
+      - "Re-run downmix similarity, phase-risk, and loudness QA after applying."
 
   # -------------------------
   # Target / Normalization (optional mastering-ish)

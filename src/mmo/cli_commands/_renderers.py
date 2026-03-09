@@ -1050,6 +1050,8 @@ def _build_eligible_rec_summaries(recs: list[dict[str, Any]]) -> list[dict[str, 
 def _build_applied_rec_summaries(
     recs: list[dict[str, Any]],
     manifests: list[dict[str, Any]],
+    *,
+    extra_received_ids: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     received_ids: set[str] = set()
     for manifest in manifests:
@@ -1062,6 +1064,10 @@ def _build_applied_rec_summaries(
             rec_id = _coerce_str(raw_id).strip()
             if rec_id:
                 received_ids.add(rec_id)
+    for raw_id in extra_received_ids or []:
+        rec_id = _coerce_str(raw_id).strip()
+        if rec_id:
+            received_ids.add(rec_id)
 
     applied = [
         rec
@@ -1070,6 +1076,350 @@ def _build_applied_rec_summaries(
         and _coerce_str(rec.get("recommendation_id")).strip() in received_ids
     ]
     return [recommendation_snapshot(rec) for rec in applied]
+
+
+def _output_channel_order(output: dict[str, Any]) -> list[str]:
+    metadata = output.get("metadata")
+    if isinstance(metadata, dict):
+        channel_order = metadata.get("channel_order")
+        if isinstance(channel_order, list):
+            normalized = [
+                _coerce_str(item).strip()
+                for item in channel_order
+                if _coerce_str(item).strip()
+            ]
+            if normalized:
+                return normalized
+        layout_id = _coerce_str(metadata.get("layout_id")).strip()
+        if layout_id:
+            from mmo.core.layout_negotiation import get_layout_channel_order  # noqa: WPS433
+
+            layout_channel_order = get_layout_channel_order(layout_id)
+            if isinstance(layout_channel_order, list):
+                return [
+                    _coerce_str(item).strip()
+                    for item in layout_channel_order
+                    if _coerce_str(item).strip()
+                ]
+
+    layout_id = _coerce_str(output.get("layout_id")).strip()
+    if layout_id:
+        from mmo.core.layout_negotiation import get_layout_channel_order  # noqa: WPS433
+
+        layout_channel_order = get_layout_channel_order(layout_id)
+        if isinstance(layout_channel_order, list):
+            return [
+                _coerce_str(item).strip()
+                for item in layout_channel_order
+                if _coerce_str(item).strip()
+            ]
+    return []
+
+
+def _resolve_output_file_path(
+    output: dict[str, Any],
+    *,
+    out_dir: Path,
+) -> Path | None:
+    file_path_value = _coerce_str(output.get("file_path")).strip()
+    if not file_path_value:
+        return None
+    candidate = Path(file_path_value)
+    if candidate.is_absolute():
+        return candidate
+    return out_dir / candidate
+
+
+def _lfe_corrective_seed(*parts: str) -> int:
+    import hashlib  # noqa: WPS433
+
+    digest = hashlib.sha256(":".join(parts).encode("utf-8")).hexdigest()
+    return int(digest[:8], 16)
+
+
+def _output_export_seed_and_policy(output: dict[str, Any]) -> tuple[int | None, str | None]:
+    receipt = output.get("export_finalization_receipt")
+    if not isinstance(receipt, dict):
+        return None, None
+    dither_policy = _coerce_str(receipt.get("dither_policy")).strip() or None
+    seed_derivation = receipt.get("seed_derivation")
+    if not isinstance(seed_derivation, dict):
+        return None, dither_policy
+    job_id = _coerce_str(seed_derivation.get("job_id")).strip()
+    layout_id = _coerce_str(seed_derivation.get("layout_id")).strip()
+    render_seed_raw = seed_derivation.get("render_seed")
+    render_seed = (
+        int(render_seed_raw)
+        if isinstance(render_seed_raw, int) and not isinstance(render_seed_raw, bool)
+        else 0
+    )
+    if not job_id or not layout_id:
+        return None, dither_policy
+    from mmo.dsp.export_finalize import derive_export_finalization_seed  # noqa: WPS433
+
+    seed = derive_export_finalization_seed(
+        job_id=job_id,
+        layout_id=layout_id,
+        stem_id=_coerce_str(seed_derivation.get("stem_id")).strip() or None,
+        render_seed=render_seed,
+    )
+    return seed, dither_policy
+
+
+def _apply_lfe_corrective_postprocess(
+    *,
+    manifests: list[dict[str, Any]],
+    recs: list[dict[str, Any]],
+    out_dir: Path,
+    session_payload: dict[str, Any],
+    explicit_lfe_ids: list[str],
+) -> dict[str, Any]:
+    import tempfile  # noqa: WPS433
+
+    from mmo.core.lfe_corrective import (  # noqa: WPS433
+        append_note,
+        compare_filtered_output_to_baseline,
+        corrective_filter_candidates,
+        corrective_filter_spec_from_recommendation,
+        recommendation_targets_explicit_lfe,
+        write_filtered_lfe_wav,
+    )
+    from mmo.dsp.io import sha256_file  # noqa: WPS433
+
+    approved_corrective_recs = [
+        rec
+        for rec in recs
+        if rec.get("eligible_render") is True
+        and rec.get("approved_by_user") is True
+        and corrective_filter_spec_from_recommendation(rec) is not None
+    ]
+    approved_corrective_recs.sort(
+        key=lambda rec: _coerce_str(rec.get("recommendation_id")).strip()
+    )
+    summary: dict[str, Any] = {
+        "applied_recommendation_ids": [],
+        "refused_recommendation_ids": [],
+        "qa_rerun_count": 0,
+        "post_manifest": None,
+    }
+    if not approved_corrective_recs:
+        return summary
+
+    post_manifest: dict[str, Any] = {
+        "renderer_id": "PLUGIN.RENDERER.LFE_CORRECTIVE_POST",
+        "outputs": [],
+        "received_recommendation_ids": [],
+        "skipped": [],
+        "notes": "post_render_lfe_corrective_filters",
+    }
+
+    for rec in approved_corrective_recs:
+        rec_id = _coerce_str(rec.get("recommendation_id")).strip()
+        action_id = _coerce_str(rec.get("action_id")).strip()
+        scope = rec.get("scope") if isinstance(rec.get("scope"), dict) else {}
+        target_stem_id = _coerce_str(scope.get("stem_id")).strip()
+        filter_spec = corrective_filter_spec_from_recommendation(rec)
+        if filter_spec is None:
+            post_manifest["skipped"].append(
+                {
+                    "recommendation_id": rec_id,
+                    "action_id": action_id,
+                    "reason": "unsupported_filter_spec",
+                    "gate_summary": "",
+                }
+            )
+            continue
+
+        candidate_outputs: list[dict[str, Any]] = []
+        for manifest in manifests:
+            if not isinstance(manifest, dict):
+                continue
+            outputs = manifest.get("outputs")
+            if not isinstance(outputs, list):
+                continue
+            for output in outputs:
+                if not isinstance(output, dict):
+                    continue
+                if target_stem_id and _coerce_str(output.get("target_stem_id")).strip() != target_stem_id:
+                    continue
+                candidate_outputs.append(output)
+
+        if not candidate_outputs:
+            post_manifest["skipped"].append(
+                {
+                    "recommendation_id": rec_id,
+                    "action_id": action_id,
+                    "reason": "missing_target_output",
+                    "gate_summary": "",
+                }
+            )
+            continue
+
+        rec_applied = False
+        refusal_attempts: list[dict[str, Any]] = []
+        explicit_lfe_target = recommendation_targets_explicit_lfe(rec, explicit_lfe_ids)
+        for output in candidate_outputs:
+            output_path = _resolve_output_file_path(output, out_dir=out_dir)
+            if output_path is None or not output_path.exists():
+                post_manifest["skipped"].append(
+                    {
+                        "recommendation_id": rec_id,
+                        "action_id": action_id,
+                        "reason": "missing_output_file",
+                        "gate_summary": "",
+                    }
+                )
+                continue
+
+            channel_order = _output_channel_order(output)
+            if not channel_order or not any(
+                speaker_id.upper().startswith("SPK.LFE")
+                for speaker_id in channel_order
+            ):
+                post_manifest["skipped"].append(
+                    {
+                        "recommendation_id": rec_id,
+                        "action_id": action_id,
+                        "reason": (
+                            "explicit_lfe_no_silent_fix"
+                            if explicit_lfe_target
+                            else "no_lfe_output_channel"
+                        ),
+                        "gate_summary": "",
+                    }
+                )
+                continue
+
+            layout_id = (
+                _coerce_str(output.get("layout_id")).strip()
+                or _coerce_str(
+                    (output.get("metadata") or {}).get("layout_id")
+                    if isinstance(output.get("metadata"), dict)
+                    else ""
+                ).strip()
+                or _coerce_str(session_payload.get("target_layout_id")).strip()
+            )
+            if not layout_id:
+                post_manifest["skipped"].append(
+                    {
+                        "recommendation_id": rec_id,
+                        "action_id": action_id,
+                        "reason": "missing_layout_id",
+                        "gate_summary": "",
+                    }
+                )
+                continue
+
+            for attempt_index, candidate in enumerate(
+                corrective_filter_candidates(filter_spec),
+                start=1,
+            ):
+                with tempfile.TemporaryDirectory(
+                    dir=output_path.parent,
+                    prefix=".mmo_lfe_corrective_",
+                ) as temp_dir:
+                    temp_output = Path(temp_dir) / output_path.name
+                    seed, dither_policy = _output_export_seed_and_policy(output)
+                    if seed is None:
+                        seed = _lfe_corrective_seed(
+                            rec_id,
+                            _coerce_str(output.get("output_id")).strip(),
+                            str(attempt_index),
+                        )
+                    wrote_output = write_filtered_lfe_wav(
+                        source_path=output_path,
+                        output_path=temp_output,
+                        channel_order=channel_order,
+                        filter_spec=candidate,
+                        seed=seed,
+                        dither_policy=dither_policy,
+                    )
+                    if not wrote_output:
+                        continue
+                    qa_compare = compare_filtered_output_to_baseline(
+                        baseline_surround_path=output_path,
+                        candidate_surround_path=temp_output,
+                        source_layout_id=layout_id,
+                    )
+                    summary["qa_rerun_count"] += 1
+                    refusal_attempts.append(
+                        {
+                            "attempt": attempt_index,
+                            "filter_spec": dict(candidate),
+                            "qa_compare": qa_compare,
+                        }
+                    )
+                    if not qa_compare.get("passed"):
+                        continue
+                    temp_output.replace(output_path)
+                    output["sha256"] = sha256_file(output_path)
+                    output["notes"] = append_note(
+                        output.get("notes"),
+                        (
+                            f"LFE corrective filter applied: {rec_id} "
+                            f"({candidate['filter_type']} @ {candidate['cutoff_hz']} Hz)."
+                        ),
+                    )
+                    metadata = output.get("metadata")
+                    if not isinstance(metadata, dict):
+                        metadata = {}
+                        output["metadata"] = metadata
+                    metadata["lfe_corrective_filter"] = dict(candidate)
+                    metadata["lfe_corrective_qa"] = qa_compare
+                    metadata["lfe_corrective_recommendation_id"] = rec_id
+                    post_manifest["received_recommendation_ids"].append(rec_id)
+                    summary["applied_recommendation_ids"].append(rec_id)
+                    rec_applied = True
+                    break
+            if rec_applied:
+                break
+
+        if not rec_applied:
+            post_manifest["skipped"].append(
+                {
+                    "recommendation_id": rec_id,
+                    "action_id": action_id,
+                    "reason": "refused_worsened_qa",
+                    "gate_summary": "",
+                    "details": {"attempts": refusal_attempts},
+                }
+            )
+            summary["refused_recommendation_ids"].append(rec_id)
+
+    post_manifest["received_recommendation_ids"] = sorted(
+        {
+            _coerce_str(rec_id).strip()
+            for rec_id in post_manifest.get("received_recommendation_ids", [])
+            if _coerce_str(rec_id).strip()
+        }
+    )
+    skipped = post_manifest.get("skipped")
+    if isinstance(skipped, list):
+        skipped.sort(
+            key=lambda item: (
+                _coerce_str(item.get("recommendation_id")),
+                _coerce_str(item.get("action_id")),
+                _coerce_str(item.get("reason")),
+            )
+        )
+    if post_manifest["received_recommendation_ids"] or post_manifest["skipped"]:
+        manifests.append(post_manifest)
+        summary["post_manifest"] = post_manifest
+    summary["applied_recommendation_ids"] = sorted(
+        {
+            _coerce_str(rec_id).strip()
+            for rec_id in summary["applied_recommendation_ids"]
+            if _coerce_str(rec_id).strip()
+        }
+    )
+    summary["refused_recommendation_ids"] = sorted(
+        {
+            _coerce_str(rec_id).strip()
+            for rec_id in summary["refused_recommendation_ids"]
+            if _coerce_str(rec_id).strip()
+        }
+    )
+    return summary
 
 
 def _json_clone(value: Any) -> Any:
@@ -1357,6 +1707,12 @@ def _run_safe_render_command(
         choose_binaural_source_layout,
         is_binaural_layout,
     )
+    from mmo.core.lfe_corrective import (  # noqa: WPS433
+        append_note,
+        corrective_filter_spec_from_recommendation,
+        explicit_lfe_stem_ids,
+        recommendation_targets_explicit_lfe,
+    )
     from mmo.core.pipeline import (  # noqa: WPS433
         build_deliverables_for_renderer_manifests,
         load_plugins,
@@ -1449,6 +1805,7 @@ def _run_safe_render_command(
         if not isinstance(session_payload, dict):
             session_payload = {}
             report["session"] = session_payload
+        explicit_lfe_ids = explicit_lfe_stem_ids(session_payload)
         (
             scene_payload_for_render,
             scene_locks_payload,
@@ -1569,11 +1926,16 @@ def _run_safe_render_command(
                     "approved_by": [],
                     "recommendations_summary": {
                         "total": 0,
+                        "eligible": 0,
                         "auto_eligible": 0,
                         "approved_by_user": 0,
                         "blocked": 0,
+                        "applied": 0,
                     },
+                    "eligible_recommendations": [],
+                    "approved_by_user": [],
                     "blocked_recommendations": [],
+                    "applied_recommendations": [],
                     "renderer_manifests": [],
                     "qa_issues": [],
                     "notes": [
@@ -1699,6 +2061,18 @@ def _run_safe_render_command(
             ]
         if isinstance(scene_payload_for_render, dict):
             apply_recommendation_precedence(scene_payload_for_render, recs)
+        for rec in recs:
+            if not recommendation_targets_explicit_lfe(rec, explicit_lfe_ids):
+                continue
+            if corrective_filter_spec_from_recommendation(rec) is None:
+                continue
+            rec["notes"] = append_note(
+                rec.get("notes"),
+                (
+                    "Explicit LFE stem detected; MMO will not silently fold or "
+                    "reroute this content into mains."
+                ),
+            )
 
         approve_all, explicit_approved_ids, approve_list = _collect_approval_inputs(
             approve=approve,
@@ -1804,6 +2178,11 @@ def _run_safe_render_command(
                     ),
                 ],
             }
+            if explicit_lfe_ids:
+                receipt["notes"].append(
+                    f"explicit_lfe_stems={','.join(sorted(explicit_lfe_ids))}"
+                )
+                receipt["notes"].append("explicit_lfe_no_silent_fix=true")
             if binaural_target_requested and binaural_source_selection is not None:
                 receipt["notes"].append(
                     "binaural_source_layout="
@@ -1866,12 +2245,36 @@ def _run_safe_render_command(
                 locks_path=scene_locks_path,
             )
             session_payload["scene_payload"] = _json_clone(scene_payload_for_render)
+        render_report = _json_clone(report)
+        postprocess_rec_ids = {
+            _coerce_str(rec.get("recommendation_id")).strip()
+            for rec in recs
+            if rec.get("eligible_render") is True
+            and rec.get("approved_by_user") is True
+            and corrective_filter_spec_from_recommendation(rec) is not None
+            and _coerce_str(rec.get("recommendation_id")).strip()
+        }
+        render_report_recommendations = render_report.get("recommendations")
+        if isinstance(render_report_recommendations, list) and postprocess_rec_ids:
+            for render_rec in render_report_recommendations:
+                if not isinstance(render_rec, dict):
+                    continue
+                rec_id = _coerce_str(render_rec.get("recommendation_id")).strip()
+                if rec_id in postprocess_rec_ids:
+                    render_rec["eligible_render"] = False
         renderer_output_formats = ["wav"] if binaural_target_requested else output_formats
         source_manifests = run_renderers(
-            report,
+            render_report,
             plugins,
             output_dir=out_dir,
             output_formats=renderer_output_formats,
+        )
+        lfe_corrective_summary = _apply_lfe_corrective_postprocess(
+            manifests=source_manifests,
+            recs=recs,
+            out_dir=out_dir,
+            session_payload=session_payload,
+            explicit_lfe_ids=explicit_lfe_ids,
         )
         manifests = source_manifests
         preview_output_count = 0
@@ -1884,6 +2287,8 @@ def _run_safe_render_command(
                 source_layout_id=binaural_source_selection.source_layout_id,
                 output_formats=output_formats,
             )
+            if isinstance(lfe_corrective_summary.get("post_manifest"), dict):
+                manifests.append(lfe_corrective_summary["post_manifest"])
             preview_output_count = int(binaural_counts.get("outputs", 0))
             preview_skipped_count = int(binaural_counts.get("skipped", 0))
         elif preview_headphones:
@@ -2005,7 +2410,15 @@ def _run_safe_render_command(
             if no_outputs_issue is not None and not allow_empty_outputs
             else "completed"
         )
-        applied_summaries = _build_applied_rec_summaries(recs, manifests)
+        applied_summaries = _build_applied_rec_summaries(
+            recs,
+            manifests,
+            extra_received_ids=list(
+                lfe_corrective_summary.get("applied_recommendation_ids", [])
+                if isinstance(lfe_corrective_summary, dict)
+                else []
+            ),
+        )
         receipt = {
             "schema_version": "0.1.0",
             "receipt_id": receipt_id,
@@ -2058,13 +2471,30 @@ def _run_safe_render_command(
                 f"export_buses={'true' if export_buses else 'false'}",
                 f"export_master={'true' if export_master else 'false'}",
                 (
-                    "export_layout_ids="
-                    f"{','.join(resolved_export_layout_ids)}"
-                    if resolved_export_layout_ids
-                    else "export_layout_ids=all"
-                ),
+                "export_layout_ids="
+                f"{','.join(resolved_export_layout_ids)}"
+                if resolved_export_layout_ids
+                else "export_layout_ids=all"
+            ),
             ],
         }
+        if explicit_lfe_ids:
+            receipt["notes"].append(
+                f"explicit_lfe_stems={','.join(sorted(explicit_lfe_ids))}"
+            )
+            receipt["notes"].append("explicit_lfe_no_silent_fix=true")
+        receipt["notes"].append(
+            "lfe_corrective_qa_rerun_count="
+            f"{int(lfe_corrective_summary.get('qa_rerun_count', 0) or 0)}"
+        )
+        receipt["notes"].append(
+            "lfe_corrective_applied="
+            f"{len(lfe_corrective_summary.get('applied_recommendation_ids', []))}"
+        )
+        receipt["notes"].append(
+            "lfe_corrective_refused="
+            f"{len(lfe_corrective_summary.get('refused_recommendation_ids', []))}"
+        )
         if no_outputs_issue is not None:
             receipt["notes"].append(f"{ISSUE_RENDER_NO_OUTPUTS}: {_NO_OUTPUTS_WARNING_MESSAGE}")
         if binaural_target_requested and binaural_source_selection is not None:

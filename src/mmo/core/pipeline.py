@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import importlib
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Sequence
+from typing import Any, Dict, Iterable, List, Mapping, Sequence
 
 from mmo.core.deliverables import (
     build_deliverables_from_outputs,
@@ -782,6 +782,34 @@ def build_deliverables_for_renderer_manifests(
     return build_deliverables_from_outputs(outputs)
 
 
+def _issue_identity_key(issue: Mapping[str, Any]) -> tuple[Any, ...]:
+    target = issue.get("target")
+    target_mapping = target if isinstance(target, Mapping) else {}
+    return (
+        _coerce_str(issue.get("issue_id")),
+        _coerce_str(target_mapping.get("scope")),
+        _coerce_str(target_mapping.get("stem_id")),
+        _coerce_str(target_mapping.get("bus_id")),
+        _coerce_str(target_mapping.get("layout_id")),
+        _coerce_str(target_mapping.get("speaker_id")),
+        _coerce_int(target_mapping.get("channel_index")),
+    )
+
+
+def _dedupe_issues(issues: Sequence[Any]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+    for issue in issues:
+        if not isinstance(issue, dict):
+            continue
+        issue_key = _issue_identity_key(issue)
+        if issue_key in seen:
+            continue
+        seen.add(issue_key)
+        deduped.append(issue)
+    return deduped
+
+
 def run_detectors(session_report: Dict[str, Any], plugins: Sequence[PluginEntry]) -> None:
     session = session_report.get("session") or {}
     features = session_report.get("features") or {}
@@ -792,7 +820,7 @@ def run_detectors(session_report: Dict[str, Any], plugins: Sequence[PluginEntry]
         plugin_issues = _call_detector(plugin.instance, session, features)
         if plugin_issues:
             issues.extend(plugin_issues)
-    session_report["issues"] = issues
+    session_report["issues"] = _dedupe_issues(issues)
 
 
 def run_resolvers(session_report: Dict[str, Any], plugins: Sequence[PluginEntry]) -> None:

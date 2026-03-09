@@ -63,6 +63,12 @@ def recommendation_impact(rec: Mapping[str, Any]) -> str:
 
 
 def recommendation_requires_user_approval(rec: Mapping[str, Any]) -> bool:
+    action_id = _coerce_str(rec.get("action_id")).strip()
+    if action_id:
+        from mmo.core.lfe_corrective import is_lfe_corrective_action_id  # noqa: WPS433
+
+        if is_lfe_corrective_action_id(action_id):
+            return True
     return bool(rec.get("requires_approval")) or recommendation_impact(rec) in _APPROVAL_IMPACTS
 
 

@@ -1,0 +1,11 @@
+plugin_id: "PLUGIN.RESOLVER.LFE_CORRECTIVE"
+plugin_type: "resolver"
+name: "LFE Corrective Resolver"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Emits approval-gated LFE corrective filter recommendations with rollback and post-apply QA expectations."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "mmo.plugins.resolvers.lfe_corrective_resolver:LfeCorrectiveResolver"
+capabilities:
+  - "ACTION.LFE.CORRECTIVE_FILTER"

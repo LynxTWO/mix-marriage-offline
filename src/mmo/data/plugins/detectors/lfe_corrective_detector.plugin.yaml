@@ -1,0 +1,13 @@
+plugin_id: "PLUGIN.DETECTOR.LFE_CORRECTIVE"
+plugin_type: "detector"
+name: "LFE Corrective Detector"
+version: "0.1.0"
+license: "Apache-2.0"
+description: "Flags measured LFE out-of-band, infrasonic, and excessive low-band content that require approval-gated corrective filtering."
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "mmo.plugins.detectors.lfe_corrective_detector:LfeCorrectiveDetector"
+capabilities:
+  - "ISSUE.LFE.OUT_OF_BAND_HIGH"
+  - "ISSUE.LFE.INFRASONIC_RUMBLE"
+  - "ISSUE.LFE.MAINS_RATIO_EXCESS"
