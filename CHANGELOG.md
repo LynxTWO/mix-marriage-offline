@@ -84,6 +84,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Tauri desktop Firefox CI parity + ontology validator robustness:
+  - Fixed the `gui/desktop-tauri` design-system surface so required widgets
+    stay fully on-screen at the tested mobile viewport in Firefox, including
+    the preset browser and responsive dashboard/readout layout.
+  - Fixed Firefox fine-adjust drag behavior by using stable active-drag
+    modifier state and preserving control viewport position across exact-entry
+    focus/blur, so fine drags remain smaller than coarse drags at the tested
+    115% scale.
+  - Hardened `tools/validate_ontology_changes.py` for Windows and CI by
+    decoding git subprocess output explicitly as UTF-8, keeping stdout/stderr
+    string-safe before YAML parsing, and emitting one clear error per base-ref
+    load failure (`base ref missing`, `file missing`, `git show failed`,
+    `YAML parse/decode failed`) without contradictory follow-on noise.
+
 - Test-suite stabilization and render-report back-compat:
   - Added repo-root `pytest.ini` discovery hygiene so `pytest -q` only
     collects the project `tests/` tree and ignores scratch/venv/build dirs

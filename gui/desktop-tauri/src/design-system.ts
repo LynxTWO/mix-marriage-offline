@@ -29,6 +29,7 @@ type DragState = {
   startFocusPan: number
   startTrimDb: number
   startWidthDb: number
+  target: HTMLElement
   startX: number
   startY: number
 }
@@ -149,6 +150,7 @@ const state = {
 }
 
 let dragState: DragState | null = null
+let inputViewportRestore: { anchor: HTMLElement; top: number } | null = null
 
 function requiredElement<T extends HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector)
@@ -180,6 +182,10 @@ function currentPreset(): PresetSpec {
 
 function isFineAdjust(event?: Pick<KeyboardEvent | PointerEvent, "ctrlKey" | "shiftKey">): boolean {
   return Boolean(event?.shiftKey || event?.ctrlKey || state.modifierDown)
+}
+
+function syncModifierState(event?: Pick<KeyboardEvent, "ctrlKey" | "shiftKey">): void {
+  state.modifierDown = Boolean(event?.shiftKey || event?.ctrlKey)
 }
 
 function updateFineAdjustIndicator(): void {
@@ -361,6 +367,8 @@ function startDrag(kind: DragKind, event: PointerEvent): void {
   if (!(target instanceof HTMLElement)) {
     return
   }
+  event.preventDefault()
+  state.modifierDown = state.modifierDown || event.shiftKey || event.ctrlKey
   dragState = {
     kind,
     pointerId: event.pointerId,
@@ -369,6 +377,7 @@ function startDrag(kind: DragKind, event: PointerEvent): void {
     startFocusPan: state.focusPan,
     startTrimDb: state.trimDb,
     startWidthDb: state.widthDb,
+    target,
     startX: event.clientX,
     startY: event.clientY,
   }
@@ -434,6 +443,9 @@ function endDrag(event: PointerEvent): void {
   if (dragState === null || dragState.pointerId !== event.pointerId) {
     return
   }
+  if (dragState.target.hasPointerCapture(event.pointerId)) {
+    dragState.target.releasePointerCapture(event.pointerId)
+  }
   dragState = null
   state.fineAdjustContext = null
   updateFineAdjustIndicator()
@@ -441,20 +453,54 @@ function endDrag(event: PointerEvent): void {
 
 function bindModifierFeedback(): void {
   window.addEventListener("keydown", (event) => {
-    if (!isFineAdjust(event)) {
+    if (!event.shiftKey && !event.ctrlKey) {
       return
     }
-    state.modifierDown = true
+    syncModifierState(event)
     updateFineAdjustIndicator()
   })
 
-  window.addEventListener("keyup", () => {
+  window.addEventListener("keyup", (event) => {
+    syncModifierState(event)
+    if (dragState === null) {
+      state.fineAdjustContext = null
+    }
+    updateFineAdjustIndicator()
+  })
+
+  window.addEventListener("blur", () => {
     state.modifierDown = false
     if (dragState === null) {
       state.fineAdjustContext = null
     }
     updateFineAdjustIndicator()
   })
+}
+
+function resetViewportForScreenChange(): void {
+  document.documentElement.scrollTop = 0
+  document.body.scrollTop = 0
+  window.scrollTo(0, 0)
+}
+
+function rememberAnchorViewportPosition(anchor: HTMLElement): void {
+  inputViewportRestore = {
+    anchor,
+    top: anchor.getBoundingClientRect().top,
+  }
+}
+
+function restoreAnchorViewportPosition(): void {
+  if (inputViewportRestore === null) {
+    return
+  }
+  const { anchor, top } = inputViewportRestore
+  const delta = anchor.getBoundingClientRect().top - top
+  inputViewportRestore = null
+  if (Math.abs(delta) < 1) {
+    return
+  }
+  window.scrollBy(0, delta)
 }
 
 function bindScreens(): void {
@@ -466,8 +512,43 @@ function bindScreens(): void {
       }
       state.screen = nextScreen
       updateScreens()
+      resetViewportForScreenChange()
     })
   }
+}
+
+function bindDragSurface(
+  element: HTMLButtonElement,
+  kind: DragKind,
+): void {
+  element.addEventListener("pointerdown", (event) => {
+    startDrag(kind, event)
+  })
+  element.addEventListener("pointermove", updateFromDrag)
+  element.addEventListener("pointerup", endDrag)
+  element.addEventListener("pointercancel", endDrag)
+  element.addEventListener("lostpointercapture", () => {
+    if (dragState?.target !== element) {
+      return
+    }
+    dragState = null
+    state.fineAdjustContext = null
+    updateFineAdjustIndicator()
+  })
+}
+
+function bindExactEntryViewport(
+  input: HTMLInputElement,
+  anchor: HTMLElement,
+): void {
+  input.addEventListener("focus", () => {
+    rememberAnchorViewportPosition(anchor)
+  })
+  input.addEventListener("blur", () => {
+    window.requestAnimationFrame(() => {
+      restoreAnchorViewportPosition()
+    })
+  })
 }
 
 function bindScale(): void {
@@ -502,16 +583,13 @@ function bindControls(): void {
     })
   }
 
-  ui.knobSurface.addEventListener("pointerdown", (event) => {
-    startDrag("width", event)
-  })
-  ui.sliderSurface.addEventListener("pointerdown", (event) => {
-    startDrag("trim", event)
-  })
-  ui.focusPad.addEventListener("pointerdown", (event) => {
-    startDrag("focus", event)
-  })
-
+  bindDragSurface(ui.knobSurface, "width")
+  bindDragSurface(ui.sliderSurface, "trim")
+  bindDragSurface(ui.focusPad, "focus")
+  bindExactEntryViewport(ui.knobInput, ui.knobSurface)
+  bindExactEntryViewport(ui.sliderInput, ui.sliderSurface)
+  bindExactEntryViewport(ui.panInput, ui.focusPad)
+  bindExactEntryViewport(ui.depthInput, ui.focusPad)
   window.addEventListener("pointermove", updateFromDrag)
   window.addEventListener("pointerup", endDrag)
   window.addEventListener("pointercancel", endDrag)

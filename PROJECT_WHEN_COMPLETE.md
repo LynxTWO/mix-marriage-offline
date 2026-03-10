@@ -182,6 +182,9 @@ What remains: expand fixture-session coverage for front/quad render variants in 
   deterministic `LAYOUT.32CH` artifact end-to-end (`nchannels == 32`,
   manifest `channel_order` length `32`, stable SHA-256 across two runs).
 - [x] CI runs on Windows, Linux, macOS (or documents any limitations).
+Done: `tools/validate_ontology_changes.py` now survives Windows git-output
+decode edge cases and reports base-ref decode/load/parse failures without
+contradictory YAML noise.
 What remains: broaden the golden fixture matrix beyond the small stereo/surround/immersive corpus into additional mixed-confidence and corrective-action edge cases.
 
 ### 4.8 UX/CLI is usable for real work
@@ -316,6 +319,9 @@ What remains: make loudness-matched A/B compensation visible in report artifacts
 - [ ] The primary Tauri GUI exposes the same workflow as the CLI: validate → analyze → scene → render → results → compare.
 - [x] GUI copy and structure follow the design system in ontology/gui_design.yaml (theme tokens, screen templates, and progressive disclosure).
 - [x] Any plugin/config UI is generated from JSON Schema with optional UI hints (example: x_mmo_ui or a dedicated ui_hints registry) so agents do not hand-build one-off forms.
+Done: Firefox design-system parity is stable for the current Tauri dashboard
+surface, including mobile on-screen widget visibility and fine-adjust drag
+behavior at the tested GUI-scale presets.
 What remains: finish the open Tauri screens/behaviors tracked in `docs/gui_parity.md`, especially full results/scene parity and loudness-matched live compare behavior.
 
 Interaction standards (non-negotiable):

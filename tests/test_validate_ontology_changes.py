@@ -20,6 +20,15 @@ class TestValidateOntologyChanges(unittest.TestCase):
     def _source_validator_script(self) -> Path:
         return self._repo_root() / "tools" / "validate_ontology_changes.py"
 
+    def _git(self, repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", *args],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=repo_root,
+        )
+
     def _init_temp_repo(self, temp_root: Path) -> Path:
         if shutil.which("git") is None:
             self.skipTest("git is required for ontology change validator tests.")
@@ -187,6 +196,93 @@ class TestValidateOntologyChanges(unittest.TestCase):
         errors = payload.get("errors", [])
         self.assertTrue(
             any("missing replaced_by" in str(msg) for msg in errors),
+            msg=payload,
+        )
+
+    def test_missing_base_manifest_reports_one_clear_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            script_path = self._init_temp_repo(temp_root)
+
+            self._git(temp_root, "checkout", "main")
+            manifest_path = temp_root / "ontology" / "ontology.yaml"
+            manifest_path.unlink()
+            self._git(temp_root, "add", "--all")
+            self._git(temp_root, "commit", "-m", "remove base manifest")
+            self._git(temp_root, "checkout", "feature")
+
+            result = self._run_validator(temp_root, script_path)
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout)
+        payload = json.loads(result.stdout)
+        errors = payload.get("errors", [])
+        self.assertIn("File missing in base ref main: ontology/ontology.yaml", errors, msg=payload)
+        self.assertFalse(
+            any("Failed to parse YAML in ontology/ontology.yaml from base ref main" in str(msg) for msg in errors),
+            msg=payload,
+        )
+        self.assertFalse(
+            any("Missing ontology version in base ontology/ontology.yaml" in str(msg) for msg in errors),
+            msg=payload,
+        )
+
+    def test_invalid_utf8_in_base_manifest_reports_decode_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            script_path = self._init_temp_repo(temp_root)
+
+            self._git(temp_root, "checkout", "main")
+            manifest_path = temp_root / "ontology" / "ontology.yaml"
+            manifest_path.write_bytes(b"\xff\xfe\x00broken manifest")
+            self._git(temp_root, "add", "ontology/ontology.yaml")
+            self._git(temp_root, "commit", "-m", "break base manifest encoding")
+            self._git(temp_root, "checkout", "feature")
+
+            result = self._run_validator(temp_root, script_path)
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout)
+        payload = json.loads(result.stdout)
+        errors = payload.get("errors", [])
+        self.assertTrue(
+            any("Failed to decode ontology/ontology.yaml from base ref main as UTF-8" in str(msg) for msg in errors),
+            msg=payload,
+        )
+        self.assertFalse(
+            any("File missing in base ref main: ontology/ontology.yaml" in str(msg) for msg in errors),
+            msg=payload,
+        )
+        self.assertFalse(
+            any("Failed to parse YAML in ontology/ontology.yaml from base ref main" in str(msg) for msg in errors),
+            msg=payload,
+        )
+
+    def test_invalid_yaml_in_base_manifest_reports_parse_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            script_path = self._init_temp_repo(temp_root)
+
+            self._git(temp_root, "checkout", "main")
+            manifest_path = temp_root / "ontology" / "ontology.yaml"
+            manifest_path.write_text("ontology:\n  ontology_version: [\n", encoding="utf-8")
+            self._git(temp_root, "add", "ontology/ontology.yaml")
+            self._git(temp_root, "commit", "-m", "break base manifest yaml")
+            self._git(temp_root, "checkout", "feature")
+
+            result = self._run_validator(temp_root, script_path)
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout)
+        payload = json.loads(result.stdout)
+        errors = payload.get("errors", [])
+        self.assertTrue(
+            any("Failed to parse YAML in ontology/ontology.yaml from base ref main" in str(msg) for msg in errors),
+            msg=payload,
+        )
+        self.assertFalse(
+            any("File missing in base ref main: ontology/ontology.yaml" in str(msg) for msg in errors),
+            msg=payload,
+        )
+        self.assertFalse(
+            any("Missing ontology version in base ontology/ontology.yaml" in str(msg) for msg in errors),
             msg=payload,
         )
 

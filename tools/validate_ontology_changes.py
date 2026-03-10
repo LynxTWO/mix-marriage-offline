@@ -33,13 +33,37 @@ class DefinitionEntry:
     replaced_by: str | None
 
 
-def _run_git(repo_root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+@dataclass(frozen=True)
+class GitCommandResult:
+    returncode: int
+    stdout: str
+    stderr: str
+    stdout_bytes: bytes
+    stderr_bytes: bytes
+
+
+@dataclass(frozen=True)
+class DocumentLoadResult:
+    documents: dict[str, Any]
+    discovered_paths: set[str]
+    failed_paths: set[str]
+
+
+def _run_git(repo_root: Path, args: list[str]) -> GitCommandResult:
+    completed = subprocess.run(
         ["git", *args],
         check=False,
         capture_output=True,
-        text=True,
         cwd=repo_root,
+    )
+    stdout_bytes = bytes(completed.stdout or b"")
+    stderr_bytes = bytes(completed.stderr or b"")
+    return GitCommandResult(
+        returncode=completed.returncode,
+        stdout=stdout_bytes.decode("utf-8", errors="replace"),
+        stderr=stderr_bytes.decode("utf-8", errors="replace"),
+        stdout_bytes=stdout_bytes,
+        stderr_bytes=stderr_bytes,
     )
 
 
@@ -71,16 +95,75 @@ def _resolve_base_ref(repo_root: Path, requested: str) -> str | None:
     return None
 
 
-def _load_yaml_text(text: str, *, file_path: str, errors: list[str]) -> Any | None:
+def _format_source_location(file_path: str, source_label: str | None) -> str:
+    if not source_label:
+        return file_path
+    return f"{file_path} from {source_label}"
+
+
+def _decode_utf8(
+    data: bytes,
+    *,
+    file_path: str,
+    source_label: str | None,
+    errors: list[str],
+) -> str | None:
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        location = _format_source_location(file_path, source_label)
+        errors.append(f"Failed to decode {location} as UTF-8: {exc}")
+        return None
+
+
+def _load_yaml_text(
+    text: str,
+    *,
+    file_path: str,
+    errors: list[str],
+    source_label: str | None = None,
+) -> Any | None:
     if yaml is None:
         errors.append("PyYAML is not installed; cannot parse ontology YAML.")
         return None
     try:
         parsed = yaml.safe_load(text)
     except Exception as exc:  # pragma: no cover - parser output varies
-        errors.append(f"Failed to parse YAML in {file_path}: {exc}")
+        location = _format_source_location(file_path, source_label)
+        errors.append(f"Failed to parse YAML in {location}: {exc}")
         return None
     return parsed
+
+
+def _load_yaml_bytes(
+    data: bytes,
+    *,
+    file_path: str,
+    errors: list[str],
+    source_label: str | None = None,
+) -> Any | None:
+    text = _decode_utf8(
+        data,
+        file_path=file_path,
+        source_label=source_label,
+        errors=errors,
+    )
+    if text is None:
+        return None
+    return _load_yaml_text(
+        text,
+        file_path=file_path,
+        errors=errors,
+        source_label=source_label,
+    )
+
+
+def _git_show_reports_missing_path(stderr: str, *, rel_path: str, base_ref: str) -> bool:
+    missing_patterns = (
+        f"path '{rel_path}' does not exist in '{base_ref}'",
+        f"path '{rel_path}' exists on disk, but not in '{base_ref}'",
+    )
+    return any(pattern in stderr for pattern in missing_patterns)
 
 
 def _walk_path(node: Any, path: tuple[str, ...]) -> list[Any]:
@@ -318,24 +401,46 @@ def _load_current_documents(
     *,
     repo_root: Path,
     errors: list[str],
-) -> dict[str, Any]:
+) -> DocumentLoadResult:
     documents: dict[str, Any] = {}
+    discovered_paths: set[str] = set()
+    failed_paths: set[str] = set()
     ontology_root = repo_root / "ontology"
     if not ontology_root.exists():
         errors.append("Missing ontology directory: ontology/")
-        return documents
+        return DocumentLoadResult(
+            documents=documents,
+            discovered_paths=discovered_paths,
+            failed_paths=failed_paths,
+        )
     for path in sorted(ontology_root.rglob("*")):
         if not path.is_file():
             continue
         rel_path = path.relative_to(repo_root).as_posix()
         if not _is_ontology_yaml_path(rel_path):
             continue
-        text = path.read_text(encoding="utf-8")
-        payload = _load_yaml_text(text, file_path=rel_path, errors=errors)
+        discovered_paths.add(rel_path)
+        try:
+            raw_bytes = path.read_bytes()
+        except OSError as exc:
+            errors.append(f"Failed to read {rel_path} from working tree: {exc}")
+            failed_paths.add(rel_path)
+            continue
+        payload = _load_yaml_bytes(
+            raw_bytes,
+            file_path=rel_path,
+            errors=errors,
+            source_label="working tree",
+        )
         if payload is None:
+            failed_paths.add(rel_path)
             continue
         documents[rel_path] = payload
-    return documents
+    return DocumentLoadResult(
+        documents=documents,
+        discovered_paths=discovered_paths,
+        failed_paths=failed_paths,
+    )
 
 
 def _load_base_documents(
@@ -343,8 +448,10 @@ def _load_base_documents(
     repo_root: Path,
     base_ref: str,
     errors: list[str],
-) -> dict[str, Any]:
+) -> DocumentLoadResult:
     documents: dict[str, Any] = {}
+    discovered_paths: set[str] = set()
+    failed_paths: set[str] = set()
     listed = _run_git(
         repo_root,
         ["ls-tree", "-r", "--name-only", base_ref, "--", "ontology"],
@@ -355,22 +462,42 @@ def _load_base_documents(
             "Failed to list ontology files from base ref "
             f"{base_ref}: {stderr or 'unknown git error'}"
         )
-        return documents
+        return DocumentLoadResult(
+            documents=documents,
+            discovered_paths=discovered_paths,
+            failed_paths=failed_paths,
+        )
     for rel_path in sorted(line.strip() for line in listed.stdout.splitlines() if line.strip()):
         if not _is_ontology_yaml_path(rel_path):
             continue
+        discovered_paths.add(rel_path)
         shown = _run_git(repo_root, ["show", f"{base_ref}:{rel_path}"])
         if shown.returncode != 0:
             stderr = shown.stderr.strip()
-            errors.append(
-                f"Failed to read {rel_path} from {base_ref}: {stderr or 'unknown git error'}"
-            )
+            if _git_show_reports_missing_path(stderr, rel_path=rel_path, base_ref=base_ref):
+                errors.append(f"File missing in base ref {base_ref}: {rel_path}")
+            else:
+                errors.append(
+                    "Git show failed for "
+                    f"{rel_path} from base ref {base_ref}: {stderr or 'unknown git error'}"
+                )
+            failed_paths.add(rel_path)
             continue
-        payload = _load_yaml_text(shown.stdout, file_path=rel_path, errors=errors)
+        payload = _load_yaml_bytes(
+            shown.stdout_bytes,
+            file_path=rel_path,
+            errors=errors,
+            source_label=f"base ref {base_ref}",
+        )
         if payload is None:
+            failed_paths.add(rel_path)
             continue
         documents[rel_path] = payload
-    return documents
+    return DocumentLoadResult(
+        documents=documents,
+        discovered_paths=discovered_paths,
+        failed_paths=failed_paths,
+    )
 
 
 def _collect_definition_map(documents: dict[str, Any]) -> dict[str, list[DefinitionEntry]]:
@@ -450,7 +577,8 @@ def validate_ontology_changes(
     errors: list[str] = []
     warnings: list[str] = []
 
-    current_documents = _load_current_documents(repo_root=repo_root, errors=errors)
+    current_load = _load_current_documents(repo_root=repo_root, errors=errors)
+    current_documents = current_load.documents
     current_entries = _collect_definition_map(current_documents)
     current_ids = set(current_entries.keys())
     deprecation_errors = _check_deprecations(
@@ -461,9 +589,12 @@ def validate_ontology_changes(
 
     current_manifest = current_documents.get(ONTOLOGY_MANIFEST_REL_PATH)
     current_version = _ontology_version_from_payload(current_manifest)
-    if current_manifest is None:
+    if (
+        current_manifest is None
+        and ONTOLOGY_MANIFEST_REL_PATH not in current_load.failed_paths
+    ):
         errors.append(f"Missing ontology manifest: {ONTOLOGY_MANIFEST_REL_PATH}")
-    elif current_version is None:
+    elif current_manifest is not None and current_version is None:
         errors.append(
             "Missing ontology version in ontology/ontology.yaml "
             "(expected ontology.ontology_version)."
@@ -495,11 +626,12 @@ def validate_ontology_changes(
                     f"Could not resolve base ref '{base_ref}'; ontology diff was skipped."
                 )
         else:
-            base_documents = _load_base_documents(
+            base_load = _load_base_documents(
                 repo_root=repo_root,
                 base_ref=resolved_base_ref,
                 errors=errors,
             )
+            base_documents = base_load.documents
             base_entries = _collect_definition_map(base_documents)
             base_ids = set(base_entries.keys())
 
@@ -508,11 +640,14 @@ def validate_ontology_changes(
 
             base_manifest = base_documents.get(ONTOLOGY_MANIFEST_REL_PATH)
             base_version = _ontology_version_from_payload(base_manifest)
-            if base_manifest is None:
+            if ONTOLOGY_MANIFEST_REL_PATH not in base_load.discovered_paths:
                 errors.append(
-                    f"Missing {ONTOLOGY_MANIFEST_REL_PATH} in base ref {resolved_base_ref}."
+                    f"File missing in base ref {resolved_base_ref}: {ONTOLOGY_MANIFEST_REL_PATH}"
                 )
-            elif base_version is None:
+            elif (
+                base_manifest is not None
+                and base_version is None
+            ):
                 errors.append(
                     "Missing ontology version in base ontology/ontology.yaml "
                     "(expected ontology.ontology_version)."
