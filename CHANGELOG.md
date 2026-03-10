@@ -82,6 +82,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Test-suite stabilization and render-report back-compat:
+  - Added repo-root `pytest.ini` discovery hygiene so `pytest -q` only
+    collects the project `tests/` tree and ignores scratch/venv/build dirs
+    such as `sandbox_tmp/pydeps`.
+  - Centralized the default `render_report` fallback payload
+    (`fallback_attempts` / `fallback_final`) and applied it across report
+    producers so schema-required fallback fields stay present without
+    weakening the contract.
+  - Restored byte-stable plugin-chain no-op behavior for matching stereo WAV
+    passthrough cases, including bypassed and fully dry endpoints, while
+    preserving explainable event-log/report output.
+
 ### Added
 
 - Golden plugin-mode audio regression coverage:

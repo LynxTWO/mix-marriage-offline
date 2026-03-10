@@ -76,6 +76,14 @@ MINIMAL_RENDER_REPORT = {
         "status": "not_run",
         "gates": [],
     },
+    "fallback_attempts": [],
+    "fallback_final": {
+        "applied_steps": [],
+        "final_outcome": "not_run",
+        "safety_collapse_applied": False,
+        "passed_layout_ids": [],
+        "failed_layout_ids": [],
+    },
 }
 
 FULL_RENDER_REPORT = {
@@ -142,6 +150,14 @@ FULL_RENDER_REPORT = {
                 "details": {"threshold_db": -20, "measured_db": -18.5},
             },
         ],
+    },
+    "fallback_attempts": [],
+    "fallback_final": {
+        "applied_steps": [],
+        "final_outcome": "not_run",
+        "safety_collapse_applied": False,
+        "passed_layout_ids": [],
+        "failed_layout_ids": [],
     },
 }
 

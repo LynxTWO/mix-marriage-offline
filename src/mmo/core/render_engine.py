@@ -54,6 +54,7 @@ from mmo.core.render_reporting import (
     build_stage_metric_entry,
     build_wall_clock_report,
     sort_stage_entries,
+    with_render_report_fallback_defaults,
 )
 from mmo.dsp.export_finalize import build_export_finalization_receipt
 
@@ -851,6 +852,7 @@ def _build_render_report(
         "policies_applied": policies_applied,
         "qa_gates": qa_gates,
     }
+    report = with_render_report_fallback_defaults(report)
     report["stage_metrics"] = sort_stage_entries(stage_metrics)
     report["stage_evidence"] = sort_stage_entries(stage_evidence)
     if isinstance(wall_clock, dict) and wall_clock:

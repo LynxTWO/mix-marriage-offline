@@ -964,6 +964,77 @@ class TestRenderRunAudioExecution(unittest.TestCase):
             self.assertGreater(mix05_peak, mix1_peak)
             self.assertLess(mix05_peak, source_peak)
 
+    def test_plugin_chain_multiband_compressor_bypass_preserves_exact_bytes(self) -> None:
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("numpy not available")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            source_path = stems_dir / "mix.wav"
+            _write_pcm16_two_tone_wav(source_path, channels=2, duration_s=0.25)
+            source_bytes = source_path.read_bytes()
+
+            scene_posix = (temp_path / "scene.json").resolve().as_posix()
+            request_payload = {
+                "schema_version": "0.1.0",
+                "target_layout_id": "LAYOUT.2_0",
+                "scene_path": scene_posix,
+                "options": {
+                    "dry_run": False,
+                    "plugin_chain": [
+                        {
+                            "plugin_id": "multiband_compressor_v0",
+                            "params": {
+                                "threshold_db": -26.0,
+                                "ratio": 5.0,
+                                "attack_ms": 8.0,
+                                "release_ms": 180.0,
+                                "makeup_db": 0.0,
+                                "lookahead_ms": 2.0,
+                                "detector_mode": "rms",
+                                "slope_sensitivity": 0.8,
+                                "min_band_count": 3,
+                                "max_band_count": 5,
+                                "oversampling": 1,
+                                "macro_mix": 100.0,
+                                "bypass": True,
+                            },
+                        }
+                    ],
+                },
+            }
+
+            event_log_out = temp_path / "render_events.jsonl"
+            exit_code, _, stderr, _, report_out = _run_render_run(
+                temp_path,
+                request_payload=request_payload,
+                extra_args=["--event-log-out", str(event_log_out)],
+            )
+            self.assertEqual(exit_code, 0, msg=stderr)
+
+            report = json.loads(report_out.read_text(encoding="utf-8"))
+            rendered_path = Path(report["jobs"][0]["output_files"][0]["file_path"])
+            self.assertEqual(source_bytes, rendered_path.read_bytes())
+
+            events = _read_jsonl(event_log_out)
+            stage_event = next(
+                (
+                    event
+                    for event in events
+                    if isinstance(event, dict)
+                    and isinstance(event.get("evidence"), dict)
+                    and "RENDER.RUN.PLUGIN.STAGE_APPLIED"
+                    in event.get("evidence", {}).get("codes", [])
+                    and "multiband_compressor_v0"
+                    in event.get("evidence", {}).get("ids", [])
+                ),
+                None,
+            )
+            self.assertIsNotNone(stage_event)
+
     def test_plugin_chain_simple_compressor_v0_is_deterministic_with_gr_evidence(self) -> None:
         try:
             import numpy  # noqa: F401

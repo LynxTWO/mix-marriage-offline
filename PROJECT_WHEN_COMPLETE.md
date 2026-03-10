@@ -172,6 +172,9 @@ What remains: expand fixture-session coverage for front/quad render variants in 
   bus-plan/scene snapshots, exact normalized manifest + receipt hashes, exact
   QA issue IDs/severities, exact channel ordering, and tolerance-based
   per-channel metrics for stereo/surround/immersive targets.
+- [x] Repo-root pytest discovery is constrained to the project `tests/` tree so
+  scratch dependency mirrors and transient build directories do not pollute CI
+  or local full-suite runs.
 - [x] Focused plugin-mode golden audio tests validate per-channel speaker-ID
   routing, linked front/surround/height group behavior, and true
   multichannel full-buffer semantics through a manifest-driven runner.

@@ -291,6 +291,14 @@ class TestProjectValidateRenderArtifacts(unittest.TestCase):
                 "matrix_id": None,
             },
             "qa_gates": {"status": "not_run", "gates": []},
+            "fallback_attempts": [],
+            "fallback_final": {
+                "applied_steps": [],
+                "final_outcome": "not_run",
+                "safety_collapse_applied": False,
+                "passed_layout_ids": [],
+                "failed_layout_ids": [],
+            },
         })
         _write_json(renders_dir / "render_execute.json", {
             "schema_version": "0.1.0",
@@ -558,6 +566,14 @@ class TestProjectValidateRenderCompatFlag(unittest.TestCase):
                 "matrix_id": None,
             },
             "qa_gates": {"status": "not_run", "gates": []},
+            "fallback_attempts": [],
+            "fallback_final": {
+                "applied_steps": [],
+                "final_outcome": "not_run",
+                "safety_collapse_applied": False,
+                "passed_layout_ids": [],
+                "failed_layout_ids": [],
+            },
         })
 
     def test_render_compat_flag_adds_issues_and_is_deterministic(self) -> None:

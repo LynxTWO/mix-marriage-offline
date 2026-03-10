@@ -158,3 +158,9 @@ Non-negotiables:
 - Keep export metadata round-trip deterministic: apply explicit ffmpeg metadata
   args by container policy and always emit `metadata_receipt` embedded/skipped
   key summaries in render/export artifacts.
+- Keep `render_report` schema back-compat centralized: every producer must
+  populate the default `fallback_attempts` / `fallback_final` shape when richer
+  fallback reporting is absent instead of weakening the schema.
+- Keep true no-op plugin-chain WAV runs byte-stable: when every stage resolves
+  to exact dry/bypass behavior and no conversion is required, preserve source
+  WAV bytes while still emitting explainable report and event-log metadata.

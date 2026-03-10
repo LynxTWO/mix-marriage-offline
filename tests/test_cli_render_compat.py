@@ -132,6 +132,14 @@ def _base_report() -> dict[str, Any]:
             "status": "not_run",
             "gates": [],
         },
+        "fallback_attempts": [],
+        "fallback_final": {
+            "applied_steps": [],
+            "final_outcome": "not_run",
+            "safety_collapse_applied": False,
+            "passed_layout_ids": [],
+            "failed_layout_ids": [],
+        },
     }
 
 
@@ -410,6 +418,14 @@ class TestRenderCompatCli(unittest.TestCase):
                 "matrix_id": None,
             },
             "qa_gates": {"status": "not_run", "gates": []},
+            "fallback_attempts": [],
+            "fallback_final": {
+                "applied_steps": [],
+                "final_outcome": "not_run",
+                "safety_collapse_applied": False,
+                "passed_layout_ids": [],
+                "failed_layout_ids": [],
+            },
         }
 
         _write_json(request_path, request_payload)

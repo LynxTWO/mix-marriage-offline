@@ -64,6 +64,38 @@ _DEFAULT_WALL_CLOCK_DISCLAIMER = (
 )
 
 
+def default_render_report_fallback_payload() -> dict[str, Any]:
+    return {
+        "fallback_attempts": [],
+        "fallback_final": {
+            "applied_steps": [],
+            "final_outcome": "not_run",
+            "safety_collapse_applied": False,
+            "passed_layout_ids": [],
+            "failed_layout_ids": [],
+        },
+    }
+
+
+def with_render_report_fallback_defaults(report: dict[str, Any]) -> dict[str, Any]:
+    normalized = _json_clone(report)
+    defaults = default_render_report_fallback_payload()
+
+    if not isinstance(normalized.get("fallback_attempts"), list):
+        normalized["fallback_attempts"] = defaults["fallback_attempts"]
+
+    fallback_final = normalized.get("fallback_final")
+    if not isinstance(fallback_final, dict):
+        normalized["fallback_final"] = defaults["fallback_final"]
+        return normalized
+
+    merged_fallback_final = _json_clone(defaults["fallback_final"])
+    for key, value in fallback_final.items():
+        merged_fallback_final[key] = _json_clone(value)
+    normalized["fallback_final"] = merged_fallback_final
+    return normalized
+
+
 def _normalize_note_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -1019,17 +1051,10 @@ def build_render_report_from_plan(
         "loudness_profile_receipt": loudness_profile_receipt,
         "policies_applied": policies_applied,
         "qa_gates": qa_gates,
-        "fallback_attempts": [],
-        "fallback_final": {
-            "applied_steps": [],
-            "final_outcome": "not_run",
-            "safety_collapse_applied": False,
-            "passed_layout_ids": [],
-            "failed_layout_ids": [],
-        },
         "request": request_summary,
         "schema_version": "0.1.0",
     }
+    report = with_render_report_fallback_defaults(report)
     report["stage_metrics"] = sort_stage_entries(stage_metrics)
     report["stage_evidence"] = sort_stage_entries(stage_evidence)
     wall_clock_payload = build_wall_clock_report(

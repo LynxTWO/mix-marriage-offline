@@ -6,6 +6,7 @@ import json
 import math
 import os
 import random
+import shutil
 import struct
 import subprocess
 import wave
@@ -795,6 +796,7 @@ def build_render_report_with_audio(
     mix_inputs_report_notes: list[str] = []
     source_input_paths: list[Path] = []
     source_bit_depth: int | None = None
+    source_channel_count: int | None = None
     source_tag_bag: TagBag = empty_tag_bag()
 
     if mix_inputs is None:
@@ -803,6 +805,10 @@ def build_render_report_with_audio(
         _validate_source_layout_or_raise(source_metadata)
         source_rate_hz = _coerce_int(source_metadata.get("sample_rate_hz")) or 0
         source_bit_depth = _coerce_int(source_metadata.get("bits_per_sample"))
+        source_channel_count = (
+            _coerce_int(source_metadata.get("channel_count"))
+            or _coerce_int(source_metadata.get("channels"))
+        )
         source_tag_bag = tag_bag_from_mapping(source_metadata.get("tags"))
         source_input_paths = [source_path.resolve()]
     else:
@@ -969,6 +975,18 @@ def build_render_report_with_audio(
         )
         needs_ffmpeg_for_trace = keep_wav_output and capture_execute_trace
         needs_ffmpeg_for_wav_metadata = keep_wav_output and bool(wav_metadata_args)
+        exact_copy_plugin_chain_wav = (
+            plugin_chain_enabled
+            and not mix_inputs_active
+            and _plugin_chain_is_total_noop(plugin_chain)
+            and source_extension in _WAV_EXTENSIONS
+            and keep_wav_output
+            and not needs_ffmpeg_encode
+            and not capture_execute_trace
+            and not wav_metadata_args
+            and source_bit_depth == output_bit_depth
+            and source_channel_count == 2
+        )
         if (
             needs_ffmpeg_decode
             or needs_ffmpeg_encode
@@ -1052,16 +1070,27 @@ def build_render_report_with_audio(
                             "determinism_flags": [],
                         }
                     )
-                job_plugin_step_events = _render_wav_with_plugin_chain(
-                    source_path=source_path,
-                    output_path=wav_path,
-                    sample_rate_hz=source_rate_hz,
-                    bit_depth=output_bit_depth,
-                    plugin_chain=plugin_chain,
-                    ffmpeg_cmd_for_decode=ffmpeg_cmd_for_decode,
-                    max_theoretical_quality=max_theoretical_quality,
-                    force_float64_default=plugin_chain_force_float64,
-                )
+                if exact_copy_plugin_chain_wav:
+                    job_plugin_step_events = _copy_source_wav_for_noop_plugin_chain(
+                        source_path=source_path,
+                        output_path=wav_path,
+                        sample_rate_hz=source_rate_hz,
+                        bit_depth=output_bit_depth,
+                        plugin_chain=plugin_chain,
+                        max_theoretical_quality=max_theoretical_quality,
+                        force_float64_default=plugin_chain_force_float64,
+                    )
+                else:
+                    job_plugin_step_events = _render_wav_with_plugin_chain(
+                        source_path=source_path,
+                        output_path=wav_path,
+                        sample_rate_hz=source_rate_hz,
+                        bit_depth=output_bit_depth,
+                        plugin_chain=plugin_chain,
+                        ffmpeg_cmd_for_decode=ffmpeg_cmd_for_decode,
+                        max_theoretical_quality=max_theoretical_quality,
+                        force_float64_default=plugin_chain_force_float64,
+                    )
             else:
                 float_samples_iter: Iterator[list[float]]
                 if source_extension in _WAV_EXTENSIONS:
@@ -1111,6 +1140,9 @@ def build_render_report_with_audio(
             wav_embedded_keys = list(wav_plan.get("embedded_keys") or [])
             wav_skipped_keys = list(wav_plan.get("skipped_keys") or [])
             wav_warnings = list(wav_plan.get("warnings") or [])
+            wav_trace_embedded_keys = (
+                [] if plugin_chain_enabled else list(trace_embedded_keys)
+            )
 
             if keep_wav_output and (capture_execute_trace or wav_metadata_args):
                 if ffmpeg_cmd_for_encode is None:
@@ -1135,7 +1167,7 @@ def build_render_report_with_audio(
                         command_rows=ffmpeg_command_rows,
                         metadata_args=wav_metadata_args,
                     )
-            if keep_wav_output:
+            if keep_wav_output and not plugin_chain_enabled:
                 write_wav_ixml_chunk(wav_path, build_trace_ixml_payload(trace_metadata))
 
             if keep_wav_output:
@@ -1147,7 +1179,7 @@ def build_render_report_with_audio(
                         bit_depth=output_bit_depth,
                         metadata_receipt=metadata_receipt_mapping(
                             output_container_format_id="wav",
-                            embedded_keys=wav_embedded_keys + trace_embedded_keys,
+                            embedded_keys=wav_embedded_keys + wav_trace_embedded_keys,
                             skipped_keys=wav_skipped_keys,
                             warnings=wav_warnings,
                         ),
@@ -1827,6 +1859,179 @@ def _prevalidate_plugin_chain_static(
                         "options.max_theoretical_quality=true."
                     ),
                 )
+
+
+def _plugin_stage_is_total_noop(stage: dict[str, Any]) -> bool:
+    params = _coerce_dict(stage.get("params"))
+    bypass = _coerce_bool(params.get("bypass"))
+    if bypass is True:
+        return True
+    macro_mix = _coerce_float(params.get("macro_mix"))
+    return macro_mix == 0.0
+
+
+def _plugin_chain_is_total_noop(plugin_chain: list[dict[str, Any]]) -> bool:
+    return bool(plugin_chain) and all(
+        isinstance(stage, dict) and _plugin_stage_is_total_noop(stage)
+        for stage in plugin_chain
+    )
+
+
+def _copy_source_wav_for_noop_plugin_chain(
+    *,
+    source_path: Path,
+    output_path: Path,
+    sample_rate_hz: int,
+    bit_depth: int,
+    plugin_chain: list[dict[str, Any]],
+    max_theoretical_quality: bool,
+    force_float64_default: bool,
+) -> list[dict[str, Any]]:
+    try:
+        import numpy as np
+    except ImportError as exc:  # pragma: no cover - env-dependent
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+            message=(
+                "options.plugin_chain requires numpy runtime support. "
+                "Reinstall MMO base deps or remove plugin_chain from the request."
+            ),
+        ) from exc
+
+    with wave.open(str(source_path), "rb") as handle:
+        channel_count = handle.getnchannels()
+        frame_count = handle.getnframes()
+        source_rate_hz = handle.getframerate()
+        source_bit_depth = handle.getsampwidth() * 8
+
+    if channel_count != 2 or source_rate_hz != sample_rate_hz or source_bit_depth != bit_depth:
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_OPTION_UNSUPPORTED,
+            message=(
+                "Plugin-chain no-op passthrough requires a stereo WAV source with "
+                "matching sample rate and bit depth."
+            ),
+        )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if source_path.resolve() != output_path.resolve():
+        shutil.copyfile(source_path, output_path)
+
+    processing_dtype_name = (
+        "float64" if (max_theoretical_quality or force_float64_default) else "float32"
+    )
+    processing_dtype = np.float64 if processing_dtype_name == "float64" else np.float32
+    process_ctx = build_process_context(
+        _STEREO_LAYOUT_ID,
+        sample_rate_hz=sample_rate_hz,
+        seed=0,
+    )
+    source_where = [source_path.resolve().as_posix()]
+    output_posix = output_path.resolve().as_posix()
+    step_events: list[dict[str, Any]] = [
+        {
+            "kind": "action",
+            "scope": "render",
+            "what": "plugin chain source loaded",
+            "why": (
+                "Plugin chain resolved to a no-op; preserved exact source WAV bytes "
+                "without decode or re-encode."
+            ),
+            "where": source_where,
+            "confidence": None,
+            "evidence": {
+                "codes": ["RENDER.RUN.PLUGIN.SOURCE_LOADED"],
+                "paths": source_where,
+                "metrics": [
+                    {"name": "channel_count", "value": process_ctx.num_channels},
+                    {"name": "frame_count", "value": frame_count},
+                ],
+            },
+        },
+    ]
+
+    dummy_matrix = np.zeros((1, process_ctx.num_channels), dtype=processing_dtype)
+    for stage_index, stage in enumerate(plugin_chain, start=1):
+        plugin_id = _coerce_str(stage.get("plugin_id")).strip().lower()
+        params = _coerce_dict(stage.get("params"))
+
+        plugin_impl = get_stereo_plugin(plugin_id)
+        if plugin_impl is None:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                message=(
+                    "Unsupported plugin_chain stage. "
+                    f"stage={stage_index}, plugin_id={plugin_id or '(missing)'}"
+                ),
+            )
+
+        evidence_collector = PluginEvidenceCollector()
+        plugin_context = PluginContext(
+            precision_mode=processing_dtype_name,
+            max_theoretical_quality=max_theoretical_quality,
+            evidence_collector=evidence_collector,
+            stage_index=stage_index,
+        )
+        try:
+            plugin_impl.process_stereo(
+                dummy_matrix.copy(),
+                sample_rate_hz,
+                params,
+                plugin_context,
+                process_ctx,
+            )
+        except PluginValidationError as exc:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                message=str(exc),
+            ) from exc
+
+        stage_token = f"plugin_chain.stage.{stage_index:03d}.{plugin_id}"
+        stage_evidence: dict[str, Any] = {
+            "codes": ["RENDER.RUN.PLUGIN.STAGE_APPLIED"],
+            "ids": [plugin_id],
+            "metrics": evidence_collector.metrics,
+        }
+        if evidence_collector.notes:
+            stage_evidence["notes"] = evidence_collector.notes
+        step_events.append(
+            {
+                "kind": "action",
+                "scope": "render",
+                "what": evidence_collector.stage_what or "plugin stage applied",
+                "why": (
+                    evidence_collector.stage_why
+                    or "Plugin stage resolved to a no-op and exact WAV bytes were preserved."
+                ),
+                "where": [*source_where, stage_token],
+                "confidence": None,
+                "evidence": stage_evidence,
+            },
+        )
+
+    step_events.append(
+        {
+            "kind": "action",
+            "scope": "render",
+            "what": "plugin chain output written",
+            "why": (
+                "Copied exact source WAV bytes because every plugin stage resolved "
+                "to a no-op and no format conversion was required."
+            ),
+            "where": [output_posix],
+            "confidence": None,
+            "evidence": {
+                "codes": ["RENDER.RUN.PLUGIN.OUTPUT_WRITTEN"],
+                "paths": [output_posix],
+                "metrics": [
+                    {"name": "bit_depth", "value": bit_depth},
+                    {"name": "frame_count", "value": frame_count},
+                    {"name": "stage_count", "value": len(plugin_chain)},
+                ],
+            },
+        },
+    )
+    return step_events
 
 
 def _render_wav_with_plugin_chain(
