@@ -1,0 +1,83 @@
+{
+  "fixture_id": "golden_small_immersive",
+  "targets": {
+    "LAYOUT.7_1_4": {
+      "downmix_similarity": {
+        "attempts": [
+          {
+            "matrix_id": "DMX.COMPOSED.LAYOUT.7_1_4_TO_LAYOUT.2_0",
+            "passed": false,
+            "risk_level": "high"
+          },
+          {
+            "matrix_id": "DMX.COMPOSED.LAYOUT.7_1_4_TO_LAYOUT.2_0",
+            "passed": false,
+            "risk_level": "high"
+          },
+          {
+            "matrix_id": "DMX.COMPOSED.LAYOUT.7_1_4_TO_LAYOUT.2_0",
+            "passed": false,
+            "risk_level": "high"
+          }
+        ],
+        "fallback_applied": true,
+        "fallback_final_outcome": "fail",
+        "gate_id": "GATE.DOWNMIX_SIMILARITY_RENDER_COMPARE",
+        "gate_version": "1.0.0",
+        "matrix_id": "DMX.COMPOSED.LAYOUT.7_1_4_TO_LAYOUT.2_0",
+        "passed": false,
+        "risk_level": "high",
+        "safety_collapse_applied": false
+      },
+      "qa_issues": [
+        {
+          "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
+          "severity": "error"
+        },
+        {
+          "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
+          "severity": "error"
+        }
+      ]
+    },
+    "LAYOUT.9_1_6": {
+      "downmix_similarity": {
+        "attempts": [
+          {
+            "matrix_id": "DMX.COMPOSED.LAYOUT.9_1_6_TO_LAYOUT.2_0",
+            "passed": false,
+            "risk_level": "high"
+          },
+          {
+            "matrix_id": "DMX.COMPOSED.LAYOUT.9_1_6_TO_LAYOUT.2_0",
+            "passed": false,
+            "risk_level": "high"
+          },
+          {
+            "matrix_id": "DMX.COMPOSED.LAYOUT.9_1_6_TO_LAYOUT.2_0",
+            "passed": false,
+            "risk_level": "high"
+          }
+        ],
+        "fallback_applied": true,
+        "fallback_final_outcome": "fail",
+        "gate_id": "GATE.DOWNMIX_SIMILARITY_RENDER_COMPARE",
+        "gate_version": "1.0.0",
+        "matrix_id": "DMX.COMPOSED.LAYOUT.9_1_6_TO_LAYOUT.2_0",
+        "passed": false,
+        "risk_level": "high",
+        "safety_collapse_applied": false
+      },
+      "qa_issues": [
+        {
+          "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
+          "severity": "error"
+        },
+        {
+          "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
+          "severity": "error"
+        }
+      ]
+    }
+  }
+}

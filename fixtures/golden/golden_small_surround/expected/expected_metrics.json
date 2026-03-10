@@ -1,0 +1,133 @@
+{
+  "fixture_id": "golden_small_surround",
+  "scene_template_id": "TEMPLATE.SEATING.ORCHESTRA_AUDIENCE",
+  "targets": {
+    "LAYOUT.5_1": {
+      "channel_count": 6,
+      "channel_order": [
+        "SPK.L",
+        "SPK.R",
+        "SPK.C",
+        "SPK.LFE",
+        "SPK.LS",
+        "SPK.RS"
+      ],
+      "downmix_policy_version": "0.1.0",
+      "normalized_receipt_sha256": "497cb4c222d5915438ff745cde8167cb1095ff78399960c8d8c98a0ec9388add",
+      "normalized_render_manifest_sha256": "4bd5925fb29bed9d530a49f6ca5c2f82c7751d266bc032f4ab46e6ea5c269d08",
+      "per_channel_metrics": [
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -3.8982,
+          "rms_dbfs": -13.8235,
+          "speaker_id": "SPK.L"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -2.7728,
+          "rms_dbfs": -13.847,
+          "speaker_id": "SPK.R"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -8.6464,
+          "rms_dbfs": -19.3329,
+          "speaker_id": "SPK.C"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": null,
+          "rms_dbfs": null,
+          "speaker_id": "SPK.LFE"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -27.2028,
+          "rms_dbfs": -36.0215,
+          "speaker_id": "SPK.LS"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -27.2028,
+          "rms_dbfs": -36.0215,
+          "speaker_id": "SPK.RS"
+        }
+      ],
+      "render_contract_version": "0.1.0",
+      "scene_sha256": "96d1fe81e9381cbee7a4985c9f14bd933ff01df10f0475f156d6ad6b0ecfe098"
+    },
+    "LAYOUT.7_1": {
+      "channel_count": 8,
+      "channel_order": [
+        "SPK.L",
+        "SPK.R",
+        "SPK.C",
+        "SPK.LFE",
+        "SPK.LS",
+        "SPK.RS",
+        "SPK.LRS",
+        "SPK.RRS"
+      ],
+      "downmix_policy_version": "0.1.0",
+      "normalized_receipt_sha256": "424779de69b87f622072e6eb986ab2992a8243631547b0fc649827af2b1d002f",
+      "normalized_render_manifest_sha256": "b4c65695b495d3576b2da5fd9fc2fcc097ef5316ac3b582627aaaa0a9920af17",
+      "per_channel_metrics": [
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -3.8982,
+          "rms_dbfs": -13.8235,
+          "speaker_id": "SPK.L"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -2.7728,
+          "rms_dbfs": -13.847,
+          "speaker_id": "SPK.R"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -8.6464,
+          "rms_dbfs": -19.3329,
+          "speaker_id": "SPK.C"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": null,
+          "rms_dbfs": null,
+          "speaker_id": "SPK.LFE"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -27.2028,
+          "rms_dbfs": -36.0215,
+          "speaker_id": "SPK.LS"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -27.2028,
+          "rms_dbfs": -36.0215,
+          "speaker_id": "SPK.RS"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -28.6121,
+          "rms_dbfs": -37.4292,
+          "speaker_id": "SPK.LRS"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -28.6121,
+          "rms_dbfs": -37.4292,
+          "speaker_id": "SPK.RRS"
+        }
+      ],
+      "render_contract_version": "0.1.0",
+      "scene_sha256": "96d1fe81e9381cbee7a4985c9f14bd933ff01df10f0475f156d6ad6b0ecfe098"
+    }
+  },
+  "tolerances": {
+    "integrated_lufs": 0.2,
+    "peak_dbfs": 0.1,
+    "rms_dbfs": 0.1
+  }
+}

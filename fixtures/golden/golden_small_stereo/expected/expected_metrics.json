@@ -1,0 +1,37 @@
+{
+  "fixture_id": "golden_small_stereo",
+  "scene_template_id": "TEMPLATE.SEATING.ORCHESTRA_AUDIENCE",
+  "targets": {
+    "LAYOUT.2_0": {
+      "channel_count": 2,
+      "channel_order": [
+        "SPK.L",
+        "SPK.R"
+      ],
+      "downmix_policy_version": "0.1.0",
+      "normalized_receipt_sha256": "2d743fb852b6a19899ed7ba13db4c2fbbf777c2dbaaceec1ff9d72a7bbb0513d",
+      "normalized_render_manifest_sha256": "f69586732f5645ac691002f4eb8a5472b8b808688bc9cb59f0899322ff629eb1",
+      "per_channel_metrics": [
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -3.8791,
+          "rms_dbfs": -13.8511,
+          "speaker_id": "SPK.L"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -2.7221,
+          "rms_dbfs": -13.865,
+          "speaker_id": "SPK.R"
+        }
+      ],
+      "render_contract_version": "0.1.0",
+      "scene_sha256": "10e7b643960e4b7831792a78f43371821a53d9c96b6e213dd929ff8e6ffdf793"
+    }
+  },
+  "tolerances": {
+    "integrated_lufs": 0.2,
+    "peak_dbfs": 0.1,
+    "rms_dbfs": 0.1
+  }
+}

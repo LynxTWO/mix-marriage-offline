@@ -1,0 +1,73 @@
+{
+  "fixture_id": "golden_small_surround",
+  "targets": {
+    "LAYOUT.5_1": {
+      "downmix_similarity": {
+        "attempts": [
+          {
+            "matrix_id": "DMX.STD.5_1_TO_2_0.LO_RO_LFE_DROP",
+            "passed": false,
+            "risk_level": "high"
+          },
+          {
+            "matrix_id": "DMX.STD.5_1_TO_2_0.LO_RO_LFE_DROP",
+            "passed": false,
+            "risk_level": "high"
+          }
+        ],
+        "fallback_applied": true,
+        "fallback_final_outcome": "fail",
+        "gate_id": "GATE.DOWNMIX_SIMILARITY_RENDER_COMPARE",
+        "gate_version": "1.0.0",
+        "matrix_id": "DMX.STD.5_1_TO_2_0.LO_RO_LFE_DROP",
+        "passed": false,
+        "risk_level": "high",
+        "safety_collapse_applied": false
+      },
+      "qa_issues": [
+        {
+          "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
+          "severity": "error"
+        },
+        {
+          "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
+          "severity": "error"
+        }
+      ]
+    },
+    "LAYOUT.7_1": {
+      "downmix_similarity": {
+        "attempts": [
+          {
+            "matrix_id": "DMX.STD.7_1_TO_2_0.LO_RO_COMPOSED",
+            "passed": false,
+            "risk_level": "high"
+          },
+          {
+            "matrix_id": "DMX.STD.7_1_TO_2_0.LO_RO_COMPOSED",
+            "passed": false,
+            "risk_level": "high"
+          }
+        ],
+        "fallback_applied": true,
+        "fallback_final_outcome": "fail",
+        "gate_id": "GATE.DOWNMIX_SIMILARITY_RENDER_COMPARE",
+        "gate_version": "1.0.0",
+        "matrix_id": "DMX.STD.7_1_TO_2_0.LO_RO_COMPOSED",
+        "passed": false,
+        "risk_level": "high",
+        "safety_collapse_applied": false
+      },
+      "qa_issues": [
+        {
+          "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
+          "severity": "error"
+        },
+        {
+          "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
+          "severity": "error"
+        }
+      ]
+    }
+  }
+}

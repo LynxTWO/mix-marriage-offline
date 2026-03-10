@@ -1,0 +1,231 @@
+{
+  "fixture_id": "golden_small_immersive",
+  "scene_template_id": "TEMPLATE.SEATING.ORCHESTRA_AUDIENCE",
+  "targets": {
+    "LAYOUT.7_1_4": {
+      "channel_count": 12,
+      "channel_order": [
+        "SPK.L",
+        "SPK.R",
+        "SPK.C",
+        "SPK.LFE",
+        "SPK.LS",
+        "SPK.RS",
+        "SPK.LRS",
+        "SPK.RRS",
+        "SPK.TFL",
+        "SPK.TFR",
+        "SPK.TRL",
+        "SPK.TRR"
+      ],
+      "downmix_policy_version": "0.1.0",
+      "normalized_receipt_sha256": "7775c999937b78978b4667ceb213b3efa2549476ffe5f8ca8e412818ebf04fdd",
+      "normalized_render_manifest_sha256": "d9e2d829e39de2bda83ba76d66743d5ebc4889d6b39cba67db221c7c9d62ee2d",
+      "per_channel_metrics": [
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -3.7768,
+          "rms_dbfs": -13.7723,
+          "speaker_id": "SPK.L"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -2.3639,
+          "rms_dbfs": -13.778,
+          "speaker_id": "SPK.R"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -8.6464,
+          "rms_dbfs": -19.3329,
+          "speaker_id": "SPK.C"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": null,
+          "rms_dbfs": null,
+          "speaker_id": "SPK.LFE"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -26.5011,
+          "rms_dbfs": -35.8752,
+          "speaker_id": "SPK.LS"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -26.5011,
+          "rms_dbfs": -35.8752,
+          "speaker_id": "SPK.RS"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -27.9111,
+          "rms_dbfs": -37.2831,
+          "speaker_id": "SPK.LRS"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -27.9111,
+          "rms_dbfs": -37.2831,
+          "speaker_id": "SPK.RRS"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -43.3113,
+          "rms_dbfs": -53.842,
+          "speaker_id": "SPK.TFL"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -43.3113,
+          "rms_dbfs": -53.842,
+          "speaker_id": "SPK.TFR"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -44.7633,
+          "rms_dbfs": -55.2939,
+          "speaker_id": "SPK.TRL"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -44.7633,
+          "rms_dbfs": -55.2939,
+          "speaker_id": "SPK.TRR"
+        }
+      ],
+      "render_contract_version": "0.1.0",
+      "scene_sha256": "65a320d041a6050d5722089d4bdc37e5c4fde9c43c46efcdb298a1196d9e2c41"
+    },
+    "LAYOUT.9_1_6": {
+      "channel_count": 16,
+      "channel_order": [
+        "SPK.L",
+        "SPK.R",
+        "SPK.C",
+        "SPK.LFE",
+        "SPK.LS",
+        "SPK.RS",
+        "SPK.LRS",
+        "SPK.RRS",
+        "SPK.LW",
+        "SPK.RW",
+        "SPK.TFL",
+        "SPK.TFR",
+        "SPK.TRL",
+        "SPK.TRR",
+        "SPK.TFC",
+        "SPK.TBC"
+      ],
+      "downmix_policy_version": "0.1.0",
+      "normalized_receipt_sha256": "b71bf2282440e6ebbf7c502d1a76c8e93295b99010fb0249a275b51d0db99d6e",
+      "normalized_render_manifest_sha256": "3240964217e74c4aa277d57a272f4b4ebbe307f070047ab3d0b6f18b457a31e2",
+      "per_channel_metrics": [
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -3.7768,
+          "rms_dbfs": -13.7723,
+          "speaker_id": "SPK.L"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -2.3639,
+          "rms_dbfs": -13.778,
+          "speaker_id": "SPK.R"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -8.6464,
+          "rms_dbfs": -19.3329,
+          "speaker_id": "SPK.C"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": null,
+          "rms_dbfs": null,
+          "speaker_id": "SPK.LFE"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -26.5011,
+          "rms_dbfs": -35.8752,
+          "speaker_id": "SPK.LS"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -26.5011,
+          "rms_dbfs": -35.8752,
+          "speaker_id": "SPK.RS"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -27.9111,
+          "rms_dbfs": -37.2831,
+          "speaker_id": "SPK.LRS"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -27.9111,
+          "rms_dbfs": -37.2831,
+          "speaker_id": "SPK.RRS"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -28.9959,
+          "rms_dbfs": -38.3686,
+          "speaker_id": "SPK.LW"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -28.9959,
+          "rms_dbfs": -38.3686,
+          "speaker_id": "SPK.RW"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -43.3113,
+          "rms_dbfs": -53.842,
+          "speaker_id": "SPK.TFL"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -43.3113,
+          "rms_dbfs": -53.842,
+          "speaker_id": "SPK.TFR"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -44.7633,
+          "rms_dbfs": -55.2939,
+          "speaker_id": "SPK.TRL"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -44.7633,
+          "rms_dbfs": -55.2939,
+          "speaker_id": "SPK.TRR"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -46.407,
+          "rms_dbfs": -56.9376,
+          "speaker_id": "SPK.TFC"
+        },
+        {
+          "integrated_lufs": null,
+          "peak_dbfs": -47.8567,
+          "rms_dbfs": -58.3875,
+          "speaker_id": "SPK.TBC"
+        }
+      ],
+      "render_contract_version": "0.1.0",
+      "scene_sha256": "65a320d041a6050d5722089d4bdc37e5c4fde9c43c46efcdb298a1196d9e2c41"
+    }
+  },
+  "tolerances": {
+    "integrated_lufs": 0.2,
+    "peak_dbfs": 0.1,
+    "rms_dbfs": 0.1
+  }
+}

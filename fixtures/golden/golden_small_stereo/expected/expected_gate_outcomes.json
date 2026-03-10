@@ -1,0 +1,9 @@
+{
+  "fixture_id": "golden_small_stereo",
+  "targets": {
+    "LAYOUT.2_0": {
+      "downmix_similarity": null,
+      "qa_issues": []
+    }
+  }
+}

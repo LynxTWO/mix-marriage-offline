@@ -1,0 +1,165 @@
+{
+  "beds": [
+    {
+      "bed_id": "BED.FX_AMBIENCE",
+      "bus_id": "BUS.FX.AMBIENCE",
+      "confidence": 0.65,
+      "content_hint": "ambience",
+      "intent": {
+        "confidence": 0.65,
+        "diffuse": 1.0,
+        "height_send_caps": {
+          "top_front_max_gain": 0.11,
+          "top_max_gain": 0.12,
+          "top_rear_max_gain": 0.12
+        },
+        "locks": []
+      },
+      "kind": "bed",
+      "label": "Fx Ambience",
+      "notes": [
+        "content_hint: ambience"
+      ],
+      "stem_ids": [
+        "STEMFILE.45f7719569"
+      ],
+      "width_hint": 1.0
+    },
+    {
+      "bed_id": "BED.FX_SFX",
+      "bus_id": "BUS.FX.SFX",
+      "confidence": 0.65,
+      "content_hint": "fx_bed",
+      "intent": {
+        "confidence": 0.65,
+        "diffuse": 0.75,
+        "locks": []
+      },
+      "kind": "bed",
+      "label": "Fx Sfx",
+      "notes": [
+        "content_hint: fx_bed"
+      ],
+      "stem_ids": [
+        "STEMFILE.601a3f1e69"
+      ],
+      "width_hint": 0.75
+    },
+    {
+      "bed_id": "BED.MUSIC_SYNTH",
+      "bus_id": "BUS.MUSIC.SYNTH",
+      "confidence": 0.65,
+      "content_hint": "pad_texture",
+      "intent": {
+        "confidence": 0.65,
+        "diffuse": 0.85,
+        "locks": []
+      },
+      "kind": "bed",
+      "label": "Music Synth",
+      "notes": [
+        "content_hint: pad_texture"
+      ],
+      "stem_ids": [
+        "STEMFILE.fa768f1376"
+      ],
+      "width_hint": 0.85
+    }
+  ],
+  "generated_utc": "1970-01-01T00:00:00Z",
+  "intent": {
+    "confidence": 0.0,
+    "locks": [],
+    "perspective": "audience"
+  },
+  "metadata": {
+    "profile_id": "PROFILE.ASSIST"
+  },
+  "objects": [
+    {
+      "azimuth_hint": 0.0,
+      "channel_count": 1,
+      "confidence": 0.8,
+      "depth_hint": 0.25,
+      "group_bus": "BUS.BASS",
+      "intent": {
+        "confidence": 0.8,
+        "depth": 0.25,
+        "locks": [],
+        "position": {
+          "azimuth_deg": 0.0
+        },
+        "width": 0.2
+      },
+      "label": "bass_di",
+      "locks": {
+        "azimuth_hint": false,
+        "depth_hint": false,
+        "width_hint": false
+      },
+      "notes": [
+        "role_id: ROLE.BASS.DI",
+        "group_bus: BUS.BASS",
+        "classification: close_miked_anchor_object"
+      ],
+      "object_id": "OBJ.STEMFILE.6fca3c2371",
+      "role_id": "ROLE.BASS.DI",
+      "stem_id": "STEMFILE.6fca3c2371",
+      "width_hint": 0.2
+    },
+    {
+      "azimuth_hint": 0.0,
+      "channel_count": 1,
+      "confidence": 0.8,
+      "depth_hint": 0.25,
+      "group_bus": "BUS.DRUMS",
+      "intent": {
+        "confidence": 0.8,
+        "depth": 0.25,
+        "locks": [],
+        "position": {
+          "azimuth_deg": 0.0
+        },
+        "width": 0.2
+      },
+      "label": "kick",
+      "locks": {
+        "azimuth_hint": false,
+        "depth_hint": false,
+        "width_hint": false
+      },
+      "notes": [
+        "role_id: ROLE.DRUM.KICK",
+        "group_bus: BUS.DRUMS",
+        "classification: close_miked_anchor_object"
+      ],
+      "object_id": "OBJ.STEMFILE.ed11e0d56b",
+      "role_id": "ROLE.DRUM.KICK",
+      "stem_id": "STEMFILE.ed11e0d56b",
+      "width_hint": 0.2
+    }
+  ],
+  "rules": {
+    "layout_safety_defaults": {
+      "default_azimuth_mode": "none",
+      "prefer_bed_for_ambient": true,
+      "unknown_role_strategy": "object_low_confidence"
+    },
+    "lfe_policy_defaults": {
+      "allow_inferred_lfe_send": false,
+      "mode": "manual_only"
+    }
+  },
+  "scene_id": "SCENE.BUS.B2D7A26AA7A6",
+  "schema_version": "0.1.0",
+  "source": {
+    "created_from": "draft",
+    "stems_dir": "/SCENE/INTENT"
+  },
+  "source_refs": {
+    "bus_plan_ref": "bus_plan.json",
+    "roles_ref": "ontology/roles.yaml",
+    "stems_index_ref": "<FIXTURE_ROOT>",
+    "stems_map_ref": "stems_map.json"
+  }
+}

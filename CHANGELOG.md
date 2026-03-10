@@ -84,6 +84,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Cross-platform golden render fixtures:
+  - Added `fixtures/golden/golden_small_stereo`,
+    `fixtures/golden/golden_small_surround`, and
+    `fixtures/golden/golden_small_immersive` with deterministic synthetic stems
+    plus checked-in expected bus-plan, scene, metrics, and gate snapshots.
+  - Added `tests/test_golden_fixtures.py`, which validates exact normalized
+    render-manifest/receipt hashes, exact channel ordering, exact QA issue
+    IDs/severities, and tolerance-based per-channel peak/RMS/LUFS metrics
+    across stereo, surround, and immersive targets.
+  - CI now runs the focused golden fixture suite explicitly on Linux, Windows,
+    and macOS before the broader test matrix.
+
 - Deterministic render trace metadata embedding:
   - Added `src/mmo/core/trace_metadata.py` so rendered artifacts derive one stable trace payload containing MMO version, optional git commit, scene SHA-256, render contract version, downmix policy version, layout/profile/export-profile IDs, and seed.
   - Renderer WAV outputs now embed that payload in native `iXML` chunks, and renderer manifests carry the same trace fields in `metadata.trace_metadata` plus a reusable `tag_bag` for downstream transcodes.

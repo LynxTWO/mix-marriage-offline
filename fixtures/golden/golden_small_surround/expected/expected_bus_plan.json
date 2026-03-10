@@ -1,0 +1,166 @@
+{
+  "assignments": [
+    {
+      "bus_id": "BUS.BASS",
+      "bus_path": "BUS.MASTER/BUS.BASS",
+      "confidence": 0.5,
+      "file_path": "stems/bass_di.wav",
+      "role_id": "ROLE.BASS.DI",
+      "stem_id": "STEMFILE.6fca3c2371"
+    },
+    {
+      "bus_id": "BUS.DRUMS.KICK",
+      "bus_path": "BUS.MASTER/BUS.DRUMS/BUS.DRUMS.KICK",
+      "confidence": 0.75,
+      "file_path": "stems/kick.wav",
+      "role_id": "ROLE.DRUM.KICK",
+      "stem_id": "STEMFILE.ed11e0d56b"
+    },
+    {
+      "bus_id": "BUS.MUSIC.SYNTH",
+      "bus_path": "BUS.MASTER/BUS.MUSIC/BUS.MUSIC.SYNTH",
+      "confidence": 0.333,
+      "file_path": "stems/pad_stereo_wide.wav",
+      "role_id": "ROLE.SYNTH.PAD",
+      "stem_id": "STEMFILE.fa768f1376"
+    },
+    {
+      "bus_id": "BUS.DRUMS.ROOM",
+      "bus_path": "BUS.MASTER/BUS.DRUMS/BUS.DRUMS.ROOM",
+      "confidence": 0.333,
+      "file_path": "stems/room_stereo.wav",
+      "role_id": "ROLE.DRUM.ROOM",
+      "stem_id": "STEMFILE.b91cd41477"
+    },
+    {
+      "bus_id": "BUS.FX.SFX",
+      "bus_path": "BUS.MASTER/BUS.FX/BUS.FX.SFX",
+      "confidence": 0.333,
+      "file_path": "stems/sfx_stereo.wav",
+      "role_id": "ROLE.SFX.HARD",
+      "stem_id": "STEMFILE.601a3f1e69"
+    }
+  ],
+  "buses": [
+    {
+      "bus_id": "BUS.BASS",
+      "children_ids": [],
+      "label": "Bass",
+      "parent_id": "BUS.MASTER",
+      "stem_ids": [
+        "STEMFILE.6fca3c2371"
+      ]
+    },
+    {
+      "bus_id": "BUS.DRUMS",
+      "children_ids": [
+        "BUS.DRUMS.KICK",
+        "BUS.DRUMS.ROOM"
+      ],
+      "label": "Drums",
+      "parent_id": "BUS.MASTER",
+      "stem_ids": [
+        "STEMFILE.ed11e0d56b",
+        "STEMFILE.b91cd41477"
+      ]
+    },
+    {
+      "bus_id": "BUS.DRUMS.KICK",
+      "children_ids": [],
+      "label": "Drums Kick",
+      "parent_id": "BUS.DRUMS",
+      "stem_ids": [
+        "STEMFILE.ed11e0d56b"
+      ]
+    },
+    {
+      "bus_id": "BUS.DRUMS.ROOM",
+      "children_ids": [],
+      "label": "Drums Room",
+      "parent_id": "BUS.DRUMS",
+      "stem_ids": [
+        "STEMFILE.b91cd41477"
+      ]
+    },
+    {
+      "bus_id": "BUS.FX",
+      "children_ids": [
+        "BUS.FX.SFX"
+      ],
+      "label": "Fx",
+      "parent_id": "BUS.MASTER",
+      "stem_ids": [
+        "STEMFILE.601a3f1e69"
+      ]
+    },
+    {
+      "bus_id": "BUS.FX.SFX",
+      "children_ids": [],
+      "label": "Fx Sfx",
+      "parent_id": "BUS.FX",
+      "stem_ids": [
+        "STEMFILE.601a3f1e69"
+      ]
+    },
+    {
+      "bus_id": "BUS.MASTER",
+      "children_ids": [
+        "BUS.DRUMS",
+        "BUS.BASS",
+        "BUS.MUSIC",
+        "BUS.FX"
+      ],
+      "label": "Master",
+      "parent_id": null,
+      "stem_ids": [
+        "STEMFILE.6fca3c2371",
+        "STEMFILE.ed11e0d56b",
+        "STEMFILE.fa768f1376",
+        "STEMFILE.b91cd41477",
+        "STEMFILE.601a3f1e69"
+      ]
+    },
+    {
+      "bus_id": "BUS.MUSIC",
+      "children_ids": [
+        "BUS.MUSIC.SYNTH"
+      ],
+      "label": "Music",
+      "parent_id": "BUS.MASTER",
+      "stem_ids": [
+        "STEMFILE.fa768f1376"
+      ]
+    },
+    {
+      "bus_id": "BUS.MUSIC.SYNTH",
+      "children_ids": [],
+      "label": "Music Synth",
+      "parent_id": "BUS.MUSIC",
+      "stem_ids": [
+        "STEMFILE.fa768f1376"
+      ]
+    }
+  ],
+  "generated_utc": "1970-01-01T00:00:00Z",
+  "schema": "mmo.bus_plan.v1",
+  "source": {
+    "roles_ref": "ontology/roles.yaml",
+    "stems_map_ref": "stems_map.json"
+  },
+  "summary": {
+    "bus_counts": {
+      "BUS.BASS": 1,
+      "BUS.DRUMS.KICK": 1,
+      "BUS.DRUMS.ROOM": 1,
+      "BUS.FX.SFX": 1,
+      "BUS.MUSIC.SYNTH": 1
+    },
+    "role_counts": {
+      "ROLE.BASS.DI": 1,
+      "ROLE.DRUM.KICK": 1,
+      "ROLE.DRUM.ROOM": 1,
+      "ROLE.SFX.HARD": 1,
+      "ROLE.SYNTH.PAD": 1
+    }
+  }
+}
