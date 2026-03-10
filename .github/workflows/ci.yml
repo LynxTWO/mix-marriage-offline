@@ -33,6 +33,9 @@ jobs:
       - name: Run golden fixtures
         run: python -m pytest -q tests/test_golden_fixtures.py
 
+      - name: Run plugin mode golden tests
+        run: python -m pytest -q tests/test_plugin_modes_golden.py
+
       - name: Run tests (xdist)
         run: MMO_PYTEST_N=auto tools/run_pytest.sh -q
 
@@ -64,6 +67,10 @@ jobs:
       - name: Run golden fixtures
         shell: pwsh
         run: python -m pytest -q tests/test_golden_fixtures.py
+
+      - name: Run plugin mode golden tests
+        shell: pwsh
+        run: python -m pytest -q tests/test_plugin_modes_golden.py
 
       - name: Run tests (xdist)
         shell: pwsh
@@ -98,6 +105,9 @@ jobs:
 
       - name: Run golden fixtures
         run: python -m pytest -q tests/test_golden_fixtures.py
+
+      - name: Run plugin mode golden tests
+        run: python -m pytest -q tests/test_plugin_modes_golden.py
 
       - name: Run tests (xdist)
         run: MMO_PYTEST_N=auto tools/run_pytest.sh -q

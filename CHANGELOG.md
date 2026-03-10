@@ -84,6 +84,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Golden plugin-mode audio regression coverage:
+  - Added `src/mmo/dsp/plugin_mode_runner.py` so tests can dispatch tiny
+    multichannel buffers by manifest-declared `channel_mode`
+    (`per_channel`, `linked_group`, `true_multichannel`) using
+    `ProcessContext.channel_order` instead of hard-coded slot assumptions.
+  - Added `tests/plugins/` fixture manifests and modules for
+    `PLUGIN.RENDERER.TEST.PER_CHANNEL_GAIN`,
+    `PLUGIN.RENDERER.TEST.LINKED_GROUP_TILT`, and
+    `PLUGIN.RENDERER.TEST.TRUE_MULTICHANNEL_SUMCHECK`, each with explicit
+    `max_channels`, link-group, and deterministic-seed semantics.
+  - Added `tests/test_plugin_modes_golden.py` to pin per-channel speaker-ID
+    routing, linked front/surround/height group gain behavior, true
+    multichannel full-buffer checksum access, mismatch no-op behavior, and
+    repeated-run determinism across 5.1 and 7.1.4 layouts.
+  - CI now runs the focused plugin-mode golden suite explicitly on Linux,
+    Windows, and macOS before the broader pytest matrix.
+
 - Cross-platform golden render fixtures:
   - Added `fixtures/golden/golden_small_stereo`,
     `fixtures/golden/golden_small_surround`, and

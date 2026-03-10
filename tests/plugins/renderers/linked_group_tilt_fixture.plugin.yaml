@@ -1,0 +1,22 @@
+plugin_id: "PLUGIN.RENDERER.TEST.LINKED_GROUP_TILT"
+plugin_type: "renderer"
+name: "Linked-Group Tilt Fixture"
+version: "0.1.0"
+description: "Test-only fixture that applies one gain delta to a semantic link group."
+entrypoint: "linked_group_tilt_fixture:LinkedGroupTiltFixture"
+capabilities:
+  max_channels: 32
+  channel_mode: "linked_group"
+  link_groups:
+    - "front"
+    - "surrounds"
+    - "heights"
+  deterministic_seed_policy: "none"
+  supported_standards:
+    - "SMPTE"
+    - "FILM"
+    - "LOGIC_PRO"
+    - "VST3"
+    - "AAF"
+  supported_contexts:
+    - "render"

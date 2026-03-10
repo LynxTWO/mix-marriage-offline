@@ -1,0 +1,12 @@
+plugin_id: "PLUGIN.RENDERER.TEST.PER_CHANNEL_GAIN"
+plugin_type: "renderer"
+name: "Per-Channel Gain Fixture"
+version: "0.1.0"
+description: "Test-only fixture that applies +1 dB to selected semantic speakers."
+entrypoint: "per_channel_gain_fixture:PerChannelGainFixture"
+capabilities:
+  max_channels: 32
+  channel_mode: "per_channel"
+  deterministic_seed_policy: "none"
+  supported_contexts:
+    - "render"

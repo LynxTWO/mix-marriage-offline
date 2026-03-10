@@ -19,6 +19,10 @@ Non-negotiables:
 - Keep DSP execution routed by ontology-backed `ProcessContext.channel_order`
   and semantic `SPK.*` IDs; do not reintroduce hard-coded slot assumptions or
   partial preset layout maps.
+- Keep `src/mmo/dsp/plugin_mode_runner.py`, `tests/plugins/`, and
+  `tests/test_plugin_modes_golden.py` aligned so manifest-declared
+  `per_channel`, `linked_group`, and `true_multichannel` semantics stay pinned
+  by deterministic 5.1 / 7.1.4 regression coverage.
 - Keep chunk-level renderer and plugin-boundary audio transport on
   `mmo.dsp.buffer.AudioBufferF64` so interleaved data keeps explicit
   `channel_order` and `sample_rate_hz` metadata instead of reverting to raw

@@ -87,6 +87,9 @@ Done: rendered similarity fallback now uses a deterministic multi-step sequencer
 - [x] `schemas/plugin.schema.json` `capabilities.supported_standards` and `capabilities.preferred_standard` fields present.
 - [x] Every downmix matrix and QA gate is order-aware (uses channel IDs, not fixed indices).
 - [x] Plugin channel routing uses `ProcessContext.channel_order` (list of `SPK.*` IDs) instead of hard-coded indices.
+- [x] Golden multichannel plugin-mode tests pin manifest-declared `per_channel`,
+  `linked_group`, and `true_multichannel` dispatch semantics, including
+  channel-order safety and deterministic evidence on 5.1 and 7.1.4 fixtures.
 
 #### 4.4.1 Loudness and layout mapping (meter contract)
 - [x] Program loudness uses ITU-R BS.1770-5 weighting with explicit, tested channel mapping.
@@ -169,6 +172,9 @@ What remains: expand fixture-session coverage for front/quad render variants in 
   bus-plan/scene snapshots, exact normalized manifest + receipt hashes, exact
   QA issue IDs/severities, exact channel ordering, and tolerance-based
   per-channel metrics for stereo/surround/immersive targets.
+- [x] Focused plugin-mode golden audio tests validate per-channel speaker-ID
+  routing, linked front/surround/height group behavior, and true
+  multichannel full-buffer semantics through a manifest-driven runner.
 - [x] A dedicated 32-channel render contract fixture proves MMO can export a
   deterministic `LAYOUT.32CH` artifact end-to-end (`nchannels == 32`,
   manifest `channel_order` length `32`, stable SHA-256 across two runs).
