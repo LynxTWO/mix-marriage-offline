@@ -1,0 +1,42 @@
+{
+  "schema_version": "0.1.0",
+  "report_id": "REPORT.TEST.FALLBACK_GATE_FAIL",
+  "project_id": "PROJECT.TEST.FALLBACK_GATE_FAIL",
+  "generated_at": "2000-01-01T00:00:00Z",
+  "engine_version": "0.1.0",
+  "ontology_version": "0.1.0",
+  "session": {
+    "stems_dir": "__FIXTURE_STEMS_DIR__",
+    "stems": [
+      {
+        "stem_id": "reference_front",
+        "file_path": "reference_front.wav",
+        "channel_count": 2,
+        "sample_rate_hz": 48000,
+        "frame_count": 19200,
+        "measurements": []
+      },
+      {
+        "stem_id": "ambience_bed",
+        "file_path": "ambience_bed.wav",
+        "channel_count": 2,
+        "sample_rate_hz": 48000,
+        "frame_count": 19200,
+        "measurements": []
+      }
+    ],
+    "render_export_options": {
+      "decorrelated_bed_widening": {
+        "enabled": true,
+        "seed": 7,
+        "mix": 0.32,
+        "confidence_threshold": 0.85,
+        "min_delay_ms": 3.0,
+        "max_delay_ms": 12.0
+      }
+    }
+  },
+  "issues": [],
+  "recommendations": [],
+  "features": {}
+}

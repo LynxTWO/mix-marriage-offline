@@ -1118,7 +1118,7 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
             if not isinstance(attempts, list):
                 return
             self.assertGreaterEqual(len(attempts), 1)
-            self.assertEqual(attempts[0]["step_id"], "reduce_surround_and_wide")
+            self.assertEqual(attempts[0]["step_id"], "reduce_surround")
             self.assertIn("fallback_applied=true", receipt.get("notes", []))
 
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))

@@ -60,6 +60,35 @@ ISSUE_RENDER_NO_OUTPUTS = "ISSUE.RENDER.NO_OUTPUTS"
 _NO_OUTPUTS_WARNING_MESSAGE = (
     "No audio outputs were written. This build may not include a mixdown renderer yet."
 )
+_FALLBACK_STEP_SEQUENCE = (
+    "reduce_surround",
+    "reduce_height",
+    "reduce_decorrelation",
+    "disable_wideners",
+    "front_bias",
+    "safety_collapse",
+)
+
+
+def _merged_render_export_options(
+    *,
+    session_payload: dict[str, Any],
+    export_stems: bool,
+    export_buses: bool,
+    export_master: bool,
+    export_layout_ids: list[str],
+) -> dict[str, Any]:
+    existing = session_payload.get("render_export_options")
+    merged = dict(existing) if isinstance(existing, dict) else {}
+    merged.update(
+        {
+            "export_stems": bool(export_stems),
+            "export_buses": bool(export_buses),
+            "export_master": bool(export_master),
+            "export_layout_ids": list(export_layout_ids),
+        }
+    )
+    return merged
 
 
 def _collect_stem_artifacts(
@@ -1047,6 +1076,13 @@ def _default_fallback_final(*, final_outcome: str) -> dict[str, Any]:
     }
 
 
+def _fallback_step_sort_key(step_id: str) -> tuple[int, str]:
+    normalized = _coerce_str(step_id).strip()
+    if normalized in _FALLBACK_STEP_SEQUENCE:
+        return (_FALLBACK_STEP_SEQUENCE.index(normalized), normalized)
+    return (len(_FALLBACK_STEP_SEQUENCE), normalized)
+
+
 def _output_similarity_metadata(output: dict[str, Any]) -> dict[str, Any] | None:
     metadata = output.get("metadata")
     if not isinstance(metadata, dict):
@@ -1127,12 +1163,23 @@ def _collect_fallback_reporting(
                 continue
             if layout_id:
                 failed_layout_ids.append(layout_id)
+            still_failed_after_safety_collapse = bool(
+                isinstance(fallback_final, dict)
+                and fallback_final.get("safety_collapse_applied") is True
+            )
             issue: dict[str, Any] = {
                 "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
                 "severity": "error",
                 "message": (
-                    "Rendered surround similarity gate failed after deterministic fallback "
-                    f"for {layout_id or 'unknown_layout'}."
+                    (
+                        "Rendered surround similarity gate still failed after safety collapse "
+                        f"for {layout_id or 'unknown_layout'}."
+                    )
+                    if still_failed_after_safety_collapse
+                    else (
+                        "Rendered surround similarity gate failed after deterministic fallback "
+                        f"for {layout_id or 'unknown_layout'}."
+                    )
                 ),
                 "metric": "downmix_similarity_gate",
                 "value": "fail",
@@ -1154,8 +1201,17 @@ def _collect_fallback_reporting(
     elif saw_similarity_checks:
         final_outcome = "not_needed"
 
+    attempts.sort(
+        key=lambda row: (
+            _coerce_str(row.get("layout_id")).strip(),
+            _fallback_step_sort_key(_coerce_str(row.get("step_id")).strip()),
+            _coerce_str(row.get("result")).strip(),
+        )
+    )
+    ordered_applied_steps = sorted(set(applied_steps), key=_fallback_step_sort_key)
+
     fallback_final: dict[str, Any] = {
-        "applied_steps": applied_steps,
+        "applied_steps": ordered_applied_steps,
         "final_outcome": final_outcome,
         "safety_collapse_applied": safety_collapse_applied,
         "passed_layout_ids": sorted(set(passed_layout_ids)),
@@ -1958,12 +2014,13 @@ def _run_safe_render_command(
             session_payload["scene_payload"] = _json_clone(scene_payload_for_render)
         if isinstance(scene_locks_payload, dict):
             session_payload["scene_locks_payload"] = _json_clone(scene_locks_payload)
-        session_payload["render_export_options"] = {
-            "export_stems": bool(export_stems),
-            "export_buses": bool(export_buses),
-            "export_master": bool(export_master),
-            "export_layout_ids": resolved_export_layout_ids,
-        }
+        session_payload["render_export_options"] = _merged_render_export_options(
+            session_payload=session_payload,
+            export_stems=export_stems,
+            export_buses=export_buses,
+            export_master=export_master,
+            export_layout_ids=resolved_export_layout_ids,
+        )
         session_payload["target_layout_id"] = resolved_target.layout_id
         if run_config is not None:
             normalized_run_config = normalize_run_config(run_config)

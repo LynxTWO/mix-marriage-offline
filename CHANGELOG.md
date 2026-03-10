@@ -123,6 +123,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Added `src/mmo/core/fallback_sequencer.py` and replaced the old one-shot rendered-similarity retry with an ordered, deterministic backoff sequence plus stop rules.
   - Placement safe-render now records every fallback attempt with before/after QA metrics, aggregates those attempts into the safe-render receipt, tags manifests with `fallback_applied=true`, and hard-fails when the sequence is exhausted without a passing similarity result.
   - Added focused regression coverage for sequencer stop conditions, rendered similarity fallback ordering, and safe-render receipt reporting.
+  - Safe-render now preserves fixture/session `render_export_options` when applying CLI export toggles, so renderer-level deterministic options such as decorrelated bed widening survive into the actual render path.
+  - Added `fixtures/fallback_gate_fail/` plus `tests/test_fallback_gate_sequence.py` to prove the 5.1 / 7.1.4 safe-render CLI path trips the downmix gate, runs the ordered fallback sequence, reports per-step before/after metrics, and resolves to deterministic safety-collapse pass behavior.
 
 - Install/runtime dependency contract hardening:
   - NumPy now ships in the base Python dependency set, while the legacy

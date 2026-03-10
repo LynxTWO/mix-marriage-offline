@@ -73,6 +73,9 @@ Non-negotiables:
   seeded decorrelated bed widening may run only for qualified bed content, and
   if rendered surround similarity fails after one bounded backoff retry, the
   renderer must auto-disable and rerender without that plugin stage.
+- Preserve explicit `session.render_export_options` extras through `safe-render`
+  CLI normalization so renderer-scoped deterministic options (for example
+  decorrelated bed widening) are not silently dropped when export toggles are applied.
 - Keep placement and baseline mixdown ingest multiformat-lossless-safe:
   decode `wav`/`flac`/`wv`/`aiff`/`aif`/`ape` through the shared decoder
   abstraction and apply deterministic family-aware sample-rate

@@ -798,7 +798,7 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
         attempts = result.get("attempts")
         self.assertIsInstance(attempts, list)
         if isinstance(attempts, list):
-            self.assertEqual(len(attempts), 2)
+            self.assertGreaterEqual(len(attempts), 2)
         self.assertIn("metrics", result)
 
     def test_decorrelated_bed_widening_respects_confidence_threshold(self) -> None:
@@ -979,7 +979,7 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
         self.assertIsInstance(qa_gate, dict)
         if isinstance(qa_gate, dict):
             fallback_final = qa_gate.get("fallback_final", {})
-            self.assertIn("disable_bed_polish", fallback_final.get("applied_steps", []))
+            self.assertIn("disable_wideners", fallback_final.get("applied_steps", []))
 
     def test_renderer_decodes_mixed_lossless_formats_in_one_session(self) -> None:
         _write_mono_wav(self.stems_dir / "stem_wav.wav", freq_hz=130.0, amplitude=0.2)

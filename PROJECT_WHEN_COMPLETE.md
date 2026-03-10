@@ -443,13 +443,14 @@ What remains: the core DSP path is functional, but formalized fallback sequencin
 - [x] Render-many includes a deterministic one-shot surround fallback:
   compare `stereo` vs `downmix(rendered 5.1/7.1)`, then attenuate surround
   sends and retry once when the similarity gate fails.
-- [ ] If a gate fails, the system applies a documented fallback strategy:
+- [x] If a gate fails, the system applies a documented fallback strategy:
   - reduce surround/height aggressiveness
   - reduce decorrelation
   - collapse risky wideners
   - move ambiguous energy forward
   - re-run render + QA until pass or stop with an explainable failure report
-- [ ] Failures are never silent. Reports must show the failing metrics and the fallback actions attempted.
+- [x] Failures are never silent. Reports must show the failing metrics and the fallback actions attempted.
+Done: safe-render now preserves renderer-side fallback config from session fixtures, records ordered per-step before/after QA metrics through safety collapse, and surfaces explicit gate-failure diagnostics when collapse still does not pass.
 
 ### 4.9.7 Formats, export, and reproducibility
 - [x] Export formats are explicit and deterministic:
@@ -475,7 +476,7 @@ What remains: the core DSP path is functional, but formalized fallback sequencin
   - one per-channel plugin
   - one linked-group plugin
   - one true-multichannel plugin
-- [ ] A regression test that proves a failed downmix gate triggers the correct fallback sequence.
+- [x] A regression test that proves a failed downmix gate triggers the correct fallback sequence.
 
 ## 5) Non-goals (explicitly out of scope for “complete”)
 - DAW plugin hosting (VST/AU/AAX).

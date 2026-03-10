@@ -89,7 +89,7 @@ _SIMILARITY_FALLBACK_HEIGHT_STEP_DB = -3.0
 _SIMILARITY_FALLBACK_REAR_STEP_DB = -6.0
 _SIMILARITY_FALLBACK_DECORRELATION_MIX_DELTA = 0.16
 _SIMILARITY_FALLBACK_STOP_EPSILON = 0.01
-_SIMILARITY_FALLBACK_STOP_STAGNATION_LIMIT = 2
+_SIMILARITY_FALLBACK_STOP_STAGNATION_LIMIT = 6
 _SIMILARITY_FALLBACK_MAX_STEPS = 6
 _DEFAULT_SUBBUS_EXPORT_IDS: tuple[str, ...] = (
     "BUS.DRUMS",
@@ -2632,7 +2632,7 @@ def _run_layout_similarity_fallback_sequence(
         initial_state=initial_state,
         steps=[
             {
-                "step_id": "reduce_surround_and_wide",
+                "step_id": "reduce_surround",
                 "apply": lambda state: _step_scale_render_intent_gains(
                     state,
                     speaker_ids=_SURROUND_CHANNEL_IDS,
@@ -2650,15 +2650,15 @@ def _run_layout_similarity_fallback_sequence(
                 ),
             },
             {
-                "step_id": "reduce_decorrelation_amount",
+                "step_id": "reduce_decorrelation",
                 "apply": _step_reduce_decorrelation_amount,
             },
             {
-                "step_id": "disable_bed_polish",
+                "step_id": "disable_wideners",
                 "apply": _step_disable_bed_polish,
             },
             {
-                "step_id": "front_bias_ambiguous_beds",
+                "step_id": "front_bias",
                 "apply": lambda state: _step_scale_render_intent_gains(
                     state,
                     speaker_ids=frozenset({"SPK.LRS", "SPK.RRS"}),
@@ -2668,7 +2668,7 @@ def _run_layout_similarity_fallback_sequence(
                 ),
             },
             {
-                "step_id": "collapse_bed_to_front_only",
+                "step_id": "safety_collapse",
                 "apply": _step_collapse_bed_to_front_only,
             },
         ],
@@ -2700,7 +2700,7 @@ def _run_layout_similarity_fallback_sequence(
     if isinstance(plugin_meta, dict):
         plugin_meta["qa_gate"] = _json_clone(similarity_result)
         applied_steps = set(similarity_result.get("fallback_final", {}).get("applied_steps", []))
-        if "disable_bed_polish" in applied_steps:
+        if "disable_wideners" in applied_steps:
             plugin_meta["disabled_by_qa"] = True
     return final_outputs, final_notes, similarity_result
 

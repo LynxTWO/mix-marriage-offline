@@ -1183,6 +1183,7 @@ def _bed_send(
     top_center_gains: tuple[float, float] | None = None
     policy_class = "BED.FRONT_ONLY_LOW_CONFIDENCE"
     notes = [
+        "source_kind:bed",
         "bed_subtle_surround_policy_v1",
         f"bed_id:{bed_id or '<unknown>'}",
         f"bed_surround_relative_db:{_BED_SURROUND_RELATIVE_DB:.1f}",

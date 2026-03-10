@@ -1,0 +1,60 @@
+{
+  "schema_version": "0.1.0",
+  "scene_id": "SCENE.TEST.FALLBACK_GATE_FAIL",
+  "source": {
+    "stems_dir": "__FIXTURE_STEMS_DIR__",
+    "created_from": "fixture"
+  },
+  "intent": {
+    "confidence": 0.0,
+    "locks": []
+  },
+  "objects": [
+    {
+      "object_id": "OBJ.reference_front",
+      "stem_id": "reference_front",
+      "role_id": "ROLE.VOCAL.LEAD",
+      "group_bus": "BUS.VOX",
+      "label": "Reference Front",
+      "channel_count": 2,
+      "width_hint": 0.02,
+      "depth_hint": 0.12,
+      "confidence": 0.99,
+      "intent": {
+        "confidence": 0.99,
+        "width": 0.02,
+        "depth": 0.12,
+        "locks": []
+      },
+      "notes": []
+    }
+  ],
+  "beds": [
+    {
+      "bed_id": "BED.AMBIENCE.001",
+      "label": "Ambience Bed",
+      "kind": "bed",
+      "bus_id": "BUS.FX",
+      "stem_ids": [
+        "ambience_bed"
+      ],
+      "content_hint": "ambience",
+      "width_hint": 1.0,
+      "confidence": 1.0,
+      "intent": {
+        "diffuse": 1.0,
+        "confidence": 1.0,
+        "height_send_caps": {
+          "top_max_gain": 1.0,
+          "top_front_max_gain": 1.0,
+          "top_rear_max_gain": 1.0
+        },
+        "locks": []
+      },
+      "notes": []
+    }
+  ],
+  "metadata": {
+    "profile_id": "PROFILE.ASSIST"
+  }
+}
