@@ -84,6 +84,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Deterministic render trace metadata embedding:
+  - Added `src/mmo/core/trace_metadata.py` so rendered artifacts derive one stable trace payload containing MMO version, optional git commit, scene SHA-256, render contract version, downmix policy version, layout/profile/export-profile IDs, and seed.
+  - Renderer WAV outputs now embed that payload in native `iXML` chunks, and renderer manifests carry the same trace fields in `metadata.trace_metadata` plus a reusable `tag_bag` for downstream transcodes.
+  - Lossless transcodes now preserve the same trace keys across `flac`, `wv`, `aiff`, and `alac`, with AIFF/ALAC-specific FFmpeg muxer flags enabled so custom fields are retained instead of dropped.
+  - Added focused regression coverage for RIFF/iXML parsing, ffmpeg-backed multiformat metadata preservation, render-run receipts, and updated the golden-path master WAV hashes for the new deterministic file bytes.
+
 - Deterministic multi-step similarity fallback sequencing:
   - Added `src/mmo/core/fallback_sequencer.py` and replaced the old one-shot rendered-similarity retry with an ordered, deterministic backoff sequence plus stop rules.
   - Placement safe-render now records every fallback attempt with before/after QA metrics, aggregates those attempts into the safe-render receipt, tags manifests with `fallback_applied=true`, and hard-fails when the sequence is exhausted without a passing similarity result.

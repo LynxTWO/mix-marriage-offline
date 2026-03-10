@@ -4,7 +4,9 @@ from typing import Any, Iterable, Sequence
 
 from mmo.core.media_tags import TagBag, tag_bag_to_mapping
 
-_ARBITRARY_FIELD_CONTAINERS = frozenset({"flac", "wv", "wavpack"})
+_ARBITRARY_FIELD_CONTAINERS = frozenset(
+    {"aif", "aiff", "alac", "flac", "ipod", "m4a", "wv", "wavpack"}
+)
 _WAV_CONTAINERS = frozenset({"wav", "wave"})
 _KEY_ALLOWED_CHARS = frozenset("abcdefghijklmnopqrstuvwxyz0123456789_.-")
 _WAV_INFO_ALIASES: dict[str, str] = {
@@ -48,8 +50,14 @@ def _normalize_container_id(value: str) -> str:
     normalized = value.strip().lower()
     if normalized in _WAV_CONTAINERS:
         return "wav"
+    if normalized in {"wv", "wavpack"}:
+        return "wv"
+    if normalized in {"aif", "aiff"}:
+        return "aiff"
+    if normalized in {"alac", "m4a", "ipod"}:
+        return "alac"
     if normalized in _ARBITRARY_FIELD_CONTAINERS:
-        return "wv" if normalized in {"wv", "wavpack"} else "flac"
+        return "flac"
     return normalized
 
 

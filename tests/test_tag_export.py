@@ -3,12 +3,16 @@ from __future__ import annotations
 import os
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 from unittest import mock
 
 from mmo.core.media_tags import RawTag, canonicalize_tag_bag, tag_bag_from_mapping
 from mmo.core.tag_export import build_ffmpeg_tag_export_args, metadata_receipt_mapping
+from mmo.core.trace_metadata import trace_tag_bag_from_metadata
+from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.decoders import read_metadata
+from mmo.dsp.transcode import transcode_wav_to_format
 
 
 class TestTagExport(unittest.TestCase):
@@ -133,6 +137,58 @@ class TestTagExport(unittest.TestCase):
         self.assertIn("x_private", {key.lower() for key in skipped_keys})
         self.assertEqual(receipt["container_format"], "wav")
         self.assertIn("x_private", {key.lower() for key in receipt["skipped_keys"]})
+
+    def test_lossless_transcodes_preserve_trace_keys_across_supported_formats(self) -> None:
+        ffmpeg_cmd = resolve_ffmpeg_cmd()
+        if ffmpeg_cmd is None:
+            self.skipTest("ffmpeg not available")
+
+        trace_bag = trace_tag_bag_from_metadata(
+            {
+                "mmo_version": "1.2.3",
+                "scene_sha256": "a" * 64,
+                "render_contract_version": "0.1.0",
+                "downmix_policy_version": "0.1.0",
+                "layout_id": "LAYOUT.2_0",
+                "profile_id": "PROFILE.ASSIST",
+                "export_profile_id": "PROFILE.ASSIST",
+                "seed": "7",
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            source_wav = temp_path / "source.wav"
+            with wave.open(str(source_wav), "wb") as handle:
+                handle.setnchannels(1)
+                handle.setsampwidth(2)
+                handle.setframerate(48000)
+                handle.writeframes(b"\x00\x00" * 16)
+            for output_format, suffix in (
+                ("flac", ".flac"),
+                ("wv", ".wv"),
+                ("aiff", ".aiff"),
+                ("alac", ".m4a"),
+            ):
+                target = temp_path / f"trace{suffix}"
+                metadata_args, embedded_keys, skipped_keys, warnings = (
+                    build_ffmpeg_tag_export_args(trace_bag, output_format)
+                )
+                self.assertEqual(skipped_keys, [])
+                self.assertEqual(warnings, [])
+
+                transcode_wav_to_format(
+                    ffmpeg_cmd,
+                    source_wav,
+                    target,
+                    output_format,
+                    metadata_args=metadata_args,
+                )
+                metadata = read_metadata(target)
+                normalized = metadata.get("tags", {}).get("normalized", {})
+                for key, values in trace_bag.normalized.items():
+                    self.assertEqual(normalized.get(key), values)
+                self.assertEqual(sorted(embedded_keys), sorted(trace_bag.normalized.keys()))
 
 
 if __name__ == "__main__":

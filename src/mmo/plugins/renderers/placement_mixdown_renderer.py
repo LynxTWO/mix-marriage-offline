@@ -17,6 +17,7 @@ from mmo.core.downmix import (
 from mmo.core.fallback_sequencer import run_fallback_sequence
 from mmo.core.placement_policy import build_render_intent
 from mmo.core.scene_builder import build_scene_from_bus_plan, build_scene_from_session
+from mmo.core.trace_metadata import add_trace_metadata, build_trace_ixml_payload, build_trace_metadata
 from mmo.dsp.buffer import AudioBufferF64, generic_channel_order
 from mmo.dsp.decoders import (
     detect_format_from_path,
@@ -30,7 +31,7 @@ from mmo.dsp.export_finalize import (
     derive_export_finalization_seed,
     resolve_dither_policy_for_bit_depth,
 )
-from mmo.dsp.io import sha256_file
+from mmo.dsp.io import sha256_file, write_wav_ixml_chunk
 from mmo.dsp.process_context import build_process_context
 from mmo.dsp.sample_rate import choose_target_rate_for_session
 from mmo.plugins.interfaces import Recommendation, RenderManifest, RendererPlugin
@@ -1638,6 +1639,7 @@ def _write_trimmed_chunk(
 def _render_subbus_output(
     *,
     session: Dict[str, Any],
+    scene: dict[str, Any],
     layout_id: str,
     output_dir: Path,
     bus_id: str,
@@ -1676,6 +1678,13 @@ def _render_subbus_output(
         dither_policy=dither_policy,
         seed=export_seed,
     )
+    trace_context = {
+        "session": session,
+        "scene_payload": scene,
+        "layout_id": layout_id,
+        "render_seed": render_seed,
+    }
+    trace_metadata = build_trace_metadata(trace_context)
     abs_path.parent.mkdir(parents=True, exist_ok=True)
     pass_frames = 0
     with wave.open(str(abs_path), "wb") as handle:
@@ -1704,6 +1713,7 @@ def _render_subbus_output(
                 sample_rate_hz=sample_rate_hz,
             )
             handle.writeframes(finalizer.finalize_chunk(silence_buffer.data))
+    write_wav_ixml_chunk(abs_path, build_trace_ixml_payload(trace_metadata))
 
     output_sha = sha256_file(abs_path)
     stem_ids = sorted(stem.stem_id for stem in prepared_stems)
@@ -1746,6 +1756,7 @@ def _render_subbus_output(
             "scene_bindings": scene_bindings,
         },
     }
+    output_row["metadata"] = add_trace_metadata(output_row.get("metadata"), trace_context)
     if notes:
         output_row["metadata"]["warnings"] = sorted(set(notes))
     return output_row, []
@@ -1754,6 +1765,7 @@ def _render_subbus_output(
 def _export_subbus_outputs(
     *,
     session: Dict[str, Any],
+    scene: dict[str, Any],
     layout_id: str,
     output_dir: Path,
     prepared_stems: list[_PreparedStem],
@@ -1795,6 +1807,7 @@ def _export_subbus_outputs(
         bus_trim_db = _coerce_float(group_trims.get(bus_id)) if isinstance(group_trims, dict) else None
         output_row, output_notes = _render_subbus_output(
             session=session,
+            scene=scene,
             layout_id=layout_id,
             output_dir=output_dir,
             bus_id=bus_id,
@@ -1903,6 +1916,7 @@ def _export_stem_copy_outputs(
 def _mix_layout_from_intent(
     *,
     session: Dict[str, Any],
+    scene: dict[str, Any],
     render_intent: dict[str, Any],
     layout_id: str,
     output_dir: Path,
@@ -2076,6 +2090,16 @@ def _mix_layout_from_intent(
                         sample_rate_hz=sample_rate_hz,
                     )
                     handle.writeframes(finalizer.finalize_chunk(silence_buffer.data))
+            trace_context = {
+                "session": session,
+                "scene_payload": scene,
+                "layout_id": layout_id,
+                "render_seed": render_seed,
+            }
+            write_wav_ixml_chunk(
+                master_abs_path,
+                build_trace_ixml_payload(build_trace_metadata(trace_context)),
+            )
 
             output_sha = sha256_file(master_abs_path)
             outputs.append(
@@ -2124,10 +2148,15 @@ def _mix_layout_from_intent(
                     },
                 }
             )
+            outputs[-1]["metadata"] = add_trace_metadata(
+                outputs[-1].get("metadata"),
+                trace_context,
+            )
 
     if export_options.export_buses:
         bus_outputs, bus_notes = _export_subbus_outputs(
             session=session,
+            scene=scene,
             layout_id=layout_id,
             output_dir=output_dir,
             prepared_stems=prepared_stems,
@@ -2439,6 +2468,7 @@ def _render_layout_fallback_state(
     *,
     state: _LayoutFallbackState,
     session: Dict[str, Any],
+    scene: dict[str, Any],
     layout_id: str,
     output_dir: Path,
     export_options: _ExportOptions,
@@ -2453,6 +2483,7 @@ def _render_layout_fallback_state(
         )
     layout_outputs, layout_notes = _mix_layout_from_intent(
         session=session,
+        scene=scene,
         render_intent=state.render_intent,
         layout_id=layout_id,
         output_dir=output_dir,
@@ -2550,6 +2581,7 @@ def _attach_similarity_metadata(
 def _run_layout_similarity_fallback_sequence(
     *,
     session: Dict[str, Any],
+    scene: dict[str, Any],
     layout_id: str,
     output_dir: Path,
     export_options: _ExportOptions,
@@ -2573,6 +2605,7 @@ def _run_layout_similarity_fallback_sequence(
         return _render_layout_fallback_state(
             state=state,
             session=session,
+            scene=scene,
             layout_id=layout_id,
             output_dir=output_dir,
             export_options=export_options,
@@ -2741,6 +2774,7 @@ class PlacementMixdownRenderer(RendererPlugin):
             )
             layout_outputs, layout_notes = _mix_layout_from_intent(
                 session=session,
+                scene=scene,
                 render_intent=render_intent,
                 layout_id=layout_id,
                 output_dir=out_dir,
@@ -2792,6 +2826,7 @@ class PlacementMixdownRenderer(RendererPlugin):
                     layout_outputs, final_layout_notes, similarity_result = (
                         _run_layout_similarity_fallback_sequence(
                             session=session,
+                            scene=scene,
                             layout_id=layout_id,
                             output_dir=out_dir,
                             export_options=export_options,

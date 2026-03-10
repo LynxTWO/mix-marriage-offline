@@ -452,8 +452,9 @@ What remains: the core DSP path is functional, but formalized fallback sequencin
   - FLAC/WavPack outputs re-embed normalized + raw tag fields deterministically.
   - WAV outputs embed conservative INFO subsets and emit skipped-key receipts.
   - `render_report`/deliverables file rows carry `metadata_receipt` entries.
-- [ ] Rendered files embed enough metadata for traceability:
-  - tool version, scene hash, render contract version, downmix policy version.
+- [x] Rendered files embed enough metadata for traceability:
+  - tool version, optional git commit, scene hash, render contract version, downmix policy version.
+  - layout/profile/export-profile IDs and deterministic seed are embedded in renderer WAV outputs (`iXML`) and ffmpeg-backed lossless outputs (`flac`, `wv`, `aiff`, `alac`).
 - [ ] Golden fixtures prove:
   - determinism across OS targets (within documented tolerance),
   - consistent gating outcomes,

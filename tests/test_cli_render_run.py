@@ -554,7 +554,20 @@ class TestRenderRunAudioExecution(unittest.TestCase):
             self.assertIsInstance(metadata_receipt, dict)
             if isinstance(metadata_receipt, dict):
                 self.assertEqual(metadata_receipt.get("container_format"), "wav")
-                self.assertEqual(metadata_receipt.get("embedded_keys"), [])
+                embedded_keys = metadata_receipt.get("embedded_keys")
+                self.assertIsInstance(embedded_keys, list)
+                self.assertTrue(
+                    {
+                        "mmo_version",
+                        "scene_sha256",
+                        "render_contract_version",
+                        "downmix_policy_version",
+                        "layout_id",
+                        "profile_id",
+                        "export_profile_id",
+                        "seed",
+                    }.issubset(set(embedded_keys or []))
+                )
                 self.assertEqual(metadata_receipt.get("skipped_keys"), [])
 
             rendered_path = Path(str(output_file["file_path"]))

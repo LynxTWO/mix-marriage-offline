@@ -19,9 +19,10 @@ from mmo.dsp.export_finalize import (
     export_finalize_interleaved_f64,
     resolve_dither_policy_for_bit_depth,
 )
-from mmo.dsp.io import sha256_file
+from mmo.dsp.io import sha256_file, write_wav_ixml_chunk
 from mmo.dsp.process_context import build_process_context
 from mmo.dsp.sample_rate import choose_target_rate_for_session
+from mmo.core.trace_metadata import add_trace_metadata, build_trace_ixml_payload, build_trace_metadata
 from mmo.plugins.interfaces import Recommendation, RenderManifest, RendererPlugin
 
 _PLUGIN_ID = "PLUGIN.RENDERER.MIXDOWN_BASELINE"
@@ -582,6 +583,7 @@ def _write_pcm_wav(
     bit_depth: int,
     dither_policy: str,
     seed: int,
+    trace_metadata: dict[str, str],
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     pcm_bytes = export_finalize_interleaved_f64(
@@ -596,6 +598,7 @@ def _write_pcm_wav(
         handle.setsampwidth(bit_depth // 8)
         handle.setframerate(buffer.sample_rate_hz)
         handle.writeframes(pcm_bytes)
+    write_wav_ixml_chunk(output_path, build_trace_ixml_payload(trace_metadata))
 
 
 def _layout_slug(layout_id: str) -> str:
@@ -674,12 +677,20 @@ class MixdownRenderer(RendererPlugin):
             )
             rel_path = _output_relative_path(output_dir=out_dir, layout_id=layout_id)
             abs_path = out_dir / rel_path
+            trace_metadata = build_trace_metadata(
+                {
+                    "session": session,
+                    "layout_id": layout_id,
+                    "render_seed": render_seed,
+                }
+            )
             _write_pcm_wav(
                 abs_path,
                 buffer=output_buffer,
                 bit_depth=bit_depth,
                 dither_policy=dither_policy,
                 seed=export_seed,
+                trace_metadata=trace_metadata,
             )
             output_sha = sha256_file(abs_path)
             layout_slug = _layout_slug(layout_id)
@@ -723,6 +734,14 @@ class MixdownRenderer(RendererPlugin):
                     "center_reduction_db": _CENTER_FOLD_REDUCTION_DB,
                 },
             }
+            output_row["metadata"] = add_trace_metadata(
+                output_row.get("metadata"),
+                {
+                    "session": session,
+                    "layout_id": layout_id,
+                    "render_seed": render_seed,
+                },
+            )
             if program.notes:
                 output_row["metadata"]["warnings"] = list(program.notes)
             outputs.append(output_row)

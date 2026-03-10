@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import struct
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -172,6 +173,79 @@ def _parse_ixml_tag(payload: bytes, *, index: int, raw_tags: list[RawTag]) -> No
             index=index,
         )
     )
+    try:
+        root = ET.fromstring(value)
+    except ET.ParseError:
+        return
+
+    trace_parent = None
+    for element in root.iter():
+        tag_name = element.tag.split("}", 1)[-1].strip().upper()
+        if tag_name == "MMO_TRACE":
+            trace_parent = element
+            break
+    if trace_parent is None:
+        return
+
+    trace_index = 0
+    for child in trace_parent:
+        key = child.tag.split("}", 1)[-1].strip().lower()
+        text = (child.text or "").strip()
+        if not key or text == "":
+            continue
+        raw_tags.append(
+            RawTag(
+                source="format",
+                container="wav",
+                scope="ixml_trace",
+                key=key,
+                value=text,
+                index=trace_index,
+            )
+        )
+        trace_index += 1
+
+
+def _riff_chunk_bytes(chunk_id: bytes, payload: bytes) -> bytes:
+    if len(chunk_id) != 4:
+        raise ValueError(f"RIFF chunk ids must be 4 bytes: {chunk_id!r}")
+    padding = b"\x00" if len(payload) % 2 == 1 else b""
+    return chunk_id + struct.pack("<I", len(payload)) + payload + padding
+
+
+def write_wav_ixml_chunk(path: Path, xml_text: str) -> None:
+    """Replace or append a WAV iXML chunk with deterministic payload text."""
+    try:
+        source_bytes = path.read_bytes()
+    except OSError as exc:
+        raise ValueError(f"Failed to read WAV file '{path}': {exc}") from exc
+
+    if len(source_bytes) < 12:
+        raise ValueError(f"WAV file too small to contain RIFF header: '{path}'")
+
+    riff_id, _riff_size, wave_id = struct.unpack("<4sI4s", source_bytes[:12])
+    if riff_id != b"RIFF" or wave_id != b"WAVE":
+        raise ValueError(f"Unsupported WAV container for iXML write: '{path}'")
+
+    chunks: list[bytes] = []
+    cursor = 12
+    while cursor + 8 <= len(source_bytes):
+        chunk_id, chunk_size = struct.unpack("<4sI", source_bytes[cursor : cursor + 8])
+        chunk_total = 8 + chunk_size + (chunk_size % 2)
+        end = cursor + chunk_total
+        if end > len(source_bytes):
+            raise ValueError(f"Truncated chunk {chunk_id!r} in '{path}'")
+        if chunk_id != b"iXML":
+            chunks.append(source_bytes[cursor:end])
+        cursor = end
+
+    xml_payload = xml_text.encode("utf-8") + b"\x00"
+    riff_payload = b"WAVE" + b"".join(chunks) + _riff_chunk_bytes(b"iXML", xml_payload)
+    updated = b"RIFF" + struct.pack("<I", len(riff_payload)) + riff_payload
+    try:
+        path.write_bytes(updated)
+    except OSError as exc:
+        raise ValueError(f"Failed to write WAV iXML chunk '{path}': {exc}") from exc
 
 
 def sha256_file(path: Path) -> str:

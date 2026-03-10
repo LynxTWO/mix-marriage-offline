@@ -20,8 +20,9 @@ from mmo.dsp.export_finalize import (
     derive_export_finalization_seed,
     resolve_dither_policy_for_bit_depth,
 )
-from mmo.dsp.io import read_wav_metadata, sha256_file
+from mmo.dsp.io import read_wav_metadata, sha256_file, write_wav_ixml_chunk
 from mmo.dsp.meters import iter_wav_float64_samples
+from mmo.core.trace_metadata import add_trace_metadata, build_trace_ixml_payload, build_trace_metadata
 from mmo.plugins.interfaces import Recommendation, RenderManifest, RendererPlugin
 
 
@@ -289,6 +290,7 @@ def _render_gain_trim(
     route_mapping: List[tuple[int, int, float]] | None = None,
     dither_policy: str,
     seed: int,
+    trace_metadata: dict[str, str],
 ) -> None:
     gain_scalar = _db_to_linear(gain_db)
     pending_samples: list[float] = []
@@ -347,6 +349,7 @@ def _render_gain_trim(
 
         if pending_samples:
             raise ValueError("decoder returned non-frame-aligned sample data")
+    write_wav_ixml_chunk(output_path, build_trace_ixml_payload(trace_metadata))
 
 
 def _resolve_stems_dir(session: Dict[str, Any]) -> Path | None:
@@ -636,6 +639,11 @@ class GainTrimRenderer(RendererPlugin):
             )
 
             try:
+                trace_context = {
+                    "session": session,
+                    "layout_id": receipt_layout_id,
+                    "render_seed": render_seed,
+                }
                 _render_gain_trim(
                     render_samples_iter,
                     output_path,
@@ -649,6 +657,7 @@ class GainTrimRenderer(RendererPlugin):
                     route_mapping=route_mapping,
                     dither_policy=dither_policy,
                     seed=export_seed,
+                    trace_metadata=build_trace_metadata(trace_context),
                 )
             except ValueError:
                 _append_skipped(skipped, contributions, "unsupported_format")
@@ -725,6 +734,10 @@ class GainTrimRenderer(RendererPlugin):
                 ),
                 "metadata": metadata,
             }
+            output_row["metadata"] = add_trace_metadata(
+                output_row.get("metadata"),
+                trace_context,
+            )
             if output_layout_id:
                 output_row["layout_id"] = output_layout_id
             outputs.append(output_row)

@@ -16,6 +16,7 @@ from mmo.core.media_tags import TagBag, empty_tag_bag, merge_tag_bags, tag_bag_f
 from mmo.core.render_execute import resolve_ffmpeg_version
 from mmo.core.render_reporting import build_render_report_from_plan
 from mmo.core.tag_export import build_ffmpeg_tag_export_args, metadata_receipt_mapping
+from mmo.core.trace_metadata import build_trace_ixml_payload, build_trace_metadata, trace_tag_bag_from_metadata
 from mmo.dsp.buffer import AudioBufferF64
 from mmo.dsp.backends.ffmpeg_decode import (
     build_ffmpeg_decode_command,
@@ -23,7 +24,7 @@ from mmo.dsp.backends.ffmpeg_decode import (
 )
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.decoders import read_metadata
-from mmo.dsp.io import read_wav_metadata, sha256_file
+from mmo.dsp.io import read_wav_metadata, sha256_file, write_wav_ixml_chunk
 from mmo.dsp.meters import iter_wav_float64_samples
 from mmo.dsp.plugins.base import (
     PluginContext,
@@ -902,14 +903,29 @@ def build_render_report_with_audio(
         job_id = _coerce_str(job.get("job_id")).strip() or "JOB.001"
         output_formats = _job_output_formats_or_raise(job)
         planned_outputs = _planned_outputs_by_format(job)
+        trace_context = {
+            **_coerce_dict(job),
+            "request_payload": request_payload,
+            "plan_payload": plan_payload,
+            "scene_payload": scene_payload,
+            "options": _coerce_dict(request_payload.get("options")),
+        }
+        trace_metadata = build_trace_metadata(trace_context)
+        trace_tag_bag = trace_tag_bag_from_metadata(trace_metadata)
+        trace_embedded_keys = sorted(trace_tag_bag.normalized.keys())
         metadata_plan_by_format: dict[str, dict[str, Any]] = {}
         for output_format in output_formats:
+            export_tag_bag = (
+                source_tag_bag
+                if output_format == "wav"
+                else merge_tag_bags((source_tag_bag, trace_tag_bag))
+            )
             (
                 ffmpeg_metadata_args,
                 embedded_keys,
                 skipped_keys,
                 metadata_warnings,
-            ) = build_ffmpeg_tag_export_args(source_tag_bag, output_format)
+            ) = build_ffmpeg_tag_export_args(export_tag_bag, output_format)
             metadata_plan_by_format[output_format] = {
                 "ffmpeg_metadata_args": ffmpeg_metadata_args,
                 "embedded_keys": embedded_keys,
@@ -1119,6 +1135,8 @@ def build_render_report_with_audio(
                         command_rows=ffmpeg_command_rows,
                         metadata_args=wav_metadata_args,
                     )
+            if keep_wav_output:
+                write_wav_ixml_chunk(wav_path, build_trace_ixml_payload(trace_metadata))
 
             if keep_wav_output:
                 output_files.append(
@@ -1129,7 +1147,7 @@ def build_render_report_with_audio(
                         bit_depth=output_bit_depth,
                         metadata_receipt=metadata_receipt_mapping(
                             output_container_format_id="wav",
-                            embedded_keys=wav_embedded_keys,
+                            embedded_keys=wav_embedded_keys + trace_embedded_keys,
                             skipped_keys=wav_skipped_keys,
                             warnings=wav_warnings,
                         ),

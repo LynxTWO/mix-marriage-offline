@@ -11,6 +11,10 @@ _FFMPEG_ENCODE_ARGS_BY_FORMAT: dict[str, tuple[str, ...]] = {
     "aiff": ("-f", "aiff", "-c:a", "pcm_s24be"),
     "alac": ("-c:a", "alac", "-f", "ipod"),
 }
+_FFMPEG_CONTAINER_ARGS_BY_FORMAT: dict[str, tuple[str, ...]] = {
+    "aiff": ("-write_id3v2", "1", "-id3v2_version", "4"),
+    "alac": ("-movflags", "use_metadata_tags"),
+}
 _FFMPEG_DETERMINISM_FLAGS: tuple[str, ...] = (
     "-map_metadata",
     "-1",
@@ -102,6 +106,7 @@ def build_ffmpeg_transcode_command(
     if metadata_args is not None:
         command.extend(str(item) for item in metadata_args)
     command.extend(encode_args)
+    command.extend(_FFMPEG_CONTAINER_ARGS_BY_FORMAT.get(fmt, ()))
     normalized_layout = (channel_layout or "").strip()
     if normalized_layout:
         command.extend(["-channel_layout", normalized_layout])
