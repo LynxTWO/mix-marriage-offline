@@ -25,7 +25,7 @@ Use this same repo-relative path on every machine:
 ## Prerequisites
 
 - Python 3.12+
-- Node.js 20+
+- Node.js 24 LTS+
 - MMO installed in editable mode so the CLI is available:
   - `python -m pip install -e .`
 

@@ -182,6 +182,14 @@ What remains: expand fixture-session coverage for front/quad render variants in 
   deterministic `LAYOUT.32CH` artifact end-to-end (`nchannels == 32`,
   manifest `channel_order` length `32`, stable SHA-256 across two runs).
 - [x] CI runs on Windows, Linux, macOS (or documents any limitations).
+Done: GitHub-hosted workflow pins now use Node 24-ready majors for
+`actions/checkout`, `actions/setup-python`, `actions/setup-node`,
+`actions/upload-artifact`, and `actions/download-artifact` where upstream has
+published them, so runtime deprecations do not silently age out the CI matrix.
+Done: CI and local desktop-dev expectations now pin the current validated
+environment surface explicitly: Node 24 LTS for GUI/Tauri work, Rust 1.94.0 for
+the Tauri crate, and versioned GitHub-hosted runner images instead of floating
+`*-latest` labels.
 What remains: broaden the golden fixture matrix beyond the small stereo/surround/immersive corpus into additional mixed-confidence and corrective-action edge cases.
 
 ### 4.8 UX/CLI is usable for real work

@@ -16,11 +16,11 @@ env:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -35,11 +35,11 @@ jobs:
 
   build-manual:
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -53,18 +53,18 @@ jobs:
           --out sandbox_tmp/manual/MMO_User_Manual.pdf
 
       - name: Upload manual artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: mmo-user-manual-pdf
           path: sandbox_tmp/manual/MMO_User_Manual.pdf
 
   build-python-dist:
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -75,21 +75,27 @@ jobs:
         run: python -m build
 
       - name: Upload dist artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: mmo-python-dist
           path: dist/
 
   build-binaries:
     needs: [validate, build-manual]
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - runner: ubuntu-24.04
+            artifact-label: ubuntu-latest
+          - runner: windows-2025
+            artifact-label: windows-latest
+          - runner: macos-15
+            artifact-label: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -114,7 +120,7 @@ jobs:
           echo "APPIMAGETOOL=/tmp/appimagetool.AppImage" >> "$GITHUB_ENV"
 
       - name: Download manual PDF
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: mmo-user-manual-pdf
           path: dist/manual/
@@ -151,9 +157,9 @@ jobs:
         run: python tools/build_installers.py --input-dir dist --output-dir dist/installers --version "${{ env.RELEASE_TAG }}" --manual-pdf dist/manual/MMO_User_Manual.pdf
 
       - name: Upload binary artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: mmo-binaries-${{ matrix.os }}
+          name: mmo-binaries-${{ matrix.artifact-label }}
           path: |
             dist/mmo-*
             dist/MMO-*
@@ -166,27 +172,27 @@ jobs:
 
   release:
     needs: [build-python-dist, build-binaries, build-manual]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download wheel/sdist artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: mmo-python-dist
           path: dist/
 
       - name: Download binary artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: mmo-binaries-*
           merge-multiple: true
           path: dist/
 
       - name: Download manual PDF
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: mmo-user-manual-pdf
           path: dist/

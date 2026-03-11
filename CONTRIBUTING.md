@@ -37,7 +37,7 @@ If you contribute with AI tools, that is fine. The human submitting the PR is st
 
 ### Node (GUI tests)
 
-- Node 20 recommended.
+- Node 24 LTS recommended (`.nvmrc` pins the repo to major `24`).
 - In `gui/`:
   - `npm ci`
   - `npm test`

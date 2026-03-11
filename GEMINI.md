@@ -145,6 +145,13 @@ Non-negotiables:
 - Keep desktop Tauri CI building release binaries on Linux, macOS, and Windows:
   frontend lint/test steps should stay install-safe, and artifact uploads
   should come from `gui/desktop-tauri/src-tauri/target/release/`.
+- Keep GitHub Actions JavaScript actions on Node 24-ready majors where
+  upstream provides them; fix runtime deprecations by upgrading action
+  versions, not by relying on insecure or temporary runner override env vars.
+- Keep GUI/Tauri runtime expectations explicit and aligned across docs + CI:
+  use Node 24 LTS for local/frontend work, pin GitHub-hosted runner images
+  instead of relying on `*-latest`, and keep the Tauri Rust toolchain pinned
+  rather than floating on the ambient `stable` channel.
 - Keep scene QA lint deterministic and explainable:
   `mmo scene lint` must emit stable issue ordering/report payloads and cover
   missing stem IDs/refs/files, duplicate object/bus refs, placement range

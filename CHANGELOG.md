@@ -141,6 +141,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     passthrough cases, including bypassed and fully dry endpoints, while
     preserving explainable event-log/report output.
 
+### Changed
+
+- CI now uses Node 24-ready GitHub Actions majors for `actions/checkout`,
+  `actions/setup-python`, `actions/setup-node`, `actions/upload-artifact`, and
+  `actions/download-artifact` where upstream publishes them.
+- GUI/Tauri workflows and contributor docs now target Node 24 LTS, GitHub-hosted
+  runner images are pinned to `ubuntu-24.04`, `windows-2025`, and `macos-15`,
+  and the Tauri crate now pins Rust `1.94.0` instead of floating on `stable`.
+
 ### Added
 
 - Golden plugin-mode audio regression coverage:

@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-03-07
+Last updated: 2026-03-11
 
 This is the single-page milestone checklist for current delivery phases.
 
@@ -59,3 +59,8 @@ Definition of done:
 - Default CI pytest jobs run with xdist.
 - CI keeps a serial pytest job to detect order dependencies.
 - Serial-only xdist tests: none currently.
+- GitHub Actions workflow pins now use Node 24-ready majors for the main
+  checkout, Python, Node, and artifact actions where upstream publishes them;
+  the Pages-specific actions remain on their latest upstream majors.
+- GitHub-hosted runner labels are pinned to `ubuntu-24.04`, `windows-2025`, and
+  `macos-15`, while GUI/Tauri dev paths now target Node 24 LTS and Rust 1.94.0.

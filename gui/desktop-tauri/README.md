@@ -14,21 +14,24 @@ Desktop production builds do not require the Node `gui/server.mjs` runtime.
 
 ## Local development
 
-1. Install the Tauri prerequisites for your OS:
+1. Install the Tauri prerequisites for your OS and use Node 24 LTS:
    https://tauri.app/start/prerequisites/
-2. Install desktop dependencies:
+   If you use `nvm`, run `nvm use` from the repo root first.
+2. Install the pinned Rust toolchain for the Tauri crate if needed:
+   `rustup toolchain install 1.94.0`
+3. Install desktop dependencies:
    `npm install`
-3. Install Python sidecar build dependencies from the repo root:
+4. Install Python sidecar build dependencies from the repo root:
    `python -m pip install -e ".[truth,pdf,gui]" pyinstaller`
    If your machine only has `python3`, use `python3` here and set `PYTHON=python3`
    when running the desktop build commands.
-4. Run the frontend only:
+5. Run the frontend only:
    `npm run dev`
-5. Run the desktop UI tests:
+6. Run the desktop UI tests:
    `npm test`
-6. Prepare the MMO sidecar manually if you want:
+7. Prepare the MMO sidecar manually if you want:
    `npm run prepare-sidecar`
-7. Run the desktop app:
+8. Run the desktop app:
    `npm run tauri dev`
 
 In the app:
