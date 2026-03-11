@@ -103,7 +103,7 @@ def _build_with_pyinstaller(
     hidden_imports: tuple[str, ...] = (),
 ) -> Path:
     if importlib.util.find_spec("PyInstaller") is None:
-        raise BuildError("PyInstaller is not installed.")
+        raise BuildError(f"PyInstaller is not installed in {sys.executable}.")
 
     dist_dir = build_dir / "pyinstaller_dist"
     work_dir = build_dir / "pyinstaller_work"
@@ -164,7 +164,7 @@ def _build_with_nuitka(
     binary_name: str,
 ) -> Path:
     if importlib.util.find_spec("nuitka") is None:
-        raise BuildError("Nuitka is not installed.")
+        raise BuildError(f"Nuitka is not installed in {sys.executable}.")
 
     output_dir = build_dir / "nuitka_dist"
     output_dir.mkdir(parents=True, exist_ok=True)
