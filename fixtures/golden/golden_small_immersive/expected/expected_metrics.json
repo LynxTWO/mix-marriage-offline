@@ -19,7 +19,7 @@
         "SPK.TRR"
       ],
       "downmix_policy_version": "0.1.0",
-      "normalized_receipt_sha256": "7775c999937b78978b4667ceb213b3efa2549476ffe5f8ca8e412818ebf04fdd",
+      "normalized_receipt_sha256": "df04a39b9a7c675dd63181ef674495f9dbeafec06a79389a98187d5ed6fd658c",
       "normalized_render_manifest_sha256": "d9e2d829e39de2bda83ba76d66743d5ebc4889d6b39cba67db221c7c9d62ee2d",
       "per_channel_metrics": [
         {
@@ -60,14 +60,14 @@
         },
         {
           "integrated_lufs": null,
-          "peak_dbfs": -27.9111,
-          "rms_dbfs": -37.2831,
+          "peak_dbfs": -33.9111,
+          "rms_dbfs": -43.2831,
           "speaker_id": "SPK.LRS"
         },
         {
           "integrated_lufs": null,
-          "peak_dbfs": -27.9111,
-          "rms_dbfs": -37.2831,
+          "peak_dbfs": -33.9111,
+          "rms_dbfs": -43.2831,
           "speaker_id": "SPK.RRS"
         },
         {
@@ -119,7 +119,7 @@
         "SPK.TBC"
       ],
       "downmix_policy_version": "0.1.0",
-      "normalized_receipt_sha256": "b71bf2282440e6ebbf7c502d1a76c8e93295b99010fb0249a275b51d0db99d6e",
+      "normalized_receipt_sha256": "837bf6cc775a554dd51c1eb40c7722973a4b77db02cdb40a991fce334ce7912d",
       "normalized_render_manifest_sha256": "3240964217e74c4aa277d57a272f4b4ebbe307f070047ab3d0b6f18b457a31e2",
       "per_channel_metrics": [
         {
@@ -160,14 +160,14 @@
         },
         {
           "integrated_lufs": null,
-          "peak_dbfs": -27.9111,
-          "rms_dbfs": -37.2831,
+          "peak_dbfs": -33.9111,
+          "rms_dbfs": -43.2831,
           "speaker_id": "SPK.LRS"
         },
         {
           "integrated_lufs": null,
-          "peak_dbfs": -27.9111,
-          "rms_dbfs": -37.2831,
+          "peak_dbfs": -33.9111,
+          "rms_dbfs": -43.2831,
           "speaker_id": "SPK.RRS"
         },
         {

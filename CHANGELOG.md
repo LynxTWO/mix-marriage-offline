@@ -92,6 +92,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     (`fallback_attempts` / `fallback_final`) and applied it across report
     producers so schema-required fallback fields stay present without
     weakening the contract.
+  - Restored safe-render fallback back-compat so exhausted surround
+    similarity fallback keeps receipts, QA reports, and written artifacts
+    instead of turning partial-success renders into accidental hard stops;
+    receipt/QA payloads now carry the explicit failure state while retained
+    front-bias fallback changes stay reflected in the surround/immersive
+    golden fixtures.
   - Restored byte-stable plugin-chain no-op behavior for matching stereo WAV
     passthrough cases, including bypassed and fully dry endpoints, while
     preserving explainable event-log/report output.

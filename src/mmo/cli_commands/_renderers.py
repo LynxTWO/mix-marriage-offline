@@ -2615,12 +2615,14 @@ def _run_safe_render_command(
             },
         )
 
+        # Safe-render remains back-compatible and user-helpful by keeping
+        # partial/safe artifacts plus explicit QA failure metadata when
+        # similarity fallback exhausts. The only hard-stop retained here is
+        # the existing "no outputs" contract unless another explicit strict
+        # policy is introduced separately.
         render_status = (
             "blocked"
-            if (
-                (no_outputs_issue is not None and not allow_empty_outputs)
-                or fallback_final.get("final_outcome") == "fail"
-            )
+            if (no_outputs_issue is not None and not allow_empty_outputs)
             else "completed"
         )
         applied_summaries = _build_applied_rec_summaries(
@@ -2755,11 +2757,11 @@ def _run_safe_render_command(
             exit_code = 1
         elif fallback_final.get("final_outcome") == "fail":
             print(
-                "safe-render: failing because deterministic fallback sequence exhausted"
-                " without passing similarity QA.",
+                "safe-render: deterministic fallback sequence exhausted without"
+                " passing similarity QA; outputs were kept and the receipt/QA"
+                " report mark the failure explicitly.",
                 file=sys.stderr,
             )
-            exit_code = 1
         elif no_outputs_issue is not None and allow_empty_outputs:
             print(
                 "safe-render: outputs=0 allowed by --allow-empty-outputs.",

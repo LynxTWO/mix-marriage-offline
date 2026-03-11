@@ -47,6 +47,11 @@
             "matrix_id": "DMX.STD.7_1_TO_2_0.LO_RO_COMPOSED",
             "passed": false,
             "risk_level": "high"
+          },
+          {
+            "matrix_id": "DMX.STD.7_1_TO_2_0.LO_RO_COMPOSED",
+            "passed": false,
+            "risk_level": "high"
           }
         ],
         "fallback_applied": true,

@@ -89,6 +89,11 @@ Non-negotiables:
   renders against downmix(rendered surround/immersive), and if gates fail,
   allow only a single bounded backoff retry (surround/height/wide channels)
   before final pass/fail logging.
+- Keep default safe-render fallback back-compatible and user-helpful:
+  exhausted surround similarity fallback must preserve written artifacts,
+  receipts, QA reports, and preview outputs when they already exist, and the
+  failure must remain explicit in receipt/QA metadata instead of escalating to
+  a non-zero exit unless a separate strict policy explicitly requires it.
 - Keep safe-render zero-output behavior fail-safe: emit
   `ISSUE.RENDER.NO_OUTPUTS` and return non-zero by default unless
   `--allow-empty-outputs` is explicitly set.

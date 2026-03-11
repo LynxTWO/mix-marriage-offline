@@ -1124,6 +1124,63 @@ def _attenuate_wav_channels_inplace(
         raise
 
 
+def _attenuate_wav_channels_with_gains_inplace(
+    *,
+    wav_path: Path,
+    gain_db_by_index: dict[int, float],
+) -> None:
+    from mmo.dsp.io import read_wav_metadata
+    from mmo.dsp.meters import iter_wav_float64_samples
+
+    metadata = read_wav_metadata(wav_path)
+    channels = int(metadata.get("channels", 0) or 0)
+    sample_rate_hz = int(metadata.get("sample_rate_hz", 0) or 0)
+    if channels <= 0 or sample_rate_hz <= 0:
+        raise ValueError(f"Invalid WAV metadata for attenuation: {wav_path}")
+
+    linear_by_index = {
+        index: math.pow(10.0, float(gain_db) / 20.0)
+        for index, gain_db in gain_db_by_index.items()
+        if 0 <= index < channels
+    }
+    if not linear_by_index:
+        raise ValueError("No valid surround channels available for attenuation.")
+
+    tmp_path = wav_path.parent / f"{wav_path.name}.mmo_retry.tmp"
+    try:
+        with wave.open(str(tmp_path), "wb") as handle:
+            handle.setnchannels(channels)
+            handle.setsampwidth(3)  # deterministic PCM24 output
+            handle.setframerate(sample_rate_hz)
+            for chunk in iter_wav_float64_samples(
+                wav_path,
+                error_context="downmix similarity fallback attenuation",
+            ):
+                if not chunk:
+                    continue
+                total = len(chunk) - (len(chunk) % channels)
+                if total <= 0:
+                    continue
+                adjusted: List[float] = list(chunk[:total])
+                frames = total // channels
+                for frame_index in range(frames):
+                    base = frame_index * channels
+                    for channel_index, linear in linear_by_index.items():
+                        sample_index = base + channel_index
+                        adjusted[sample_index] = _clamp_sample(
+                            float(adjusted[sample_index]) * linear
+                        )
+                handle.writeframes(_float_samples_to_pcm24_bytes(adjusted))
+        tmp_path.replace(wav_path)
+    except Exception:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except OSError:
+            pass
+        raise
+
+
 def _zero_wav_channels_inplace(
     *,
     wav_path: Path,
@@ -1210,7 +1267,7 @@ def enforce_rendered_surround_similarity_gate(
     true_peak_delta_warn_abs: float = 1.0,
     true_peak_delta_error_abs: float = 2.0,
 ) -> Dict[str, Any]:
-    """Run rendered similarity gate with a deterministic multi-step fallback sequence."""
+    """Run rendered similarity gate with a single deterministic backoff retry."""
     resolved_height_backoff_db = (
         float(surround_backoff_db)
         if height_backoff_db is None
@@ -1266,56 +1323,49 @@ def enforce_rendered_surround_similarity_gate(
             if 0 <= index < len(order)
         ]
 
-    def _make_attenuation_step(
-        *,
-        step_id: str,
-        speaker_ids: frozenset[str],
-        gain_db: float,
-        change_kind: str,
-    ) -> dict[str, Any]:
-        def _apply(current_state: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    def _apply_bounded_backoff_retry(
+        current_state: dict[str, Any],
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        channel_count = int(current_state["channel_count"])
+        channel_order = current_state["channel_order"]
+        changes: list[dict[str, Any]] = []
+        gain_db_by_index: dict[int, float] = {}
+
+        group_rows = (
+            (_SURROUND_AND_WIDE_SPK_IDS - _REAR_SPK_IDS, float(surround_backoff_db), "attenuate_surround_and_wide"),
+            (_HEIGHT_SPK_IDS, resolved_height_backoff_db, "attenuate_height"),
+            (_REAR_SPK_IDS, resolved_rear_backoff_db, "attenuate_rear"),
+        )
+        for speaker_ids, gain_db, change_kind in group_rows:
             indices = _layout_channel_indices(
                 source_layout_id,
-                int(current_state["channel_count"]),
+                channel_count,
                 speaker_ids=speaker_ids,
             )
             if not indices:
-                return current_state, []
-            _attenuate_wav_channels_inplace(
-                wav_path=Path(current_state["surround_render_file"]),
-                channel_indices=indices,
-                gain_db=gain_db,
-            )
-            return current_state, _fallback_step_row(
-                channel_ids=_channel_ids_for_indices(indices),
-                change_kind=change_kind,
-                gain_db_delta=gain_db,
+                continue
+            for index in indices:
+                gain_db_by_index[index] = float(gain_db)
+            changes.extend(
+                _fallback_step_row(
+                    channel_ids=[
+                        str(channel_order[index])
+                        for index in indices
+                        if 0 <= index < len(channel_order)
+                    ],
+                    change_kind=change_kind,
+                    gain_db_delta=float(gain_db),
+                )
             )
 
-        return {"step_id": step_id, "apply": _apply}
-
-    def _collapse_to_front_only(
-        current_state: dict[str, Any],
-    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        indices = [
-            index
-            for index in range(int(current_state["channel_count"]))
-            if index >= len(current_state["channel_order"])
-            or current_state["channel_order"][index] not in _FRONT_SAFE_SPK_IDS
-            and not _is_lfe_speaker_id(current_state["channel_order"][index])
-        ]
-        if not indices:
+        if not gain_db_by_index:
             return current_state, []
-        _zero_wav_channels_inplace(
+
+        _attenuate_wav_channels_with_gains_inplace(
             wav_path=Path(current_state["surround_render_file"]),
-            channel_indices=indices,
+            gain_db_by_index=gain_db_by_index,
         )
-        next_state = dict(current_state)
-        next_state["safety_collapse_applied"] = True
-        return next_state, _fallback_step_row(
-            channel_ids=_channel_ids_for_indices(indices),
-            change_kind="zero_channels",
-        )
+        return current_state, changes
 
     sequence_report: dict[str, Any]
     final_state: dict[str, Any] = dict(state)
@@ -1325,33 +1375,15 @@ def enforce_rendered_surround_similarity_gate(
             qa_fn=_qa_fn,
             initial_state=state,
             steps=[
-                _make_attenuation_step(
-                    step_id="reduce_surround_and_wide",
-                    speaker_ids=_SURROUND_AND_WIDE_SPK_IDS,
-                    gain_db=float(surround_backoff_db),
-                    change_kind="attenuate_surround_and_wide",
-                ),
-                _make_attenuation_step(
-                    step_id="reduce_height",
-                    speaker_ids=_HEIGHT_SPK_IDS,
-                    gain_db=resolved_height_backoff_db,
-                    change_kind="attenuate_height",
-                ),
-                _make_attenuation_step(
-                    step_id="front_bias_ambiguous_beds",
-                    speaker_ids=_REAR_SPK_IDS,
-                    gain_db=resolved_rear_backoff_db,
-                    change_kind="attenuate_rear",
-                ),
                 {
-                    "step_id": "collapse_bed_to_front_only",
-                    "apply": _collapse_to_front_only,
+                    "step_id": "reduce_surround_and_wide",
+                    "apply": _apply_bounded_backoff_retry,
                 },
             ],
             stop_rule={
-                "max_steps": 4,
+                "max_steps": 1,
                 "improvement_epsilon": 0.01,
-                "stagnation_limit": 2,
+                "stagnation_limit": 1,
                 "score_fn": similarity_gate_score,
             },
         )
@@ -1386,11 +1418,6 @@ def enforce_rendered_surround_similarity_gate(
     fallback_final["safety_collapse_applied"] = bool(
         final_state.get("safety_collapse_applied")
         or fallback_final.get("safety_collapse_applied")
-        or any(
-            isinstance(item, dict)
-            and str(item.get("step_id") or "").strip() == "collapse_bed_to_front_only"
-            for item in fallback_attempts
-        )
     )
     if (
         fallback_final.get("final_outcome") == "pass"

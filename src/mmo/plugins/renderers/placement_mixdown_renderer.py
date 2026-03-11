@@ -2500,6 +2500,20 @@ def _render_layout_fallback_state(
     )
 
 
+def _clone_layout_fallback_state(
+    state: _LayoutFallbackState,
+) -> _LayoutFallbackState:
+    return _LayoutFallbackState(
+        render_intent=_json_clone(state.render_intent),
+        bed_decorrelation_options=state.bed_decorrelation_options,
+        enable_bed_decorrelation=state.enable_bed_decorrelation,
+        layout_outputs=tuple(_json_clone(list(state.layout_outputs))),
+        layout_notes=tuple(state.layout_notes),
+        needs_rerender=state.needs_rerender,
+        safety_collapse_applied=state.safety_collapse_applied,
+    )
+
+
 def _layout_similarity_result(
     *,
     layout_id: str,
@@ -2626,59 +2640,86 @@ def _run_layout_similarity_fallback_sequence(
             source_layout_id=layout_id,
         )
 
+    fallback_steps = [
+        {
+            "step_id": "reduce_surround",
+            "apply": lambda state: _step_scale_render_intent_gains(
+                state,
+                speaker_ids=_SURROUND_CHANNEL_IDS,
+                gain_db=_SIMILARITY_FALLBACK_SURROUND_STEP_DB,
+                change_kind="attenuate_surround_and_wide",
+            ),
+        },
+        {
+            "step_id": "reduce_height",
+            "apply": lambda state: _step_scale_render_intent_gains(
+                state,
+                speaker_ids=_OVERHEAD_CHANNEL_IDS,
+                gain_db=_SIMILARITY_FALLBACK_HEIGHT_STEP_DB,
+                change_kind="attenuate_height",
+            ),
+        },
+        {
+            "step_id": "reduce_decorrelation",
+            "apply": _step_reduce_decorrelation_amount,
+        },
+        {
+            "step_id": "disable_wideners",
+            "apply": _step_disable_bed_polish,
+        },
+        {
+            "step_id": "front_bias",
+            "apply": lambda state: _step_scale_render_intent_gains(
+                state,
+                speaker_ids=frozenset({"SPK.LRS", "SPK.RRS"}),
+                gain_db=_SIMILARITY_FALLBACK_REAR_STEP_DB,
+                change_kind="front_bias_ambiguous_beds",
+                row_filter=_send_row_is_bed,
+            ),
+        },
+        {
+            "step_id": "safety_collapse",
+            "apply": _step_collapse_bed_to_front_only,
+        },
+    ]
+    stop_rule = {
+        "max_steps": _SIMILARITY_FALLBACK_MAX_STEPS,
+        "improvement_epsilon": _SIMILARITY_FALLBACK_STOP_EPSILON,
+        "stagnation_limit": _SIMILARITY_FALLBACK_STOP_STAGNATION_LIMIT,
+        "score_fn": similarity_gate_score,
+    }
+
+    sequence_initial_state = _clone_layout_fallback_state(initial_state)
+
     final_state, sequence_report = run_fallback_sequence(
         render_fn=_render_fn,
         qa_fn=_qa_fn,
-        initial_state=initial_state,
-        steps=[
-            {
-                "step_id": "reduce_surround",
-                "apply": lambda state: _step_scale_render_intent_gains(
-                    state,
-                    speaker_ids=_SURROUND_CHANNEL_IDS,
-                    gain_db=_SIMILARITY_FALLBACK_SURROUND_STEP_DB,
-                    change_kind="attenuate_surround_and_wide",
-                ),
-            },
-            {
-                "step_id": "reduce_height",
-                "apply": lambda state: _step_scale_render_intent_gains(
-                    state,
-                    speaker_ids=_OVERHEAD_CHANNEL_IDS,
-                    gain_db=_SIMILARITY_FALLBACK_HEIGHT_STEP_DB,
-                    change_kind="attenuate_height",
-                ),
-            },
-            {
-                "step_id": "reduce_decorrelation",
-                "apply": _step_reduce_decorrelation_amount,
-            },
-            {
-                "step_id": "disable_wideners",
-                "apply": _step_disable_bed_polish,
-            },
-            {
-                "step_id": "front_bias",
-                "apply": lambda state: _step_scale_render_intent_gains(
-                    state,
-                    speaker_ids=frozenset({"SPK.LRS", "SPK.RRS"}),
-                    gain_db=_SIMILARITY_FALLBACK_REAR_STEP_DB,
-                    change_kind="front_bias_ambiguous_beds",
-                    row_filter=_send_row_is_bed,
-                ),
-            },
-            {
-                "step_id": "safety_collapse",
-                "apply": _step_collapse_bed_to_front_only,
-            },
-        ],
-        stop_rule={
-            "max_steps": _SIMILARITY_FALLBACK_MAX_STEPS,
-            "improvement_epsilon": _SIMILARITY_FALLBACK_STOP_EPSILON,
-            "stagnation_limit": _SIMILARITY_FALLBACK_STOP_STAGNATION_LIMIT,
-            "score_fn": similarity_gate_score,
-        },
+        initial_state=sequence_initial_state,
+        steps=fallback_steps,
+        stop_rule=stop_rule,
     )
+
+    # Preserve the last pre-collapse artifact when collapse still does not
+    # satisfy similarity QA. This keeps the failure explicit without erasing
+    # surround/height content as an accidental side effect of the retry path.
+    fallback_final = sequence_report.get("fallback_final")
+    if (
+        isinstance(fallback_final, dict)
+        and fallback_final.get("final_outcome") == "fail"
+        and final_state.safety_collapse_applied
+    ):
+        non_collapse_steps = [
+            step
+            for step in fallback_steps
+            if _coerce_str(step.get("step_id")).strip() != "safety_collapse"
+        ]
+        final_state, sequence_report = run_fallback_sequence(
+            render_fn=_render_fn,
+            qa_fn=_qa_fn,
+            initial_state=_clone_layout_fallback_state(initial_state),
+            steps=non_collapse_steps,
+            stop_rule=stop_rule,
+        )
     final_outputs = list(final_state.layout_outputs)
     final_notes = list(final_state.layout_notes)
     master_row = _master_output_row_for_layout(
