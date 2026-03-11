@@ -68,6 +68,7 @@ for (const candidate of rawCandidates) {
 }
 
 const attempted = [];
+let exitCode = null;
 for (const candidate of pythonCandidates) {
   const command = candidate[0];
   const args = [
@@ -91,17 +92,23 @@ for (const candidate of pythonCandidates) {
     console.error(
       `Failed to launch Python interpreter ${attemptedCandidate}: ${result.error.message}`
     );
-    process.exit(1);
+    exitCode = 1;
+    break;
   }
   if (result.status !== 0) {
     console.error(`MMO sidecar build failed using Python interpreter: ${attemptedCandidate}`);
   }
-  process.exit(result.status ?? 1);
+  exitCode = result.status ?? 1;
+  break;
 }
 
-console.error(
-  "Unable to locate a Python interpreter. Tried:\n" +
-  attempted.map((c) => `  ${c}`).join("\n") +
-  "\nSet PYTHON or install python to build the MMO sidecar."
-);
-process.exit(1);
+if (exitCode === null) {
+  console.error(
+    "Unable to locate a Python interpreter. Tried:\n" +
+    attempted.map((c) => `  ${c}`).join("\n") +
+    "\nSet PYTHON or install python to build the MMO sidecar."
+  );
+  exitCode = 1;
+}
+
+process.exitCode = exitCode;
