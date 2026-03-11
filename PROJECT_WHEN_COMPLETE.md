@@ -356,6 +356,9 @@ AI-readable layout export + validation (prevents overlaps/off-screen UI):
   - missing labels/units for numeric controls,
   - insufficient spacing versus the declared spacing tokens.
 - [x] A global GUI scale control exists (or responsive scaling equivalent) for laptop vs 4K displays.
+Done: Firefox design-system regression coverage now keeps required Tauri widgets
+inside viewport bounds at the mobile breakpoint, and exact-entry -> drag flows
+retain visible fine-adjust feedback without scroll-induced coordinate drift.
 
 
 ## 4.9 DSP engine and plugin execution (Definition of Done)

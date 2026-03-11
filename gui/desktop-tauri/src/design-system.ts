@@ -2,6 +2,10 @@ type ScreenKey = "dashboard" | "presets" | "run" | "compare"
 type PerspectiveKey = "audience" | "band" | "orchestra"
 type CompareState = "A" | "B"
 type DragKind = "width" | "trim" | "focus"
+type ModifierState = {
+  ctrlKeyActive: boolean
+  shiftKeyActive: boolean
+}
 
 type ScalePreset = {
   factor: number
@@ -23,7 +27,8 @@ type PresetSpec = {
 
 type DragState = {
   kind: DragKind
-  pointerId: number
+  pointerId: number | null
+  usesPointerEvents: boolean
   rect: DOMRect
   startFocusDepth: number
   startFocusPan: number
@@ -32,6 +37,8 @@ type DragState = {
   startX: number
   startY: number
 }
+
+type DragGestureEvent = MouseEvent | PointerEvent
 
 const SCALE_PRESETS: ScalePreset[] = [
   { scaleId: "compact", label: "90%", factor: 0.9 },
@@ -134,7 +141,10 @@ const ui = {
 const state = {
   compareState: "A" as CompareState,
   fineAdjustContext: null as string | null,
-  modifierDown: false,
+  modifierState: {
+    ctrlKeyActive: false,
+    shiftKeyActive: false,
+  } as ModifierState,
   perspective: "audience" as PerspectiveKey,
   presetId: PRESETS[0]?.presetId ?? "",
   scaleId: "standard",
@@ -178,12 +188,30 @@ function currentPreset(): PresetSpec {
   return PRESETS.find((preset) => preset.presetId === state.presetId) ?? PRESETS[0]
 }
 
-function isFineAdjust(event?: Pick<KeyboardEvent | PointerEvent, "ctrlKey" | "shiftKey">): boolean {
-  return Boolean(event?.shiftKey || event?.ctrlKey || state.modifierDown)
+function hasFineAdjustModifier(): boolean {
+  return state.modifierState.shiftKeyActive || state.modifierState.ctrlKeyActive
+}
+
+function syncModifierState(event: Pick<KeyboardEvent, "ctrlKey" | "metaKey" | "shiftKey">): void {
+  state.modifierState.shiftKeyActive = event.shiftKey
+  state.modifierState.ctrlKeyActive = event.ctrlKey || event.metaKey
+}
+
+function resetModifierState(): void {
+  state.modifierState.shiftKeyActive = false
+  state.modifierState.ctrlKeyActive = false
+}
+
+function isFineAdjust(event?: Pick<KeyboardEvent | MouseEvent | PointerEvent, "ctrlKey" | "metaKey" | "shiftKey">): boolean {
+  return Boolean(event?.shiftKey || event?.ctrlKey || event?.metaKey || hasFineAdjustModifier())
+}
+
+function isPointerGestureEvent(event: DragGestureEvent): event is PointerEvent {
+  return typeof PointerEvent !== "undefined" && event instanceof PointerEvent
 }
 
 function updateFineAdjustIndicator(): void {
-  const active = state.modifierDown || state.fineAdjustContext !== null
+  const active = hasFineAdjustModifier() || state.fineAdjustContext !== null
   ui.fineAdjustIndicator.classList.toggle("is-active", active)
   if (active) {
     const suffix = state.fineAdjustContext ? ` · ${state.fineAdjustContext}` : ""
@@ -356,14 +384,19 @@ function applyPreset(presetId: string): void {
   syncAll()
 }
 
-function startDrag(kind: DragKind, event: PointerEvent): void {
+function startDrag(kind: DragKind, event: DragGestureEvent): void {
+  if (dragState !== null) {
+    return
+  }
   const target = event.currentTarget
   if (!(target instanceof HTMLElement)) {
     return
   }
+  event.preventDefault()
   dragState = {
     kind,
-    pointerId: event.pointerId,
+    pointerId: isPointerGestureEvent(event) ? event.pointerId : null,
+    usesPointerEvents: isPointerGestureEvent(event),
     rect: target.getBoundingClientRect(),
     startFocusDepth: state.focusDepth,
     startFocusPan: state.focusPan,
@@ -372,7 +405,13 @@ function startDrag(kind: DragKind, event: PointerEvent): void {
     startX: event.clientX,
     startY: event.clientY,
   }
-  target.setPointerCapture(event.pointerId)
+  if (isPointerGestureEvent(event)) {
+    try {
+      target.setPointerCapture(event.pointerId)
+    } catch {
+      // Firefox can reject synthetic pointer capture in automation; window listeners still drive the drag.
+    }
+  }
   state.fineAdjustContext = isFineAdjust(event)
     ? dragLabel(kind)
     : null
@@ -390,8 +429,16 @@ function dragLabel(kind: DragKind): string {
   }
 }
 
-function updateFromDrag(event: PointerEvent): void {
-  if (dragState === null || dragState.pointerId !== event.pointerId) {
+function updateFromDrag(event: DragGestureEvent): void {
+  if (dragState === null) {
+    return
+  }
+  const pointerEvent = isPointerGestureEvent(event)
+  if (dragState.usesPointerEvents) {
+    if (!pointerEvent || dragState.pointerId !== event.pointerId) {
+      return
+    }
+  } else if (pointerEvent || event.buttons === 0) {
     return
   }
   const fine = isFineAdjust(event)
@@ -430,8 +477,16 @@ function updateFromDrag(event: PointerEvent): void {
   syncAll()
 }
 
-function endDrag(event: PointerEvent): void {
-  if (dragState === null || dragState.pointerId !== event.pointerId) {
+function endDrag(event: DragGestureEvent): void {
+  if (dragState === null) {
+    return
+  }
+  const pointerEvent = isPointerGestureEvent(event)
+  if (dragState.usesPointerEvents) {
+    if (!pointerEvent || dragState.pointerId !== event.pointerId) {
+      return
+    }
+  } else if (pointerEvent) {
     return
   }
   dragState = null
@@ -441,15 +496,34 @@ function endDrag(event: PointerEvent): void {
 
 function bindModifierFeedback(): void {
   window.addEventListener("keydown", (event) => {
-    if (!isFineAdjust(event)) {
+    syncModifierState(event)
+    if (!hasFineAdjustModifier()) {
       return
     }
-    state.modifierDown = true
     updateFineAdjustIndicator()
   })
 
-  window.addEventListener("keyup", () => {
-    state.modifierDown = false
+  window.addEventListener("keyup", (event) => {
+    syncModifierState(event)
+    if (dragState === null && !hasFineAdjustModifier()) {
+      state.fineAdjustContext = null
+    }
+    updateFineAdjustIndicator()
+  })
+
+  window.addEventListener("blur", () => {
+    resetModifierState()
+    if (dragState === null) {
+      state.fineAdjustContext = null
+    }
+    updateFineAdjustIndicator()
+  })
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      return
+    }
+    resetModifierState()
     if (dragState === null) {
       state.fineAdjustContext = null
     }
@@ -483,6 +557,29 @@ function bindScale(): void {
   }
 }
 
+function bindCompositeControlFocus(): void {
+  const keepFocusLocal = (event: KeyboardEvent, nextTarget: HTMLElement): void => {
+    if (event.key !== "Tab" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
+      return
+    }
+    event.preventDefault()
+    nextTarget.focus({ preventScroll: true })
+  }
+
+  ui.knobInput.addEventListener("keydown", (event) => {
+    keepFocusLocal(event, ui.knobSurface)
+  })
+  ui.sliderInput.addEventListener("keydown", (event) => {
+    keepFocusLocal(event, ui.sliderSurface)
+  })
+  ui.panInput.addEventListener("keydown", (event) => {
+    keepFocusLocal(event, ui.focusPad)
+  })
+  ui.depthInput.addEventListener("keydown", (event) => {
+    keepFocusLocal(event, ui.focusPad)
+  })
+}
+
 function bindControls(): void {
   ui.safeModeToggle.addEventListener("click", () => {
     state.safeMode = !state.safeMode
@@ -505,15 +602,26 @@ function bindControls(): void {
   ui.knobSurface.addEventListener("pointerdown", (event) => {
     startDrag("width", event)
   })
+  ui.knobSurface.addEventListener("mousedown", (event) => {
+    startDrag("width", event)
+  })
   ui.sliderSurface.addEventListener("pointerdown", (event) => {
+    startDrag("trim", event)
+  })
+  ui.sliderSurface.addEventListener("mousedown", (event) => {
     startDrag("trim", event)
   })
   ui.focusPad.addEventListener("pointerdown", (event) => {
     startDrag("focus", event)
   })
+  ui.focusPad.addEventListener("mousedown", (event) => {
+    startDrag("focus", event)
+  })
 
   window.addEventListener("pointermove", updateFromDrag)
+  window.addEventListener("mousemove", updateFromDrag)
   window.addEventListener("pointerup", endDrag)
+  window.addEventListener("mouseup", endDrag)
   window.addEventListener("pointercancel", endDrag)
 
   ui.knobInput.addEventListener("change", () => {
@@ -598,6 +706,7 @@ export function initDesignSystem(): void {
   bindModifierFeedback()
   bindScreens()
   bindScale()
+  bindCompositeControlFocus()
   bindControls()
   syncAll()
 }

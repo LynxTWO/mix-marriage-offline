@@ -84,6 +84,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Tauri desktop design-system Firefox regressions:
+  - The isolated `gui/desktop-tauri` shell now uses a wide-screen app layout
+    that keeps the scaled dashboard trim control reachable for exact-entry ->
+    drag interactions without relying on stale off-screen coordinates.
+  - Mobile preset-browser layout now keeps the required widget inside the
+    `390x844` viewport by preserving wrapped tag rows and constraining internal
+    scrolling instead of letting the single required widget grow past the
+    visible screen.
+  - Fine-adjust feedback now tracks explicit modifier-key state across
+    `keydown` / `keyup` / blur-driven drag lifecycles, and composite numeric
+    controls keep `Tab` focus local without scroll jumps so Firefox drag tests
+    stay deterministic.
+
 - Ontology change validation now runs git subprocesses with explicit UTF-8
   decoding, reports decode-fallback warnings instead of crashing on Windows
   locale defaults, and stops base-ref diffing cleanly when base ontology files

@@ -462,6 +462,8 @@ button:disabled {
   position: relative;
   min-height: 9rem;
   padding: 0;
+  touch-action: none;
+  user-select: none;
 }
 
 .knob-surface {
@@ -798,6 +800,76 @@ button:disabled {
   color: var(--theme-text-muted);
 }
 
+@media (min-width: 1101px) {
+  .shell {
+    grid-template-columns: minmax(22rem, 28rem) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .hero {
+    align-self: start;
+  }
+
+  .hero-tools {
+    grid-template-columns: 1fr;
+  }
+
+  .screen-panel {
+    grid-column: 2;
+    align-self: start;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-content: start;
+  }
+
+  .screen-panel > * {
+    grid-column: 1 / -1;
+  }
+
+  .screen-panel > .panel-header {
+    grid-column: 1 / span 7;
+  }
+
+  .screen-panel > .panel-copy {
+    grid-column: 8 / -1;
+    align-self: end;
+    justify-self: end;
+    max-width: 34ch;
+  }
+
+  .control-card[data-control-kind="KNOB"],
+  .control-card[data-control-kind="SLIDER"] {
+    align-content: start;
+  }
+
+  .control-card[data-control-kind="SLIDER"] {
+    gap: calc(var(--space-base) * 0.35);
+  }
+
+  .control-card[data-control-kind="KNOB"] > .control-head,
+  .control-card[data-control-kind="SLIDER"] > .control-head {
+    grid-row: 1;
+  }
+
+  .control-card[data-control-kind="KNOB"] > .value-entry,
+  .control-card[data-control-kind="SLIDER"] > .value-entry {
+    grid-row: 2;
+  }
+
+  .control-card[data-control-kind="KNOB"] > .knob-surface,
+  .control-card[data-control-kind="SLIDER"] > .slider-surface {
+    grid-row: 3;
+  }
+
+  .control-card[data-control-kind="SLIDER"] > .slider-surface {
+    min-height: 3.2rem;
+  }
+
+  .control-card[data-control-kind="KNOB"] > .control-caption,
+  .control-card[data-control-kind="SLIDER"] > .control-caption {
+    grid-row: 4;
+  }
+}
+
 @media (max-width: 1100px) {
   .hero-tools,
   .preset-browser-body,
@@ -842,11 +914,30 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
+  .preset-browser {
+    max-block-size: calc(100vh - 2rem);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .preset-browser-body {
+    min-block-size: 0;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .preset-list {
+    min-block-size: 0;
+    overflow: auto;
+    padding-inline-end: 0.2rem;
+  }
+
   .button-row,
   .segmented-control,
-  .screen-tabs,
-  .tag-row {
+  .screen-tabs {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .preset-browser .tag-row {
+    align-items: center;
   }
 }
