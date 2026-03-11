@@ -20,7 +20,7 @@
       ],
       "downmix_policy_version": "0.1.0",
       "normalized_receipt_sha256": "df04a39b9a7c675dd63181ef674495f9dbeafec06a79389a98187d5ed6fd658c",
-      "normalized_render_manifest_sha256": "d9e2d829e39de2bda83ba76d66743d5ebc4889d6b39cba67db221c7c9d62ee2d",
+      "normalized_render_manifest_sha256": "170539a970709e6c1e50bd5ca4297b76eef845da08dce054689a6b07cfbaee54",
       "per_channel_metrics": [
         {
           "integrated_lufs": null,
@@ -96,7 +96,7 @@
         }
       ],
       "render_contract_version": "0.1.0",
-      "scene_sha256": "65a320d041a6050d5722089d4bdc37e5c4fde9c43c46efcdb298a1196d9e2c41"
+      "scene_sha256": "c5129a158f63d57ac0c6a5b252913a37d32441df4533a48e163029d7f8323a31"
     },
     "LAYOUT.9_1_6": {
       "channel_count": 16,
@@ -120,7 +120,7 @@
       ],
       "downmix_policy_version": "0.1.0",
       "normalized_receipt_sha256": "837bf6cc775a554dd51c1eb40c7722973a4b77db02cdb40a991fce334ce7912d",
-      "normalized_render_manifest_sha256": "3240964217e74c4aa277d57a272f4b4ebbe307f070047ab3d0b6f18b457a31e2",
+      "normalized_render_manifest_sha256": "5c05ff501fd7d0ecf639942432f714cb23d8c1b19cd9cca9e5d991a0256f881c",
       "per_channel_metrics": [
         {
           "integrated_lufs": null,
@@ -220,7 +220,7 @@
         }
       ],
       "render_contract_version": "0.1.0",
-      "scene_sha256": "65a320d041a6050d5722089d4bdc37e5c4fde9c43c46efcdb298a1196d9e2c41"
+      "scene_sha256": "c5129a158f63d57ac0c6a5b252913a37d32441df4533a48e163029d7f8323a31"
     }
   },
   "tolerances": {

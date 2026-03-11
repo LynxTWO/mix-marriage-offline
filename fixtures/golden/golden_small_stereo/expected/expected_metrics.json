@@ -10,7 +10,7 @@
       ],
       "downmix_policy_version": "0.1.0",
       "normalized_receipt_sha256": "2d743fb852b6a19899ed7ba13db4c2fbbf777c2dbaaceec1ff9d72a7bbb0513d",
-      "normalized_render_manifest_sha256": "f69586732f5645ac691002f4eb8a5472b8b808688bc9cb59f0899322ff629eb1",
+      "normalized_render_manifest_sha256": "d64073456343a578aca648279d045058afb36cda40f04d05bcc32215f92cd6c2",
       "per_channel_metrics": [
         {
           "integrated_lufs": null,
@@ -26,7 +26,7 @@
         }
       ],
       "render_contract_version": "0.1.0",
-      "scene_sha256": "10e7b643960e4b7831792a78f43371821a53d9c96b6e213dd929ff8e6ffdf793"
+      "scene_sha256": "8cb8179e045948de7feac246b813ee3e8aa085ff4a57e7b6a6c7cad56230a201"
     }
   },
   "tolerances": {

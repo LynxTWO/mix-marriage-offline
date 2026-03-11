@@ -84,6 +84,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Cross-platform golden render manifest hashing:
+  - `scene_sha256` now canonicalizes path-bearing scene fields before hashing,
+    so absolute runner paths no longer leak into normalized render manifest
+    hashes across Linux, macOS, and Windows.
+  - Added focused regression coverage for scene payloads that differ only by
+    absolute root or path separators, and refreshed the affected golden
+    fixture metric hashes to match the intended path-stable trace metadata.
+
 - Tauri sidecar Python interpreter selection:
   - `gui/desktop-tauri/scripts/prepare-sidecar.mjs` now prefers the Python
     interpreter exposed by `PYTHON`, `npm_config_python`, and

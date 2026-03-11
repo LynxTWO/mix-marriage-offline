@@ -4,7 +4,7 @@ import hashlib
 import json
 import os
 from functools import lru_cache
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 from xml.sax.saxutils import escape
 
@@ -79,6 +79,14 @@ def _canonical_sha256(payload: Any) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+# Keys whose values are filesystem refs where only the basename is meaningful for hashing.
+_SCENE_HASH_BASENAME_KEYS: frozenset[str] = frozenset(
+    {"bus_plan_ref", "stems_map_ref", "stems_index_ref"}
+)
+# Placeholder used in place of absolute stems_dir values so the hash is runner-agnostic.
+_STEMS_DIR_HASH_TOKEN = "<stems_dir>"
+
+
 def _canonicalize_scene_for_hash(value: Any, *, parent_key: str = "") -> Any:
     if isinstance(value, dict):
         return {
@@ -90,8 +98,24 @@ def _canonicalize_scene_for_hash(value: Any, *, parent_key: str = "") -> Any:
             _canonicalize_scene_for_hash(child, parent_key=parent_key)
             for child in value
         ]
-    if isinstance(value, str) and parent_key in {"bus_plan_ref", "stems_map_ref"}:
-        return Path(value).name
+    if isinstance(value, str):
+        if parent_key in _SCENE_HASH_BASENAME_KEYS:
+            # Normalize OS separators then extract basename so Windows and POSIX
+            # paths with the same logical filename hash identically.
+            return PurePosixPath(value.replace("\\", "/")).name
+        if parent_key == "stems_dir":
+            # Absolute stems_dir is runner-specific; replace with stable token.
+            return _STEMS_DIR_HASH_TOKEN
+        if parent_key == "file_path":
+            # Normalize OS path separators; reduce absolute paths to basename.
+            normalized = value.replace("\\", "/")
+            # Detect absolute: POSIX (/...) or Windows drive (C:/...)
+            is_absolute = normalized.startswith("/") or (
+                len(normalized) >= 2 and normalized[1] == ":"
+            )
+            if is_absolute:
+                return PurePosixPath(normalized).name
+            return normalized
     return value
 
 
