@@ -33,22 +33,115 @@ class DefinitionEntry:
     replaced_by: str | None
 
 
-def _run_git(repo_root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", *args],
-        check=False,
-        capture_output=True,
-        text=True,
-        cwd=repo_root,
+@dataclass(frozen=True)
+class GitCommandResult:
+    args: tuple[str, ...]
+    returncode: int | None
+    stdout: str
+    stderr: str
+    decode_fallback_used: bool
+    invocation_error: str | None = None
+
+    @property
+    def command(self) -> str:
+        return " ".join(("git", *self.args))
+
+
+@dataclass(frozen=True)
+class BaseDocumentsLoadResult:
+    documents: dict[str, Any]
+    listed_paths: frozenset[str]
+    listing_failed: bool
+    load_failures: frozenset[str]
+
+
+def _append_message(messages: list[str], message: str) -> None:
+    if message and message not in messages:
+        messages.append(message)
+
+
+def _decode_utf8_output(data: bytes) -> tuple[str, bool]:
+    try:
+        return data.decode("utf-8"), False
+    except UnicodeDecodeError:
+        return data.decode("utf-8", errors="replace"), True
+
+
+def _run_git(repo_root: Path, args: list[str]) -> GitCommandResult:
+    command = ["git", *args]
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=False,
+            cwd=repo_root,
+        )
+    except OSError as exc:
+        return GitCommandResult(
+            args=tuple(args),
+            returncode=None,
+            stdout="",
+            stderr=str(exc),
+            decode_fallback_used=False,
+            invocation_error=f"Git invocation failed for {' '.join(command)}: {exc}",
+        )
+
+    stdout, stdout_fallback = _decode_utf8_output(completed.stdout or b"")
+    stderr, stderr_fallback = _decode_utf8_output(completed.stderr or b"")
+    return GitCommandResult(
+        args=tuple(args),
+        returncode=completed.returncode,
+        stdout=stdout,
+        stderr=stderr,
+        decode_fallback_used=stdout_fallback or stderr_fallback,
     )
 
 
-def _is_git_repo(repo_root: Path) -> bool:
+def _record_git_decode_warning(
+    result: GitCommandResult,
+    *,
+    warnings: list[str],
+    context: str,
+) -> None:
+    if not result.decode_fallback_used:
+        return
+    _append_message(
+        warnings,
+        f"Decoded git output with utf-8 replacement while {context} via {result.command}.",
+    )
+
+
+def _git_error_detail(result: GitCommandResult) -> str:
+    if result.invocation_error:
+        return result.invocation_error
+    return result.stderr.strip() or "unknown git error"
+
+
+def _git_show_reports_missing_path(stderr: str) -> bool:
+    lowered = stderr.lower()
+    return "does not exist in" in lowered or "exists on disk, but not in" in lowered
+
+
+def _is_git_repo(repo_root: Path, *, warnings: list[str]) -> tuple[bool, str | None]:
     probe = _run_git(repo_root, ["rev-parse", "--is-inside-work-tree"])
-    return probe.returncode == 0 and probe.stdout.strip() == "true"
+    _record_git_decode_warning(
+        probe,
+        warnings=warnings,
+        context="probing whether the repository is a git worktree",
+    )
+    if probe.invocation_error:
+        return False, probe.invocation_error
+    return probe.returncode == 0 and probe.stdout.strip() == "true", None
 
 
-def _resolve_base_ref(repo_root: Path, requested: str) -> str | None:
+def _resolve_base_ref(
+    repo_root: Path,
+    requested: str,
+    *,
+    warnings: list[str],
+) -> tuple[str | None, str | None]:
     candidates: list[str] = []
     if requested:
         candidates.append(requested)
@@ -66,19 +159,26 @@ def _resolve_base_ref(repo_root: Path, requested: str) -> str | None:
             continue
         seen.add(candidate)
         probe = _run_git(repo_root, ["rev-parse", "--verify", "--quiet", candidate])
+        _record_git_decode_warning(
+            probe,
+            warnings=warnings,
+            context=f"resolving base ref {candidate}",
+        )
+        if probe.invocation_error:
+            return None, probe.invocation_error
         if probe.returncode == 0:
-            return candidate
-    return None
+            return candidate, None
+    return None, None
 
 
 def _load_yaml_text(text: str, *, file_path: str, errors: list[str]) -> Any | None:
     if yaml is None:
-        errors.append("PyYAML is not installed; cannot parse ontology YAML.")
+        _append_message(errors, "PyYAML is not installed; cannot parse ontology YAML.")
         return None
     try:
         parsed = yaml.safe_load(text)
     except Exception as exc:  # pragma: no cover - parser output varies
-        errors.append(f"Failed to parse YAML in {file_path}: {exc}")
+        _append_message(errors, f"Failed to parse YAML in {file_path}: {exc}")
         return None
     return parsed
 
@@ -330,7 +430,14 @@ def _load_current_documents(
         rel_path = path.relative_to(repo_root).as_posix()
         if not _is_ontology_yaml_path(rel_path):
             continue
-        text = path.read_text(encoding="utf-8")
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as exc:
+            _append_message(errors, f"Failed to decode ontology file {rel_path} as utf-8: {exc}")
+            continue
+        except OSError as exc:
+            _append_message(errors, f"Failed to read ontology file {rel_path}: {exc}")
+            continue
         payload = _load_yaml_text(text, file_path=rel_path, errors=errors)
         if payload is None:
             continue
@@ -343,34 +450,76 @@ def _load_base_documents(
     repo_root: Path,
     base_ref: str,
     errors: list[str],
-) -> dict[str, Any]:
+    warnings: list[str],
+) -> BaseDocumentsLoadResult:
     documents: dict[str, Any] = {}
+    listed_paths: set[str] = set()
+    load_failures: set[str] = set()
     listed = _run_git(
         repo_root,
         ["ls-tree", "-r", "--name-only", base_ref, "--", "ontology"],
     )
-    if listed.returncode != 0:
-        stderr = listed.stderr.strip()
-        errors.append(
-            "Failed to list ontology files from base ref "
-            f"{base_ref}: {stderr or 'unknown git error'}"
+    _record_git_decode_warning(
+        listed,
+        warnings=warnings,
+        context=f"listing ontology files from base ref {base_ref}",
+    )
+    if listed.invocation_error:
+        _append_message(errors, listed.invocation_error)
+        return BaseDocumentsLoadResult(
+            documents=documents,
+            listed_paths=frozenset(),
+            listing_failed=True,
+            load_failures=frozenset(),
         )
-        return documents
-    for rel_path in sorted(line.strip() for line in listed.stdout.splitlines() if line.strip()):
+    if listed.returncode != 0:
+        _append_message(
+            errors,
+            "Failed to list ontology files from base ref "
+            f"{base_ref}: {_git_error_detail(listed)}",
+        )
+        return BaseDocumentsLoadResult(
+            documents=documents,
+            listed_paths=frozenset(),
+            listing_failed=True,
+            load_failures=frozenset(),
+        )
+
+    listed_paths = {line.strip() for line in listed.stdout.splitlines() if line.strip()}
+    for rel_path in sorted(listed_paths):
         if not _is_ontology_yaml_path(rel_path):
             continue
         shown = _run_git(repo_root, ["show", f"{base_ref}:{rel_path}"])
+        _record_git_decode_warning(
+            shown,
+            warnings=warnings,
+            context=f"reading {rel_path} from base ref {base_ref}",
+        )
+        if shown.invocation_error:
+            _append_message(errors, shown.invocation_error)
+            load_failures.add(rel_path)
+            continue
         if shown.returncode != 0:
-            stderr = shown.stderr.strip()
-            errors.append(
-                f"Failed to read {rel_path} from {base_ref}: {stderr or 'unknown git error'}"
-            )
+            if _git_show_reports_missing_path(shown.stderr):
+                _append_message(errors, f"Missing {rel_path} in base ref {base_ref}.")
+            else:
+                _append_message(
+                    errors,
+                    f"Failed to read {rel_path} from {base_ref}: {_git_error_detail(shown)}",
+                )
+            load_failures.add(rel_path)
             continue
         payload = _load_yaml_text(shown.stdout, file_path=rel_path, errors=errors)
         if payload is None:
+            load_failures.add(rel_path)
             continue
         documents[rel_path] = payload
-    return documents
+    return BaseDocumentsLoadResult(
+        documents=documents,
+        listed_paths=frozenset(listed_paths),
+        listing_failed=False,
+        load_failures=frozenset(load_failures),
+    )
 
 
 def _collect_definition_map(documents: dict[str, Any]) -> dict[str, list[DefinitionEntry]]:
@@ -476,84 +625,131 @@ def validate_ontology_changes(
     added_ids: list[str] = []
     migration_note_path: str | None = None
 
-    if not _is_git_repo(repo_root):
+    is_git_repo, git_repo_error = _is_git_repo(repo_root, warnings=warnings)
+    if git_repo_error is not None:
+        _append_message(errors, git_repo_error)
+        skipped_diff = True
+    elif not is_git_repo:
         if require_base_ref:
-            errors.append("Repository is not a git worktree; cannot diff ontology against base ref.")
+            _append_message(
+                errors,
+                "Repository is not a git worktree; cannot diff ontology against base ref.",
+            )
         else:
             skipped_diff = True
-            warnings.append("Not a git worktree; ontology diff against base ref was skipped.")
+            _append_message(
+                warnings,
+                "Not a git worktree; ontology diff against base ref was skipped.",
+            )
     else:
-        resolved_base_ref = _resolve_base_ref(repo_root, base_ref)
-        if resolved_base_ref is None:
+        resolved_base_ref, resolve_error = _resolve_base_ref(
+            repo_root,
+            base_ref,
+            warnings=warnings,
+        )
+        if resolve_error is not None:
+            _append_message(errors, resolve_error)
+            skipped_diff = True
+        elif resolved_base_ref is None:
             if require_base_ref:
-                errors.append(
+                _append_message(
+                    errors,
                     f"Could not resolve base ref '{base_ref}' (or origin/{base_ref})."
                 )
             else:
                 skipped_diff = True
-                warnings.append(
+                _append_message(
+                    warnings,
                     f"Could not resolve base ref '{base_ref}'; ontology diff was skipped."
                 )
         else:
-            base_documents = _load_base_documents(
+            base_result = _load_base_documents(
                 repo_root=repo_root,
                 base_ref=resolved_base_ref,
                 errors=errors,
+                warnings=warnings,
             )
-            base_entries = _collect_definition_map(base_documents)
-            base_ids = set(base_entries.keys())
-
-            added_ids = sorted(current_ids - base_ids)
-            removed_ids = sorted(base_ids - current_ids)
-
+            base_documents = base_result.documents
             base_manifest = base_documents.get(ONTOLOGY_MANIFEST_REL_PATH)
-            base_version = _ontology_version_from_payload(base_manifest)
-            if base_manifest is None:
-                errors.append(
-                    f"Missing {ONTOLOGY_MANIFEST_REL_PATH} in base ref {resolved_base_ref}."
-                )
-            elif base_version is None:
-                errors.append(
-                    "Missing ontology version in base ontology/ontology.yaml "
-                    "(expected ontology.ontology_version)."
-                )
 
-            if removed_ids:
-                bumped = _version_is_bumped(base_version, current_version)
-                if bumped is None:
-                    errors.append(
-                        "Cannot validate ontology version bump: expected semver (X.Y.Z) in "
-                        "current and base ontology manifest versions."
+            if (
+                not base_result.listing_failed
+                and ONTOLOGY_MANIFEST_REL_PATH not in base_result.listed_paths
+            ):
+                _append_message(
+                    errors,
+                    f"Missing {ONTOLOGY_MANIFEST_REL_PATH} in base ref {resolved_base_ref}.",
+                )
+            elif ONTOLOGY_MANIFEST_REL_PATH not in base_result.load_failures:
+                base_version = _ontology_version_from_payload(base_manifest)
+                if base_manifest is None:
+                    _append_message(
+                        errors,
+                        f"Missing {ONTOLOGY_MANIFEST_REL_PATH} in base ref {resolved_base_ref}.",
                     )
-                elif not bumped:
-                    errors.append(
-                        "Removed ontology IDs require an ontology version bump. "
-                        f"Base={base_version!r}, current={current_version!r}."
+                elif base_version is None:
+                    _append_message(
+                        errors,
+                        "Missing ontology version in base ontology/ontology.yaml "
+                        "(expected ontology.ontology_version).",
                     )
 
-                if current_version:
-                    migration_note = repo_root / MIGRATIONS_DIR_REL_PATH / f"{current_version}.md"
-                    migration_note_path = migration_note.relative_to(repo_root).as_posix()
-                    if not migration_note.is_file():
-                        errors.append(
-                            "Removed ontology IDs require a migration note at "
-                            f"{migration_note_path}."
+            if base_result.listing_failed or base_result.load_failures:
+                skipped_diff = True
+            else:
+                base_entries = _collect_definition_map(base_documents)
+                base_ids = set(base_entries.keys())
+
+                added_ids = sorted(current_ids - base_ids)
+                removed_ids = sorted(base_ids - current_ids)
+
+                if removed_ids:
+                    bumped = _version_is_bumped(base_version, current_version)
+                    if bumped is None:
+                        _append_message(
+                            errors,
+                            "Cannot validate ontology version bump: expected semver (X.Y.Z) in "
+                            "current and base ontology manifest versions.",
                         )
-                    else:
-                        migration_text = migration_note.read_text(encoding="utf-8").strip()
-                        if not migration_text:
-                            errors.append(f"Migration note is empty: {migration_note_path}")
-                        missing_mentions = [
-                            id_value for id_value in removed_ids if id_value not in migration_text
-                        ]
-                        if missing_mentions:
-                            preview = ", ".join(missing_mentions[:10])
-                            if len(missing_mentions) > 10:
-                                preview += ", ..."
-                            errors.append(
-                                "Migration note must mention every removed ontology ID. Missing: "
-                                f"{preview}"
+                    elif not bumped:
+                        _append_message(
+                            errors,
+                            "Removed ontology IDs require an ontology version bump. "
+                            f"Base={base_version!r}, current={current_version!r}.",
+                        )
+
+                    if current_version:
+                        migration_note = (
+                            repo_root / MIGRATIONS_DIR_REL_PATH / f"{current_version}.md"
+                        )
+                        migration_note_path = migration_note.relative_to(repo_root).as_posix()
+                        if not migration_note.is_file():
+                            _append_message(
+                                errors,
+                                "Removed ontology IDs require a migration note at "
+                                f"{migration_note_path}.",
                             )
+                        else:
+                            migration_text = migration_note.read_text(encoding="utf-8").strip()
+                            if not migration_text:
+                                _append_message(
+                                    errors,
+                                    f"Migration note is empty: {migration_note_path}",
+                                )
+                            missing_mentions = [
+                                id_value
+                                for id_value in removed_ids
+                                if id_value not in migration_text
+                            ]
+                            if missing_mentions:
+                                preview = ", ".join(missing_mentions[:10])
+                                if len(missing_mentions) > 10:
+                                    preview += ", ..."
+                                _append_message(
+                                    errors,
+                                    "Migration note must mention every removed ontology ID. "
+                                    f"Missing: {preview}",
+                                )
 
     payload = {
         "ok": len(errors) == 0,

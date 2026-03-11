@@ -84,6 +84,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Ontology change validation now runs git subprocesses with explicit UTF-8
+  decoding, reports decode-fallback warnings instead of crashing on Windows
+  locale defaults, and stops base-ref diffing cleanly when base ontology files
+  are missing or unreadable so follow-on YAML/manifest errors stay truthful.
+
 - Test-suite stabilization and render-report back-compat:
   - Added repo-root `pytest.ini` discovery hygiene so `pytest -q` only
     collects the project `tests/` tree and ignores scratch/venv/build dirs

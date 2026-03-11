@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import os
 import shutil
@@ -6,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import yaml
 
@@ -19,6 +21,21 @@ class TestValidateOntologyChanges(unittest.TestCase):
 
     def _source_validator_script(self) -> Path:
         return self._repo_root() / "tools" / "validate_ontology_changes.py"
+
+    def _load_validator_module(self):
+        module_path = self._source_validator_script()
+        spec = importlib.util.spec_from_file_location(
+            "validate_ontology_changes_for_tests",
+            module_path,
+        )
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        if spec is None or spec.loader is None:
+            raise AssertionError("Failed to load validate_ontology_changes module spec.")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        return module
 
     def _init_temp_repo(self, temp_root: Path) -> Path:
         if shutil.which("git") is None:
@@ -187,6 +204,132 @@ class TestValidateOntologyChanges(unittest.TestCase):
         errors = payload.get("errors", [])
         self.assertTrue(
             any("missing replaced_by" in str(msg) for msg in errors),
+            msg=payload,
+        )
+
+    def test_missing_base_manifest_reports_single_clean_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            script_path = self._init_temp_repo(temp_root)
+
+            subprocess.run(["git", "checkout", "main"], check=True, cwd=temp_root)
+            subprocess.run(
+                ["git", "rm", "ontology/ontology.yaml"],
+                check=True,
+                cwd=temp_root,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", "remove base ontology manifest"],
+                check=True,
+                cwd=temp_root,
+            )
+            subprocess.run(["git", "checkout", "feature"], check=True, cwd=temp_root)
+
+            result = self._run_validator(temp_root, script_path)
+
+        self.assertNotEqual(result.returncode, 0, msg=result.stdout)
+        payload = json.loads(result.stdout)
+        self.assertFalse(payload.get("ok"))
+        self.assertEqual(
+            payload.get("errors"),
+            ["Missing ontology/ontology.yaml in base ref main."],
+        )
+        self.assertEqual(payload.get("warnings"), [])
+        self.assertFalse(payload.get("skipped_diff"))
+
+    def test_invalid_utf8_from_git_show_uses_warning_not_crash(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            script_path = self._init_temp_repo(temp_root)
+
+            subprocess.run(["git", "checkout", "main"], check=True, cwd=temp_root)
+            roles_path = temp_root / "ontology" / "roles.yaml"
+            roles_bytes = roles_path.read_bytes()
+            roles_path.write_bytes(b"# decode fallback \x96\n" + roles_bytes)
+            subprocess.run(["git", "add", "ontology/roles.yaml"], check=True, cwd=temp_root)
+            subprocess.run(
+                ["git", "commit", "-m", "introduce invalid utf8 in base"],
+                check=True,
+                cwd=temp_root,
+            )
+            subprocess.run(["git", "checkout", "feature"], check=True, cwd=temp_root)
+
+            result = self._run_validator(temp_root, script_path)
+
+        self.assertEqual(result.returncode, 0, msg=result.stdout)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload.get("ok"), msg=payload)
+        self.assertEqual(payload.get("errors"), [])
+        warnings = payload.get("warnings", [])
+        self.assertTrue(
+            any(
+                "Decoded git output with utf-8 replacement while reading ontology/roles.yaml"
+                in str(msg)
+                for msg in warnings
+            ),
+            msg=payload,
+        )
+
+    def test_failed_base_show_does_not_emit_missing_manifest_or_yaml_parse_error(self) -> None:
+        module = self._load_validator_module()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            shutil.copytree(self._repo_root() / "ontology", temp_root / "ontology")
+            (temp_root / "docs").mkdir(parents=True, exist_ok=True)
+            units_text = (temp_root / "ontology" / "units.yaml").read_text(encoding="utf-8")
+
+            def fake_run_git(repo_root: Path, args: list[str]):
+                if args == ["rev-parse", "--is-inside-work-tree"]:
+                    return module.GitCommandResult(tuple(args), 0, "true\n", "", False)
+                if args == ["rev-parse", "--verify", "--quiet", "main"]:
+                    return module.GitCommandResult(tuple(args), 0, "deadbeef\n", "", False)
+                if args == ["ls-tree", "-r", "--name-only", "main", "--", "ontology"]:
+                    return module.GitCommandResult(
+                        tuple(args),
+                        0,
+                        "ontology/ontology.yaml\nontology/units.yaml\n",
+                        "",
+                        False,
+                    )
+                if args == ["show", "main:ontology/ontology.yaml"]:
+                    return module.GitCommandResult(
+                        tuple(args),
+                        128,
+                        "",
+                        "fatal: unable to read main:ontology/ontology.yaml\n",
+                        False,
+                    )
+                if args == ["show", "main:ontology/units.yaml"]:
+                    return module.GitCommandResult(tuple(args), 0, units_text, "", False)
+                self.fail(f"Unexpected git args: {args}")
+
+            with mock.patch.object(module, "_run_git", side_effect=fake_run_git):
+                payload = module.validate_ontology_changes(
+                    repo_root=temp_root,
+                    base_ref="main",
+                    require_base_ref=True,
+                )
+
+        self.assertFalse(payload.get("ok"))
+        self.assertTrue(payload.get("skipped_diff"))
+        self.assertEqual(payload.get("added_ids"), [])
+        self.assertEqual(payload.get("removed_ids"), [])
+        errors = payload.get("errors", [])
+        self.assertTrue(
+            any(
+                "Failed to read ontology/ontology.yaml from main: fatal: unable to read"
+                in str(msg)
+                for msg in errors
+            ),
+            msg=payload,
+        )
+        self.assertFalse(
+            any("Missing ontology/ontology.yaml in base ref main." == str(msg) for msg in errors),
+            msg=payload,
+        )
+        self.assertFalse(
+            any("Failed to parse YAML in ontology/ontology.yaml" in str(msg) for msg in errors),
             msg=payload,
         )
 
