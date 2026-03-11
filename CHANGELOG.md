@@ -149,6 +149,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - GUI/Tauri workflows and contributor docs now target Node 24 LTS, GitHub-hosted
   runner images are pinned to `ubuntu-24.04`, `windows-2025`, and `macos-15`,
   and the Tauri crate now pins Rust `1.94.0` instead of floating on `stable`.
+- Completion/status tracking now treats optional GUI maturity items as post-v1
+  work, marks the shipped 32-channel / golden-fixture / plugin-mode regression
+  gates complete, and calls out the remaining release-surface, packaged-smoke,
+  and Tauri compare-parity blockers explicitly.
 
 ### Added
 

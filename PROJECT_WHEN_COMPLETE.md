@@ -41,6 +41,7 @@ Note: numbered docs (`docs/00-*` through `docs/20-*`) are canonical; this checkl
 - [x] docs/05-fixtures-and-ci.md documents fixtures, CI gates, and determinism expectations.
 - [x] docs/07-export-guides.md documents how users should export stems for best results.
 - [x] docs/06-roadmap.md clearly separates “now” vs “later.”
+- [ ] `README.md`, `docs/README.md`, installer-facing docs, and release-copy sources describe only shipped capabilities, supported artifacts, and current limitations.
 
 ### 4.2 Ontology is stable and versioned
 - [x] ontology/*.yaml covers roles, features, issues, actions, params, units, evidence.
@@ -182,6 +183,8 @@ What remains: expand fixture-session coverage for front/quad render variants in 
   deterministic `LAYOUT.32CH` artifact end-to-end (`nchannels == 32`,
   manifest `channel_order` length `32`, stable SHA-256 across two runs).
 - [x] CI runs on Windows, Linux, macOS (or documents any limitations).
+- [ ] Packaged binaries and one-click installers receive smoke checks on
+  Windows, macOS, and Linux against built release artifacts.
 Done: GitHub-hosted workflow pins now use Node 24-ready majors for
 `actions/checkout`, `actions/setup-python`, `actions/setup-node`,
 `actions/upload-artifact`, and `actions/download-artifact` where upstream has
@@ -190,7 +193,7 @@ Done: CI and local desktop-dev expectations now pin the current validated
 environment surface explicitly: Node 24 LTS for GUI/Tauri work, Rust 1.94.0 for
 the Tauri crate, and versioned GitHub-hosted runner images instead of floating
 `*-latest` labels.
-What remains: broaden the golden fixture matrix beyond the small stereo/surround/immersive corpus into additional mixed-confidence and corrective-action edge cases.
+What remains: broaden the golden fixture matrix beyond the small stereo/surround/immersive corpus into additional mixed-confidence and corrective-action edge cases, and smoke the packaged release artifacts instead of only building them.
 
 ### 4.8 UX/CLI is usable for real work
 - [x] CLI can: validate, analyze, generate scene, render, and output reports.
@@ -274,11 +277,13 @@ What remains: broaden the golden fixture matrix beyond the small stereo/surround
   CLI (`mmo plugin list/update`), and GUI browser surfaces.
 - [x] Desktop GUI includes an artistic `Discover` marketplace tab with preview
   cards and deterministic one-click offline plugin install flow.
-- [ ] Preview/A-B audition is loudness-compensated by default (auto-gain for evaluation), and the report discloses the compensation used.
-- [ ] Presets (example: EQ vibe presets) can be initialized from measured stem features, and preset preview does not create surprise loudness jumps.
+- [ ] Compare is a first-class user-facing workflow across CLI and GUI:
+  artifact-backed compare flows (`current vs last run`, `report vs report`) are
+  visible from results surfaces, and any loudness compensation used for
+  evaluation is disclosed.
 - [x] A “variant runner” can render multiple output variants (profiles/presets/targets) while reusing cached analysis artifacts keyed by content hash.
 - [x] Project session JSON persistence exists for `scene + history + receipts` via `mmo project save/load`, with deterministic JSON output and strict schema validation.
-What remains: make loudness-matched A/B compensation visible in report artifacts and add preset-preview loudness-jump guards for all shipped preset packs.
+What remains: finish artifact-backed compare parity and loudness-compensation disclosure in the primary GUI/results flow.
 
 ### 4.8.1 GUI is ergonomically safe and AI-readable (a work of art in itself, so creatives and nerds alike love it. Strong typography, cinematic color contrast, and intentional spacing/visual hierarchy so it feels crafted, not utilitarian, while still staying cross-platform and deterministic)
 - [x] GUI delivery has one primary plan and one fallback until parity:
@@ -321,32 +326,22 @@ What remains: make loudness-matched A/B compensation visible in report artifacts
   through the packaged sidecar, streams live stdout/stderr into a desktop
   timeline, and writes deterministic artifacts under a user-provided workspace
   folder without requiring the Node `gui/server.mjs` runtime in production.
-- [ ] The primary Tauri GUI exposes the same workflow as the CLI: validate → analyze → scene → render → results → compare.
+- [ ] The primary Tauri GUI exposes the same workflow as the CLI:
+  validate -> analyze -> scene -> render -> results -> compare, using the same
+  project/report/scene/render artifacts the CLI writes.
 - [x] GUI copy and structure follow the design system in ontology/gui_design.yaml (theme tokens, screen templates, and progressive disclosure).
 - [x] Any plugin/config UI is generated from JSON Schema with optional UI hints (example: x_mmo_ui or a dedicated ui_hints registry) so agents do not hand-build one-off forms.
-What remains: finish the open Tauri screens/behaviors tracked in `docs/gui_parity.md`, especially full results/scene parity and loudness-matched live compare behavior.
+What remains: finish the open Tauri screens/behaviors tracked in `docs/gui_parity.md`, especially scene/results parity, compare entry points, and loudness-matched compare behavior.
 
 Interaction standards (non-negotiable):
 - [x] Every numeric control supports direct text entry (exact value).
 - [x] Every drag control supports a fine-adjust modifier (Shift/Ctrl is fine) with visible on-screen feedback while engaged.
 - [x] Units are always visible (Hz, dB, ms, LUFS, degrees, samples) and rounding/display rules are consistent.
-- [ ] A/B compare is loudness-compensated by default so “louder is better” bias is reduced (compare-to-silence style behavior).
 
 Reusable component library (minimum set for v1 GUI parity):
 - [x] Controls: knob/rotary, fader/slider, toggle/button, segmented selector, XY pad, preset browser with search/tags, A/B toggle, value readout.
 - [x] Metering: peak/RMS, true-peak, LUFS, multi-channel meters (surround/immersive energy distribution).
 - [x] Visualizers (offline-rendered is acceptable): waveform (pre/post overlay), spectrum (FFT), optional spectrogram, EQ curve editor.
-- [ ] Dynamics/spatial views (offline-rendered is acceptable): gain reduction meter, phase correlation, goniometer/vectorscope, optional transfer curve.
-- [ ] Explainability: hint overlays (“what/why”), confidence indicator for recommendations, and a compact “what changed” summary.
-
-Artist-first controls (optional, but should be supported as the GUI matures):
-- [ ] Macro controls with semantic labels (example: Warmth, Air, Punch, Glue) that map to multiple parameters and always disclose what they change.
-- [ ] Mood/texture selectors (tag chips or icons) that swap whole preset strategies without jargon.
-- [ ] “Safe mode” toggle that prevents destructive choices (clipping, hard gate overrides) while still allowing creative exploration.
-- [ ] Reference matcher view (delta-to-reference) and a per-bus/track priority list that can guide recommendation ranking.
-- [ ] A/B/C/D morphing control (or equivalent) for blending between multiple states.
-- [ ] Optional history scrub/timeline view for stepping through previous states (can be implemented as an enhanced undo stack).
-- [ ] Optional soundstage + masking views (2D bubble map + conflict highlights) for non-technical spatial understanding.
 
 AI-readable layout export + validation (prevents overlaps/off-screen UI):
 - [x] The GUI can export a machine-readable layout manifest per screen/view that conforms to:
@@ -372,7 +367,7 @@ retain visible fine-adjust feedback without scroll-induced coordinate drift.
 ## 4.9 DSP engine and plugin execution (Definition of Done)
 
 The project is not considered complete until the DSP pipeline, plugin contracts, and render behavior below are implemented, documented, and covered by tests.
-What remains: the core DSP path is functional, but formalized fallback sequencing, stricter plugin purity guarantees, and full export-policy documentation still need to be locked and tested end-to-end.
+What remains: the core DSP path is functional, but public export-policy docs, the locked stage graph, stricter plugin purity guarantees, and the final multichannel safety contract still need to be closed out.
 
 ### 4.9.1 DSP core guarantees
 - [x] Internal processing uses a documented floating-point format (default: 64-bit float).
@@ -384,7 +379,7 @@ What remains: the core DSP path is functional, but formalized fallback sequencin
 - [x] All DSP is offline-render capable (no realtime assumptions).
 - [x] Sample rate handling is explicit:
   - [x] Session target sample rate selection is deterministic and explainable, and any resampling uses a declared algorithm with deterministic settings plus per-job receipts.
-- [ ] Channel counts up to at least 32 are supported end-to-end.
+- [x] Channel counts up to at least 32 are supported end-to-end.
 - [x] Plugin order is deterministic and serialized in reports.
 - [ ] Every processing decision that can affect tone/balance/spatialization is either:
   - (a) explicitly requested by the user intent, or
@@ -436,7 +431,7 @@ What remains: the core DSP path is functional, but formalized fallback sequencin
   - Medium: gentle EQ/dynamics within strict ranges.
   - High: tone reshaping, balance changes, spatial placement changes, aggressive dynamics, destructive edits.
 - [x] Only low-risk changes may be auto-applied, and only within user-defined limits.
-- [ ] Medium/high changes must be output as recommendations with:
+- [x] Medium/high changes must be output as recommendations with:
   - what/why/where/confidence
   - the exact parameter deltas proposed
   - rollback notes (how to undo)
@@ -478,7 +473,7 @@ Done: safe-render now preserves renderer-side fallback config from session fixtu
 - [x] Rendered files embed enough metadata for traceability:
   - tool version, optional git commit, scene hash, render contract version, downmix policy version.
   - layout/profile/export-profile IDs and deterministic seed are embedded in renderer WAV outputs (`iXML`) and ffmpeg-backed lossless outputs (`flac`, `wv`, `aiff`, `alac`).
-- [ ] Golden fixtures prove:
+- [x] Golden fixtures prove:
   - determinism across OS targets (within documented tolerance),
   - consistent gating outcomes,
   - identical channel ordering and naming per contract.
@@ -486,7 +481,7 @@ Done: safe-render now preserves renderer-side fallback config from session fixtu
 
 ### 4.9.8 Tests required for “complete”
 - [x] Unit tests for plugin manifest validation and stage ordering determinism.
-- [ ] Golden-audio tests for at least:
+- [x] Golden-audio tests for at least:
   - one per-channel plugin
   - one linked-group plugin
   - one true-multichannel plugin
@@ -517,8 +512,33 @@ Done: safe-render now preserves renderer-side fallback config from session fixtu
 - Primary contracts: docs/ + ontology/ + schemas/
 - Process rules for AI tools: AGENTS.md
 
+## 9) Optional capabilities (post-v1)
+These items should stay tracked, but they do not block v1 completion once
+sections 4.1 through 4.9 are closed.
 
-## 9) Optional capabilities (nice-to-have, not required for v1 completion)
-- Layout router/splitter stage that can split/assign/recombine stems based on channel semantics and roles (useful for complex multichannel stems).
-- Support for very large “many-channel” layouts (example: 9.1.6, 9.4.6) as long as they fit within max_channels, with clear layout negotiation rules.
-- Additional export targets and packaging (listen packs, audition bundles, multiple preset variants) with cached analysis reuse.
+- [ ] Presets (example: EQ vibe presets) can be initialized from measured stem
+  features, and preset preview does not create surprise loudness jumps.
+- [ ] Dynamics/spatial views (offline-rendered is acceptable): gain reduction
+  meter, phase correlation, goniometer/vectorscope, optional transfer curve.
+- [ ] Explainability overlays (“what/why”), confidence indicator for
+  recommendations, and a compact “what changed” summary.
+- [ ] Macro controls with semantic labels (example: Warmth, Air, Punch, Glue)
+  that map to multiple parameters and always disclose what they change.
+- [ ] Mood/texture selectors (tag chips or icons) that swap whole preset
+  strategies without jargon.
+- [ ] “Safe mode” toggle that prevents destructive choices (clipping, hard gate
+  overrides) while still allowing creative exploration.
+- [ ] Reference matcher view (delta-to-reference) and a per-bus/track priority
+  list that can guide recommendation ranking.
+- [ ] A/B/C/D morphing control (or equivalent) for blending between multiple
+  states.
+- [ ] Optional history scrub/timeline view for stepping through previous states
+  (can be implemented as an enhanced undo stack).
+- [ ] Optional soundstage + masking views (2D bubble map + conflict highlights)
+  for non-technical spatial understanding.
+- [ ] Layout router/splitter stage that can split/assign/recombine stems based
+  on channel semantics and roles (useful for complex multichannel stems).
+- [ ] Support for very large “many-channel” layouts (example: 9.1.6, 9.4.6) as
+  long as they fit within `max_channels`, with clear layout negotiation rules.
+- [ ] Additional export targets and packaging (listen packs, audition bundles,
+  multiple preset variants) with cached analysis reuse.
