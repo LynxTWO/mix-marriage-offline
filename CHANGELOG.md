@@ -84,6 +84,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Tauri sidecar Python interpreter selection:
+  - `gui/desktop-tauri/scripts/prepare-sidecar.mjs` now prefers the Python
+    interpreter exposed by `PYTHON`, `npm_config_python`, and
+    `actions/setup-python`'s `pythonLocation` before generic `python` /
+    `python3` fallbacks, so desktop CI uses the same environment that already
+    has PyInstaller/Nuitka installed.
+  - The sidecar wrapper now de-duplicates resolved interpreter candidates and
+    reports the interpreter command it actually used when the frozen-binary
+    build fails, making missing-backend diagnostics truthful in CI and local
+    runs.
+  - The desktop-tauri CI build step now exports `PYTHON=python`, and the
+    Tauri README now mirrors the same `python -m pip ...` install flow.
+
 - Tauri desktop design-system Firefox regressions:
   - The isolated `gui/desktop-tauri` shell now uses a wide-screen app layout
     that keeps the scaled dashboard trim control reachable for exact-entry ->

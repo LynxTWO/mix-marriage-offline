@@ -300,6 +300,8 @@ jobs:
 
       - name: Build desktop release binary
         working-directory: gui/desktop-tauri
+        env:
+          PYTHON: python
         run: npm run tauri build -- --no-bundle
 
       - name: Upload desktop release binary

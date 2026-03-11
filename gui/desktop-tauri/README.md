@@ -19,7 +19,7 @@ Desktop production builds do not require the Node `gui/server.mjs` runtime.
 2. Install desktop dependencies:
    `npm install`
 3. Install Python sidecar build dependencies from the repo root:
-   `python3 -m pip install -e ".[truth,pdf,gui]" pyinstaller`
+   `python -m pip install -e ".[truth,pdf,gui]" pyinstaller`
 4. Run the frontend only:
    `npm run dev`
 5. Run the desktop UI tests:
