@@ -82,6 +82,24 @@ These must remain untracked/ignored:
 
 If you need to use local scan outputs, treat them as *inputs only* and do not stage them.
 
+## Engineering thoroughness
+
+Avoid speculative complexity: no abstractions for a single use, no hypothetical future
+features, no docstrings or comments on untouched code.
+
+However, do not skip defensive correctness at real system boundaries:
+
+- Handle distinct error modes separately with messages that name the exact failing
+  resource (interpreter path, file, API endpoint, etc.). Lumping all failures into
+  one generic message is not acceptable.
+- Normalize and de-duplicate inputs that can collide through different representations
+  (absolute vs. relative paths, env var aliases, case differences on Windows).
+- Cover real failure paths users will actually hit in CI or cross-platform installs,
+  even if infrequent. Low-probability + high-pain edge cases belong in the code.
+
+The line: no complexity for hypothetical futures; full thoroughness for real
+operating environments.
+
 ## Audio quality + digital-first DSP mandates
 
 All plugin work must preserve MMO's digital-native quality bar and objective QA model.
