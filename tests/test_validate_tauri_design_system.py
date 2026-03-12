@@ -58,13 +58,13 @@ class TestValidateTauriDesignSystem(unittest.TestCase):
             index_path = temp_root / "gui" / "desktop-tauri" / "index.html"
             original = index_path.read_text(encoding="utf-8")
             mutated = original.replace(
-                '            data-widget-id="widget.dashboard.slider_trim"\n'
+                '            data-widget-id="widget.results.detail_slider"\n'
                 '            data-control-kind="SLIDER"\n'
                 '            data-numeric-control="true"\n'
                 '            data-direct-entry="true"\n'
                 '            data-fine-adjust="true"\n'
-                '            data-units="dB"\n',
-                '            data-widget-id="widget.dashboard.slider_trim"\n'
+                '            data-units="lines"\n',
+                '            data-widget-id="widget.results.detail_slider"\n'
                 '            data-control-kind="SLIDER"\n'
                 '            data-numeric-control="true"\n'
                 '            data-direct-entry="true"\n'
@@ -88,7 +88,7 @@ class TestValidateTauriDesignSystem(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, msg=result.stdout)
         payload = json.loads(result.stdout)
         self.assertFalse(payload.get("ok"))
-        self.assertIn("widget.dashboard.slider_trim", payload.get("numeric_missing_units", []))
+        self.assertIn("widget.results.detail_slider", payload.get("numeric_missing_units", []))
 
     def test_validator_fails_when_required_control_kind_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

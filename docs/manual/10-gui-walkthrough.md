@@ -1,10 +1,17 @@
-# Desktop GUI walkthrough (v1.1)
+# Desktop GUI walkthrough (legacy fallback)
 
 The GUI exists to reduce friction, not to hide the truth.
 It wraps the same CLI behaviors and keeps receipts.
 
-This chapter documents the fallback CustomTkinter GUI (`mmo-gui`).
-The primary GUI plan is the Tauri desktop app tracked in
+The primary GUI plan is now the Tauri desktop app, which covers the artifact-backed
+workflow sequence `Validate -> Analyze -> Scene -> Render -> Results -> Compare`
+tracked in [../gui_parity.md](../gui_parity.md).
+
+This chapter documents the legacy fallback CustomTkinter GUI (`mmo-gui`).
+That fallback remains available during the transition, but it is deprecated after
+Tauri parity lands.
+
+The primary GUI plan is tracked in
 [../gui_parity.md](../gui_parity.md); this walkthrough is deprecated after
 Tauri parity lands.
 

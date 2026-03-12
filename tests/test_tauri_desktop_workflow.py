@@ -30,24 +30,42 @@ class TestTauriDesktopWorkflow(unittest.TestCase):
         expected_allow = [{"name": "binaries/mmo", "sidecar": True, "args": True}]
         self.assertEqual(execute_permission.get("allow"), expected_allow)
         self.assertEqual(spawn_permission.get("allow"), expected_allow)
+        self.assertIn("fs:default", permissions)
+        self.assertTrue(
+            any(
+                isinstance(item, dict) and item.get("identifier") == "fs:allow-read-text-file"
+                for item in permissions
+            )
+        )
 
     def test_index_exposes_direct_workflow_controls(self) -> None:
         html_path = _TAURI_ROOT / "index.html"
         html = html_path.read_text(encoding="utf-8")
 
         for token in (
-            "workflow-prepare-button",
             "workflow-validate-button",
             "workflow-analyze-button",
+            "workflow-scene-button",
             "workflow-render-button",
+            "workflow-compare-button",
             "workflow-run-all-button",
+            "render-cancel-button",
+            "results-refresh-button",
             "workspace-reveal-button",
             "timeline-list",
+            "screen-validate",
+            "screen-analyze",
+            "screen-scene",
+            "screen-render",
+            "screen-results",
+            "screen-compare",
         ):
             self.assertIn(token, html)
 
         self.assertIn("safe-render --live-progress", html)
         self.assertIn("No Node server is launched.", html)
+        self.assertIn("compare_report.json", html)
+        self.assertIn("scene_lint.json", html)
 
     def test_typescript_wrapper_uses_sidecar_execute_and_spawn(self) -> None:
         wrapper_path = _TAURI_ROOT / "src" / "mmo-sidecar.ts"
@@ -58,6 +76,9 @@ class TestTauriDesktopWorkflow(unittest.TestCase):
         self.assertIn(".execute()", source)
         self.assertIn(".spawn()", source)
         self.assertIn('projectValidationPath: joinPath(projectDir, "validation.json")', source)
+        self.assertIn('scenePath: joinPath(normalizedWorkspaceDir, "scene.json")', source)
+        self.assertIn('compareReportPath: joinPath(normalizedWorkspaceDir, "compare_report.json")', source)
+        self.assertIn("readTextFile", source)
 
 
 if __name__ == "__main__":

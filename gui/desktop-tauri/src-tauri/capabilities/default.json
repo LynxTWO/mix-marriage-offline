@@ -5,7 +5,50 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "fs:default",
     "opener:default",
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [
+        { "path": "$HOME/**" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$DOCUMENT/**" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$TEMP/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPLOCALDATA/**" },
+        { "path": "$LOCALDATA/**" },
+        { "path": "$PUBLIC/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [
+        { "path": "$HOME/**" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$DOCUMENT/**" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$TEMP/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPLOCALDATA/**" },
+        { "path": "$LOCALDATA/**" },
+        { "path": "$PUBLIC/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [
+        { "path": "$HOME/**" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$DOCUMENT/**" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$TEMP/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPLOCALDATA/**" },
+        { "path": "$LOCALDATA/**" },
+        { "path": "$PUBLIC/**" }
+      ]
+    },
     {
       "identifier": "shell:allow-execute",
       "allow": [

@@ -1,4 +1,5 @@
 import { Command } from "@tauri-apps/plugin-shell";
+import { exists, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 const SIDECAR_NAME = "binaries/mmo";
 const LIVE_PREFIX = "[MMO-LIVE] ";
@@ -40,14 +41,22 @@ export type MmoRunResult = {
 };
 
 export type WorkflowPaths = {
+  busPlanCsvPath: string;
+  busPlanPath: string;
+  comparePdfPath: string;
+  compareReportPath: string;
   projectDir: string;
   projectValidationPath: string;
   renderDir: string;
+  renderCancelDir: string;
   renderManifestPath: string;
   renderQaPath: string;
   renderReceiptPath: string;
   reportPath: string;
   scanReportPath: string;
+  sceneLintPath: string;
+  scenePath: string;
+  stemsMapPath: string;
   workspaceDir: string;
 };
 
@@ -71,16 +80,40 @@ class LineBuffer {
   }
 }
 
-function normalizePath(pathValue: string): string {
+export function normalizePath(pathValue: string): string {
   return pathValue.trim().replace(/\\/g, "/").replace(/\/+$/, "");
 }
 
-function joinPath(basePath: string, leafName: string): string {
+export function joinPath(basePath: string, leafName: string): string {
   const normalizedBase = normalizePath(basePath);
   if (!normalizedBase) {
     return leafName;
   }
   return `${normalizedBase}/${leafName}`;
+}
+
+export function dirname(pathValue: string): string {
+  const normalized = normalizePath(pathValue);
+  const separatorIndex = normalized.lastIndexOf("/");
+  if (separatorIndex <= 0) {
+    return "";
+  }
+  return normalized.slice(0, separatorIndex);
+}
+
+export function resolveSiblingPath(pathValue: string, leafName: string): string {
+  const normalized = normalizePath(pathValue);
+  if (!normalized) {
+    return leafName;
+  }
+  if (normalized.toLowerCase().endsWith(".json")) {
+    return joinPath(dirname(normalized), leafName);
+  }
+  return joinPath(normalized, leafName);
+}
+
+export function isTauriRuntime(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
 function normalizeCommandOutput(output: MmoRunResult): MmoRunResult {
@@ -180,18 +213,73 @@ function createSidecar(args: string[], options: MmoRunOptions): Command<string> 
 export function buildWorkflowPaths(workspaceDir: string): WorkflowPaths {
   const normalizedWorkspaceDir = normalizePath(workspaceDir);
   const projectDir = joinPath(normalizedWorkspaceDir, "project");
+  const renderDir = joinPath(normalizedWorkspaceDir, "render");
 
   return {
+    busPlanCsvPath: joinPath(normalizedWorkspaceDir, "bus_plan.summary.csv"),
+    busPlanPath: joinPath(normalizedWorkspaceDir, "bus_plan.json"),
+    comparePdfPath: joinPath(normalizedWorkspaceDir, "compare_report.pdf"),
+    compareReportPath: joinPath(normalizedWorkspaceDir, "compare_report.json"),
     projectDir,
     projectValidationPath: joinPath(projectDir, "validation.json"),
-    renderDir: joinPath(normalizedWorkspaceDir, "render"),
+    renderDir,
+    renderCancelDir: normalizedWorkspaceDir,
     renderManifestPath: joinPath(normalizedWorkspaceDir, "render_manifest.json"),
     renderQaPath: joinPath(normalizedWorkspaceDir, "render_qa.json"),
     renderReceiptPath: joinPath(normalizedWorkspaceDir, "safe_render_receipt.json"),
     reportPath: joinPath(normalizedWorkspaceDir, "report.json"),
     scanReportPath: joinPath(normalizedWorkspaceDir, "report.scan.json"),
+    sceneLintPath: joinPath(normalizedWorkspaceDir, "scene_lint.json"),
+    scenePath: joinPath(normalizedWorkspaceDir, "scene.json"),
+    stemsMapPath: joinPath(normalizedWorkspaceDir, "stems_map.json"),
     workspaceDir: normalizedWorkspaceDir,
   };
+}
+
+export async function artifactExists(path: string): Promise<boolean> {
+  if (!path.trim() || !isTauriRuntime()) {
+    return false;
+  }
+  try {
+    return await exists(path);
+  } catch {
+    return false;
+  }
+}
+
+export async function readArtifactText(path: string): Promise<string | null> {
+  if (!path.trim() || !isTauriRuntime()) {
+    return null;
+  }
+  try {
+    return await readTextFile(path);
+  } catch {
+    return null;
+  }
+}
+
+export async function readArtifactJson<T>(path: string): Promise<T | null> {
+  const text = await readArtifactText(path);
+  if (text === null) {
+    return null;
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function writeArtifactText(path: string, text: string): Promise<boolean> {
+  if (!path.trim() || !isTauriRuntime()) {
+    return false;
+  }
+  try {
+    await writeTextFile(path, text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function executeMmo(

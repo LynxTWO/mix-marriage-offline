@@ -30,22 +30,22 @@ is deprecated after parity lands.
 
 ## Required Screens
 
-- [ ] Validate: open project or workspace, run deterministic project/stem checks,
+- [x] Validate: open project or workspace, run deterministic project/stem checks,
   and surface actionable validation failures before later stages.
-- [ ] Analyze: run CLI-backed analysis, persist artifacts, and expose the same
+- [x] Analyze: run CLI-backed analysis, persist artifacts, and expose the same
   deterministic receipts and logs that the CLI writes.
-- [ ] Scene: inspect generated scene intent, preview routing/object-vs-bed
+- [x] Scene: inspect generated scene intent, preview routing/object-vs-bed
   context, and keep scene artifacts explainable.
-- [ ] Render: run deterministic render workflows from the GUI against the same
+- [x] Render: run deterministic render workflows from the GUI against the same
   CLI contracts, including progress and cancellation surfaces.
-- [ ] Results: show the written artifacts, final receipts, and what changed in a
+- [x] Results: show the written artifacts, final receipts, and what changed in a
   way that maps back to generated files.
-- [ ] Compare: provide post-render or post-analysis comparison workflow entry
+- [x] Compare: provide post-render or post-analysis comparison workflow entry
   points so users can review outcomes before committing changes.
 
 ## Required Behaviors
 
-- [ ] A/B loudness-comp compare: comparison defaults must loudness-match the two
+- [x] A/B loudness-comp compare: comparison defaults must loudness-match the two
   audition states and disclose any compensation used.
 - [ ] Scene locks edit: the GUI must support deterministic scene lock editing and
   save the resulting lock artifact for repeatable reruns.

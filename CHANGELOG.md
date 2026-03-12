@@ -152,7 +152,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Completion/status tracking now treats optional GUI maturity items as post-v1
   work, marks the shipped 32-channel / golden-fixture / plugin-mode regression
   gates complete, and calls out the remaining release-surface, packaged-smoke,
-  and Tauri compare-parity blockers explicitly.
+  and primary-GUI scene-lock parity blocker explicitly.
 
 ### Added
 
@@ -387,6 +387,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Expanded the Tauri shell capability contract so the desktop app explicitly
     allowlists both `shell:allow-execute` and `shell:allow-spawn` for the MMO
     sidecar.
+
+- Tauri workflow parity completion:
+  - Replaced the placeholder desktop shell with first-class `Validate`,
+    `Analyze`, `Scene`, `Render`, `Results`, and `Compare` screens wired to
+    the packaged sidecar commands and the real workspace artifacts those CLI
+    flows produce.
+  - Results now surfaces generated artifact paths, final receipt context,
+    render QA summaries, and a deterministic "what changed" view tied back to
+    emitted output artifacts.
+  - Compare now accepts real report/render artifacts, invokes the existing
+    compare contract, and discloses any loudness compensation derived from the
+    paired render QA artifacts for A/B evaluation.
+  - Scene now exposes generated `scene.json` plus lint and lock context in a
+    read-only deterministic explainer view, and the Tauri app reads/writes
+    those JSON artifacts through `@tauri-apps/plugin-fs` with explicit
+    cross-platform capability allowlists.
+  - Added authored layout manifests and desktop regression coverage for the
+    new workflow screens, artifact import/rendering, and compare/result
+    behaviors, and updated `docs/gui_parity.md` to mark the completed screens
+    while leaving primary-GUI scene-lock editing as the remaining open item.
 
 ### Fixed
 

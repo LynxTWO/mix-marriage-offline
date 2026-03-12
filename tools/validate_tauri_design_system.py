@@ -23,9 +23,11 @@ from mmo.core.ui_layout import build_ui_layout_snapshot, snapshot_has_violations
 
 
 LAYOUT_FILES: tuple[str, ...] = (
-    "gui/desktop-tauri/layouts/dashboard.ui_layout.json",
-    "gui/desktop-tauri/layouts/presets.ui_layout.json",
-    "gui/desktop-tauri/layouts/run.ui_layout.json",
+    "gui/desktop-tauri/layouts/validate.ui_layout.json",
+    "gui/desktop-tauri/layouts/analyze.ui_layout.json",
+    "gui/desktop-tauri/layouts/scene.ui_layout.json",
+    "gui/desktop-tauri/layouts/render.ui_layout.json",
+    "gui/desktop-tauri/layouts/results.ui_layout.json",
     "gui/desktop-tauri/layouts/compare.ui_layout.json",
 )
 

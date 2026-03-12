@@ -59,25 +59,46 @@
       "section_id": "compare",
       "widgets": [
         {
+          "widget_id": "widget.compare.inputs",
+          "col_span": 4,
+          "row_span": 3,
+          "min_width_px": 104,
+          "min_height_px": 120
+        },
+        {
           "widget_id": "widget.compare.ab_toggle",
           "col_span": 4,
           "row_span": 2,
-          "min_width_px": 110,
+          "min_width_px": 104,
           "min_height_px": 88
+        },
+        {
+          "widget_id": "widget.compare.compensation_knob",
+          "col_span": 4,
+          "row_span": 3,
+          "min_width_px": 104,
+          "min_height_px": 120
         },
         {
           "widget_id": "widget.compare.value_readout",
           "col_span": 4,
           "row_span": 2,
-          "min_width_px": 110,
+          "min_width_px": 104,
           "min_height_px": 88
         },
         {
           "widget_id": "widget.compare.summary",
-          "col_span": 4,
-          "row_span": 2,
-          "min_width_px": 110,
-          "min_height_px": 88
+          "col_span": 8,
+          "row_span": 3,
+          "min_width_px": 180,
+          "min_height_px": 120
+        },
+        {
+          "widget_id": "widget.compare.json",
+          "col_span": 12,
+          "row_span": 3,
+          "min_width_px": 240,
+          "min_height_px": 120
         }
       ]
     }

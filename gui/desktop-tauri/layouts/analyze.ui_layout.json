@@ -1,0 +1,50 @@
+{
+  "schema_version": "0.1.0",
+  "layout_id": "LAYOUT.GUI.TAURI.ANALYZE",
+  "grid": {
+    "columns": 12,
+    "gap_px": 12,
+    "row_height_px": 44,
+    "margin_px": 20
+  },
+  "container": {
+    "section_gap_px": 16
+  },
+  "breakpoints": [
+    {
+      "breakpoint_id": "mobile",
+      "max_viewport_width_px": 720,
+      "grid_overrides": {
+        "gap_px": 10,
+        "row_height_px": 40,
+        "margin_px": 16
+      },
+      "container_overrides": {
+        "section_gap_px": 12
+      }
+    },
+    {
+      "breakpoint_id": "desktop",
+      "min_viewport_width_px": 721
+    }
+  ],
+  "sections": [
+    {
+      "section_id": "header",
+      "widgets": [
+        { "widget_id": "widget.header.scale", "col_span": 4, "row_span": 1, "min_width_px": 108, "min_height_px": 36 },
+        { "widget_id": "widget.header.fine_adjust", "col_span": 4, "row_span": 1, "min_width_px": 108, "min_height_px": 36 },
+        { "widget_id": "widget.header.tabs", "col_span": 4, "row_span": 1, "min_width_px": 112, "min_height_px": 36 }
+      ]
+    },
+    {
+      "section_id": "analyze",
+      "widgets": [
+        { "widget_id": "widget.analyze.actions", "col_span": 4, "row_span": 3, "min_width_px": 104, "min_height_px": 120 },
+        { "widget_id": "widget.analyze.summary", "col_span": 4, "row_span": 2, "min_width_px": 104, "min_height_px": 88 },
+        { "widget_id": "widget.analyze.scan", "col_span": 4, "row_span": 2, "min_width_px": 104, "min_height_px": 88 },
+        { "widget_id": "widget.analyze.json", "col_span": 12, "row_span": 3, "min_width_px": 240, "min_height_px": 120 }
+      ]
+    }
+  ]
+}

@@ -277,13 +277,13 @@ What remains: broaden the golden fixture matrix beyond the small stereo/surround
   CLI (`mmo plugin list/update`), and GUI browser surfaces.
 - [x] Desktop GUI includes an artistic `Discover` marketplace tab with preview
   cards and deterministic one-click offline plugin install flow.
-- [ ] Compare is a first-class user-facing workflow across CLI and GUI:
+- [x] Compare is a first-class user-facing workflow across CLI and GUI:
   artifact-backed compare flows (`current vs last run`, `report vs report`) are
   visible from results surfaces, and any loudness compensation used for
   evaluation is disclosed.
 - [x] A “variant runner” can render multiple output variants (profiles/presets/targets) while reusing cached analysis artifacts keyed by content hash.
 - [x] Project session JSON persistence exists for `scene + history + receipts` via `mmo project save/load`, with deterministic JSON output and strict schema validation.
-What remains: finish artifact-backed compare parity and loudness-compensation disclosure in the primary GUI/results flow.
+What remains: the primary remaining Tauri parity item is scene-lock editing in the primary GUI; compare/results artifact parity is complete.
 
 ### 4.8.1 GUI is ergonomically safe and AI-readable (a work of art in itself, so creatives and nerds alike love it. Strong typography, cinematic color contrast, and intentional spacing/visual hierarchy so it feels crafted, not utilitarian, while still staying cross-platform and deterministic)
 - [x] GUI delivery has one primary plan and one fallback until parity:
@@ -326,12 +326,12 @@ What remains: finish artifact-backed compare parity and loudness-compensation di
   through the packaged sidecar, streams live stdout/stderr into a desktop
   timeline, and writes deterministic artifacts under a user-provided workspace
   folder without requiring the Node `gui/server.mjs` runtime in production.
-- [ ] The primary Tauri GUI exposes the same workflow as the CLI:
+- [x] The primary Tauri GUI exposes the same workflow as the CLI:
   validate -> analyze -> scene -> render -> results -> compare, using the same
   project/report/scene/render artifacts the CLI writes.
 - [x] GUI copy and structure follow the design system in ontology/gui_design.yaml (theme tokens, screen templates, and progressive disclosure).
 - [x] Any plugin/config UI is generated from JSON Schema with optional UI hints (example: x_mmo_ui or a dedicated ui_hints registry) so agents do not hand-build one-off forms.
-What remains: finish the open Tauri screens/behaviors tracked in `docs/gui_parity.md`, especially scene/results parity, compare entry points, and loudness-matched compare behavior.
+What remains: the open Tauri parity behavior tracked in `docs/gui_parity.md` is scene-lock editing in the primary desktop workflow.
 
 Interaction standards (non-negotiable):
 - [x] Every numeric control supports direct text entry (exact value).
