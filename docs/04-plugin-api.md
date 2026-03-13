@@ -10,7 +10,8 @@
 
 The plugin system exists to:
 
-- let the community improve detection and strategy without destabilizing the “truth layer”
+- let the community improve detection and strategy without destabilizing the
+  "truth layer"
 - enable taste and workflow diversity (multiple strategies for the same problem)
 - keep outputs consistent through **ontology IDs** and **schema validation**
 - preserve reproducibility (plugin versions/hashes recorded in reports)
@@ -26,7 +27,8 @@ MMO supports three plugin types:
 
 ### 2.1 Detector plugins
 
-**Purpose:** convert measured features into **issues** (problem statements with evidence).
+**Purpose:** convert measured features into **issues**
+(problem statements with evidence).
 
 **Input:** Session + measured features  
 **Output:** `issues[]`
@@ -40,7 +42,8 @@ Examples:
 
 ### 2.2 Resolver plugins
 
-**Purpose:** convert issues into **actions** (recommendations), often with multiple strategy options.
+**Purpose:** convert issues into **actions** (recommendations), often with
+multiple strategy options.
 
 **Input:** Session + issues + user intent/limits  
 **Output:** `recommendations[]` (action options)
@@ -300,36 +303,46 @@ If an ontology ID is deprecated:
 
 ## 11) Channel ordering standards for plugins
 
-MMO supports two channel-ordering standards: **SMPTE** (default) and **Film**.
+MMO supports five channel-ordering standards at the I/O boundary:
+**SMPTE** (default), **FILM**, **LOGIC_PRO**, **VST3**, and **AAF**.
 
 ### Why this matters
 
-Plugins that use channel position (surround panning, spatial processing, linked groups) must
-know the active channel order so they route audio to the correct speaker.  A plugin that
-assumes index 3 is always LFE will misroute audio when Film ordering is active (where LFE
-is at the last index).
+Plugins that use channel position
+(surround panning, spatial processing, linked groups) must know the active
+channel order so they route audio to the correct speaker.
+A plugin that assumes index 3 is always LFE will misroute audio whenever the
+active standard changes slot order.
 
 ### Plugin manifest fields
 
 ```yaml
 capabilities:
-  supported_standards: ["SMPTE", "FILM"]   # omit = both supported
+  supported_standards: ["SMPTE", "FILM", "LOGIC_PRO"]  # omit = all supported
   preferred_standard: "SMPTE"              # omit = SMPTE
 ```
 
-Defined in `ontology/plugin_semantics.yaml` (section `channel_ordering_standards`).
-Schema: `schemas/plugin.schema.json` (`capabilities.supported_standards`, `capabilities.preferred_standard`).
+Defined in `ontology/plugin_semantics.yaml`
+(section `channel_ordering_standards`).
+Schema: `schemas/plugin.schema.json`
+(`capabilities.supported_standards`,
+`capabilities.preferred_standard`).
 
 ### Rules for plugin authors
 
-- **`per_channel` plugins** that never reference speaker position: no declaration needed.
+- **`per_channel` plugins** that never reference speaker position:
+  no declaration needed.
   The host treats them as standard-agnostic.
-- **`linked_group` or `true_multichannel` plugins**: must declare `supported_standards`.
-  Use `link_groups` (`front`, `surrounds`, `heights`, `all`) instead of hard-coded indices.
-- **Never assume a fixed channel index.** Use the channel IDs from `ProcessContext.channel_order`
-  (a list of `SPK.*` IDs in active-standard order) to locate channels dynamically.
-- Plugins that only support one standard should declare it and set `preferred_standard` so the
-  host can reorder or bypass as needed.
+- **`linked_group` or `true_multichannel` plugins**:
+  must declare `supported_standards`.
+  Use `link_groups` (`front`, `surrounds`, `heights`, `all`) instead of
+  hard-coded indices.
+- **Never assume a fixed channel index.**
+  Use the channel IDs from `ProcessContext.channel_order`
+  (a list of `SPK.*` IDs in active-standard order) to locate channels
+  dynamically.
+- Plugins that only support one standard should declare it and set
+  `preferred_standard` so the host can reorder or bypass as needed.
 
 ### ProcessContext.channel_order
 

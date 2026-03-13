@@ -5,74 +5,56 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
 
-An open-source, offline mixing assistant that handles the technical math so humans can focus on vibe, intent, and performance.
+An open-source, offline mixing assistant for deterministic analysis,
+layout-agnostic scene intent, and mix-once/render-many delivery.
 
-Website: [lynxtwo.github.io/mix-marriage-offline](https://lynxtwo.github.io/mix-marriage-offline/)
+Website:
+[lynxtwo.github.io/mix-marriage-offline](https://lynxtwo.github.io/mix-marriage-offline/)
 
-MMO is a standalone tool that analyzes exported stems in a folder and produces:
+MMO is not a DAW plugin and it is not "AI that mixes your song for you."
+It is a technical co-pilot that keeps the engineering side honest while the
+human keeps the musical intent.
 
-- A ranked list of technical issues with evidence
-- DAW-agnostic recommendations (a recall sheet you can apply anywhere)
-- Translation checks (stereo, mono, phone, earbuds, car-like curves)
-- Optional conservative rendered stem variants (explicit invoke only)
-- A modular plugin system so strategies can evolve without breaking the core
+## What MMO Ships Today
 
-This is not a DAW plugin. This is not "AI that mixes your song for you."
-It is a technical co-pilot that keeps the engineering side honest, so the human can stay artistic.
+- Deterministic contract artifacts for analysis and delivery:
+  `report.json`, `scene.json`, `render_plan.json`, `render_report.json`,
+  `render_manifest.json`, `receipt.json`, and `compare_report.json`.
+- CLI workflows for `scan`, `analyze`, `run`, `safe-render`, `compare`,
+  `project`, `watch`, `scene`, `render-plan`, and `render-run`.
+- Mix-once/render-many delivery from one scene into multiple target layouts.
+- A compare workflow that can write `compare_report.json` and compare PDF
+  exports, with fair-listen `loudness_match` disclosure when sibling
+  `render_qa.json` artifacts exist.
+- First-class render targets for stereo, surround, immersive, and headphone
+  delivery, including deterministic binaural/headphone preview flows.
+- Five supported channel-ordering standards at the I/O boundary:
+  `SMPTE`, `FILM`, `LOGIC_PRO`, `VST3`, and `AAF`.
+- A shipped Tauri desktop app path for packaged releases, plus the legacy
+  CustomTkinter fallback GUI while Tauri parity is still finishing.
+- Offline plugin marketplace/discovery, project/session artifacts, translation
+  QA, downmix QA, and watch-folder batch automation.
 
----
+## Still Not Complete Yet
 
-## v1.1.0 highlights
+- The Tauri desktop app is the primary GUI path, but it does not yet have full
+  parity for scene-lock editing.
+- Cross-platform packaged desktop smoke coverage is still incomplete even
+  though release binaries are built for Windows, macOS, and Linux.
+- The legacy `mmo-gui` fallback remains available during the transition, but it
+  is not the long-term primary GUI.
+- MMO does not claim to replace proprietary Atmos renderers or licensed Dolby
+  workflows.
 
-- Offline plugin marketplace and updateable local index (`mmo plugin list/update` + GUI browser).
-- Smart watch-folder automation for deterministic batch `run --render-many` workflows.
-- GUI Visualization Dashboard v1.1 with deterministic spectrum/vectorscope/correlation and 3D scene previews.
-- Deterministic headphone preview flow (`safe-render --preview-headphones`).
-- New benchmark suite in [`benchmarks/`](benchmarks/) and a new user-facing workflow guide at [`docs/user_guide.md`](docs/user_guide.md).
-- Community onboarding assets are now first-class in the docs flow (`README`, `CONTRIBUTING`, `CODE_OF_CONDUCT`, `SECURITY`, user guide).
+## Install And Runtime Expectations
 
----
+Recommended for end users:
 
-## Why this exists
+- Download the packaged desktop release from GitHub Releases.
+- Release assets provide a Windows installer, macOS app bundle, and Linux
+  AppImage for the Tauri desktop app.
 
-Mixing is two jobs wearing one hat:
-
-- Objective engineering: gain staging, loudness safety, masking, resonances, dynamics, translation
-- Subjective art: mood, texture, space, hierarchy, energy, emotional story
-
-When one person must do both, something gets compromised. Usually it is the technical details or the creative intent. Sometimes both.
-
-MMO's promise:
-
-- The machine handles the technical chores relentlessly
-- The human decides what the music means
-
-## Install
-
-One-click installers (no Python required):
-
-- Download the matching release asset from GitHub Releases:
-  - Windows installer: `mmo-setup-windows-<arch>-v<version>.exe`
-  - macOS app bundle: `MMO-v<version>-macos-<arch>.app.zip`
-  - Linux AppImage: `mmo-v<version>-linux-<arch>.AppImage`
-- Launch:
-
-```powershell
-# Windows (PowerShell): run installer
-.\mmo-setup-windows-x86_64-v1.1.0.exe
-```
-
-```sh
-# macOS
-unzip MMO-v1.1.0-macos-arm64.app.zip
-open "MMO-v1.1.0-macos-arm64.app"
-
-# Linux
-chmod +x mmo-v1.1.0-linux-x86_64.AppImage
-./mmo-v1.1.0-linux-x86_64.AppImage
-```
-
-Python install (repo/dev):
+Source install:
 
 ```sh
 pip install .
@@ -82,330 +64,182 @@ Optional extras:
 
 ```sh
 pip install .[pdf]
+pip install .[gui]
+pip install .[watch]
 ```
 
-Verify signatures/checksums:
+Runtime expectations:
 
-```powershell
-# Windows Authenticode (expect Status = Valid)
-Get-AuthenticodeSignature .\mmo-setup-windows-x86_64-v1.1.0.exe | Format-List
-```
+- Python `3.12+` for source installs.
+- FFmpeg and ffprobe are expected for core audio workflows such as decode,
+  render, metadata handling, and QA on real-world sessions.
+- NumPy is part of the base install.
+- ReportLab is only needed for PDF exports.
+- `.[gui]` installs the legacy fallback `mmo-gui` entrypoint.
+
+Verify your environment:
 
 ```sh
-# macOS code signature
-codesign --verify --deep --strict --verbose=2 "MMO-v1.1.0-macos-arm64.app"
+mmo --help
+mmo env doctor --format text
 ```
 
+If FFmpeg or ffprobe are not on `PATH`, set `MMO_FFMPEG_PATH` and
+`MMO_FFPROBE_PATH`.
+
+## Current Workflow Snapshot
+
+Quick one-button run:
+
 ```sh
-# Linux detached signature + checksum
-gpg --verify mmo-v1.1.0-linux-x86_64.AppImage.asc mmo-v1.1.0-linux-x86_64.AppImage
-sha256sum -c mmo-v1.1.0-linux-x86_64.AppImage.sha256
+mmo run --stems ./stems --out out/run_001 --export-csv --export-pdf --bundle
 ```
 
----
+What that gets you:
 
-## Supported formats
+- deterministic analysis artifacts in one output folder
+- `report.json` plus optional PDF/CSV exports
+- optional `scene.json`, `render_plan.json`, `ui_bundle.json`, and delivery
+  helpers when requested
 
-- WAV (.wav/.wave) is always supported.
-- FLAC (.flac) and WavPack (.wv) are supported when ffprobe/FFmpeg is available (or MMO_FFPROBE_PATH is set).
-- AIFF (.aif/.aiff) is not supported yet; export WAV for now.
-- Lossy formats (MP3/AAC/Ogg/Opus) will trigger warnings; re-export lossless for reliable analysis.
-
----
-
-## CLI Cookbook
-
-### Analyze stems (stereo or surround)
+Project scaffold flow:
 
 ```sh
-# Analyze a stem folder and write a report
-mmo analyze ./stems --out-report out/report.json
-
-# Analyze with peak metering
-mmo scan ./stems --meters peak --out-report out/report.json
-
-# Analyze with truth metering
-mmo scan ./stems --meters truth --out-report out/report.json
+mmo project init --stems-root ./stems --out-dir ./project
+mmo project refresh --project-dir ./project --stems-root ./stems
 ```
 
-### Export reports
+This is the clean path for longer-running sessions, teams, and GUI-backed
+workspaces.
+
+## Compare Workflow
+
+MMO can compare two runs or two report folders and write a deterministic
+artifact describing what changed.
 
 ```sh
-# Export PDF recall sheet (requires pip install .[pdf])
-mmo export --report out/report.json --pdf out/report.pdf
-
-# Export CSV issues list
-mmo export --report out/report.json --csv out/issues.csv
-
-# Export both
-mmo report --report out/report.json --pdf out/report.pdf --csv out/recall.csv
+mmo compare \
+  --a out/run_a/report.json \
+  --b out/run_b/report.json \
+  --out out/compare_report.json \
+  --pdf out/compare_report.pdf
 ```
 
-### Layout standards: SMPTE, FILM, Logic Pro, VST3, AAF
+When sibling `render_qa.json` files are present, the compare artifact also
+records the evaluation-only loudness compensation MMO used for fair listening.
 
-MMO supports five channel-ordering standards for import and export.
-The internal canonical standard is always **SMPTE**.
+## Mix-Once, Render-Many
 
-| Standard    | Used by                                        |
-|-------------|------------------------------------------------|
-| `SMPTE`     | Netflix, broadcast, DCP, FFmpeg, WAV/FLAC/BWF  |
-| `FILM`      | Pro Tools, Dolby cinema legacy                 |
-| `LOGIC_PRO` | Logic Pro (Apple), DTS                         |
-| `VST3`      | Cubase, Nuendo 7.1+                            |
-| `AAF`       | Metadata-driven interchange                    |
+Safe-render is the bounded, receipt-driven render flow:
 
 ```sh
-# Render with SMPTE output order (default)
-mmo safe-render --report out/report.json --layout-standard SMPTE --out-dir out/smpte/
-
-# Render with Pro Tools / FILM output order
-mmo safe-render --report out/report.json --layout-standard FILM --out-dir out/film/
-
-# Render with Logic Pro output order
-mmo safe-render --report out/report.json --layout-standard LOGIC_PRO --out-dir out/logic/
-
-# Render with VST3 / Cubase output order
-mmo safe-render --report out/report.json --layout-standard VST3 --out-dir out/vst3/
-```
-
-### Mix-once, render-many: deliver to SMPTE / FILM / Logic Pro in one pass
-
-```sh
-# Full safe-render to all 5 channel standards from a single source report
 mmo safe-render \
-  --report out/report.json \
+  --report out/run_001/report.json \
   --render-many \
-  --render-many-targets stereo,5.1,7.1.4 \
-  --out-dir out/deliverables/
+  --render-many-targets stereo,5.1,7.1.4,binaural \
+  --layout-standard SMPTE \
+  --preview-headphones \
+  --out-dir out/deliverables \
+  --receipt-out out/receipt.json
+```
 
-# Demo flow: load the built-in 7.1.4 fixture and dry-run to all 5 standards
-mmo safe-render --demo --out-dir out/demo/
+What ships in this path today:
 
-# Public example session fixture (7.1.4 SMPTE + FILM), dry-run render
-mmo safe-render \
-  --report fixtures/public_session/report.7_1_4.json \
-  --target 7.1.4 \
-  --layout-standard FILM \
-  --dry-run \
-  --receipt-out out/public_session/receipt.json \
-  --out-manifest out/public_session/render_manifest.json
+- deterministic scene-aware render contracts
+- one scene rendered to many targets in one pass
+- conservative fallback sequencing and QA receipts
+- explicit approval gates for higher-impact recommendations
+- optional headphone preview WAVs via `--preview-headphones`
 
-# One-shot: analyze + render-many in a single workflow pass
-mmo run ./stems \
+`run --render-many` is also available when you want analyze plus delivery in
+one command:
+
+```sh
+mmo run \
+  --stems ./stems \
+  --out out/run_render_many \
   --render-many \
-  --targets TARGET.STEREO.2_0 \
+  --targets TARGET.STEREO.2_0,TARGET.SURROUND.5_1,TARGET.IMMERSIVE.7_1_4 \
   --translation \
-  --out-dir out/run/
+  --deliverables-index \
+  --listen-pack
 ```
 
-The render-many workflow:
+## Targets, Layouts, And Ordering Standards
 
-1. Analyzes the source session once
-2. Plans renders to every requested layout + standard
-3. Writes per-standard deliverable directories
-4. Runs translation QA (stereo, mono, phone) when a `TARGET.STEREO.2_0` deliverable exists
+Current first-class render targets include:
 
-### Downmix matrix
+- stereo: `2.0`, `2.1`
+- front stage: `3.0`, `3.1`
+- surround: `4.0`, `4.1`, `5.1`, `7.1`
+- immersive: `5.1.2`, `5.1.4`, `7.1.2`, `7.1.4`, `9.1.6`
+- headphones: `binaural`
 
-```sh
-# Show the downmix matrix for 5.1 → stereo
-mmo downmix show --source LAYOUT.5_1 --target LAYOUT.2_0 --format csv
+The layout registry also includes additional layouts used for validation and
+routing contracts, including `7.1.6`, `SDDS 7.1`, and `32CH`.
 
-# List all available layouts, policies, and conversions
-mmo downmix list
-mmo downmix list --policies
+MMO keeps internal processing in canonical `SMPTE` order and remaps at the I/O
+boundary for these standards:
 
-# QA a rendered downmix against a stereo reference
-mmo downmix qa --src 5.1.flac --ref ref_stereo.flac \
-  --source-layout LAYOUT.5_1 --format json
+| Standard | Typical use |
+| --- | --- |
+| `SMPTE` | broadcast, FFmpeg, WAV/FLAC/BWF |
+| `FILM` | Pro Tools and cinema-style ordering |
+| `LOGIC_PRO` | Logic Pro / DTS ordering |
+| `VST3` | Cubase / Nuendo 7.1+ ordering |
+| `AAF` | metadata-driven interchange |
 
-# QA then export PDF
-mmo downmix qa --src 5.1.flac --ref ref_stereo.flac \
-  --source-layout LAYOUT.5_1 --meters truth --emit-report qa_report.json
-mmo export --report qa_report.json --pdf qa_report.pdf
-```
+See [docs/18-channel-standards.md](docs/18-channel-standards.md) and
+[docs/15-target-selection.md](docs/15-target-selection.md) for the canonical
+contracts.
 
-### Plugins and ontology
+## Desktop App Status
 
-```sh
-# List available plugins
-mmo plugins list
+MMO currently has two desktop paths:
 
-# Browse ontology: roles, targets, issues
-mmo roles list
-mmo targets list
-mmo ontology integrity
+- Primary path: the packaged Tauri desktop app in
+  [gui/desktop-tauri/README.md](gui/desktop-tauri/README.md)
+- Fallback path: the legacy CustomTkinter `mmo-gui` flow documented in
+  [docs/manual/10-gui-walkthrough.md](docs/manual/10-gui-walkthrough.md)
 
-# Inspect a translation profile
-mmo translation show TRANS.MONO.COLLAPSE
-```
+Tauri already covers the artifact-backed workflow sequence:
+`Validate -> Analyze -> Scene -> Render -> Results -> Compare`.
 
----
+Fallback GUI status:
 
-## Mix-once, render-many: channel layout workflow
-
-MMO uses SMPTE order internally for all processing.
-Stems are remapped from the source standard on import and back to the target standard on export.
-
-```text
-Source stems  →  [remap in]  →  SMPTE (internal)  →  [remap out]  →  SMPTE / FILM / LOGIC_PRO / VST3 / AAF
-```
-
-This means you mix once and MMO handles channel reordering for every downstream standard.
-
-**7.1.4 channel order by standard:**
-
-| Slot  | SMPTE           | FILM            | LOGIC_PRO       | VST3            |
-|-------|-----------------|-----------------|-----------------|-----------------|
-| 1     | L               | L               | L               | L               |
-| 2     | R               | C               | C               | R               |
-| 3     | C               | R               | R               | C               |
-| 4     | LFE             | Ls              | Ls              | LFE             |
-| 5     | Ls              | Rs              | Rs              | Ls              |
-| 6     | Rs              | Lrs             | Lrs             | Rs              |
-| 7     | Lrs             | Rrs             | Rrs             | Lrs             |
-| 8     | Rrs             | LFE             | LFE             | Rrs             |
-| 9–12  | TFL TFR TRL TRR | TFL TFR TRL TRR | TFL TFR TRL TRR | TFL TFR TRL TRR |
-
-See [docs/07-export-guides.md](docs/07-export-guides.md) for per-DAW export recipes.
-
----
+- still available for bounded desktop workflows
+- still useful when you want the old point-and-click pipeline quickly
+- intentionally treated as fallback-only until Tauri parity is complete
 
 ## Documentation
 
-Start here: [docs/README.md](docs/README.md)
+Start here:
+[docs/README.md](docs/README.md)
 
-Key reads:
+Recommended reads:
 
-- User guide: [docs/user_guide.md](docs/user_guide.md)
-- Product vision: [docs/09-product-vision.md](docs/09-product-vision.md)
-- Authority modes: [docs/10-authority-profiles.md](docs/10-authority-profiles.md)
-- GUI vision: [docs/11-gui-vision.md](docs/11-gui-vision.md)
-- GUI dev shell: [docs/12-gui-dev.md](docs/12-gui-dev.md)
-- Export guides: [docs/07-export-guides.md](docs/07-export-guides.md)
-- Benchmark suite: [benchmarks/README.md](benchmarks/README.md)
+- [docs/manual/00-manual-overview.md](docs/manual/00-manual-overview.md)
+- [docs/00-quickstart.md](docs/00-quickstart.md)
+- [docs/02-architecture.md](docs/02-architecture.md)
+- [docs/15-target-selection.md](docs/15-target-selection.md)
+- [docs/18-channel-standards.md](docs/18-channel-standards.md)
+- [docs/11-gui-vision.md](docs/11-gui-vision.md)
+- [docs/gui_parity.md](docs/gui_parity.md)
+- [docs/STATUS.md](docs/STATUS.md)
 
----
-
-## Core ideas
-
-### Objective core vs subjective plugins
-
-MMO keeps two worlds separate on purpose:
-
-#### Objective Core (truth layer)
-
-- metering, validation, translation checks, safety gates, strict schemas
-- deterministic and heavily tested
-
-#### Subjective Plugins (strategy layer)
-
-- detectors, resolvers, renderers, profiles
-- fast-evolving and swappable
-
-### Ontology-first
-
-Open source projects fall apart when contributors cannot agree on terms. MMO uses a shared vocabulary defined in YAML:
-
-- roles, features, issues, actions, parameters, units, evidence fields
-
-Internal variable names can vary, but anything leaving a plugin uses canonical IDs.
-
-### Bounded authority
-
-The tool can recommend anything, but it only auto-applies low-risk actions within user limits. High-impact moves require explicit approval.
-
----
-
-## Workflow
-
-1. Export stems from any DAW using simple rules:
-   - all stems start at 0:00
-   - same sample rate and bit depth
-   - consistent length
-   - consistent naming roles (or assign roles in-app)
-2. Point MMO at the folder
-3. MMO validates, measures, detects issues, proposes actions, applies safety gates
-4. MMO exports:
-   - report (PDF + JSON)
-   - recall sheet (CSV/TXT)
-   - optional rendered stem variants
-
-Optional conservative render (explicit invoke):
-
-```sh
-mmo safe-render --report out/report.json --out-dir out/rendered/ --dry-run
-```
-
----
-
-## Surround and immersive audio
-
-MMO v1.0 includes full multi-standard support for immersive layouts (5.1, 7.1, 7.1.4, 9.1.6, etc.) via the `SpeakerLayout` module:
-
-- channel layout awareness (2.0, 5.1, 7.1, 7.1.4, Dolby Atmos beds, etc.)
-- channel-group measurement (front stage, surrounds, heights, LFE)
-- downmix translation checks (surround to stereo/mono)
-- common immersive risk detection
-- five channel-ordering standards: SMPTE, FILM, LOGIC_PRO, VST3, AAF
-
-Note: Dolby Atmos involves licensing and proprietary tooling. MMO will focus on open, practical workflows and translation QA without claiming to replace official renderers.
-
----
-
-## Repo layout
+## Repo Layout
 
 ```text
-docs/       Project docs (proposal, philosophy, architecture, roadmap)
-ontology/   YAML source of truth (roles, features, issues, actions, policies)
-schemas/    JSON schemas for project/report/plugin I/O
-src/        Core engine and CLI
-plugins/    Community detectors/resolvers/renderers
-fixtures/   Test sessions for regression testing
-tests/      Automated tests
+docs/       Canonical docs and user manual
+ontology/   YAML source of truth for IDs, layouts, policies, and presets
+schemas/    JSON schemas for reports, scenes, renders, plugins, and projects
+src/        MMO engine, CLI, bundled data, and GUI bridge code
+gui/        Desktop app implementations (Tauri primary, CTK fallback)
+fixtures/   Deterministic audio and contract fixtures
+tests/      Cross-platform regression coverage
+tools/      Validation and workflow helper scripts
 ```
-
----
-
-## Status
-
-v1.1.0 — Release with marketplace/watch automation, GUI dashboard v1.1, benchmarks, and user/community docs.
-
-What works now:
-
-- Full analysis pipeline (scan, issue detection, recommendations, export)
-- PDF + JSON reports, CSV recall sheets
-- Downmix matrix computation and QA
-- Multi-standard channel layout: SMPTE, FILM, LOGIC_PRO, VST3, AAF
-- `SpeakerLayout` module with 5-standard remap and zero-fill
-- `safe-render` with bounded authority gates
-- Mix-once render-many: render to N standards in one pass
-- Conservative subjective plugins (gain trim, translation checks)
-- Offline plugin marketplace with CLI + GUI browsing
-- Smart watch-folder batch automation (`mmo watch`)
-- Deterministic headphone preview renders (`--preview-headphones`)
-- Benchmarks suite (`benchmarks/suite.py`) for repeatable timing snapshots
-- Deterministic pipeline, strict schemas, full CI matrix (Linux/Windows/macOS)
-
----
-
-## Contributing
-
-Contributions we expect to need (soon):
-
-- ontology additions and cleanup (IDs, definitions, policies)
-- fixture sessions and regression tests
-- detectors and resolvers (as plugins)
-- documentation, especially export guides for common DAWs
-
-When the contributor docs land, start with:
-
-- `CONTRIBUTING.md`
-- `docs/04-plugin-api.md`
-- `docs/05-fixtures-and-ci.md`
-
----
 
 ## License
 
-Apache-2.0. See `LICENSE`.
+Apache-2.0. See [LICENSE](LICENSE).

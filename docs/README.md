@@ -1,88 +1,120 @@
-# MMO docs index
+# MMO Docs Index
 
 This folder is the canonical documentation set for Mix Marriage Offline (MMO).
 
-The numeric prefixes reflect a recommended reading order. Gaps may exist as documents evolve.
+The numbered docs are the primary source of truth for product behavior,
+workflows, and architecture. Non-numbered one-offs are kept only as supporting
+reference when still useful.
 
-## Start here
+## Current Shipped Capabilities
+
+- Deterministic analysis, report export, and contract artifacts.
+- Scene-first, mix-once/render-many workflows across CLI and desktop paths.
+- Compare workflows with `compare_report.json` and fair-listen
+  `loudness_match` disclosure.
+- Render targets from stereo through immersive, plus first-class binaural
+  headphone delivery and preview flows.
+- Five supported channel-ordering standards:
+  `SMPTE`, `FILM`, `LOGIC_PRO`, `VST3`, and `AAF`.
+- Tauri desktop workflow screens for
+  `Validate -> Analyze -> Scene -> Render -> Results -> Compare`.
+
+## Still In Progress
+
+- Tauri scene-lock editing parity is not done yet.
+- Cross-platform packaged desktop smoke coverage is still incomplete.
+- The legacy CustomTkinter GUI remains available as fallback-only while Tauri
+  parity closes out.
+
+## Start Here
 
 - [manual/00-manual-overview.md](manual/00-manual-overview.md)
-  **User Manual** — the canonical end-user guide: install, workflows, safe-render,
-  translation QA, plugins, projects, and troubleshooting.
-  Chapter order is defined in [manual/manual.yaml](manual/manual.yaml).
-- [user_guide.md](user_guide.md)
-  Quickstart pointer with the most common commands. For depth, see the User Manual.
+  User Manual. Canonical end-user install, workflow, troubleshooting, and GUI
+  walkthrough sequence.
 - [00-quickstart.md](00-quickstart.md)
-  Golden-path walkthrough: stems to project scaffold in five minutes.
+  Golden-path walkthrough from stems to project scaffold and render-ready
+  artifacts.
+- [02-architecture.md](02-architecture.md)
+  Architecture as shipped today: deterministic artifacts, scene/render flow,
+  compare, delivery, and desktop paths.
+- [15-target-selection.md](15-target-selection.md)
+  Canonical target tokens, shorthands, and binaural target behavior.
+- [18-channel-standards.md](18-channel-standards.md)
+  Canonical channel-ordering standards contract.
+- [11-gui-vision.md](11-gui-vision.md)
+  Current GUI direction, shipped surfaces, and remaining parity work.
 - [STATUS.md](STATUS.md)
-  Live project checklist with milestone definitions and done criteria.
+  Live milestone checklist and current completion boundaries.
 - [milestones.yaml](milestones.yaml)
   Machine-readable milestone IDs, states, and doc section links.
 
-## Installed vs checkout paths
+## Canonical Doc Map
 
-- Repo checkout mode may use `plugins/` as the primary plugin root.
-- Installed package mode always has bundled manifests under `mmo.data/plugins`.
-- Runtime plugin scanning order is: primary (`--plugins`), external (`--plugin-dir`
-  or `~/.mmo/plugins`), then built-in packaged root fallback.
+- Core product framing:
+  [00-proposal.md](00-proposal.md),
+  [01-philosophy.md](01-philosophy.md),
+  [09-product-vision.md](09-product-vision.md)
+- Scene/render contracts:
+  [02-architecture.md](02-architecture.md),
+  [13-gui-handshake.md](13-gui-handshake.md),
+  [15-target-selection.md](15-target-selection.md),
+  [18-channel-standards.md](18-channel-standards.md)
+- Exports, translation, and delivery:
+  [07-export-guides.md](07-export-guides.md),
+  [16-translation-checks.md](16-translation-checks.md),
+  [21-loudness-profiles.md](21-loudness-profiles.md)
+- Plugins and ontology:
+  [03-ontology.md](03-ontology.md),
+  [04-plugin-api.md](04-plugin-api.md),
+  [13-plugin-authoring.md](13-plugin-authoring.md)
+- GUI and desktop:
+  [11-gui-vision.md](11-gui-vision.md),
+  [12-gui-design-system.md](12-gui-design-system.md),
+  [12-gui-dev.md](12-gui-dev.md),
+  [gui_parity.md](gui_parity.md)
 
-## Contribution workflow
+## Contribution Workflow
 
 - [Status system (`STATUS.md` + `milestones.yaml`)](STATUS.md)
   Keep milestone checklist state and machine-readable milestone state aligned.
 - [13-plugin-authoring.md](13-plugin-authoring.md)
   Minimum viable plugin package checklist for GUI-visible plugin metadata.
 - [PR checklist template](../.github/pull_request_template.md)
-  Required checklist for milestone links, state moves, changelog updates, and validation/tests reporting.
+  Required checklist for milestone links, changelog updates, and validation
+  reporting.
 
-## Recommended reading order
+## Installed Vs Checkout Paths
+
+- Repo checkout mode may use `plugins/` as the primary plugin root.
+- Installed package mode always has bundled manifests under `mmo.data/plugins`.
+- Runtime plugin scanning order is primary (`--plugins`), external
+  (`--plugin-dir` or `~/.mmo/plugins`), then built-in packaged root fallback.
+
+## Recommended Reading Order
 
 1. [00-proposal.md](00-proposal.md)
-2. [01-philosophy.md](01-philosophy.md)  
-3. [02-architecture.md](02-architecture.md)  
-4. [03-ontology.md](03-ontology.md)  
-5. [04-plugin-api.md](04-plugin-api.md)  
-6. [13-plugin-authoring.md](13-plugin-authoring.md)  
-7. [05-fixtures-and-ci.md](05-fixtures-and-ci.md)  
-8. [06-roadmap.md](06-roadmap.md)  
-9. [07-export-guides.md](07-export-guides.md)  
-10. [08-policy-validation.md](08-policy-validation.md)  
-11. [PROJECT_INSTRUCTIONS.md](PROJECT_INSTRUCTIONS.md)  
-12. [SCENE_AND_RENDER_CONTRACT_OVERVIEW.md](SCENE_AND_RENDER_CONTRACT_OVERVIEW.md)  
+2. [01-philosophy.md](01-philosophy.md)
+3. [02-architecture.md](02-architecture.md)
+4. [03-ontology.md](03-ontology.md)
+5. [04-plugin-api.md](04-plugin-api.md)
+6. [05-fixtures-and-ci.md](05-fixtures-and-ci.md)
+7. [07-export-guides.md](07-export-guides.md)
+8. [09-product-vision.md](09-product-vision.md)
+9. [11-gui-vision.md](11-gui-vision.md)
+10. [13-plugin-authoring.md](13-plugin-authoring.md)
+11. [15-target-selection.md](15-target-selection.md)
+12. [18-channel-standards.md](18-channel-standards.md)
 
-## Scene-first contracts
+## Legacy Reference Notes
 
-- [PROJECT_INSTRUCTIONS.md](PROJECT_INSTRUCTIONS.md)  
-  Core architecture requirements for mix-once/render-many, Objective Core boundaries, determinism, and plugin semantics.
-- [SCENE_AND_RENDER_CONTRACT_OVERVIEW.md](SCENE_AND_RENDER_CONTRACT_OVERVIEW.md)  
-  MVP scene model plus render target contract, gate expectations, and deterministic backoff behavior.
-
-## Product vision and UX
-
-- [09-product-vision.md](09-product-vision.md)  
-  Product promise (“technical co-pilot”), user stories, and mode overview.
-- [10-authority-profiles.md](10-authority-profiles.md)  
-  Guide vs Assist vs Full send, hard stops vs taste gates, safety rules.
-- [11-gui-vision.md](11-gui-vision.md)  
-  Musician-first GUI principles, nerd toggle, screens, and rollout milestones.
-- [gui_parity.md](gui_parity.md)
-  Canonical Tauri parity checklist: primary plan, fallback plan, required
-  screens, required behaviors, and CI gate.
-- [12-gui-dev.md](12-gui-dev.md)
-  First runnable GUI dev shell (thin client over `mmo gui rpc`) and cross-platform smoke steps.
-- [17-stem-discovery.md](17-stem-discovery.md)  
-  Stem-set scan/classify/review flow, safe override artifact, and confidence-first behavior.
-- [18-corpus-scanning.md](18-corpus-scanning.md)
-  Private names-only corpus scan flow for role lexicon refinement.
-- [19-stems-drafts.md](19-stems-drafts.md)
-  Preview-only scene and routing plan drafts from classified stems.
-- [20-stems-audition.md](20-stems-audition.md)
-  Per-bus-group WAV audition pack rendering and manifest format.
-- [21-loudness-profiles.md](21-loudness-profiles.md)
-  Data-driven `LOUD.*` profile contracts for render/preflight receipts.
+- [PROJECT_INSTRUCTIONS.md](PROJECT_INSTRUCTIONS.md) and
+  [SCENE_AND_RENDER_CONTRACT_OVERVIEW.md](SCENE_AND_RENDER_CONTRACT_OVERVIEW.md)
+  are older deep-dive references. Prefer the numbered docs above when linking
+  new readers into the docs set.
 
 ## Conventions
 
-- Use relative links between docs (e.g., `(10-authority-profiles.md)`).
-- Keep terminology aligned with ontology IDs (actions, issues, gates, reasons).
-- Prefer “what/why/where/confidence” for any detector output and “what changed/why/limits” for any resolver output.
+- Use relative links between docs, for example `(10-authority-profiles.md)`.
+- Keep terminology aligned with ontology IDs.
+- Prefer "what/why/where/confidence" for detector output and
+  "what changed/why/limits" for resolver or delivery output.

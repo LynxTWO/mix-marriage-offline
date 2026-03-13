@@ -1,27 +1,36 @@
 # GUI vision
 
-This document sketches a musician-friendly GUI for MMO. The goal is an interface that feels intuitive, visual, and fast, without burying users in menus.
+This document describes the current GUI direction for MMO.
+The goal is still a musician-friendly interface that feels intuitive, visual,
+and fast without hiding the underlying contracts.
 
-MMO remains offline-first and deterministic. The GUI is a front-end to the same contracts:
+MMO remains offline-first and deterministic. The GUI is a front-end to the same
+artifact contracts:
 
 - report JSON (schema-valid)
 - exports (PDF/CSV)
 - render manifest JSON (schema-valid)
 
-Implementation plan note:
+Current delivery note:
 
-- Tauri is the primary GUI plan.
-- CustomTkinter is the fallback plan until parity lands, then it is deprecated.
+- Tauri is the primary shipped desktop path.
+- The packaged Tauri app already covers
+  `Validate -> Analyze -> Scene -> Render -> Results -> Compare`.
+- CustomTkinter is the fallback desktop path until Tauri parity lands.
+- The main remaining parity gap is scene-lock editing.
 - The enforceable rollout checklist lives in [gui_parity.md](gui_parity.md).
 
 ## Scene-first / render-many note
 
-The GUI should center one scene and multiple render targets. Stereo should be presented as one target alongside others, not as the only truth when scene intent is present.
+The GUI should center one scene and multiple render targets.
+Stereo should be presented as one target alongside others, not as the only
+truth when scene intent is present.
 
 See:
 
-- [PROJECT_INSTRUCTIONS.md](PROJECT_INSTRUCTIONS.md)
-- [SCENE_AND_RENDER_CONTRACT_OVERVIEW.md](SCENE_AND_RENDER_CONTRACT_OVERVIEW.md)
+- [02-architecture.md](02-architecture.md)
+- [13-gui-handshake.md](13-gui-handshake.md)
+- [15-target-selection.md](15-target-selection.md)
 
 ## 1) Design goals
 
@@ -39,8 +48,9 @@ See:
 2. Validate + assign roles/layout (if needed)
 3. Run analysis (meters, checks, issues)
 4. Review "Fix plan" (recommendations + gates)
-5. Export recall sheet and report
-6. Optional: render variants (only if eligible) and export render manifest
+5. Review scene, targets, and delivery choices
+6. Export recall sheet, report, and optional render artifacts
+7. Compare revisions or deliveries before committing changes
 
 ## 3) Core screens
 
@@ -180,15 +190,22 @@ Keep contracts strict:
 - UI should treat JSON schemas as source of truth.
 - UI should not invent meaning not present in the report.
 
-## 9) GUI milestones (suggested)
+## 9) Shipped today
 
-- v1: folder picker + run analysis + show dashboard + export
-- v2: role/layout assignment UI + issue drill-down
-- v3: plan view + gating visibility + mode selector
-- v4: render screen + manifest viewer + skipped explanations
-- v5: nerd toggle + full advanced limits editor
+- Tauri sidecar-driven workflow screens for validate, analyze, scene, render,
+  results, and compare.
+- Artifact-backed compare with loudness-match disclosure.
+- Fallback CustomTkinter workflow for bounded desktop runs.
+- Deterministic dashboard/design-system surfaces in both desktop tracks where
+  implemented.
 
-## 10) Non-goals (GUI)
+## 10) Remaining GUI parity work
+
+- Scene-lock editing in the primary Tauri app.
+- Cross-platform packaged smoke checks that exercise the shipped desktop
+  binaries end to end.
+
+## 11) Non-goals (GUI)
 
 - Full DAW timeline editing
 - Real-time plugin hosting

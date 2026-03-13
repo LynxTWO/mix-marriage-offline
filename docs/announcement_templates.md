@@ -1,123 +1,132 @@
-# MMO v1.1.0 Announcement Templates
+# MMO Release Announcement Templates
 
-Copy-paste templates for GitHub release, social, and email announcements.
-Adjust names, links, and tone as needed.
+Copy-paste templates for GitHub release notes, social posts, and longer release
+announcements.
 
----
+These templates are intentionally generic so future releases do not drift back
+into outdated "foundation only" language.
 
-## GitHub Release Notes (v1.1.0)
+## Release Writer Guardrails
 
-**Mix Marriage Offline v1.1.0 — Marketplace · Watch · Dashboard**
+Always lead with shipped behavior from the current repo, not old roadmap text.
 
-This release brings the offline plugin marketplace, smart watch-folder batch mode,
-the cinematic Visualization Dashboard, binaural preview rendering, and a full
-benchmark suite — all deterministic, all explainable, all offline.
+Good claims to reuse when they are still true:
 
-### What's new
+- deterministic analysis and delivery artifacts
+- scene-first, mix-once/render-many workflows
+- compare workflow with `compare_report.json`
+- supported channel-ordering standards:
+  `SMPTE`, `FILM`, `LOGIC_PRO`, `VST3`, `AAF`
+- binaural/headphone preview and first-class headphone target
+- Tauri desktop app as the primary packaged GUI path
+- fallback `mmo-gui` as legacy transition path only
 
-- **Offline plugin marketplace** — `mmo plugin list` / `mmo plugin update`.
-  Browse and install community detectors, resolvers, and renderers without a network call.
-- **Watch-folder automation** — `mmo watch <folder>`.
-  Auto-runs deterministic `render-many` the moment new stems land.
-- **Visualization Dashboard v1.1** — spectrum analyzer, vectorscope, correlation meter,
-  cinematic 3D speaker layout, and per-object intent cards (what/why/where/confidence).
-- **Binaural preview** — `safe-render --preview-headphones`.
-  Deterministic conservative virtualization with source-layout traceability.
-- **Benchmark suite** — `benchmarks/suite.py`.
-  Repeatable timing baseline keyed to content hash.
-- **Project session persistence** — `mmo project save/load`.
-  Scene + history + receipts round-trip as strict-schema deterministic JSON.
-- **New render targets** — `TARGET.STEREO.2_1`, `TARGET.FRONT.3_0/3_1`,
-  `TARGET.SURROUND.4_0/4_1`, and first-class `LAYOUT.BINAURAL`.
+Do not claim these are complete unless the repo status says so:
+
+- full Tauri parity for scene-lock editing
+- complete packaged desktop smoke coverage
+- replacement of proprietary/licensed Atmos renderers
+
+## GitHub Release Notes Template
+
+Release title: `Mix Marriage Offline v[VERSION] - [SHORT TAGLINE]`
+
+Mix Marriage Offline is an offline, deterministic mixing assistant for
+analysis, scene-first delivery, compare, and mix-once/render-many workflows.
+
+### What ships today
+
+- **Deterministic contracts** - analysis, scene, render, receipt, and compare
+  artifacts stay explainable and automation-friendly.
+- **Mix-once/render-many delivery** - one scene can drive multiple targets and
+  channel-ordering standards in a bounded render flow.
+- **Compare workflow** - `mmo compare` writes `compare_report.json`, and when
+  sibling render QA artifacts exist it also discloses evaluation-only
+  loudness-match context for fair listening.
+- **Supported target families** - stereo, surround, immersive, and first-class
+  binaural/headphone workflows.
+- **Desktop path** - the packaged Tauri desktop app remains the primary GUI
+  path, with the legacy `mmo-gui` fallback still available during parity work.
+
+### What's new in this release
+
+- [NEW ITEM 1]
+- [NEW ITEM 2]
+- [NEW ITEM 3]
+
+### Still in progress
+
+- [ONLY LIST REAL OPEN ITEMS THAT STILL APPLY]
+- Example: Tauri scene-lock editing parity is still in progress.
+- Example: packaged desktop smoke coverage is still being expanded.
 
 ### Install
 
-One-click signed installers for Windows, macOS, and Linux:
-https://github.com/LynxTWO/mix-marriage-offline/releases/tag/v1.1.0
+Packaged desktop releases for Windows, macOS, and Linux:
+[RELEASE URL]
 
-From source:
+Source install:
+
 ```bash
 pip install .
-python -m mmo --help
+mmo env doctor --format text
 ```
 
-### Upgrade note
+### Docs
 
-Run `python tools/validate_contracts.py` after pulling to confirm schema mirrors are current.
+- User manual: `docs/manual/00-manual-overview.md`
+- Quickstart: `docs/00-quickstart.md`
+- Architecture: `docs/02-architecture.md`
+- Targets and ordering standards:
+  `docs/15-target-selection.md`, `docs/18-channel-standards.md`
 
----
+## Short Social Template
 
-## Twitter / X (280 chars)
+> MMO v[VERSION] is out: deterministic analysis, compare, scene-first
+> render-many delivery, five channel-ordering standards, and shipped desktop
+> workflows. Offline-first, explainable, and honest about what is still in
+> progress. [RELEASE URL]
 
-> Mix Marriage Offline v1.1 is out.
-> Offline plugin marketplace, watch-folder auto-batch, cinematic Dashboard,
-> binaural preview, and a full benchmark suite.
-> Deterministic. Explainable. Offline-first.
-> https://github.com/LynxTWO/mix-marriage-offline/releases/tag/v1.1.0
-> #audio #mixing #opensource
+## Longer Announcement Template
 
----
+**Subject:** Mix Marriage Offline v[VERSION] - [SHORT TAGLINE]
 
-## Short Twitter / X (under 280 chars, no link)
+Mix Marriage Offline (MMO) v[VERSION] is now available.
 
-> MMO v1.1 — offline marketplace, watch-folder automation, cinematic Dashboard,
-> binaural preview. Mix once. Feel forever.
+MMO is an offline, deterministic mixing assistant that analyzes stems, captures
+layout-agnostic scene intent, renders one scene to many delivery targets, and
+keeps the resulting compare and receipt artifacts explainable.
 
----
+What readers should know about the product today:
 
-## LinkedIn / Long-form (email newsletter)
+- MMO already ships deterministic report, scene, render, and compare artifacts.
+- `mmo compare` is a first-class workflow, not a side tool.
+- Render-many, channel-ordering standards, downmix QA, and headphone preview
+  are part of the shipped surface.
+- The packaged Tauri app is the primary GUI path today.
+- The legacy `mmo-gui` fallback still exists while the last parity items close.
 
-**Subject:** Mix Marriage Offline v1.1 — offline marketplace, watch mode, and more
+What changed in this release:
 
----
+- [NEW ITEM 1]
+- [NEW ITEM 2]
+- [NEW ITEM 3]
 
-Mix Marriage Offline (MMO) v1.1.0 is now available.
+What is still not complete yet:
 
-MMO is an offline, deterministic stem-folder mixing assistant. It captures mix
-intent as a layout-agnostic scene, then renders to any of five channel standards
-(SMPTE, FILM, Logic Pro, VST3, AAF) with strict downmix QA and fully explainable
-reports. No black boxes. No network required.
+- [REAL OPEN ITEM 1]
+- [REAL OPEN ITEM 2]
 
-**What's new in v1.1:**
+Install:
 
-🎛 **Offline plugin marketplace** — Browse and install community-contributed
-detectors, resolvers, and renderers directly from the CLI or GUI, no internet
-connection needed.
+- Packaged desktop release: [RELEASE URL]
+- Source install: `pip install .`
 
-⏱ **Watch-folder automation** — Drop stems in a folder. MMO auto-runs
-a deterministic multi-target render pass, waits for settle, and outputs
-deliverables with QA receipts.
+Docs:
 
-📊 **Visualization Dashboard v1.1** — Real-time spectrum analyzer, vectorscope,
-phase/correlation meter, cinematic 3D speaker layout view, and per-object intent
-cards showing what MMO found and why.
-
-🎧 **Binaural headphone preview** — A deterministic, conservative virtualization
-pass that produces `.headphones.wav` audition files linked back to their source
-renders, so you can check your surround mix on any headphones.
-
-📐 **New render targets** — 2.1, 3.0, 3.1, 4.0, 4.1, and first-class Binaural
-join the target roster alongside Stereo, 5.1, 7.1, and 7.1.4.
-
-📋 **Project session persistence** — Save and restore scene + history + receipts
-as strict-schema deterministic JSON for long-running projects.
-
-⚡ **Benchmark suite** — Repeatable timing baseline via `benchmarks/suite.py`,
-content-hash-keyed so re-runs skip unchanged analysis.
-
-**Install**
-
-Signed one-click installers for Windows, macOS, and Linux:
-https://github.com/LynxTWO/mix-marriage-offline/releases/tag/v1.1.0
-
-From source: `pip install .`
-
-**Docs**
-
-Full user guide: `docs/user_guide.md`
-Architecture and plugin API: `docs/02-architecture.md`, `docs/04-plugin-api.md`
-
----
+- `docs/manual/00-manual-overview.md`
+- `docs/00-quickstart.md`
+- `docs/02-architecture.md`
+- `docs/11-gui-vision.md`
 
 Apache-2.0 · Offline-first · Deterministic
-https://github.com/LynxTWO/mix-marriage-offline

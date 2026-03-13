@@ -1,21 +1,26 @@
-# MMO Desktop Tauri Scaffold
+# MMO Desktop Tauri App
 
-This directory contains the isolated Tauri 2 desktop app for MMO. The app
-ships a frozen `mmo` CLI as a Tauri sidecar and now exposes a direct workflow
-screen for:
+This directory contains the isolated Tauri 2 desktop app for MMO.
+It is the primary packaged desktop path and ships a frozen `mmo` CLI as a
+Tauri sidecar.
+
+Current workflow coverage includes:
 
 - `Doctor` sidecar verification,
-- `Prepare` project scaffold creation,
+- `Prepare` project/workspace creation,
 - `Validate` project artifact checks,
 - `Analyze` stems into `report.json`,
-- `Render` via `safe-render --live-progress` with live timeline logs.
+- `Scene` artifact inspection,
+- `Render` via `safe-render --live-progress` with live timeline logs,
+- `Results` artifact review,
+- `Compare` workflow entry points.
 
 Desktop production builds do not require the Node `gui/server.mjs` runtime.
 
 ## Local development
 
 1. Install the Tauri prerequisites for your OS and use Node 24 LTS:
-   https://tauri.app/start/prerequisites/
+   [Tauri prerequisites](https://tauri.app/start/prerequisites/)
    If you use `nvm`, run `nvm use` from the repo root first.
 2. Install the pinned Rust toolchain for the Tauri crate if needed:
    `rustup toolchain install 1.94.0`
@@ -23,8 +28,8 @@ Desktop production builds do not require the Node `gui/server.mjs` runtime.
    `npm install`
 4. Install Python sidecar build dependencies from the repo root:
    `python -m pip install -e ".[truth,pdf,gui]" pyinstaller`
-   If your machine only has `python3`, use `python3` here and set `PYTHON=python3`
-   when running the desktop build commands.
+   If your machine only has `python3`, use `python3` here and set
+   `PYTHON=python3` when running the desktop build commands.
 5. Run the frontend only:
    `npm run dev`
 6. Run the desktop UI tests:

@@ -2,313 +2,244 @@
 
 ## Mix Marriage Offline Architecture
 
-### Offline stems in. Truth-first analysis. Explainable actions out
+### Offline stems in. Deterministic artifacts out. One scene, many deliveries
 
 ---
 
 ## 1) System overview
 
-Mix Marriage Offline (MMO) is a standalone, offline tool that consumes a folder of exported stems and produces:
+Mix Marriage Offline (MMO) is a standalone, offline toolchain for stem-folder
+analysis, scene-first delivery, and explainable compare/render workflows.
 
-- validated session metadata
-- measured features (meters and signal stats)
-- detected issues (with evidence)
-- proposed actions (with risk levels and constraints)
-- exports (PDF + JSON report, CSV recall sheet)
-- optional safe rendered stem variants
+As shipped today, MMO produces and consumes a family of deterministic artifacts:
 
-MMO is intentionally DAW-agnostic. The bridge back into any DAW is the **recall sheet** (and optional rendered stems).
+- `report.json` for analysis output
+- `scene.json` for layout-agnostic mix intent
+- `render_plan.json` for target/job expansion
+- `render_report.json` and `render_manifest.json` for executed delivery runs
+- `receipt.json` and `render_qa.json` for audit and QA trails
+- `compare_report.json` for revision comparison
+
+The CLI, the packaged Tauri desktop app, and the fallback CustomTkinter GUI all
+work against those same contracts.
 
 ---
 
 ## 2) Design constraints
 
-- Offline first (no cloud dependency).
-- No DAW integration required.
-- Deterministic outputs given identical inputs/settings.
-- Explainability is mandatory (issues and actions must carry evidence).
-- Modular plugins for detectors, resolvers, and renderers.
-- “Truth layer” (meters, validation, gates, schemas) is stable and heavily tested.
+- Offline first. No cloud dependency.
+- Cross-platform install safety for Linux, Windows, and macOS.
+- Deterministic outputs given identical inputs and settings.
+- Explainability is mandatory for issues, gates, receipts, and compare diffs.
+- Plugin extensibility must not weaken core contracts.
+- Internal processing stays canonical even when I/O ordering standards differ.
 
 ---
 
 ## 3) Inputs and assumptions
 
-### 3.1 Stem folder rules
+### 3.1 Stem/session inputs
 
-- All stems start at 0:00 (full-length stems with leading silence allowed).
-- All stems share the same sample rate and bit depth.
-- Stems are aligned and roughly equal length (within tolerance).
-- Roles are inferred from naming convention or assigned in-app.
+- Stems start at `0:00`.
+- Sample rate and bit depth should be consistent inside a session.
+- Roles and layouts are inferred or assigned explicitly.
+- FFmpeg/ffprobe are expected for core decode, metadata, and QA workflows.
 
-### 3.2 Surround and multichannel stems
+### 3.2 Layout-aware inputs
 
-- Stems may be mono, stereo, or multichannel (layout-aware).
-- Channel layout is either inferred (from filename or container metadata) or assigned by the user.
-- MMO can run layout-specific checks and downmix translation checks.
-- Immersive beds (5.1.2, 5.1.4, 7.1.2, 7.1.4) are supported with conservative height-to-bed fold-down policies.
-  Height channels (TFL, TFR, TRL, TRR at 45° elevation) fold at -6 dB per `POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0`.
+MMO accepts stereo, surround, immersive, and headphone-target workflows.
 
----
+Current first-class target families include:
 
-## 4) High-level pipeline
+- stereo and front-stage layouts
+- surround layouts through `7.1`
+- immersive layouts through `9.1.6`
+- first-class `LAYOUT.BINAURAL` / `TARGET.HEADPHONES.BINAURAL`
 
-The core pipeline is linear and explicit:
-
-1) **Validate**
-   - scan folder, read metadata, check formats
-   - confirm sample rate/bit depth consistency
-   - confirm alignment and duration rules
-   - compute file checksums for reproducibility
-
-2) **Build session**
-   - assign stem roles
-   - build virtual buses (DRUMS/VOCALS/MUSIC/MIX)
-   - determine channel layout(s)
-
-3) **Measure**
-   - compute trusted meters and features per stem and per bus
-   - loudness (LUFS), true peak (dBTP), crest factor
-   - spectral bands and tilt, stereo correlation, M/S energy (where applicable)
-   - surround group energy balance (front/surround/height/LFE) where applicable
-
-4) **Detect**
-   - detectors convert features into **issues**
-   - issues include severity (0–100), confidence, and evidence
-
-5) **Resolve**
-   - resolvers turn issues into **actions** (or action options)
-   - multiple strategies are encouraged (tradeoffs made explicit)
-
-6) **Gate**
-   - safety gates enforce bounded authority and user limits
-   - unsafe actions are rejected or downgraded to “suggest only”
-
-7) **Export**
-   - PDF report + JSON report + CSV recall sheet
-   - project file (session + settings + results)
-
-8) **(Optional) Render**
-   - apply gated actions to produce conservative stem variants
-   - preserve sample alignment and length
-   - never clip by default
+At the I/O boundary MMO supports five channel-ordering standards:
+`SMPTE`, `FILM`, `LOGIC_PRO`, `VST3`, and `AAF`.
 
 ---
 
-## 5) Core data model (conceptual)
+## 4) Core artifact model
 
-MMO uses a small set of canonical objects, validated by schemas and ontology IDs.
+### 4.1 Analysis artifacts
 
-### 5.1 Session
+- `report.json`
+- optional report PDF
+- recall CSV/TXT exports
 
-- session_id
-- created_at
-- engine_version, ontology_version
-- settings (intent sliders, limits, policies)
-- stems[] and buses[]
-- features[], issues[], recommendations[]
-- translation_results[]
-- plugin_manifest (versions/hashes)
-- input_checksums (per file)
+### 4.2 Scene and render artifacts
 
-### 5.2 Stem
+- `scene.json`
+- `render_plan.json`
+- `render_report.json`
+- `render_manifest.json`
+- `receipt.json`
+- optional `deliverables_index.json` and `listen_pack.json`
 
-- stem_id
-- file_path, checksum
-- role_id (ontology)
-- channel_layout_id (ontology)
-- channels[] (speaker mapping where relevant)
-- duration, sample_rate, bit_depth
+### 4.3 Compare artifacts
 
-### 5.3 Bus
-
-- bus_id (DRUMS/VOCALS/MUSIC/MIX)
-- member_stem_ids[]
-- channel_layout_id
-
-### 5.4 Feature
-
-- feature_id (ontology)
-- scope: stem_id or bus_id
-- value + unit
-- optional per-band or per-channel-group breakdown
-- computation metadata (algorithm version)
-
-### 5.5 Issue
-
-- issue_id (ontology)
-- scope: stem/bus/session
-- severity 0–100
-- confidence: low/medium/high
-- evidence:
-  - time_range_s
-  - freq_range_hz
-  - stems_involved[]
-  - channel_groups_involved[] (surround)
-  - supporting feature references
-
-### 5.6 Action
-
-- action_id (ontology)
-- target (stem/bus/channel group)
-- params (ontology param keys + values + units)
-- risk level
-- requires_approval flag
-- expected_effect and tradeoffs
-
-### 5.7 ActionPlan
-
-- ordered list of actions
-- gating results (allowed/rejected reasons)
-- provenance (which resolver produced it)
+- `compare_report.json`
+- optional compare PDF
+- optional fair-listen `loudness_match` context from sibling `render_qa.json`
 
 ---
 
-## 6) Ontology and registries
+## 5) High-level pipeline
 
-MMO uses YAML as the source of truth for canonical names and IDs:
-
-- roles, features, issues, actions, params, units, evidence fields
-- speakers, layouts, downmix policies
-- safety gates and policy references
-
-At runtime, `registry` loads the YAML and exposes:
-
-- ID validation (reject unknown IDs)
-- required parameter enforcement for actions
-- unit validation
-- layout/channel group relationships
-
-Plugins must output ontology IDs, not ad-hoc strings.
-
----
-
-## 7) Plugin architecture
-
-MMO supports three plugin types:
-
-### 7.1 Detector plugins
-
-Input:
-
-- session + measured features (stems/buses/layout)
-
-Output:
-
-- issues[] with evidence, severity, confidence
-
-Examples:
-
-- resonance detector
-- mud/harshness detector
-- mono collapse risk detector
-- downmix intelligibility loss detector (surround)
-
-### 7.2 Resolver plugins
-
-Input:
-
-- session + issues[] + intent/limits
-
-Output:
-
-- action options (recommendations) + rationale
-
-Examples:
-
-- conservative EQ resolver (suggest notches)
-- masking strategy resolver (suggest dynamic EQ vs subtractive EQ)
-- surround focus resolver (suggest center/front balance strategies)
-
-### 7.3 Renderer plugins (optional)
-
-Input:
-
-- session + gated action plan
-
-Output:
-
-- rendered stem variants (WAV) + render manifest
-
-Default renderer behavior is conservative and safe.
+1. **Validate**
+   - inspect files, formats, metadata, durations, layouts, and checksums
+2. **Analyze**
+   - measure meters and features
+   - detect issues and emit evidence
+   - resolve recommendations under bounded-authority rules
+3. **Build intent**
+   - optionally derive `scene.json`
+   - optionally apply scene templates, locks, and target selection logic
+4. **Plan delivery**
+   - expand one scene into one or many render jobs in `render_plan.json`
+5. **Render**
+   - execute safe-render or render-run paths
+   - enforce approvals, gates, QA, fallback sequencing, and output contracts
+6. **Compare and export**
+   - compare revisions, export PDFs/CSVs, and write receipt/audit artifacts
 
 ---
 
-## 8) Safety gates
+## 6) Scene and render contracts
 
-Safety gates live in the core, not in plugins.
+The architectural center of MMO is no longer just "analyze a stem folder."
+It is the scene/render contract chain.
 
-Gates enforce:
+### 6.1 Scene
 
-- user limits (max EQ change, max compression ratio, etc.)
-- “never clip by default”
-- “mix-bus changes require explicit enable”
-- “every action must be explainable and parameterized”
-- “reject incomplete evidence or missing required params”
+`scene.json` stores layout-agnostic intent.
+It captures choices that should survive across render targets and channel-order
+variants.
 
-Plugins can propose anything, but the core decides what is allowed.
+### 6.2 Render plan
 
----
+`render_plan.json` expands one scene into concrete jobs for selected targets and
+contexts.
+This is where mix-once/render-many becomes explicit.
 
-## 9) Translation checks
+### 6.3 Render execution
 
-Translation checks are implemented as policy-driven simulations, then measured again.
+`safe-render`, `render-run`, and related project workflows execute against the
+same plan/contract concepts and write explainable artifacts for what happened.
 
-Examples:
+### 6.4 Ordering standards
 
-- stereo and mono collapse checks
-- phone profile (band-limit + mono emphasis)
-- earbuds profile (presence and fatigue risk)
-- car-like curve profile
-- surround downmix profiles (5.1 → 2.0, 7.1.4 → 5.1/2.0)
-
-Outputs:
-
-- translation score (0–100) per profile
-- top risks + evidence
-- suggested mitigations
+MMO processes internally using canonical `SMPTE` ordering.
+It remaps at the boundary for `FILM`, `LOGIC_PRO`, `VST3`, and `AAF` when the
+selected target/layout declares those variants.
 
 ---
 
-## 10) CLI and automation (planned)
+## 7) Plugins and safety gates
 
-A minimal CLI keeps the tool scriptable.
+MMO supports detector, resolver, and renderer plugins.
 
-Examples:
+What plugins can do:
 
-- `mmo scan <folder>`
-- `mmo analyze <folder> --intent preset.json`
-- `mmo export <project.mmo_project.json>`
-- `mmo render <project.mmo_project.json>`
+- add issue detection
+- add strategy/recommendation logic
+- add bounded render behavior
 
-The CLI output should always include paths to exported artifacts.
+What plugins cannot do:
+
+- redefine core artifact schemas
+- bypass safety gates
+- silently change layout or ordering meaning
+
+Core gates enforce:
+
+- explicit approvals for higher-impact actions
+- "never clip by default" behavior
+- deterministic receipts and failure reporting
+- required parameter/evidence completeness
+
+---
+
+## 8) Compare, QA, and audit
+
+Compare is a first-class part of the architecture.
+
+`mmo compare` can compare two reports or two report folders and write a
+deterministic `compare_report.json`.
+
+When sibling render QA artifacts exist, compare also records
+evaluation-only `loudness_match` context so CLI and GUI comparison surfaces can
+disclose fair-listen compensation instead of hiding it.
+
+Safe-render and render-run also write audit-friendly receipts and QA artifacts
+so delivery decisions remain explainable after the audio files are exported.
+
+---
+
+## 9) CLI and automation surface
+
+MMO's shipped CLI surface is broader than a minimal planned CLI.
+
+Current user-facing command groups include:
+
+- `scan`, `analyze`, `run`, `safe-render`, `compare`
+- `project`, `scene`, `render-plan`, `render-run`, `render-report`
+- `watch`, `variants`, `deliverables`, `translation`, `downmix`
+- `plugin`, `plugins`, `targets`, `roles`, `ontology`, `env`
+
+That surface exists so the same contracts can serve:
+
+- one-shot musician workflows
+- deterministic batch/watch workflows
+- project/session persistence
+- desktop sidecar execution
+
+---
+
+## 10) Desktop paths
+
+MMO currently ships two GUI paths:
+
+- Primary path: packaged Tauri desktop app
+- Fallback path: legacy CustomTkinter `mmo-gui`
+
+Tauri already covers the artifact-backed workflow sequence:
+`Validate -> Analyze -> Scene -> Render -> Results -> Compare`.
+
+Still in progress:
+
+- scene-lock editing parity in Tauri
+- complete packaged desktop smoke coverage on all release targets
 
 ---
 
 ## 11) Reproducibility and audit trail
 
-Every run produces a manifest:
+Reproducibility remains a hard requirement.
 
-- stem checksums
-- ontology + engine versions
-- plugin versions/hashes
-- settings and policies
-- analysis timestamps
+MMO artifacts can carry:
 
-This makes results comparable across machines and over time.
+- engine version
+- ontology version
+- plugin versions and hashes
+- settings/policies
+- checksums and trace metadata
+- selected layout and ordering standard
+- fallback/approval decisions
+
+That trail is what makes cross-machine regression testing and release delivery
+review possible.
 
 ---
 
-## 12) What’s next (implementation order)
+## 12) Current implementation focus
 
-1) Ontology YAML + registry loader + validators
-2) Meter truth layer (LUFS, true peak, crest factor)
-3) Basic features (spectral bands, correlation)
-4) First detectors (resonance, mud/harshness)
-5) First resolver (conservative EQ suggestions)
-6) Exporters (JSON + CSV first, PDF later)
-7) Fixtures + CI regression tests
-8) Translation profiles
-9) Optional safe rendering
-10) Surround foundation (layouts + downmix QA)
-11) Immersive render targets and height support (5.1.2, 5.1.4, 7.1.2, 7.1.4 beds)
+This repo is not "foundation only" anymore.
+The current focus is finishing the remaining public-surface gaps around:
+
+- release-copy accuracy and install/runtime guidance
+- Tauri parity for scene-lock editing
+- packaged desktop smoke coverage
+- continued deterministic regression expansion for render and compare flows

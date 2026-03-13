@@ -45,7 +45,7 @@ Definition of done:
   (CustomTkinter) until parity.
 - [x] `docs/gui_parity.md` defines required Tauri screens/behaviors and is
   validated in CI.
-- [x] Tauri desktop scaffold builds in CI and uploads per-OS binaries.
+- [x] Tauri desktop app builds in CI and uploads per-OS binaries.
 - [x] The Tauri app can drive doctor/prepare/validate/analyze/render through the
   packaged sidecar.
 - [x] The primary Tauri app exposes Scene, Results, and Compare as artifact-backed
@@ -76,7 +76,7 @@ State: `in_progress`
 
 Definition of done:
 
-- [ ] `README.md`, `docs/README.md`, installer-facing docs, and release-copy
+- [x] `README.md`, `docs/README.md`, installer-facing docs, and release-copy
   sources match shipped capabilities and current limitations.
 - [ ] Windows, macOS, and Linux release artifacts receive packaged binary smoke
   checks.

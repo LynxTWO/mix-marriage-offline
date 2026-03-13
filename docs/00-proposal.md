@@ -2,66 +2,63 @@
 
 ## Mix Marriage Offline
 
-### An open-source, offline mixing assistant that handles the technical math so humans can focus on vibe, intent, and performance
+An open-source, offline mixing assistant for deterministic analysis,
+scene-first delivery, and explainable render workflows.
 
 ---
 
 ## 1) What this is
 
-Mix Marriage Offline is a standalone desktop tool that analyzes exported stems in a folder and outputs:
+Mix Marriage Offline (MMO) is a standalone desktop and CLI tool that works with
+exported stems from any DAW.
 
-- A ranked list of technical issues (with evidence).
-- Clear, DAW-agnostic recommendations (a recall sheet you can apply anywhere).
-- Optional “safe” rendered stem variants (conservative by default).
-- Translation checks (stereo, mono, phone, earbuds, car-like curves).
-- A modular plugin system so the community can swap in better detectors, strategies, and renderers over time.
+Today it ships:
 
-This is not a DAW plugin. This is not “AI that mixes your song for you.”  
-It’s a **technical co-pilot** that keeps the engineering side honest, so the human can stay artistic.
+- deterministic analysis reports with evidence
+- DAW-agnostic recall/export artifacts
+- scene intent and render-planning contracts
+- compare workflows for revision-to-revision review
+- bounded safe-render and mix-once/render-many delivery
+- translation QA, downmix QA, and headphone preview flows
+- offline plugin/discovery workflows that do not require a network service
+
+This is not a DAW plugin.
+This is not "AI that mixes your song for you."
+It is a technical co-pilot that helps engineers stay repeatable, auditable,
+and conservative when the work gets complicated.
 
 ---
 
 ## 2) Why this matters
 
-Mixing is two jobs wearing one hat:
+Mixing is two jobs wearing one hat.
 
 ### Objective engineering
 
-Gain staging, loudness, clipping safety, masking, resonances, dynamics control, translation.
+Gain staging, loudness safety, clipping, masking, resonance, translation,
+layout mapping, and delivery correctness.
 
 ### Subjective art
 
-Mood, texture, space, hierarchy, energy, emotional story.
+Mood, texture, space, hierarchy, energy, and emotional story.
 
-When one person must do both, something gets compromised. Usually it’s the technical details or the creative intent. Sometimes both.
-
-The goal here is simple:
-
-**Never compromise on technical quality.**
-Let the machine do the math chores relentlessly.
-Let the human decide what the music means.
+The point of MMO is not to replace taste.
+The point is to make the technical side more deterministic so taste has more
+room to breathe.
 
 ---
 
-## 3) What problem we are solving
+## 3) The problem we are solving
 
-### The pain
+- Technical QA is repetitive and easy to do inconsistently.
+- Surround and immersive delivery introduces layout, ordering, and downmix
+  failure modes that are hard to keep straight by hand.
+- Comparing revisions fairly gets harder when loudness, routing, or delivery
+  format changes between runs.
+- Many tools are either black boxes or tightly bound to one DAW.
 
-- DAW integration is fragile and slow to build.
-- Many “auto” tools chase a curve or a loudness target and flatten character.
-- Technical quality control is tiring and repetitive.
-- Surround mixing is a steep learning curve and feels inaccessible to most creators.
-
-### The opportunity
-
-If we make the technical layer:
-
-- repeatable,
-- transparent,
-- conservative by default,
-- and easy to extend,
-
-then mixing becomes more about intent and less about fighting the process.
+The opportunity is a conservative, testable system that captures intent once,
+then reuses that intent across analysis, rendering, comparison, and delivery.
 
 ---
 
@@ -69,177 +66,151 @@ then mixing becomes more about intent and less about fighting the process.
 
 ### 4.1 Objective core vs subjective strategy
 
-We separate the system into two worlds:
-
-#### Objective Core (truth layer)
-
-Meters, validation, analysis, translation checks, safety gates. This is deterministic and heavily tested.
-
-#### Subjective Plugins (strategy layer)
-
-Detectors, resolvers, renderers, profiles. These can evolve fast and be swapped without breaking the core.
+The stable core handles contracts, metering, validation, ordering, gates, and
+receipts.
+Plugins are where fast-changing detectors, resolvers, and render strategies
+live.
 
 ### 4.2 Bounded authority
 
-The tool can recommend anything, but it only auto-applies low-risk actions inside user-defined limits. High-impact moves require explicit approval.
+MMO can recommend freely, but it only auto-applies within explicit limits.
+Higher-impact changes stay approval-gated.
 
 ### 4.3 Explainability
 
-Every issue and recommendation must include:
-
-- what it is,
-- why it matters,
-- where it happens (time + frequency + tracks),
-- how confident the system is.
-
-No black box vibes.
+Issues, actions, compare diffs, and render receipts must say what changed, why
+it changed, and what evidence backed that decision.
 
 ### 4.4 Reproducibility
 
-Given the same stems and settings, the system should produce the same results. Reports include:
+Given the same stems, config, plugins, and version, MMO should produce the same
+artifacts and the same contract hashes.
 
-- engine version,
-- ontology version,
-- plugin versions/hashes,
-- settings,
-- stem checksums.
+### 4.5 Offline by default
 
-### 4.5 Open source by design
-
-This is meant to be a “living instrument.”
-
-- DSP experts improve meters and analysis.
-- Mix engineers improve strategies and profiles.
-- QA people harden fixtures and regression tests.
-- Surround nerds contribute downmix policies and immersive checks.
+The tool must work without a cloud service.
+External tools like FFmpeg are explicit runtime dependencies, not hidden remote
+services.
 
 ---
 
-## 5) How it works (high level)
+## 5) How MMO works today
 
-### Input
+1. Validate stems, metadata, layouts, and reproducibility inputs.
+2. Measure trusted meters and signal features.
+3. Detect issues and produce evidence-backed recommendations.
+4. Optionally build scene intent and render plans from the analyzed session.
+5. Run bounded safe-render or render-many delivery when requested.
+6. Export deterministic artifacts for reports, receipts, QA, and compare.
 
-You export stems from any DAW, using simple rules:
-
-- all stems start at 0:00
-- same sample rate/bit depth
-- consistent length
-- consistent naming roles (or assign roles in-app)
-
-Put stems in a folder and point the tool at it.
-
-### Pipeline
-
-1) Validate stems and metadata.
-2) Assign roles and build virtual buses (drums, vocals, music, mix).
-3) Measure core features (LUFS, true peak, spectral bands, dynamics stats).
-4) Detect issues (mud, harshness, resonances, masking, mono risks, etc.).
-5) Generate recommendations (multiple options when appropriate).
-6) Apply safety gates (reject unsafe plans by default).
-7) Export results (PDF/JSON + recall CSV). Optional: render safe stem variants.
+The same core contracts are used by the CLI, the Tauri desktop app, and the
+legacy fallback GUI.
 
 ---
 
-## 6) Outputs
+## 6) What MMO outputs
 
-### 6.1 Report (PDF + JSON)
+### 6.1 Analysis artifacts
 
-- Ranked issue list with evidence
-- Stem and bus diagnostics
-- Recommendations with parameters, risk level, and rationale
-- Translation test results and “most likely failures”
+- `report.json`
+- optional report PDF
+- recall CSV/TXT exports
 
-### 6.2 Recall sheet (CSV/TXT)
+### 6.2 Scene and render artifacts
 
-DAW-agnostic instruction list:
+- `scene.json`
+- `render_plan.json`
+- `render_report.json`
+- `render_manifest.json`
+- `receipt.json`
+- optional `deliverables_index.json` and `listen_pack.json`
 
-- track/stem identifier
-- action type (e.g., EQ bell cut)
-- parameters (freq/Q/gain)
-- time/frequency evidence
-- priority and risk level
+### 6.3 Compare artifacts
 
-### 6.3 Optional rendered stems
+- `compare_report.json`
+- optional compare PDF
+- fair-listen `loudness_match` disclosure when render QA companions exist
 
-Conservative processing variants:
+### 6.4 Audio deliverables
 
-- `<original>__MMO_v1.wav`
-- sample-aligned and length-matched
-- no clipping by default
-- intended for audition and fast iteration
-
----
-
-## 7) Surround and immersive audio (long-term goal)
-
-Surround mixing is powerful but technically intimidating. This tool aims to reduce the barrier by baking in:
-
-- channel layout awareness (2.1, 5.1, 7.1, 7.1.4, etc.)
-- channel-group measurement (front stage, surrounds, heights, LFE)
-- downmix translation checks (surround → stereo/mono)
-- common immersive risks (dialogue focus, LFE misuse, phase/cancellation, height smear)
-
-Important note: Dolby Atmos itself involves licensing and proprietary tooling. This project will focus on open, practical workflows (channel-based layouts, downmix QA, metadata-friendly interchange where feasible) without claiming to replace official renderers.
+- conservative baseline renders for supported targets
+- optional render-many batches from one scene
+- optional deterministic headphone preview WAVs
 
 ---
 
-## 8) What makes this different from “auto mastering” tools
+## 7) Surround, immersive, and headphone support
 
-- It is mix-first and stem-aware, not just a final stereo file processor.
-- It is intent-constrained, not curve-chasing.
-- It is transparent and testable.
-- It is modular so the community can swap strategies.
-- It supports surround thinking as a first-class concept.
+This is not only a future direction anymore.
+It is already part of the shipped product surface.
+
+Current capabilities include:
+
+- layout-aware analysis and rendering
+- first-class render targets from stereo through `9.1.6`
+- binaural/headphone delivery and preview flows
+- downmix QA and rendered similarity gates
+- five I/O ordering standards:
+  `SMPTE`, `FILM`, `LOGIC_PRO`, `VST3`, and `AAF`
+
+Important note:
+Dolby Atmos still involves licensing and proprietary tooling.
+MMO focuses on open, practical channel-based workflows, deterministic receipts,
+and downmix/translation confidence rather than claiming to replace official
+renderers.
+
+---
+
+## 8) What makes MMO different
+
+- It is stem-aware and scene-aware, not just a final-file processor.
+- It treats compare as a first-class workflow, not an afterthought.
+- It treats delivery layout/order correctness as part of the product, not just
+  user discipline.
+- It is deterministic and test-driven instead of opaque.
+- It is extensible without giving plugins authority over the core contracts.
 
 ---
 
 ## 9) Who this is for
 
-- Mixers who want faster technical QA and better translation.
-- Artists who want the technical layer handled so they can focus on performance and vibe.
-- Developers and DSP nerds who want to build something meaningful and measurable.
-- Surround-curious creators who want guardrails and truth meters.
+- Mixers who want repeatable technical QA and delivery receipts
+- Artists who want the technical layer handled conservatively
+- Teams that need project/session artifacts and long-lived rerun workflows
+- Developers and DSP contributors who want strict contracts and fixtures
+- Surround-curious creators who want guardrails without proprietary lock-in
 
 ---
 
-## 10) Planned milestones (short version)
+## 10) Current shipped capabilities
 
-- **M0:** Repo, docs, ontology YAML, schemas, plugin host skeleton.
-- **M1:** Validation + metering truth layer.
-- **M2:** Core stereo issue detectors + conservative recommendations + recall export.
-- **M3:** Translation profiles + scoring.
-- **M4:** Optional safe stem rendering.
-- **M5:** Surround foundation (layouts + downmix QA + first immersive detectors).
-
-See `docs/06-roadmap.md` for the detailed plan.
-
----
-
-## 11) How to contribute
-
-This project welcomes:
-
-- New detectors (issues + evidence + severity scoring).
-- New resolvers (strategy plugins that turn issues into action plans).
-- Better meters and analysis (core changes require strong review).
-- Fixture sessions and regression tests.
-- Documentation and export guides.
-
-Start here:
-
-- `docs/04-plugin-api.md`
-- `docs/05-fixtures-and-ci.md`
-- `CONTRIBUTING.md`
+- deterministic analysis and export flows
+- deterministic scene/render contracts
+- compare workflow with artifact-backed fair-listen context
+- render-many delivery from one scene to multiple targets
+- supported stereo, surround, immersive, and binaural targets
+- Tauri desktop workflow path plus legacy fallback GUI
+- offline plugin marketplace, project/session persistence, and watch-folder
+  automation
 
 ---
 
-## 12) Status
+## 11) Still not complete yet
 
-Early-stage design and scaffolding. We are building the foundation first:
+- Tauri scene-lock editing parity is still open.
+- Cross-platform packaged desktop smoke coverage is still incomplete.
+- The legacy fallback GUI remains available during that gap, but it is not the
+  long-term primary path.
+- MMO remains conservative about licensed Atmos-specific claims and workflows.
 
-- shared ontology (YAML source of truth)
-- strict schemas and validators
-- test fixtures
-- deterministic analysis pipeline
+---
 
-If you’re reading this early: perfect. This is the time to shape it.
+## 12) Where to go next
+
+Read these next:
+
+- `docs/00-quickstart.md`
+- `docs/02-architecture.md`
+- `docs/15-target-selection.md`
+- `docs/18-channel-standards.md`
+- `docs/manual/00-manual-overview.md`
