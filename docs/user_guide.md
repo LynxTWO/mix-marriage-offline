@@ -1,7 +1,7 @@
 # MMO User Guide
 
-> **This is a quickstart pointer.**
-> For the full User Manual, see [manual/00-manual-overview.md](manual/00-manual-overview.md).
+> **This is a quickstart pointer.** For the full User Manual, see
+> [manual/00-manual-overview.md](manual/00-manual-overview.md).
 
 ## 1. Install and verify
 
@@ -25,7 +25,8 @@ Verify the CLI is available:
 python -m mmo --help
 ```
 
-Run the environment doctor to confirm required runtime tools and optional PDF support:
+Run the environment doctor to confirm required runtime tools and optional PDF
+support:
 
 ```bash
 python -m mmo env doctor --format text
@@ -133,7 +134,8 @@ python -m mmo project load ./project --session out/session.json
 
 ## 9. Troubleshooting
 
-- If truth metering fails in a source checkout: repair the base install with `pip install .`
+- If truth metering fails in a source checkout: repair the base install with
+  `pip install .`
 - If PDF export fails: `pip install .[pdf]`
 - For watch-folder automation: `pip install .[watch]`
 - For deterministic checks in development:
@@ -143,4 +145,5 @@ python tools/validate_contracts.py
 python -m pytest -q
 ```
 
-For detailed troubleshooting see [manual/13-troubleshooting.md](manual/13-troubleshooting.md).
+For detailed troubleshooting see
+[manual/13-troubleshooting.md](manual/13-troubleshooting.md).

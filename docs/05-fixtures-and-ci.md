@@ -16,7 +16,8 @@ Audio tooling fails in two common ways:
 MMO is built to be measurable and repeatable.  
 Fixtures are the foundation of that promise.
 
-A **fixture** is a deterministic test session with known problems, stored as stems and expected outputs.
+A **fixture** is a deterministic test session with known problems, stored as
+stems and expected outputs.
 
 Fixtures enable:
 
@@ -33,7 +34,8 @@ Fixtures enable:
 
 To keep the repository legally clean:
 
-- Prefer synthetic signals and generated stems (tones, noise, impulses, simple mixes).
+- Prefer synthetic signals and generated stems (tones, noise, impulses, simple
+  mixes).
 - If real audio is included, it must be clearly licensed for redistribution.
 
 ### 2.2 Test problems, not “taste”
@@ -156,8 +158,7 @@ Any change in:
 - validation
 - gates
 - schemas
-- ontology rules
-must pass all fixtures and unit tests.
+- ontology rules must pass all fixtures and unit tests.
 
 If fixture outcomes change:
 
@@ -177,15 +178,15 @@ Plugins must:
 
 ## 7) How to add a fixture (contributor workflow)
 
-1) Decide the target failure mode (mud, harshness, etc.)
-2) Add a generator script or a stems folder:
+1. Decide the target failure mode (mud, harshness, etc.)
+2. Add a generator script or a stems folder:
    - generator preferred for reproducibility
-3) Include stems in `fixtures/sessions/<name>/stems/`
-4) Run MMO to produce a report and capture expected outputs:
+3. Include stems in `fixtures/sessions/<name>/stems/`
+4. Run MMO to produce a report and capture expected outputs:
    - `expected_issues.json` should include issue IDs and severity bands
    - `expected_features.json` should include key meters and tolerances
-5) Add or update a test in `tests/test_fixtures.py`
-6) Document the fixture in `fixtures/README.md`
+5. Add or update a test in `tests/test_fixtures.py`
+6. Document the fixture in `fixtures/README.md`
 
 ---
 
@@ -201,7 +202,8 @@ Plugins must:
 
 ### Surround fixtures (later milestones)
 
-- `downmix_dialogue_loss_5_1_demo`: center content cancels/vanishes on stereo fold-down
+- `downmix_dialogue_loss_5_1_demo`: center content cancels/vanishes on stereo
+  fold-down
 - `lfe_overuse_demo`: too much bass routed to LFE
 
 ---
@@ -282,9 +284,11 @@ Notes:
 
 Policy integrity is validated separately from audio analysis.
 
-- `fixtures/policies/` contains deterministic cases for registry and policy-pack validation.
+- `fixtures/policies/` contains deterministic cases for registry and policy-pack
+  validation.
 - These cases should be runnable in CI without any audio files.
-- Expected outputs should be expressed as `ISSUE.VALIDATION.*` IDs (see `docs/08-policy-validation.md`).
+- Expected outputs should be expressed as `ISSUE.VALIDATION.*` IDs (see
+  `docs/08-policy-validation.md`).
 
 ### Install and run
 
@@ -302,7 +306,8 @@ python tools/run_policy_fixtures.py fixtures/policies/downmix
 
 Notes:
 
-- `tools/validate_policies.py` prints a JSON payload that conforms to `schemas/validation_result.schema.json`.
+- `tools/validate_policies.py` prints a JSON payload that conforms to
+  `schemas/validation_result.schema.json`.
 - Add `--strict` to enable a lower warning threshold for coefficient `sum_abs`.
 
 ## Full determinism harness (public session)
@@ -342,4 +347,5 @@ PYTHONPATH=src python tools/validate_plugins.py plugins
 
 Notes:
 
-- `tools/validate_plugins.py` prints a JSON payload that conforms to `schemas/validation_result.schema.json`.
+- `tools/validate_plugins.py` prints a JSON payload that conforms to
+  `schemas/validation_result.schema.json`.

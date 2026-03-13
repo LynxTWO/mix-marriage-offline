@@ -6,8 +6,10 @@ and compatible with objective gates.
 ## Why digital-first
 
 - Digital-native processing is repeatable and testable across platforms.
-- Information-preserving transforms are the default because they reduce regression risk.
-- Any coloration must be intentional, declared, and bounded by measurable outcomes.
+- Information-preserving transforms are the default because they reduce
+  regression risk.
+- Any coloration must be intentional, declared, and bounded by measurable
+  outcomes.
 
 ## Truth contract (plugin-level)
 
@@ -17,17 +19,19 @@ changes and what it does not change.
 For renderer plugins, the contract is declared in:
 
 - `capabilities.deterministic_seed_policy`
-- `capabilities.dsp_traits` (including `tier`, `linearity`, and anti-aliasing intent)
+- `capabilities.dsp_traits` (including `tier`, `linearity`, and anti-aliasing
+  intent)
 - `capabilities.dsp_traits.measurable_claims`
 
-Plugins must never bypass objective core gates. If gates fail, plugin behavior must
-respect gate feedback and conservative backoff/stop decisions.
+Plugins must never bypass objective core gates. If gates fail, plugin behavior
+must respect gate feedback and conservative backoff/stop decisions.
 
 ## Writing measurable claims
 
 Each claim should be machine-checkable and auditable:
 
-- `metric_id`: metric to evaluate (for example peak, loudness delta, dynamic range).
+- `metric_id`: metric to evaluate (for example peak, loudness delta, dynamic
+  range).
 - `expected_direction`:
   - `up` means metric should increase.
   - `down` means metric should decrease.

@@ -15,7 +15,8 @@ This guide describes the conservative stem workflow:
 python -m mmo stems scan --root <stems_root> --out stems_index.json
 ```
 
-`stems_index` captures discovered files, normalized relative paths, and stem-set candidates.
+`stems_index` captures discovered files, normalized relative paths, and stem-set
+candidates.
 
 ### 2) Classify stems
 
@@ -23,7 +24,8 @@ python -m mmo stems scan --root <stems_root> --out stems_index.json
 python -m mmo stems classify --index stems_index.json --out stems_map.json
 ```
 
-`stems_map` assigns each file to a role with `confidence`, `bus_group`, and `reasons`.
+`stems_map` assigns each file to a role with `confidence`, `bus_group`, and
+`reasons`.
 
 ### 3) Review assignments
 
@@ -31,7 +33,8 @@ python -m mmo stems classify --index stems_index.json --out stems_map.json
 python -m mmo stems review --map stems_map.json --format text
 ```
 
-Use review mode before rendering if confidence is low or files land in `ROLE.OTHER.UNKNOWN`.
+Use review mode before rendering if confidence is low or files land in
+`ROLE.OTHER.UNKNOWN`.
 
 ### 4) Generate and edit overrides
 
@@ -48,31 +51,37 @@ Override entries are deterministic:
   - `regex`
 - `role_id` is the forced target role.
 
-If multiple overrides match one file, MMO picks the first sorted `override_id` and records:
+If multiple overrides match one file, MMO picks the first sorted `override_id`
+and records:
 
 `override:<override_id>`
 
 ### 5) Apply overrides
 
 ```powershell
-python -m mmo stems apply-overrides --map stems_map.json --overrides stems_overrides.yaml --out stems_map.json
+python -m mmo stems apply-overrides --map stems_map.json `
+  --overrides stems_overrides.yaml --out stems_map.json
 ```
 
-The patched map keeps existing file identity and path fields unchanged; only assignment role metadata is updated.
+The patched map keeps existing file identity and path fields unchanged; only
+assignment role metadata is updated.
 
 ## Conservative behavior
 
 - Classifier output is a recommendation, not a rename operation.
-- Overrides are explicit, reviewable artifacts checked by schema and regex compilation.
-- Low-confidence or unknown assignments stay visible through summary counts and review output.
+- Overrides are explicit, reviewable artifacts checked by schema and regex
+  compilation.
+- Low-confidence or unknown assignments stay visible through summary counts and
+  review output.
 
 ## Confidence notes
 
 - Higher confidence means stronger lexical or regex evidence.
 - `ROLE.OTHER.UNKNOWN` remains valid when no reliable evidence exists.
-- Use overrides for intentional domain corrections rather than weakening classifier thresholds globally.
+- Use overrides for intentional domain corrections rather than weakening
+  classifier thresholds globally.
 
 ## Next step: generate drafts
 
-Once you have a finalized `stems_map.json`, you can generate preview-only scene and
-routing plan drafts. See [19. Stems Drafts](19-stems-drafts.md) for details.
+Once you have a finalized `stems_map.json`, you can generate preview-only scene
+and routing plan drafts. See [19. Stems Drafts](19-stems-drafts.md) for details.

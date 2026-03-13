@@ -1,3 +1,5 @@
+# Fallback Gate Fail Fixture
+
 Deterministic safe-render fallback regression fixture.
 
 - `report.json` and `scene.json` use `__FIXTURE_STEMS_DIR__` as a placeholder.

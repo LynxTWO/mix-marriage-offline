@@ -11,8 +11,8 @@ regression testing:
   - immersive (`7.1.4`, `9.1.6`)
 
 These fixtures intentionally use tiny placeholder audio files (empty `.wav`
-files). Classification and planning rely on deterministic filename patterns,
-not on distributable source media.
+files). Classification and planning rely on deterministic filename patterns, not
+on distributable source media.
 
 The naming corpus emphasizes patterns observed in the source inventory:
 

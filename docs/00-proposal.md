@@ -2,8 +2,8 @@
 
 ## Mix Marriage Offline
 
-An open-source, offline mixing assistant for deterministic analysis,
-scene-first delivery, and explainable render workflows.
+An open-source, offline mixing assistant for deterministic analysis, scene-first
+delivery, and explainable render workflows.
 
 ---
 
@@ -22,10 +22,9 @@ Today it ships:
 - translation QA, downmix QA, and headphone preview flows
 - offline plugin/discovery workflows that do not require a network service
 
-This is not a DAW plugin.
-This is not "AI that mixes your song for you."
-It is a technical co-pilot that helps engineers stay repeatable, auditable,
-and conservative when the work gets complicated.
+This is not a DAW plugin. This is not "AI that mixes your song for you." It is a
+technical co-pilot that helps engineers stay repeatable, auditable, and
+conservative when the work gets complicated.
 
 ---
 
@@ -35,16 +34,15 @@ Mixing is two jobs wearing one hat.
 
 ### Objective engineering
 
-Gain staging, loudness safety, clipping, masking, resonance, translation,
-layout mapping, and delivery correctness.
+Gain staging, loudness safety, clipping, masking, resonance, translation, layout
+mapping, and delivery correctness.
 
 ### Subjective art
 
 Mood, texture, space, hierarchy, energy, and emotional story.
 
-The point of MMO is not to replace taste.
-The point is to make the technical side more deterministic so taste has more
-room to breathe.
+The point of MMO is not to replace taste. The point is to make the technical
+side more deterministic so taste has more room to breathe.
 
 ---
 
@@ -67,9 +65,8 @@ then reuses that intent across analysis, rendering, comparison, and delivery.
 ### 4.1 Objective core vs subjective strategy
 
 The stable core handles contracts, metering, validation, ordering, gates, and
-receipts.
-Plugins are where fast-changing detectors, resolvers, and render strategies
-live.
+receipts. Plugins are where fast-changing detectors, resolvers, and render
+strategies live.
 
 ### 4.2 Bounded authority
 
@@ -88,9 +85,8 @@ artifacts and the same contract hashes.
 
 ### 4.5 Offline by default
 
-The tool must work without a cloud service.
-External tools like FFmpeg are explicit runtime dependencies, not hidden remote
-services.
+The tool must work without a cloud service. External tools like FFmpeg are
+explicit runtime dependencies, not hidden remote services.
 
 ---
 
@@ -141,8 +137,8 @@ legacy fallback GUI.
 
 ## 7) Surround, immersive, and headphone support
 
-This is not only a future direction anymore.
-It is already part of the shipped product surface.
+This is not only a future direction anymore. It is already part of the shipped
+product surface.
 
 Current capabilities include:
 
@@ -150,11 +146,9 @@ Current capabilities include:
 - first-class render targets from stereo through `9.1.6`
 - binaural/headphone delivery and preview flows
 - downmix QA and rendered similarity gates
-- five I/O ordering standards:
-  `SMPTE`, `FILM`, `LOGIC_PRO`, `VST3`, and `AAF`
+- five I/O ordering standards: `SMPTE`, `FILM`, `LOGIC_PRO`, `VST3`, and `AAF`
 
-Important note:
-Dolby Atmos still involves licensing and proprietary tooling.
+Important note: Dolby Atmos still involves licensing and proprietary tooling.
 MMO focuses on open, practical channel-based workflows, deterministic receipts,
 and downmix/translation confidence rather than claiming to replace official
 renderers.

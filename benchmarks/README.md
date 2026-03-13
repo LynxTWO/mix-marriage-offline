@@ -2,8 +2,8 @@
 
 This folder contains the MMO v1.1 benchmark runner:
 
-- `suite.py`: deterministic benchmark cases for core CLI list commands and
-  the agent harness self-dogfood graph build.
+- `suite.py`: deterministic benchmark cases for core CLI list commands and the
+  agent harness self-dogfood graph build.
 
 The suite uses only Python standard library modules.
 

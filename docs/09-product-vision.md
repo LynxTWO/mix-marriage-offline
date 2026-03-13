@@ -1,13 +1,17 @@
 # Product vision
 
-This document describes the long-term product goal for Mix Marriage Offline (MMO): make mixing feel as approachable as modern video editing tools, while staying offline, deterministic, and explainable.
+This document describes the long-term product goal for Mix Marriage Offline
+(MMO): make mixing feel as approachable as modern video editing tools, while
+staying offline, deterministic, and explainable.
 
-MMO is not "AI that mixes your song for you."
-MMO is a technical co-pilot that makes *good engineering* easier, so humans can stay focused on vibe and intent.
+MMO is not "AI that mixes your song for you." MMO is a technical co-pilot that
+makes _good engineering_ easier, so humans can stay focused on vibe and intent.
 
 ## Scene-first / render-many note
 
-MMO stores mix intent as a scene, then renders that scene to one or more targets (stereo, 5.1, and beyond). Stereo is one target in the render set rather than a universal source of truth when stems plus intent exist.
+MMO stores mix intent as a scene, then renders that scene to one or more targets
+(stereo, 5.1, and beyond). Stereo is one target in the render set rather than a
+universal source of truth when stems plus intent exist.
 
 See:
 
@@ -18,14 +22,16 @@ See:
 
 Mixing is two jobs:
 
-- **Engineering:** gain staging, loudness safety, masking, translation, downmix integrity, phase risk
+- **Engineering:** gain staging, loudness safety, masking, translation, downmix
+  integrity, phase risk
 - **Art:** story, emotion, hierarchy, texture, space, taste
 
 MMO's product promise:
 
 - The tool relentlessly handles the technical math.
 - The user stays in control of meaning and style.
-- The tool can run in different **modes**, from "coach me" to "just fix it", without becoming a black box.
+- The tool can run in different **modes**, from "coach me" to "just fix it",
+  without becoming a black box.
 
 The outcome should feel like what video editing did for non-editors:
 
@@ -81,7 +87,8 @@ MMO should work for a spectrum of users:
 
 ### 3.3 Translation checks that feel practical
 
-- As a user, I can run translation profiles (mono, phone-like, earbuds-like, car-like) and see:
+- As a user, I can run translation profiles (mono, phone-like, earbuds-like,
+  car-like) and see:
   - what got worse, what improved
   - where the problem shows up
   - what actions would help (without forcing them)
@@ -103,11 +110,12 @@ MMO should work for a spectrum of users:
 
 ## 4) Modes (high level)
 
-MMO should support clear modes that change *authority*, not truth.
+MMO should support clear modes that change _authority_, not truth.
 
 - **Guide:** measure + explain + suggest only
 - **Assist:** auto-apply low-risk fixes within strict limits, suggest the rest
-- **Full send:** auto-apply broadly, warn when changes are extreme, still preserve audit + undo
+- **Full send:** auto-apply broadly, warn when changes are extreme, still
+  preserve audit + undo
 
 Details live in `docs/10-authority-profiles.md`.
 
@@ -139,7 +147,8 @@ These are non-negotiable:
 - **Deterministic:** same inputs + settings → same outputs
 - **Explainable:** every decision cites evidence and IDs
 - **Bounded authority:** defaults are conservative
-- **No silent character changes:** big moves must be explicit (or clearly opted into)
+- **No silent character changes:** big moves must be explicit (or clearly opted
+  into)
 - **DAW-agnostic:** recall sheet is the bridge back to any workflow
 
 ## 7) Non-goals (for now)
@@ -155,4 +164,5 @@ These are non-negotiable:
 - **Recommendation:** an action with explicit parameters
 - **Gate:** a rule that determines eligibility in a context
 - **Context:** suggest / auto_apply / render
-- **Mode:** a user-facing authority profile that changes what the tool may auto-do
+- **Mode:** a user-facing authority profile that changes what the tool may
+  auto-do

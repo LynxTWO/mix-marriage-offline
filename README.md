@@ -11,14 +11,14 @@ layout-agnostic scene intent, and mix-once/render-many delivery.
 Website:
 [lynxtwo.github.io/mix-marriage-offline](https://lynxtwo.github.io/mix-marriage-offline/)
 
-MMO is not a DAW plugin and it is not "AI that mixes your song for you."
-It is a technical co-pilot that keeps the engineering side honest while the
-human keeps the musical intent.
+MMO is not a DAW plugin and it is not "AI that mixes your song for you." It is a
+technical co-pilot that keeps the engineering side honest while the human keeps
+the musical intent.
 
 ## What MMO Ships Today
 
-- Deterministic contract artifacts for analysis and delivery:
-  `report.json`, `scene.json`, `render_plan.json`, `render_report.json`,
+- Deterministic contract artifacts for analysis and delivery: `report.json`,
+  `scene.json`, `render_plan.json`, `render_report.json`,
   `render_manifest.json`, `receipt.json`, and `compare_report.json`.
 - CLI workflows for `scan`, `analyze`, `run`, `safe-render`, `compare`,
   `project`, `watch`, `scene`, `render-plan`, and `render-run`.
@@ -28,8 +28,8 @@ human keeps the musical intent.
   `render_qa.json` artifacts exist.
 - First-class render targets for stereo, surround, immersive, and headphone
   delivery, including deterministic binaural/headphone preview flows.
-- Five supported channel-ordering standards at the I/O boundary:
-  `SMPTE`, `FILM`, `LOGIC_PRO`, `VST3`, and `AAF`.
+- Five supported channel-ordering standards at the I/O boundary: `SMPTE`,
+  `FILM`, `LOGIC_PRO`, `VST3`, and `AAF`.
 - A shipped Tauri desktop app path for packaged releases, plus the legacy
   CustomTkinter fallback GUI while Tauri parity is still finishing.
 - Offline plugin marketplace/discovery, project/session artifacts, translation
@@ -39,8 +39,8 @@ human keeps the musical intent.
 
 - The Tauri desktop app is the primary GUI path, but it does not yet have full
   parity for scene-lock editing.
-- Cross-platform packaged desktop smoke coverage is still incomplete even
-  though release binaries are built for Windows, macOS, and Linux.
+- Cross-platform packaged desktop smoke coverage is still incomplete even though
+  release binaries are built for Windows, macOS, and Linux.
 - The legacy `mmo-gui` fallback remains available during the transition, but it
   is not the long-term primary GUI.
 - MMO does not claim to replace proprietary Atmos renderers or licensed Dolby
@@ -151,8 +151,8 @@ What ships in this path today:
 - explicit approval gates for higher-impact recommendations
 - optional headphone preview WAVs via `--preview-headphones`
 
-`run --render-many` is also available when you want analyze plus delivery in
-one command:
+`run --render-many` is also available when you want analyze plus delivery in one
+command:
 
 ```sh
 mmo run \
@@ -181,13 +181,13 @@ routing contracts, including `7.1.6`, `SDDS 7.1`, and `32CH`.
 MMO keeps internal processing in canonical `SMPTE` order and remaps at the I/O
 boundary for these standards:
 
-| Standard | Typical use |
-| --- | --- |
-| `SMPTE` | broadcast, FFmpeg, WAV/FLAC/BWF |
-| `FILM` | Pro Tools and cinema-style ordering |
-| `LOGIC_PRO` | Logic Pro / DTS ordering |
-| `VST3` | Cubase / Nuendo 7.1+ ordering |
-| `AAF` | metadata-driven interchange |
+| Standard    | Typical use                         |
+| ----------- | ----------------------------------- |
+| `SMPTE`     | broadcast, FFmpeg, WAV/FLAC/BWF     |
+| `FILM`      | Pro Tools and cinema-style ordering |
+| `LOGIC_PRO` | Logic Pro / DTS ordering            |
+| `VST3`      | Cubase / Nuendo 7.1+ ordering       |
+| `AAF`       | metadata-driven interchange         |
 
 See [docs/18-channel-standards.md](docs/18-channel-standards.md) and
 [docs/15-target-selection.md](docs/15-target-selection.md) for the canonical
@@ -213,8 +213,7 @@ Fallback GUI status:
 
 ## Documentation
 
-Start here:
-[docs/README.md](docs/README.md)
+Start here: [docs/README.md](docs/README.md)
 
 Recommended reads:
 

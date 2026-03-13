@@ -16,10 +16,9 @@ Mixing is both **engineering** and **art**.
 When one person has to hold both jobs at once, something gets compromised.  
 This project exists to make that compromise optional.
 
-**North star:**
-The machine handles the technical math relentlessly.
-The human focuses on intent, vibe, and performance.
-No guesswork. No magical black boxes. No silent changes.
+**North star:** The machine handles the technical math relentlessly. The human
+focuses on intent, vibe, and performance. No guesswork. No magical black boxes.
+No silent changes.
 
 ---
 
@@ -47,7 +46,8 @@ We keep two worlds separate on purpose:
 The core is conservative, deterministic, and heavily tested.  
 Plugins are where experimentation and style can evolve.
 
-This separation is how we avoid “one house sound” while still keeping quality high.
+This separation is how we avoid “one house sound” while still keeping quality
+high.
 
 ---
 
@@ -72,7 +72,7 @@ It must not:
 
 ### Default rule
 
-- Low-risk changes may be auto-applied *inside strict user limits*.
+- Low-risk changes may be auto-applied _inside strict user limits_.
 - High-impact changes always require approval.
 
 “High impact” includes, by default:
@@ -110,7 +110,8 @@ If the tool cannot explain it, it should not do it.
 
 This is a technical tool. It has to be repeatable.
 
-Given the same stems and the same settings, the system should produce the same output.
+Given the same stems and the same settings, the system should produce the same
+output.
 
 Reports include:
 
@@ -143,8 +144,8 @@ We solve that by defining a canonical vocabulary:
 - units
 - evidence fields
 
-Internal variable names can vary.
-But anything leaving a plugin must use the canonical IDs.
+Internal variable names can vary. But anything leaving a plugin must use the
+canonical IDs.
 
 Why this matters:
 
@@ -159,7 +160,8 @@ Why this matters:
 
 ### 7.1 Fixtures
 
-We maintain a library of known test sessions (fixtures) that intentionally contain:
+We maintain a library of known test sessions (fixtures) that intentionally
+contain:
 
 - mud
 - harshness
@@ -177,7 +179,8 @@ They function as:
 
 ### 7.2 Safety gates
 
-Gates are non-negotiable rules enforced by the core, regardless of plugin creativity.
+Gates are non-negotiable rules enforced by the core, regardless of plugin
+creativity.
 
 Examples:
 
@@ -227,8 +230,8 @@ Surround becomes manageable when:
 - downmix survival is tested automatically
 - common pitfalls are flagged early
 
-The goal is not “surround purity.”
-The goal is **immersive intent that still survives real-world playback**.
+The goal is not “surround purity.” The goal is **immersive intent that still
+survives real-world playback**.
 
 We treat downmix checks as translation checks:
 
@@ -236,9 +239,12 @@ We treat downmix checks as translation checks:
 - 7.1.4 → 5.1
 - immersive → headphones
 
-If a surround mix collapses into nonsense when folded down, the tool should catch it.
+If a surround mix collapses into nonsense when folded down, the tool should
+catch it.
 
-Note: We aim to support practical, open workflows. Dolby Atmos rendering and licensing constraints are respected. The tool can be Atmos-friendly without pretending to replace Dolby’s ecosystem.
+Note: We aim to support practical, open workflows. Dolby Atmos rendering and
+licensing constraints are respected. The tool can be Atmos-friendly without
+pretending to replace Dolby’s ecosystem.
 
 ---
 
@@ -257,7 +263,8 @@ But the foundation is:
 - measurable fixtures
 - transparent logic
 
-ML should be additive, not required, and never a black box that overrides the truth layer.
+ML should be additive, not required, and never a black box that overrides the
+truth layer.
 
 ---
 
@@ -278,4 +285,6 @@ Mix Marriage Offline is built around a simple promise:
 
 **Truth meters in the core. Taste in the plugins. Humans keep the meaning.**
 
-If we protect that separation, this can become a living, open tool that helps thousands of creators make better mixes without burning their taste-budget on technical chores.
+If we protect that separation, this can become a living, open tool that helps
+thousands of creators make better mixes without burning their taste-budget on
+technical chores.

@@ -1,8 +1,8 @@
 # GUI vision
 
-This document describes the current GUI direction for MMO.
-The goal is still a musician-friendly interface that feels intuitive, visual,
-and fast without hiding the underlying contracts.
+This document describes the current GUI direction for MMO. The goal is still a
+musician-friendly interface that feels intuitive, visual, and fast without
+hiding the underlying contracts.
 
 MMO remains offline-first and deterministic. The GUI is a front-end to the same
 artifact contracts:
@@ -22,9 +22,9 @@ Current delivery note:
 
 ## Scene-first / render-many note
 
-The GUI should center one scene and multiple render targets.
-Stereo should be presented as one target alongside others, not as the only
-truth when scene intent is present.
+The GUI should center one scene and multiple render targets. Stereo should be
+presented as one target alongside others, not as the only truth when scene
+intent is present.
 
 See:
 
@@ -40,7 +40,8 @@ See:
 - **No menu labyrinth:** avoid menus within menus.
 - **Trustable:** every suggestion is explainable and traceable.
 - **Offline:** no accounts, no cloud dependency.
-- **Deterministic:** UI does not change meaning, only presentation and configuration.
+- **Deterministic:** UI does not change meaning, only presentation and
+  configuration.
 
 ## 2) Primary user flow (happy path)
 
@@ -161,7 +162,8 @@ Principle:
 - Prefer inline panels over nested menus.
 - Keep "deep" settings on one dedicated Advanced screen.
 - Use search instead of drilling through trees.
-- Use "explain" affordances (tooltips or side panels) instead of separate screens.
+- Use "explain" affordances (tooltips or side panels) instead of separate
+  screens.
 - Make important actions visible:
   - Export report
   - Export recall

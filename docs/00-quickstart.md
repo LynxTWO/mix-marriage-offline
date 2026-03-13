@@ -1,8 +1,10 @@
 # Quickstart: Stems to Project in Five Minutes
 
-This is the golden-path walkthrough for new users.
-Follow it top-to-bottom and you will have a classified project scaffold
-with preview drafts ready for review.
+<!-- markdownlint-disable-file MD013 -->
+
+This is the golden-path walkthrough for new users. Follow it top-to-bottom and
+you will have a classified project scaffold with preview drafts ready for
+review.
 
 For deeper detail on any step, see the cross-references at the end.
 
@@ -14,11 +16,11 @@ For deeper detail on any step, see the cross-references at the end.
 
 **Supported Python versions:** 3.12, 3.13, 3.14.
 
-**FFmpeg** and **ffprobe** are required for MMO's core audio workflows.
-They are used for decoding non-WAV audio formats, render/export metadata,
-and QA features such as loudness and translation checks.
-If FFmpeg is not on your `PATH`, you can point MMO at it with the
-`MMO_FFMPEG_PATH` and `MMO_FFPROBE_PATH` environment variables:
+**FFmpeg** and **ffprobe** are required for MMO's core audio workflows. They are
+used for decoding non-WAV audio formats, render/export metadata, and QA features
+such as loudness and translation checks. If FFmpeg is not on your `PATH`, you
+can point MMO at it with the `MMO_FFMPEG_PATH` and `MMO_FFPROBE_PATH`
+environment variables:
 
 ```bash
 export MMO_FFMPEG_PATH=/usr/local/bin/ffmpeg   # Linux / macOS
@@ -27,8 +29,8 @@ set MMO_FFMPEG_PATH=C:\ffmpeg\bin\ffmpeg.exe   # Windows cmd
 set MMO_FFPROBE_PATH=C:\ffmpeg\bin\ffprobe.exe # Windows cmd
 ```
 
-MMO will report both tools in `mmo env doctor --format text`, and core
-audio commands should be treated as misconfigured when either tool is absent.
+MMO will report both tools in `mmo env doctor --format text`, and core audio
+commands should be treated as misconfigured when either tool is absent.
 
 ---
 
@@ -39,8 +41,8 @@ pip install .
 python -m mmo --help
 ```
 
-You should see the top-level command list.
-Optional extras such as `pip install .[pdf]` are not needed for this guide.
+You should see the top-level command list. Optional extras such as
+`pip install .[pdf]` are not needed for this guide.
 
 ---
 
@@ -59,7 +61,8 @@ This runs the full pipeline in one shot:
 1. Scans files into `stems/stems_index.json`.
 2. Classifies each file into a role (`stems/stems_map.json`).
 3. Writes a starter `stems/stems_overrides.yaml` for manual corrections.
-4. Generates preview-only `drafts/scene.draft.json` and `drafts/routing_plan.draft.json`.
+4. Generates preview-only `drafts/scene.draft.json` and
+   `drafts/routing_plan.draft.json`.
 
 The output is a self-contained project directory:
 
@@ -76,23 +79,25 @@ project/
   README.txt
 ```
 
-**`--bundle` flag (pointer bundle):** You can pass `--bundle path/to/bundle.json` to also write a pointer bundle JSON.
-This is a *scaffold-only* bundle built from the init artifacts alone (stems index, stems map, scene draft).
-It does **not** contain a scan report, listen pack, or metering data.
-For a complete GUI payload, see [section 5](#5-build-a-gui-payload-stems-arc) below.
+**`--bundle` flag (pointer bundle):** You can pass
+`--bundle path/to/bundle.json` to also write a pointer bundle JSON. This is a
+_scaffold-only_ bundle built from the init artifacts alone (stems index, stems
+map, scene draft). It does **not** contain a scan report, listen pack, or
+metering data. For a complete GUI payload, see
+[section 5](#5-build-a-gui-payload-stems-arc) below.
 
-**Important:** Draft files are preview-only.
-They are never auto-loaded by any MMO workflow.
-You must pass them explicitly to any command that consumes a scene or routing plan.
+**Important:** Draft files are preview-only. They are never auto-loaded by any
+MMO workflow. You must pass them explicitly to any command that consumes a scene
+or routing plan.
 
 ---
 
 ## 3. Edit overrides and refresh
 
 Open `stems/stems_overrides.yaml` in any text editor and fix role assignments
-that the classifier got wrong.
-For example, if a file was classified as `ROLE.OTHER.UNKNOWN` but is actually a lead vocal,
-add an override entry mapping that file to `ROLE.VOCAL.LEAD`.
+that the classifier got wrong. For example, if a file was classified as
+`ROLE.OTHER.UNKNOWN` but is actually a lead vocal, add an override entry mapping
+that file to `ROLE.VOCAL.LEAD`.
 
 Then re-run the pipeline and drafts in one step:
 
@@ -124,8 +129,8 @@ python -m mmo stems audition `
   --out-dir "D:\MySession\project"
 ```
 
-This creates `stems_auditions/<bus_group>.wav` plus a `manifest.json`.
-Listen to each group to verify that the classifier put the right files together.
+This creates `stems_auditions/<bus_group>.wav` plus a `manifest.json`. Listen to
+each group to verify that the classifier put the right files together.
 
 See [20-stems-audition.md](20-stems-audition.md) for options and limitations.
 
@@ -150,8 +155,8 @@ results. No meters or peak data are included unless you pass `--meters` or
 
 ### Step 2 -- (Optional) Build a listen pack
 
-If you ran `stems audition` in step 4, you can include the audition index in
-the bundle. Otherwise, skip `--listen-pack` in step 3.
+If you ran `stems audition` in step 4, you can include the audition index in the
+bundle. Otherwise, skip `--listen-pack` in step 3.
 
 ```python
 # Minimal listen_pack.json (written by the test suite or your own tooling):
@@ -173,19 +178,19 @@ python -m mmo bundle `
   --out "D:\MySession\project\ui_bundle.json"
 ```
 
-All flags except `--report` and `--out` are optional.
-Each extra flag adds its payload to the bundle under a dedicated key.
-The output is validated against `schemas/ui_bundle.schema.json`.
+All flags except `--report` and `--out` are optional. Each extra flag adds its
+payload to the bundle under a dedicated key. The output is validated against
+`schemas/ui_bundle.schema.json`.
 
 ### Pointer bundle vs full UI bundle
 
-| | Pointer bundle (`project init --bundle`) | Full UI bundle (`mmo bundle`) |
-|---|---|---|
-| Source | Built automatically during `project init` | Built explicitly by the user |
-| Contains report | No | Yes (required `--report`) |
-| Contains listen pack | No | Optional (`--listen-pack`) |
-| Contains metering data | No | Only if the report includes it |
-| Use case | Quick scaffold preview | Complete GUI payload |
+|                        | Pointer bundle (`project init --bundle`)  | Full UI bundle (`mmo bundle`)  |
+| ---------------------- | ----------------------------------------- | ------------------------------ |
+| Source                 | Built automatically during `project init` | Built explicitly by the user   |
+| Contains report        | No                                        | Yes (required `--report`)      |
+| Contains listen pack   | No                                        | Optional (`--listen-pack`)     |
+| Contains metering data | No                                        | Only if the report includes it |
+| Use case               | Quick scaffold preview                    | Complete GUI payload           |
 
 ---
 
@@ -211,12 +216,15 @@ python -m mmo role-lexicon merge-suggestions `
   --out "ontology\role_lexicon.yaml"
 ```
 
-Re-run `project refresh` (or `project init`) with `--role-lexicon ontology\role_lexicon.yaml`
-to apply the improved lexicon.
+Re-run `project refresh` (or `project init`) with
+`--role-lexicon ontology\role_lexicon.yaml` to apply the improved lexicon.
 
-**Privacy:** Corpus outputs (`*.corpus.jsonl`, `*.corpus.stats.json`, `*.suggested.yaml`) must stay in ignored paths (`private/`, `corpus/`). Never commit them.
+**Privacy:** Corpus outputs (`*.corpus.jsonl`, `*.corpus.stats.json`,
+`*.suggested.yaml`) must stay in ignored paths (`private/`, `corpus/`). Never
+commit them.
 
-See [18-corpus-scanning.md](18-corpus-scanning.md) for full flag reference and workflow.
+See [18-corpus-scanning.md](18-corpus-scanning.md) for full flag reference and
+workflow.
 
 ---
 
@@ -232,16 +240,16 @@ python tools/stem_corpus_diff.py `
   --top 20
 ```
 
-The output is stable JSON showing token frequency deltas, per-role changes,
-and summary counts. Use `--out diff.json` to write to a file.
+The output is stable JSON showing token frequency deltas, per-role changes, and
+summary counts. Use `--out diff.json` to write to a file.
 
 ---
 
 ## Gates policies
 
 MMO ships an Objective Core gates policy that defines safety and authority
-boundaries (loudness ceilings, gain limits, approval requirements, etc.).
-Use the `gates` CLI to inspect the active policy:
+boundaries (loudness ceilings, gain limits, approval requirements, etc.). Use
+the `gates` CLI to inspect the active policy:
 
 ```powershell
 python -m mmo gates list
@@ -259,7 +267,8 @@ MMO target inputs are interchangeable across CLI/GUI:
 
 - `TARGET.*` IDs (engineering/nerd explicit)
 - `LAYOUT.*` IDs (layout explicit)
-- shorthands (musician-friendly): `stereo`, `2.1`, `3.0`, `3.1`, `4.0`, `4.1`, `quad`, `lcr`, `5.1`, `7.1`, `7.1.4`, `binaural`
+- shorthands (musician-friendly): `stereo`, `2.1`, `3.0`, `3.1`, `4.0`, `4.1`,
+  `quad`, `lcr`, `5.1`, `7.1`, `7.1.4`, `binaural`
 
 Inspect available targets:
 
@@ -290,8 +299,8 @@ python -m mmo safe-render --report report.json --target LAYOUT.5_1 --dry-run
 ```
 
 `render-plan plan` resolves `jobs[].resolved_target_id` from this registry
-deterministically. If `render_request.options.target_ids` is provided, those
-IDs are validated and used explicitly.
+deterministically. If `render_request.options.target_ids` is provided, those IDs
+are validated and used explicitly.
 
 Initialize a project render request with multiple layouts and explicit targets:
 
@@ -307,36 +316,39 @@ python -m mmo project render-init "project_out" `
 
 ### OneDrive locks
 
-OneDrive can hold file locks that prevent git operations.
-If you see `.git/index.lock` errors, close OneDrive sync or wait for it to
-finish, then delete the stale lock file manually.
+OneDrive can hold file locks that prevent git operations. If you see
+`.git/index.lock` errors, close OneDrive sync or wait for it to finish, then
+delete the stale lock file manually.
 
 ### Temp hygiene
 
-MMO tests and tools create repo-local temp directories.
-Use the allowlist-only cleanup script to remove them safely:
+MMO tests and tools create repo-local temp directories. Use the allowlist-only
+cleanup script to remove them safely:
 
 ```powershell
 python tools/safe_cleanup.py
 ```
 
-This removes only the canonical temp dirs listed in CLAUDE.md
-(`.tmp_pytest/`, `.tmp_codex/`, `.tmp_claude/`, `sandbox_tmp/`, `.pytest_cache/`).
-It never pattern-matches or sweeps unknown directories.
+This removes only the canonical temp dirs listed in CLAUDE.md (`.tmp_pytest/`,
+`.tmp_codex/`, `.tmp_claude/`, `sandbox_tmp/`, `.pytest_cache/`). It never
+pattern-matches or sweeps unknown directories.
 
 Add `--dry-run` to preview what would be removed without deleting anything.
 
 ### Draft files are preview-only
 
-Draft files (`*.draft.json`) are never auto-discovered.
-No MMO command will silently load them.
-You must always pass scene or routing plan paths explicitly.
+Draft files (`*.draft.json`) are never auto-discovered. No MMO command will
+silently load them. You must always pass scene or routing plan paths explicitly.
 
 ---
 
 ## Cross-references
 
-- [17-stem-discovery.md](17-stem-discovery.md) -- step-by-step stem scan, classify, review, and override commands.
-- [18-corpus-scanning.md](18-corpus-scanning.md) -- private corpus scan, stats, suggestions, merge workflow, and diff tool.
-- [19-stems-drafts.md](19-stems-drafts.md) -- draft scene and routing plan format, fields, and explicit usage.
-- [20-stems-audition.md](20-stems-audition.md) -- audition pack rendering, manifest format, and limitations.
+- [17-stem-discovery.md](17-stem-discovery.md) -- step-by-step stem scan,
+  classify, review, and override commands.
+- [18-corpus-scanning.md](18-corpus-scanning.md) -- private corpus scan, stats,
+  suggestions, merge workflow, and diff tool.
+- [19-stems-drafts.md](19-stems-drafts.md) -- draft scene and routing plan
+  format, fields, and explicit usage.
+- [20-stems-audition.md](20-stems-audition.md) -- audition pack rendering,
+  manifest format, and limitations.

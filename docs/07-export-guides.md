@@ -1,6 +1,9 @@
 ﻿# Export guides
 
-MMO works best when stems are exported consistently. This guide is DAW-agnostic and focuses on rules that prevent the most common failures.
+<!-- markdownlint-disable-file MD013 -->
+
+MMO works best when stems are exported consistently. This guide is DAW-agnostic
+and focuses on rules that prevent the most common failures.
 
 ## Quick checklist
 
@@ -14,14 +17,16 @@ Before you export:
 
 ## Quick CLI flow
 
-Use the demo stems generator to create deterministic stems, then run the one-shot analyzer.
+Use the demo stems generator to create deterministic stems, then run the
+one-shot analyzer.
 
 ```sh
 PYTHONPATH=src python tools/make_demo_stems.py /tmp/mmo_demo
 PYTHONPATH=src python tools/analyze_stems.py /tmp/mmo_demo --out-report examples/demo_run/out.json --peak --csv examples/demo_run/recall.csv
 ```
 
-Use `--keep-scan` to retain the intermediate `examples/demo_run/out.scan.json` scan output.
+Use `--keep-scan` to retain the intermediate `examples/demo_run/out.scan.json`
+scan output.
 
 Artifacts:
 
@@ -31,9 +36,9 @@ Artifacts:
 ## Render-many demo (7.1.4 SMPTE + FILM, all 5 standards)
 
 Use the built-in `--demo` flag to run the render-many-standards end-to-end flow.
-It loads the `fixtures/immersive/report.7_1_4.json` fixture and renders in dry-run
-mode for all 5 channel-ordering standards (SMPTE, FILM, LOGIC_PRO, VST3, AAF) in
-parallel. No audio files are required.
+It loads the `fixtures/immersive/report.7_1_4.json` fixture and renders in
+dry-run mode for all 5 channel-ordering standards (SMPTE, FILM, LOGIC_PRO, VST3,
+AAF) in parallel. No audio files are required.
 
 ```sh
 PYTHONPATH=src python -m mmo safe-render \
@@ -82,8 +87,8 @@ PYTHONPATH=src python -m mmo safe-render \
 
 `binaural` (alias of `TARGET.HEADPHONES.BINAURAL` / `LAYOUT.BINAURAL`) is a
 headphone deliverable. MMO renders an internal speaker-layout source first
-(7.1.4, else 5.1, else stereo), then deterministically virtualizes to
-2-channel binaural output.
+(7.1.4, else 5.1, else stereo), then deterministically virtualizes to 2-channel
+binaural output.
 
 To render in Film (Pro Tools) channel order:
 
@@ -106,7 +111,9 @@ python -m tools.agent.run graph-only --preset schemas,ontology
 
 ## Render (optional)
 
-If you want MMO to render only conservative gain/trim recommendations, use the renderer tool. It only applies low-risk, approval-free, negative gain/trim values.
+If you want MMO to render only conservative gain/trim recommendations, use the
+renderer tool. It only applies low-risk, approval-free, negative gain/trim
+values.
 
 ```sh
 PYTHONPATH=src python tools/render_gain_trim.py /tmp/mmo_demo --report examples/demo_run/out.json --out-dir rendered
@@ -122,17 +129,21 @@ PYTHONPATH=src python tools/analyze_stems.py /tmp/mmo_demo --out-report examples
 
 - WAV, PCM
 - 24-bit (or 32-bit float if your DAW supports it cleanly)
-- Keep the session sample rate (44.1k, 48k, 96k). Do not mix rates inside one folder.
+- Keep the session sample rate (44.1k, 48k, 96k). Do not mix rates inside one
+  folder.
 
 Avoid:
 
-- MP3/AAC or any other lossy exports. For lossless stems, use WAV, FLAC, or WavPack (all acceptable).
+- MP3/AAC or any other lossy exports. For lossless stems, use WAV, FLAC, or
+  WavPack (all acceptable).
 - Normalization on export
 - Per-stem limiting that changes the intent
 
 ## Supported stem formats (current)
 
-MMO detects several stem formats by extension. WAV metadata is always decoded; FLAC/WavPack metadata is decoded when ffprobe/FFmpeg is available (or MMO_FFPROBE_PATH is set).
+MMO detects several stem formats by extension. WAV metadata is always decoded;
+FLAC/WavPack metadata is decoded when ffprobe/FFmpeg is available (or
+MMO_FFPROBE_PATH is set).
 
 WAV (.wav/.wave):
 
@@ -141,7 +152,8 @@ WAV (.wav/.wave):
 Lossless:
 
 - FLAC (.flac), WavPack (.wv)
-- Warning: requires ffprobe/FFmpeg for metadata. If missing, install FFmpeg or set MMO_FFPROBE_PATH.
+- Warning: requires ffprobe/FFmpeg for metadata. If missing, install FFmpeg or
+  set MMO_FFPROBE_PATH.
 
 Lossless detected but not decoded yet:
 
@@ -151,7 +163,8 @@ Lossless detected but not decoded yet:
 Lossy formats:
 
 - MP3 (.mp3), AAC (.aac), Ogg (.ogg), Opus (.opus)
-- Warning: lossy stems are discouraged because further processing and resampling can compound artifacts and make comparisons less reliable.
+- Warning: lossy stems are discouraged because further processing and resampling
+  can compound artifacts and make comparisons less reliable.
 
 M4A (.m4a):
 
@@ -181,7 +194,8 @@ Receipts are visible in:
 
 ## Strict mode
 
-Running `scan_session --strict` elevates lossy and unsupported format warnings to higher severity for CI and advanced checks.
+Running `scan_session --strict` elevates lossy and unsupported format warnings
+to higher severity for CI and advanced checks.
 
 ## Stem alignment rules
 
@@ -219,7 +233,8 @@ If you prefer names like:
 - `Kick In.wav`
 - `Lead Vox.wav`
 
-Add a mapping file later (planned) or keep a simple text note for now. The goal is that every stem can be assigned a `ROLE.*` deterministically.
+Add a mapping file later (planned) or keep a simple text note for now. The goal
+is that every stem can be assigned a `ROLE.*` deterministically.
 
 ## Folder layout convention
 
@@ -298,15 +313,16 @@ For dual-LFE exports (`SPK.LFE` + `SPK.LFE2`), MMO uses a conservative strategy:
 - write WAV with a direct-out style mask strategy (`channel_mask=0`),
 - include warnings when a toolchain may collapse or relabel `LFE2`.
 
-When FFmpeg is used for export/transcode and supports `LFE2` layout strings,
-MMO passes explicit layout strings such as:
+When FFmpeg is used for export/transcode and supports `LFE2` layout strings, MMO
+passes explicit layout strings such as:
 
 - `FL+FR+FC+LFE+LFE2+SL+SR` (5.2)
 - `FL+FR+FC+LFE+LFE2+SL+SR+BL+BR` (7.2)
 
 Validation workflow:
 
-- Confirm `render_report.jobs[*].channel_order` contains both `SPK.LFE` and `SPK.LFE2`.
+- Confirm `render_report.jobs[*].channel_order` contains both `SPK.LFE` and
+  `SPK.LFE2`.
 - Confirm `render_report.jobs[*].ffmpeg_channel_layout` contains `LFE2`.
 - Run ffprobe and confirm the expected layout token order:
 
@@ -316,13 +332,15 @@ ffprobe -v error -select_streams a:0 -show_entries stream=channels,channel_layou
 
 ### Missing-LFE derivation (policy-driven, deterministic)
 
-When a target layout includes LFE channels but source program content has no LFE,
-MMO records a deterministic derivation receipt in plan/report contracts.
+When a target layout includes LFE channels but source program content has no
+LFE, MMO records a deterministic derivation receipt in plan/report contracts.
 
 Defaults:
 
-- profile: `LFE_DERIVE.DOLBY_120_LR24_TRIM_10` (120 Hz low-pass, LR24, -10 dB trim)
-- alternate profile: `LFE_DERIVE.MUSIC_80_LR24_TRIM_10` (80 Hz low-pass, LR24, -10 dB trim; conservative bass-management-safe rolloff)
+- profile: `LFE_DERIVE.DOLBY_120_LR24_TRIM_10` (120 Hz low-pass, LR24, -10 dB
+  trim)
+- alternate profile: `LFE_DERIVE.MUSIC_80_LR24_TRIM_10` (80 Hz low-pass, LR24,
+  -10 dB trim; conservative bass-management-safe rolloff)
 - mode: `mono`
 
 Phase-maximization rule for derived LFE:
@@ -334,14 +352,16 @@ Phase-maximization rule for derived LFE:
 Dual-LFE targets:
 
 - default behavior is mirrored mono (`LFE1 = LFE2`)
-- if `lfe_mode=stereo`, MMO derives `lowpass(L)` / `lowpass(R)` and can flip R (`flipped R`) when mono-sum loudness improves by `>= 0.1 dB`
+- if `lfe_mode=stereo`, MMO derives `lowpass(L)` / `lowpass(R)` and can flip R
+  (`flipped R`) when mono-sum loudness improves by `>= 0.1 dB`
 
 Receipt fields include:
 
 - selected profile and mode
 - chosen sum mode (`L+R`, `L-R`, or `flipped R`)
 - measured `delta_db` and threshold
-- whether derivation ran and why (derived, passthrough, or not run for dry contract planning)
+- whether derivation ran and why (derived, passthrough, or not run for dry
+  contract planning)
 
 Avoid:
 
@@ -356,89 +376,90 @@ If your DAW exports split mono only, keep the grouping obvious:
 
 ## Immersive / height exports (7.1.4 beds)
 
-For Dolby Atmos-style bed exports (5.1.2, 5.1.4, 7.1.2, 7.1.4), additional rules apply.
+For Dolby Atmos-style bed exports (5.1.2, 5.1.4, 7.1.2, 7.1.4), additional rules
+apply.
 
 ### Supported immersive layouts
 
-| Layout | Channels | Height speakers | Render target |
-|--------|----------|-----------------|---------------|
+| Layout | Channels | Height speakers      | Render target            |
+| ------ | -------- | -------------------- | ------------------------ |
 | 5.1.2  | 8        | TFL, TFR (front top) | `TARGET.IMMERSIVE.5_1_2` |
-| 5.1.4  | 10       | TFL, TFR, TRL, TRR | `TARGET.IMMERSIVE.5_1_4` |
+| 5.1.4  | 10       | TFL, TFR, TRL, TRR   | `TARGET.IMMERSIVE.5_1_4` |
 | 7.1.2  | 10       | TFL, TFR (front top) | `TARGET.IMMERSIVE.7_1_2` |
-| 7.1.4  | 12       | TFL, TFR, TRL, TRR | `TARGET.IMMERSIVE.7_1_4` |
+| 7.1.4  | 12       | TFL, TFR, TRL, TRR   | `TARGET.IMMERSIVE.7_1_4` |
 
 ### Channel ordering standards
 
-MMO supports five channel-ordering standards. The internal canonical is always **SMPTE**.
-All imports from other standards are remapped to SMPTE at the file boundary.
-All exports remap from SMPTE back to the target standard.
+MMO supports five channel-ordering standards. The internal canonical is always
+**SMPTE**. All imports from other standards are remapped to SMPTE at the file
+boundary. All exports remap from SMPTE back to the target standard.
 
-| Standard   | Used by | Internal? |
-|------------|---------|-----------|
-| SMPTE      | WAV (WAVEFORMATEXTENSIBLE), FLAC, WavPack, FFmpeg, Dolby Atmos beds, Netflix delivery, DCP | **Yes — always** |
-| FILM       | Pro Tools internal tracks/metering, cinema dubbing stages, theatrical feature-film pipelines | No |
-| LOGIC_PRO  | Logic Pro bounces, DTS-native files, Apple ecosystem | No |
-| VST3       | Steinberg Cubase/Nuendo for 7.1+; follows SMPTE for ≤5.1 | No |
-| AAF        | AAF/OMF/XML interchange (ordering read from per-channel labels, not assumed) | No |
+| Standard  | Used by                                                                                      | Internal?        |
+| --------- | -------------------------------------------------------------------------------------------- | ---------------- |
+| SMPTE     | WAV (WAVEFORMATEXTENSIBLE), FLAC, WavPack, FFmpeg, Dolby Atmos beds, Netflix delivery, DCP   | **Yes — always** |
+| FILM      | Pro Tools internal tracks/metering, cinema dubbing stages, theatrical feature-film pipelines | No               |
+| LOGIC_PRO | Logic Pro bounces, DTS-native files, Apple ecosystem                                         | No               |
+| VST3      | Steinberg Cubase/Nuendo for 7.1+; follows SMPTE for ≤5.1                                     | No               |
+| AAF       | AAF/OMF/XML interchange (ordering read from per-channel labels, not assumed)                 | No               |
 
 #### SMPTE / ITU-R BS.775 (default)
 
-| Layout | Channel order |
-|--------|---------------|
-| 2.0    | L R |
-| 2.1    | L R LFE |
-| 5.1    | L R C LFE Ls Rs |
-| 7.1    | L R C LFE Ls Rs Lrs Rrs |
-| 5.1.2  | L R C LFE Ls Rs TFL TFR |
-| 5.1.4  | L R C LFE Ls Rs TFL TFR TRL TRR |
-| 7.1.2  | L R C LFE Ls Rs Lrs Rrs TFL TFR |
+| Layout | Channel order                           |
+| ------ | --------------------------------------- |
+| 2.0    | L R                                     |
+| 2.1    | L R LFE                                 |
+| 5.1    | L R C LFE Ls Rs                         |
+| 7.1    | L R C LFE Ls Rs Lrs Rrs                 |
+| 5.1.2  | L R C LFE Ls Rs TFL TFR                 |
+| 5.1.4  | L R C LFE Ls Rs TFL TFR TRL TRR         |
+| 7.1.2  | L R C LFE Ls Rs Lrs Rrs TFL TFR         |
 | 7.1.4  | L R C LFE Ls Rs Lrs Rrs TFL TFR TRL TRR |
 
 Verify 7.1.4 SMPTE: the first four channels must be L, R, C, LFE.
 
 #### Film / Cinema / Pro Tools
 
-| Layout | Channel order |
-|--------|---------------|
-| 2.0    | L R |
-| 2.1    | L R LFE |
-| 5.1    | L C R Ls Rs LFE |
-| 7.1    | L C R Ls Rs Lrs Rrs LFE |
-| 5.1.2  | L C R Ls Rs LFE TFL TFR |
-| 5.1.4  | L C R Ls Rs LFE TFL TFR TRL TRR |
-| 7.1.2  | L C R Ls Rs Lrs Rrs LFE TFL TFR |
+| Layout | Channel order                           |
+| ------ | --------------------------------------- |
+| 2.0    | L R                                     |
+| 2.1    | L R LFE                                 |
+| 5.1    | L C R Ls Rs LFE                         |
+| 7.1    | L C R Ls Rs Lrs Rrs LFE                 |
+| 5.1.2  | L C R Ls Rs LFE TFL TFR                 |
+| 5.1.4  | L C R Ls Rs LFE TFL TFR TRL TRR         |
+| 7.1.2  | L C R Ls Rs Lrs Rrs LFE TFL TFR         |
 | 7.1.4  | L C R Ls Rs Lrs Rrs LFE TFL TFR TRL TRR |
 
 #### Logic Pro / DTS
 
-| Layout | Channel order |
-|--------|---------------|
-| 5.1    | L R Ls Rs C LFE |
+| Layout | Channel order           |
+| ------ | ----------------------- |
+| 5.1    | L R Ls Rs C LFE         |
 | 7.1    | L R Lrs Rrs Ls Rs C LFE |
 
-Logic Pro bounces a "5.1 WAV" without a channel mask — it is very likely in LOGIC_PRO order
-even if the header does not state it.
+Logic Pro bounces a "5.1 WAV" without a channel mask — it is very likely in
+LOGIC_PRO order even if the header does not state it.
 
 #### Steinberg VST3 (Cubase / Nuendo) for 7.1+
 
-Follows SMPTE for ≤5.1. For 7.1+, rear surrounds (Lrs/Rrs) occupy slots 4-5 and side
-surrounds (Lss/Rss) occupy slots 6-7 — the reverse of SMPTE.
+Follows SMPTE for ≤5.1. For 7.1+, rear surrounds (Lrs/Rrs) occupy slots 4-5 and
+side surrounds (Lss/Rss) occupy slots 6-7 — the reverse of SMPTE.
 
-| Layout | Channel order |
-|--------|---------------|
-| 7.1    | L R C LFE Lrs Rrs Lss Rss |
+| Layout | Channel order                             |
+| ------ | ----------------------------------------- |
+| 7.1    | L R C LFE Lrs Rrs Lss Rss                 |
 | 7.1.4  | L R C LFE Lrs Rrs Lss Rss TFL TFR TRL TRR |
 
 #### AAF / OMF / XML interchange
 
-AAF containers carry explicit per-channel speaker labels or a channel mask.
-The ordering must be read from the metadata, not assumed.
-Use `--layout-standard AAF` when a layout was inferred from AAF metadata.
+AAF containers carry explicit per-channel speaker labels or a channel mask. The
+ordering must be read from the metadata, not assumed. Use
+`--layout-standard AAF` when a layout was inferred from AAF metadata.
 
 ### Specifying the layout standard on the CLI
 
-Pass `--layout-standard <STANDARD>` to any render or export command to declare the
-active ordering for file I/O. MMO will remap at the import/export boundary.
+Pass `--layout-standard <STANDARD>` to any render or export command to declare
+the active ordering for file I/O. MMO will remap at the import/export boundary.
 
 ```sh
 # Analyze stems in SMPTE order (default — no flag needed)
@@ -462,10 +483,12 @@ PYTHONPATH=src python tools/render_gain_trim.py /path/to/stems \
   --report out.json --layout-standard FILM --out-dir rendered
 ```
 
-If your project uses Film ordering, pass `--layout-standard FILM` to `mmo safe-render`
-so MMO generates the correct `channel_order` in the render contract and receipt.
+If your project uses Film ordering, pass `--layout-standard FILM` to
+`mmo safe-render` so MMO generates the correct `channel_order` in the render
+contract and receipt.
 
-Export your DAW project using SMPTE channel order for best compatibility with MMO defaults.
+Export your DAW project using SMPTE channel order for best compatibility with
+MMO defaults.
 
 ### Height channel rules
 
@@ -473,17 +496,20 @@ Height channels (TFL, TFR, TRL, TRR) at elevation 45°:
 
 - Must be included in the interleaved stem, not as separate files.
 - Export at the same level as bed channels — do not pre-attenuate heights.
-- MMO applies -6 dB height-to-bed fold for downstream downmix (per `POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0`).
+- MMO applies -6 dB height-to-bed fold for downstream downmix (per
+  `POLICY.DOWNMIX.IMMERSIVE_FOLDOWN_V0`).
 
 ### Height "air" guidance
 
-Height channels carry the spatial air layer (overhead ambience, ceiling reflections, objects above).
+Height channels carry the spatial air layer (overhead ambience, ceiling
+reflections, objects above).
 
 Recommended practices:
 
 - Keep height content below -12 dBFS RMS to avoid overwhelming the bed.
 - Treat heights conservatively: MMO is advisory, not prescriptive.
-- If you intend silence in heights, still export them (as silence) to maintain channel count consistency.
+- If you intend silence in heights, still export them (as silence) to maintain
+  channel count consistency.
 
 ### Downmix paths for immersive
 

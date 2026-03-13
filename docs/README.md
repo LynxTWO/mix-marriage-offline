@@ -10,12 +10,12 @@ reference when still useful.
 
 - Deterministic analysis, report export, and contract artifacts.
 - Scene-first, mix-once/render-many workflows across CLI and desktop paths.
-- Compare workflows with `compare_report.json` and fair-listen
-  `loudness_match` disclosure.
+- Compare workflows with `compare_report.json` and fair-listen `loudness_match`
+  disclosure.
 - Render targets from stereo through immersive, plus first-class binaural
   headphone delivery and preview flows.
-- Five supported channel-ordering standards:
-  `SMPTE`, `FILM`, `LOGIC_PRO`, `VST3`, and `AAF`.
+- Five supported channel-ordering standards: `SMPTE`, `FILM`, `LOGIC_PRO`,
+  `VST3`, and `AAF`.
 - Tauri desktop workflow screens for
   `Validate -> Analyze -> Scene -> Render -> Results -> Compare`.
 
@@ -28,34 +28,31 @@ reference when still useful.
 
 ## Start Here
 
-- [manual/00-manual-overview.md](manual/00-manual-overview.md)
-  User Manual. Canonical end-user install, workflow, troubleshooting, and GUI
-  walkthrough sequence.
-- [00-quickstart.md](00-quickstart.md)
-  Golden-path walkthrough from stems to project scaffold and render-ready
-  artifacts.
-- [02-architecture.md](02-architecture.md)
-  Architecture as shipped today: deterministic artifacts, scene/render flow,
-  compare, delivery, and desktop paths.
-- [15-target-selection.md](15-target-selection.md)
-  Canonical target tokens, shorthands, and binaural target behavior.
-- [18-channel-standards.md](18-channel-standards.md)
-  Canonical channel-ordering standards contract.
-- [11-gui-vision.md](11-gui-vision.md)
-  Current GUI direction, shipped surfaces, and remaining parity work.
-- [STATUS.md](STATUS.md)
-  Live milestone checklist and current completion boundaries.
-- [milestones.yaml](milestones.yaml)
-  Machine-readable milestone IDs, states, and doc section links.
+- [manual/00-manual-overview.md](manual/00-manual-overview.md) User Manual.
+  Canonical end-user install, workflow, troubleshooting, and GUI walkthrough
+  sequence.
+- [00-quickstart.md](00-quickstart.md) Golden-path walkthrough from stems to
+  project scaffold and render-ready artifacts.
+- [02-architecture.md](02-architecture.md) Architecture as shipped today:
+  deterministic artifacts, scene/render flow, compare, delivery, and desktop
+  paths.
+- [15-target-selection.md](15-target-selection.md) Canonical target tokens,
+  shorthands, and binaural target behavior.
+- [18-channel-standards.md](18-channel-standards.md) Canonical channel-ordering
+  standards contract.
+- [11-gui-vision.md](11-gui-vision.md) Current GUI direction, shipped surfaces,
+  and remaining parity work.
+- [STATUS.md](STATUS.md) Live milestone checklist and current completion
+  boundaries.
+- [milestones.yaml](milestones.yaml) Machine-readable milestone IDs, states, and
+  doc section links.
 
 ## Canonical Doc Map
 
-- Core product framing:
-  [00-proposal.md](00-proposal.md),
+- Core product framing: [00-proposal.md](00-proposal.md),
   [01-philosophy.md](01-philosophy.md),
   [09-product-vision.md](09-product-vision.md)
-- Scene/render contracts:
-  [02-architecture.md](02-architecture.md),
+- Scene/render contracts: [02-architecture.md](02-architecture.md),
   [13-gui-handshake.md](13-gui-handshake.md),
   [15-target-selection.md](15-target-selection.md),
   [18-channel-standards.md](18-channel-standards.md)
@@ -63,25 +60,21 @@ reference when still useful.
   [07-export-guides.md](07-export-guides.md),
   [16-translation-checks.md](16-translation-checks.md),
   [21-loudness-profiles.md](21-loudness-profiles.md)
-- Plugins and ontology:
-  [03-ontology.md](03-ontology.md),
+- Plugins and ontology: [03-ontology.md](03-ontology.md),
   [04-plugin-api.md](04-plugin-api.md),
   [13-plugin-authoring.md](13-plugin-authoring.md)
-- GUI and desktop:
-  [11-gui-vision.md](11-gui-vision.md),
+- GUI and desktop: [11-gui-vision.md](11-gui-vision.md),
   [12-gui-design-system.md](12-gui-design-system.md),
-  [12-gui-dev.md](12-gui-dev.md),
-  [gui_parity.md](gui_parity.md)
+  [12-gui-dev.md](12-gui-dev.md), [gui_parity.md](gui_parity.md)
 
 ## Contribution Workflow
 
-- [Status system (`STATUS.md` + `milestones.yaml`)](STATUS.md)
-  Keep milestone checklist state and machine-readable milestone state aligned.
-- [13-plugin-authoring.md](13-plugin-authoring.md)
-  Minimum viable plugin package checklist for GUI-visible plugin metadata.
-- [PR checklist template](../.github/pull_request_template.md)
-  Required checklist for milestone links, changelog updates, and validation
-  reporting.
+- [Status system (`STATUS.md` + `milestones.yaml`)](STATUS.md) Keep milestone
+  checklist state and machine-readable milestone state aligned.
+- [13-plugin-authoring.md](13-plugin-authoring.md) Minimum viable plugin package
+  checklist for GUI-visible plugin metadata.
+- [PR checklist template](../.github/pull_request_template.md) Required
+  checklist for milestone links, changelog updates, and validation reporting.
 
 ## Installed Vs Checkout Paths
 
@@ -116,5 +109,5 @@ reference when still useful.
 
 - Use relative links between docs, for example `(10-authority-profiles.md)`.
 - Keep terminology aligned with ontology IDs.
-- Prefer "what/why/where/confidence" for detector output and
-  "what changed/why/limits" for resolver or delivery output.
+- Prefer "what/why/where/confidence" for detector output and "what
+  changed/why/limits" for resolver or delivery output.

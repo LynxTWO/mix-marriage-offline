@@ -56,8 +56,8 @@ Current first-class target families include:
 - immersive layouts through `9.1.6`
 - first-class `LAYOUT.BINAURAL` / `TARGET.HEADPHONES.BINAURAL`
 
-At the I/O boundary MMO supports five channel-ordering standards:
-`SMPTE`, `FILM`, `LOGIC_PRO`, `VST3`, and `AAF`.
+At the I/O boundary MMO supports five channel-ordering standards: `SMPTE`,
+`FILM`, `LOGIC_PRO`, `VST3`, and `AAF`.
 
 ---
 
@@ -109,20 +109,18 @@ At the I/O boundary MMO supports five channel-ordering standards:
 
 ## 6) Scene and render contracts
 
-The architectural center of MMO is no longer just "analyze a stem folder."
-It is the scene/render contract chain.
+The architectural center of MMO is no longer just "analyze a stem folder." It is
+the scene/render contract chain.
 
 ### 6.1 Scene
 
-`scene.json` stores layout-agnostic intent.
-It captures choices that should survive across render targets and channel-order
-variants.
+`scene.json` stores layout-agnostic intent. It captures choices that should
+survive across render targets and channel-order variants.
 
 ### 6.2 Render plan
 
 `render_plan.json` expands one scene into concrete jobs for selected targets and
-contexts.
-This is where mix-once/render-many becomes explicit.
+contexts. This is where mix-once/render-many becomes explicit.
 
 ### 6.3 Render execution
 
@@ -131,9 +129,9 @@ same plan/contract concepts and write explainable artifacts for what happened.
 
 ### 6.4 Ordering standards
 
-MMO processes internally using canonical `SMPTE` ordering.
-It remaps at the boundary for `FILM`, `LOGIC_PRO`, `VST3`, and `AAF` when the
-selected target/layout declares those variants.
+MMO processes internally using canonical `SMPTE` ordering. It remaps at the
+boundary for `FILM`, `LOGIC_PRO`, `VST3`, and `AAF` when the selected
+target/layout declares those variants.
 
 ---
 
@@ -169,9 +167,9 @@ Compare is a first-class part of the architecture.
 `mmo compare` can compare two reports or two report folders and write a
 deterministic `compare_report.json`.
 
-When sibling render QA artifacts exist, compare also records
-evaluation-only `loudness_match` context so CLI and GUI comparison surfaces can
-disclose fair-listen compensation instead of hiding it.
+When sibling render QA artifacts exist, compare also records evaluation-only
+`loudness_match` context so CLI and GUI comparison surfaces can disclose
+fair-listen compensation instead of hiding it.
 
 Safe-render and render-run also write audit-friendly receipts and QA artifacts
 so delivery decisions remain explainable after the audio files are exported.
@@ -236,8 +234,8 @@ review possible.
 
 ## 12) Current implementation focus
 
-This repo is not "foundation only" anymore.
-The current focus is finishing the remaining public-surface gaps around:
+This repo is not "foundation only" anymore. The current focus is finishing the
+remaining public-surface gaps around:
 
 - release-copy accuracy and install/runtime guidance
 - Tauri parity for scene-lock editing

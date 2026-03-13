@@ -2,27 +2,30 @@
 
 Thanks for helping build an offline, deterministic mixing assistant.
 
-If you contribute with AI tools, that is fine. The human submitting the PR is still responsible for correctness, safety, determinism, and license hygiene.
+If you contribute with AI tools, that is fine. The human submitting the PR is
+still responsible for correctness, safety, determinism, and license hygiene.
 
 ## Before you start
 
 - Read the docs index: `docs/README.md`.
-- Follow the milestone tracking rule: PRs that move work must update `docs/STATUS.md` and `docs/milestones.yaml`.
+- Follow the milestone tracking rule: PRs that move work must update
+  `docs/STATUS.md` and `docs/milestones.yaml`.
 - Follow the PR checklist in `.github/pull_request_template.md`.
 
 ## Project rules that matter
 
-1) Determinism is a contract.
+1. Determinism is a contract.
 
 - Same inputs + settings must produce the same outputs.
-- Avoid timestamps, random IDs, environment-dependent ordering, and locale-specific formatting.
+- Avoid timestamps, random IDs, environment-dependent ordering, and
+  locale-specific formatting.
 
-1) Schemas and ontology are not optional.
+1. Schemas and ontology are not optional.
 
 - If you change any payload shape, update the JSON schema in the same PR.
 - Prefer strict schemas and stable ordering in outputs.
 
-1) Bounded authority stays conservative.
+1. Bounded authority stays conservative.
 
 - Recommendations can be broad.
 - Auto-apply must remain low-risk unless a policy explicitly allows more.
@@ -51,7 +54,8 @@ Run these before opening a PR:
   - Linux/macOS: `MMO_PYTEST_N=auto tools/run_pytest.sh -q`
   - Windows: `.\tools\run_pytest.ps1 -q`
 
-If you cannot run something due to your environment, say exactly what you ran and what you could not run in the PR description.
+If you cannot run something due to your environment, say exactly what you ran
+and what you could not run in the PR description.
 
 ## What to work on
 
@@ -77,4 +81,5 @@ Bigger contributions:
 
 ## Code of Conduct
 
-By participating, you agree to the project Code of Conduct in `CODE_OF_CONDUCT.md`.
+By participating, you agree to the project Code of Conduct in
+`CODE_OF_CONDUCT.md`.

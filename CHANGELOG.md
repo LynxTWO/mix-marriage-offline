@@ -1,23 +1,23 @@
 # Changelog
 
+<!-- markdownlint-disable-file MD013 -->
+
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.1.3] — 2026-03-02
 
-### Fixed
+### Fixed (continued)
 
-- **Windows packaged GUI `-m mmo` regression (critical hotfix):**
-  GUI passthrough now maps `-m mmo` to `mmo.__main__` for module execution while
+- **Windows packaged GUI `-m mmo` regression (critical hotfix):** GUI
+  passthrough now maps `-m mmo` to `mmo.__main__` for module execution while
   preserving `sys.argv[0]` as `mmo`, so frozen builds execute the CLI entrypoint
-  correctly.
-  (`src/mmo/gui/main.py`)
-- **Frozen GUI module inclusion for passthrough:** PyInstaller GUI builds now add
-  explicit hidden imports for `mmo.__main__` and `mmo.cli` so
+  correctly. (`src/mmo/gui/main.py`)
+- **Frozen GUI module inclusion for passthrough:** PyInstaller GUI builds now
+  add explicit hidden imports for `mmo.__main__` and `mmo.cli` so
   `mmo-gui.exe -m mmo ...` and nested CLI execution paths are available in the
-  bundled binary.
-  (`tools/build_binaries.py`)
+  bundled binary. (`tools/build_binaries.py`)
 - **Release CI regression lock:** Windows release workflow now smoke-tests:
   `mmo-gui.exe -m mmo --help` and
   `mmo-gui.exe -m mmo.tools.analyze_stems --help`.
@@ -30,55 +30,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **Packaged GUI `-m mmo*` passthrough (critical hotfix):**
-  `mmo-gui` now dispatches any `-m mmo...` module via `runpy` (not only `-m mmo`),
-  so nested frozen subprocess calls like
-  `sys.executable -m mmo.tools.analyze_stems ...` and
-  `sys.executable -m mmo.tools.scan_session ...` execute correctly.
+- **Packaged GUI `-m mmo*` passthrough (critical hotfix):** `mmo-gui` now
+  dispatches any `-m mmo...` module via `runpy` (not only `-m mmo`), so nested
+  frozen subprocess calls like `sys.executable -m mmo.tools.analyze_stems ...`
+  and `sys.executable -m mmo.tools.scan_session ...` execute correctly.
   (`src/mmo/gui/main.py` — `_try_cli_passthrough`)
-- **Passthrough regression coverage:** added GUI passthrough tests for
-  `mmo`, `mmo.tools.analyze_stems`, `mmo.tools.scan_session`, and
+- **Passthrough regression coverage:** added GUI passthrough tests for `mmo`,
+  `mmo.tools.analyze_stems`, `mmo.tools.scan_session`, and
   `mmo.tools.export_report` with `--help` dispatch paths.
   (`tests/test_gui_smoke.py`)
 - **PyInstaller module collection:** binary builds now explicitly collect
-  `mmo.tools` submodules so packaged GUI passthrough supports current and
-  future `mmo.tools.*` invocations.
-  (`tools/build_binaries.py`)
+  `mmo.tools` submodules so packaged GUI passthrough supports current and future
+  `mmo.tools.*` invocations. (`tools/build_binaries.py`)
 
 ### Changed
 
-- **Release status:** `1.1.1` is marked as a broken release for packaged GUI nested
-  tool subprocesses (`-m mmo.tools.*`) and is superseded by `1.1.2`.
-- **Release status update:** `1.1.2` is now marked as broken for Windows packaged GUI
-  `-m mmo` execution due to missing `mmo.__main__` in frozen bundles and is
-  superseded by `1.1.3`.
+- **Release status:** `1.1.1` is marked as a broken release for packaged GUI
+  nested tool subprocesses (`-m mmo.tools.*`) and is superseded by `1.1.2`.
+- **Release status update:** `1.1.2` is now marked as broken for Windows
+  packaged GUI `-m mmo` execution due to missing `mmo.__main__` in frozen
+  bundles and is superseded by `1.1.3`.
 
 ## [1.1.1] — 2026-03-01 (broken)
 
 ### Fixed
 
-- **Windows GUI passthrough (critical):** The packaged GUI executable now dispatches
-  `sys.executable -m mmo <subcommand>` to the real CLI entrypoint before any argparse
-  processing, so frozen builds no longer abort with `unrecognized arguments: -m mmo ...`.
-  (`src/mmo/gui/main.py` — `_try_cli_passthrough`)
-- **Windows default plugins directory:** `default_user_plugins_dir()` on Windows now
-  resolves to `%LOCALAPPDATA%\mmo\plugins` (with `APPDATA` / `USERPROFILE` fallbacks)
-  instead of incorrectly falling back to `C:\Windows\System32\plugins` in frozen builds.
+- **Windows GUI passthrough (critical):** The packaged GUI executable now
+  dispatches `sys.executable -m mmo <subcommand>` to the real CLI entrypoint
+  before any argparse processing, so frozen builds no longer abort with
+  `unrecognized arguments: -m mmo ...`. (`src/mmo/gui/main.py` —
+  `_try_cli_passthrough`)
+- **Windows default plugins directory:** `default_user_plugins_dir()` on Windows
+  now resolves to `%LOCALAPPDATA%\mmo\plugins` (with `APPDATA` / `USERPROFILE`
+  fallbacks) instead of incorrectly falling back to
+  `C:\Windows\System32\plugins` in frozen builds.
   (`src/mmo/core/plugin_loader.py`)
 - **macOS / Linux plugin directories:** macOS resolves to
-  `~/Library/Application Support/mmo/plugins`; Linux honours `$XDG_DATA_HOME/mmo/plugins`
-  with fallback to `~/.local/share/mmo/plugins`.
+  `~/Library/Application Support/mmo/plugins`; Linux honours
+  `$XDG_DATA_HOME/mmo/plugins` with fallback to `~/.local/share/mmo/plugins`.
 
 ### Changed
 
-- **GUI live-log error codes:** `_run_command` now emits structured anchor lines:
-  `[GUI.E2001] spawn_failed` on subprocess launch failure,
+- **GUI live-log error codes:** `_run_command` now emits structured anchor
+  lines: `[GUI.E2001] spawn_failed` on subprocess launch failure,
   `[GUI.E2000] stage_failed` on nonzero exit (with stage name and return code),
-  `[GUI.E2000] first_error_line` with the first meaningful error line from output,
-  `[GUI.STAGE] <stage> starting.` and `[GUI.STAGE] <stage> completed ok.` for orientation.
-- **Docs — Chapter 13 (Troubleshooting):** Documents GUI error codes, the Windows
-  `-m mmo` broken-build note, and the corrected Windows default plugin folder path.
-- **Docs — Chapter 11 (Plugins):** Lists platform-specific default plugin directories.
+  `[GUI.E2000] first_error_line` with the first meaningful error line from
+  output, `[GUI.STAGE] <stage> starting.` and
+  `[GUI.STAGE] <stage> completed ok.` for orientation.
+- **Docs — Chapter 13 (Troubleshooting):** Documents GUI error codes, the
+  Windows `-m mmo` broken-build note, and the corrected Windows default plugin
+  folder path.
+- **Docs — Chapter 11 (Plugins):** Lists platform-specific default plugin
+  directories.
 
 ## [Unreleased]
 
@@ -100,8 +103,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     so absolute runner paths no longer leak into normalized render manifest
     hashes across Linux, macOS, and Windows.
   - Added focused regression coverage for scene payloads that differ only by
-    absolute root or path separators, and refreshed the affected golden
-    fixture metric hashes to match the intended path-stable trace metadata.
+    absolute root or path separators, and refreshed the affected golden fixture
+    metric hashes to match the intended path-stable trace metadata.
 
 - Tauri sidecar Python interpreter selection:
   - `gui/desktop-tauri/scripts/prepare-sidecar.mjs` now prefers the Python
@@ -113,8 +116,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     reports the interpreter command it actually used when the frozen-binary
     build fails, making missing-backend diagnostics truthful in CI and local
     runs.
-  - The desktop-tauri CI build step now exports `PYTHON=python`, and the
-    Tauri README now mirrors the same `python -m pip ...` install flow.
+  - The desktop-tauri CI build step now exports `PYTHON=python`, and the Tauri
+    README now mirrors the same `python -m pip ...` install flow.
 
 - Tauri desktop design-system Firefox regressions:
   - The isolated `gui/desktop-tauri` shell now uses a wide-screen app layout
@@ -124,10 +127,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `390x844` viewport by preserving wrapped tag rows and constraining internal
     scrolling instead of letting the single required widget grow past the
     visible screen.
-  - Fine-adjust feedback now tracks explicit modifier-key state across
-    `keydown` / `keyup` / blur-driven drag lifecycles, and composite numeric
-    controls keep `Tab` focus local without scroll jumps so Firefox drag tests
-    stay deterministic.
+  - Fine-adjust feedback now tracks explicit modifier-key state across `keydown`
+    / `keyup` / blur-driven drag lifecycles, and composite numeric controls keep
+    `Tab` focus local without scroll jumps so Firefox drag tests stay
+    deterministic.
 
 - Ontology change validation now runs git subprocesses with explicit UTF-8
   decoding, reports decode-fallback warnings instead of crashing on Windows
@@ -135,19 +138,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   are missing or unreadable so follow-on YAML/manifest errors stay truthful.
 
 - Test-suite stabilization and render-report back-compat:
-  - Added repo-root `pytest.ini` discovery hygiene so `pytest -q` only
-    collects the project `tests/` tree and ignores scratch/venv/build dirs
-    such as `sandbox_tmp/pydeps`.
+  - Added repo-root `pytest.ini` discovery hygiene so `pytest -q` only collects
+    the project `tests/` tree and ignores scratch/venv/build dirs such as
+    `sandbox_tmp/pydeps`.
   - Centralized the default `render_report` fallback payload
     (`fallback_attempts` / `fallback_final`) and applied it across report
-    producers so schema-required fallback fields stay present without
-    weakening the contract.
-  - Restored safe-render fallback back-compat so exhausted surround
-    similarity fallback keeps receipts, QA reports, and written artifacts
-    instead of turning partial-success renders into accidental hard stops;
-    receipt/QA payloads now carry the explicit failure state while retained
-    front-bias fallback changes stay reflected in the surround/immersive
-    golden fixtures.
+    producers so schema-required fallback fields stay present without weakening
+    the contract.
+  - Restored safe-render fallback back-compat so exhausted surround similarity
+    fallback keeps receipts, QA reports, and written artifacts instead of
+    turning partial-success renders into accidental hard stops; receipt/QA
+    payloads now carry the explicit failure state while retained front-bias
+    fallback changes stay reflected in the surround/immersive golden fixtures.
   - Restored byte-stable plugin-chain no-op behavior for matching stereo WAV
     passthrough cases, including bypassed and fully dry endpoints, while
     preserving explainable event-log/report output.
@@ -171,22 +173,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   gates complete, and calls out the remaining release-surface, packaged-smoke,
   and primary-GUI scene-lock parity blocker explicitly.
 
-### Added
+### Added (ontology and immersive coverage)
 
 - Golden plugin-mode audio regression coverage:
   - Added `src/mmo/dsp/plugin_mode_runner.py` so tests can dispatch tiny
-    multichannel buffers by manifest-declared `channel_mode`
-    (`per_channel`, `linked_group`, `true_multichannel`) using
-    `ProcessContext.channel_order` instead of hard-coded slot assumptions.
+    multichannel buffers by manifest-declared `channel_mode` (`per_channel`,
+    `linked_group`, `true_multichannel`) using `ProcessContext.channel_order`
+    instead of hard-coded slot assumptions.
   - Added `tests/plugins/` fixture manifests and modules for
     `PLUGIN.RENDERER.TEST.PER_CHANNEL_GAIN`,
     `PLUGIN.RENDERER.TEST.LINKED_GROUP_TILT`, and
     `PLUGIN.RENDERER.TEST.TRUE_MULTICHANNEL_SUMCHECK`, each with explicit
     `max_channels`, link-group, and deterministic-seed semantics.
   - Added `tests/test_plugin_modes_golden.py` to pin per-channel speaker-ID
-    routing, linked front/surround/height group gain behavior, true
-    multichannel full-buffer checksum access, mismatch no-op behavior, and
-    repeated-run determinism across 5.1 and 7.1.4 layouts.
+    routing, linked front/surround/height group gain behavior, true multichannel
+    full-buffer checksum access, mismatch no-op behavior, and repeated-run
+    determinism across 5.1 and 7.1.4 layouts.
   - CI now runs the focused plugin-mode golden suite explicitly on Linux,
     Windows, and macOS before the broader pytest matrix.
 
@@ -197,23 +199,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     plus checked-in expected bus-plan, scene, metrics, and gate snapshots.
   - Added `tests/test_golden_fixtures.py`, which validates exact normalized
     render-manifest/receipt hashes, exact channel ordering, exact QA issue
-    IDs/severities, and tolerance-based per-channel peak/RMS/LUFS metrics
-    across stereo, surround, and immersive targets.
+    IDs/severities, and tolerance-based per-channel peak/RMS/LUFS metrics across
+    stereo, surround, and immersive targets.
   - CI now runs the focused golden fixture suite explicitly on Linux, Windows,
     and macOS before the broader test matrix.
 
 - Deterministic render trace metadata embedding:
-  - Added `src/mmo/core/trace_metadata.py` so rendered artifacts derive one stable trace payload containing MMO version, optional git commit, scene SHA-256, render contract version, downmix policy version, layout/profile/export-profile IDs, and seed.
-  - Renderer WAV outputs now embed that payload in native `iXML` chunks, and renderer manifests carry the same trace fields in `metadata.trace_metadata` plus a reusable `tag_bag` for downstream transcodes.
-  - Lossless transcodes now preserve the same trace keys across `flac`, `wv`, `aiff`, and `alac`, with AIFF/ALAC-specific FFmpeg muxer flags enabled so custom fields are retained instead of dropped.
-  - Added focused regression coverage for RIFF/iXML parsing, ffmpeg-backed multiformat metadata preservation, render-run receipts, and updated the golden-path master WAV hashes for the new deterministic file bytes.
+  - Added `src/mmo/core/trace_metadata.py` so rendered artifacts derive one
+    stable trace payload containing MMO version, optional git commit, scene
+    SHA-256, render contract version, downmix policy version,
+    layout/profile/export-profile IDs, and seed.
+  - Renderer WAV outputs now embed that payload in native `iXML` chunks, and
+    renderer manifests carry the same trace fields in `metadata.trace_metadata`
+    plus a reusable `tag_bag` for downstream transcodes.
+  - Lossless transcodes now preserve the same trace keys across `flac`, `wv`,
+    `aiff`, and `alac`, with AIFF/ALAC-specific FFmpeg muxer flags enabled so
+    custom fields are retained instead of dropped.
+  - Added focused regression coverage for RIFF/iXML parsing, ffmpeg-backed
+    multiformat metadata preservation, render-run receipts, and updated the
+    golden-path master WAV hashes for the new deterministic file bytes.
 
 - Deterministic multi-step similarity fallback sequencing:
-  - Added `src/mmo/core/fallback_sequencer.py` and replaced the old one-shot rendered-similarity retry with an ordered, deterministic backoff sequence plus stop rules.
-  - Placement safe-render now records every fallback attempt with before/after QA metrics, aggregates those attempts into the safe-render receipt, tags manifests with `fallback_applied=true`, and hard-fails when the sequence is exhausted without a passing similarity result.
-  - Added focused regression coverage for sequencer stop conditions, rendered similarity fallback ordering, and safe-render receipt reporting.
-  - Safe-render now preserves fixture/session `render_export_options` when applying CLI export toggles, so renderer-level deterministic options such as decorrelated bed widening survive into the actual render path.
-  - Added `fixtures/fallback_gate_fail/` plus `tests/test_fallback_gate_sequence.py` to prove the 5.1 / 7.1.4 safe-render CLI path trips the downmix gate, runs the ordered fallback sequence, reports per-step before/after metrics, and resolves to deterministic safety-collapse pass behavior.
+  - Added `src/mmo/core/fallback_sequencer.py` and replaced the old one-shot
+    rendered-similarity retry with an ordered, deterministic backoff sequence
+    plus stop rules.
+  - Placement safe-render now records every fallback attempt with before/after
+    QA metrics, aggregates those attempts into the safe-render receipt, tags
+    manifests with `fallback_applied=true`, and hard-fails when the sequence is
+    exhausted without a passing similarity result.
+  - Added focused regression coverage for sequencer stop conditions, rendered
+    similarity fallback ordering, and safe-render receipt reporting.
+  - Safe-render now preserves fixture/session `render_export_options` when
+    applying CLI export toggles, so renderer-level deterministic options such as
+    decorrelated bed widening survive into the actual render path.
+  - Added `fixtures/fallback_gate_fail/` plus
+    `tests/test_fallback_gate_sequence.py` to prove the 5.1 / 7.1.4 safe-render
+    CLI path trips the downmix gate, runs the ordered fallback sequence, reports
+    per-step before/after metrics, and resolves to deterministic safety-collapse
+    pass behavior.
 
 - Install/runtime dependency contract hardening:
   - NumPy now ships in the base Python dependency set, while the legacy
@@ -228,37 +251,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `pip install .[truth]`.
 
 - Approval-gated LFE corrective filtering:
-  - Added `ACTION.FILTER.HPF`, `ACTION.FILTER.LPF`, `ACTION.FILTER.BELL`, `ACTION.LFE.CORRECTIVE_FILTER`, and `PARAM.EQ.PHASE_MODE` to the ontology and packaged data copies.
-  - Safe-render now treats LFE corrective filters as explicit-approval actions, applies them only in a post-render LFE-only pass, re-runs deterministic translation QA, and records refused step-down attempts when QA gets worse.
-  - Added `PLUGIN.DETECTOR.LFE_CORRECTIVE` and `PLUGIN.RESOLVER.LFE_CORRECTIVE` so measured LFE out-of-band / infrasonic / excessive low-band content produces high-impact corrective recommendations with rollback metadata.
-  - Added deterministic `fixtures/lfe_explicit/` and `fixtures/lfe_out_of_band/` WAV inputs plus `tests/test_lfe_corrective_approval.py` to pin blocked-without-approval, applied-with-approval-and-re-QA, and explicit-LFE no-silent-fix behavior.
+  - Added `ACTION.FILTER.HPF`, `ACTION.FILTER.LPF`, `ACTION.FILTER.BELL`,
+    `ACTION.LFE.CORRECTIVE_FILTER`, and `PARAM.EQ.PHASE_MODE` to the ontology
+    and packaged data copies.
+  - Safe-render now treats LFE corrective filters as explicit-approval actions,
+    applies them only in a post-render LFE-only pass, re-runs deterministic
+    translation QA, and records refused step-down attempts when QA gets worse.
+  - Added `PLUGIN.DETECTOR.LFE_CORRECTIVE` and `PLUGIN.RESOLVER.LFE_CORRECTIVE`
+    so measured LFE out-of-band / infrasonic / excessive low-band content
+    produces high-impact corrective recommendations with rollback metadata.
+  - Added deterministic `fixtures/lfe_explicit/` and `fixtures/lfe_out_of_band/`
+    WAV inputs plus `tests/test_lfe_corrective_approval.py` to pin
+    blocked-without-approval, applied-with-approval-and-re-QA, and explicit-LFE
+    no-silent-fix behavior.
 
 - Medium/high recommendation contract + approval receipts:
-  - Safe-render recommendations now carry explicit `impact`, `scope`,
-    `deltas`, and rollback metadata in the report/receipt contract, with
-    medium/high items normalized to include exact parameter deltas even when
-    the original report only supplied legacy `risk` + `params`.
-  - Medium/high recommendations no longer auto-apply by default; safe-render
-    now requires explicit per-recommendation approval via `--approve-rec` or
+  - Safe-render recommendations now carry explicit `impact`, `scope`, `deltas`,
+    and rollback metadata in the report/receipt contract, with medium/high items
+    normalized to include exact parameter deltas even when the original report
+    only supplied legacy `risk` + `params`.
+  - Medium/high recommendations no longer auto-apply by default; safe-render now
+    requires explicit per-recommendation approval via `--approve-rec` or
     `--approve-file` (while retaining legacy `--approve` compatibility).
-  - Safe-render receipts now list `eligible`, `blocked`, `approved_by_user`,
-    and `applied` recommendation entries so approval outcomes are explainable
+  - Safe-render receipts now list `eligible`, `blocked`, `approved_by_user`, and
+    `applied` recommendation entries so approval outcomes are explainable
     alongside rollback steps.
   - Added `tests/test_authority_gates.py` to pin the medium-impact approval
     gate, receipt delta disclosure, and approval-file flow.
-  - Spatial routing/object-bed recommendations now carry
-    `spatial_change` + `required_lock_ids`, escalate to high-impact under
-    `PROFILE.ASSIST` unless matching scene-build locks are present, and stay
-    approval-unblockable through the existing `--approve-rec` flow.
+  - Spatial routing/object-bed recommendations now carry `spatial_change` +
+    `required_lock_ids`, escalate to high-impact under `PROFILE.ASSIST` unless
+    matching scene-build locks are present, and stay approval-unblockable
+    through the existing `--approve-rec` flow.
   - Added `tests/test_spatial_high_impact.py` to pin object-to-bed
-    reclassification, surround-send threshold blocking, explicit lock
-    linkage, and permissive-profile behavior.
+    reclassification, surround-send threshold blocking, explicit lock linkage,
+    and permissive-profile behavior.
 
 - Lock-precedence single source of truth + regression matrix:
   - Added `src/mmo/core/precedence.py` as the shared lock/explicit/suggested/
     inferred merge path with canonical receipt sources
-    `locked | explicit | suggested | inferred`, plus
-    `original_value` / `applied_value` / `lock_id` receipt fields.
+    `locked | explicit | suggested | inferred`, plus `original_value` /
+    `applied_value` / `lock_id` receipt fields.
   - `scene build`, `safe-render`, placement-policy receipt propagation, and
     renderer entrypoints now re-apply precedence so locks win across templated
     scene suggestions, explicit scene payloads, resolver/plugin eligibility
@@ -271,10 +303,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Added `LAYOUT.32CH` plus generic `SPK.CH01..SPK.CH32` ontology entries so
     MMO can resolve a deterministic 32-channel placeholder layout through the
     packaged data path.
-  - Placement policy/rendering now falls back to a deterministic front-safe
-    pair when a high-channel-count layout has no semantic `SPK.L`/`SPK.R`
-    speakers, allowing end-to-end `LAYOUT.32CH` export without inventing a
-    fake speaker standard.
+  - Placement policy/rendering now falls back to a deterministic front-safe pair
+    when a high-channel-count layout has no semantic `SPK.L`/`SPK.R` speakers,
+    allowing end-to-end `LAYOUT.32CH` export without inventing a fake speaker
+    standard.
   - Added `tests/test_32ch_end_to_end.py` as a byte-stable regression tripwire
     that renders a 32-channel WAV, asserts `nchannels == 32`, checks manifest
     `channel_order` length `32`, and pins SHA-256 stability across two runs.
@@ -289,36 +321,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `dither_policy`, seed-derivation inputs, clamp behavior, and
     `target_peak_dbfs` when applicable).
   - `render_report.stage_evidence[*].evidence` now carries the planned/exported
-    finalization receipt for the `export_finalize` stage so bit depth and
-    dither policy are disclosed in the deterministic report contract.
+    finalization receipt for the `export_finalize` stage so bit depth and dither
+    policy are disclosed in the deterministic report contract.
 
 - Deterministic `render_report` stage reporting:
   - Added optional top-level `stage_metrics` and `stage_evidence` sections to
     `render_report` with stable `(job_id, stage_id, where)` ordering, covering
     `planning`, `resampling`, `dsp_hooks`, `export_finalize`, and `qa_gates`.
   - Extended the render-report builders so plan-derived reports emit
-    deterministic stage placeholders while the runtime render engine now
-    threads DSP dispatch/hook evidence and stage-like metrics into the final
-    report payload.
+    deterministic stage placeholders while the runtime render engine now threads
+    DSP dispatch/hook evidence and stage-like metrics into the final report
+    payload.
   - Added opt-in `wall_clock` report support with an explicit non-deterministic
     disclaimer; default report generation remains wall-clock free so golden
     determinism tests stay byte-stable.
 
 - Typed `AudioBufferF64` transport for renderer/plugin-chain audio boundaries:
-  baseline mixdown, placement mixdown, and gain-trim renderer chunk handling
-  now use explicit interleaved buffer metadata (`channel_order`,
-  `channel_count`, `sample_rate_hz`) instead of ad hoc raw-list math, and the
-  stereo plugin-chain runner now centralizes deterministic typed-buffer
-  conversion at the plugin boundary.
+  baseline mixdown, placement mixdown, and gain-trim renderer chunk handling now
+  use explicit interleaved buffer metadata (`channel_order`, `channel_count`,
+  `sample_rate_hz`) instead of ad hoc raw-list math, and the stereo plugin-chain
+  runner now centralizes deterministic typed-buffer conversion at the plugin
+  boundary.
 
 - DSP `ProcessContext` routing contract:
   - Added `src/mmo/dsp/process_context.py` as the ontology-backed DSP truth
     object (`layout_id`, `layout_standard`, `channel_order`, `sample_rate_hz`,
     `seed`) with semantic speaker/group lookup helpers.
   - Refactored `src/mmo/core/dsp_dispatch.py` to build per-stem processing
-    context from layout metadata instead of a hard-coded preset layout map,
-    and to emit `StemResult.channel_order` alongside derived LFE/height
-    indices.
+    context from layout metadata instead of a hard-coded preset layout map, and
+    to emit `StemResult.channel_order` alongside derived LFE/height indices.
   - Extended plugin contracts so DSP stages can receive `process_ctx` while
     preserving `LayoutContext` compatibility for existing multichannel plugins.
   - Removed fallback renderer layout-order maps in the baseline and placement
@@ -326,11 +357,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     channel order consistently, including 9.1.6.
 
 - Tauri desktop design-system + ergonomics CI:
-  - Reworked `gui/desktop-tauri` into explicit `Dashboard` / `Presets` /
-    `Run` / `Compare` screens with machine-readable widget ids, ontology-driven
-    theme tokens, and the required control family:
-    knob, slider, toggle, segmented selector, XY pad, preset browser, A/B
-    toggle, and value readout.
+  - Reworked `gui/desktop-tauri` into explicit `Dashboard` / `Presets` / `Run` /
+    `Compare` screens with machine-readable widget ids, ontology-driven theme
+    tokens, and the required control family: knob, slider, toggle, segmented
+    selector, XY pad, preset browser, A/B toggle, and value readout.
   - Added direct numeric entry for drag controls, visible units on numeric
     widgets, fine-adjust modifier feedback, and a global GUI scale control with
     `90% / 100% / 115%` presets.
@@ -340,22 +370,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     numeric units/direct-entry metadata, or spacing below the declared design
     tokens.
   - Added Playwright desktop UI tests for breakpoint visibility, overlap
-    tripwires, units visibility, direct numeric entry, fine-adjust behavior,
-    and global scale switching, and wired browser installation into the desktop
-    CI job.
+    tripwires, units visibility, direct numeric entry, fine-adjust behavior, and
+    global scale switching, and wired browser installation into the desktop CI
+    job.
 
 - Web GUI dashboard meter bridge + Canvas2D stage/audition visualizers:
   - Added a Canvas2D meter bridge in `gui/web` that extracts peak, RMS,
-    true-peak, and LUFS rows from scan reports and render QA artifacts, with
-    a compact LUFS spread view and scene-distribution summary.
+    true-peak, and LUFS rows from scan reports and render QA artifacts, with a
+    compact LUFS spread view and scene-distribution summary.
   - Replaced the web scene preview SVG with a Canvas2D stage view that shows
     objects vs. bed energy, confidence-weighted object labels, selected layout
     speakers, and audience/on-stage/band/orchestra perspective changes.
   - Added audition waveform and spectrum overlays for selected input/output
     pointers, preferring `render_qa.json` spectral data and falling back to
     bounded local audio decode for waveform extraction when possible.
-  - Added GUI regression coverage for the new dashboard/audition helper
-    modules in `gui/tests/dashboard_visuals.test.mjs` and
+  - Added GUI regression coverage for the new dashboard/audition helper modules
+    in `gui/tests/dashboard_visuals.test.mjs` and
     `gui/tests/audition_overlays.test.mjs`.
 
 - GUI parity checklist + CI contract:
@@ -379,9 +409,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Tauri MMO sidecar packaging + Doctor screen:
   - Added a Tauri sidecar preparation flow that freezes the `mmo` CLI with
-    bundled `mmo.data` using the existing Python binary builder, then stages
-    the result under `gui/desktop-tauri/src-tauri/binaries/` using the exact
-    Rust target triple that Tauri expects for `bundle.externalBin`.
+    bundled `mmo.data` using the existing Python binary builder, then stages the
+    result under `gui/desktop-tauri/src-tauri/binaries/` using the exact Rust
+    target triple that Tauri expects for `bundle.externalBin`.
   - Wired `tauri.conf.json`, Rust plugin initialization, capabilities, and the
     desktop package scripts so `tauri dev` / `tauri build` can execute the
     packaged `mmo` sidecar through `@tauri-apps/plugin-shell`.
@@ -389,8 +419,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `mmo --version`, `mmo plugins validate --bundled-only`, and
     `mmo env doctor --format json`, then displays the bundled plugins path and
     resolved runtime data/cache/temp paths reported by the sidecar itself.
-  - Added `mmo --version` plus a deterministic `mmo plugins validate`
-    contract so packaged desktop flows can verify bundled plugin manifests and
+  - Added `mmo --version` plus a deterministic `mmo plugins validate` contract
+    so packaged desktop flows can verify bundled plugin manifests and
     entrypoints without relying on external Python installs.
   - Replaced the doctor-only desktop surface with a direct sidecar workflow
     screen that prepares a project scaffold, validates project artifacts,
@@ -407,36 +437,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Tauri workflow parity completion:
   - Replaced the placeholder desktop shell with first-class `Validate`,
-    `Analyze`, `Scene`, `Render`, `Results`, and `Compare` screens wired to
-    the packaged sidecar commands and the real workspace artifacts those CLI
-    flows produce.
-  - Results now surfaces generated artifact paths, final receipt context,
-    render QA summaries, and a deterministic "what changed" view tied back to
-    emitted output artifacts.
+    `Analyze`, `Scene`, `Render`, `Results`, and `Compare` screens wired to the
+    packaged sidecar commands and the real workspace artifacts those CLI flows
+    produce.
+  - Results now surfaces generated artifact paths, final receipt context, render
+    QA summaries, and a deterministic "what changed" view tied back to emitted
+    output artifacts.
   - Compare now accepts real report/render artifacts, invokes the existing
     compare contract, and discloses any loudness compensation derived from the
     paired render QA artifacts for A/B evaluation.
   - Scene now exposes generated `scene.json` plus lint and lock context in a
-    read-only deterministic explainer view, and the Tauri app reads/writes
-    those JSON artifacts through `@tauri-apps/plugin-fs` with explicit
-    cross-platform capability allowlists.
-  - Added authored layout manifests and desktop regression coverage for the
-    new workflow screens, artifact import/rendering, and compare/result
-    behaviors, and updated `docs/gui_parity.md` to mark the completed screens
-    while leaving primary-GUI scene-lock editing as the remaining open item.
+    read-only deterministic explainer view, and the Tauri app reads/writes those
+    JSON artifacts through `@tauri-apps/plugin-fs` with explicit cross-platform
+    capability allowlists.
+  - Added authored layout manifests and desktop regression coverage for the new
+    workflow screens, artifact import/rendering, and compare/result behaviors,
+    and updated `docs/gui_parity.md` to mark the completed screens while leaving
+    primary-GUI scene-lock editing as the remaining open item.
 
-### Fixed
+### Fixed (GUI CLI passthrough and explicit scene inputs)
 
 - Placement scene safe-render regressions:
-  - `scene build --templates` now preserves template-authored fields outside
-    the precedence-merged subset (for example `loudness_bias`) and applies
-    locks on top of the fully templated scene instead of discarding
-    non-precedence template data.
+  - `scene build --templates` now preserves template-authored fields outside the
+    precedence-merged subset (for example `loudness_bias`) and applies locks on
+    top of the fully templated scene instead of discarding non-precedence
+    template data.
   - Placement subbus export now threads the renderer `session` through the
     subbus helper so explicit-scene `safe-render --export-buses` no longer
     raises a `NameError`.
 
-### Added
+### Added (continued)
 
 - Ontology additive-change enforcement:
   - Added `tools/validate_ontology_changes.py` to diff ontology IDs against
@@ -448,14 +478,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Immersive golden-path small fixture + hash tripwire:
   - Added `fixtures/golden_path_small/` with deterministic generated stems
-    (`kick`, `snare`, `bass_di`, `pad_stereo_wide`, `sfx_stereo`) plus
-    expected per-layout WAV hash snapshots for
-    `LAYOUT.2_0/5_1/7_1/7_1_4/9_1_6`.
+    (`kick`, `snare`, `bass_di`, `pad_stereo_wide`, `sfx_stereo`) plus expected
+    per-layout WAV hash snapshots for `LAYOUT.2_0/5_1/7_1/7_1_4/9_1_6`.
   - Added `tests/test_cli_immersive_golden_path_small.py` to enforce
-    `stems classify -> stems bus-plan -> scene build -> scene template apply
-    (audience) -> safe-render --render-many` determinism, channel-count
-    contracts, and rendered downmix-similarity pass/backoff assertions when
-    optional truth-meter dependencies are installed.
+    `stems classify -> stems bus-plan -> scene build -> scene template apply (audience) -> safe-render --render-many`
+    determinism, channel-count contracts, and rendered downmix-similarity
+    pass/backoff assertions when optional truth-meter dependencies are
+    installed.
 
 - Scene-aware safe-render debug artifact exports:
   - Added `safe-render` flags `--export-stems`, `--export-buses`,
@@ -468,28 +497,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     (`stem -> subbus -> BUS.MAIN -> object/bed`) derived from render intent +
     scene context.
 - Optional deterministic immersive bed decorrelation plugin:
-  - Added renderer option `render_export_options.decorrelated_bed_widening`
-    for seeded decorrelated widening on qualifying bed stems
-    (`BED.*` + content hints + confidence threshold).
-  - Added hard QA gate integration against rendered stereo reference:
-    run rendered surround similarity gate, apply bounded backoff retry, and
+  - Added renderer option `render_export_options.decorrelated_bed_widening` for
+    seeded decorrelated widening on qualifying bed stems (`BED.*` + content
+    hints + confidence threshold).
+  - Added hard QA gate integration against rendered stereo reference: run
+    rendered surround similarity gate, apply bounded backoff retry, and
     auto-disable/rerender without the plugin when gate failure persists.
   - Added placement renderer regression coverage for confidence gating,
     deterministic output stability, and QA-triggered auto-disable behavior.
 
 - Scene QA lint command for pre-render validation:
-  - Added `mmo scene lint --scene <scene.json> [--scene-locks <scene_locks.yaml|json>] [--out <report.json>]`.
-  - Lint checks now cover missing stem references, duplicate object/bus references,
-    azimuth/width/depth range issues, lock conflicts against role/bus/layout
-    assumptions, low-confidence critical anchors (warn), and immersive
-    perspective without bed/ambient candidates (warn).
+  - Added
+    `mmo scene lint --scene <scene.json> [--scene-locks <scene_locks.yaml|json>] [--out <report.json>]`.
+  - Lint checks now cover missing stem references, duplicate object/bus
+    references, azimuth/width/depth range issues, lock conflicts against
+    role/bus/layout assumptions, low-confidence critical anchors (warn), and
+    immersive perspective without bed/ambient candidates (warn).
   - Lint now also checks missing stem IDs/files, conflicting per-stem bus locks,
     immersive perspective with no template evidence (warn), and immersive
     low-confidence perspective intent (warn).
   - `safe-render` now runs scene lint automatically for explicit `--scene`
     preflight inputs and `--scene-strict` fails fast when lint reports errors.
-  - Added deterministic report generation + stable issue ordering with CLI
-    exit code `2` on lint errors and `0` for warnings-only results.
+  - Added deterministic report generation + stable issue ordering with CLI exit
+    code `2` on lint errors and `0` for warnings-only results.
   - Added CLI regression coverage for deterministic lint payload output and
     warnings-only non-failing behavior.
 
@@ -504,28 +534,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     field preservation.
 
 - Desktop GUI Scene Preview v1 (read-only):
-  - Desktop GUI post-analyze flow now runs deterministic `scene build` + `scene lint`
-    from `_mmo_gui/stems_map.json` + `_mmo_gui/bus_plan.json` and writes
-    `_mmo_gui/scene.json` + `_mmo_gui/scene_lint.json`.
+  - Desktop GUI post-analyze flow now runs deterministic `scene build` +
+    `scene lint` from `_mmo_gui/stems_map.json` + `_mmo_gui/bus_plan.json` and
+    writes `_mmo_gui/scene.json` + `_mmo_gui/scene_lint.json`.
   - Added a read-only `Scene` tab that surfaces scene perspective, object
     azimuth/width/depth/confidence rows, bed-bus listing (with content hints),
-    and warning-level scene-lint issues for explainable object-vs-bed intent review.
+    and warning-level scene-lint issues for explainable object-vs-bed intent
+    review.
   - Added GUI smoke coverage for scene CLI argv wiring and deterministic
     scene-summary rendering.
 
-### Fixed
+### Fixed (continued)
 
 - GUI `-m mmo*` passthrough no longer executes modules via `runpy`:
-  - Passthrough now imports target modules and calls callable `main()` entrypoints
-    directly, preserving prior exit-code behavior while avoiding
-    `RuntimeWarning: '<module>' found in sys.modules ...` noise in smoke/CI logs.
+  - Passthrough now imports target modules and calls callable `main()`
+    entrypoints directly, preserving prior exit-code behavior while avoiding
+    `RuntimeWarning: '<module>' found in sys.modules ...` noise in smoke/CI
+    logs.
   - Added GUI smoke regression coverage that preloads a tool module and asserts
     passthrough help dispatch emits no `runpy` warning text.
   - (`src/mmo/gui/main.py`, `tests/test_gui_smoke.py`)
 
 - `safe-render` now supports first-class explicit scene inputs:
-  - Added `--scene <scene.json>`, `--scene-locks <scene_locks.yaml|json>`,
-    and `--scene-strict`.
+  - Added `--scene <scene.json>`, `--scene-locks <scene_locks.yaml|json>`, and
+    `--scene-strict`.
   - Explicit scene input now takes precedence over implicit scene rebuilds.
   - When scene locks are provided, lock overrides are applied before placement
     policy evaluation.
@@ -535,13 +567,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Safe-render zero-output contract is now explicit and fail-safe:
   - Added `ISSUE.RENDER.NO_OUTPUTS` emission when full safe-render renderer
     stage writes zero outputs.
-  - Full safe-render now exits non-zero by default on `outputs=0`, with
-    explicit override via `--allow-empty-outputs`.
-  - Desktop GUI now surfaces a persistent warning banner with receipt-path
-    link behavior whenever final safe-render returns non-zero or emits
+  - Full safe-render now exits non-zero by default on `outputs=0`, with explicit
+    override via `--allow-empty-outputs`.
+  - Desktop GUI now surfaces a persistent warning banner with receipt-path link
+    behavior whenever final safe-render returns non-zero or emits
     `ISSUE.RENDER.NO_OUTPUTS`.
-  - Added regression coverage for stub-only renderer runs to assert
-    non-zero exit and receipt issue presence.
+  - Added regression coverage for stub-only renderer runs to assert non-zero
+    exit and receipt issue presence.
 
 - Scene build locks now preserve full per-stem `bus_id` identity in scene
   objects/receipts (for example `BUS.DRUMS.KICK`) while still deriving
@@ -554,9 +586,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `ROLE.DRUM.KICK` + `BUS.DRUMS.KICK` overrides.
 
 - Placement scene/render stereo imaging is now preserved end-to-end:
-  - Added deterministic stereo feature extraction (`src/mmo/core/stem_features.py`)
-    using L/R correlation + side/mid ratio for `width_hint` and ILD-window
-    analysis for `azimuth_hint`.
+  - Added deterministic stereo feature extraction
+    (`src/mmo/core/stem_features.py`) using L/R correlation + side/mid ratio for
+    `width_hint` and ILD-window analysis for `azimuth_hint`.
   - `build_scene_from_session()` now infers stereo hints from actual stereo WAV
     stems when confidence is high enough, writes `object.width_hint` and
     `object.azimuth_hint`, and stores metric/value evidence in
@@ -566,72 +598,72 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     use deterministic mid/side routing that keeps stereo side energy in L/R.
   - Side wrap remains conservative: by default there is no surround leakage for
     anchor-like objects; optional tiny wide-channel wrap only engages when
-    immersive perspective (`in_band`/`in_orchestra`) and high confidence are present.
+    immersive perspective (`in_band`/`in_orchestra`) and high confidence are
+    present.
   - Added regression coverage for scene hint evidence + confidence gating and
     stereo render energy-ratio preservation / wrap behavior.
   - Placement renderer mixdown now uses deterministic two-pass streaming
-    (`chunk_frames=4096`): pass 1 scans mixed chunk peaks, pass 2 writes
-    trimmed PCM24 directly to the wave writer, avoiding full-program
-    in-memory accumulation on long sessions.
-  - Placement and baseline mixdown renderers now share a lossless
-    multiformat decode abstraction (`wav`, `flac`, `wv`, `aiff`/`aif`,
-    `ape`) and no longer skip stems solely for sample-rate mismatches.
-- Added deterministic sample-rate policy + SRC receipts:
-    explicit session override when provided, otherwise deterministic
-    `44.1k`-family vs `48k`-family selection followed by exact-rate majority
-    with upward tiebreak inside the winning family; mismatched stems are
-    resampled with deterministic linear interpolation and decisions are
-    recorded in renderer metadata/warnings and promoted into per-job
-    `render_report` `resampling_receipt` payloads.
+    (`chunk_frames=4096`): pass 1 scans mixed chunk peaks, pass 2 writes trimmed
+    PCM24 directly to the wave writer, avoiding full-program in-memory
+    accumulation on long sessions.
+  - Placement and baseline mixdown renderers now share a lossless multiformat
+    decode abstraction (`wav`, `flac`, `wv`, `aiff`/`aif`, `ape`) and no longer
+    skip stems solely for sample-rate mismatches.
+- Added deterministic sample-rate policy + SRC receipts: explicit session
+  override when provided, otherwise deterministic `44.1k`-family vs `48k`-family
+  selection followed by exact-rate majority with upward tiebreak inside the
+  winning family; mismatched stems are resampled with deterministic linear
+  interpolation and decisions are recorded in renderer metadata/warnings and
+  promoted into per-job `render_report` `resampling_receipt` payloads.
   - Added regression coverage for mixed-lossless session rendering and
     deterministic sample-rate selection/resampling behavior.
 
 ### Added
 
-- Role-driven deterministic seating templates and immersive-aware placement routing:
+- Role-driven deterministic seating templates and immersive-aware placement
+  routing:
   - Added scene-template registry entries:
     `TEMPLATE.SEATING.ORCHESTRA_AUDIENCE`,
     `TEMPLATE.SEATING.ORCHESTRA.IN_ORCHESTRA`, and
-    `TEMPLATE.SEATING.BAND.IN_BAND` (root + packaged ontology mirror),
-    including scene perspective patches and per-role azimuth regions.
+    `TEMPLATE.SEATING.BAND.IN_BAND` (root + packaged ontology mirror), including
+    scene perspective patches and per-role azimuth regions.
   - Extended scene-template contracts to support role/content matching
-    (`role_id`, `role_regex`, `stem_id`, `group_bus`, `bus_id`,
-    `content_hint`) and generalized template IDs to `TEMPLATE.*`
-    (schemas + packaged mirrors + UI bundle schema pattern updates).
+    (`role_id`, `role_regex`, `stem_id`, `group_bus`, `bus_id`, `content_hint`)
+    and generalized template IDs to `TEMPLATE.*` (schemas + packaged mirrors +
+    UI bundle schema pattern updates).
   - Placement policy now consumes template-applied azimuth intent and
-    deterministic role defaults to route object sends by region across
-    L/C/R, LS/RS, LRS/RRS, and LW/RW (where available), with perspective
-    gating so brass/percussion rear bias activates only in `in_orchestra`.
+    deterministic role defaults to route object sends by region across L/C/R,
+    LS/RS, LRS/RRS, and LW/RW (where available), with perspective gating so
+    brass/percussion rear bias activates only in `in_orchestra`.
   - Added deterministic section slot spreading so dense/odd instrument sets
-    distribute naturally instead of collapsing to one point, and added
-    explicit rare-role placement coverage through new roles:
-    `ROLE.BRASS.TUBA`, `ROLE.WINDS.BAGPIPE`,
-    `ROLE.WINDS.DIDGERIDOO`, `ROLE.WINDS.DUDUK`,
-    `ROLE.WINDS.PAN_FLUTE`, `ROLE.WINDS.SHAKUHACHI`,
-    `ROLE.WW.BASSOON`, `ROLE.WW.OBOE`, and `ROLE.WW.PICCOLO`.
+    distribute naturally instead of collapsing to one point, and added explicit
+    rare-role placement coverage through new roles: `ROLE.BRASS.TUBA`,
+    `ROLE.WINDS.BAGPIPE`, `ROLE.WINDS.DIDGERIDOO`, `ROLE.WINDS.DUDUK`,
+    `ROLE.WINDS.PAN_FLUTE`, `ROLE.WINDS.SHAKUHACHI`, `ROLE.WW.BASSOON`,
+    `ROLE.WW.OBOE`, and `ROLE.WW.PICCOLO`.
   - Expanded role ontology + stem inference coverage for uncommon/rare
     instruments across strings (bowed/plucked/struck/harp families), brass
     variants (cornet/flugelhorn/euphonium), woodwinds (bass clarinet,
-    contrabassoon, English horn, recorder/ocarina/whistle), free-reed keys,
-    and mallet/latin/world percussion so large mixed stem sets classify into
+    contrabassoon, English horn, recorder/ocarina/whistle), free-reed keys, and
+    mallet/latin/world percussion so large mixed stem sets classify into
     deterministic stage families without dropping to unknown.
-  - Added hybrid stress coverage for `INTENT.PERSPECTIVE=in_orchestra`
-    template placement (mixed orchestral + band + rare instruments), and
-    refreshed stems-small render-plan hash expectations so the deterministic
-    self-dogfood regression harness stays aligned with the expanded role map.
-  - Bed overhead sends are now hall/room-focused and capped; non-hall/room
-    beds stay surround-only by default (object heights remain bed-first).
-  - Added regression coverage for mini-orchestra stems-map → scene → template
-    → placement behavior, including violin left bias and brass rear bias only
-    in `in_orchestra`.
+  - Added hybrid stress coverage for `INTENT.PERSPECTIVE=in_orchestra` template
+    placement (mixed orchestral + band + rare instruments), and refreshed
+    stems-small render-plan hash expectations so the deterministic self-dogfood
+    regression harness stays aligned with the expanded role map.
+  - Bed overhead sends are now hall/room-focused and capped; non-hall/room beds
+    stay surround-only by default (object heights remain bed-first).
+  - Added regression coverage for mini-orchestra stems-map → scene → template →
+    placement behavior, including violin left bias and brass rear bias only in
+    `in_orchestra`.
 
 - Scene builder + conservative surround bed routing contract hardening:
   - Scene schema now allows deterministic bed-to-stem mapping via
     `beds[].stem_ids` (root schema + packaged mirror).
   - `mmo scene build --map <stems_map.json> --bus <bus_plan.json> --out <scene.json>`
-    now emits stricter conservative classification behavior:
-    bed candidates include pads/ambience/room/long-SFX/drones/crowds/reverbs;
-    unknowns remain low-confidence objects with no placement hints.
+    now emits stricter conservative classification behavior: bed candidates
+    include pads/ambience/room/long-SFX/drones/crowds/reverbs; unknowns remain
+    low-confidence objects with no placement hints.
   - Placement policy v1 now enforces front-only object routing, subtle
     deterministic bed surround/height sends (capped, ~-12 dB relative), and
     confidence/lock-based surround-disable behavior.
@@ -652,37 +684,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `overhead_sends`, and `why` evidence arrays for deterministic receipts.
 
 - GUI scene-intent preview contract + web rendering:
-  - Added deterministic `scene_preview` payload in `ui_bundle.json` with
-    layout options for `LAYOUT.5_1`, `LAYOUT.7_1`, `LAYOUT.7_1_4`, and
-    `LAYOUT.9_1_6`, plus per-object confidence/position rows and bed energy.
+  - Added deterministic `scene_preview` payload in `ui_bundle.json` with layout
+    options for `LAYOUT.5_1`, `LAYOUT.7_1`, `LAYOUT.7_1_4`, and `LAYOUT.9_1_6`,
+    plus per-object confidence/position rows and bed energy.
   - Added scene-preview warnings for low confidence and missing lock coverage.
   - Web GUI now renders a top-down scene view with layout selector, labeled
     object dots (confidence), and bed halo visualization before audition.
 
 - Stems-small real-world naming regression fixture chain:
-  - Added compact redistributable fixture sessions under
-    `fixtures/stems_small/` covering numeric suffixes and compound naming
-    patterns observed in real inventories (`ElecGtr`, `BackingVox`,
-    `Synth*`, `SFX`, `BassDI`, drum mic variants).
-  - Added deterministic expected snapshots:
-    `fixtures/expected_bus_plan.json` and `fixtures/expected_scene.json`.
-  - Added CI regression coverage in `tests/test_stems_small_regression.py`
-    for stems->bus-plan->scene snapshots, SHA-256 output hashing, target-chain
+  - Added compact redistributable fixture sessions under `fixtures/stems_small/`
+    covering numeric suffixes and compound naming patterns observed in real
+    inventories (`ElecGtr`, `BackingVox`, `Synth*`, `SFX`, `BassDI`, drum mic
+    variants).
+  - Added deterministic expected snapshots: `fixtures/expected_bus_plan.json`
+    and `fixtures/expected_scene.json`.
+  - Added CI regression coverage in `tests/test_stems_small_regression.py` for
+    stems->bus-plan->scene snapshots, SHA-256 output hashing, target-chain
     render-plan determinism (`2.0/5.1/7.1/7.1.4/9.1.6`), and passing downmix
     gate checks for downmix targets.
 
 - Conservative immersive height render targets and strict fallback routing:
-  - Added `TARGET.IMMERSIVE.9_1_6` plus bed-first fallback notes for `TARGET.IMMERSIVE.7_1_4` / `TARGET.IMMERSIVE.9_1_6` in render target registries.
-  - Added `LAYOUT.9_1_6` downmix conversions (`-> 7.1.4`, `-> 7.1`, `-> 5.1`, `-> 2.0`) and conservative immersive matrices in the fold-down policy pack, including a bed-first `9.1.6 -> 7.1.4` path.
-  - Added regression coverage for immersive target registration, `9.1.6` shorthand token resolution, and downmix conversion inventory/fallback path assertions.
+  - Added `TARGET.IMMERSIVE.9_1_6` plus bed-first fallback notes for
+    `TARGET.IMMERSIVE.7_1_4` / `TARGET.IMMERSIVE.9_1_6` in render target
+    registries.
+  - Added `LAYOUT.9_1_6` downmix conversions (`-> 7.1.4`, `-> 7.1`, `-> 5.1`,
+    `-> 2.0`) and conservative immersive matrices in the fold-down policy pack,
+    including a bed-first `9.1.6 -> 7.1.4` path.
+  - Added regression coverage for immersive target registration, `9.1.6`
+    shorthand token resolution, and downmix conversion inventory/fallback path
+    assertions.
 
 - Scene build lock/override contract for intent steering:
   - Added `mmo scene build --locks <scene_locks.yaml>` support for both
     `--report` and `--map/--bus` build paths.
   - Added `src/mmo/core/locks.py` with deterministic override loading and
-    precedence resolution (`locks > explicit metadata > inference`) for
-    per-stem `role_id`, `bus_id`, placement (`azimuth_deg`, `width`, `depth`),
-    surround send caps, and height send caps.
+    precedence resolution (`locks > explicit metadata > inference`) for per-stem
+    `role_id`, `bus_id`, placement (`azimuth_deg`, `width`, `depth`), surround
+    send caps, and height send caps.
   - Extended `scene.schema.json` (plus packaged mirror) with
     `intent.surround_send_caps` / `intent.height_send_caps` /
     `intent.perspective` and richer `metadata.locks_receipt` sources so scene
@@ -699,25 +737,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - DSP pipeline hook scaffold with strict bounded authority:
   - Added strict `schemas/plugin_manifest.json` (plus packaged mirror) for DSP
-    hook plugin manifests (`schema_version`, `stage_scope`, authority,
-    evidence contract, and parameter bounds).
+    hook plugin manifests (`schema_version`, `stage_scope`, authority, evidence
+    contract, and parameter bounds).
   - Added deterministic bus-aware hook runner at
     `src/mmo/core/dsp_pipeline_hooks.py` with three canonical stages:
-    `pre_bus_stem`, `bus`, and `post_master`, including authority refusal
-    paths and explainable `what/why/where/confidence` events.
-  - Added one low-risk default plugin:
-    `DSP.PLUGIN.HPF_RUMBLE_GUARD_V0` (conservative high-pass planning only for
-    non-bass roles when rumble evidence confidence is high).
+    `pre_bus_stem`, `bus`, and `post_master`, including authority refusal paths
+    and explainable `what/why/where/confidence` events.
+  - Added one low-risk default plugin: `DSP.PLUGIN.HPF_RUMBLE_GUARD_V0`
+    (conservative high-pass planning only for non-bass roles when rumble
+    evidence confidence is high).
   - Wired render-engine stem dispatch flow to execute DSP hooks and emit DSP
     explainability events through `ProgressTracker` logs.
-  - Added deterministic coverage in
-    `tests/test_dsp_pipeline_hooks.py` and
+  - Added deterministic coverage in `tests/test_dsp_pipeline_hooks.py` and
     `tests/test_render_engine_dsp_hooks.py`.
 
 - Downmix similarity gate framework for rendered surround vs stereo reference:
-  - Added deterministic rendered-audio gate metrics for
-    `loudness delta`, `correlation over time`, `coarse-band spectral distance`,
-    `peak delta`, and `true-peak delta`.
+  - Added deterministic rendered-audio gate metrics for `loudness delta`,
+    `correlation over time`, `coarse-band spectral distance`, `peak delta`, and
+    `true-peak delta`.
   - Added one-shot bounded fallback for `LAYOUT.5_1`/`LAYOUT.7_1` that reduces
     surround channel sends and re-runs similarity once.
   - Wired render-many workflow to run these checks when stereo + surround
@@ -726,16 +763,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     downmix policies in ontology contract + packaged mirror.
 
 - Baseline mixdown renderer for safe-render zero-recommendation runs:
-  - Added `PLUGIN.RENDERER.MIXDOWN_BASELINE` with `true_multichannel`
-    capability metadata (`max_channels: 16`) and deterministic headroom
-    policy (`worst_case_peak_sum -> -1 dBFS`, fallback `-12 dB` trim).
-  - Added `src/mmo/plugins/renderers/mixdown_renderer.py` to write
-    conservative layout masters:
-    `LAYOUT_2_0/master.wav`, `LAYOUT_5_1/master.wav`, `LAYOUT_7_1/master.wav`,
-    `LAYOUT_7_1_4/master.wav`, and `LAYOUT_9_1_6/master.wav`
-    (always emitted per run, even with zero eligible recommendations).
-  - Added fixture-driven safe-render coverage for baseline output existence
-    and deterministic output hashes.
+  - Added `PLUGIN.RENDERER.MIXDOWN_BASELINE` with `true_multichannel` capability
+    metadata (`max_channels: 16`) and deterministic headroom policy
+    (`worst_case_peak_sum -> -1 dBFS`, fallback `-12 dB` trim).
+  - Added `src/mmo/plugins/renderers/mixdown_renderer.py` to write conservative
+    layout masters: `LAYOUT_2_0/master.wav`, `LAYOUT_5_1/master.wav`,
+    `LAYOUT_7_1/master.wav`, `LAYOUT_7_1_4/master.wav`, and
+    `LAYOUT_9_1_6/master.wav` (always emitted per run, even with zero eligible
+    recommendations).
+  - Added fixture-driven safe-render coverage for baseline output existence and
+    deterministic output hashes.
 - Scene-driven placement mixdown renderer and immersive send expansion:
   - Added `PLUGIN.RENDERER.PLACEMENT_MIXDOWN_V1` with deterministic scene-based
     placement rendering for `LAYOUT.2_0`, `LAYOUT.5_1`, `LAYOUT.7_1`,
@@ -745,64 +782,77 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `SPK.TFL/TFR/TRL/TRR/TFC/TBC`), front-only object routing, and
     confidence-gated/capped bed sends for translation safety.
   - Extended rendered surround-similarity fallback attenuation to cover
-    immersive backoff channels (surrounds, heights, wides) for
-    `LAYOUT.7_1_4`, `LAYOUT.7_1_6`, and `LAYOUT.9_1_6` in addition to `5.1/7.1`.
+    immersive backoff channels (surrounds, heights, wides) for `LAYOUT.7_1_4`,
+    `LAYOUT.7_1_6`, and `LAYOUT.9_1_6` in addition to `5.1/7.1`.
 - Deterministic stems bus-plan artifact generator:
-  - Added `mmo stems bus-plan --map <stems_map.json> --out <bus_plan.json> [--csv <bus_plan.csv>]`
-    to build a schema-validated `mmo.bus_plan.v1` artifact from classified stems.
-  - Added `src/mmo/core/bus_plan.py` with deterministic stem ordering, fixed main-bus group
-    ordering (`DRUMS`, `BASS`, `MUSIC`, `VOX`, `FX`, `OTHER`), and drum consolidation rules
-    (`KICK`, `SNARE`, `TOMS`, `PERC`, `CYMBALS`) under `BUS.MASTER`.
+  - Added
+    `mmo stems bus-plan --map <stems_map.json> --out <bus_plan.json> [--csv <bus_plan.csv>]`
+    to build a schema-validated `mmo.bus_plan.v1` artifact from classified
+    stems.
+  - Added `src/mmo/core/bus_plan.py` with deterministic stem ordering, fixed
+    main-bus group ordering (`DRUMS`, `BASS`, `MUSIC`, `VOX`, `FX`, `OTHER`),
+    and drum consolidation rules (`KICK`, `SNARE`, `TOMS`, `PERC`, `CYMBALS`)
+    under `BUS.MASTER`.
   - Added `schemas/bus_plan.schema.json` and packaged mirror
     `src/mmo/data/schemas/bus_plan.schema.json`.
-  - Added end-to-end CLI coverage in `tests/test_cli_stems_bus_plan.py` validating schema
-    compliance and expected bus assignments for kick/snare/synth/SFX stems.
+  - Added end-to-end CLI coverage in `tests/test_cli_stems_bus_plan.py`
+    validating schema compliance and expected bus assignments for
+    kick/snare/synth/SFX stems.
 - GUI Analyze now emits and surfaces stems bus planning:
-  - Desktop GUI post-analyze stage now runs deterministic
-    `stems classify` and `stems bus-plan` into `_mmo_gui/`
-    (`stems_map.json`, `bus_plan.json`, `bus_plan.summary.csv`) before safe-render.
-  - Dashboard now shows a dedicated post-analyze `Role counts` + `Bus tree` panel,
-    and Live Log mirrors that summary for immediate review.
-  - Bus-plan hierarchy now includes `BUS.MASTER` as root, routes grouped buses under
-    that root, consolidates cymbals as `BUS.DRUMS.CYMBALS`, and collapses
+  - Desktop GUI post-analyze stage now runs deterministic `stems classify` and
+    `stems bus-plan` into `_mmo_gui/` (`stems_map.json`, `bus_plan.json`,
+    `bus_plan.summary.csv`) before safe-render.
+  - Dashboard now shows a dedicated post-analyze `Role counts` + `Bus tree`
+    panel, and Live Log mirrors that summary for immediate review.
+  - Bus-plan hierarchy now includes `BUS.MASTER` as root, routes grouped buses
+    under that root, consolidates cymbals as `BUS.DRUMS.CYMBALS`, and collapses
     `ROLE.BASS.*` to `BUS.BASS`.
-  - Added GUI smoke coverage for deterministic post-analyze CLI argv generation and
-    bus-plan summary rendering.
+  - Added GUI smoke coverage for deterministic post-analyze CLI argv generation
+    and bus-plan summary rendering.
 - Scene intent scaffolding from stems artifacts:
-  - Added `mmo scene build --map <stems_map.json> --bus <bus_plan.json> --out <scene.json> [--profile PROFILE.ASSIST]`
+  - Added
+    `mmo scene build --map <stems_map.json> --bus <bus_plan.json> --out <scene.json> [--profile PROFILE.ASSIST]`
     to generate deterministic scene intent scaffolding from bus-plan inputs.
-  - Extended `src/mmo/core/scene_builder.py` with conservative object-vs-bed classification
-    (FX/reverbs/rooms/ambience/pads/crowd -> beds; close-miked drums/bass/lead vocals -> objects;
-    unknowns remain low-confidence objects with no azimuth hint).
-  - Extended `schemas/scene.schema.json` (+ packaged mirror) with optional scene-intent
-    scaffolding fields: `generated_utc`, `source_refs`, object placement hints, bed content hints,
-    and conservative `rules` defaults.
-  - Added fixture-driven and CLI coverage in `tests/test_scene_builder_bus_plan.py` and
-    `tests/test_cli_scene.py` for schema validity, deterministic output, and conservative fallback behavior.
+  - Extended `src/mmo/core/scene_builder.py` with conservative object-vs-bed
+    classification (FX/reverbs/rooms/ambience/pads/crowd -> beds; close-miked
+    drums/bass/lead vocals -> objects; unknowns remain low-confidence objects
+    with no azimuth hint).
+  - Extended `schemas/scene.schema.json` (+ packaged mirror) with optional
+    scene-intent scaffolding fields: `generated_utc`, `source_refs`, object
+    placement hints, bed content hints, and conservative `rules` defaults.
+  - Added fixture-driven and CLI coverage in
+    `tests/test_scene_builder_bus_plan.py` and `tests/test_cli_scene.py` for
+    schema validity, deterministic output, and conservative fallback behavior.
 - Conservative surround placement policy (scene -> layout mapping):
-  - Added `src/mmo/core/placement_policy.py` with deterministic, safety-first channel-send mapping for
-    `LAYOUT.2_0`, `LAYOUT.5_1`, and `LAYOUT.7_1`.
-  - Rules keep kick/snare/bass front-safe by default, optionally anchor lead/dialogue to center,
-    apply modest surround sends for pads/ambience/long FX, and gate percussion/hihat surround sends
-    behind width/confidence thresholds.
-  - Added a transient-anchor surround-wrap exception only when both explicit immersive intent
-    (for example `intent.loudness_bias=back` / “you are there” markers) and high
-    width/depth/confidence evidence agree, with lock-aware safety overrides
-    (`LOCK.NO_STEREO_WIDENING`, `LOCK.PRESERVE_CENTER_IMAGE`, `LOCK.PRESERVE_TRANSIENTS`).
-  - `render_plan` jobs now optionally carry `render_intent` payloads, and `render_report` mirrors them
-    so placement policy can be inspected in receipts.
-  - Added fixture-driven policy coverage in `tests/test_placement_policy.py` plus integration checks in
-    `tests/test_cli_render_plan_from_request.py` and `tests/test_cli_render_report.py`.
+  - Added `src/mmo/core/placement_policy.py` with deterministic, safety-first
+    channel-send mapping for `LAYOUT.2_0`, `LAYOUT.5_1`, and `LAYOUT.7_1`.
+  - Rules keep kick/snare/bass front-safe by default, optionally anchor
+    lead/dialogue to center, apply modest surround sends for pads/ambience/long
+    FX, and gate percussion/hihat surround sends behind width/confidence
+    thresholds.
+  - Added a transient-anchor surround-wrap exception only when both explicit
+    immersive intent (for example `intent.loudness_bias=back` / “you are there”
+    markers) and high width/depth/confidence evidence agree, with lock-aware
+    safety overrides (`LOCK.NO_STEREO_WIDENING`, `LOCK.PRESERVE_CENTER_IMAGE`,
+    `LOCK.PRESERVE_TRANSIENTS`).
+  - `render_plan` jobs now optionally carry `render_intent` payloads, and
+    `render_report` mirrors them so placement policy can be inspected in
+    receipts.
+  - Added fixture-driven policy coverage in `tests/test_placement_policy.py`
+    plus integration checks in `tests/test_cli_render_plan_from_request.py` and
+    `tests/test_cli_render_report.py`.
 - User manual source added under `docs/manual/`:
-  - 15 chapters (`00-manual-overview.md` through `14-glossary.md`) covering install,
-    stems prep, the four main workflows, reports, safe-render, translation QA,
-    presets/locks, watch-folder automation, GUI walkthrough, plugins, projects,
-    and troubleshooting.
-  - `docs/manual/manual.yaml` — ordered chapter manifest (single source of chapter order).
-  - `docs/manual/glossary.yaml` — structured glossary source with terms, definitions,
-    and see-also links.
+  - 15 chapters (`00-manual-overview.md` through `14-glossary.md`) covering
+    install, stems prep, the four main workflows, reports, safe-render,
+    translation QA, presets/locks, watch-folder automation, GUI walkthrough,
+    plugins, projects, and troubleshooting.
+  - `docs/manual/manual.yaml` — ordered chapter manifest (single source of
+    chapter order).
+  - `docs/manual/glossary.yaml` — structured glossary source with terms,
+    definitions, and see-also links.
   - Fixed command flags in `docs/manual/12-projects-sessions-and-artifacts.md`:
-    `project save` and `project load` now include the required positional `project_dir`.
+    `project save` and `project load` now include the required positional
+    `project_dir`.
 - Doc accuracy fixes:
   - `docs/user_guide.md` corrected: `scan --out-report` → `scan --out`;
     `report --csv` → `export --csv`; `watch --out-dir` → `watch --out`;
@@ -811,13 +861,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `docs/README.md`: User Manual listed first in "Start here" with links to
     `manual/manual.yaml`; `user_guide.md` re-described as a quickstart pointer.
 - Strict BS.1770-5 loudness method registry and advanced-layout weighting:
-  - Added versioned loudness method registry in `src/mmo/core/loudness_methods.py`
-    with implemented `BS.1770-5` plus forward-compat placeholder IDs that fail
-    with explicit `NotImplementedError`.
+  - Added versioned loudness method registry in
+    `src/mmo/core/loudness_methods.py` with implemented `BS.1770-5` plus
+    forward-compat placeholder IDs that fail with explicit
+    `NotImplementedError`.
   - Updated truth-meter loudness entrypoints to dispatch by `method_id` instead
     of implicit hard-coded behavior.
   - Implemented BS.1770-5 Table 4 position-based `Gi` weighting from ontology
-    speaker metadata, with deterministic warning receipts when positions are unknown.
+    speaker metadata, with deterministic warning receipts when positions are
+    unknown.
   - Added `EVID.METER.LUFS_WEIGHTING_RECEIPT` for structured weighting receipts
     (method/order/mode/warnings) in scan output.
   - Extended speaker ontology metadata for immersive readiness (`SPK.TFC`,
@@ -828,54 +880,73 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `ontology/loudness_profiles.yaml` with broadcast and streaming profiles,
     including compliance vs informational classification and best-effort notes.
   - Added strict schema `schemas/loudness_profiles.schema.json` and wired
-    `render_request`/`render_plan` contracts to accept `options.loudness_profile_id`.
+    `render_request`/`render_plan` contracts to accept
+    `options.loudness_profile_id`.
   - Added `src/mmo/core/loudness_profiles.py` loader/validator with
     deterministic ordering and stable unknown-profile errors.
   - `render_report` and `render_preflight` now include
     `loudness_profile_receipt` (target, tolerance, true-peak, method, scope,
-    warnings), including clear non-fatal warnings for informational profiles
-    and not-yet-implemented metering methods.
+    warnings), including clear non-fatal warnings for informational profiles and
+    not-yet-implemented metering methods.
   - Added contributor doc `docs/21-loudness-profiles.md` describing profile
     contract semantics and no-code registry updates.
 - First-class 2.1/3.x/4.x render targets across ontology, CLI, and GUI:
-  - Added targets `TARGET.STEREO.2_1`, `TARGET.FRONT.3_0`,
-    `TARGET.FRONT.3_1`, `TARGET.SURROUND.4_0`, and
-    `TARGET.SURROUND.4_1` with deterministic token/alias resolution.
-  - Added/extended layout ordering variants for
-    `LAYOUT.2_1`, `LAYOUT.3_0`, `LAYOUT.3_1`, `LAYOUT.4_0`,
-    `LAYOUT.4_1` across SMPTE/FILM/LOGIC_PRO/VST3/AAF (SMPTE canonical).
-  - Added deterministic downmix routes for QA fold-down to stereo:
-    2.1->2.0, 3.0->2.0, 3.1->2.0, 4.0->2.0, 4.1->2.0.
+  - Added targets `TARGET.STEREO.2_1`, `TARGET.FRONT.3_0`, `TARGET.FRONT.3_1`,
+    `TARGET.SURROUND.4_0`, and `TARGET.SURROUND.4_1` with deterministic
+    token/alias resolution.
+  - Added/extended layout ordering variants for `LAYOUT.2_1`, `LAYOUT.3_0`,
+    `LAYOUT.3_1`, `LAYOUT.4_0`, `LAYOUT.4_1` across
+    SMPTE/FILM/LOGIC_PRO/VST3/AAF (SMPTE canonical).
+  - Added deterministic downmix routes for QA fold-down to stereo: 2.1->2.0,
+    3.0->2.0, 3.1->2.0, 4.0->2.0, 4.1->2.0.
   - Added regression coverage for target token resolution, render-target
-    registry inclusion, downmix-registry route resolution, and deterministic
-    GUI target picker ordering.
+    registry inclusion, downmix-registry route resolution, and deterministic GUI
+    target picker ordering.
 - Layout-standard roundtrip contract coverage:
   - Added `docs/18-channel-standards.md` to document the five standards
     (SMPTE/FILM/LOGIC_PRO/VST3/AAF), boundary conversion, and internal SMPTE
     canonical processing.
   - Added deterministic roundtrip regression matrix
     `tests/test_layout_standard_roundtrips.py` covering all multichannel
-    ontology layouts with `source -> SMPTE -> target` assertions across all
-    five standards.
+    ontology layouts with `source -> SMPTE -> target` assertions across all five
+    standards.
 - Dual-LFE Phase 1 contract support:
-  - Added `SPK.LFE2` speaker ontology ID and new x.2 layouts:
-    `LAYOUT.5_2`, `LAYOUT.7_2`, and `LAYOUT.7_2_4`.
-  - Added deterministic ordering variants for SMPTE/FILM (plus LOGIC_PRO/VST3 where applicable) on new x.2 layouts.
-  - Added contract-level loudness-input mapping helper to exclude all declared LFE channels (`SPK.LFE`, `SPK.LFE2`) from program loudness inputs.
-  - Tightened layout/render-target schema validation for dual-LFE identifiers and `lfe_policy` consistency.
+  - Added `SPK.LFE2` speaker ontology ID and new x.2 layouts: `LAYOUT.5_2`,
+    `LAYOUT.7_2`, and `LAYOUT.7_2_4`.
+  - Added deterministic ordering variants for SMPTE/FILM (plus LOGIC_PRO/VST3
+    where applicable) on new x.2 layouts.
+  - Added contract-level loudness-input mapping helper to exclude all declared
+    LFE channels (`SPK.LFE`, `SPK.LFE2`) from program loudness inputs.
+  - Tightened layout/render-target schema validation for dual-LFE identifiers
+    and `lfe_policy` consistency.
 - Dual-LFE Phase 2 analysis, QA, and fold-down support:
-  - Generalized loudness/meter handling to exclude any `SPK.LFE*` speaker from program loudness calculations.
-  - Expanded LFE audit output to include per-LFE rows (band energy, out-of-band detection, true-peak) and summed LFE energy metrics.
-  - Extended downmix registries/policy packs with x.2 stereo fold-down conversions and an explicit dual-LFE safe split strategy (preserving single-LFE `-10 dB` combined contribution).
-  - Implemented deterministic downmix `source_pre_filters` execution (`lowpass`/`highpass`, slope-aware), applied pre-matrix on declared source channels only.
-  - Updated downmix QA/receipts to reflect filtered fold-down paths and report applied source pre-filters.
-  - Added regression tests for multi-LFE loudness exclusion, per-channel LFE audit rows, source pre-filter behavior, and deterministic output tolerance.
+  - Generalized loudness/meter handling to exclude any `SPK.LFE*` speaker from
+    program loudness calculations.
+  - Expanded LFE audit output to include per-LFE rows (band energy, out-of-band
+    detection, true-peak) and summed LFE energy metrics.
+  - Extended downmix registries/policy packs with x.2 stereo fold-down
+    conversions and an explicit dual-LFE safe split strategy (preserving
+    single-LFE `-10 dB` combined contribution).
+  - Implemented deterministic downmix `source_pre_filters` execution
+    (`lowpass`/`highpass`, slope-aware), applied pre-matrix on declared source
+    channels only.
+  - Updated downmix QA/receipts to reflect filtered fold-down paths and report
+    applied source pre-filters.
+  - Added regression tests for multi-LFE loudness exclusion, per-channel LFE
+    audit rows, source pre-filter behavior, and deterministic output tolerance.
 - Dual-LFE Phase 3 export-contract and documentation completion:
-  - Render-report jobs now include canonical contract fields (`target_layout_id`, `channel_count`, `channel_order`, `ffmpeg_channel_layout`) sourced from resolved layout contracts.
-  - Dual-LFE WAV jobs emit explicit warnings for `WAVEFORMATEXTENSIBLE` single-LFE-mask limits and include deterministic validation instructions.
-  - Recall-sheet export now carries render channel-order and export-warning context columns for x.2 traceability.
-  - FFmpeg transcoding now forwards explicit channel layout strings (including `LFE2` when supported) for layout-preserving non-WAV exports.
-  - Added deterministic dual-LFE render fixtures for `5.2`, `7.2`, and `7.2.4`, plus regression tests covering channel order/count contracts and WAV warning behavior.
+  - Render-report jobs now include canonical contract fields
+    (`target_layout_id`, `channel_count`, `channel_order`,
+    `ffmpeg_channel_layout`) sourced from resolved layout contracts.
+  - Dual-LFE WAV jobs emit explicit warnings for `WAVEFORMATEXTENSIBLE`
+    single-LFE-mask limits and include deterministic validation instructions.
+  - Recall-sheet export now carries render channel-order and export-warning
+    context columns for x.2 traceability.
+  - FFmpeg transcoding now forwards explicit channel layout strings (including
+    `LFE2` when supported) for layout-preserving non-WAV exports.
+  - Added deterministic dual-LFE render fixtures for `5.2`, `7.2`, and `7.2.4`,
+    plus regression tests covering channel order/count contracts and WAV warning
+    behavior.
 - Missing-LFE derivation as a deterministic policy primitive:
   - Added `ontology/lfe_derivation_profiles.yaml` + strict schema
     `schemas/lfe_derivation_profiles.schema.json` with default
@@ -887,24 +958,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Added `src/mmo/dsp/lfe_derive.py` deterministic low-pass + phase-max test
     primitive (`L+R` vs `L-R`, `0.1 dB` threshold) with mono and stereo-LFE
     behavior for dual-LFE targets.
-  - Planner/report integration now records whether LFE is passthrough vs
-    derived (and why), including profile/mode/threshold/delta receipts in
-    dry-run contracts.
+  - Planner/report integration now records whether LFE is passthrough vs derived
+    (and why), including profile/mode/threshold/delta receipts in dry-run
+    contracts.
   - Added unit/integration coverage for in-phase/out-of-phase selection,
     below-threshold default behavior, dual-LFE mirroring, stereo-LFE flip
     decisions, and schema-valid deterministic receipts.
 - Artistic headphone preview UX polish in `mmo-gui`:
   - Added a dedicated `Preview on Headphones` control in the Audition panel.
-  - Added deterministic pulsing waveform visualization and warm analog L/R metering
-    driven by live audio analyser data.
+  - Added deterministic pulsing waveform visualization and warm analog L/R
+    metering driven by live audio analyser data.
   - Added deterministic screenshot assets:
     `docs/screenshots/preview_headphones_desktop.svg` and
     `docs/screenshots/preview_headphones_mobile.svg`.
 - Binaural preview renderer refinement:
-  - Added conservative HRTF far-ear shading control (`hrtf_amount`) while preserving
-    existing RMS gate behavior and deterministic output.
-  - Improved five-standard layout awareness with explicit standard fallback candidates
-    (including AAF -> FILM/SMPTE fallback) and preview metadata trace fields.
+  - Added conservative HRTF far-ear shading control (`hrtf_amount`) while
+    preserving existing RMS gate behavior and deterministic output.
+  - Improved five-standard layout awareness with explicit standard fallback
+    candidates (including AAF -> FILM/SMPTE fallback) and preview metadata trace
+    fields.
 - First-class binaural render target:
   - Added ontology entries for `SPK.HL`/`SPK.HR`, `LAYOUT.BINAURAL`, and
     `TARGET.HEADPHONES.BINAURAL`.
@@ -914,44 +986,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     auto-selected source layout (7.1.4 -> 5.1 -> stereo) and records the
     source-layout explainability notes in contracts/receipts.
 - Watch-folder cinematic queue telemetry:
-  - Added deterministic watch-batch queue snapshots in `src/mmo/core/watch_folder.py`
-    with explicit pending/running/succeeded/failed states.
+  - Added deterministic watch-batch queue snapshots in
+    `src/mmo/core/watch_folder.py` with explicit
+    pending/running/succeeded/failed states.
   - Added ASCII cinematic queue rendering for live operator visibility.
   - Added CLI flags `mmo watch --visual-queue --cinematic-progress`.
-  - Added GUI watch-argv support for visual queue flags via `build_watch_cli_argv()`.
+  - Added GUI watch-argv support for visual queue flags via
+    `build_watch_cli_argv()`.
 - Artistic offline plugin hub:
   - Added deterministic plugin marketplace install flow (`plugin install`,
-    `plugin.market.install`) that copies bundled offline plugin assets into
-    a chosen plugin root.
+    `plugin.market.install`) that copies bundled offline plugin assets into a
+    chosen plugin root.
   - Added a new `Discover` tab in `mmo-gui` with styled preview cards and
     one-click install actions.
-  - Extended `ontology/plugin_index.yaml` with preview metadata and
-    install asset root contract for bundled offline installs.
+  - Extended `ontology/plugin_index.yaml` with preview metadata and install
+    asset root contract for bundled offline installs.
 - Digital-first plugin quality mandates:
-  - Extended `schemas/plugin.schema.json` with `capabilities.dsp_traits`
-    and `measurable_claims` truth-contract shape.
-  - Tightened `tools/validate_plugins.py` to require renderer seed-policy +
-    DSP trait declarations and nonlinear anti-aliasing strategies.
+  - Extended `schemas/plugin.schema.json` with `capabilities.dsp_traits` and
+    `measurable_claims` truth-contract shape.
+  - Tightened `tools/validate_plugins.py` to require renderer seed-policy + DSP
+    trait declarations and nonlinear anti-aliasing strategies.
   - Updated renderer/plugin-market manifests and authoring docs to document
     measurable claim contracts and gate-respecting DSP expectations.
 - Best-effort metadata round-trip with receipts:
-  - Added export-side tag application policy (`src/mmo/core/tag_export.py`)
-    for deterministic ffmpeg metadata args and embedded/skipped key tracking.
+  - Added export-side tag application policy (`src/mmo/core/tag_export.py`) for
+    deterministic ffmpeg metadata args and embedded/skipped key tracking.
   - Render/transcode paths now clear inherited metadata and apply explicit
     deterministic `-metadata` entries per container policy (FLAC/WV arbitrary
     fields; WAV conservative INFO subset).
-  - `render_report` output files now include strict `metadata_receipt`
-    sections, and deliverables index file rows preserve receipts when present.
-  - Added FLAC/WV custom-tag fixtures + tests for TagBag preservation and
-    export receipts, plus WAV subset/skipped receipt coverage.
+  - `render_report` output files now include strict `metadata_receipt` sections,
+    and deliverables index file rows preserve receipts when present.
+  - Added FLAC/WV custom-tag fixtures + tests for TagBag preservation and export
+    receipts, plus WAV subset/skipped receipt coverage.
 
-### Fixed
+### Fixed (role-name validation)
 
 - Role-name validation now uses classifier-derived tokens to handle numeric
-  suffixes and common compounds (for example `Kick1`, `ElecGtr1`,
-  `BackingVox2`, `SFX5`) and avoid `ISSUE.VALIDATION.UNKNOWN_ROLE` false
-  positives. Added generic synth recognition via `ROLE.SYNTH.OTHER`
-  (`synth`/`synth01`) and `SubDrop` recognition under `ROLE.FX.IMPACT`.
+  suffixes and common compounds (for example `Kick1`, `ElecGtr1`, `BackingVox2`,
+  `SFX5`) and avoid `ISSUE.VALIDATION.UNKNOWN_ROLE` false positives. Added
+  generic synth recognition via `ROLE.SYNTH.OTHER` (`synth`/`synth01`) and
+  `SubDrop` recognition under `ROLE.FX.IMPACT`.
 
 ## [1.1.0] — 2026-02-27
 
@@ -959,33 +1033,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Offline plugin marketplace/discovery:
   - New bundled index `ontology/plugin_index.yaml` (mirrored to packaged data).
-  - New core module `src/mmo/core/plugin_market.py` for deterministic marketplace
-    listing and local index snapshot updates.
+  - New core module `src/mmo/core/plugin_market.py` for deterministic
+    marketplace listing and local index snapshot updates.
   - New CLI commands: `mmo plugin list` and `mmo plugin update`.
   - New GUI marketplace browser panel backed by GUI RPC methods
     `plugin.market.list` and `plugin.market.update`.
 - Smart batch watch-folder workflow:
-  - New core module `src/mmo/core/watch_folder.py` with watchdog-backed
-    folder monitoring, debounce/settle behavior, and deterministic
-    stem-set signature tracking.
-  - New CLI command `mmo watch <folder>` that auto-runs
-    `run --render-many` for new/changed stem sets.
+  - New core module `src/mmo/core/watch_folder.py` with watchdog-backed folder
+    monitoring, debounce/settle behavior, and deterministic stem-set signature
+    tracking.
+  - New CLI command `mmo watch <folder>` that auto-runs `run --render-many` for
+    new/changed stem sets.
   - GUI helper `build_watch_cli_argv()` for stable watch-command argv wiring.
 - Artistic GUI Visualization Dashboard v1.1 for `mmo-gui`:
   - Real-time frequency-colored spectrum analyzer with warm glow curves.
   - Vectorscope with confidence glow and deterministic trail rendering.
   - Correlation/phase meter with explicit low/medium/high risk zones.
-  - Cinematic 3D speaker layout + object placement previews with confidence badges.
+  - Cinematic 3D speaker layout + object placement previews with confidence
+    badges.
   - Per-object intent cards (what/why/where/confidence) and deterministic
     surface snapshot signatures for screenshot-style regression tests.
 - Headphone binaural preview renderer for `safe-render`:
   - New deterministic conservative preview plugin:
-    `src/mmo/plugins/subjective/binaural_preview_v0.py`
-    (5-standard aware: SMPTE, FILM, LOGIC_PRO, VST3, AAF).
+    `src/mmo/plugins/subjective/binaural_preview_v0.py` (5-standard aware:
+    SMPTE, FILM, LOGIC_PRO, VST3, AAF).
   - New CLI flag: `mmo safe-render --preview-headphones`.
   - GUI action: `Preview on Headphones` button in `mmo-gui`.
-  - Preview outputs include explainable metadata linking each
-    `.headphones.wav` to the source render output.
+  - Preview outputs include explainable metadata linking each `.headphones.wav`
+    to the source render output.
 - Deterministic benchmark suite:
   - New `benchmarks/suite.py` with repeatable CLI + harness timing cases.
   - New benchmark usage doc: `benchmarks/README.md`.
@@ -995,8 +1070,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- README release docs now target `v1.1.0` installer artifacts and include
-  v1.1 highlights (marketplace, watch mode, dashboard, benchmarks, user guide).
+- README release docs now target `v1.1.0` installer artifacts and include v1.1
+  highlights (marketplace, watch mode, dashboard, benchmarks, user guide).
 - Project version bumped to `1.1.0`.
 
 ## [1.0.0] — 2026-02-26
@@ -1007,18 +1082,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Windows setup `.exe` via Inno Setup.
   - macOS `.app` bundle packaging (plus zip artifact).
   - Linux `.AppImage` packaging.
-- Config/preset resolution module `src/mmo/core/config.py` with merged run-config loading
-  (`preset -> config file -> CLI overrides`) and ontology-first preset resolution.
-- Project session persistence contract (`schemas/project_session.schema.json`) and
-  deterministic save/load commands:
+- Config/preset resolution module `src/mmo/core/config.py` with merged
+  run-config loading (`preset -> config file -> CLI overrides`) and
+  ontology-first preset resolution.
+- Project session persistence contract (`schemas/project_session.schema.json`)
+  and deterministic save/load commands:
   - `mmo project save <project_dir> [--session <path>] [--force]`
   - `mmo project load <project_dir> [--session <path>] [--force]`
 - Minimal CustomTkinter desktop GUI (`mmo-gui`) with drag/drop stems selection,
   render target controls, live subprocess logs, and high-risk approval gating.
 - Full determinism harness `tests/test_full_determinism.py` for byte-stable
   safe-render + bundle outputs on the public fixture.
-- Thread-safe progress/cancel core (`src/mmo/core/progress.py`) wired through CLI
-  and GUI with explainable live log fields (`what/why/where/confidence`).
+- Thread-safe progress/cancel core (`src/mmo/core/progress.py`) wired through
+  CLI and GUI with explainable live log fields (`what/why/where/confidence`).
 - Cross-platform signing hooks in `tools/build_installers.py`:
   - Authenticode (`signtool`) for Windows.
   - `codesign` verification flow for macOS apps.
@@ -1045,37 +1121,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- **5-standard channel layout support** (SMPTE, FILM, LOGIC_PRO, VST3, AAF) via the new
-  `SpeakerLayout` module (`src/mmo/core/speaker_layout.py`).
-  - SMPTE is the internal canonical standard; all import/export remaps at the boundary.
+- **5-standard channel layout support** (SMPTE, FILM, LOGIC_PRO, VST3, AAF) via
+  the new `SpeakerLayout` module (`src/mmo/core/speaker_layout.py`).
+  - SMPTE is the internal canonical standard; all import/export remaps at the
+    boundary.
   - `remap_channels_fill()` for zero-fill remap when source is missing channels.
-  - Preset `SpeakerLayout` constants for 2.0, 5.1, 7.1, 7.1.4, 9.1.6, SDDS 7.1, etc.
+  - Preset `SpeakerLayout` constants for 2.0, 5.1, 7.1, 7.1.4, 9.1.6, SDDS 7.1,
+    etc.
   - `MultichannelPlugin` + `LayoutContext` protocol in `mmo.dsp.plugins.base`.
 - **Mix-once render-many** workflow (`mmo safe-render --render-many`):
   - Render to SMPTE, FILM, LOGIC_PRO, VST3, and AAF in a single pass.
   - `--layout-standard` flag on `safe-render` and `render` commands.
   - `--render-many-targets` to specify per-run target layout IDs.
-  - Demo flow (`--demo`): loads the built-in 7.1.4 SMPTE+FILM fixture and dry-runs to
-    all 5 standards — no audio files required.
+  - Demo flow (`--demo`): loads the built-in 7.1.4 SMPTE+FILM fixture and
+    dry-runs to all 5 standards — no audio files required.
 - **Conservative subjective plugins** pack:
   - Spatial polish: width/depth/azimuth annotation and gain-trim suggestions.
   - Speaker layout-aware plugin interface (per-channel-group processing).
 - **Immersive fixtures** (`fixtures/immersive/`):
   - `report.7_1_4.json` — minimal valid 7.1.4 SMPTE+FILM session fixture.
-  - `fixtures/layouts/` — YAML layout descriptors for SMPTE and FILM 7.1.4 examples.
+  - `fixtures/layouts/` — YAML layout descriptors for SMPTE and FILM 7.1.4
+    examples.
 - **PDF report + recall sheet** polish:
   - Multi-standard layout tables in PDF output.
   - Render-many delivery summary section in PDF.
-- **Edge-case layout IDs**: `LAYOUT.7_1_6`, `LAYOUT.9_1_6`, `LAYOUT.SDDS_7_1` added to
-  the layout registry and fixture.
+- **Edge-case layout IDs**: `LAYOUT.7_1_6`, `LAYOUT.9_1_6`, `LAYOUT.SDDS_7_1`
+  added to the layout registry and fixture.
 - `WAVEFORMATEXTENSIBLE` height channel mask bits in `mmo.dsp.channel_layout`.
 - CI matrix extended: Python 3.12, 3.13, 3.14 on Linux, Windows, macOS.
 
 ### Changed
 
-- Internal temp path in tests uses `tempfile.gettempdir()` instead of hardcoded `/tmp/`.
-- `mmo.resources` resolver used everywhere for ontology/schema loading (no repo-root
-  path assumptions).
+- Internal temp path in tests uses `tempfile.gettempdir()` instead of hardcoded
+  `/tmp/`.
+- `mmo.resources` resolver used everywhere for ontology/schema loading (no
+  repo-root path assumptions).
 
 ## [2026-02-17]
 
@@ -1083,7 +1163,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Added a repo-native status and milestones system with `docs/STATUS.md` and
   `docs/milestones.yaml`.
-- Added `tools/validate_milestones.py` with deterministic output for machine validation.
+- Added `tools/validate_milestones.py` with deterministic output for machine
+  validation.
 - Added validator tests for happy-path and deterministic error ordering.
 
 ### Changed

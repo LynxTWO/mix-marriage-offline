@@ -8,14 +8,16 @@ read from source media.
 MMO stores source tags as a `TagBag`:
 
 - `raw`: ordered list of `RawTag` entries.
-- `normalized`: case-insensitive key map (`lower(key) -> [values]`) that keeps duplicates.
+- `normalized`: case-insensitive key map (`lower(key) -> [values]`) that keeps
+  duplicates.
 - `warnings`: non-fatal parse warnings.
 
 `RawTag` fields:
 
 - `source`: `"format"` or `"stream"`
 - `container`: container/format label (for example `wav`, `flac`, `m4a`)
-- `scope`: tag namespace (`format`, `info`, `bext`, `ixml`, `stream:<index>`, etc.)
+- `scope`: tag namespace (`format`, `info`, `bext`, `ixml`, `stream:<index>`,
+  etc.)
 - `key`: original tag key
 - `value`: string value
 - `index`: stable source index

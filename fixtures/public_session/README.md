@@ -6,9 +6,9 @@ Public, deterministic session fixtures for end-to-end pipeline tests.
 
 - `report.7_1_4.json` — 7.1.4 public example session with paired stem entries
   representing SMPTE and FILM channel-order exports.
-- `stems/` — placeholder directory for optional demo audio assets.
-  The full determinism harness runs in `--dry-run` mode and does not require
-  checked-in audio files.
+- `stems/` — placeholder directory for optional demo audio assets. The full
+  determinism harness runs in `--dry-run` mode and does not require checked-in
+  audio files.
 
 ## Usage
 

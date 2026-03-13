@@ -3,6 +3,7 @@
 The MMO ontology is the project’s **shared vocabulary**.
 
 It defines the canonical IDs that appear in:
+
 - plugin outputs (detectors, resolvers, renderers)
 - reports and recall sheets
 - fixture expectations and regression tests
@@ -17,19 +18,21 @@ If an ID does not exist in the ontology YAML, it is **not valid**.
 **Truth meters in the core. Taste in the plugins.**
 
 The ontology supports this by making the language stable and testable:
+
 - **Features** are measured values (meters, stats).
 - **Issues** are detected technical problems with evidence.
 - **Actions** are DAW-agnostic operations (recommendations).
 - **Params** specify action settings with explicit units.
 - **Evidence** keys standardize “what/why/where” proof.
 
-The core loads these YAML files into a registry and uses them to validate everything coming from plugins and exporters.
+The core loads these YAML files into a registry and uses them to validate
+everything coming from plugins and exporters.
 
 ---
 
 ## Folder structure
 
-```
+```text
 ontology/
   README.md
 
@@ -54,7 +57,9 @@ ontology/
       *.yaml
 ```
 
-Policies are **separate by design**: the ontology defines *what* things are, policies define *how strict* we are (thresholds, fold-down coefficients, scoring rules).
+Policies are **separate by design**: the ontology defines _what_ things are,
+policies define _how strict_ we are (thresholds, fold-down coefficients, scoring
+rules).
 
 ---
 
@@ -67,6 +72,7 @@ The ontology has its own semantic version, stored in `ontology/ontology.yaml`.
 - **MAJOR**: breaking changes (avoid; prefer deprecations)
 
 ### Stability promise
+
 - **Never rename** or remove IDs silently.
 - Deprecate instead:
   - `deprecated: true`
@@ -79,26 +85,32 @@ This is what keeps plugins and fixtures from breaking unexpectedly.
 ## What each YAML file is responsible for
 
 ### `ontology.yaml`
+
 - Declares `ontology_version`.
 - Lists included files (and later, policy packs).
 
 ### `units.yaml`
+
 - Canonical units used everywhere (features + params).
 - Example: `UNIT.DBTP`, `UNIT.LUFS`, `UNIT.HZ`.
 
 ### `roles.yaml`
+
 - Canonical stem roles and role inference hints (keywords/regex).
 - Used for virtual bus building (DRUMS/VOCALS/MUSIC/MIX).
 
 ### `features.yaml`
+
 - Canonical measured meters and stats.
 - Must be deterministic and unit-labeled (ex: LUFS, true peak, band energy).
 
 ### `issues.yaml`
+
 - Canonical technical problems (not taste labels).
 - Includes evidence expectations and common fix hints.
 
 ### `actions.yaml`
+
 - Canonical operations MMO can recommend (DAW-agnostic).
 - Defines:
   - required params (`PARAM.*`)
@@ -107,18 +119,22 @@ This is what keeps plugins and fixtures from breaking unexpectedly.
   - scope and granularity constraints
 
 ### `params.yaml`
+
 - Canonical parameter keys and units (EQ freq/Q/gain, thresholds, times).
 - Includes constraints and recommended ranges.
 
 ### `evidence.yaml`
+
 - Canonical evidence keys (time ranges, freq ranges, meters, counts, etc.).
 - Used by detectors and resolvers to prove “what/why/where”.
 
 ### `reasons.yaml`
+
 - Canonical `REASON.*` codes used by gates and policy evaluation.
-- Explains *why* a plan was rejected or downgraded (not an `ISSUE.*`).
+- Explains _why_ a plan was rejected or downgraded (not an `ISSUE.*`).
 
 ### `speakers.yaml` and `layouts.yaml`
+
 - **Surround foundation**.
 - Speakers define semantic channels (L, R, C, LFE, heights) with defaults.
 - Layouts define channel counts and canonical ordering, referencing `SPK.*`.
@@ -128,6 +144,7 @@ This is what keeps plugins and fixtures from breaking unexpectedly.
 ## How the core uses the ontology
 
 At runtime, the core should:
+
 1. Load all ontology YAML into a registry.
 2. Validate:
    - ID uniqueness and format
@@ -138,19 +155,22 @@ At runtime, the core should:
    - missing required params rejected
    - wrong units rejected
 
-This is how MMO stays explainable and safe while still letting plugins evolve quickly.
+This is how MMO stays explainable and safe while still letting plugins evolve
+quickly.
 
 ---
 
 ## How plugins should use the ontology
 
 Plugins must output canonical IDs:
+
 - `FEATURE.*` in feature manifests (core-produced, plugins consume)
 - `ISSUE.*` from detectors
 - `ACTION.*` + `PARAM.*` from resolvers
 - `EVID.*` everywhere evidence is required
 
-Plugins should **not invent new strings** at runtime. If an ID is missing, it belongs in the ontology first.
+Plugins should **not invent new strings** at runtime. If an ID is missing, it
+belongs in the ontology first.
 
 ---
 
@@ -169,13 +189,15 @@ When adding a new entry:
 5. If adding surround items:
    - speakers must be `SPK.*`
    - layouts must reference existing speakers only
-6. Add or update a fixture expectation if the change affects detection or reporting.
+6. Add or update a fixture expectation if the change affects detection or
+   reporting.
 
 ---
 
 ## Validation checklist
 
 Before merging ontology changes:
+
 - IDs are unique and match the category prefix (`ROLE.`, `FEATURE.`, etc.).
 - Every referenced ID exists (params, units, speakers, layouts).
 - Numeric values have units (avoid unitless unless truly unitless).
@@ -188,8 +210,10 @@ Before merging ontology changes:
 ## Notes on policies
 
 Policies live in `ontology/policies/` and are meant to be swappable:
+
 - safety gates and thresholds (`gates.yaml`)
 - downmix policy registry (`downmix.yaml`)
 - concrete downmix coefficient sets (`downmix_policies/*.yaml`)
 
-These are intentionally not part of the “stable ID surface” like roles/issues/actions. They are the tuning layer.
+These are intentionally not part of the “stable ID surface” like
+roles/issues/actions. They are the tuning layer.

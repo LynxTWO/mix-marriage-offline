@@ -1,8 +1,12 @@
 # Minimal GUI Handshake (Open -> Edit -> Run Render-Many)
 
-This document defines the smallest real GUI loop using existing MMO contracts and CLI entry points.
+<!-- markdownlint-disable-file MD013 -->
 
-For translation simulation behavior and CLI commands, see [16-translation-checks.md](16-translation-checks.md).
+This document defines the smallest real GUI loop using existing MMO contracts
+and CLI entry points.
+
+For translation simulation behavior and CLI commands, see
+[16-translation-checks.md](16-translation-checks.md).
 
 The loop is:
 
@@ -29,7 +33,8 @@ Load the project payload and show:
 
 - `stems_dir`
 - `last_run` (mode + pointers)
-- profile/preset defaults from `run_config_defaults.profile_id` and `run_config_defaults.preset_id`
+- profile/preset defaults from `run_config_defaults.profile_id` and
+  `run_config_defaults.preset_id`
 
 CLI helper:
 
@@ -39,15 +44,18 @@ mmo project show --project path/to/song.mmo_project.json --format json
 
 Notes:
 
-- `last_run` is optional but, when present, is the primary pointer map for reopening prior results.
-- `run_config_defaults` is optional; use it as the default profile/preset source for GUI controls.
+- `last_run` is optional but, when present, is the primary pointer map for
+  reopening prior results.
+- `run_config_defaults` is optional; use it as the default profile/preset source
+  for GUI controls.
 
 ## 2) Load `ui_bundle` (dashboard + presets + render_targets)
 
 Build/load `ui_bundle.json` and bind:
 
 - Dashboard: `dashboard`
-- Preset-facing data: `dashboard.preset_recommendations` (and any profile/preset info in `report.run_config`)
+- Preset-facing data: `dashboard.preset_recommendations` (and any profile/preset
+  info in `report.run_config`)
 - Targets: `render_targets.targets`
 
 CLI builder:
@@ -58,7 +66,8 @@ mmo bundle --report out/report.json --project path/to/song.mmo_project.json --sc
 
 Notes:
 
-- `--scene`, `--render-plan`, `--deliverables-index`, and `--listen-pack` are optional pointers, but should be provided when available.
+- `--scene`, `--render-plan`, `--deliverables-index`, and `--listen-pack` are
+  optional pointers, but should be provided when available.
 - For variant runs, render manifests are per-variant (see step 6).
 
 ## 3) If `scene.json` exists, show `scene_meta`
@@ -81,7 +90,8 @@ Apply template (if implemented):
 mmo scene template apply TEMPLATE.SCENE.* --scene out/scene.json --out out/scene.json
 ```
 
-For starter intent packs and safe apply semantics, see [14-scene-templates.md](14-scene-templates.md).
+For starter intent packs and safe apply semantics, see
+[14-scene-templates.md](14-scene-templates.md).
 
 Add/remove locks:
 
@@ -103,9 +113,11 @@ mmo targets list --format json
 mmo targets show TARGET.STEREO.2_0 --format json
 ```
 
-For deterministic target selection and recommendation wiring, see [15-target-selection.md](15-target-selection.md).
+For deterministic target selection and recommendation wiring, see
+[15-target-selection.md](15-target-selection.md).
 
-Persist selected target IDs in GUI state, then pass them as CSV in execution (step 5).
+Persist selected target IDs in GUI state, then pass them as CSV in execution
+(step 5).
 
 ## 5) Execute
 
@@ -123,7 +135,8 @@ mmo render-plan to-variants --render-plan out/render_plan.json --scene out/scene
 
 ### 5c) Update project `last_run` pointers
 
-After a successful run, update the opened project file to point at generated artifacts:
+After a successful run, update the opened project file to point at generated
+artifacts:
 
 - `last_run.mode = "variants"`
 - `last_run.out_dir`
@@ -145,7 +158,8 @@ Show:
 Render-manifest lookup:
 
 - Variants: `variant_result.results[*].render_manifest_path`
-- Also available in `deliverables_index.entries[*].artifacts.render_manifest` when present
+- Also available in `deliverables_index.entries[*].artifacts.render_manifest`
+  when present
 
 Compare entry points:
 
@@ -155,7 +169,8 @@ Compare entry points:
 mmo compare --a path/to/A/report.json --b path/to/B/report.json --out out/compare_report.json
 ```
 
-- Directory form is also valid (`--a` / `--b` may point to folders containing `report.json`).
+- Directory form is also valid (`--a` / `--b` may point to folders containing
+  `report.json`).
 - Common GUI wiring:
   - Variant vs variant (from `variant_result.results[*].report_path`)
   - Current run vs last run (from project `last_run` pointers)

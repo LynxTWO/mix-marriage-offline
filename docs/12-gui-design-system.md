@@ -1,13 +1,16 @@
 # GUI design system contract
 
-This document is the canonical GUI contract for MMO. It is normative and intended to prevent UX drift across future GUI work.
+This document is the canonical GUI contract for MMO. It is normative and
+intended to prevent UX drift across future GUI work.
 
 ## Principles
 
 - Musician-first: default language is sonic outcome, not implementation detail.
-- Progressive disclosure: basic flow is visible first; advanced detail is optional.
+- Progressive disclosure: basic flow is visible first; advanced detail is
+  optional.
 - Explainable actions: each action must say what changes and why it helps.
-- Safe defaults: default choices should bias toward reversible, low-risk outcomes.
+- Safe defaults: default choices should bias toward reversible, low-risk
+  outcomes.
 
 ## Layout model
 
@@ -29,10 +32,12 @@ This document is the canonical GUI contract for MMO. It is normative and intende
 ## Nerd toggle behavior
 
 - Nerd toggle defaults to off.
-- Off: show outcome-first summaries, plain-language explanations, and core actions.
+- Off: show outcome-first summaries, plain-language explanations, and core
+  actions.
 - On: reveal IDs, thresholds, policy references, and raw diagnostic detail.
 - Toggling must never change analysis results, eligibility, or action ordering.
-- Advanced fields appear inline or in the inspector; no separate hidden workflow.
+- Advanced fields appear inline or in the inspector; no separate hidden
+  workflow.
 
 ## Copy rules
 
@@ -54,7 +59,9 @@ This document is the canonical GUI contract for MMO. It is normative and intende
 
 ### Dashboard
 
-Purpose: Dashboard is the default orientation screen. It should answer "how this mix feels," "is it safe," and "what should I do next" within a few seconds, without requiring technical interpretation.
+Purpose: Dashboard is the default orientation screen. It should answer "how this
+mix feels," "is it safe," and "what should I do next" within a few seconds,
+without requiring technical interpretation.
 
 Primary components:
 
@@ -65,14 +72,19 @@ Primary components:
 
 Default view vs Nerd view:
 
-- Default: summary cards for Vibe Signals, Safety status, deliverables readiness, and suggested next actions.
-- Nerd: reveal technical diagnostics and policy-level detail behind the same cards.
+- Default: summary cards for Vibe Signals, Safety status, deliverables
+  readiness, and suggested next actions.
+- Nerd: reveal technical diagnostics and policy-level detail behind the same
+  cards.
 
 States:
 
-- Success: safety checks clear, deliverables are ready, and next action is optional refinement.
-- Warning: one or more signals are risky; show targeted fix path and expected impact.
-- Blocked: render or publish path is blocked; show exact blocker and shortest unblock sequence.
+- Success: safety checks clear, deliverables are ready, and next action is
+  optional refinement.
+- Warning: one or more signals are risky; show targeted fix path and expected
+  impact.
+- Blocked: render or publish path is blocked; show exact blocker and shortest
+  unblock sequence.
 
 Example copy:
 
@@ -80,7 +92,9 @@ Example copy:
 
 ### Presets
 
-Purpose: Presets is the exploration and decision screen. It helps the user browse likely sonic directions, preview outcomes safely, and understand what each preset changes before applying it.
+Purpose: Presets is the exploration and decision screen. It helps the user
+browse likely sonic directions, preview outcomes safely, and understand what
+each preset changes before applying it.
 
 Primary components:
 
@@ -91,14 +105,18 @@ Primary components:
 
 Default view vs Nerd view:
 
-- Default: outcome-first preset labels, short preview notes, and a plain-language impact summary.
-- Nerd: reveal underlying parameter deltas, policy references, and threshold details.
+- Default: outcome-first preset labels, short preview notes, and a
+  plain-language impact summary.
+- Nerd: reveal underlying parameter deltas, policy references, and threshold
+  details.
 
 States:
 
 - Success: preset is previewed, understood, and ready to apply or run.
-- Warning: preset may push a risky region; show the specific risk and safer alternatives.
-- Blocked: preset cannot be applied due to hard constraints; show required preconditions.
+- Warning: preset may push a risky region; show the specific risk and safer
+  alternatives.
+- Blocked: preset cannot be applied due to hard constraints; show required
+  preconditions.
 
 Example copy:
 
@@ -106,7 +124,9 @@ Example copy:
 
 ### Run
 
-Purpose: Run is the execution control surface. It lets users choose steps and output formats, monitor progress, and understand whether cached results are being reused.
+Purpose: Run is the execution control surface. It lets users choose steps and
+output formats, monitor progress, and understand whether cached results are
+being reused.
 
 Primary components:
 
@@ -123,7 +143,8 @@ Default view vs Nerd view:
 States:
 
 - Success: run completed with expected outputs and no blockers.
-- Warning: run completed with caveats; show impacted outputs and mitigation steps.
+- Warning: run completed with caveats; show impacted outputs and mitigation
+  steps.
 - Blocked: run cannot continue; show the blocking condition and recovery action.
 
 Example copy:
@@ -132,7 +153,9 @@ Example copy:
 
 ### Results
 
-Purpose: Results is the delivery and interpretation screen. It presents final outputs, guides listening checks, flags extreme states, and gives clear export actions.
+Purpose: Results is the delivery and interpretation screen. It presents final
+outputs, guides listening checks, flags extreme states, and gives clear export
+actions.
 
 Primary components:
 
@@ -144,7 +167,8 @@ Primary components:
 Default view vs Nerd view:
 
 - Default: highlight deliverables, listen guidance, and recommended export path.
-- Nerd: reveal measurement traces, IDs, and threshold rationale behind each result.
+- Nerd: reveal measurement traces, IDs, and threshold rationale behind each
+  result.
 
 States:
 
@@ -158,7 +182,9 @@ Example copy:
 
 ### Compare
 
-Purpose: Compare is for A/B decision support. It should make differences visible quickly, summarize what changed objectively, and surface warnings without judging the user's taste.
+Purpose: Compare is for A/B decision support. It should make differences visible
+quickly, summarize what changed objectively, and surface warnings without
+judging the user's taste.
 
 Primary components:
 
@@ -170,17 +196,20 @@ Primary components:
 Default view vs Nerd view:
 
 - Default: plain-language change summary and key outcome differences.
-- Nerd: reveal metric-level diffs, detector IDs, and threshold-level comparisons.
+- Nerd: reveal metric-level diffs, detector IDs, and threshold-level
+  comparisons.
 
 States:
 
 - Success: differences are clear and decision is straightforward.
-- Warning: differences include safety or translation risk; show specific context.
+- Warning: differences include safety or translation risk; show specific
+  context.
 - Blocked: comparison cannot run due to missing or incompatible inputs.
 
 Example copy:
 
-- "Version B feels wider and brighter, with similar loudness and safer headroom."
+- "Version B feels wider and brighter, with similar loudness and safer
+  headroom."
 
 ## Copy glossary
 
@@ -229,7 +258,8 @@ Feedback rules:
 
 Badge rules:
 
-- `EXTREME`: output is intentionally or measurably pushed beyond normal-safe bounds.
+- `EXTREME`: output is intentionally or measurably pushed beyond normal-safe
+  bounds.
 - `BLOCKED`: action cannot continue until a hard precondition is resolved.
 - `SAFE`: checks passed for the relevant action or deliverable.
 - `INFO`: neutral context that is useful but not a warning.
@@ -241,9 +271,11 @@ Compare rules:
 
 ## Accessibility rules
 
-- Contrast minimum: WCAG AA baseline (4.5:1 for normal text, 3:1 for large text).
+- Contrast minimum: WCAG AA baseline (4.5:1 for normal text, 3:1 for large
+  text).
 - Do not rely on color alone; pair color with text labels or icons.
 - Minimum body text size is 16 px; avoid critical text below 14 px.
 - Full keyboard navigation required for primary workflow paths.
 - Focus indicators must be visible on all interactive controls.
-- Ensure readable spacing, predictable tab order, and screen-reader-friendly labels.
+- Ensure readable spacing, predictable tab order, and screen-reader-friendly
+  labels.

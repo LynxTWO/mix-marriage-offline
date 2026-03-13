@@ -1,13 +1,17 @@
 # 19. Stems Drafts (Preview-Only Scene + Routing Plan)
 
+<!-- markdownlint-disable-file MD013 -->
+
 This guide describes the `stems draft` command, which generates preview-only
-`scene.draft.json` and `routing_plan.draft.json` files from a classified `stems_map`.
+`scene.draft.json` and `routing_plan.draft.json` files from a classified
+`stems_map`.
 
 ## What are drafts?
 
-Drafts are conservative starter payloads generated from your stem classifications.
-They are **preview-only** and **never auto-discovered** by any workflow.
-You must explicitly pass them as inputs to any command that consumes a scene or routing plan.
+Drafts are conservative starter payloads generated from your stem
+classifications. They are **preview-only** and **never auto-discovered** by any
+workflow. You must explicitly pass them as inputs to any command that consumes a
+scene or routing plan.
 
 ## Generating drafts
 
@@ -20,19 +24,20 @@ python -m mmo stems draft --stems-map stems_map.json --out-dir drafts/
 This produces:
 
 - `drafts/scene.draft.json` — a scene with one object per stem assignment
-- `drafts/routing_plan.draft.json` — a routing plan with mono-to-stereo center-pan routes
+- `drafts/routing_plan.draft.json` — a routing plan with mono-to-stereo
+  center-pan routes
 
 ### Options
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--stems-map` | (required) | Path to `stems_map.json` |
-| `--out-dir` | (required) | Output directory for draft files |
-| `--scene-out` | `scene.draft.json` | Output filename for the draft scene |
+| Flag            | Default                   | Description                                |
+| --------------- | ------------------------- | ------------------------------------------ |
+| `--stems-map`   | (required)                | Path to `stems_map.json`                   |
+| `--out-dir`     | (required)                | Output directory for draft files           |
+| `--scene-out`   | `scene.draft.json`        | Output filename for the draft scene        |
 | `--routing-out` | `routing_plan.draft.json` | Output filename for the draft routing plan |
-| `--stems-dir` | `/DRAFT/stems` | Absolute stems_dir for `scene.source` |
-| `--format` | `text` | Output format: `json` or `text` |
-| `--overwrite` | off | Allow overwriting existing output files |
+| `--stems-dir`   | `/DRAFT/stems`            | Absolute stems_dir for `scene.source`      |
+| `--format`      | `text`                    | Output format: `json` or `text`            |
+| `--overwrite`   | off                       | Allow overwriting existing output files    |
 
 ## What is inside the drafts?
 
@@ -60,10 +65,12 @@ Drafts are never picked up automatically. To use them, pass them explicitly:
 python -m mmo analyze --scene drafts/scene.draft.json ...
 ```
 
-Or use them as a starting point for manual editing before passing to any workflow.
+Or use them as a starting point for manual editing before passing to any
+workflow.
 
 ## Safety
 
-- Draft files use `*.draft.json` filenames to avoid confusion with production artifacts.
+- Draft files use `*.draft.json` filenames to avoid confusion with production
+  artifacts.
 - No code in the repo auto-discovers scene or routing plan files by glob.
 - All scene/routing paths must be passed explicitly by the user.

@@ -15,8 +15,8 @@ Good claims to reuse when they are still true:
 - deterministic analysis and delivery artifacts
 - scene-first, mix-once/render-many workflows
 - compare workflow with `compare_report.json`
-- supported channel-ordering standards:
-  `SMPTE`, `FILM`, `LOGIC_PRO`, `VST3`, `AAF`
+- supported channel-ordering standards: `SMPTE`, `FILM`, `LOGIC_PRO`, `VST3`,
+  `AAF`
 - binaural/headphone preview and first-class headphone target
 - Tauri desktop app as the primary packaged GUI path
 - fallback `mmo-gui` as legacy transition path only
@@ -31,8 +31,8 @@ Do not claim these are complete unless the repo status says so:
 
 Release title: `Mix Marriage Offline v[VERSION] - [SHORT TAGLINE]`
 
-Mix Marriage Offline is an offline, deterministic mixing assistant for
-analysis, scene-first delivery, compare, and mix-once/render-many workflows.
+Mix Marriage Offline is an offline, deterministic mixing assistant for analysis,
+scene-first delivery, compare, and mix-once/render-many workflows.
 
 ### What ships today
 
@@ -62,8 +62,7 @@ analysis, scene-first delivery, compare, and mix-once/render-many workflows.
 
 ### Install
 
-Packaged desktop releases for Windows, macOS, and Linux:
-[RELEASE URL]
+Packaged desktop releases for Windows, macOS, and Linux: [RELEASE URL]
 
 Source install:
 
@@ -77,8 +76,8 @@ mmo env doctor --format text
 - User manual: `docs/manual/00-manual-overview.md`
 - Quickstart: `docs/00-quickstart.md`
 - Architecture: `docs/02-architecture.md`
-- Targets and ordering standards:
-  `docs/15-target-selection.md`, `docs/18-channel-standards.md`
+- Targets and ordering standards: `docs/15-target-selection.md`,
+  `docs/18-channel-standards.md`
 
 ## Short Social Template
 
@@ -101,8 +100,8 @@ What readers should know about the product today:
 
 - MMO already ships deterministic report, scene, render, and compare artifacts.
 - `mmo compare` is a first-class workflow, not a side tool.
-- Render-many, channel-ordering standards, downmix QA, and headphone preview
-  are part of the shipped surface.
+- Render-many, channel-ordering standards, downmix QA, and headphone preview are
+  part of the shipped surface.
 - The packaged Tauri app is the primary GUI path today.
 - The legacy `mmo-gui` fallback still exists while the last parity items close.
 

@@ -16,16 +16,16 @@ Briefly explain why additive-only policy was insufficient.
 
 List every removed/renamed ID.
 
-| Old ID | New ID (or `N/A`) | Notes |
-| --- | --- | --- |
-| `EXAMPLE.OLD.ID` | `EXAMPLE.NEW.ID` | Reason and compatibility guidance |
+| Old ID           | New ID (or `N/A`) | Notes                             |
+| ---------------- | ----------------- | --------------------------------- |
+| `EXAMPLE.OLD.ID` | `EXAMPLE.NEW.ID`  | Reason and compatibility guidance |
 
 ## Deprecations
 
 If IDs remain present but are deprecated, list them with `replaced_by`.
 
-| Deprecated ID | replaced_by | Notes |
-| --- | --- | --- |
+| Deprecated ID           | replaced_by              | Notes       |
+| ----------------------- | ------------------------ | ----------- |
 | `EXAMPLE.DEPRECATED.ID` | `EXAMPLE.REPLACEMENT.ID` | Sunset plan |
 
 ## Upgrade Guidance

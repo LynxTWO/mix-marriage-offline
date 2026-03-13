@@ -10,7 +10,8 @@
 
 Open-source projects break when contributors can’t agree on terms.
 
-MMO avoids that by defining a single, canonical vocabulary (the “ontology”) that every plugin and report uses:
+MMO avoids that by defining a single, canonical vocabulary (the “ontology”) that
+every plugin and report uses:
 
 - track roles
 - channel layouts and speakers
@@ -38,7 +39,8 @@ This is the key to:
 
 **YAML is the source of truth.**
 
-All canonical IDs and definitions live in `ontology/*.yaml` and `ontology/policies/*.yaml`.
+All canonical IDs and definitions live in `ontology/*.yaml` and
+`ontology/policies/*.yaml`.
 
 Code should not invent new IDs at runtime.  
 If an ID doesn’t exist in YAML, it is not valid.
@@ -115,50 +117,47 @@ The ontology is split for reviewability and low merge-conflict risk.
 
 Minimum set:
 
-- `ontology/ontology.yaml`
-  Declares `ontology_version` and includes references to the other YAML files.
+- `ontology/ontology.yaml` Declares `ontology_version` and includes references
+  to the other YAML files.
 
-- `ontology/units.yaml`
-  Canonical units: Hz, dB, dBTP, LUFS, ms, samples, percent, degrees, meters, etc.
+- `ontology/units.yaml` Canonical units: Hz, dB, dBTP, LUFS, ms, samples,
+  percent, degrees, meters, etc.
 
-- `ontology/speakers.yaml`
-  Speaker definitions with metadata (azimuth/elevation), for surround reasoning.
+- `ontology/speakers.yaml` Speaker definitions with metadata
+  (azimuth/elevation), for surround reasoning.
 
-- `ontology/layouts.yaml`
-  Channel layouts (2.0, 2.1, 5.1, 7.1, 7.1.4, etc.) and channel groups.
+- `ontology/layouts.yaml` Channel layouts (2.0, 2.1, 5.1, 7.1, 7.1.4, etc.) and
+  channel groups.
 
-- `ontology/roles.yaml`
-  Track/stem roles used for auto-bus creation and context.
+- `ontology/roles.yaml` Track/stem roles used for auto-bus creation and context.
 
-- `ontology/features.yaml`
-  Measured feature IDs (meters + signal stats).
+- `ontology/features.yaml` Measured feature IDs (meters + signal stats).
 
-- `ontology/loudness_profiles.yaml`
-  Versioned `LOUD.*` profile contracts (target, tolerance, true-peak limit,
-  method, scope, compliance/informational mode) used for render receipts.
+- `ontology/loudness_profiles.yaml` Versioned `LOUD.*` profile contracts
+  (target, tolerance, true-peak limit, method, scope, compliance/informational
+  mode) used for render receipts.
 
-- `ontology/issues.yaml`
-  Detected problem IDs with definitions and typical evidence.
+- `ontology/issues.yaml` Detected problem IDs with definitions and typical
+  evidence.
 
-- `ontology/actions.yaml`
-  Action IDs with required parameters and constraints.
+- `ontology/actions.yaml` Action IDs with required parameters and constraints.
 
-- `ontology/params.yaml`
-  Parameter keys and units (e.g., EQ freq/Q/gain).
+- `ontology/params.yaml` Parameter keys and units (e.g., EQ freq/Q/gain).
 
-- `ontology/evidence.yaml`
-  Evidence keys used to justify issues and actions (time ranges, freq ranges, stems involved).
+- `ontology/evidence.yaml` Evidence keys used to justify issues and actions
+  (time ranges, freq ranges, stems involved).
 
-- `ontology/reasons.yaml`
-  Canonical `REASON.*` codes used by gates to explain plan rejections/downgrades.
+- `ontology/reasons.yaml` Canonical `REASON.*` codes used by gates to explain
+  plan rejections/downgrades.
 
 Policies (swappable by design):
 
-- `ontology/policies/gates.yaml`
-  Non-negotiable safety rules and default thresholds.
+- `ontology/policies/gates.yaml` Non-negotiable safety rules and default
+  thresholds.
 
-- `ontology/policies/downmix.yaml` and `ontology/policies/downmix_policies/*.yaml`
-  Downmix profile references and fold-down policy definitions.
+- `ontology/policies/downmix.yaml` and
+  `ontology/policies/downmix_policies/*.yaml` Downmix profile references and
+  fold-down policy definitions.
 
 ---
 
@@ -188,19 +187,20 @@ Those belong in plugins and policies, constrained by gates.
 
 At runtime, the core loads the ontology and enforces:
 
-1) **ID validity**
+1. **ID validity**
    - unknown IDs are rejected
 
-2) **Required fields**
-   - entries must include at least `label` and `description` (exceptions allowed for units)
+2. **Required fields**
+   - entries must include at least `label` and `description` (exceptions allowed
+     for units)
 
-3) **Action parameter requirements**
+3. **Action parameter requirements**
    - an action must include all required params listed in `actions.yaml`
 
-4) **Unit correctness**
+4. **Unit correctness**
    - parameters and features must use the declared units
 
-5) **Layout consistency**
+5. **Layout consistency**
    - layouts reference valid speaker IDs
    - channel groups reference speakers that exist in that layout
 
@@ -212,16 +212,16 @@ This validation is what makes the plugin ecosystem safe to expand.
 
 When adding a new feature/issue/action:
 
-1) Choose the correct category file (`features.yaml`, `issues.yaml`, etc.)
-2) Add a new canonical ID following the naming rules
-3) Provide:
+1. Choose the correct category file (`features.yaml`, `issues.yaml`, etc.)
+2. Add a new canonical ID following the naming rules
+3. Provide:
    - label
    - description
    - any relevant default bands, hints, or notes
-4) If it’s an action:
+4. If it’s an action:
    - define required params (in `actions.yaml`)
    - ensure params exist (in `params.yaml`)
-5) Update fixtures/tests if the change affects detection logic or reports
+5. Update fixtures/tests if the change affects detection logic or reports
 
 ---
 
@@ -264,13 +264,15 @@ An EQ notch:
 - Prefer adding new IDs over renaming old ones.
 - Keep the ontology descriptive, not prescriptive.
 - Use policies for thresholds and fold-down coefficients, not the core ontology.
-- When unsure, add `notes` and mark entries as `experimental: true` until proven.
+- When unsure, add `notes` and mark entries as `experimental: true` until
+  proven.
 
 ---
 
 ## 11) What’s next
 
-After this doc, we implement the ontology YAML skeletons and a registry loader that:
+After this doc, we implement the ontology YAML skeletons and a registry loader
+that:
 
 - loads all YAML files
 - validates IDs and required fields

@@ -17,7 +17,8 @@ The plugin system exists to:
 - preserve reproducibility (plugin versions/hashes recorded in reports)
 
 MMO plugins are not “random Python scripts.”  
-They are modules that implement strict interfaces and return validated data structures.
+They are modules that implement strict interfaces and return validated data
+structures.
 
 ---
 
@@ -27,8 +28,8 @@ MMO supports three plugin types:
 
 ### 2.1 Detector plugins
 
-**Purpose:** convert measured features into **issues**
-(problem statements with evidence).
+**Purpose:** convert measured features into **issues** (problem statements with
+evidence).
 
 **Input:** Session + measured features  
 **Output:** `issues[]`
@@ -94,13 +95,13 @@ Resolvers must include:
 
 ### 3.3 Determinism
 
-Given identical inputs and settings, plugin outputs should be stable.
-Avoid randomness. If randomness is required, it must be seeded and logged.
+Given identical inputs and settings, plugin outputs should be stable. Avoid
+randomness. If randomness is required, it must be seeded and logged.
 
 ### 3.4 Safety gates are final
 
-Plugins can propose anything, but the core enforces gates.
-Plugins must not attempt to “bypass” gates or weaken the schema.
+Plugins can propose anything, but the core enforces gates. Plugins must not
+attempt to “bypass” gates or weaken the schema.
 
 ### 3.5 Numeric precision
 
@@ -135,11 +136,12 @@ Each plugin module provides:
 Plugin scan roots (in order):
 
 - Primary root from `--plugins`.
-- External root from `--plugin-dir` / `MMO_PLUGIN_DIR` / default `~/.mmo/plugins`.
+- External root from `--plugin-dir` / `MMO_PLUGIN_DIR` / default
+  `~/.mmo/plugins`.
 - Built-in packaged root from `mmo.data/plugins` (when present in the install).
 
-Primary/external roots take precedence. Built-in packaged manifests are loaded last
-as a fallback so installed wheels work without a repo checkout.
+Primary/external roots take precedence. Built-in packaged manifests are loaded
+last as a fallback so installed wheels work without a repo checkout.
 
 ### 4.2 plugin.yaml (recommended manifest)
 
@@ -154,7 +156,8 @@ name: "Resonance Detector"
 version: "0.1.0"
 author: "Your Name"
 license: "Apache-2.0"
-description: "Detects persistent narrow-band resonances and flags safe notch suggestions."
+description:
+  "Detects persistent narrow-band resonances and flags safe notch suggestions."
 mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.detectors.resonance_detector:ResonanceDetector"
@@ -162,7 +165,8 @@ capabilities:
   - "ISSUE.SPECTRAL.RESONANCE"
 ```
 
-MMO records plugin metadata (including version and file hash) in output manifests.
+MMO records plugin metadata (including version and file hash) in output
+manifests.
 
 ---
 
@@ -193,7 +197,8 @@ All outputs must:
 
 ## 6) Interfaces (behavioral contract)
 
-Below is the behavioral contract. The concrete Python types live in `src/mmo/plugins/interfaces.py`.
+Below is the behavioral contract. The concrete Python types live in
+`src/mmo/plugins/interfaces.py`.
 
 ### 6.1 Detector interface
 
@@ -260,9 +265,9 @@ The core gates may override or block actions even if a plugin marks them “low.
 
 Plugin outputs are validated in this order:
 
-1) schema validation (required fields and types)
-2) ontology validation (IDs and required params)
-3) safety gate validation (limits and policies)
+1. schema validation (required fields and types)
+2. ontology validation (IDs and required params)
+3. safety gate validation (limits and policies)
 
 ### 8.2 Errors
 
@@ -292,62 +297,56 @@ If an ontology ID is deprecated:
 
 ## 10) How to write a plugin (quick start)
 
-1) Pick a type: detector, resolver, renderer.
-2) Choose the ontology IDs you will emit.
-3) Implement the interface class.
-4) Add a `plugin.yaml` manifest.
-5) Add at least one fixture test proving expected behavior.
-6) Submit a PR with documentation and test results.
+1. Pick a type: detector, resolver, renderer.
+2. Choose the ontology IDs you will emit.
+3. Implement the interface class.
+4. Add a `plugin.yaml` manifest.
+5. Add at least one fixture test proving expected behavior.
+6. Submit a PR with documentation and test results.
 
 ---
 
 ## 11) Channel ordering standards for plugins
 
-MMO supports five channel-ordering standards at the I/O boundary:
-**SMPTE** (default), **FILM**, **LOGIC_PRO**, **VST3**, and **AAF**.
+MMO supports five channel-ordering standards at the I/O boundary: **SMPTE**
+(default), **FILM**, **LOGIC_PRO**, **VST3**, and **AAF**.
 
 ### Why this matters
 
-Plugins that use channel position
-(surround panning, spatial processing, linked groups) must know the active
-channel order so they route audio to the correct speaker.
-A plugin that assumes index 3 is always LFE will misroute audio whenever the
-active standard changes slot order.
+Plugins that use channel position (surround panning, spatial processing, linked
+groups) must know the active channel order so they route audio to the correct
+speaker. A plugin that assumes index 3 is always LFE will misroute audio
+whenever the active standard changes slot order.
 
 ### Plugin manifest fields
 
 ```yaml
 capabilities:
-  supported_standards: ["SMPTE", "FILM", "LOGIC_PRO"]  # omit = all supported
-  preferred_standard: "SMPTE"              # omit = SMPTE
+  supported_standards: ["SMPTE", "FILM", "LOGIC_PRO"] # omit = all supported
+  preferred_standard: "SMPTE" # omit = SMPTE
 ```
 
-Defined in `ontology/plugin_semantics.yaml`
-(section `channel_ordering_standards`).
-Schema: `schemas/plugin.schema.json`
-(`capabilities.supported_standards`,
-`capabilities.preferred_standard`).
+Defined in `ontology/plugin_semantics.yaml` (section
+`channel_ordering_standards`). Schema: `schemas/plugin.schema.json`
+(`capabilities.supported_standards`, `capabilities.preferred_standard`).
 
 ### Rules for plugin authors
 
-- **`per_channel` plugins** that never reference speaker position:
-  no declaration needed.
-  The host treats them as standard-agnostic.
-- **`linked_group` or `true_multichannel` plugins**:
-  must declare `supported_standards`.
-  Use `link_groups` (`front`, `surrounds`, `heights`, `all`) instead of
-  hard-coded indices.
-- **Never assume a fixed channel index.**
-  Use the channel IDs from `ProcessContext.channel_order`
-  (a list of `SPK.*` IDs in active-standard order) to locate channels
-  dynamically.
+- **`per_channel` plugins** that never reference speaker position: no
+  declaration needed. The host treats them as standard-agnostic.
+- **`linked_group` or `true_multichannel` plugins**: must declare
+  `supported_standards`. Use `link_groups` (`front`, `surrounds`, `heights`,
+  `all`) instead of hard-coded indices.
+- **Never assume a fixed channel index.** Use the channel IDs from
+  `ProcessContext.channel_order` (a list of `SPK.*` IDs in active-standard
+  order) to locate channels dynamically.
 - Plugins that only support one standard should declare it and set
   `preferred_standard` so the host can reorder or bypass as needed.
 
 ### ProcessContext.channel_order
 
-The host passes the active channel order to the plugin via `ProcessContext.channel_order`
-(a `list[str]` of `SPK.*` IDs).  Use it like this:
+The host passes the active channel order to the plugin via
+`ProcessContext.channel_order` (a `list[str]` of `SPK.*` IDs). Use it like this:
 
 ```python
 lfe_idx = context.channel_order.index("SPK.LFE")
@@ -362,4 +361,5 @@ After this doc:
 
 - implement `schemas/plugin.schema.json`
 - implement the plugin registry/loader (`src/mmo/plugins/host.py`)
-- create one reference detector and resolver that pass schema + ontology validation
+- create one reference detector and resolver that pass schema + ontology
+  validation

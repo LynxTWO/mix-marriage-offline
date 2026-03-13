@@ -1,26 +1,33 @@
 # Policy validation
 
-This document defines deterministic validation rules for YAML policy files under `ontology/policies/`.
+This document defines deterministic validation rules for YAML policy files under
+`ontology/policies/`.
 
-The goal is to fail fast on broken policy packs (missing files, bad IDs, layout/speaker mismatches, unsafe coefficients) before we run any audio analysis.
+The goal is to fail fast on broken policy packs (missing files, bad IDs,
+layout/speaker mismatches, unsafe coefficients) before we run any audio
+analysis.
 
 ## Outputs
 
-Validators emit **issues** using canonical IDs from `ontology/issues.yaml` (not ad-hoc strings). Policy validation issues are all `ISSUE.VALIDATION.*`.
+Validators emit **issues** using canonical IDs from `ontology/issues.yaml` (not
+ad-hoc strings). Policy validation issues are all `ISSUE.VALIDATION.*`.
 
 - **error**: repository/policy integrity is broken; block downmix rendering.
 - **warn**: allowed but suspicious; proceed but report.
 
 ## File resolution
 
-- **Registry files** (example: `ontology/policies/downmix.yaml`) are loaded by explicit path.
-- **Policy pack file paths inside a registry** are resolved **relative to the directory containing that registry file**.
+- **Registry files** (example: `ontology/policies/downmix.yaml`) are loaded by
+  explicit path.
+- **Policy pack file paths inside a registry** are resolved **relative to the
+  directory containing that registry file**.
 
 Example:
 
 - Registry: `ontology/policies/downmix.yaml`
 - Registry entry: `file: "downmix_policies/standard_foldown_v0.yaml"`
-- Resolved pack file: `ontology/policies/downmix_policies/standard_foldown_v0.yaml`
+- Resolved pack file:
+  `ontology/policies/downmix_policies/standard_foldown_v0.yaml`
 
 ## Downmix registry validation rules
 
@@ -68,7 +75,8 @@ For each `downmix.policies[POLICY.DOWNMIX.*]` entry:
 
 #### DMX.REG.014 (error)
 
-- `supports_source_layouts` and `supports_target_layouts` must be lists of `LAYOUT.*`.
+- `supports_source_layouts` and `supports_target_layouts` must be lists of
+  `LAYOUT.*`.
 - Each referenced layout must exist in `ontology/layouts.yaml`.
 - On failure: `ISSUE.VALIDATION.DOWNMIX_LAYOUT_UNKNOWN`.
 
@@ -79,15 +87,16 @@ For each `downmix.policies[POLICY.DOWNMIX.*]` entry:
 - Every key in `default_policy_by_source_layout` must be a valid `LAYOUT.*`.
 - Every value must exist in `downmix.policies`.
 - On invalid layout: `ISSUE.VALIDATION.DOWNMIX_LAYOUT_UNKNOWN`.
-- On unknown policy id: use `ISSUE.VALIDATION.DOWNMIX_POLICY_ID_MISMATCH` until a dedicated issue exists.
+- On unknown policy id: use `ISSUE.VALIDATION.DOWNMIX_POLICY_ID_MISMATCH` until
+  a dedicated issue exists.
 
 ### Conversions
 
 Each item in `downmix.conversions` must contain:
 
-- `source_layout_id` (LAYOUT.*)
-- `target_layout_id` (LAYOUT.*)
-- `policy_id` (POLICY.DOWNMIX.*)
+- `source_layout_id` (LAYOUT.\*)
+- `target_layout_id` (LAYOUT.\*)
+- `policy_id` (POLICY.DOWNMIX.\*)
 - `matrix_id` (string)
 
 #### DMX.REG.030 (error)
@@ -106,16 +115,21 @@ Each item in `downmix.conversions` must contain:
 
 #### DMX.REG.033 (error)
 
-- The referenced matrix must declare `source_layout_id` and `target_layout_id` equal to the conversion.
-- On failure: `ISSUE.VALIDATION.DOWNMIX_LAYOUT_SPEAKER_MISMATCH` (closest current ID; a dedicated "matrix layout mismatch" issue could be added later).
+- The referenced matrix must declare `source_layout_id` and `target_layout_id`
+  equal to the conversion.
+- On failure: `ISSUE.VALIDATION.DOWNMIX_LAYOUT_SPEAKER_MISMATCH` (closest
+  current ID; a dedicated "matrix layout mismatch" issue could be added later).
 
 ### Composition paths
 
 #### DMX.REG.040 (error)
 
-- If `composition_paths` is present, each `steps[*].matrix_id` must exist in its referenced policy pack.
-- `steps` must form a contiguous chain: each step's `target_layout_id` equals the next step's `source_layout_id`.
-- The first step source equals the composition path source; final step target equals composition path target.
+- If `composition_paths` is present, each `steps[*].matrix_id` must exist in its
+  referenced policy pack.
+- `steps` must form a contiguous chain: each step's `target_layout_id` equals
+  the next step's `source_layout_id`.
+- The first step source equals the composition path source; final step target
+  equals composition path target.
 - On missing matrices: `ISSUE.VALIDATION.DOWNMIX_MATRIX_ID_MISSING`.
 - On layout chain mismatch: `ISSUE.VALIDATION.DOWNMIX_LAYOUT_SPEAKER_MISMATCH`.
 
@@ -144,7 +158,8 @@ For each `downmix_policy_pack.matrices[MATRIX_ID]`:
 
 #### DMX.PACK.010 (error)
 
-- `source_layout_id` and `target_layout_id` must exist in `ontology/layouts.yaml`.
+- `source_layout_id` and `target_layout_id` must exist in
+  `ontology/layouts.yaml`.
 - On failure: `ISSUE.VALIDATION.DOWNMIX_LAYOUT_UNKNOWN`.
 
 #### DMX.PACK.011 (error)
@@ -161,14 +176,16 @@ For each `downmix_policy_pack.matrices[MATRIX_ID]`:
 
 #### DMX.PACK.013 (error)
 
-- Target speaker keys must match the target layout's `channel_order` **exactly** (same set).
+- Target speaker keys must match the target layout's `channel_order` **exactly**
+  (same set).
   - Missing any target channel is an error (silent channel).
   - Extra target speakers not in the layout is an error.
 - On failure: `ISSUE.VALIDATION.DOWNMIX_LAYOUT_SPEAKER_MISMATCH`.
 
 #### DMX.PACK.014 (error)
 
-- Any referenced **source** speaker must be part of the source layout's `channel_order`.
+- Any referenced **source** speaker must be part of the source layout's
+  `channel_order`.
 - On failure: `ISSUE.VALIDATION.DOWNMIX_LAYOUT_SPEAKER_MISMATCH`.
 
 ### Coefficient sanity
@@ -193,7 +210,8 @@ Coefficients are **linear gain** values.
 
 #### DMX.COEFF.004 (warn)
 
-- For each target channel, compute `sum_abs = sum(abs(coef))` across all sources feeding that target.
+- For each target channel, compute `sum_abs = sum(abs(coef))` across all sources
+  feeding that target.
 - If `sum_abs > 2.5`, warn (risk of unexpected level).
 - If `sum_abs > 4.0`, error.
 

@@ -1,52 +1,42 @@
 # Translation checks and downmix QA
 
-Translation is where a mix gets humbled.
-MMO’s translation checks are designed to catch predictable failure modes across
-playback systems.
+Translation is where a mix gets humbled. MMO’s translation checks are designed
+to catch predictable failure modes across playback systems.
 
-Translation profiles available today.
-Phone, earbuds, car, small speaker, mono collapse.
+Translation profiles available today. Phone, earbuds, car, small speaker, mono
+collapse.
 
-List profiles.
-mmo translation list --format json
+List profiles. mmo translation list --format json
 
-Show one profile.
-mmo translation show TRANS.MONO.COLLAPSE
+Show one profile. mmo translation show TRANS.MONO.COLLAPSE
 
-When translation runs automatically.
-In `run --render-many` workflows, translation checks run when a stereo
-deliverable exists.
+When translation runs automatically. In `run --render-many` workflows,
+translation checks run when a stereo deliverable exists.
 
-Downmix is a contract.
-MMO includes downmix policy inventory and deterministic matrices.
+Downmix is a contract. MMO includes downmix policy inventory and deterministic
+matrices.
 
-Show a downmix matrix.
-mmo downmix show --source LAYOUT.5_1 --target LAYOUT.2_0 --format csv
+Show a downmix matrix. mmo downmix show --source LAYOUT.5_1 --target LAYOUT.2_0
+--format csv
 
-List available paths and policies.
-mmo downmix list
-mmo downmix list --policies
+List available paths and policies. mmo downmix list mmo downmix list --policies
 
-QA a downmix against a reference.
-mmo downmix qa --src your_5_1.wav --ref your_stereo_ref.wav \
-  --source-layout LAYOUT.5_1 --format json
+QA a downmix against a reference. mmo downmix qa --src your_5_1.wav --ref
+your_stereo_ref.wav \
+ --source-layout LAYOUT.5_1 --format json
 
-Rendered similarity fallback (safe-render/downmix workflows).
-When rendered surround/immersive output drifts too far from stereo reference
-behavior, MMO can run a deterministic ordered fallback sequence and re-check
-after each step until it passes or the bounded sequence is exhausted.
-Backoff channels can include surrounds, heights, and wides when present
-(`5.1`, `7.1`, `7.1.4`, `9.1.6`).
+Rendered similarity fallback (safe-render/downmix workflows). When rendered
+surround/immersive output drifts too far from stereo reference behavior, MMO can
+run a deterministic ordered fallback sequence and re-check after each step until
+it passes or the bounded sequence is exhausted. Backoff channels can include
+surrounds, heights, and wides when present (`5.1`, `7.1`, `7.1.4`, `9.1.6`).
 
-How to interpret QA.
-A high similarity score means your fold-down behaves like your intended stereo.
-A low score means your surround balance is not collapsing the way you think.
-A “warn” is a prompt to listen and verify.
-A “block” is a strong indicator of translation risk.
+How to interpret QA. A high similarity score means your fold-down behaves like
+your intended stereo. A low score means your surround balance is not collapsing
+the way you think. A “warn” is a prompt to listen and verify. A “block” is a
+strong indicator of translation risk.
 
-Pro notes.
-Correlation failures often show up as “impressive” width that disappears in
-mono.
-Harshness failures often show up as “clarity” that becomes fatigue in earbuds.
-Low-end translation failures often show up as “big” bass that vanishes on
-small speakers.
+Pro notes. Correlation failures often show up as “impressive” width that
+disappears in mono. Harshness failures often show up as “clarity” that becomes
+fatigue in earbuds. Low-end translation failures often show up as “big” bass
+that vanishes on small speakers.

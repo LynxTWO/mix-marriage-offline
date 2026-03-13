@@ -29,10 +29,10 @@ Definition of done:
 - [x] CLI entrypoint and command routing are stable (`python -m mmo`).
 - [x] Core validation contracts run in CI.
 - [x] Cross-OS golden fixture workflows cover the baseline
-  `classify -> bus-plan -> scene -> safe-render --render-many` path and the
-  focused plugin-mode audio contract path.
+      `classify -> bus-plan -> scene -> safe-render --render-many` path and the
+      focused plugin-mode audio contract path.
 - [x] Deterministic compare, project/session, and render-many workflows are
-  user-facing CLI capabilities.
+      user-facing CLI capabilities.
 
 ## MVP-GUI
 
@@ -42,16 +42,18 @@ Definition of done:
 
 - [x] GUI contract docs and wireframes are documented.
 - [x] GUI delivery names one primary plan (Tauri) and one fallback plan
-  (CustomTkinter) until parity.
+      (CustomTkinter) until parity.
 - [x] `docs/gui_parity.md` defines required Tauri screens/behaviors and is
-  validated in CI.
+      validated in CI.
 - [x] Tauri desktop app builds in CI and uploads per-OS binaries.
 - [x] The Tauri app can drive doctor/prepare/validate/analyze/render through the
-  packaged sidecar.
-- [x] The primary Tauri app exposes Scene, Results, and Compare as artifact-backed
-  workflow screens with the same files/contracts the CLI writes.
+      packaged sidecar.
+- [x] The primary Tauri app exposes Scene, Results, and Compare as
+      artifact-backed workflow screens with the same files/contracts the CLI
+      writes.
 - [ ] The primary Tauri app supports the required scene-lock editing behavior.
-- [x] Compare is loudness-matched by default and discloses the compensation used.
+- [x] Compare is loudness-matched by default and discloses the compensation
+      used.
 - [ ] Cross-platform packaged desktop smoke tests are green.
 
 ## DSP Phase 1
@@ -62,13 +64,13 @@ Definition of done:
 
 - [x] Core DSP/render primitives exist.
 - [x] 32-channel, golden-fixture, plugin-mode audio, and fallback-sequence
-  regression coverage exist.
+      regression coverage exist.
 - [ ] Export finalization policy is documented as a stable public contract.
 - [ ] The stage graph is documented and fixed.
 - [ ] Typed plugin buffers and determinism purity guarantees are enforced
-  end-to-end.
+      end-to-end.
 - [ ] Multichannel safety-class declarations and bypass/restrict behavior are
-  fully enforced.
+      fully enforced.
 
 ## Release Surface
 
@@ -77,11 +79,11 @@ State: `in_progress`
 Definition of done:
 
 - [x] `README.md`, `docs/README.md`, installer-facing docs, and release-copy
-  sources match shipped capabilities and current limitations.
+      sources match shipped capabilities and current limitations.
 - [ ] Windows, macOS, and Linux release artifacts receive packaged binary smoke
-  checks.
+      checks.
 - [ ] Windows installer, macOS app bundle, and Linux AppImage outputs receive
-  installer-level smoke checks in release CI.
+      installer-level smoke checks in release CI.
 
 ## Status System
 

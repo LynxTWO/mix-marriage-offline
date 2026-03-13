@@ -1,14 +1,18 @@
 # GEMINI: Repo context preamble (MMO)
 
+<!-- markdownlint-disable-file MD013 -->
+
 You are working in the Mix Marriage Offline (MMO) repository.
 
 Read these first (source of truth):
-1) PROJECT_WHEN_COMPLETE.md (finish line and Definition of Done)
-2) AGENTS.md (repo workflow, commands, constraints)
-3) docs/ (architecture + contracts)
-4) ontology/ and schemas/ (canonical IDs and strict validation)
+
+1. PROJECT_WHEN_COMPLETE.md (finish line and Definition of Done)
+2. AGENTS.md (repo workflow, commands, constraints)
+3. docs/ (architecture + contracts)
+4. ontology/ and schemas/ (canonical IDs and strict validation)
 
 Non-negotiables:
+
 - Offline-first, deterministic behavior, explainability, bounded authority.
 - Keep medium/high recommendation contracts explicit: recommendation payloads
   and safe-render receipts must disclose exact deltas, scope, and rollback
@@ -25,20 +29,22 @@ Non-negotiables:
   by deterministic 5.1 / 7.1.4 regression coverage.
 - Keep chunk-level renderer and plugin-boundary audio transport on
   `mmo.dsp.buffer.AudioBufferF64` so interleaved data keeps explicit
-  `channel_order` and `sample_rate_hz` metadata instead of reverting to raw
-  list math at conversion boundaries.
+  `channel_order` and `sample_rate_hz` metadata instead of reverting to raw list
+  math at conversion boundaries.
 - Keep float64 -> PCM export finalization centralized in
   `mmo.dsp.export_finalize`; renderer WAV paths must disclose deterministic
   bit-depth / dither policy via `export_finalization_receipt` instead of
   reintroducing per-renderer quantize/dither code.
-- Keep GUI dashboard rendering deterministic (frame + surface snapshot signatures).
-- Route runtime progress/cancel/live-log wiring through `mmo.core.progress`
-  and keep ETA/runtime diagnostics out of deterministic persisted artifacts.
+- Keep GUI dashboard rendering deterministic (frame + surface snapshot
+  signatures).
+- Route runtime progress/cancel/live-log wiring through `mmo.core.progress` and
+  keep ETA/runtime diagnostics out of deterministic persisted artifacts.
   `render_report.stage_metrics` / `stage_evidence` must stay deterministic; use
   opt-in `wall_clock` only when a caller explicitly requests non-deterministic
   elapsed-time diagnostics.
 - Keep `fixtures/public_session/report.7_1_4.json` and
-  `tests/test_full_determinism.py` in sync for full-pipeline byte-stability checks.
+  `tests/test_full_determinism.py` in sync for full-pipeline byte-stability
+  checks.
 - Keep `fixtures/golden/` and `tests/test_golden_fixtures.py` in sync for the
   cross-OS classify->bus-plan->scene->safe-render tripwire: exact scene/bus
   snapshots, exact normalized manifest/receipt hashes, exact channel ordering,
@@ -49,62 +55,63 @@ Non-negotiables:
 - Keep watch-folder visual queue telemetry deterministic (stable ordering,
   explicit state transitions, and install-safe CLI wiring).
 - Keep safe-render baseline mixdown deterministic: supported
-  2.0/5.1/7.1/7.1.4/9.1.6 targets must still emit conservative WAV masters
-  when recommendations are not render-eligible.
+  2.0/5.1/7.1/7.1.4/9.1.6 targets must still emit conservative WAV masters when
+  recommendations are not render-eligible.
 - Keep safe-render explicit scene workflows first-class and deterministic:
   `--scene` must take precedence over hidden scene rebuilds, optional
   `--scene-locks` must apply before placement policy and be re-applied before
   authority/eligibility checks, and receipt artifacts must preserve canonical
   scene/lock source provenance.
 - Keep scene-aware safe-render export artifacts deterministic and explainable:
-  `--export-stems`, `--export-buses`, `--export-master/--no-export-master`,
-  and `--export-layouts` must emit stable file paths + SHA-256 hashes in
-  render manifest/receipt outputs and preserve stem->subbus->main-bus->scene
-  mapping context for recall CSV generation.
+  `--export-stems`, `--export-buses`, `--export-master/--no-export-master`, and
+  `--export-layouts` must emit stable file paths + SHA-256 hashes in render
+  manifest/receipt outputs and preserve stem->subbus->main-bus->scene mapping
+  context for recall CSV generation.
 - Keep scene-driven placement mixdown deterministic when enabled: one
-  layout-agnostic scene should render conservative
-  2.0/5.1/7.1/7.1.4/7.1.6/9.1.6 outputs with role/azimuth-driven object stage
-  routing (perspective-gated side/rear/wide use) and subtle
-  confidence-gated/capped hall-room-first bed surround-height sends.
-- Keep placement mixdown memory bounded for long sessions by using
-  deterministic two-pass streaming (fixed-size chunk peak scan, then trimmed
-  PCM24 chunk writes) instead of whole-program in-memory accumulation.
-- Keep optional immersive bed decorrelation deterministic and QA-bounded:
-  seeded decorrelated bed widening may run only for qualified bed content, and
-  if rendered surround similarity fails after one bounded backoff retry, the
+  layout-agnostic scene should render conservative 2.0/5.1/7.1/7.1.4/7.1.6/9.1.6
+  outputs with role/azimuth-driven object stage routing (perspective-gated
+  side/rear/wide use) and subtle confidence-gated/capped hall-room-first bed
+  surround-height sends.
+- Keep placement mixdown memory bounded for long sessions by using deterministic
+  two-pass streaming (fixed-size chunk peak scan, then trimmed PCM24 chunk
+  writes) instead of whole-program in-memory accumulation.
+- Keep optional immersive bed decorrelation deterministic and QA-bounded: seeded
+  decorrelated bed widening may run only for qualified bed content, and if
+  rendered surround similarity fails after one bounded backoff retry, the
   renderer must auto-disable and rerender without that plugin stage.
 - Preserve explicit `session.render_export_options` extras through `safe-render`
   CLI normalization so renderer-scoped deterministic options (for example
-  decorrelated bed widening) are not silently dropped when export toggles are applied.
-- Keep placement and baseline mixdown ingest multiformat-lossless-safe:
-  decode `wav`/`flac`/`wv`/`aiff`/`aif`/`ape` through the shared decoder
-  abstraction and apply deterministic family-aware sample-rate
-  policy/resampling with explainable receipts and per-job `render_report`
-  disclosure instead of silently skipping mismatched stems.
+  decorrelated bed widening) are not silently dropped when export toggles are
+  applied.
+- Keep placement and baseline mixdown ingest multiformat-lossless-safe: decode
+  `wav`/`flac`/`wv`/`aiff`/`aif`/`ape` through the shared decoder abstraction
+  and apply deterministic family-aware sample-rate policy/resampling with
+  explainable receipts and per-job `render_report` disclosure instead of
+  silently skipping mismatched stems.
 - Preserve stereo imaging in placement render paths: stereo stems should not
   collapse to mono in `LAYOUT.2_0`, scene stereo hints (`width_hint`,
   `azimuth_hint`) must remain evidence-backed/deterministic, and any optional
   side wrap beyond L/R must stay confidence-gated and perspective-gated.
 - Keep render-many surround similarity gating deterministic: compare stereo
-  renders against downmix(rendered surround/immersive), and if gates fail,
-  allow only a single bounded backoff retry (surround/height/wide channels)
-  before final pass/fail logging.
-- Keep default safe-render fallback back-compatible and user-helpful:
-  exhausted surround similarity fallback must preserve written artifacts,
-  receipts, QA reports, and preview outputs when they already exist, and the
-  failure must remain explicit in receipt/QA metadata instead of escalating to
-  a non-zero exit unless a separate strict policy explicitly requires it.
+  renders against downmix(rendered surround/immersive), and if gates fail, allow
+  only a single bounded backoff retry (surround/height/wide channels) before
+  final pass/fail logging.
+- Keep default safe-render fallback back-compatible and user-helpful: exhausted
+  surround similarity fallback must preserve written artifacts, receipts, QA
+  reports, and preview outputs when they already exist, and the failure must
+  remain explicit in receipt/QA metadata instead of escalating to a non-zero
+  exit unless a separate strict policy explicitly requires it.
 - Keep safe-render zero-output behavior fail-safe: emit
   `ISSUE.RENDER.NO_OUTPUTS` and return non-zero by default unless
   `--allow-empty-outputs` is explicitly set.
 - Keep offline plugin marketplace discovery install-safe via bundled
   `ontology/plugin_index.yaml` and deterministic CLI/GUI listing paths.
 - Keep offline plugin hub installs deterministic and install-safe by sourcing
-  plugin assets from packaged data (no repo-root assumptions) and writing
-  stable manifest/module outputs in one-click install flows.
-- Keep stems artifact progression deterministic: `stems_map` (role identity)
-  and `bus_plan` (bus-path identity) must preserve stable sorting and
-  schema-valid contracts across repeated runs.
+  plugin assets from packaged data (no repo-root assumptions) and writing stable
+  manifest/module outputs in one-click install flows.
+- Keep stems artifact progression deterministic: `stems_map` (role identity) and
+  `bus_plan` (bus-path identity) must preserve stable sorting and schema-valid
+  contracts across repeated runs.
 - Keep role ontology + classifier coverage additive for uncommon/rare
   instruments (world strings/winds/brass/percussion/keys/guitars) and ensure
   those roles stay wired through template and placement routing with
@@ -116,12 +123,12 @@ Non-negotiables:
   `mmo scene build --map ... --bus ...` must emit stable object-vs-bed
   classification with conservative low-confidence fallback behavior.
 - Keep scene-build locks deterministic and precedence-safe:
-  `mmo scene build --locks ...` must apply per-stem overrides with
-  one centralized precedence rule:
+  `mmo scene build --locks ...` must apply per-stem overrides with one
+  centralized precedence rule:
   `locks > explicit scene fields > explicit CLI flags > plugin/template suggestions > inference defaults`,
   including scene perspective plus role/bus/placement
-  (`azimuth_deg`/`width`/`depth`) and surround/height send caps, and emit
-  stable `locked|explicit|suggested|inferred` provenance receipts in scene metadata.
+  (`azimuth_deg`/`width`/`depth`) and surround/height send caps, and emit stable
+  `locked|explicit|suggested|inferred` provenance receipts in scene metadata.
 - Keep GUI scene-lock editing deterministic and project-local:
   `scene.locks.inspect/save` should round-trip stable stem/object ordering,
   persist `scene_locks.yaml`, preserve non-UI override fields, and update
@@ -130,43 +137,42 @@ Non-negotiables:
   `compare_report.json` must carry deterministic `loudness_match` metadata when
   sibling `render_qa.json` artifacts exist, the primary Tauri compare screen
   should default to that fair-listen compensation while disclosing method +
-  amount, and any preset-preview compensation must stay bounded,
-  explainable, and evaluation-only unless the user explicitly commits it.
+  amount, and any preset-preview compensation must stay bounded, explainable,
+  and evaluation-only unless the user explicitly commits it.
 - Keep Desktop GUI post-analyze scene preview deterministic and read-only:
   `_mmo_gui/scene.json` + `_mmo_gui/scene_lint.json` should be regenerated from
   `stems_map`/`bus_plan` with stable ordering, and the Scene tab should display
   perspective, object-vs-bed context, and warning-level lint issues without
   mutating scene artifacts.
-- Keep the isolated Tauri desktop scaffold install-safe:
-  `gui/desktop-tauri` should remain self-contained, Vite-based, and free of
-  repo-root path assumptions.
-- Treat Tauri as the only primary GUI plan:
-  parity requirements live in `docs/gui_parity.md`, and `mmo-gui`
-  (CustomTkinter) remains fallback-only until those Tauri checklist items land.
-- Keep the Tauri desktop app sidecar-driven and offline:
-  stage the frozen `mmo` CLI via the repo's binary builder, bundle it through
-  `externalBin`, avoid a production dependency on `gui/server.mjs`, and keep
-  desktop workflow actions invoking the packaged sidecar directly via Tauri
-  shell `execute`/`spawn` with bundled data/plugin path resolution.
+- Keep the isolated Tauri desktop scaffold install-safe: `gui/desktop-tauri`
+  should remain self-contained, Vite-based, and free of repo-root path
+  assumptions.
+- Treat Tauri as the only primary GUI plan: parity requirements live in
+  `docs/gui_parity.md`, and `mmo-gui` (CustomTkinter) remains fallback-only
+  until those Tauri checklist items land.
+- Keep the Tauri desktop app sidecar-driven and offline: stage the frozen `mmo`
+  CLI via the repo's binary builder, bundle it through `externalBin`, avoid a
+  production dependency on `gui/server.mjs`, and keep desktop workflow actions
+  invoking the packaged sidecar directly via Tauri shell `execute`/`spawn` with
+  bundled data/plugin path resolution.
 - Keep desktop Tauri CI building release binaries on Linux, macOS, and Windows:
-  frontend lint/test steps should stay install-safe, and artifact uploads
-  should come from `gui/desktop-tauri/src-tauri/target/release/`.
-- Keep GitHub Actions JavaScript actions on Node 24-ready majors where
-  upstream provides them; fix runtime deprecations by upgrading action
-  versions, not by relying on insecure or temporary runner override env vars.
-- Keep GUI/Tauri runtime expectations explicit and aligned across docs + CI:
-  use Node 24 LTS for local/frontend work, pin GitHub-hosted runner images
-  instead of relying on `*-latest`, and keep the Tauri Rust toolchain pinned
-  rather than floating on the ambient `stable` channel.
-- Keep scene QA lint deterministic and explainable:
-  `mmo scene lint` must emit stable issue ordering/report payloads and cover
-  missing stem IDs/refs/files, duplicate object/bus refs, placement range
-  violations, lock-role/bus/layout conflicts (including per-stem bus lock
-  conflicts), low-confidence critical anchors, and immersive-perspective
-  bed/ambient + template-evidence warnings.
-- Keep explicit-scene safe-render preflight lint-first:
-  when `--scene` is provided, safe-render must run scene lint before render
-  stages, and `--scene-strict` must fail fast on lint errors.
+  frontend lint/test steps should stay install-safe, and artifact uploads should
+  come from `gui/desktop-tauri/src-tauri/target/release/`.
+- Keep GitHub Actions JavaScript actions on Node 24-ready majors where upstream
+  provides them; fix runtime deprecations by upgrading action versions, not by
+  relying on insecure or temporary runner override env vars.
+- Keep GUI/Tauri runtime expectations explicit and aligned across docs + CI: use
+  Node 24 LTS for local/frontend work, pin GitHub-hosted runner images instead
+  of relying on `*-latest`, and keep the Tauri Rust toolchain pinned rather than
+  floating on the ambient `stable` channel.
+- Keep scene QA lint deterministic and explainable: `mmo scene lint` must emit
+  stable issue ordering/report payloads and cover missing stem IDs/refs/files,
+  duplicate object/bus refs, placement range violations, lock-role/bus/layout
+  conflicts (including per-stem bus lock conflicts), low-confidence critical
+  anchors, and immersive-perspective bed/ambient + template-evidence warnings.
+- Keep explicit-scene safe-render preflight lint-first: when `--scene` is
+  provided, safe-render must run scene lint before render stages, and
+  `--scene-strict` must fail fast on lint errors.
 - Keep dual-LFE (x.2) export contracts explicit: preserve canonical SPK channel
   order in render/recall artifacts, use conservative WAV mask strategy, and
   surface validation guidance for toolchains that may drop `LFE2`.

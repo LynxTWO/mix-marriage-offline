@@ -1,12 +1,12 @@
 # Plugin Authoring: Minimum Viable Package
 
-This checklist defines the minimum plugin package needed for GUI-visible metadata.
-Use it when creating a new plugin under `plugins/`.
+This checklist defines the minimum plugin package needed for GUI-visible
+metadata. Use it when creating a new plugin under `plugins/`.
 
 ## 1. Required package files
 
-- `*.plugin.yaml` manifest (or `plugin.yaml`) with valid `plugin_id`, `plugin_type`,
-  `version`, and `entrypoint`.
+- `*.plugin.yaml` manifest (or `plugin.yaml`) with valid `plugin_id`,
+  `plugin_type`, `version`, and `entrypoint`.
 - `ui/layout.json` referenced by `ui_layout` in the manifest.
 - `config_schema` object in the manifest with parameter `properties`.
 - `x_mmo_ui` blocks on all parameters referenced by the layout.
@@ -21,33 +21,38 @@ Example starter pack:
 MMO now loads plugins from three roots:
 
 - Primary root: `--plugins` (default: `plugins/` in repo mode).
-- External root: `~/.mmo/plugins/` by default, or `--plugin-dir <path>` to override.
+- External root: `~/.mmo/plugins/` by default, or `--plugin-dir <path>` to
+  override.
 - Built-in packaged root: `mmo.data/plugins` (loaded last when present).
 
-External plugin manifests are automatically validated (schema + ontology semantics)
-before registration. Duplicate `plugin_id` values across primary/external roots are
-rejected deterministically; built-in packaged manifests are fallback-only.
+External plugin manifests are automatically validated (schema + ontology
+semantics) before registration. Duplicate `plugin_id` values across
+primary/external roots are rejected deterministically; built-in packaged
+manifests are fallback-only.
 
 ## 2. Manifest checklist
 
-- `plugin_id` matches schema pattern for the plugin type
-  (for renderer: `PLUGIN.RENDERER.*`).
+- `plugin_id` matches schema pattern for the plugin type (for renderer:
+  `PLUGIN.RENDERER.*`).
 - `entrypoint` imports successfully.
-- `capabilities` uses supported fields (`max_channels`, `channel_mode`, `link_groups`,
-  `latency`, `deterministic_seed_policy`, `dsp_traits`, `bed_only`,
-  `supported_standards`, `preferred_standard`, `supported_layout_ids`,
-  `supported_contexts`, `scene`, `notes`).
+- `capabilities` uses supported fields (`max_channels`, `channel_mode`,
+  `link_groups`, `latency`, `deterministic_seed_policy`, `dsp_traits`,
+  `bed_only`, `supported_standards`, `preferred_standard`,
+  `supported_layout_ids`, `supported_contexts`, `scene`, `notes`).
 - Renderer manifests must declare `capabilities.deterministic_seed_policy`.
 - Renderer manifests must declare `capabilities.dsp_traits.tier` and
   `capabilities.dsp_traits.linearity`.
 - If `capabilities.dsp_traits.linearity` is `nonlinear`, `anti_aliasing` must be
   `oversampling` or `bandlimited` (not `none`).
-- Treat `capabilities.dsp_traits.measurable_claims` as the plugin truth contract.
-  Include at least one measurable claim with `metric_id` and expected direction.
-- If `channel_mode` is `linked_group` or `true_multichannel`, declare `supported_standards`
-  (at minimum `["SMPTE"]`). Omit if the plugin is truly channel-position-agnostic.
-- Never hard-code channel indices. Use `ProcessContext.channel_order` (list of `SPK.*` IDs)
-  to locate channels dynamically — safe for both SMPTE and Film ordering.
+- Treat `capabilities.dsp_traits.measurable_claims` as the plugin truth
+  contract. Include at least one measurable claim with `metric_id` and expected
+  direction.
+- If `channel_mode` is `linked_group` or `true_multichannel`, declare
+  `supported_standards` (at minimum `["SMPTE"]`). Omit if the plugin is truly
+  channel-position-agnostic.
+- Never hard-code channel indices. Use `ProcessContext.channel_order` (list of
+  `SPK.*` IDs) to locate channels dynamically — safe for both SMPTE and Film
+  ordering.
 - `ui_layout` is a relative path inside the plugin directory.
 - `config_schema` is a JSON Schema object (Draft 2020-12 compatible).
 
@@ -55,9 +60,11 @@ rejected deterministically; built-in packaged manifests are fallback-only.
 
 - Every GUI control parameter is declared under `config_schema.properties`.
 - Every GUI control parameter has a valid `x_mmo_ui` block:
-  - `widget` is one of `knob`, `fader`, `toggle`, `selector`, `xy`, `meter`, `graph`.
+  - `widget` is one of `knob`, `fader`, `toggle`, `selector`, `xy`, `meter`,
+    `graph`.
   - Use `units` / `step` / `min` / `max` where relevant.
-- Keep parameter names stable; layout `param_ref` resolution depends on these names.
+- Keep parameter names stable; layout `param_ref` resolution depends on these
+  names.
 
 ## 4. UI layout checklist
 
@@ -79,10 +86,12 @@ With external plugins:
 
 ```powershell
 python -m mmo plugins list --plugins plugins --plugin-dir ~/.mmo/plugins
-python -m mmo render --report report.json --plugins plugins --plugin-dir ~/.mmo/plugins --out-manifest render_manifest.json
+python -m mmo render --report report.json --plugins plugins `
+  --plugin-dir ~/.mmo/plugins --out-manifest render_manifest.json
 ```
 
-Use `python -m mmo plugins show PLUGIN.RENDERER.EXAMPLE_GAIN_V0 ...` to target a specific plugin.
+Use `python -m mmo plugins show PLUGIN.RENDERER.EXAMPLE_GAIN_V0 ...` to target a
+specific plugin.
 
 Expected outcomes:
 
@@ -94,4 +103,5 @@ Expected outcomes:
 - `plugins ui-lint` exits cleanly with no errors for the plugin.
 
 See [docs/16-audio-quality-mandates.md](./16-audio-quality-mandates.md) for
-digital-first DSP policy, truth-contract guidance, and measurable-claim examples.
+digital-first DSP policy, truth-contract guidance, and measurable-claim
+examples.

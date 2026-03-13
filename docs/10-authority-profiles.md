@@ -1,8 +1,10 @@
 # Authority profiles
 
-This document defines *authority profiles* (modes) for MMO. Profiles change what the tool is allowed to auto-apply or auto-render, while keeping the truth layer unchanged.
+This document defines _authority profiles_ (modes) for MMO. Profiles change what
+the tool is allowed to auto-apply or auto-render, while keeping the truth layer
+unchanged.
 
-Truth stays truth. Profiles only change *authority*.
+Truth stays truth. Profiles only change _authority_.
 
 ## 1) Why profiles exist
 
@@ -38,7 +40,8 @@ Reports expose eligibility flags:
 - `eligible_auto_apply`
 - `eligible_render`
 
-Profiles should primarily determine how gates behave in each context, plus user-set limits.
+Profiles should primarily determine how gates behave in each context, plus
+user-set limits.
 
 ## 3) Two classes of rules
 
@@ -46,7 +49,8 @@ To stay safe and predictable, treat rules as two categories:
 
 ### 3.1 Hard stops (integrity rules)
 
-These protect the session and outputs. They should remain strict in every profile unless the user explicitly forces unsafe behavior.
+These protect the session and outputs. They should remain strict in every
+profile unless the user explicitly forces unsafe behavior.
 
 Examples:
 
@@ -131,7 +135,8 @@ Behavior:
 - Auto-apply and/or render a wide range of actions.
 - Still respects hard stops unless the user explicitly forces unsafe behavior.
 - Labels "extreme" changes clearly and records them in an audit trail.
-- Preserves originals and supports undo (via manifests and non-destructive outputs).
+- Preserves originals and supports undo (via manifests and non-destructive
+  outputs).
 - Explicitly opting into `Full send` (and more permissive authority modes such
   as `Turbo`) can permit otherwise lock-gated spatial moves; `Assist` does not.
 
@@ -145,7 +150,8 @@ Best for:
 
 Even in Full send, the tool should not pretend extremes are harmless.
 
-Define "extreme" as any recommendation that crosses a configured threshold, for example:
+Define "extreme" as any recommendation that crosses a configured threshold, for
+example:
 
 - gain changes beyond X dB
 - EQ boosts/cuts beyond Y dB
@@ -156,7 +162,8 @@ Extreme handling should be consistent:
 
 - Always visible in the report (flag + reason + parameter values).
 - Always logged in the render manifest when rendering.
-- Optional: require explicit confirmation unless the user toggles "allow extremes".
+- Optional: require explicit confirmation unless the user toggles "allow
+  extremes".
 
 ## 6) How profiles should map onto gates (implementation guidance)
 

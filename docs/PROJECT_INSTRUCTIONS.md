@@ -1,5 +1,7 @@
 # Mix Marriage Offline (MMO) Project Instructions
 
+<!-- markdownlint-disable-file MD013 -->
+
 This document defines the foundational architecture constraints for MMO.
 
 ## A) Updated goal
@@ -32,24 +34,33 @@ The scene is the source of truth when stems plus intent are available.
 
 ## C) Determinism requirements (minimum: up to 32 channels)
 
-- Stable ordering everywhere: IDs, outputs, manifests, reports, artifact listings
-- Seeded decorrelation policies when used; seed source must be documented and stable
-- Consistent dither/noise policies; same inputs plus same settings must produce same outputs
-- No time-based metadata in outputs (for example, no creation timestamps in encoded formats)
+- Stable ordering everywhere: IDs, outputs, manifests, reports, artifact
+  listings
+- Seeded decorrelation policies when used; seed source must be documented and
+  stable
+- Consistent dither/noise policies; same inputs plus same settings must produce
+  same outputs
+- No time-based metadata in outputs (for example, no creation timestamps in
+  encoded formats)
 - Deterministic retry/backoff limits and deterministic attempt ordering
-- If BLAS/OpenMP backends show allocation hiccups or nondeterministic performance variance during validation, pin backend thread counts:
+- If BLAS/OpenMP backends show allocation hiccups or nondeterministic
+  performance variance during validation, pin backend thread counts:
   - `OPENBLAS_NUM_THREADS=1`
   - `OMP_NUM_THREADS=1`
   - `MKL_NUM_THREADS=1`
   - `VECLIB_MAXIMUM_THREADS=1` (macOS)
   - `NUMEXPR_NUM_THREADS=1`
-- These environment settings do not change mix decisions; they reduce runtime variability in numeric backends.
+- These environment settings do not change mix decisions; they reduce runtime
+  variability in numeric backends.
 
 ## D) Layout safety principles
 
-- Downmix similarity gates (`LUFS delta`, `True Peak delta`, `Correlation delta`) are conservative guardrails
-- Phase/correlation risk checks use conservative backoff; system should block or advise, not silently "fix"
-- Stereo is a render target, not automatically the source of truth when stems plus intent exist
+- Downmix similarity gates (`LUFS delta`, `True Peak delta`,
+  `Correlation delta`) are conservative guardrails
+- Phase/correlation risk checks use conservative backoff; system should block or
+  advise, not silently "fix"
+- Stereo is a render target, not automatically the source of truth when stems
+  plus intent exist
 - Gate outcomes must be explainable with stable IDs and clear reason text
 
 ## E) Required plugin semantics
@@ -57,10 +68,13 @@ The scene is the source of truth when stems plus intent are available.
 Every plugin must declare and honor:
 
 - `channel_mode`: explicit mono/stereo/multichannel behavior and assumptions
-- `link_groups`: how linked multi-stem processing is declared (for example, drum bus)
-- Latency reporting: plugin must report added latency (samples or ms), even if currently unused by host flow
+- `link_groups`: how linked multi-stem processing is declared (for example, drum
+  bus)
+- Latency reporting: plugin must report added latency (samples or ms), even if
+  currently unused by host flow
 - `determinism_seed` behavior: where the seed comes from and how it is applied
-- Speaker position requirements: if positions are needed, renderer/plugin must consume canonical layout definitions
+- Speaker position requirements: if positions are needed, renderer/plugin must
+  consume canonical layout definitions
 
 ## F) Advisory inference policy
 
@@ -84,14 +98,17 @@ Stereo stems with baked pan/width are inference-only:
 - Preferred pytest entrypoint (Windows/OneDrive safe):
   - `tools\run_pytest.cmd -q`
   - `tools\run_pytest.cmd -q tests/test_tools_stem_corpus_scan.py`
-- `tools\run_pytest.cmd` forces `TMP`, `TEMP`, and `TMPDIR` into a repo-local temp directory from `mmo.resources.temp_dir()` and sets pytest `--basetemp` there.
+- `tools\run_pytest.cmd` forces `TMP`, `TEMP`, and `TMPDIR` into a repo-local
+  temp directory from `mmo.resources.temp_dir()` and sets pytest `--basetemp`
+  there.
 - Optional PowerShell runner (useful if you need a `.ps1` entrypoint):
   - `powershell -NoProfile -ExecutionPolicy Bypass -File tools\run_pytest.ps1 -q`
 - Linux/WSL shell runner:
   - `tools/run_pytest.sh -q`
 - Optional parallelism for all three runners:
   - Set `MMO_PYTEST_N` to a worker count (for example `4`) or `auto`.
-  - If `MMO_PYTEST_N` is set and `pytest-xdist` is missing, the runner exits with a clear install hint.
+  - If `MMO_PYTEST_N` is set and `pytest-xdist` is missing, the runner exits
+    with a clear install hint.
 - If you see `.git\index.lock` permission denied:
   - Pause OneDrive sync for this repo.
   - Close Explorer tabs/windows on the repo.
@@ -100,23 +117,23 @@ Stereo stems with baked pan/width are inference-only:
 
 ## Safe cleanup
 
-All temp/artifact cleanup MUST be allowlist-only.
-Never use regex, glob patterns, name-length heuristics, or root-level sweeps.
+All temp/artifact cleanup MUST be allowlist-only. Never use regex, glob
+patterns, name-length heuristics, or root-level sweeps.
 
 ### Allowlisted repo-local temp dirs
 
-| Directory | Purpose |
-|---|---|
-| `.tmp_pytest/` | pytest basetemp (`run_pytest.ps1` / `run_pytest.sh`) |
-| `.tmp_codex/` | Codex tooling temp |
-| `.tmp_claude/` | Claude tooling temp |
-| `sandbox_tmp/` | Sandbox temp |
-| `.pytest_cache/` | pytest cache |
-| `pytest-cache-files-*` | pytest cache dirs (repo root only) |
+| Directory              | Purpose                                              |
+| ---------------------- | ---------------------------------------------------- |
+| `.tmp_pytest/`         | pytest basetemp (`run_pytest.ps1` / `run_pytest.sh`) |
+| `.tmp_codex/`          | Codex tooling temp                                   |
+| `.tmp_claude/`         | Claude tooling temp                                  |
+| `sandbox_tmp/`         | Sandbox temp                                         |
+| `.pytest_cache/`       | pytest cache                                         |
+| `pytest-cache-files-*` | pytest cache dirs (repo root only)                   |
 
 ### Running safe cleanup
 
-```
+```bash
 python tools/safe_cleanup.py            # delete allowlisted dirs
 python tools/safe_cleanup.py --dry-run  # preview only
 ```
@@ -124,8 +141,10 @@ python tools/safe_cleanup.py --dry-run  # preview only
 ### Rules
 
 - Only the dirs listed above may be deleted by automation.
-- Do NOT delete arbitrary root folders or files matching hashes, short names, etc.
-- Do NOT add new entries without updating `CLAUDE.md`, this table, and `tools/safe_cleanup.py` together.
+- Do NOT delete arbitrary root folders or files matching hashes, short names,
+  etc.
+- Do NOT add new entries without updating `CLAUDE.md`, this table, and
+  `tools/safe_cleanup.py` together.
 
 ## Related docs
 

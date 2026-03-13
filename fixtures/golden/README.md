@@ -1,6 +1,7 @@
 # fixtures/golden/
 
-Cross-platform golden render fixtures for `classify -> bus-plan -> scene -> safe-render`.
+Cross-platform golden render fixtures for
+`classify -> bus-plan -> scene -> safe-render`.
 
 Each fixture keeps:
 

@@ -79,8 +79,10 @@ In the running GUI:
 1. Click `Call rpc.discover`.
 2. Click `Call env.doctor`.
 3. Set:
-   - `Project directory`: your `sandbox_tmp/gui_smoke_demo/project` absolute path.
-   - `Stems root (for scan)`: your `sandbox_tmp/gui_smoke_demo/stems_root` absolute path.
+   - `Project directory`: your `sandbox_tmp/gui_smoke_demo/project` absolute
+     path.
+   - `Stems root (for scan)`: your `sandbox_tmp/gui_smoke_demo/stems_root`
+     absolute path.
    - `Pack output`: leave default or set another path under the project.
    - `Plugins directory`: keep `plugins` unless testing another plugin tree.
 4. Click `Call project.show`.

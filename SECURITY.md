@@ -7,7 +7,8 @@ We provide security updates for:
 - The latest released version.
 - The `main` branch (best effort).
 
-If you are on an older release, upgrade to the latest release before reporting a vulnerability unless the issue prevents upgrading.
+If you are on an older release, upgrade to the latest release before reporting a
+vulnerability unless the issue prevents upgrading.
 
 ## Reporting a vulnerability
 
@@ -17,7 +18,8 @@ Preferred: use GitHub Security Advisories for private reporting:
 
 - Repository → Security → Advisories → “Report a vulnerability”.
 
-If Security Advisories are not enabled, contact the maintainer privately using the email listed on the repo owner/maintainer GitHub profile.
+If Security Advisories are not enabled, contact the maintainer privately using
+the email listed on the repo owner/maintainer GitHub profile.
 
 Include:
 
@@ -29,8 +31,10 @@ Include:
 
 ## Disclosure
 
-We prefer coordinated disclosure. Please give maintainers a reasonable chance to investigate and patch before public disclosure.
+We prefer coordinated disclosure. Please give maintainers a reasonable chance to
+investigate and patch before public disclosure.
 
 ## Non-security bugs
 
-For non-sensitive bugs, open a normal GitHub issue with logs and reproduction steps.
+For non-sensitive bugs, open a normal GitHub issue with logs and reproduction
+steps.

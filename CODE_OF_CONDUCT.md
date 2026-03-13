@@ -2,7 +2,9 @@
 
 ## Purpose
 
-Mix Marriage Offline (MMO) is an open-source project. We want technical debate without personal damage, and a community where people can contribute without getting targeted.
+Mix Marriage Offline (MMO) is an open-source project. We want technical debate
+without personal damage, and a community where people can contribute without
+getting targeted.
 
 This document sets the baseline for behavior in all MMO community spaces.
 
@@ -12,9 +14,11 @@ We expect contributors, maintainers, and community members to:
 
 - Be respectful and specific. Critique ideas, code, and evidence, not people.
 - Assume good faith first, then ask for receipts if something feels off.
-- Keep feedback actionable. If you call something “bad,” say what to improve and why.
+- Keep feedback actionable. If you call something “bad,” say what to improve and
+  why.
 - Respect boundaries. If someone asks you to stop, stop.
-- Keep discussions safe for work and safe for minors. This is an audio engineering tool, not a shock-value arena.
+- Keep discussions safe for work and safe for minors. This is an audio
+  engineering tool, not a shock-value arena.
 
 ## Unacceptable behavior
 
@@ -29,14 +33,16 @@ Examples include:
 
 ## Scope
 
-This applies in all project spaces, including issues, pull requests, discussions, commits, and any place someone is representing MMO.
+This applies in all project spaces, including issues, pull requests,
+discussions, commits, and any place someone is representing MMO.
 
 ## Reporting
 
 If you experience or witness a conduct issue, report it privately.
 
-Preferred: email the maintainers at a dedicated conduct address.
-If that is not yet configured, contact the repo owner/maintainer via the email listed on their GitHub profile.
+Preferred: email the maintainers at a dedicated conduct address. If that is not
+yet configured, contact the repo owner/maintainer via the email listed on their
+GitHub profile.
 
 Please include:
 
@@ -58,7 +64,8 @@ Enforcement decisions are based on behavior and impact, not “who started it.�
 
 ## Appeals
 
-If you believe an action was taken in error, contact the maintainers privately with the relevant links and your explanation.
+If you believe an action was taken in error, contact the maintainers privately
+with the relevant links and your explanation.
 
 ## Attribution
 
