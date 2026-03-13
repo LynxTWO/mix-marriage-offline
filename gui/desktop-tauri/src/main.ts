@@ -4,7 +4,7 @@ import {
   clamp,
   initDesignSystem,
   roundToStep,
-  signedNumber,
+  signedDb,
 } from "./design-system";
 import {
   artifactExists,
@@ -186,7 +186,10 @@ const state = {
   } as ArtifactSourceState,
   busyStage: null as CommandStage | null,
   compareCompensationDb: 0,
-  compareCompensationSource: "none" as "manual" | "none" | "render_qa",
+  compareCompensationEvaluationOnly: true,
+  compareCompensationMethodId: "",
+  compareCompensationNote: "",
+  compareCompensationSource: "none" as "compare_report" | "manual" | "none" | "render_qa",
   compareState: "A" as CompareState,
   currentCancelPath: null as string | null,
   dragState: null as DragState | null,
@@ -1097,12 +1100,91 @@ function meanQaMetric(qa: JsonObject | null, metricKey: string): number | null {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-function deriveCompareCompensation(): { db: number; note: string; source: "none" | "render_qa" } {
+type CompareCompensationState = {
+  db: number;
+  evaluationOnly: boolean;
+  methodId: string;
+  note: string;
+  source: "compare_report" | "none" | "render_qa";
+};
+
+type CompareLoudnessMatch = {
+  compensationDb: number;
+  details: string;
+  evaluationOnly: boolean;
+  matched: boolean;
+  measurementA: number | null;
+  measurementB: number | null;
+  methodId: string;
+  unitLabel: string;
+};
+
+function compareLoudnessMatch(compare: JsonObject | null): CompareLoudnessMatch | null {
+  if (compare === null) {
+    return null;
+  }
+  const loudnessMatch = asObject(compare.loudness_match);
+  if (loudnessMatch === null) {
+    return null;
+  }
+
+  const unitId = asString(loudnessMatch.measurement_unit_id);
+  return {
+    compensationDb: asNumber(loudnessMatch.compensation_db) ?? 0,
+    details: asString(loudnessMatch.details),
+    evaluationOnly: loudnessMatch.evaluation_only !== false,
+    matched: asString(loudnessMatch.status) === "matched",
+    measurementA: asNumber(loudnessMatch.measurement_a),
+    measurementB: asNumber(loudnessMatch.measurement_b),
+    methodId: asString(loudnessMatch.method_id),
+    unitLabel: unitId === "UNIT.LUFS" ? "LUFS" : (unitId === "UNIT.DBFS" ? "dBFS" : ""),
+  };
+}
+
+function compareMeasurementForSide(
+  sideKey: "a" | "b",
+  loudnessMatch: CompareLoudnessMatch | null,
+): { unitLabel: string; value: number | null } {
+  const qa = sideKey === "a" ? state.artifacts.compareAQa : state.artifacts.compareBQa;
+  const integrated = meanQaMetric(qa, "integrated_lufs");
+  if (integrated !== null) {
+    return { value: integrated, unitLabel: "LUFS" };
+  }
+
+  const rms = meanQaMetric(qa, "rms_dbfs");
+  if (rms !== null) {
+    return { value: rms, unitLabel: "dBFS" };
+  }
+
+  if (loudnessMatch !== null && loudnessMatch.matched) {
+    return {
+      value: sideKey === "a" ? loudnessMatch.measurementA : loudnessMatch.measurementB,
+      unitLabel: loudnessMatch.unitLabel,
+    };
+  }
+
+  return { value: null, unitLabel: "" };
+}
+
+function deriveCompareCompensation(): CompareCompensationState {
+  const fromCompare = compareLoudnessMatch(state.artifacts.compare);
+  if (fromCompare !== null && fromCompare.matched) {
+    return {
+      db: fromCompare.compensationDb,
+      evaluationOnly: fromCompare.evaluationOnly,
+      methodId: fromCompare.methodId,
+      note: fromCompare.details,
+      source: fromCompare.matched ? "compare_report" : "none",
+    };
+  }
+
   const aIntegrated = meanQaMetric(state.artifacts.compareAQa, "integrated_lufs");
   const bIntegrated = meanQaMetric(state.artifacts.compareBQa, "integrated_lufs");
   if (aIntegrated !== null && bIntegrated !== null) {
     return {
       db: roundToStep(aIntegrated - bIntegrated, 0.1),
+      evaluationOnly: true,
+      methodId: "COMPARE.LOUDNESS_MATCH.RENDER_QA.MEAN_INTEGRATED_LUFS",
       note: `Default loudness match from A/B render_qa mean integrated LUFS (${aIntegrated.toFixed(1)} vs ${bIntegrated.toFixed(1)}).`,
       source: "render_qa",
     };
@@ -1113,17 +1195,29 @@ function deriveCompareCompensation(): { db: number; note: string; source: "none"
   if (aRms !== null && bRms !== null) {
     return {
       db: roundToStep(aRms - bRms, 0.1),
+      evaluationOnly: true,
+      methodId: "COMPARE.LOUDNESS_MATCH.RENDER_QA.MEAN_RMS_DBFS",
       note: `Default loudness match from A/B render_qa mean RMS dBFS (${aRms.toFixed(1)} vs ${bRms.toFixed(1)}).`,
       source: "render_qa",
     };
   }
 
-  return { db: 0, note: "No paired render_qa loudness metrics were available.", source: "none" };
+  return {
+    db: 0,
+    evaluationOnly: true,
+    methodId: "COMPARE.LOUDNESS_MATCH.UNAVAILABLE",
+    note: fromCompare?.details || "No compare-report or paired render_qa loudness metrics were available.",
+    source: "none",
+  };
 }
 
 function summarizeCompareHeadline(compare: JsonObject | null): string {
   if (compare === null) {
     return "No compare artifact loaded.";
+  }
+  const loudness = compareLoudnessMatch(compare);
+  if (loudness !== null && loudness.details) {
+    return loudness.details;
   }
   const notes = asArray(compare.notes).map(asString).filter(Boolean);
   return notes[0] ?? "Compare artifact loaded.";
@@ -1143,11 +1237,13 @@ function renderCompare(ui: AppUi): void {
   ui.compareCompensation.knob.style.setProperty("--control-ratio", clamp(compensationRatio, 0, 1).toFixed(4));
   ui.compareCompensation.knob.setAttribute("aria-valuenow", state.compareCompensationDb.toFixed(1));
   ui.compareCompensation.input.value = state.compareCompensationDb.toFixed(1);
-  ui.compareCompensation.value.textContent = `${signedNumber(state.compareCompensationDb)} dB`;
+  ui.compareCompensation.value.textContent = signedDb(state.compareCompensationDb);
 
-  const compensationNote = state.compareCompensationSource === "render_qa"
-    ? `B is loudness-matched by ${signedNumber(state.compareCompensationDb)} dB.`
-    : `B compensation is ${signedNumber(state.compareCompensationDb)} dB.`;
+  const compensationNote = state.compareCompensationSource === "compare_report" || state.compareCompensationSource === "render_qa"
+    ? `Fair listen on: B is compensated by ${signedDb(state.compareCompensationDb)}${state.compareCompensationEvaluationOnly ? " (evaluation only)." : "."}`
+    : (state.compareCompensationSource === "manual"
+      ? `Manual B compensation is ${signedDb(state.compareCompensationDb)}${state.compareCompensationEvaluationOnly ? " (evaluation only)." : "."}`
+      : "Fair listen unavailable: load paired render_qa metrics or rerun compare.");
   requiredElement<HTMLElement>("#ab-compensation").textContent = compareExists
     ? compensationNote
     : "No loudness-match data loaded.";
@@ -1163,36 +1259,33 @@ function renderCompare(ui: AppUi): void {
 
   const sideKey = state.compareState.toLowerCase() as "a" | "b";
   const side = asObject(compare[sideKey]);
+  const loudnessMatch = compareLoudnessMatch(compare);
   const notes = asArray(compare.notes).map(asString).filter(Boolean);
   const warnings = asArray(compare.warnings).map(asString).filter(Boolean);
-  const loudnessRaw = sideKey === "a"
-    ? meanQaMetric(state.artifacts.compareAQa, "integrated_lufs") ?? meanQaMetric(state.artifacts.compareAQa, "rms_dbfs")
-    : meanQaMetric(state.artifacts.compareBQa, "integrated_lufs") ?? meanQaMetric(state.artifacts.compareBQa, "rms_dbfs");
-  const loudnessUnit = meanQaMetric(sideKey === "a" ? state.artifacts.compareAQa : state.artifacts.compareBQa, "integrated_lufs") !== null
-    ? "LUFS"
-    : "dBFS";
+  const measurement = compareMeasurementForSide(sideKey, loudnessMatch);
+  const loudnessRaw = measurement.value;
+  const loudnessUnit = measurement.unitLabel;
   const matchedLoudness = sideKey === "b" && loudnessRaw !== null
     ? loudnessRaw + state.compareCompensationDb
     : loudnessRaw;
 
   ui.compareReadoutPrimary.textContent = [
     `${state.compareState} · ${asString(side?.label) || state.compareState}`,
-    loudnessRaw === null ? "no loudness metric" : `${matchedLoudness?.toFixed(1)} ${loudnessUnit}`,
+    loudnessRaw === null || !loudnessUnit ? "no loudness metric" : `${matchedLoudness?.toFixed(1)} ${loudnessUnit}`,
   ].join(" · ");
   ui.compareReadoutSecondary.textContent = [
     `profile=${asString(side?.profile_id) || "-"}`,
     `preset=${asString(side?.preset_id) || "-"}`,
-    loudnessRaw === null ? "raw=n/a" : `raw=${loudnessRaw.toFixed(1)} ${loudnessUnit}`,
+    loudnessRaw === null || !loudnessUnit ? "raw=n/a" : `raw=${loudnessRaw.toFixed(1)} ${loudnessUnit}`,
   ].join(" · ");
 
   ui.compareSummary.textContent = notes[0] ?? "No tracked differences were detected.";
   const summaryLines = [
-    state.compareCompensationSource === "render_qa"
-      ? `compensation_source=render_qa | compensation=${signedNumber(state.compareCompensationDb)} dB`
-      : `compensation_source=${state.compareCompensationSource} | compensation=${signedNumber(state.compareCompensationDb)} dB`,
+    `compensation_source=${state.compareCompensationSource} | method=${state.compareCompensationMethodId || "-"} | compensation=${signedDb(state.compareCompensationDb)} | evaluation_only=${state.compareCompensationEvaluationOnly ? "true" : "false"}`,
+    state.compareCompensationNote,
     ...warnings.slice(0, state.resultsDetailLevel),
     ...notes.slice(1, 1 + Math.max(1, state.resultsDetailLevel - warnings.length)),
-  ];
+  ].filter(Boolean);
   ui.compareSummaryNote.textContent = summaryLines.join("\n");
   ui.compareJsonPreview.textContent = serializeJson(compare, state.nerdView ? 70 : 18);
 }
@@ -1427,10 +1520,11 @@ async function refreshCompareArtifacts(paths: WorkflowPaths, aPath: string, bPat
   state.artifactSources.compareBQaPath = bQaPath;
 
   const derived = deriveCompareCompensation();
-  if (state.compareCompensationSource !== "manual" || state.artifacts.compare === null) {
-    state.compareCompensationDb = derived.db;
-    state.compareCompensationSource = derived.source;
-  }
+  state.compareCompensationDb = derived.db;
+  state.compareCompensationEvaluationOnly = derived.evaluationOnly;
+  state.compareCompensationMethodId = derived.methodId;
+  state.compareCompensationNote = derived.note;
+  state.compareCompensationSource = derived.source;
 }
 
 async function runDoctor(ui: AppUi): Promise<void> {
@@ -1819,8 +1913,13 @@ function bindResultsDetailSlider(ui: AppUi, controller: ReturnType<typeof initDe
 function bindCompareKnob(ui: AppUi, controller: ReturnType<typeof initDesignSystem>): void {
   const minimum = -12;
   const maximum = 12;
-  const applyValue = (value: number, source: "manual" | "render_qa" | "none" = "manual") => {
+  const applyValue = (value: number, source: "compare_report" | "manual" | "render_qa" | "none" = "manual") => {
     state.compareCompensationDb = clamp(roundToStep(value, 0.1), minimum, maximum);
+    state.compareCompensationEvaluationOnly = true;
+    if (source === "manual") {
+      state.compareCompensationMethodId = "COMPARE.LOUDNESS_MATCH.MANUAL";
+      state.compareCompensationNote = "Manual compare compensation override. Evaluation only until you explicitly render or commit a change.";
+    }
     state.compareCompensationSource = source;
     renderCompare(ui);
   };
@@ -2166,6 +2265,9 @@ window.addEventListener("DOMContentLoaded", () => {
       state.artifactSources.comparePath = sourceName;
       const derived = deriveCompareCompensation();
       state.compareCompensationDb = derived.db;
+      state.compareCompensationEvaluationOnly = derived.evaluationOnly;
+      state.compareCompensationMethodId = derived.methodId;
+      state.compareCompensationNote = derived.note;
       state.compareCompensationSource = derived.source;
       renderCompare(ui);
       controller.setScreen("compare");
@@ -2181,6 +2283,9 @@ window.addEventListener("DOMContentLoaded", () => {
       const derived = deriveCompareCompensation();
       if (state.compareCompensationSource !== "manual") {
         state.compareCompensationDb = derived.db;
+        state.compareCompensationEvaluationOnly = derived.evaluationOnly;
+        state.compareCompensationMethodId = derived.methodId;
+        state.compareCompensationNote = derived.note;
         state.compareCompensationSource = derived.source;
       }
       renderCompare(ui);
@@ -2196,6 +2301,9 @@ window.addEventListener("DOMContentLoaded", () => {
       const derived = deriveCompareCompensation();
       if (state.compareCompensationSource !== "manual") {
         state.compareCompensationDb = derived.db;
+        state.compareCompensationEvaluationOnly = derived.evaluationOnly;
+        state.compareCompensationMethodId = derived.methodId;
+        state.compareCompensationNote = derived.note;
         state.compareCompensationSource = derived.source;
       }
       renderCompare(ui);

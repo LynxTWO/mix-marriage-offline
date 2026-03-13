@@ -391,6 +391,22 @@ test.describe("desktop workflow design system", () => {
       warnings: [
         "Translation risk increased from A to B; verify on small speakers before choosing.",
       ],
+      loudness_match: {
+        status: "matched",
+        enabled_by_default: true,
+        evaluation_only: true,
+        compensated_side: "b",
+        method_id: "COMPARE.LOUDNESS_MATCH.RENDER_QA.MEAN_INTEGRATED_LUFS",
+        measurement_unit_id: "UNIT.LUFS",
+        measurement_a: -14.0,
+        measurement_b: -15.2,
+        compensation_db: 1.2,
+        source_artifacts: {
+          a_render_qa_path: "/tmp/variant_a/render_qa.json",
+          b_render_qa_path: "/tmp/variant_b/render_qa.json",
+        },
+        details: "Default fair-listen applies +1.2 dB to B using render_qa mean integrated LUFS (A=-14, B=-15.2).",
+      },
     }));
     await page.locator("#compare-a-qa-file-input").setInputFiles(jsonFile("a.render_qa.json", {
       jobs: [
@@ -425,9 +441,10 @@ test.describe("desktop workflow design system", () => {
       ],
     }));
 
-    await expect(page.locator("#ab-compensation")).toContainText("loudness-matched");
+    await expect(page.locator("#ab-compensation")).toContainText("Fair listen on");
     await expect(page.locator("#compare-compensation-input")).toHaveValue("1.2");
     await expect(page.locator("#compare-summary")).toContainText("Profile changed");
+    await expect(page.locator("#compare-summary-note")).toContainText("evaluation_only=true");
     await page.getByRole("button", { name: "B", exact: true }).click();
     await expect(page.locator("#compare-readout-primary")).toContainText("variant_b");
     await expect(page.locator("#compare-readout-secondary")).toContainText("raw=-15.2");

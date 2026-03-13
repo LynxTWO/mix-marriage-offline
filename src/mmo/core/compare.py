@@ -20,6 +20,22 @@ _DOWNMIX_QA_DELTA_EVIDENCE_IDS = {
     "true_peak_delta": "EVID.DOWNMIX.QA.TRUE_PEAK_DELTA",
     "corr_delta": "EVID.DOWNMIX.QA.CORR_DELTA",
 }
+_COMPARE_LOUDNESS_METHODS = (
+    {
+        "label": "render_qa mean integrated LUFS",
+        "method_id": "COMPARE.LOUDNESS_MATCH.RENDER_QA.MEAN_INTEGRATED_LUFS",
+        "metric_key": "integrated_lufs",
+        "unit_id": "UNIT.LUFS",
+    },
+    {
+        "label": "render_qa mean RMS dBFS",
+        "method_id": "COMPARE.LOUDNESS_MATCH.RENDER_QA.MEAN_RMS_DBFS",
+        "metric_key": "rms_dbfs",
+        "unit_id": "UNIT.DBFS",
+    },
+)
+_COMPARE_LOUDNESS_UNAVAILABLE_METHOD_ID = "COMPARE.LOUDNESS_MATCH.UNAVAILABLE"
+_COMPARE_LOUDNESS_LARGE_DELTA_WARN_DB = 4.0
 
 
 def _coerce_str(value: Any) -> str:
@@ -178,6 +194,88 @@ def _report_output_formats(report: dict[str, Any], *, report_path: Path) -> list
     return sorted(formats, key=lambda item: (_OUTPUT_FORMAT_ORDER.get(item, 999), item))
 
 
+def _round_number(value: float | None, *, digits: int) -> float | None:
+    if value is None:
+        return None
+    rounded = round(value, digits)
+    if rounded == -0.0:
+        return 0.0
+    return rounded
+
+
+def _compare_render_qa_path(report_path: Path) -> Path:
+    return report_path.parent / "render_qa.json"
+
+
+def _mean_render_qa_metric(render_qa: dict[str, Any], metric_key: str) -> float | None:
+    values: list[float] = []
+    for job in _coerce_dict_list(render_qa.get("jobs")):
+        for output in _coerce_dict_list(job.get("outputs")):
+            metrics = _coerce_dict(output.get("metrics"))
+            value = _coerce_number(metrics.get(metric_key))
+            if value is not None:
+                values.append(value)
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+def _build_loudness_match(report_path_a: Path, report_path_b: Path) -> dict[str, Any]:
+    qa_path_a = _compare_render_qa_path(report_path_a)
+    qa_path_b = _compare_render_qa_path(report_path_b)
+    qa_a = _read_optional_json_object(qa_path_a)
+    qa_b = _read_optional_json_object(qa_path_b)
+    source_artifacts = {
+        "a_render_qa_path": qa_path_a.resolve().as_posix(),
+        "b_render_qa_path": qa_path_b.resolve().as_posix(),
+    }
+
+    for method in _COMPARE_LOUDNESS_METHODS:
+        measurement_a = _mean_render_qa_metric(qa_a, method["metric_key"])
+        measurement_b = _mean_render_qa_metric(qa_b, method["metric_key"])
+        if measurement_a is None or measurement_b is None:
+            continue
+        compensation_db = _round_number(measurement_a - measurement_b, digits=1)
+        rounded_a = _round_number(measurement_a, digits=3)
+        rounded_b = _round_number(measurement_b, digits=3)
+        return {
+            "status": "matched",
+            "enabled_by_default": True,
+            "evaluation_only": True,
+            "compensated_side": "b",
+            "method_id": method["method_id"],
+            "measurement_unit_id": method["unit_id"],
+            "measurement_a": rounded_a,
+            "measurement_b": rounded_b,
+            "compensation_db": compensation_db,
+            "source_artifacts": source_artifacts,
+            "details": (
+                "Default fair-listen applies "
+                f"{_format_signed(compensation_db, precision=1)} dB to B using "
+                f"{method['label']} "
+                f"(A={_format_number(rounded_a, precision=2)}, "
+                f"B={_format_number(rounded_b, precision=2)})."
+            ),
+        }
+
+    return {
+        "status": "unavailable",
+        "enabled_by_default": False,
+        "evaluation_only": True,
+        "compensated_side": "b",
+        "method_id": _COMPARE_LOUDNESS_UNAVAILABLE_METHOD_ID,
+        "measurement_unit_id": "UNIT.NONE",
+        "measurement_a": None,
+        "measurement_b": None,
+        "compensation_db": 0.0,
+        "source_artifacts": source_artifacts,
+        "details": (
+            "Fair-listen compensation was unavailable because paired render_qa "
+            "integrated LUFS or RMS metrics were not found for both sides."
+        ),
+    }
+
+
 def _first_measurement_value(downmix_qa: dict[str, Any], *, evidence_id: str) -> float | None:
     measurements = downmix_qa.get("measurements")
     if not isinstance(measurements, list):
@@ -299,9 +397,34 @@ def _compare_side_summary(
     }
 
 
-def _build_notes_and_warnings(diffs: dict[str, Any]) -> tuple[list[str], list[str]]:
+def _build_notes_and_warnings(
+    diffs: dict[str, Any],
+    *,
+    loudness_match: dict[str, Any] | None = None,
+) -> tuple[list[str], list[str]]:
     notes: list[str] = []
     warnings: list[str] = []
+    loudness_notes: list[str] = []
+    loudness_warnings: list[str] = []
+
+    if isinstance(loudness_match, dict):
+        loudness_status = _coerce_str(loudness_match.get("status")).strip().lower()
+        loudness_details = _coerce_str(loudness_match.get("details")).strip()
+        compensation_db = _coerce_number(loudness_match.get("compensation_db"))
+        if loudness_status == "matched":
+            if loudness_details:
+                loudness_notes.append(loudness_details)
+            if (
+                compensation_db is not None
+                and abs(compensation_db) >= _COMPARE_LOUDNESS_LARGE_DELTA_WARN_DB
+            ):
+                loudness_warnings.append(
+                    "Fair-listen needed a large compensation on B "
+                    f"({_format_signed(compensation_db, precision=1)} dB); "
+                    "double-check both raw and matched playback before deciding."
+                )
+        elif loudness_details:
+            loudness_warnings.append(loudness_details)
 
     profile_diff = _coerce_dict(diffs.get("profile_id"))
     profile_a = _coerce_str(profile_diff.get("a")).strip()
@@ -426,7 +549,7 @@ def _build_notes_and_warnings(diffs: dict[str, Any]) -> tuple[list[str], list[st
 
     if not notes:
         notes.append("No tracked differences were detected between A and B.")
-    return notes, warnings
+    return [*loudness_notes, *notes], [*loudness_warnings, *warnings]
 
 
 def build_compare_report(
@@ -470,6 +593,7 @@ def build_compare_report(
     translation_risk_a = _translation_risk(report_a)
     translation_risk_b = _translation_risk(report_b)
     translation_shift = _risk_shift(translation_risk_a, translation_risk_b)
+    loudness_match = _build_loudness_match(report_path_a, report_path_b)
 
     payload: dict[str, Any] = {
         "schema_version": COMPARE_REPORT_SCHEMA_VERSION,
@@ -505,10 +629,14 @@ def build_compare_report(
                 },
             },
         },
+        "loudness_match": loudness_match,
         "notes": [],
         "warnings": [],
     }
-    notes, warnings = _build_notes_and_warnings(_coerce_dict(payload.get("diffs")))
+    notes, warnings = _build_notes_and_warnings(
+        _coerce_dict(payload.get("diffs")),
+        loudness_match=loudness_match,
+    )
     payload["notes"] = notes
     payload["warnings"] = warnings
     return payload

@@ -870,6 +870,36 @@ def export_compare_report_pdf(
     )
     story.append(Spacer(1, 12))
 
+    loudness_match = compare_report.get("loudness_match", {})
+    if isinstance(loudness_match, dict):
+        source_artifacts = loudness_match.get("source_artifacts", {})
+        if not isinstance(source_artifacts, dict):
+            source_artifacts = {}
+        rows = [
+            ["field", "value"],
+            ["status", _safe_str(loudness_match.get("status"))],
+            ["enabled_by_default", _safe_str(loudness_match.get("enabled_by_default"))],
+            ["evaluation_only", _safe_str(loudness_match.get("evaluation_only"))],
+            ["method_id", truncate_value(_safe_str(loudness_match.get("method_id")), truncate_values)],
+            ["measurement_unit_id", _safe_str(loudness_match.get("measurement_unit_id"))],
+            ["measurement_a", _safe_str(loudness_match.get("measurement_a"))],
+            ["measurement_b", _safe_str(loudness_match.get("measurement_b"))],
+            ["compensation_db", _safe_str(loudness_match.get("compensation_db"))],
+            [
+                "a_render_qa_path",
+                truncate_value(_safe_str(source_artifacts.get("a_render_qa_path")), truncate_values),
+            ],
+            [
+                "b_render_qa_path",
+                truncate_value(_safe_str(source_artifacts.get("b_render_qa_path")), truncate_values),
+            ],
+            ["details", truncate_value(_safe_str(loudness_match.get("details")), truncate_values)],
+        ]
+        story.append(Paragraph("Loudness Match", styles["Heading2"]))
+        story.append(Spacer(1, 6))
+        story.append(_compare_table(rows))
+        story.append(Spacer(1, 12))
+
     diffs = compare_report.get("diffs", {})
     metrics = {}
     if isinstance(diffs, dict):

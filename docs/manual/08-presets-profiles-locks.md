@@ -10,6 +10,10 @@ mmo presets list --format json
 Preview what a preset does.
 mmo presets preview PRESET.VIBE.TRANSLATION_SAFE
 
+Preview it with measured report context so MMO can explain any bounded
+feature-driven preview safety adjustments.
+mmo presets preview PRESET.VIBE.DENSE_GLUE --report out/report.json
+
 Authority modes control how aggressive automation is allowed to be.
 These are the built-in modes described in the help registry:
 Guide (no auto-apply), Assist (conservative default), Full Send (more permissive), Turbo (fast and aggressive).
@@ -85,3 +89,6 @@ Locks exist because “taste” changes are high-risk in automation.
 If you know a boundary is non-negotiable, make it explicit as a lock.
 Use Assist mode plus a conservative user profile when you are working on unfamiliar stems.
 Use Turbo only when you accept that you are trading subtlety for momentum.
+Preset preview loudness compensation is evaluation-only unless you explicitly
+run or apply the preset. Shipped preset packs declare a preview loudness guard,
+and report-driven preview initialization must stay bounded and disclosed.

@@ -57,6 +57,10 @@ export function signedNumber(value: number, digits = 1): string {
   return rounded > 0 ? `+${rounded.toFixed(digits)}` : rounded.toFixed(digits);
 }
 
+export function signedDb(value: number, digits = 1): string {
+  return `${signedNumber(value, digits)} dB`;
+}
+
 export function initDesignSystem(options: InitOptions = {}): DesignSystemController {
   const scaleButtons = Array.from(
     document.querySelectorAll<HTMLButtonElement>("#gui-scale-control [data-scale-id]"),

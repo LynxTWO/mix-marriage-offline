@@ -22,9 +22,15 @@ _PRESET_ALLOWED_KEYS = (
     | set(_PRESET_OPTIONAL_STRING_LIST_KEYS)
 )
 _PACK_REQUIRED_KEYS = {"pack_id", "label", "description", "preset_ids"}
+_PACK_OPTIONAL_STRING_KEYS = {"feature_init_policy_id"}
+_PACK_OPTIONAL_NUMBER_KEYS = {"preview_loudness_guard_db"}
 from mmo.resources import presets_dir as _presets_dir, schemas_dir
 
-_PACK_ALLOWED_KEYS = _PACK_REQUIRED_KEYS
+_PACK_ALLOWED_KEYS = (
+    _PACK_REQUIRED_KEYS
+    | _PACK_OPTIONAL_STRING_KEYS
+    | _PACK_OPTIONAL_NUMBER_KEYS
+)
 
 
 def _load_json_object(path: Path, *, label: str) -> dict[str, Any]:
@@ -99,6 +105,21 @@ def _normalize_optional_string_list_field(item: dict[str, Any], key: str) -> lis
             raise ValueError(f"Preset field {key}[{idx}] must not be empty.")
         normalized_items.append(normalized_item)
     return normalized_items
+
+
+def _normalize_optional_non_negative_number_field(
+    item: dict[str, Any],
+    key: str,
+) -> float | None:
+    value = item.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"Preset pack field {key} must be a number when present.")
+    normalized_value = float(value)
+    if normalized_value < 0:
+        raise ValueError(f"Preset pack field {key} must be >= 0 when present.")
+    return normalized_value
 
 
 def _validate_preset_index_basic(index: dict[str, Any], *, index_path: Path) -> dict[str, Any]:
@@ -276,6 +297,32 @@ def _validate_preset_index_basic(index: dict[str, Any], *, index_path: Path) -> 
                 "label": str(label).strip(),
                 "description": str(description).strip(),
                 "preset_ids": normalized_preset_ids,
+                **(
+                    {
+                        "feature_init_policy_id": feature_init_policy_id,
+                    }
+                    if (
+                        (feature_init_policy_id := _normalize_optional_string_field(
+                            item,
+                            "feature_init_policy_id",
+                        ))
+                        is not None
+                    )
+                    else {}
+                ),
+                **(
+                    {
+                        "preview_loudness_guard_db": preview_loudness_guard_db,
+                    }
+                    if (
+                        (preview_loudness_guard_db := _normalize_optional_non_negative_number_field(
+                            item,
+                            "preview_loudness_guard_db",
+                        ))
+                        is not None
+                    )
+                    else {}
+                ),
             }
         )
 

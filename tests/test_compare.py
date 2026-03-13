@@ -124,6 +124,28 @@ def _write_json(path: Path, payload: dict) -> None:
     )
 
 
+def _write_render_qa(path: Path, *, integrated_lufs: float, rms_dbfs: float) -> None:
+    _write_json(
+        path,
+        {
+            "jobs": [
+                {
+                    "job_id": "JOB.COMPARE.TEST",
+                    "outputs": [
+                        {
+                            "path": "render/mix.wav",
+                            "metrics": {
+                                "integrated_lufs": integrated_lufs,
+                                "rms_dbfs": rms_dbfs,
+                            },
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+
 class TestCompareCore(unittest.TestCase):
     def test_load_report_from_path_or_dir(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -182,6 +204,11 @@ class TestCompareCore(unittest.TestCase):
                     masking_pairs_count=2,
                 ),
             )
+            _write_render_qa(
+                report_a_path.parent / "render_qa.json",
+                integrated_lufs=-14.0,
+                rms_dbfs=-10.0,
+            )
             _write_json(
                 report_b_path,
                 _build_report(
@@ -199,6 +226,11 @@ class TestCompareCore(unittest.TestCase):
                     density_peak=5,
                     masking_pairs_count=6,
                 ),
+            )
+            _write_render_qa(
+                report_b_path.parent / "render_qa.json",
+                integrated_lufs=-15.2,
+                rms_dbfs=-11.1,
             )
 
             report_a, resolved_a = load_report_from_path_or_dir(report_a_path)
@@ -222,6 +254,16 @@ class TestCompareCore(unittest.TestCase):
 
             self.assertEqual(first, second)
             validator.validate(first)
+            self.assertEqual(first["loudness_match"]["status"], "matched")
+            self.assertEqual(
+                first["loudness_match"]["method_id"],
+                "COMPARE.LOUDNESS_MATCH.RENDER_QA.MEAN_INTEGRATED_LUFS",
+            )
+            self.assertTrue(first["loudness_match"]["enabled_by_default"])
+            self.assertTrue(first["loudness_match"]["evaluation_only"])
+            self.assertAlmostEqual(first["loudness_match"]["measurement_a"], -14.0)
+            self.assertAlmostEqual(first["loudness_match"]["measurement_b"], -15.2)
+            self.assertAlmostEqual(first["loudness_match"]["compensation_db"], 1.2)
             self.assertEqual(first["diffs"]["profile_id"], {"a": "PROFILE.ASSIST", "b": "PROFILE.FULL_SEND"})
             self.assertEqual(first["diffs"]["preset_id"]["a"], "PRESET.SAFE_CLEANUP")
             self.assertEqual(first["diffs"]["preset_id"]["b"], "PRESET.VIBE.WARM_INTIMATE")

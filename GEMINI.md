@@ -126,6 +126,12 @@ Non-negotiables:
   `scene.locks.inspect/save` should round-trip stable stem/object ordering,
   persist `scene_locks.yaml`, preserve non-UI override fields, and update
   `drafts/scene.draft.json` so corrected intent can be re-rendered immediately.
+- Keep compare and preset-preview listening fairness explicit:
+  `compare_report.json` must carry deterministic `loudness_match` metadata when
+  sibling `render_qa.json` artifacts exist, the primary Tauri compare screen
+  should default to that fair-listen compensation while disclosing method +
+  amount, and any preset-preview compensation must stay bounded,
+  explainable, and evaluation-only unless the user explicitly commits it.
 - Keep Desktop GUI post-analyze scene preview deterministic and read-only:
   `_mmo_gui/scene.json` + `_mmo_gui/scene_lint.json` should be regenerated from
   `stems_map`/`bus_plan` with stable ordering, and the Scene tab should display

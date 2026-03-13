@@ -2023,6 +2023,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional path to a run config JSON file.",
     )
     presets_preview_parser.add_argument(
+        "--report",
+        default=None,
+        help=(
+            "Optional analyzed report JSON used to derive bounded preview-only "
+            "feature initialization and loudness safety context."
+        ),
+    )
+    presets_preview_parser.add_argument(
         "--format",
         choices=["json", "text"],
         default="text",
@@ -6570,6 +6578,7 @@ def main(argv: list[str] | None = None) -> int:
                     presets_dir=presets_dir,
                     preset_id=args.preset_id,
                     config_path=args.config,
+                    report_path=args.report,
                     cli_overrides=cli_overrides,
                 )
             except ValueError as exc:

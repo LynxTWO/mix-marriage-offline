@@ -151,6 +151,32 @@ class TestPresets(unittest.TestCase):
                 self.assertGreaterEqual(len(words), 1)
                 self.assertLessEqual(len(words), 3)
 
+    def test_vibe_starter_pack_declares_preview_guard_policy(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        presets_dir = repo_root / "presets"
+
+        index = load_preset_index(presets_dir)
+        packs = index.get("packs", [])
+        self.assertIsInstance(packs, list)
+        if not isinstance(packs, list):
+            return
+
+        by_id = {
+            item.get("pack_id"): item
+            for item in packs
+            if isinstance(item, dict)
+        }
+        vibe_starter = by_id.get("PACK.VIBE_STARTER")
+        self.assertIsInstance(vibe_starter, dict)
+        if not isinstance(vibe_starter, dict):
+            return
+
+        self.assertEqual(
+            vibe_starter.get("feature_init_policy_id"),
+            "FEATURE_INIT.REPORT_CONTEXT.BOUNDED_V1",
+        )
+        self.assertEqual(vibe_starter.get("preview_loudness_guard_db"), 2.0)
+
 
 if __name__ == "__main__":
     unittest.main()

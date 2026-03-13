@@ -204,6 +204,8 @@
       "pack_id": "PACK.VIBE_STARTER",
       "label": "Vibe starter",
       "description": "A compact vibe-first preset pack for quick directional passes.",
+      "feature_init_policy_id": "FEATURE_INIT.REPORT_CONTEXT.BOUNDED_V1",
+      "preview_loudness_guard_db": 2.0,
       "preset_ids": [
         "PRESET.VIBE.WARM_INTIMATE",
         "PRESET.VIBE.BRIGHT_AIRY",

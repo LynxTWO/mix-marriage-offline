@@ -41,7 +41,8 @@ polish items live in `PROJECT_WHEN_COMPLETE.md` section 9 and in `LATER` below.
 
 Post-complete work that should not block `PROJECT_WHEN_COMPLETE.md`:
 
-- feature-driven preset initialization and loudness-safe preset preview polish
+- follow-on preset surface polish beyond the shipped bounded report-driven
+  preview safety contract
 - extra compare visual polish: dynamics/spatial scopes, explainability overlays, richer "what changed" summaries
 - artist-first preset surfaces: macro controls, mood/texture selectors, safe-mode polish
 - reference matcher guidance, A/B/C/D morphing, history scrub, and soundstage/masking views

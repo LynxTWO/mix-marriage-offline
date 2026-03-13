@@ -279,8 +279,9 @@ What remains: broaden the golden fixture matrix beyond the small stereo/surround
   cards and deterministic one-click offline plugin install flow.
 - [x] Compare is a first-class user-facing workflow across CLI and GUI:
   artifact-backed compare flows (`current vs last run`, `report vs report`) are
-  visible from results surfaces, and any loudness compensation used for
-  evaluation is disclosed.
+  visible from results surfaces, `compare_report.json` records the deterministic
+  loudness-match method/amount, and any evaluation-only compensation is
+  disclosed in user-visible compare results.
 - [x] A “variant runner” can render multiple output variants (profiles/presets/targets) while reusing cached analysis artifacts keyed by content hash.
 - [x] Project session JSON persistence exists for `scene + history + receipts` via `mmo project save/load`, with deterministic JSON output and strict schema validation.
 What remains: the primary remaining Tauri parity item is scene-lock editing in the primary GUI; compare/results artifact parity is complete.
@@ -516,8 +517,10 @@ Done: safe-render now preserves renderer-side fallback config from session fixtu
 These items should stay tracked, but they do not block v1 completion once
 sections 4.1 through 4.9 are closed.
 
-- [ ] Presets (example: EQ vibe presets) can be initialized from measured stem
-  features, and preset preview does not create surprise loudness jumps.
+- [x] Presets (example: EQ vibe presets) can be initialized from measured stem
+  or report context with bounded, explainable preview metadata, and preset
+  preview does not create surprise loudness jumps because any preview
+  compensation remains evaluation-only unless explicitly committed.
 - [ ] Dynamics/spatial views (offline-rendered is acceptable): gain reduction
   meter, phase correlation, goniometer/vectorscope, optional transfer curve.
 - [ ] Explainability overlays (“what/why”), confidence indicator for

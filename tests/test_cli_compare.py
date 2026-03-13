@@ -108,6 +108,28 @@ def _write_manifest(path: Path, *, output_format: str) -> None:
     )
 
 
+def _write_render_qa(path: Path, *, integrated_lufs: float, rms_dbfs: float) -> None:
+    _write_json(
+        path,
+        {
+            "jobs": [
+                {
+                    "job_id": "JOB.CLI.COMPARE.TEST",
+                    "outputs": [
+                        {
+                            "path": "render/mix.wav",
+                            "metrics": {
+                                "integrated_lufs": integrated_lufs,
+                                "rms_dbfs": rms_dbfs,
+                            },
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+
 class TestCliCompare(unittest.TestCase):
     def test_compare_cli_accepts_dir_or_report_path_and_writes_json(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -143,6 +165,8 @@ class TestCliCompare(unittest.TestCase):
             )
             _write_manifest(out_a / "render_manifest.json", output_format="wav")
             _write_manifest(out_b / "apply_manifest.json", output_format="flac")
+            _write_render_qa(out_a / "render_qa.json", integrated_lufs=-14.0, rms_dbfs=-10.0)
+            _write_render_qa(out_b / "render_qa.json", integrated_lufs=-15.2, rms_dbfs=-11.0)
 
             exit_code = main(
                 [
@@ -164,6 +188,12 @@ class TestCliCompare(unittest.TestCase):
             self.assertEqual(payload["b"]["label"], "variant_b")
             self.assertEqual(payload["diffs"]["output_formats"]["a"], ["wav"])
             self.assertEqual(payload["diffs"]["output_formats"]["b"], ["flac"])
+            self.assertEqual(payload["loudness_match"]["status"], "matched")
+            self.assertEqual(
+                payload["loudness_match"]["method_id"],
+                "COMPARE.LOUDNESS_MATCH.RENDER_QA.MEAN_INTEGRATED_LUFS",
+            )
+            self.assertAlmostEqual(payload["loudness_match"]["compensation_db"], 1.2)
             self.assertIsInstance(payload.get("notes"), list)
             self.assertIsInstance(payload.get("warnings"), list)
 
@@ -199,6 +229,8 @@ class TestCliCompare(unittest.TestCase):
             )
             _write_manifest(out_a / "render_manifest.json", output_format="wav")
             _write_manifest(out_b / "apply_manifest.json", output_format="flac")
+            _write_render_qa(out_a / "render_qa.json", integrated_lufs=-14.0, rms_dbfs=-10.0)
+            _write_render_qa(out_b / "render_qa.json", integrated_lufs=-14.3, rms_dbfs=-10.2)
 
             exit_code = main(
                 [

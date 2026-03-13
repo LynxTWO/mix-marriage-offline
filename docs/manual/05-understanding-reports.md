@@ -33,4 +33,7 @@ Render and apply flows produce receipts that record what changed, what did not, 
 
 Pro notes.
 Use `mmo compare` to compare two reports and see what changed across revisions.
+When sibling `render_qa.json` artifacts exist, `compare_report.json` also records
+the fair-listen `loudness_match` method, amount, and source paths so GUI and CLI
+compare surfaces can disclose the evaluation compensation instead of hiding it.
 Use `mmo report` when you want validation plus exports in one command.

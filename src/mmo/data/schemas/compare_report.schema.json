@@ -10,6 +10,7 @@
     "a": { "$ref": "#/$defs/side" },
     "b": { "$ref": "#/$defs/side" },
     "diffs": { "$ref": "#/$defs/diffs" },
+    "loudness_match": { "$ref": "#/$defs/loudness_match" },
     "notes": {
       "type": "array",
       "items": { "type": "string" }
@@ -102,6 +103,51 @@
       "properties": {
         "extreme_count": { "$ref": "#/$defs/number_diff" },
         "translation_risk": { "$ref": "#/$defs/translation_risk_diff" }
+      }
+    },
+    "loudness_match_source_artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["a_render_qa_path", "b_render_qa_path"],
+      "properties": {
+        "a_render_qa_path": { "type": "string" },
+        "b_render_qa_path": { "type": "string" }
+      }
+    },
+    "loudness_match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "enabled_by_default",
+        "evaluation_only",
+        "compensated_side",
+        "method_id",
+        "measurement_unit_id",
+        "measurement_a",
+        "measurement_b",
+        "compensation_db",
+        "source_artifacts",
+        "details"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["matched", "unavailable"]
+        },
+        "enabled_by_default": { "type": "boolean" },
+        "evaluation_only": { "type": "boolean" },
+        "compensated_side": {
+          "type": "string",
+          "enum": ["b"]
+        },
+        "method_id": { "type": "string" },
+        "measurement_unit_id": { "type": "string" },
+        "measurement_a": { "type": ["number", "null"] },
+        "measurement_b": { "type": ["number", "null"] },
+        "compensation_db": { "type": "number" },
+        "source_artifacts": { "$ref": "#/$defs/loudness_match_source_artifacts" },
+        "details": { "type": "string" }
       }
     },
     "metrics": {

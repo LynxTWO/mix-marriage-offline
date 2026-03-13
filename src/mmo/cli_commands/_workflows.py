@@ -2843,6 +2843,7 @@ def _ui_render_preview_text(payload: dict[str, Any], *, nerd: bool) -> str:
     label = payload.get("label")
     overlay = payload.get("overlay")
     help_payload = payload.get("help")
+    preview_safety = payload.get("preview_safety")
     warnings = payload.get("warnings")
 
     normalized_label = label if isinstance(label, str) and label.strip() else "Preset"
@@ -2871,6 +2872,11 @@ def _ui_render_preview_text(payload: dict[str, Any], *, nerd: bool) -> str:
     lines.append("Watch out for:")
     for item in watch_out_for[:4]:
         lines.append(f"  - {item}")
+    if isinstance(preview_safety, dict):
+        details = preview_safety.get("details")
+        if isinstance(details, str) and details.strip():
+            lines.append("Preview safety:")
+            lines.append(f"  - {details.strip()}")
     return "\n".join(lines)
 
 
@@ -3162,6 +3168,7 @@ def _run_ui_workflow(
             presets_dir=presets_dir,
             preset_id=selected_preset_id,
             config_path=None,
+            report_path=recommendation_report_path.as_posix() if recommendation_report_path is not None else None,
             cli_overrides={},
         )
     except ValueError as exc:

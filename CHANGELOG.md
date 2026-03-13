@@ -84,6 +84,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Compare fair-listen disclosure and preset-preview loudness safety:
+  - `mmo compare` now writes deterministic `loudness_match` context into
+    `compare_report.json` from sibling `render_qa.json` artifacts, including
+    method ID, measurement values, compensation amount, and evaluation-only
+    disclosure; the compare PDF export and Tauri compare screen surface the same
+    fair-listen contract by default.
+  - Preset packs now declare a preview loudness guard, and `mmo presets preview`
+    accepts optional `--report` context so report-driven preview initialization
+    stays bounded, explainable, and evaluation-only unless the user explicitly
+    runs or applies the preset.
+
 - Cross-platform golden render manifest hashing:
   - `scene_sha256` now canonicalizes path-bearing scene fields before hashing,
     so absolute runner paths no longer leak into normalized render manifest

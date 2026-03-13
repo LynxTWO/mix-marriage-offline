@@ -46,7 +46,9 @@ is deprecated after parity lands.
 ## Required Behaviors
 
 - [x] A/B loudness-comp compare: comparison defaults must loudness-match the two
-  audition states and disclose any compensation used.
+  audition states, record the deterministic compensation method/amount in
+  `compare_report.json`, and disclose that evaluation-only compensation in the
+  user-visible compare readout.
 - [ ] Scene locks edit: the GUI must support deterministic scene lock editing and
   save the resulting lock artifact for repeatable reruns.
 

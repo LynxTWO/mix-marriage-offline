@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-03-11
+Last updated: 2026-03-13
 
 This is the single-page milestone checklist for current delivery phases.
 
@@ -48,10 +48,10 @@ Definition of done:
 - [x] Tauri desktop scaffold builds in CI and uploads per-OS binaries.
 - [x] The Tauri app can drive doctor/prepare/validate/analyze/render through the
   packaged sidecar.
-- [ ] The primary Tauri app exposes Scene, Results, and Compare as artifact-backed
+- [x] The primary Tauri app exposes Scene, Results, and Compare as artifact-backed
   workflow screens with the same files/contracts the CLI writes.
 - [ ] The primary Tauri app supports the required scene-lock editing behavior.
-- [ ] Compare is loudness-matched by default and discloses the compensation used.
+- [x] Compare is loudness-matched by default and discloses the compensation used.
 - [ ] Cross-platform packaged desktop smoke tests are green.
 
 ## DSP Phase 1

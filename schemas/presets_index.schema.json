@@ -49,6 +49,14 @@
           "pack_id": { "type": "string" },
           "label": { "type": "string" },
           "description": { "type": "string" },
+          "feature_init_policy_id": {
+            "type": "string",
+            "pattern": "^FEATURE_INIT\\.[A-Z0-9_.]+$"
+          },
+          "preview_loudness_guard_db": {
+            "type": "number",
+            "minimum": 0
+          },
           "preset_ids": {
             "type": "array",
             "items": { "type": "string" }

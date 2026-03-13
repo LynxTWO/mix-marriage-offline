@@ -145,6 +145,62 @@ __all__ = [
 
 # ── Preset helpers ────────────────────────────────────────────────
 
+_PRESET_PREVIEW_FALLBACK_FEATURE_INIT_POLICY_ID = "FEATURE_INIT.REPORT_CONTEXT.BOUNDED_V1"
+_PRESET_PREVIEW_FALLBACK_GUARD_DB = 2.0
+_PRESET_PREVIEW_PROFILE_STEP_DB = 1.5
+_PRESET_PREVIEW_PROFILE_ORDER = {
+    "PROFILE.GUIDE": 0,
+    "PROFILE.ASSIST": 1,
+    "PROFILE.FULL_SEND": 2,
+    "PROFILE.TURBO": 3,
+}
+
+
+def _dict_object(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def _coerce_number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        value_float = float(value)
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            value_float = float(stripped)
+        except ValueError:
+            return None
+    else:
+        return None
+    if not math.isfinite(value_float):
+        return None
+    return value_float
+
+
+def _round_optional(value: float | None, *, digits: int) -> float | None:
+    if value is None:
+        return None
+    rounded = round(value, digits)
+    if rounded == -0.0:
+        return 0.0
+    return rounded
+
+
+def _round_float(value: float, *, digits: int) -> float:
+    rounded = round(value, digits)
+    if rounded == -0.0:
+        return 0.0
+    return rounded
+
+
+def _clamp(value: float, minimum: float, maximum: float) -> float:
+    return max(minimum, min(maximum, value))
+
 
 def _build_preset_show_payload(*, presets_dir: Path, preset_id: str) -> dict[str, Any]:
     normalized_preset_id = preset_id.strip() if isinstance(preset_id, str) else ""
@@ -281,12 +337,210 @@ def _build_preset_preview_cli_overrides(
     return cli_overrides
 
 
+def _preset_preview_pack_policy(
+    *,
+    presets_dir: Path,
+    preset_id: str,
+) -> dict[str, Any]:
+    for pack in list_preset_packs(presets_dir):
+        if not isinstance(pack, dict):
+            continue
+        if preset_id not in _string_list(pack.get("preset_ids")):
+            continue
+        preview_loudness_guard_db = _coerce_number(pack.get("preview_loudness_guard_db"))
+        return {
+            "pack_id": _coerce_str(pack.get("pack_id")),
+            "feature_init_policy_id": _coerce_str(pack.get("feature_init_policy_id"))
+            or _PRESET_PREVIEW_FALLBACK_FEATURE_INIT_POLICY_ID,
+            "preview_loudness_guard_db": (
+                preview_loudness_guard_db
+                if preview_loudness_guard_db is not None
+                else _PRESET_PREVIEW_FALLBACK_GUARD_DB
+            ),
+        }
+    return {
+        "pack_id": "",
+        "feature_init_policy_id": _PRESET_PREVIEW_FALLBACK_FEATURE_INIT_POLICY_ID,
+        "preview_loudness_guard_db": _PRESET_PREVIEW_FALLBACK_GUARD_DB,
+    }
+
+
+def _report_profile_id(report: dict[str, Any]) -> str:
+    run_config = _dict_object(report.get("run_config"))
+    profile_id = _coerce_str(run_config.get("profile_id")).strip()
+    if profile_id:
+        return profile_id
+    return _coerce_str(report.get("profile_id")).strip()
+
+
+def _report_translation_risk(report: dict[str, Any]) -> str:
+    vibe_signals = _dict_object(report.get("vibe_signals"))
+    return _coerce_str(vibe_signals.get("translation_risk")).strip().lower()
+
+
+def _build_preset_preview_safety(
+    *,
+    presets_dir: Path,
+    preset_id: str,
+    effective_cfg: dict[str, Any],
+    report_path: str | None,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    pack_policy = _preset_preview_pack_policy(presets_dir=presets_dir, preset_id=preset_id)
+    pack_id = _coerce_str(pack_policy.get("pack_id")).strip()
+    feature_init_policy_id = (
+        _coerce_str(pack_policy.get("feature_init_policy_id")).strip()
+        or _PRESET_PREVIEW_FALLBACK_FEATURE_INIT_POLICY_ID
+    )
+    base_guard_db = _coerce_number(pack_policy.get("preview_loudness_guard_db"))
+    if base_guard_db is None:
+        base_guard_db = _PRESET_PREVIEW_FALLBACK_GUARD_DB
+    base_guard_db = _round_float(base_guard_db, digits=1)
+    target_profile_id = _coerce_str(effective_cfg.get("profile_id")).strip()
+
+    preview_safety: dict[str, Any] = {
+        "evaluation_only": True,
+        "commit_required": True,
+        "pack_id": pack_id,
+        "feature_init_policy_id": feature_init_policy_id,
+        "guard_db": base_guard_db,
+        "current_profile_id": "",
+        "target_profile_id": target_profile_id,
+        "predicted_jump_db": 0.0,
+        "applied_preview_compensation_db": 0.0,
+        "source_report_path": "",
+        "details": (
+            "Preview loudness guard is evaluation-only. No measured report context "
+            f"was supplied, so preview compensation stays at 0.0 dB (guard ±{base_guard_db:.1f} dB)."
+        ),
+    }
+    if not report_path:
+        return preview_safety, []
+
+    report = _load_report(Path(report_path))
+    current_profile_id = _report_profile_id(report)
+    translation_risk = _report_translation_risk(report)
+    metering_session = _dict_object(_dict_object(report.get("metering")).get("session"))
+    lufs_range_db = _coerce_number(metering_session.get("lufs_i_range_db"))
+    true_peak_max_dbtp = _coerce_number(metering_session.get("true_peak_max_dbtp"))
+    guard_db = base_guard_db
+    adjustments: list[dict[str, Any]] = []
+
+    if translation_risk == "high":
+        tightened_guard = min(guard_db, 1.5)
+        if tightened_guard != guard_db:
+            adjustments.append(
+                {
+                    "rule_id": "FEATURE_INIT.REPORT_CONTEXT.TRANSLATION_RISK_HIGH",
+                    "field": "preview_safety.guard_db",
+                    "before": _round_float(guard_db, digits=1),
+                    "after": _round_float(tightened_guard, digits=1),
+                    "reason": (
+                        "Report translation_risk=high tightens the preview loudness guard "
+                        "before evaluating the preset."
+                    ),
+                }
+            )
+            guard_db = tightened_guard
+
+    if lufs_range_db is not None and lufs_range_db >= 6.0:
+        tightened_guard = min(guard_db, 1.5)
+        if tightened_guard != guard_db:
+            adjustments.append(
+                {
+                    "rule_id": "FEATURE_INIT.REPORT_CONTEXT.LOUDNESS_RANGE_TIGHTEN",
+                    "field": "preview_safety.guard_db",
+                    "before": _round_float(guard_db, digits=1),
+                    "after": _round_float(tightened_guard, digits=1),
+                    "reason": (
+                        f"Report metering.session.lufs_i_range_db={lufs_range_db:.1f} dB "
+                        "tightens the preview guard."
+                    ),
+                }
+            )
+            guard_db = tightened_guard
+
+    if true_peak_max_dbtp is not None and true_peak_max_dbtp >= -1.0:
+        tightened_guard = min(guard_db, 1.0)
+        if tightened_guard != guard_db:
+            adjustments.append(
+                {
+                    "rule_id": "FEATURE_INIT.REPORT_CONTEXT.TRUE_PEAK_TIGHTEN",
+                    "field": "preview_safety.guard_db",
+                    "before": _round_float(guard_db, digits=1),
+                    "after": _round_float(tightened_guard, digits=1),
+                    "reason": (
+                        f"Report metering.session.true_peak_max_dbtp={true_peak_max_dbtp:.1f} dBTP "
+                        "tightens the preview guard."
+                    ),
+                }
+            )
+            guard_db = tightened_guard
+
+    predicted_jump_db = 0.0
+    current_step = _PRESET_PREVIEW_PROFILE_ORDER.get(current_profile_id)
+    target_step = _PRESET_PREVIEW_PROFILE_ORDER.get(target_profile_id)
+    if current_step is not None and target_step is not None:
+        predicted_jump_db = _round_float(
+            float(target_step - current_step) * _PRESET_PREVIEW_PROFILE_STEP_DB,
+            digits=1,
+        )
+
+    applied_preview_compensation_db = _round_float(
+        _clamp(-predicted_jump_db, -guard_db, guard_db),
+        digits=1,
+    )
+    if predicted_jump_db != 0.0 or applied_preview_compensation_db != 0.0:
+        adjustments.append(
+            {
+                "rule_id": "FEATURE_INIT.REPORT_CONTEXT.PROFILE_DELTA",
+                "field": "preview_safety.applied_preview_compensation_db",
+                "before": 0.0,
+                "after": applied_preview_compensation_db,
+                "reason": (
+                    f"Current profile {current_profile_id or '<unknown>'} -> "
+                    f"target {target_profile_id or '<unknown>'} predicts "
+                    f"{predicted_jump_db:+.1f} dB of preview bias, so preview compensation "
+                    "stays bounded and evaluation-only."
+                ),
+            }
+        )
+
+    preview_safety.update(
+        {
+            "guard_db": _round_float(guard_db, digits=1),
+            "current_profile_id": current_profile_id,
+            "predicted_jump_db": predicted_jump_db,
+            "applied_preview_compensation_db": applied_preview_compensation_db,
+            "source_report_path": Path(report_path).resolve().as_posix(),
+        }
+    )
+    if predicted_jump_db == 0.0:
+        preview_safety["details"] = (
+            "Measured report context did not predict a preset-preview loudness jump, "
+            f"so preview compensation stays at 0.0 dB (guard ±{guard_db:.1f} dB, evaluation only)."
+        )
+    elif abs(applied_preview_compensation_db) < abs(predicted_jump_db):
+        preview_safety["details"] = (
+            f"Preview compensation {applied_preview_compensation_db:+.1f} dB is evaluation-only and "
+            f"bounded by the pack guard (±{guard_db:.1f} dB) from predicted profile-driven "
+            f"bias {predicted_jump_db:+.1f} dB."
+        )
+    else:
+        preview_safety["details"] = (
+            f"Preview compensation {applied_preview_compensation_db:+.1f} dB is evaluation-only, "
+            f"derived from report context {current_profile_id or '<unknown>'} -> "
+            f"{target_profile_id or '<unknown>'}, and guarded at ±{guard_db:.1f} dB."
+        )
+    return preview_safety, adjustments
+
+
 def _build_preset_preview_payload(
     *,
     repo_root: Path,
     presets_dir: Path,
     preset_id: str,
     config_path: str | None,
+    report_path: str | None,
     cli_overrides: dict[str, Any],
 ) -> dict[str, Any]:
     preset_payload = _build_preset_show_payload(presets_dir=presets_dir, preset_id=preset_id)
@@ -350,6 +604,12 @@ def _build_preset_preview_payload(
         changes_by_key_path[key_path]
         for key_path in sorted(changes_by_key_path.keys())
     ]
+    preview_safety, feature_initialization = _build_preset_preview_safety(
+        presets_dir=presets_dir,
+        preset_id=normalized_preset_id,
+        effective_cfg=effective_cfg,
+        report_path=report_path,
+    )
 
     label = preset_payload.get("label")
     overlay = preset_payload.get("overlay")
@@ -365,6 +625,8 @@ def _build_preset_preview_payload(
         "help": help_payload,
         "effective_run_config": effective_cfg,
         "changes_from_defaults": changes_from_defaults,
+        "preview_safety": preview_safety,
+        "feature_initialization": feature_initialization,
     }
     return payload
 
@@ -420,6 +682,23 @@ def _render_preset_preview_text(payload: dict[str, Any]) -> str:
         lines.append(
             "This preset is a workflow lens. It doesnt change settings, it changes what you focus on."
         )
+    preview_safety = payload.get("preview_safety")
+    if isinstance(preview_safety, dict):
+        details = preview_safety.get("details")
+        if isinstance(details, str) and details:
+            lines.append("Preview loudness safety:")
+            lines.append(f"  - {details}")
+            guard_db = _coerce_number(preview_safety.get("guard_db"))
+            if guard_db is not None:
+                lines.append(f"  - Guard: +/-{guard_db:.1f} dB")
+            compensation_db = _coerce_number(
+                preview_safety.get("applied_preview_compensation_db")
+            )
+            if compensation_db is not None:
+                lines.append(
+                    "  - Evaluation-only preview compensation: "
+                    f"{compensation_db:+.1f} dB"
+                )
     return "\n".join(lines)
 
 

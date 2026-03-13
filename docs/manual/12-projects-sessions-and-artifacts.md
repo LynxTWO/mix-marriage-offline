@@ -43,3 +43,6 @@ Pro notes.
 Schema validation is a feature.
 If an artifact fails validation, that is MMO preventing silent drift.
 Artifacts are deterministic so they can be diffed between commits and releases.
+`compare_report.json` is one of those deterministic artifacts; when paired
+`render_qa.json` files are present beside the compared reports, it records a
+`loudness_match` block so fair-listen compare context travels with the artifact.
