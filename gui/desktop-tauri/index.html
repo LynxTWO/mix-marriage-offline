@@ -601,8 +601,198 @@
             <p id="results-readout-note" class="control-caption">The readout stays anchored to safe_render_receipt.json.</p>
           </article>
 
+          <article
+            class="control-card widget"
+            data-widget-id="widget.results.recommendation_confidence"
+            data-control-kind="VALUE_READOUT"
+            data-units="%"
+          >
+            <div class="control-head">
+              <div>
+                <p class="control-label">Recommendation confidence</p>
+                <p class="control-why">Keep advice explainable by showing how certain each recorded recommendation actually was.</p>
+              </div>
+              <div class="control-meta">
+                <div class="hint-group">
+                  <button
+                    id="results-confidence-hint-trigger"
+                    type="button"
+                    class="hint-trigger"
+                    aria-describedby="hint-results-confidence"
+                  >
+                    What / Why
+                  </button>
+                  <div id="hint-results-confidence" class="hint-overlay" role="note">
+                    <p><strong>What:</strong> Confidence is averaged from recorded recommendation deltas.</p>
+                    <p><strong>Why:</strong> Low-confidence advice stays visible as a hint, not a command.</p>
+                  </div>
+                </div>
+                <span class="control-unit">%</span>
+              </div>
+            </div>
+            <div id="results-confidence-list" class="confidence-list" aria-live="polite"></div>
+            <p id="results-confidence-note" class="control-caption">
+              Load a receipt to inspect recommendation certainty and gating.
+            </p>
+          </article>
+
+          <article
+            class="control-card widget"
+            data-widget-id="widget.results.gain_reduction"
+            data-control-kind="VALUE_READOUT"
+            data-units="dB"
+          >
+            <div class="control-head">
+              <div>
+                <p class="control-label">Gain reduction</p>
+                <p class="control-why">Surface the recorded level pullback so dynamics changes stay inspectable after render.</p>
+              </div>
+              <div class="control-meta">
+                <div class="hint-group">
+                  <button
+                    id="results-gain-hint-trigger"
+                    type="button"
+                    class="hint-trigger"
+                    aria-describedby="hint-results-gain"
+                  >
+                    What / Why
+                  </button>
+                  <div id="hint-results-gain" class="hint-overlay" role="note">
+                    <p><strong>What:</strong> This meter uses receipt deltas and render-QA level comparisons.</p>
+                    <p><strong>Why:</strong> It helps you verify that “safer” output did not quietly over-compress the mix.</p>
+                  </div>
+                </div>
+                <span class="control-unit">dB</span>
+              </div>
+            </div>
+            <p id="results-gain-reduction-value" class="readout-primary">n/a</p>
+            <div id="results-gain-reduction-meter" class="bar-meter" role="img" aria-label="Gain reduction meter">
+              <span class="bar-meter-track"></span>
+              <span class="bar-meter-fill"></span>
+            </div>
+            <svg
+              id="results-transfer-curve"
+              class="transfer-curve"
+              viewBox="0 0 120 80"
+              role="img"
+              aria-label="Transfer curve proxy"
+            >
+              <path id="results-transfer-curve-path" class="transfer-curve-path" d="M 0 80 L 120 0"></path>
+            </svg>
+            <p id="results-transfer-note" class="control-caption">Transfer curve proxy will appear when dynamics data is available.</p>
+          </article>
+
+          <article
+            class="control-card widget"
+            data-widget-id="widget.results.phase_correlation"
+            data-control-kind="VALUE_READOUT"
+            data-units="corr"
+          >
+            <div class="control-head">
+              <div>
+                <p class="control-label">Phase correlation</p>
+                <p class="control-why">Keep stereo coherence visible so mono collapse risks do not hide behind a “completed” badge.</p>
+              </div>
+              <div class="control-meta">
+                <div class="hint-group">
+                  <button
+                    id="results-phase-hint-trigger"
+                    type="button"
+                    class="hint-trigger"
+                    aria-describedby="hint-results-phase"
+                  >
+                    What / Why
+                  </button>
+                  <div id="hint-results-phase" class="hint-overlay" role="note">
+                    <p><strong>What:</strong> Stereo coherence is the mean L/R correlation from render QA.</p>
+                    <p><strong>Why:</strong> Lower values can feel wide but may cancel or smear in mono.</p>
+                  </div>
+                </div>
+                <span class="control-unit">corr</span>
+              </div>
+            </div>
+            <p id="results-phase-correlation-value" class="readout-primary">n/a corr</p>
+            <div id="results-phase-correlation-meter" class="phase-meter" role="img" aria-label="Phase correlation meter">
+              <span class="phase-meter-track"></span>
+              <span class="phase-meter-zero"></span>
+              <span class="phase-meter-needle"></span>
+            </div>
+            <div class="phase-scale" aria-hidden="true">
+              <span>-1</span>
+              <span>0</span>
+              <span>+1</span>
+            </div>
+            <p id="results-phase-note" class="control-caption">Render QA thresholds will appear here.</p>
+          </article>
+
+          <article
+            class="control-card widget"
+            data-widget-id="widget.results.vectorscope"
+            data-control-kind="VALUE_READOUT"
+            data-units="L/R"
+          >
+            <div class="control-head">
+              <div>
+                <p class="control-label">Goniometer / vectorscope</p>
+                <p class="control-why">A deterministic stereo-shape proxy keeps spatial changes reviewable without requiring live playback.</p>
+              </div>
+              <div class="control-meta">
+                <div class="hint-group">
+                  <button
+                    id="results-vectorscope-hint-trigger"
+                    type="button"
+                    class="hint-trigger"
+                    aria-describedby="hint-results-vectorscope"
+                  >
+                    What / Why
+                  </button>
+                  <div id="hint-results-vectorscope" class="hint-overlay" role="note">
+                    <p><strong>What:</strong> This offline scope is derived from render-QA correlation, side/mid ratio, and crest.</p>
+                    <p><strong>Why:</strong> The same artifacts always draw the same spatial footprint, which keeps compare notes reproducible.</p>
+                  </div>
+                </div>
+                <span class="control-unit">L/R</span>
+              </div>
+            </div>
+            <svg
+              id="results-vectorscope"
+              class="scope-canvas"
+              viewBox="0 0 100 100"
+              role="img"
+              aria-label="Vectorscope proxy"
+            >
+              <path class="scope-grid-line" d="M 50 4 L 50 96"></path>
+              <path class="scope-grid-line" d="M 4 50 L 96 50"></path>
+              <path class="scope-grid-ring" d="M 50 10 C 72 10 90 28 90 50 C 90 72 72 90 50 90 C 28 90 10 72 10 50 C 10 28 28 10 50 10"></path>
+              <path id="results-vectorscope-path" class="scope-path" d="M 50 16 L 72 50 L 50 84 L 28 50 Z"></path>
+            </svg>
+            <p id="results-vectorscope-summary" class="control-caption">Load render QA to inspect the stereo footprint.</p>
+          </article>
+
           <article class="signal-card widget" data-widget-id="widget.results.what_changed">
-            <p class="signal-label">What changed</p>
+            <div class="control-head">
+              <div>
+                <p class="signal-label">What changed</p>
+                <p class="control-why">Keep run/apply outcomes short, concrete, and tied back to the written artifacts.</p>
+              </div>
+              <div class="control-meta">
+                <div class="hint-group">
+                  <button
+                    id="results-changes-hint-trigger"
+                    type="button"
+                    class="hint-trigger"
+                    aria-describedby="hint-results-changes"
+                  >
+                    What / Why
+                  </button>
+                  <div id="hint-results-changes" class="hint-overlay" role="note">
+                    <p><strong>What:</strong> This summary counts outputs, applied actions, blocked actions, and QA fallout.</p>
+                    <p><strong>Why:</strong> It gives you a compact receipt before you dive into raw JSON.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div id="results-change-summary" class="change-summary-list" aria-live="polite"></div>
             <pre class="stage-output compact-output" id="results-what-changed-text">No receipt or manifest loaded.</pre>
           </article>
 
@@ -741,7 +931,29 @@
           </article>
 
           <article class="signal-card widget" data-widget-id="widget.compare.summary">
-            <p class="signal-label">What changed</p>
+            <div class="control-head">
+              <div>
+                <p class="signal-label">What changed</p>
+                <p class="control-why">Compare should stay plain-language first, then expose the raw diff trail underneath.</p>
+              </div>
+              <div class="control-meta">
+                <div class="hint-group">
+                  <button
+                    id="compare-summary-hint-trigger"
+                    type="button"
+                    class="hint-trigger"
+                    aria-describedby="hint-compare-summary"
+                  >
+                    What / Why
+                  </button>
+                  <div id="hint-compare-summary" class="hint-overlay" role="note">
+                    <p><strong>What:</strong> These chips come from compare-report diffs plus paired render-QA context.</p>
+                    <p><strong>Why:</strong> You can scan the objective deltas before deciding which version feels better.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div id="compare-change-summary" class="change-summary-list" aria-live="polite"></div>
             <p id="compare-summary" class="signal-value">No compare artifact loaded.</p>
             <pre class="stage-output compact-output" id="compare-summary-note">Warnings and notes will appear here.</pre>
           </article>

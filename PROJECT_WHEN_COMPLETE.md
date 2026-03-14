@@ -483,9 +483,11 @@ Reusable component library (minimum set for v1 GUI parity):
 - [x] Controls: knob/rotary, fader/slider, toggle/button, segmented selector, XY
       pad, preset browser with search/tags, A/B toggle, value readout.
 - [x] Metering: peak/RMS, true-peak, LUFS, multi-channel meters
-      (surround/immersive energy distribution).
+      (surround/immersive energy distribution), plus deterministic desktop
+      inspection for gain reduction and stereo/phase coherence.
 - [x] Visualizers (offline-rendered is acceptable): waveform (pre/post overlay),
-      spectrum (FFT), optional spectrogram, EQ curve editor.
+      spectrum (FFT), optional spectrogram, EQ curve editor, and desktop
+      vectorscope/transfer-curve proxies sourced from artifacts.
 
 AI-readable layout export + validation (prevents overlaps/off-screen UI):
 
@@ -699,10 +701,16 @@ sections 4.1 through 4.9 are closed.
       or report context with bounded, explainable preview metadata, and preset
       preview does not create surprise loudness jumps because any preview
       compensation remains evaluation-only unless explicitly committed.
-- [ ] Dynamics/spatial views (offline-rendered is acceptable): gain reduction
-      meter, phase correlation, goniometer/vectorscope, optional transfer curve.
-- [ ] Explainability overlays (“what/why”), confidence indicator for
-      recommendations, and a compact “what changed” summary.
+- [x] Dynamics/spatial views (offline-rendered is acceptable): gain reduction
+      meter, phase correlation, goniometer/vectorscope, optional transfer
+      curve. Done: the Tauri Results screen now renders deterministic,
+      artifact-backed inspection widgets from `safe_render_receipt.json` and
+      `render_qa.json`.
+- [x] Explainability overlays (“what/why”), confidence indicator for
+      recommendations, and a compact “what changed” summary. Done: the Tauri
+      Results/Compare screens now surface hover/focus hint overlays,
+      receipt-backed recommendation confidence rows, and compact change-summary
+      chips without making optional macro/mood extras blocking.
 - [ ] Macro controls with semantic labels (example: Warmth, Air, Punch, Glue)
       that map to multiple parameters and always disclose what they change.
 - [ ] Mood/texture selectors (tag chips or icons) that swap whole preset

@@ -6,6 +6,8 @@ export type ScreenKey =
   | "results"
   | "compare";
 
+export type ConfidenceTone = "high" | "low" | "medium" | "unknown";
+
 type ScaleId = "compact" | "standard" | "comfort";
 type ModifierLike = Pick<KeyboardEvent | MouseEvent | PointerEvent, "ctrlKey" | "metaKey" | "shiftKey">;
 
@@ -59,6 +61,46 @@ export function signedNumber(value: number, digits = 1): string {
 
 export function signedDb(value: number, digits = 1): string {
   return `${signedNumber(value, digits)} dB`;
+}
+
+export function formatPercent(value: number | null, digits = 0): string {
+  if (value === null || !Number.isFinite(value)) {
+    return "n/a";
+  }
+  return `${(clamp(value, 0, 1) * 100).toFixed(digits)}%`;
+}
+
+export function describeConfidence(value: number | null): {
+  label: string;
+  percentLabel: string;
+  tone: ConfidenceTone;
+} {
+  if (value === null || !Number.isFinite(value)) {
+    return {
+      label: "Unknown",
+      percentLabel: "n/a",
+      tone: "unknown",
+    };
+  }
+  if (value >= 0.75) {
+    return {
+      label: "High",
+      percentLabel: formatPercent(value),
+      tone: "high",
+    };
+  }
+  if (value >= 0.5) {
+    return {
+      label: "Medium",
+      percentLabel: formatPercent(value),
+      tone: "medium",
+    };
+  }
+  return {
+    label: "Low",
+    percentLabel: formatPercent(value),
+    tone: "low",
+  };
 }
 
 export function initDesignSystem(options: InitOptions = {}): DesignSystemController {

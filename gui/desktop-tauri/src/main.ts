@@ -2,6 +2,8 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
 import {
   clamp,
+  describeConfidence,
+  formatPercent,
   initDesignSystem,
   roundToStep,
   signedDb,
@@ -36,6 +38,11 @@ type ArtifactEntry = {
   summary: string;
   tag: ArtifactTag;
   title: string;
+};
+
+type ChangeSummaryChip = {
+  label: string;
+  tone: "danger" | "info" | "ok" | "warn";
 };
 
 type ArtifactState = {
@@ -97,6 +104,7 @@ type AppUi = {
   compareJsonPreview: HTMLElement;
   compareReadoutPrimary: HTMLElement;
   compareReadoutSecondary: HTMLElement;
+  compareChangeSummary: HTMLElement;
   compareSummary: HTMLElement;
   compareSummaryNote: HTMLElement;
   fileInputs: Record<
@@ -126,11 +134,23 @@ type AppUi = {
     detailInput: HTMLInputElement;
     detailSlider: HTMLButtonElement;
     detailValue: HTMLElement;
+    changeSummary: HTMLElement;
+    confidenceList: HTMLElement;
+    confidenceNote: HTMLElement;
+    gainReductionMeter: HTMLElement;
+    gainReductionValue: HTMLElement;
     jsonPreview: HTMLElement;
+    phaseCorrelationMeter: HTMLElement;
+    phaseCorrelationValue: HTMLElement;
+    phaseNote: HTMLElement;
     qaText: HTMLElement;
     readoutNote: HTMLElement;
     readoutPrimary: HTMLElement;
     readoutSecondary: HTMLElement;
+    transferCurvePath: SVGPathElement;
+    transferNote: HTMLElement;
+    vectorscopePath: SVGPathElement;
+    vectorscopeSummary: HTMLElement;
     whatChangedText: HTMLElement;
   };
   runtimeMessage: HTMLElement;
@@ -203,7 +223,7 @@ const state = {
   timelineCount: 0,
 };
 
-function requiredElement<T extends HTMLElement>(selector: string): T {
+function requiredElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
   if (element === null) {
     throw new Error(`Missing required desktop workflow node: ${selector}`);
@@ -246,6 +266,7 @@ function getUi(): AppUi {
     compareJsonPreview: requiredElement("#compare-json-preview"),
     compareReadoutPrimary: requiredElement("#compare-readout-primary"),
     compareReadoutSecondary: requiredElement("#compare-readout-secondary"),
+    compareChangeSummary: requiredElement("#compare-change-summary"),
     compareSummary: requiredElement("#compare-summary"),
     compareSummaryNote: requiredElement("#compare-summary-note"),
     fileInputs: {
@@ -287,15 +308,27 @@ function getUi(): AppUi {
     renderProgressText: requiredElement("#render-progress-text"),
     results: {
       browserList: requiredElement("#artifact-browser-list"),
+      changeSummary: requiredElement("#results-change-summary"),
+      confidenceList: requiredElement("#results-confidence-list"),
+      confidenceNote: requiredElement("#results-confidence-note"),
       detailFill: requiredElement("#results-detail-fill"),
       detailInput: requiredElement("#results-detail-input"),
       detailSlider: requiredElement("#results-detail-slider"),
       detailValue: requiredElement("#results-detail-value"),
+      gainReductionMeter: requiredElement("#results-gain-reduction-meter"),
+      gainReductionValue: requiredElement("#results-gain-reduction-value"),
       jsonPreview: requiredElement("#results-json-preview"),
+      phaseCorrelationMeter: requiredElement("#results-phase-correlation-meter"),
+      phaseCorrelationValue: requiredElement("#results-phase-correlation-value"),
+      phaseNote: requiredElement("#results-phase-note"),
       qaText: requiredElement("#results-qa-text"),
       readoutNote: requiredElement("#results-readout-note"),
       readoutPrimary: requiredElement("#results-readout-primary"),
       readoutSecondary: requiredElement("#results-readout-secondary"),
+      transferCurvePath: requiredElement("#results-transfer-curve-path"),
+      transferNote: requiredElement("#results-transfer-note"),
+      vectorscopePath: requiredElement("#results-vectorscope-path"),
+      vectorscopeSummary: requiredElement("#results-vectorscope-summary"),
       whatChangedText: requiredElement("#results-what-changed-text"),
     },
     runtimeMessage: requiredElement("#runtime-message"),
@@ -353,6 +386,44 @@ function asNumber(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+function average(values: number[]): number | null {
+  if (values.length === 0) {
+    return null;
+  }
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function formatNumber(value: number | null, digits = 1, suffix = ""): string {
+  if (value === null) {
+    return "n/a";
+  }
+  return `${value.toFixed(digits)}${suffix}`;
+}
+
+function formatScopedLabel(scope: JsonObject | null): string {
+  if (scope === null) {
+    return "unspecified";
+  }
+  return (
+    asString(scope.stem_id) ||
+    asString(scope.bus_id) ||
+    asString(scope.layout_id) ||
+    (scope.global === true ? "global" : "unspecified")
+  );
+}
+
+function numericDeltaValue(delta: JsonObject | null): number | null {
+  if (delta === null) {
+    return null;
+  }
+  const from = asNumber(delta.from);
+  const to = asNumber(delta.to);
+  if (from === null || to === null) {
+    return null;
+  }
+  return to - from;
 }
 
 function formatExitSummary(result: MmoRunResult): string {
@@ -1100,6 +1171,522 @@ function meanQaMetric(qa: JsonObject | null, metricKey: string): number | null {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+function meanQaComparisonMetric(qa: JsonObject | null, metricKey: string): number | null {
+  if (qa === null) {
+    return null;
+  }
+  const values: number[] = [];
+  for (const job of asArray(qa.jobs)) {
+    const jobObject = asObject(job);
+    if (jobObject === null) {
+      continue;
+    }
+    for (const comparison of asArray(jobObject.comparisons)) {
+      const comparisonObject = asObject(comparison);
+      const metricsDelta = asObject(comparisonObject?.metrics_delta);
+      const value = asNumber(metricsDelta?.[metricKey]);
+      if (value !== null) {
+        values.push(value);
+      }
+    }
+  }
+  return average(values);
+}
+
+function meanQaInputOutputDelta(qa: JsonObject | null, metricKey: string): number | null {
+  if (qa === null) {
+    return null;
+  }
+  const values: number[] = [];
+  for (const job of asArray(qa.jobs)) {
+    const jobObject = asObject(job);
+    const input = asObject(jobObject?.input);
+    const inputMetrics = asObject(input?.metrics);
+    const inputValue = asNumber(inputMetrics?.[metricKey]);
+    if (inputValue === null) {
+      continue;
+    }
+    for (const output of asArray(jobObject?.outputs)) {
+      const outputObject = asObject(output);
+      const outputMetrics = asObject(outputObject?.metrics);
+      const outputValue = asNumber(outputMetrics?.[metricKey]);
+      if (outputValue !== null) {
+        values.push(outputValue - inputValue);
+      }
+    }
+  }
+  return average(values);
+}
+
+type RecommendationStatus = "applied" | "approved" | "blocked" | "eligible";
+
+type RecommendationInsight = {
+  actionId: string;
+  confidence: number | null;
+  recommendationId: string;
+  scopeLabel: string;
+  status: RecommendationStatus;
+  why: string;
+};
+
+function recommendationConfidence(recommendation: JsonObject): number | null {
+  const deltaValues = asArray(recommendation.deltas)
+    .map(asObject)
+    .filter((row): row is JsonObject => row !== null)
+    .map((row) => asNumber(row.confidence))
+    .filter((value): value is number => value !== null);
+  return average(deltaValues);
+}
+
+function recommendationReason(recommendation: JsonObject): string {
+  const firstDelta = asArray(recommendation.deltas)
+    .map(asObject)
+    .find((row): row is JsonObject => row !== null);
+  if (firstDelta !== undefined) {
+    const from = firstDelta.from === undefined ? "?" : String(firstDelta.from);
+    const to = firstDelta.to === undefined ? "?" : String(firstDelta.to);
+    const unit = asString(firstDelta.unit);
+    return `${asString(firstDelta.param_id) || "delta"}: ${from} -> ${to}${unit ? ` ${unit}` : ""}`;
+  }
+  const notes = asString(recommendation.notes);
+  if (notes) {
+    return notes;
+  }
+  const gateSummary = asString(recommendation.gate_summary);
+  if (gateSummary) {
+    return `Gate: ${gateSummary}`;
+  }
+  return `${asString(recommendation.action_id) || "No action"} on ${formatScopedLabel(asObject(recommendation.scope))}`;
+}
+
+function recommendationInsights(receipt: JsonObject | null): RecommendationInsight[] {
+  if (receipt === null) {
+    return [];
+  }
+  const sources: Array<{ key: string; status: RecommendationStatus }> = [
+    { key: "applied_recommendations", status: "applied" },
+    { key: "approved_by_user", status: "approved" },
+    { key: "blocked_recommendations", status: "blocked" },
+    { key: "eligible_recommendations", status: "eligible" },
+  ];
+  const insights: RecommendationInsight[] = [];
+  for (const source of sources) {
+    for (const item of asArray(receipt[source.key])) {
+      const recommendation = asObject(item);
+      if (recommendation === null) {
+        continue;
+      }
+      insights.push({
+        actionId: asString(recommendation.action_id),
+        confidence: recommendationConfidence(recommendation),
+        recommendationId: asString(recommendation.recommendation_id) || `${source.status}.unknown`,
+        scopeLabel: formatScopedLabel(asObject(recommendation.scope)),
+        status: source.status,
+        why: recommendationReason(recommendation),
+      });
+    }
+  }
+  const statusOrder: Record<RecommendationStatus, number> = {
+    applied: 0,
+    approved: 1,
+    blocked: 2,
+    eligible: 3,
+  };
+  insights.sort((left, right) => {
+    const byStatus = statusOrder[left.status] - statusOrder[right.status];
+    if (byStatus !== 0) {
+      return byStatus;
+    }
+    const leftConfidence = left.confidence ?? -1;
+    const rightConfidence = right.confidence ?? -1;
+    if (leftConfidence !== rightConfidence) {
+      return rightConfidence - leftConfidence;
+    }
+    return left.recommendationId.localeCompare(right.recommendationId);
+  });
+  return insights;
+}
+
+function receiptChangeSummaryChips(
+  receipt: JsonObject | null,
+  manifest: JsonObject | null,
+  qa: JsonObject | null,
+): ChangeSummaryChip[] {
+  if (receipt === null) {
+    return [];
+  }
+  const summary = asObject(receipt.recommendations_summary);
+  const status = asString(receipt.status);
+  const qaCount = asArray(qa?.issues).length || asArray(receipt.qa_issues).length;
+  const outputCount = flattenManifestOutputs(manifest).length;
+  const chips: ChangeSummaryChip[] = [];
+
+  chips.push({
+    label: status || "receipt loaded",
+    tone: status === "blocked" ? "danger" : (status === "completed" ? "ok" : "info"),
+  });
+  chips.push({
+    label: `Applied ${asNumber(summary?.applied) ?? asArray(receipt.applied_recommendations).length}`,
+    tone: (asNumber(summary?.applied) ?? asArray(receipt.applied_recommendations).length) > 0 ? "ok" : "info",
+  });
+  chips.push({
+    label: `Blocked ${asNumber(summary?.blocked) ?? asArray(receipt.blocked_recommendations).length}`,
+    tone: (asNumber(summary?.blocked) ?? asArray(receipt.blocked_recommendations).length) > 0 ? "warn" : "info",
+  });
+  chips.push({
+    label: outputCount > 0 ? `Outputs ${outputCount}` : "No outputs",
+    tone: outputCount > 0 ? "info" : "warn",
+  });
+  chips.push({
+    label: qaCount > 0 ? `QA issues ${qaCount}` : "QA clear",
+    tone: qaCount > 0 ? "warn" : "ok",
+  });
+
+  return chips;
+}
+
+function compareChangeSummaryChips(compare: JsonObject | null): ChangeSummaryChip[] {
+  if (compare === null) {
+    return [];
+  }
+
+  const chips: ChangeSummaryChip[] = [];
+  const diffs = asObject(compare.diffs);
+  const profileDiff = asObject(diffs?.profile_id);
+  const presetDiff = asObject(diffs?.preset_id);
+  const metrics = asObject(diffs?.metrics);
+  const downmixQa = asObject(metrics?.downmix_qa);
+  const corrDelta = asObject(downmixQa?.corr_delta);
+  const changeFlags = asObject(metrics?.change_flags);
+  const translationRisk = asObject(changeFlags?.translation_risk);
+  const loudnessMatch = compareLoudnessMatch(compare);
+
+  if (profileDiff !== null) {
+    chips.push({
+      label: `Profile ${asString(profileDiff.a) || "-"} -> ${asString(profileDiff.b) || "-"}`,
+      tone: "info",
+    });
+  }
+  if (presetDiff !== null) {
+    chips.push({
+      label: `Preset ${asString(presetDiff.a) || "-"} -> ${asString(presetDiff.b) || "-"}`,
+      tone: "info",
+    });
+  }
+  if (translationRisk !== null) {
+    const shift = asNumber(translationRisk.shift) ?? 0;
+    chips.push({
+      label: `Risk ${asString(translationRisk.a) || "-"} -> ${asString(translationRisk.b) || "-"}`,
+      tone: shift > 0 ? "warn" : "ok",
+    });
+  }
+  if (corrDelta !== null) {
+    const delta = asNumber(corrDelta.delta);
+    chips.push({
+      label: delta === null ? "Stereo coherence n/a" : `Stereo coherence ${delta >= 0 ? "+" : ""}${delta.toFixed(2)}`,
+      tone: delta !== null && Math.abs(delta) >= 0.2 ? "warn" : "info",
+    });
+  }
+  if (loudnessMatch !== null && loudnessMatch.matched) {
+    chips.push({
+      label: `Fair listen ${signedDb(loudnessMatch.compensationDb)}`,
+      tone: "info",
+    });
+  }
+  if (chips.length === 0) {
+    chips.push({
+      label: `${asArray(compare.warnings).length} warning(s)`,
+      tone: asArray(compare.warnings).length > 0 ? "warn" : "info",
+    });
+  }
+  return chips.slice(0, 5);
+}
+
+function renderChangeSummary(container: HTMLElement, chips: ChangeSummaryChip[], emptyLabel: string): void {
+  container.innerHTML = "";
+  const rows = chips.length > 0 ? chips : [{ label: emptyLabel, tone: "info" as const }];
+  for (const chip of rows) {
+    const node = document.createElement("div");
+    node.className = "change-summary-chip";
+    node.dataset.tone = chip.tone;
+    node.textContent = chip.label;
+    container.append(node);
+  }
+}
+
+function recommendationParamValue(receipt: JsonObject | null, pattern: RegExp): number | null {
+  if (receipt === null) {
+    return null;
+  }
+  for (const recommendation of asArray(receipt.applied_recommendations)) {
+    const recommendationObject = asObject(recommendation);
+    if (recommendationObject === null) {
+      continue;
+    }
+    for (const delta of asArray(recommendationObject.deltas)) {
+      const deltaObject = asObject(delta);
+      if (deltaObject === null) {
+        continue;
+      }
+      if (!pattern.test(asString(deltaObject.param_id).toUpperCase())) {
+        continue;
+      }
+      const value = asNumber(deltaObject.to) ?? asNumber(deltaObject.from);
+      if (value !== null) {
+        return value;
+      }
+    }
+  }
+  return null;
+}
+
+type GainReductionState = {
+  note: string;
+  ratio: number;
+  thresholdDb: number | null;
+  transferRatio: number | null;
+  value: number | null;
+};
+
+function deriveGainReduction(receipt: JsonObject | null, qa: JsonObject | null): GainReductionState {
+  const rmsDelta = meanQaComparisonMetric(qa, "rms_dbfs") ?? meanQaInputOutputDelta(qa, "rms_dbfs");
+  if (rmsDelta !== null && rmsDelta < 0) {
+    return {
+      note: `Measured from render_qa RMS delta (${rmsDelta.toFixed(1)} dB).`,
+      ratio: clamp(Math.abs(rmsDelta) / 12, 0, 1),
+      thresholdDb: recommendationParamValue(receipt, /THRESH/),
+      transferRatio: recommendationParamValue(receipt, /RATIO/),
+      value: Math.abs(rmsDelta),
+    };
+  }
+
+  const peakDelta = meanQaComparisonMetric(qa, "peak_dbfs") ?? meanQaInputOutputDelta(qa, "peak_dbfs");
+  if (peakDelta !== null && peakDelta < 0) {
+    return {
+      note: `Measured from render_qa peak delta (${peakDelta.toFixed(1)} dB).`,
+      ratio: clamp(Math.abs(peakDelta) / 12, 0, 1),
+      thresholdDb: recommendationParamValue(receipt, /THRESH/),
+      transferRatio: recommendationParamValue(receipt, /RATIO/),
+      value: Math.abs(peakDelta),
+    };
+  }
+
+  const reductionValues = asArray(receipt?.applied_recommendations)
+    .map(asObject)
+    .filter((row): row is JsonObject => row !== null)
+    .flatMap((row) => asArray(row.deltas).map(asObject))
+    .filter((row): row is JsonObject => row !== null)
+    .flatMap((row) => {
+      const paramId = asString(row.param_id).toUpperCase();
+      const unit = asString(row.unit).toLowerCase();
+      const deltaValue = numericDeltaValue(row);
+      if (deltaValue === null || deltaValue >= 0) {
+        return [];
+      }
+      if (!unit.includes("db") || !/(GAIN|TRIM|OUTPUT|CEILING|MAKEUP)/.test(paramId)) {
+        return [];
+      }
+      return [Math.abs(deltaValue)];
+    });
+  const maxReduction = reductionValues.length > 0 ? Math.max(...reductionValues) : null;
+  if (maxReduction !== null) {
+    return {
+      note: "Measured from applied receipt delta(s).",
+      ratio: clamp(maxReduction / 12, 0, 1),
+      thresholdDb: recommendationParamValue(receipt, /THRESH/),
+      transferRatio: recommendationParamValue(receipt, /RATIO/),
+      value: maxReduction,
+    };
+  }
+
+  return {
+    note: "No receipt or render-QA level delta recorded.",
+    ratio: 0,
+    thresholdDb: null,
+    transferRatio: null,
+    value: null,
+  };
+}
+
+function buildTransferCurvePath(gainReduction: GainReductionState): string {
+  const threshold = gainReduction.value === null
+    ? 0
+    : clamp(gainReduction.thresholdDb ?? (-18 + Math.min(gainReduction.value, 10)), -30, -4);
+  const ratio = gainReduction.value === null
+    ? 1
+    : clamp(gainReduction.transferRatio ?? (1 + (gainReduction.value / 2.5)), 1.2, 8);
+  const points: string[] = [];
+  for (let index = 0; index <= 18; index += 1) {
+    const inputDb = -48 + ((48 / 18) * index);
+    const outputDb = ratio <= 1 || inputDb <= threshold
+      ? inputDb
+      : threshold + ((inputDb - threshold) / ratio);
+    const x = 6 + (((inputDb + 48) / 48) * 108);
+    const y = 74 - (((outputDb + 48) / 48) * 68);
+    points.push(`${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`);
+  }
+  return points.join(" ");
+}
+
+function phaseCorrelationState(qa: JsonObject | null): {
+  note: string;
+  ratio: number;
+  tone: "danger" | "info" | "ok" | "warn";
+  value: number | null;
+} {
+  const value = meanQaMetric(qa, "correlation_lr");
+  if (value === null) {
+    return {
+      note: "Load render_qa.json to inspect stereo coherence thresholds.",
+      ratio: 0.5,
+      tone: "info",
+      value: null,
+    };
+  }
+  const thresholds = asObject(qa?.thresholds);
+  const warnThreshold = asNumber(thresholds?.correlation_warn_lte);
+  const errorThreshold = asNumber(thresholds?.polarity_error_correlation_lte);
+  const tone = errorThreshold !== null && value <= errorThreshold
+    ? "danger"
+    : (warnThreshold !== null && value <= warnThreshold ? "warn" : "ok");
+  return {
+    note: [
+      "Stereo coherence from render_qa mean correlation.",
+      warnThreshold === null ? null : `warn<=${warnThreshold.toFixed(2)}`,
+      errorThreshold === null ? null : `polarity<=${errorThreshold.toFixed(2)}`,
+    ].filter(Boolean).join(" · "),
+    ratio: clamp((value + 1) / 2, 0, 1),
+    tone,
+    value,
+  };
+}
+
+function buildVectorscopePath(correlation: number | null, sideMidRatio: number | null, crestFactor: number | null): string {
+  const correlationRatio = correlation === null ? 0.5 : clamp((correlation + 1) / 2, 0, 1);
+  const sideRatio = sideMidRatio === null ? 0.4 : clamp((sideMidRatio + 18) / 24, 0, 1);
+  const crestRatio = crestFactor === null ? 0.5 : clamp(crestFactor / 18, 0, 1);
+
+  const horizontal = 12 + ((1 - correlationRatio) * 22) + (sideRatio * 8);
+  const vertical = 14 + (correlationRatio * 22) + (crestRatio * 4) - (sideRatio * 3);
+  const waist = 0.32 + (sideRatio * 0.24);
+
+  const topY = 50 - vertical;
+  const rightInsetX = 50 + (horizontal * 0.58);
+  const rightMidX = 50 + horizontal;
+  const rightY = 50 - (vertical * waist);
+  const bottomY = 50 + vertical;
+  const leftInsetX = 50 - (horizontal * 0.58);
+  const leftMidX = 50 - horizontal;
+
+  return [
+    `M 50 ${topY.toFixed(2)}`,
+    `L ${rightInsetX.toFixed(2)} ${rightY.toFixed(2)}`,
+    `L ${rightMidX.toFixed(2)} 50`,
+    `L ${rightInsetX.toFixed(2)} ${(100 - rightY).toFixed(2)}`,
+    `L 50 ${bottomY.toFixed(2)}`,
+    `L ${leftInsetX.toFixed(2)} ${(100 - rightY).toFixed(2)}`,
+    `L ${leftMidX.toFixed(2)} 50`,
+    `L ${leftInsetX.toFixed(2)} ${rightY.toFixed(2)}`,
+    "Z",
+  ].join(" ");
+}
+
+function renderRecommendationConfidence(ui: AppUi): void {
+  ui.results.confidenceList.innerHTML = "";
+  const insights = recommendationInsights(state.artifacts.receipt).slice(0, Math.max(2, state.resultsDetailLevel));
+
+  if (insights.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "control-caption";
+    empty.textContent = "No recommendation confidence data loaded.";
+    ui.results.confidenceList.append(empty);
+  } else {
+    for (const insight of insights) {
+      const confidence = describeConfidence(insight.confidence);
+      const row = document.createElement("article");
+      row.className = "confidence-row";
+      row.dataset.confidenceTone = confidence.tone;
+
+      const head = document.createElement("div");
+      head.className = "confidence-row-head";
+
+      const title = document.createElement("p");
+      title.textContent = `${insight.recommendationId} · ${insight.actionId || "-"}`;
+
+      const status = document.createElement("span");
+      status.className = "confidence-row-status";
+      status.dataset.status = insight.status;
+      status.textContent = insight.status;
+
+      head.append(title, status);
+
+      const meta = document.createElement("p");
+      meta.className = "confidence-row-meta";
+      meta.textContent = `${confidence.percentLabel} ${confidence.label} · scope=${insight.scopeLabel}`;
+
+      const bar = document.createElement("div");
+      bar.className = "confidence-bar";
+      bar.style.setProperty("--confidence-ratio", insight.confidence === null ? "0" : clamp(insight.confidence, 0, 1).toFixed(4));
+
+      const why = document.createElement("p");
+      why.className = "control-caption";
+      why.textContent = insight.why;
+
+      row.append(head, meta, bar, why);
+      ui.results.confidenceList.append(row);
+    }
+  }
+
+  const summary = asObject(state.artifacts.receipt?.recommendations_summary);
+  ui.results.confidenceNote.textContent = summary === null
+    ? "Confidence rows use receipt deltas when they are available."
+    : [
+      `eligible=${asNumber(summary.eligible) ?? 0}`,
+      `applied=${asNumber(summary.applied) ?? 0}`,
+      `blocked=${asNumber(summary.blocked) ?? 0}`,
+    ].join(" · ");
+}
+
+function renderResultsInspection(ui: AppUi): void {
+  const gainReduction = deriveGainReduction(state.artifacts.receipt, state.artifacts.qa);
+  ui.results.gainReductionValue.textContent = gainReduction.value === null
+    ? "n/a"
+    : `${gainReduction.value.toFixed(1)} dB`;
+  ui.results.gainReductionMeter.style.setProperty("--bar-ratio", gainReduction.ratio.toFixed(4));
+  ui.results.transferCurvePath.setAttribute("d", buildTransferCurvePath(gainReduction));
+  ui.results.transferNote.textContent = gainReduction.value === null
+    ? "Transfer curve proxy will appear when dynamics data is available."
+    : [
+      gainReduction.note,
+      gainReduction.thresholdDb === null ? null : `threshold=${gainReduction.thresholdDb.toFixed(1)} dB`,
+      gainReduction.transferRatio === null ? null : `ratio=${gainReduction.transferRatio.toFixed(1)}:1`,
+    ].filter(Boolean).join(" · ");
+
+  const phaseState = phaseCorrelationState(state.artifacts.qa);
+  ui.results.phaseCorrelationValue.textContent = phaseState.value === null
+    ? "n/a corr"
+    : `${phaseState.value.toFixed(2)} corr`;
+  ui.results.phaseCorrelationMeter.style.setProperty("--phase-ratio", phaseState.ratio.toFixed(4));
+  ui.results.phaseCorrelationMeter.dataset.phaseTone = phaseState.tone;
+  ui.results.phaseNote.textContent = phaseState.note;
+
+  const correlation = meanQaMetric(state.artifacts.qa, "correlation_lr");
+  const sideMidRatio = meanQaMetric(state.artifacts.qa, "side_mid_ratio_db");
+  const crestFactor = meanQaMetric(state.artifacts.qa, "crest_factor_db");
+  ui.results.vectorscopePath.setAttribute("d", buildVectorscopePath(correlation, sideMidRatio, crestFactor));
+
+  const spreadLabel = correlation === null
+    ? "Spread unavailable"
+    : (correlation >= 0.7
+      ? "Tight / mono-safe"
+      : (correlation >= 0.2 ? "Balanced stereo" : (correlation >= -0.2 ? "Wide stereo" : "Anti-phase risk")));
+  ui.results.vectorscopeSummary.textContent = [
+    spreadLabel,
+    `side/mid=${formatNumber(sideMidRatio, 1, " dB")}`,
+    `crest=${formatNumber(crestFactor, 1, " dB")}`,
+  ].join(" · ");
+}
+
 type CompareCompensationState = {
   db: number;
   evaluationOnly: boolean;
@@ -1226,6 +1813,7 @@ function summarizeCompareHeadline(compare: JsonObject | null): string {
 function renderCompare(ui: AppUi): void {
   const compare = state.artifacts.compare;
   const compareExists = compare !== null;
+  renderChangeSummary(ui.compareChangeSummary, compareChangeSummaryChips(compare), "Load compare_report.json.");
 
   for (const button of ui.abButtons) {
     const active = button.dataset.abState === state.compareState;
@@ -1344,6 +1932,13 @@ function renderResults(ui: AppUi): void {
   ui.results.detailSlider.setAttribute("aria-valuenow", state.resultsDetailLevel.toString());
   ui.results.detailInput.value = state.resultsDetailLevel.toString();
   ui.results.detailValue.textContent = `${state.resultsDetailLevel} line(s) of detail`;
+  renderChangeSummary(
+    ui.results.changeSummary,
+    receiptChangeSummaryChips(state.artifacts.receipt, state.artifacts.manifest, state.artifacts.qa),
+    "Load a receipt or manifest.",
+  );
+  renderRecommendationConfidence(ui);
+  renderResultsInspection(ui);
 
   ui.results.readoutPrimary.textContent = summarizeReceipt(
     state.artifacts.receipt,

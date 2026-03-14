@@ -132,6 +132,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `Tab` focus local without scroll jumps so Firefox drag tests stay
     deterministic.
 
+- Tauri GUI explainability + dynamics/spatial inspection parity:
+  - The desktop Results screen now renders deterministic, artifact-backed gain
+    reduction, phase-correlation, vectorscope, and transfer-curve proxy views
+    from `safe_render_receipt.json` and `render_qa.json`.
+  - Results/Compare now surface keyboard/hover "what / why" hint overlays,
+    receipt-backed recommendation confidence rows, and compact change-summary
+    chips after run/apply/compare actions.
+  - Desktop design-system regression coverage now treats those widgets as
+    required parity surfaces and verifies their labels, units, visibility, and
+    no-overlap layout behavior.
+
 - Ontology change validation now runs git subprocesses with explicit UTF-8
   decoding, reports decode-fallback warnings instead of crashing on Windows
   locale defaults, and stops base-ref diffing cleanly when base ontology files

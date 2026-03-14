@@ -50,8 +50,22 @@ deprecated after parity lands.
       audition states, record the deterministic compensation method/amount in
       `compare_report.json`, and disclose that evaluation-only compensation in
       the user-visible compare readout.
+- [x] Dynamics/spatial inspection: Results must expose deterministic,
+      artifact-backed gain reduction, phase correlation, and
+      goniometer/vectorscope views, with a transfer-curve proxy when the loaded
+      artifacts contain enough dynamics context.
+- [x] Explainability surfaces: Results/Compare must expose hover/focus
+      "what/why" hints, recommendation confidence indicators sourced from
+      artifacts, and compact "what changed" summaries after run/apply/compare
+      actions.
 - [ ] Scene locks edit: the GUI must support deterministic scene lock editing
       and save the resulting lock artifact for repeatable reruns.
+
+## Explicitly Non-Blocking Here
+
+- Macro mood systems and semantic macro controls remain optional.
+- Soundstage candy and non-essential spatial eye candy remain optional.
+- A/B/C/D morphing remains optional.
 
 ## Exit Rule
 

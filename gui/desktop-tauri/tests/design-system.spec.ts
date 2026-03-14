@@ -60,6 +60,10 @@ const screens: Record<ScreenKey, { buttonLabel: string; requiredWidgets: string[
       "widget.results.browser",
       "widget.results.detail_slider",
       "widget.results.value_readout",
+      "widget.results.recommendation_confidence",
+      "widget.results.gain_reduction",
+      "widget.results.phase_correlation",
+      "widget.results.vectorscope",
       "widget.results.what_changed",
       "widget.results.qa",
       "widget.results.json",
@@ -306,17 +310,67 @@ test.describe("desktop workflow design system", () => {
         blocked: 1,
         applied: 1,
       },
+      eligible_recommendations: [
+        {
+          recommendation_id: "REC.RENDER.003",
+          action_id: "ACTION.SPATIAL.NARROW",
+          scope: { bus_id: "BUS.MUSIC" },
+          deltas: [
+            {
+              param_id: "PARAM.STEREO.WIDTH",
+              from: 1.0,
+              to: 0.85,
+              unit: "ratio",
+              confidence: 0.58,
+              evidence_ref: "EVID.SIDE.001",
+            },
+          ],
+          gate_summary: "eligible",
+        },
+      ],
       applied_recommendations: [
         {
           recommendation_id: "REC.RENDER.001",
           action_id: "ACTION.UTILITY.GAIN",
           scope: { stem_id: "STEM.VOX" },
+          deltas: [
+            {
+              param_id: "PARAM.UTILITY.GAIN_DB",
+              from: 0.0,
+              to: -2.4,
+              unit: "dB",
+              confidence: 0.82,
+              evidence_ref: "EVID.GAIN.001",
+            },
+            {
+              param_id: "PARAM.DYNAMICS.THRESHOLD_DB",
+              from: -18.0,
+              to: -20.5,
+              unit: "dB",
+              confidence: 0.79,
+              evidence_ref: "EVID.DYN.002",
+            },
+          ],
+          gate_summary: "applied",
+          notes: "Trimmed the lead for extra headroom.",
         },
       ],
       blocked_recommendations: [
         {
           recommendation_id: "REC.RENDER.002",
           gate_summary: "blocked_by_gates",
+          action_id: "ACTION.STEREO.WIDEN",
+          scope: { bus_id: "BUS.MUSIC" },
+          deltas: [
+            {
+              param_id: "PARAM.STEREO.WIDTH",
+              from: 1.0,
+              to: 1.2,
+              unit: "ratio",
+              confidence: 0.41,
+              evidence_ref: "EVID.WIDTH.004",
+            },
+          ],
         },
       ],
       qa_issues: [],
@@ -339,15 +393,38 @@ test.describe("desktop workflow design system", () => {
       ],
     }));
     await page.locator("#results-qa-file-input").setInputFiles(jsonFile("render_qa.json", {
+      thresholds: {
+        correlation_warn_lte: -0.2,
+        polarity_error_correlation_lte: -0.6,
+      },
       jobs: [
         {
           job_id: "JOB.001",
+          input: {
+            metrics: {
+              rms_dbfs: -8.0,
+              peak_dbfs: -1.0,
+            },
+          },
           outputs: [
             {
               path: "render/2_0/mix.wav",
               metrics: {
                 integrated_lufs: -14.1,
                 rms_dbfs: -10.2,
+                crest_factor_db: 9.4,
+                correlation_lr: 0.14,
+                side_mid_ratio_db: -2.8,
+              },
+            },
+          ],
+          comparisons: [
+            {
+              metrics_delta: {
+                rms_dbfs: -2.4,
+                peak_dbfs: -1.1,
+                correlation_lr: -0.12,
+                side_mid_ratio_db: -0.6,
               },
             },
           ],
@@ -364,9 +441,20 @@ test.describe("desktop workflow design system", () => {
     }));
 
     await expect(page.locator("#results-readout-primary")).toContainText("completed");
+    await expect(page.locator("#results-change-summary")).toContainText("Applied 1");
     await expect(page.locator("#results-what-changed-text")).toContainText("render/2_0/mix.wav");
     await expect(page.locator("#results-qa-text")).toContainText("ISSUE.RENDER.QA.TRUE_PEAK_WARN");
     await expect(page.locator("#artifact-browser-list")).toContainText("render/2_0/mix.wav");
+    await expect(page.locator("#results-confidence-list")).toContainText("REC.RENDER.001");
+    await expect(page.locator("#results-confidence-list")).toContainText("81% High");
+    await expect(page.locator("#results-gain-reduction-value")).toContainText("2.4 dB");
+    await expect(page.locator("#results-phase-correlation-value")).toContainText("0.14 corr");
+    await expect(page.locator("#results-transfer-note")).toContainText("threshold=-20.5 dB");
+    await expect(page.locator("#results-vectorscope-summary")).toContainText("side/mid=-2.8 dB");
+
+    await page.locator("#results-phase-hint-trigger").focus();
+    await expect(page.locator("#hint-results-phase")).toBeVisible();
+    await expect(page.locator("#hint-results-phase")).toContainText("Why:");
   });
 
   test("compare screen uses compare artifact plus A/B render QA for loudness match", async ({ page }) => {
@@ -383,6 +471,56 @@ test.describe("desktop workflow design system", () => {
         label: "variant_b",
         profile_id: "PROFILE.FULL_SEND",
         preset_id: "PRESET.WIDE",
+      },
+      diffs: {
+        profile_id: {
+          a: "PROFILE.ASSIST",
+          b: "PROFILE.FULL_SEND",
+        },
+        preset_id: {
+          a: "PRESET.SAFE",
+          b: "PRESET.WIDE",
+        },
+        meters: {
+          a: "METER.SAFE",
+          b: "METER.WIDE",
+        },
+        output_formats: {
+          a: ["wav"],
+          b: ["wav"],
+        },
+        metrics: {
+          downmix_qa: {
+            lufs_delta: {
+              a: -14.0,
+              b: -15.2,
+              delta: -1.2,
+            },
+            true_peak_delta: {
+              a: -1.0,
+              b: -0.7,
+              delta: 0.3,
+            },
+            corr_delta: {
+              a: 0.34,
+              b: 0.18,
+              delta: -0.16,
+            },
+          },
+          mix_complexity: null,
+          change_flags: {
+            extreme_count: {
+              a: 0,
+              b: 0,
+              delta: 0,
+            },
+            translation_risk: {
+              a: "low",
+              b: "medium",
+              shift: 1,
+            },
+          },
+        },
       },
       notes: [
         "Profile changed: PROFILE.ASSIST -> PROFILE.FULL_SEND.",
@@ -443,10 +581,15 @@ test.describe("desktop workflow design system", () => {
 
     await expect(page.locator("#ab-compensation")).toContainText("Fair listen on");
     await expect(page.locator("#compare-compensation-input")).toHaveValue("1.2");
+    await expect(page.locator("#compare-change-summary")).toContainText("Stereo coherence -0.16");
     await expect(page.locator("#compare-summary")).toContainText("Profile changed");
     await expect(page.locator("#compare-summary-note")).toContainText("evaluation_only=true");
     await page.getByRole("button", { name: "B", exact: true }).click();
     await expect(page.locator("#compare-readout-primary")).toContainText("variant_b");
     await expect(page.locator("#compare-readout-secondary")).toContainText("raw=-15.2");
+
+    await page.locator("#compare-summary-hint-trigger").focus();
+    await expect(page.locator("#hint-compare-summary")).toBeVisible();
+    await expect(page.locator("#hint-compare-summary")).toContainText("What:");
   });
 });

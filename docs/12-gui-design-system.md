@@ -163,6 +163,9 @@ Primary components:
 - Audition guidance
 - Extreme flags
 - Export buttons
+- Dynamics/spatial inspection: gain reduction, stereo coherence, vectorscope,
+  and a transfer-curve proxy when artifact data allows it
+- Recommendation confidence rows with plain-language reasons and gating context
 
 Default view vs Nerd view:
 
@@ -192,6 +195,8 @@ Primary components:
 - Objective difference summary
 - Warning indicators
 - "What changed" narrative summary
+- Compact delta chips for profile/preset/coherence/risk changes
+- Hint overlays that explain what a diff means and why it matters
 
 Default view vs Nerd view:
 
@@ -210,6 +215,21 @@ Example copy:
 
 - "Version B feels wider and brighter, with similar loudness and safer
   headroom."
+
+## Required inspection surfaces
+
+- Results must expose deterministic, artifact-backed dynamics/spatial widgets:
+  gain reduction, phase correlation, and a goniometer/vectorscope proxy.
+- Transfer-curve view is allowed to be a low-cost proxy, but it must still be
+  derived from recorded artifact data and label that source honestly.
+- Results and Compare must provide compact "what changed" summaries immediately
+  after run/apply/compare actions.
+- Hint overlays must include one "what" line and one "why it matters" line, and
+  they must work on hover and keyboard focus.
+- Recommendation confidence must come from artifact evidence or recorded delta
+  confidence; never fabricate certainty.
+- Macro mood systems, soundstage candy, and A/B/C/D morphing stay optional and
+  must not become parity blockers for the core workflow.
 
 ## Copy glossary
 
