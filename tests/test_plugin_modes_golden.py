@@ -74,6 +74,15 @@ class TestPluginModesGolden(unittest.TestCase):
         self.assertGreaterEqual(per_channel["max_channels"], 32)
         self.assertEqual(per_channel["channel_mode"], "per_channel")
         self.assertEqual(per_channel["deterministic_seed_policy"], "none")
+        self.assertEqual(
+            per_channel["purity"],
+            {
+                "audio_buffer": "typed_f64_interleaved",
+                "randomness": "forbidden",
+                "wall_clock": "forbidden",
+                "thread_scheduling": "forbidden",
+            },
+        )
 
         linked_group = entries[_LINKED_GROUP_PLUGIN_ID].manifest["capabilities"]
         self.assertGreaterEqual(linked_group["max_channels"], 32)
@@ -83,6 +92,15 @@ class TestPluginModesGolden(unittest.TestCase):
             ["front", "surrounds", "heights"],
         )
         self.assertEqual(linked_group["deterministic_seed_policy"], "none")
+        self.assertEqual(
+            linked_group["purity"],
+            {
+                "audio_buffer": "typed_f64_interleaved",
+                "randomness": "forbidden",
+                "wall_clock": "forbidden",
+                "thread_scheduling": "forbidden",
+            },
+        )
 
         true_multichannel = entries[_TRUE_MULTICHANNEL_PLUGIN_ID].manifest["capabilities"]
         self.assertGreaterEqual(true_multichannel["max_channels"], 32)
@@ -90,6 +108,15 @@ class TestPluginModesGolden(unittest.TestCase):
         self.assertEqual(
             true_multichannel["deterministic_seed_policy"],
             "seed_required",
+        )
+        self.assertEqual(
+            true_multichannel["purity"],
+            {
+                "audio_buffer": "typed_f64_interleaved",
+                "randomness": "process_context_seed",
+                "wall_clock": "forbidden",
+                "thread_scheduling": "forbidden",
+            },
         )
 
     def test_per_channel_plugin_targets_semantic_speakers_across_channel_orders(self) -> None:
@@ -108,6 +135,7 @@ class TestPluginModesGolden(unittest.TestCase):
                 )
 
                 self.assertEqual(result.evidence["channel_mode"], "per_channel")
+                self.assertEqual(result.evidence["runtime_audio_buffer"], "typed_f64_interleaved")
                 self.assertEqual(
                     result.evidence["channel_ids_touched"],
                     sorted(target_channel_ids),
@@ -154,6 +182,8 @@ class TestPluginModesGolden(unittest.TestCase):
                 )
 
                 self.assertEqual(result.evidence["channel_mode"], "linked_group")
+                self.assertEqual(result.evidence["runtime_audio_buffer"], "typed_f64_interleaved")
+                self.assertEqual(result.evidence["buffer_type"], "AudioBufferF64")
                 self.assertEqual(result.evidence["group_name"], group_name)
                 self.assertEqual(result.evidence["channel_ids"], expected_channel_ids)
 
@@ -193,6 +223,8 @@ class TestPluginModesGolden(unittest.TestCase):
                 second = run_plugin_mode(plugin_entry, source, process_ctx, params=params)
 
                 np.testing.assert_array_equal(first.rendered, second.rendered)
+                self.assertEqual(first.evidence["runtime_audio_buffer"], "typed_f64_interleaved")
+                self.assertEqual(first.evidence["buffer_type"], "AudioBufferF64")
                 self.assertEqual(
                     first.evidence["channel_ids_seen"],
                     list(process_ctx.channel_order),

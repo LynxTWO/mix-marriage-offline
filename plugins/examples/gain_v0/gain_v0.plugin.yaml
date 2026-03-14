@@ -10,6 +10,11 @@ entrypoint: "mmo.plugins.renderers.safe_renderer:SafeRenderer"
 capabilities:
   max_channels: 32
   deterministic_seed_policy: "none"
+  purity:
+    audio_buffer: "typed_f64_interleaved"
+    randomness: "forbidden"
+    wall_clock: "forbidden"
+    thread_scheduling: "forbidden"
   supported_contexts:
     - "render"
     - "auto_apply"

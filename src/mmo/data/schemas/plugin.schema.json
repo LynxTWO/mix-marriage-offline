@@ -116,6 +116,10 @@
           "enum": ["none", "seed_required", "seed_optional"],
           "description": "Plugin's determinism contract for internal randomness."
         },
+        "purity": {
+          "$ref": "#/$defs/plugin_purity_contract",
+          "description": "Runtime purity contract for typed audio buffers and deterministic execution."
+        },
         "dsp_traits": {
           "$ref": "#/$defs/plugin_dsp_traits",
           "description": "Digital-first DSP traits and measurable truth-contract claims."
@@ -175,6 +179,29 @@
           "type": "integer",
           "minimum": 0,
           "description": "Latency in samples. Required when type is fixed."
+        }
+      }
+    },
+    "plugin_purity_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["audio_buffer", "randomness", "wall_clock", "thread_scheduling"],
+      "properties": {
+        "audio_buffer": {
+          "type": "string",
+          "enum": ["typed_f64_interleaved"]
+        },
+        "randomness": {
+          "type": "string",
+          "enum": ["forbidden", "process_context_seed"]
+        },
+        "wall_clock": {
+          "type": "string",
+          "enum": ["forbidden"]
+        },
+        "thread_scheduling": {
+          "type": "string",
+          "enum": ["forbidden"]
         }
       }
     },

@@ -286,6 +286,7 @@ def _validate_capabilities(
         "link_groups",
         "latency",
         "deterministic_seed_policy",
+        "purity",
         "bed_only",
         "supported_standards",
         "preferred_standard",
@@ -324,6 +325,106 @@ def _validate_capabilities(
                 "max_channels": max_channels,
             },
         )
+
+    seed_policy = capabilities.get("deterministic_seed_policy")
+    purity = capabilities.get("purity")
+    if purity is not None:
+        if not isinstance(purity, dict):
+            _add_issue(
+                issues,
+                ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                "error",
+                "capabilities.purity must be an object.",
+                {"file_path": str(manifest_path)},
+            )
+        else:
+            allowed_purity_fields = {
+                "audio_buffer",
+                "randomness",
+                "wall_clock",
+                "thread_scheduling",
+            }
+            for field_name in sorted(purity.keys()):
+                if field_name not in allowed_purity_fields:
+                    _add_issue(
+                        issues,
+                        ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                        "error",
+                        f"capabilities.purity contains unsupported field: {field_name}.",
+                        {"file_path": str(manifest_path), "field_name": field_name},
+                    )
+
+            allowed_audio_buffer = {"typed_f64_interleaved"}
+            audio_buffer = purity.get("audio_buffer")
+            if audio_buffer is not None and (
+                not isinstance(audio_buffer, str) or audio_buffer not in allowed_audio_buffer
+            ):
+                _add_issue(
+                    issues,
+                    ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                    "error",
+                    "capabilities.purity.audio_buffer must be 'typed_f64_interleaved'.",
+                    {"file_path": str(manifest_path), "value": audio_buffer},
+                )
+
+            randomness = purity.get("randomness")
+            allowed_randomness = {"forbidden", "process_context_seed"}
+            if randomness is not None and (
+                not isinstance(randomness, str) or randomness not in allowed_randomness
+            ):
+                _add_issue(
+                    issues,
+                    ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                    "error",
+                    (
+                        "capabilities.purity.randomness must be 'forbidden' or "
+                        "'process_context_seed'."
+                    ),
+                    {"file_path": str(manifest_path), "value": randomness},
+                )
+
+            wall_clock = purity.get("wall_clock")
+            if wall_clock is not None and wall_clock != "forbidden":
+                _add_issue(
+                    issues,
+                    ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                    "error",
+                    "capabilities.purity.wall_clock must be 'forbidden'.",
+                    {"file_path": str(manifest_path), "value": wall_clock},
+                )
+
+            thread_scheduling = purity.get("thread_scheduling")
+            if thread_scheduling is not None and thread_scheduling != "forbidden":
+                _add_issue(
+                    issues,
+                    ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                    "error",
+                    "capabilities.purity.thread_scheduling must be 'forbidden'.",
+                    {"file_path": str(manifest_path), "value": thread_scheduling},
+                )
+
+            if seed_policy == "none" and randomness == "process_context_seed":
+                _add_issue(
+                    issues,
+                    ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                    "error",
+                    (
+                        "capabilities.purity.randomness='process_context_seed' "
+                        "conflicts with capabilities.deterministic_seed_policy='none'."
+                    ),
+                    {"file_path": str(manifest_path)},
+                )
+            if seed_policy in {"seed_required", "seed_optional"} and randomness == "forbidden":
+                _add_issue(
+                    issues,
+                    ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                    "error",
+                    (
+                        "capabilities.purity.randomness='forbidden' conflicts with "
+                        "a seed-enabled deterministic_seed_policy."
+                    ),
+                    {"file_path": str(manifest_path)},
+                )
 
     supported_layout_ids = capabilities.get("supported_layout_ids")
     layout_values: list[str] = []

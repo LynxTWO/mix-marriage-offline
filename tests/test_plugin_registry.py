@@ -24,6 +24,7 @@ from mmo.core.plugin_registry import (
     ISSUE_SEMANTICS_LATENCY_TYPE_INVALID,
     ISSUE_SEMANTICS_LINK_GROUPS_INVALID,
     ISSUE_SEMANTICS_LINK_GROUPS_REQUIRES_LINKED_MODE,
+    ISSUE_SEMANTICS_PURITY_RANDOMNESS_CONFLICT,
     ISSUE_SEMANTICS_SEED_POLICY_INVALID,
     ISSUE_SEMANTICS_SPEAKER_POSITIONS_NO_LAYOUT,
     PluginRegistryError,
@@ -199,6 +200,22 @@ class TestSchemaValidation(unittest.TestCase):
         errors = validate_manifest(manifest, schema_path=_SCHEMA_PATH)
         self.assertEqual(errors, [], msg=errors)
 
+    def test_valid_purity_contract_passes(self) -> None:
+        manifest = _renderer_manifest(
+            capabilities={
+                "max_channels": 2,
+                "deterministic_seed_policy": "seed_required",
+                "purity": {
+                    "audio_buffer": "typed_f64_interleaved",
+                    "randomness": "process_context_seed",
+                    "wall_clock": "forbidden",
+                    "thread_scheduling": "forbidden",
+                },
+            }
+        )
+        errors = validate_manifest(manifest, schema_path=_SCHEMA_PATH)
+        self.assertEqual(errors, [], msg=errors)
+
 
 # ---------------------------------------------------------------------------
 # Semantics validation
@@ -311,6 +328,44 @@ class TestSemanticsValidation(unittest.TestCase):
             _errors_contain(errors, ISSUE_SEMANTICS_SEED_POLICY_INVALID)
             or _errors_contain(errors, "[schema]"),
             msg=f"Expected seed policy error; got: {errors}",
+        )
+
+    def test_seed_none_conflicts_with_seeded_purity_randomness(self) -> None:
+        manifest = _renderer_manifest(
+            capabilities={
+                "max_channels": 2,
+                "deterministic_seed_policy": "none",
+                "purity": {
+                    "audio_buffer": "typed_f64_interleaved",
+                    "randomness": "process_context_seed",
+                    "wall_clock": "forbidden",
+                    "thread_scheduling": "forbidden",
+                },
+            }
+        )
+        errors = validate_manifest(manifest, schema_path=_SCHEMA_PATH, semantics=self.semantics)
+        self.assertTrue(
+            _errors_contain(errors, ISSUE_SEMANTICS_PURITY_RANDOMNESS_CONFLICT),
+            msg=f"Expected purity/seed conflict; got: {errors}",
+        )
+
+    def test_seed_required_conflicts_with_forbidden_randomness(self) -> None:
+        manifest = _renderer_manifest(
+            capabilities={
+                "max_channels": 2,
+                "deterministic_seed_policy": "seed_required",
+                "purity": {
+                    "audio_buffer": "typed_f64_interleaved",
+                    "randomness": "forbidden",
+                    "wall_clock": "forbidden",
+                    "thread_scheduling": "forbidden",
+                },
+            }
+        )
+        errors = validate_manifest(manifest, schema_path=_SCHEMA_PATH, semantics=self.semantics)
+        self.assertTrue(
+            _errors_contain(errors, ISSUE_SEMANTICS_PURITY_RANDOMNESS_CONFLICT),
+            msg=f"Expected purity/seed conflict; got: {errors}",
         )
 
     def test_bed_only_conflicts_with_supports_objects(self) -> None:

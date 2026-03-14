@@ -164,6 +164,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Restored byte-stable plugin-chain no-op behavior for matching stereo WAV
     passthrough cases, including bypassed and fully dry endpoints, while
     preserving explainable event-log/report output.
+- Typed plugin buffer boundary + determinism purity enforcement:
+  - Stereo plugin-chain execution and manifest-driven plugin-mode fixtures now
+    pass `AudioBufferF64` at the real plugin boundary and reject raw ndarray
+    returns there.
+  - Plugin manifests/schema/validators now expose a `capabilities.purity`
+    contract covering typed buffers, seeded randomness, wall-clock bans, and
+    thread-scheduling bans.
+  - Runtime guardrails now fail loudly on unseeded RNG, `time.*`, and
+    thread/executor usage during deterministic plugin execution, and authoring
+    docs/tests now pin the exact contract.
 
 ### Changed
 

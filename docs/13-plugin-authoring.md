@@ -36,10 +36,13 @@ manifests are fallback-only.
   `PLUGIN.RENDERER.*`).
 - `entrypoint` imports successfully.
 - `capabilities` uses supported fields (`max_channels`, `channel_mode`,
-  `link_groups`, `latency`, `deterministic_seed_policy`, `dsp_traits`,
+  `link_groups`, `latency`, `deterministic_seed_policy`, `purity`, `dsp_traits`,
   `bed_only`, `supported_standards`, `preferred_standard`,
   `supported_layout_ids`, `supported_contexts`, `scene`, `notes`).
 - Renderer manifests must declare `capabilities.deterministic_seed_policy`.
+- If the plugin crosses an audio-processing boundary, declare
+  `capabilities.purity` so authors and validators agree on typed-buffer and
+  determinism rules.
 - Renderer manifests must declare `capabilities.dsp_traits.tier` and
   `capabilities.dsp_traits.linearity`.
 - If `capabilities.dsp_traits.linearity` is `nonlinear`, `anti_aliasing` must be
@@ -55,6 +58,60 @@ manifests are fallback-only.
   ordering.
 - `ui_layout` is a relative path inside the plugin directory.
 - `config_schema` is a JSON Schema object (Draft 2020-12 compatible).
+
+## 2.2 Typed audio boundary and purity contract
+
+Audio plugins now execute on `mmo.dsp.buffer.AudioBufferF64`, not anonymous raw
+NumPy buffers.
+
+Exact runtime expectations:
+
+- accept `AudioBufferF64` at the plugin boundary
+- respect `audio_buffer.channel_order` and `process_ctx.channel_order`
+- keep `audio_buffer.sample_rate_hz` aligned with the provided `sample_rate`
+- return `AudioBufferF64` from the boundary
+
+Manifest example:
+
+```yaml
+capabilities:
+  max_channels: 32
+  deterministic_seed_policy: "seed_required"
+  purity:
+    audio_buffer: "typed_f64_interleaved"
+    randomness: "process_context_seed"
+    wall_clock: "forbidden"
+    thread_scheduling: "forbidden"
+```
+
+Python example:
+
+```python
+from mmo.dsp.buffer import AudioBufferF64
+
+def process_stereo(audio_buffer, sample_rate, params, ctx, process_ctx=None):
+    if not isinstance(audio_buffer, AudioBufferF64):
+        raise ValueError("AudioBufferF64 required at plugin boundary.")
+
+    frame_matrix = audio_buffer.to_frame_matrix(np=np, dtype=np.float64)
+    rendered = frame_matrix * 0.5
+    return AudioBufferF64.from_frame_matrix(
+        rendered,
+        channel_order=audio_buffer.channel_order,
+        sample_rate_hz=audio_buffer.sample_rate_hz,
+    )
+```
+
+Determinism purity rules are enforced, not advisory:
+
+- Do not call global `random.*` helpers.
+- Do not call `numpy.random.*` helpers without an explicit seed.
+- Do not call `time.time()`, `time.perf_counter()`, or related wall-clock APIs.
+- Do not spawn threads, timers, or executors inside plugin execution.
+
+If seeded randomness is part of the design, derive it from `process_ctx.seed`
+and use an explicit constructor such as `numpy.random.default_rng(process_ctx.seed)`.
+The runtime guard rejects unseeded RNG construction.
 
 ## 2.1 Canonical stage graph for plugin authors
 

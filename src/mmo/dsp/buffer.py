@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterator, Sequence
+from typing import Any, Iterator, Sequence
 
 
 def generic_channel_order(channels: int) -> tuple[str, ...]:
@@ -54,6 +54,15 @@ class AudioBufferF64:
     def frame_count(self) -> int:
         return len(self.data) // self.channels
 
+    def index_of(self, channel_id: str) -> int | None:
+        normalized = channel_id.strip()
+        if not normalized:
+            return None
+        for index, candidate in enumerate(self.channel_order):
+            if candidate == normalized:
+                return index
+        return None
+
     def slice_frames(self, start: int, count: int) -> AudioBufferF64:
         start_frame = int(start)
         count_frames = int(count)
@@ -96,6 +105,30 @@ class AudioBufferF64:
                 sample_index += 1
         return planar
 
+    def to_frame_matrix(
+        self,
+        *,
+        np: Any,
+        dtype: Any,
+    ) -> Any:
+        requested_dtype = np.dtype(dtype)
+        if requested_dtype not in {np.dtype(np.float32), np.dtype(np.float64)}:
+            raise ValueError(
+                "AudioBufferF64.to_frame_matrix() requires float32 or float64 dtype.",
+            )
+        return np.asarray(self.data, dtype=requested_dtype).reshape(
+            self.frame_count,
+            self.channels,
+        )
+
+    def to_channel_matrix(
+        self,
+        *,
+        np: Any,
+        dtype: Any,
+    ) -> Any:
+        return self.to_frame_matrix(np=np, dtype=dtype).transpose().copy()
+
     @classmethod
     def from_planar_lists(
         cls,
@@ -122,6 +155,45 @@ class AudioBufferF64:
             data=interleaved,
             channels=channels,
             channel_order=tuple(channel_order),
+            sample_rate_hz=sample_rate_hz,
+        )
+
+    @classmethod
+    def from_frame_matrix(
+        cls,
+        frame_matrix: Sequence[Sequence[float]],
+        *,
+        channel_order: Sequence[str],
+        sample_rate_hz: int,
+    ) -> AudioBufferF64:
+        channels = len(tuple(channel_order))
+        if channels <= 0:
+            raise ValueError("channel_order must contain at least one channel id")
+
+        interleaved: list[float] = []
+        for frame in frame_matrix:
+            if len(frame) != channels:
+                raise ValueError("frame_matrix width must match channel_order length")
+            interleaved.extend(float(sample) for sample in frame)
+
+        return cls(
+            data=interleaved,
+            channels=channels,
+            channel_order=tuple(channel_order),
+            sample_rate_hz=sample_rate_hz,
+        )
+
+    @classmethod
+    def from_channel_matrix(
+        cls,
+        channel_matrix: Sequence[Sequence[float]],
+        *,
+        channel_order: Sequence[str],
+        sample_rate_hz: int,
+    ) -> AudioBufferF64:
+        return cls.from_planar_lists(
+            channel_matrix,
+            channel_order=channel_order,
             sample_rate_hz=sample_rate_hz,
         )
 

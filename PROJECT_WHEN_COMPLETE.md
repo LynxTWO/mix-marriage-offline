@@ -516,9 +516,8 @@ AI-readable layout export + validation (prevents overlaps/off-screen UI):
 
 The project is not considered complete until the DSP pipeline, plugin contracts,
 and render behavior below are implemented, documented, and covered by tests.
-What remains: the core DSP path is functional, but public export-policy docs,
-the stricter plugin purity guarantees and the final multichannel safety
-contract still need to be closed out.
+What remains: the core DSP path is functional, but the final multichannel
+safety contract still needs to be closed out.
 
 ### 4.9.1 DSP core guarantees
 
@@ -573,16 +572,14 @@ contract still need to be closed out.
 - [x] Nonlinear renderer manifests declare anti-aliasing strategy (not `none`).
 - [x] Renderer manifests include measurable truth contracts via
       `capabilities.dsp_traits.measurable_claims`.
-- [ ] Plugins operate on typed buffers with explicit channel semantics (not “raw
-      arrays”). Progress note: renderer chunk transport now uses
-      `mmo.dsp.buffer.AudioBufferF64` for explicit
-      interleaved/channel-order/sample-rate semantics, and the stereo
-      plugin-chain runner now centralizes deterministic typed-buffer adapters at
-      the plugin boundary.
-- [ ] Plugins must be pure with respect to determinism:
-  - [ ] No internal randomness unless seeded from the provided seed.
-  - [ ] No wall-clock/time-based behavior.
-  - [ ] No dependency on host thread scheduling for results.
+- [x] Plugins operate on typed buffers with explicit channel semantics (not “raw
+      arrays”). Done: stereo render execution and manifest-driven plugin-mode
+      dispatch now pass `mmo.dsp.buffer.AudioBufferF64` at the real plugin
+      boundary and reject mismatched return types loudly.
+- [x] Plugins must be pure with respect to determinism:
+  - [x] No internal randomness unless seeded from the provided seed.
+  - [x] No wall-clock/time-based behavior.
+  - [x] No dependency on host thread scheduling for results.
 
 ### 4.9.4 Bounded authority for DSP (what plugins may change)
 

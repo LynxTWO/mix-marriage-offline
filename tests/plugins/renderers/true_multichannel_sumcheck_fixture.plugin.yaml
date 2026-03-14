@@ -8,6 +8,11 @@ capabilities:
   max_channels: 32
   channel_mode: "true_multichannel"
   deterministic_seed_policy: "seed_required"
+  purity:
+    audio_buffer: "typed_f64_interleaved"
+    randomness: "process_context_seed"
+    wall_clock: "forbidden"
+    thread_scheduling: "forbidden"
   supported_standards:
     - "SMPTE"
     - "FILM"

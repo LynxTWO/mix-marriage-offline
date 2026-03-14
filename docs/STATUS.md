@@ -67,7 +67,7 @@ Definition of done:
       regression coverage exist.
 - [x] Export finalization policy is documented as a stable public contract.
 - [x] The stage graph is documented and fixed.
-- [ ] Typed plugin buffers and determinism purity guarantees are enforced
+- [x] Typed plugin buffers and determinism purity guarantees are enforced
       end-to-end.
 - [ ] Multichannel safety-class declarations and bypass/restrict behavior are
       fully enforced.

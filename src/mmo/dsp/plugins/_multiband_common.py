@@ -6,12 +6,16 @@ import math
 from typing import Any, Sequence
 
 from mmo.dsp.plugins.base import (
+    AudioBufferF64,
+    ProcessContext,
     PluginContext,
     PluginValidationError,
+    coerce_audio_buffer_for_process_context,
     optional_float_param,
     optional_int_param,
     parse_bypass_for_stage,
     parse_macro_mix_for_stage,
+    precision_mode_numpy_dtype,
     require_finite_float_param,
 )
 
@@ -592,12 +596,23 @@ def process_multiband_plugin(
     *,
     plugin_id: str,
     operation_mode: str,
-    buf_f32_or_f64: Any,
+    audio_buffer: AudioBufferF64,
     sample_rate: int,
     params: dict[str, Any],
     ctx: PluginContext,
-) -> Any:
+    process_ctx: ProcessContext | None = None,
+) -> AudioBufferF64:
     import numpy as np
+
+    if process_ctx is None:
+        raise PluginValidationError(f"{plugin_id} requires ProcessContext.")
+
+    source_buffer = coerce_audio_buffer_for_process_context(
+        value=audio_buffer,
+        plugin_id=plugin_id,
+        sample_rate_hz=sample_rate,
+        process_ctx=process_ctx,
+    )
 
     threshold_db = require_finite_float_param(
         plugin_id=plugin_id,
@@ -675,8 +690,11 @@ def process_multiband_plugin(
         params=params,
     )
 
-    processing_dtype = buf_f32_or_f64.dtype.type
-    rendered = buf_f32_or_f64
+    processing_dtype = precision_mode_numpy_dtype(
+        np=np,
+        precision_mode=ctx.precision_mode,
+    )
+    rendered = source_buffer.to_frame_matrix(np=np, dtype=processing_dtype)
     multiband_summary: dict[str, Any] = {
         "band_count": 1.0,
         "slope_activity_db_per_oct": 0.0,
@@ -799,5 +817,8 @@ def process_multiband_plugin(
             ),
         ],
     )
-    return rendered
-
+    return AudioBufferF64.from_frame_matrix(
+        rendered,
+        channel_order=source_buffer.channel_order,
+        sample_rate_hz=source_buffer.sample_rate_hz,
+    )

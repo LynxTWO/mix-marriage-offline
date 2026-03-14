@@ -7,7 +7,13 @@ from typing import Any, Mapping
 
 import numpy as np
 
+from mmo.dsp.buffer import AudioBufferF64
 from mmo.dsp.process_context import ProcessContext
+from mmo.plugins.runtime_contract import (
+    PluginPurityViolationError,
+    invoke_with_purity_guard,
+    purity_contract_from_capabilities,
+)
 
 _SURROUND_GROUP_NAME = "surrounds"
 _HEIGHT_GROUP_NAME = "heights"
@@ -102,6 +108,58 @@ def _validate_capabilities(capabilities: Mapping[str, Any], process_ctx: Process
         raise PluginModeRunError("Plugin requires deterministic seed in ProcessContext.")
 
 
+def _runtime_purity_contract(
+    plugin_entry: Any,
+    capabilities: Mapping[str, Any],
+) -> Any:
+    contract = purity_contract_from_capabilities(getattr(plugin_entry, "capabilities", None))
+    if contract is not None:
+        return contract
+    contract = purity_contract_from_capabilities(capabilities)
+    if contract is not None:
+        return contract
+    return getattr(plugin_entry.instance, "plugin_purity_contract", None)
+
+
+def _typed_audio_buffer(
+    matrix: np.ndarray,
+    *,
+    channel_order: tuple[str, ...],
+    sample_rate_hz: int,
+) -> AudioBufferF64:
+    return AudioBufferF64.from_channel_matrix(
+        matrix,
+        channel_order=channel_order,
+        sample_rate_hz=sample_rate_hz,
+    )
+
+
+def _require_typed_buffer_output(
+    value: Any,
+    *,
+    plugin_id: str,
+    expected_channel_order: tuple[str, ...],
+    expected_sample_rate_hz: int,
+) -> AudioBufferF64:
+    if not isinstance(value, AudioBufferF64):
+        raise PluginModeRunError(
+            f"{plugin_id} must return AudioBufferF64 at the typed plugin boundary.",
+        )
+    if value.sample_rate_hz != expected_sample_rate_hz:
+        raise PluginModeRunError(
+            f"{plugin_id} returned AudioBufferF64 with mismatched sample_rate_hz.",
+        )
+    if value.channel_order != expected_channel_order:
+        raise PluginModeRunError(
+            f"{plugin_id} returned AudioBufferF64 with mismatched channel_order.",
+        )
+    if value.channels != len(expected_channel_order):
+        raise PluginModeRunError(
+            f"{plugin_id} returned AudioBufferF64 with mismatched channel count.",
+        )
+    return value
+
+
 def run_plugin_mode(
     plugin_entry: Any,
     buf: Any,
@@ -117,6 +175,7 @@ def run_plugin_mode(
     sample_rate = sample_rate_hz or process_ctx.sample_rate_hz
     runtime_params = dict(params or {})
     working = _require_matrix_shape(buf, process_ctx)
+    purity_contract = _runtime_purity_contract(plugin_entry, capabilities)
 
     _validate_capabilities(capabilities, process_ctx)
 
@@ -125,6 +184,7 @@ def run_plugin_mode(
             plugin_entry,
             working,
             process_ctx,
+            purity_contract=purity_contract,
             params=runtime_params,
             sample_rate_hz=sample_rate,
         )
@@ -133,6 +193,7 @@ def run_plugin_mode(
             plugin_entry,
             working,
             process_ctx,
+            purity_contract=purity_contract,
             params=runtime_params,
             sample_rate_hz=sample_rate,
             capabilities=capabilities,
@@ -142,6 +203,7 @@ def run_plugin_mode(
             plugin_entry,
             working,
             process_ctx,
+            purity_contract=purity_contract,
             params=runtime_params,
             sample_rate_hz=sample_rate,
         )
@@ -153,6 +215,7 @@ def _run_per_channel(
     working: np.ndarray,
     process_ctx: ProcessContext,
     *,
+    purity_contract: Any,
     params: dict[str, Any],
     sample_rate_hz: int,
 ) -> PluginModeRunResult:
@@ -162,18 +225,43 @@ def _run_per_channel(
 
     call_rows: list[dict[str, Any]] = []
     touched_channel_ids: list[str] = []
+    plugin_id = _coerce_str(getattr(plugin_entry, "plugin_id", ""))
     for index, spk_id in enumerate(process_ctx.channel_order):
-        rendered_channel, row_evidence = processor(
-            working[index].copy(),
-            sample_rate_hz,
-            dict(params),
-            spk_id=spk_id,
-            process_ctx=process_ctx,
+        channel_buffer = _typed_audio_buffer(
+            working[index : index + 1].copy(),
+            channel_order=(spk_id,),
+            sample_rate_hz=sample_rate_hz,
         )
-        working[index] = np.asarray(rendered_channel)
+        try:
+            rendered_channel, row_evidence = invoke_with_purity_guard(
+                plugin_id=plugin_id,
+                purity_contract=purity_contract,
+                invoke=lambda: processor(
+                    channel_buffer,
+                    sample_rate_hz,
+                    dict(params),
+                    spk_id=spk_id,
+                    process_ctx=process_ctx,
+                ),
+            )
+        except PluginPurityViolationError as exc:
+            raise PluginModeRunError(str(exc)) from exc
+        typed_output = _require_typed_buffer_output(
+            rendered_channel,
+            plugin_id=plugin_id,
+            expected_channel_order=(spk_id,),
+            expected_sample_rate_hz=sample_rate_hz,
+        )
+        working[index] = typed_output.to_channel_matrix(
+            np=np,
+            dtype=working.dtype,
+        )[0]
         evidence_row = dict(row_evidence) if isinstance(row_evidence, Mapping) else {}
         evidence_row.setdefault("channel_id", spk_id)
         evidence_row.setdefault("channel_index", index)
+        evidence_row.setdefault("buffer_type", type(channel_buffer).__name__)
+        evidence_row.setdefault("buffer_channel_order", list(channel_buffer.channel_order))
+        evidence_row.setdefault("returned_buffer_type", type(typed_output).__name__)
         call_rows.append(evidence_row)
         if bool(evidence_row.get("touched")):
             channel_ids = _coerce_str_list(evidence_row.get("channel_ids"))
@@ -184,6 +272,7 @@ def _run_per_channel(
     evidence = _base_evidence(plugin_entry, process_ctx, "per_channel")
     evidence["channel_call_count"] = len(call_rows)
     evidence["channel_ids_touched"] = sorted(set(touched_channel_ids))
+    evidence["runtime_audio_buffer"] = "typed_f64_interleaved"
     evidence["per_channel_calls"] = call_rows
     return PluginModeRunResult(rendered=working, evidence=evidence)
 
@@ -193,6 +282,7 @@ def _run_linked_group(
     working: np.ndarray,
     process_ctx: ProcessContext,
     *,
+    purity_contract: Any,
     params: dict[str, Any],
     sample_rate_hz: int,
     capabilities: Mapping[str, Any],
@@ -214,19 +304,42 @@ def _run_linked_group(
 
     indices = _group_indices(process_ctx, group_name)
     channel_ids = [process_ctx.channel_order[index] for index in indices]
-    rendered_group, group_evidence = processor(
+    plugin_id = _coerce_str(getattr(plugin_entry, "plugin_id", ""))
+    group_buffer = _typed_audio_buffer(
         working[indices].copy(),
-        sample_rate_hz,
-        dict(params),
-        group_name=group_name,
-        channel_ids=tuple(channel_ids),
-        process_ctx=process_ctx,
+        channel_order=tuple(channel_ids),
+        sample_rate_hz=sample_rate_hz,
     )
-    working[indices] = np.asarray(rendered_group)
+    try:
+        rendered_group, group_evidence = invoke_with_purity_guard(
+            plugin_id=plugin_id,
+            purity_contract=purity_contract,
+            invoke=lambda: processor(
+                group_buffer,
+                sample_rate_hz,
+                dict(params),
+                group_name=group_name,
+                channel_ids=tuple(channel_ids),
+                process_ctx=process_ctx,
+            ),
+        )
+    except PluginPurityViolationError as exc:
+        raise PluginModeRunError(str(exc)) from exc
+    typed_output = _require_typed_buffer_output(
+        rendered_group,
+        plugin_id=plugin_id,
+        expected_channel_order=tuple(channel_ids),
+        expected_sample_rate_hz=sample_rate_hz,
+    )
+    working[indices] = typed_output.to_channel_matrix(np=np, dtype=working.dtype)
 
     evidence = _base_evidence(plugin_entry, process_ctx, "linked_group")
     evidence["group_name"] = group_name
     evidence["channel_ids"] = channel_ids
+    evidence["runtime_audio_buffer"] = "typed_f64_interleaved"
+    evidence["buffer_type"] = type(group_buffer).__name__
+    evidence["buffer_channel_order"] = list(group_buffer.channel_order)
+    evidence["returned_buffer_type"] = type(typed_output).__name__
     if isinstance(group_evidence, Mapping):
         evidence.update(dict(group_evidence))
         evidence["group_name"] = group_name
@@ -239,6 +352,7 @@ def _run_true_multichannel(
     working: np.ndarray,
     process_ctx: ProcessContext,
     *,
+    purity_contract: Any,
     params: dict[str, Any],
     sample_rate_hz: int,
 ) -> PluginModeRunResult:
@@ -248,14 +362,40 @@ def _run_true_multichannel(
             "true_multichannel plugin fixture must implement process_true_multichannel().",
         )
 
-    rendered_matrix, plugin_evidence = processor(
+    plugin_id = _coerce_str(getattr(plugin_entry, "plugin_id", ""))
+    typed_input = _typed_audio_buffer(
         working.copy(),
-        sample_rate_hz,
-        dict(params),
-        process_ctx=process_ctx,
+        channel_order=tuple(process_ctx.channel_order),
+        sample_rate_hz=sample_rate_hz,
+    )
+    try:
+        rendered_matrix, plugin_evidence = invoke_with_purity_guard(
+            plugin_id=plugin_id,
+            purity_contract=purity_contract,
+            invoke=lambda: processor(
+                typed_input,
+                sample_rate_hz,
+                dict(params),
+                process_ctx=process_ctx,
+            ),
+        )
+    except PluginPurityViolationError as exc:
+        raise PluginModeRunError(str(exc)) from exc
+    typed_output = _require_typed_buffer_output(
+        rendered_matrix,
+        plugin_id=plugin_id,
+        expected_channel_order=tuple(process_ctx.channel_order),
+        expected_sample_rate_hz=sample_rate_hz,
     )
     evidence = _base_evidence(plugin_entry, process_ctx, "true_multichannel")
+    evidence["runtime_audio_buffer"] = "typed_f64_interleaved"
+    evidence["buffer_type"] = type(typed_input).__name__
+    evidence["buffer_channel_order"] = list(typed_input.channel_order)
+    evidence["returned_buffer_type"] = type(typed_output).__name__
     if isinstance(plugin_evidence, Mapping):
         evidence.update(dict(plugin_evidence))
     evidence.setdefault("channel_ids_seen", list(process_ctx.channel_order))
-    return PluginModeRunResult(rendered=np.asarray(rendered_matrix), evidence=evidence)
+    return PluginModeRunResult(
+        rendered=typed_output.to_channel_matrix(np=np, dtype=working.dtype),
+        evidence=evidence,
+    )

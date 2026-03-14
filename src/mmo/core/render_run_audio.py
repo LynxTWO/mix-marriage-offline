@@ -34,6 +34,11 @@ from mmo.dsp.plugins.base import (
 )
 from mmo.dsp.plugins.registry import get_stereo_plugin
 from mmo.dsp.process_context import build_process_context
+from mmo.plugins.runtime_contract import (
+    PluginPurityViolationError,
+    invoke_with_purity_guard,
+    purity_contract_from_capabilities,
+)
 from mmo.dsp.transcode import (
     LOSSLESS_OUTPUT_FORMATS,
     ffmpeg_determinism_flags,
@@ -476,6 +481,15 @@ def _plugin_config_schema_for_id(plugin_id: str) -> dict[str, Any] | None:
     if not isinstance(schema_payload, dict):
         return None
     return _clone_json_payload(schema_payload)
+
+
+def _plugin_purity_contract_for_impl(plugin_impl: Any) -> Any:
+    contract = purity_contract_from_capabilities(
+        getattr(plugin_impl, "plugin_capabilities", None),
+    )
+    if contract is not None:
+        return contract
+    return getattr(plugin_impl, "plugin_purity_contract", None)
 
 
 def _schema_types(schema: dict[str, Any]) -> tuple[str, ...]:
@@ -1888,7 +1902,7 @@ def _copy_source_wav_for_noop_plugin_chain(
     force_float64_default: bool,
 ) -> list[dict[str, Any]]:
     try:
-        import numpy as np
+        __import__("numpy")
     except ImportError as exc:  # pragma: no cover - env-dependent
         raise RenderRunRefusalError(
             issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
@@ -1920,7 +1934,6 @@ def _copy_source_wav_for_noop_plugin_chain(
     processing_dtype_name = (
         "float64" if (max_theoretical_quality or force_float64_default) else "float32"
     )
-    processing_dtype = np.float64 if processing_dtype_name == "float64" else np.float32
     process_ctx = build_process_context(
         _STEREO_LAYOUT_ID,
         sample_rate_hz=sample_rate_hz,
@@ -1950,7 +1963,12 @@ def _copy_source_wav_for_noop_plugin_chain(
         },
     ]
 
-    dummy_matrix = np.zeros((1, process_ctx.num_channels), dtype=processing_dtype)
+    dummy_buffer = AudioBufferF64(
+        data=[0.0] * process_ctx.num_channels,
+        channels=process_ctx.num_channels,
+        channel_order=tuple(process_ctx.channel_order),
+        sample_rate_hz=sample_rate_hz,
+    )
     for stage_index, stage in enumerate(plugin_chain, start=1):
         plugin_id = _coerce_str(stage.get("plugin_id")).strip().lower()
         params = _coerce_dict(stage.get("params"))
@@ -1973,14 +1991,39 @@ def _copy_source_wav_for_noop_plugin_chain(
             stage_index=stage_index,
         )
         try:
-            plugin_impl.process_stereo(
-                dummy_matrix.copy(),
-                sample_rate_hz,
-                params,
-                plugin_context,
-                process_ctx,
+            stage_output = invoke_with_purity_guard(
+                plugin_id=plugin_id,
+                purity_contract=_plugin_purity_contract_for_impl(plugin_impl),
+                invoke=lambda: plugin_impl.process_stereo(
+                    dummy_buffer,
+                    sample_rate_hz,
+                    params,
+                    plugin_context,
+                    process_ctx,
+                ),
             )
+            if not isinstance(stage_output, AudioBufferF64):
+                raise PluginValidationError(
+                    f"{plugin_id} must return AudioBufferF64 at the typed runtime boundary.",
+                )
+            if stage_output.sample_rate_hz != sample_rate_hz:
+                raise PluginValidationError(
+                    f"{plugin_id} returned AudioBufferF64 with mismatched sample_rate_hz.",
+                )
+            if stage_output.channel_order != tuple(process_ctx.channel_order):
+                raise PluginValidationError(
+                    f"{plugin_id} returned AudioBufferF64 with mismatched channel_order.",
+                )
+            if stage_output.channels != process_ctx.num_channels:
+                raise PluginValidationError(
+                    f"{plugin_id} returned AudioBufferF64 with mismatched channel count.",
+                )
         except PluginValidationError as exc:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                message=str(exc),
+            ) from exc
+        except PluginPurityViolationError as exc:
             raise RenderRunRefusalError(
                 issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
                 message=str(exc),
@@ -2049,7 +2092,7 @@ def _render_wav_with_plugin_chain(
 ) -> list[dict[str, Any]]:
     _prevalidate_plugin_chain_static(plugin_chain, max_theoretical_quality)
     try:
-        import numpy as np
+        __import__("numpy")
     except ImportError as exc:  # pragma: no cover - env-dependent
         raise RenderRunRefusalError(
             issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
@@ -2065,9 +2108,9 @@ def _render_wav_with_plugin_chain(
             message=f"Unsupported output bit depth: {bit_depth}",
         )
 
-    use_float64_processing = bool(max_theoretical_quality or force_float64_default)
-    processing_dtype_name = "float64" if use_float64_processing else "float32"
-    processing_dtype = np.float64 if use_float64_processing else np.float32
+    processing_dtype_name = (
+        "float64" if (max_theoretical_quality or force_float64_default) else "float32"
+    )
 
     source_where: list[str] = []
     if source_samples_interleaved is None:
@@ -2141,24 +2184,39 @@ def _render_wav_with_plugin_chain(
             stage_index=stage_index,
         )
         try:
-            rendered_matrix = _audio_buffer_to_numpy_frame_matrix(
-                rendered_buffer,
-                np=np,
-                dtype=processing_dtype,
+            rendered_buffer = invoke_with_purity_guard(
+                plugin_id=plugin_id,
+                purity_contract=_plugin_purity_contract_for_impl(plugin_impl),
+                invoke=lambda: plugin_impl.process_stereo(
+                    rendered_buffer,
+                    sample_rate_hz,
+                    params,
+                    plugin_context,
+                    process_ctx,
+                ),
             )
-            rendered_matrix = plugin_impl.process_stereo(
-                rendered_matrix,
-                sample_rate_hz,
-                params,
-                plugin_context,
-                process_ctx,
-            )
-            rendered_buffer = _numpy_frame_matrix_to_audio_buffer(
-                rendered_matrix,
-                np=np,
-                template=rendered_buffer,
-            )
+            if not isinstance(rendered_buffer, AudioBufferF64):
+                raise PluginValidationError(
+                    f"{plugin_id} must return AudioBufferF64 at the typed runtime boundary.",
+                )
+            if rendered_buffer.sample_rate_hz != sample_rate_hz:
+                raise PluginValidationError(
+                    f"{plugin_id} returned AudioBufferF64 with mismatched sample_rate_hz.",
+                )
+            if rendered_buffer.channel_order != tuple(process_ctx.channel_order):
+                raise PluginValidationError(
+                    f"{plugin_id} returned AudioBufferF64 with mismatched channel_order.",
+                )
+            if rendered_buffer.channels != process_ctx.num_channels:
+                raise PluginValidationError(
+                    f"{plugin_id} returned AudioBufferF64 with mismatched channel count.",
+                )
         except PluginValidationError as exc:
+            raise RenderRunRefusalError(
+                issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
+                message=str(exc),
+            ) from exc
+        except PluginPurityViolationError as exc:
             raise RenderRunRefusalError(
                 issue_id=ISSUE_RENDER_RUN_PLUGIN_CHAIN_INVALID,
                 message=str(exc),

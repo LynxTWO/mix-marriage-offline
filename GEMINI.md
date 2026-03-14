@@ -31,6 +31,9 @@ Non-negotiables:
   `mmo.dsp.buffer.AudioBufferF64` so interleaved data keeps explicit
   `channel_order` and `sample_rate_hz` metadata instead of reverting to raw list
   math at conversion boundaries.
+- Keep runtime determinism purity enforcement active at plugin boundaries:
+  reject unseeded RNG, wall-clock/timer access, and thread/executor spawning,
+  and keep any approved randomness derived explicitly from `process_ctx.seed`.
 - Keep float64 -> PCM export finalization centralized in
   `mmo.dsp.export_finalize`; renderer WAV paths must disclose deterministic
   bit-depth / dither policy via `export_finalization_receipt` instead of

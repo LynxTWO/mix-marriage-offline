@@ -66,6 +66,14 @@ class TestPluginCapabilities(unittest.TestCase):
 
             expected_max_channels = 16 if plugin_id == "PLUGIN.RENDERER.MIXDOWN_BASELINE" else 32
             self.assertEqual(capabilities.max_channels, expected_max_channels)
+            self.assertEqual(capabilities.deterministic_seed_policy, "none")
+            self.assertIsNotNone(capabilities.purity)
+            if capabilities.purity is None:
+                return
+            self.assertEqual(capabilities.purity.audio_buffer, "typed_f64_interleaved")
+            self.assertEqual(capabilities.purity.randomness, "forbidden")
+            self.assertEqual(capabilities.purity.wall_clock, "forbidden")
+            self.assertEqual(capabilities.purity.thread_scheduling, "forbidden")
             self.assertEqual(capabilities.supported_contexts, ("render", "auto_apply"))
             if plugin_id == "PLUGIN.RENDERER.MIXDOWN_BASELINE":
                 self.assertEqual(
@@ -148,8 +156,15 @@ class TestPluginCapabilities(unittest.TestCase):
         self.assertEqual(
             instance_capabilities.to_dict(),
             {
+                "deterministic_seed_policy": "none",
                 "max_channels": 32,
                 "notes": ["Deterministic gain/trim rendering; no boosts."],
+                "purity": {
+                    "audio_buffer": "typed_f64_interleaved",
+                    "randomness": "forbidden",
+                    "thread_scheduling": "forbidden",
+                    "wall_clock": "forbidden",
+                },
                 "scene": {
                     "requires_speaker_positions": True,
                     "supported_target_ids": [
@@ -199,6 +214,49 @@ class TestPluginCapabilities(unittest.TestCase):
             result = validate_plugins(plugins_dir, Path("schemas/plugin.schema.json"))
 
         self.assertTrue(result["ok"], msg=result)
+
+    def test_validate_plugins_rejects_purity_seed_policy_conflict(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            plugins_dir = Path(temp_dir)
+            _write_manifest(
+                plugins_dir,
+                plugin_id="PLUGIN.RENDERER.TEMP_PURITY_CONFLICT",
+                capabilities_block="\n".join(
+                    [
+                        "  max_channels: 2",
+                        '  deterministic_seed_policy: "none"',
+                        "  purity:",
+                        '    audio_buffer: "typed_f64_interleaved"',
+                        '    randomness: "process_context_seed"',
+                        '    wall_clock: "forbidden"',
+                        '    thread_scheduling: "forbidden"',
+                        "  dsp_traits:",
+                        '    tier: "information_preserving"',
+                        '    linearity: "linear"',
+                        '    phase_behavior: "linear_phase"',
+                        "    adds_noise: false",
+                        "    introduces_harmonics: false",
+                        '    anti_aliasing: "na"',
+                        "    measurable_claims:",
+                        '      - metric_id: "METER.TRUE_PEAK_DBTP"',
+                        '        expected_direction: "within"',
+                        "        threshold: 0.2",
+                    ]
+                ),
+            )
+
+            result = validate_plugins(plugins_dir, Path("schemas/plugin.schema.json"))
+
+        self.assertFalse(result["ok"])
+        messages = [
+            issue.get("message", "")
+            for issue in result.get("issues", [])
+            if isinstance(issue, dict)
+        ]
+        self.assertTrue(
+            any("purity.randomness='process_context_seed'" in message for message in messages),
+            msg=messages,
+        )
 
     def test_validate_plugins_rejects_unknown_supported_layout_id(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

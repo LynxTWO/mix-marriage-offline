@@ -12,6 +12,11 @@ capabilities:
     - "surrounds"
     - "heights"
   deterministic_seed_policy: "none"
+  purity:
+    audio_buffer: "typed_f64_interleaved"
+    randomness: "forbidden"
+    wall_clock: "forbidden"
+    thread_scheduling: "forbidden"
   supported_standards:
     - "SMPTE"
     - "FILM"

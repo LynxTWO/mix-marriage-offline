@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from mmo.dsp.plugins._multiband_common import (
     OPERATION_COMPRESS,
     process_multiband_plugin,
 )
-from mmo.dsp.plugins.base import PluginContext, ProcessContext
+from mmo.dsp.plugins.base import AudioBufferF64, PluginContext, ProcessContext
 
 PLUGIN_ID = "multiband_compressor_v0"
 
@@ -20,18 +18,18 @@ class MultibandCompressorV0Plugin:
 
     def process_stereo(
         self,
-        buf_f32_or_f64: Any,
+        audio_buffer: AudioBufferF64,
         sample_rate: int,
         params: dict[str, Any],
         ctx: PluginContext,
         process_ctx: ProcessContext | None = None,
-    ) -> Any:
-        del process_ctx
+    ) -> AudioBufferF64:
         return process_multiband_plugin(
             plugin_id=PLUGIN_ID,
             operation_mode=OPERATION_COMPRESS,
-            buf_f32_or_f64=buf_f32_or_f64,
+            audio_buffer=audio_buffer,
             sample_rate=sample_rate,
             params=params,
             ctx=ctx,
+            process_ctx=process_ctx,
         )

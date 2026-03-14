@@ -26,6 +26,7 @@ from mmo.dsp.transcode import (
 from mmo.plugins.interfaces import (
     PLUGIN_SUPPORTED_CONTEXTS,
     PluginCapabilities,
+    PluginPurityContract,
     PluginSceneCapabilities,
 )
 
@@ -118,6 +119,41 @@ def _coerce_plugin_capabilities(value: Any) -> PluginCapabilities | None:
             return raw_value
         return None
 
+    deterministic_seed_policy = None
+    raw_seed_policy = value.get("deterministic_seed_policy")
+    if isinstance(raw_seed_policy, str) and raw_seed_policy.strip():
+        deterministic_seed_policy = raw_seed_policy.strip()
+
+    purity_value = value.get("purity")
+    purity: PluginPurityContract | None = None
+    if isinstance(purity_value, dict):
+        purity = PluginPurityContract(
+            audio_buffer=(
+                purity_value.get("audio_buffer").strip()
+                if isinstance(purity_value.get("audio_buffer"), str)
+                and purity_value.get("audio_buffer").strip()
+                else None
+            ),
+            randomness=(
+                purity_value.get("randomness").strip()
+                if isinstance(purity_value.get("randomness"), str)
+                and purity_value.get("randomness").strip()
+                else None
+            ),
+            wall_clock=(
+                purity_value.get("wall_clock").strip()
+                if isinstance(purity_value.get("wall_clock"), str)
+                and purity_value.get("wall_clock").strip()
+                else None
+            ),
+            thread_scheduling=(
+                purity_value.get("thread_scheduling").strip()
+                if isinstance(purity_value.get("thread_scheduling"), str)
+                and purity_value.get("thread_scheduling").strip()
+                else None
+            ),
+        )
+
     supported_layout_ids = _coerce_string_tuple(value.get("supported_layout_ids"))
 
     supported_contexts_raw = _coerce_string_tuple(value.get("supported_contexts"))
@@ -147,6 +183,8 @@ def _coerce_plugin_capabilities(value: Any) -> PluginCapabilities | None:
     notes = _coerce_string_tuple(value.get("notes"))
     return PluginCapabilities(
         max_channels=max_channels,
+        deterministic_seed_policy=deterministic_seed_policy,
+        purity=purity,
         supported_layout_ids=supported_layout_ids,
         supported_contexts=supported_contexts,
         scene=scene,

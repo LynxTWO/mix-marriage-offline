@@ -17,6 +17,8 @@ Determinism guarantee: all assertions produce the same result on repeated runs.
 
 from __future__ import annotations
 
+import threading
+import time
 import unittest
 from pathlib import Path
 from typing import Any
@@ -39,14 +41,21 @@ from mmo.core.speaker_layout import (
     SpeakerPosition,
 )
 from mmo.dsp.plugins.base import (
+    AudioBufferF64,
     LayoutContext,
     MultichannelPlugin,
     PluginContext,
     PluginEvidenceCollector,
 )
+from mmo.dsp.process_context import build_process_context
 from mmo.dsp.plugins.registry import (
     get_multichannel_plugin,
     multichannel_plugin_ids,
+)
+from mmo.plugins.interfaces import PluginPurityContract
+from mmo.plugins.runtime_contract import (
+    PluginPurityViolationError,
+    invoke_with_purity_guard,
 )
 from mmo.plugins.subjective.early_reflections_v0 import EarlyReflectionsV0Plugin
 from mmo.plugins.subjective.height_air_v0 import HeightAirV0Plugin
@@ -102,6 +111,18 @@ def _run(
     layout_ctx = _make_layout_ctx(layout)
     result = plugin.process_multichannel(buf, sample_rate, params, ctx, layout_ctx)
     return result, ctx
+
+
+def _typed_noise(layout_id: str, *, seed: int) -> tuple[AudioBufferF64, Any, LayoutContext]:
+    process_ctx = build_process_context(layout_id, seed=seed)
+    rng = np.random.default_rng(seed)
+    matrix = rng.random((process_ctx.num_channels, NUM_SAMPLES), dtype=np.float64) * 0.25
+    audio_buffer = AudioBufferF64.from_channel_matrix(
+        matrix,
+        channel_order=process_ctx.channel_order,
+        sample_rate_hz=process_ctx.sample_rate_hz,
+    )
+    return audio_buffer, process_ctx, LayoutContext.from_process_context(process_ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -585,6 +606,262 @@ class TestSemanticDeclarations(unittest.TestCase):
             p = cls()
             for std in p.supported_standards:
                 self.assertIsInstance(std, str, msg=f"{cls.__name__}: {std!r}")
+
+
+class TestRuntimePurityContract(unittest.TestCase):
+    def test_typed_buffer_semantics_reach_plugin_boundary(self) -> None:
+        class BoundaryProbePlugin:
+            plugin_id = "boundary_probe"
+
+            def __init__(self) -> None:
+                self.seen: dict[str, Any] = {}
+
+            def process_multichannel(
+                self,
+                audio_buffer: AudioBufferF64,
+                sample_rate: int,
+                params: dict[str, Any],
+                ctx: PluginContext,
+                layout_ctx: LayoutContext,
+                process_ctx: Any | None = None,
+            ) -> AudioBufferF64:
+                del params, layout_ctx
+                self.seen = {
+                    "buffer_type": type(audio_buffer).__name__,
+                    "channel_order": list(audio_buffer.channel_order),
+                    "sample_rate_hz": audio_buffer.sample_rate_hz,
+                    "sample_rate_arg": sample_rate,
+                    "process_ctx_channel_order": list(process_ctx.channel_order or ()),
+                }
+                ctx.evidence_collector.set(
+                    stage_what="plugin stage applied",
+                    stage_why="Boundary probe captured typed buffer semantics.",
+                    metrics=[{"name": "stage_index", "value": ctx.stage_index}],
+                )
+                return audio_buffer
+
+        plugin = BoundaryProbePlugin()
+        audio_buffer, process_ctx, layout_ctx = _typed_noise("LAYOUT.5_1", seed=101)
+        rendered = invoke_with_purity_guard(
+            plugin_id=plugin.plugin_id,
+            purity_contract=PluginPurityContract(
+                audio_buffer="typed_f64_interleaved",
+                randomness="forbidden",
+                wall_clock="forbidden",
+                thread_scheduling="forbidden",
+            ),
+            invoke=lambda: plugin.process_multichannel(
+                audio_buffer,
+                process_ctx.sample_rate_hz,
+                {},
+                _make_ctx(stage_index=7),
+                layout_ctx,
+                process_ctx,
+            ),
+        )
+
+        self.assertIsInstance(rendered, AudioBufferF64)
+        self.assertEqual(plugin.seen["buffer_type"], "AudioBufferF64")
+        self.assertEqual(plugin.seen["channel_order"], list(process_ctx.channel_order))
+        self.assertEqual(
+            plugin.seen["process_ctx_channel_order"],
+            list(process_ctx.channel_order),
+        )
+        self.assertEqual(plugin.seen["sample_rate_hz"], process_ctx.sample_rate_hz)
+        self.assertEqual(plugin.seen["sample_rate_arg"], process_ctx.sample_rate_hz)
+
+    def test_seeded_rng_behavior_is_reproducible(self) -> None:
+        class SeededNoisePlugin:
+            plugin_id = "seeded_noise_probe"
+
+            def process_multichannel(
+                self,
+                audio_buffer: AudioBufferF64,
+                sample_rate: int,
+                params: dict[str, Any],
+                ctx: PluginContext,
+                layout_ctx: LayoutContext,
+                process_ctx: Any | None = None,
+            ) -> AudioBufferF64:
+                del params, sample_rate, ctx, layout_ctx
+                rng = np.random.default_rng(process_ctx.seed)
+                noise = rng.uniform(
+                    low=-1e-5,
+                    high=1e-5,
+                    size=(audio_buffer.channels, audio_buffer.frame_count),
+                )
+                rendered = audio_buffer.to_channel_matrix(np=np, dtype=np.float64) + noise
+                return AudioBufferF64.from_channel_matrix(
+                    rendered,
+                    channel_order=audio_buffer.channel_order,
+                    sample_rate_hz=audio_buffer.sample_rate_hz,
+                )
+
+        plugin = SeededNoisePlugin()
+        audio_buffer_a, process_ctx_a, layout_ctx_a = _typed_noise("LAYOUT.5_1", seed=77)
+        audio_buffer_b, process_ctx_b, layout_ctx_b = _typed_noise("LAYOUT.5_1", seed=77)
+        audio_buffer_c, process_ctx_c, layout_ctx_c = _typed_noise("LAYOUT.5_1", seed=78)
+
+        purity = PluginPurityContract(
+            audio_buffer="typed_f64_interleaved",
+            randomness="process_context_seed",
+            wall_clock="forbidden",
+            thread_scheduling="forbidden",
+        )
+        out_a = invoke_with_purity_guard(
+            plugin_id=plugin.plugin_id,
+            purity_contract=purity,
+            invoke=lambda: plugin.process_multichannel(
+                audio_buffer_a,
+                process_ctx_a.sample_rate_hz,
+                {},
+                _make_ctx(),
+                layout_ctx_a,
+                process_ctx_a,
+            ),
+        )
+        out_b = invoke_with_purity_guard(
+            plugin_id=plugin.plugin_id,
+            purity_contract=purity,
+            invoke=lambda: plugin.process_multichannel(
+                audio_buffer_b,
+                process_ctx_b.sample_rate_hz,
+                {},
+                _make_ctx(),
+                layout_ctx_b,
+                process_ctx_b,
+            ),
+        )
+        out_c = invoke_with_purity_guard(
+            plugin_id=plugin.plugin_id,
+            purity_contract=purity,
+            invoke=lambda: plugin.process_multichannel(
+                audio_buffer_c,
+                process_ctx_c.sample_rate_hz,
+                {},
+                _make_ctx(),
+                layout_ctx_c,
+                process_ctx_c,
+            ),
+        )
+
+        self.assertEqual(out_a.data, out_b.data)
+        self.assertNotEqual(out_a.data, out_c.data)
+
+    def test_unseeded_rng_is_rejected(self) -> None:
+        class BadRandomPlugin:
+            plugin_id = "bad_random_probe"
+
+            def process_multichannel(
+                self,
+                audio_buffer: AudioBufferF64,
+                sample_rate: int,
+                params: dict[str, Any],
+                ctx: PluginContext,
+                layout_ctx: LayoutContext,
+                process_ctx: Any | None = None,
+            ) -> AudioBufferF64:
+                del audio_buffer, sample_rate, params, ctx, layout_ctx, process_ctx
+                np.random.default_rng()
+                raise AssertionError("unreachable")
+
+        plugin = BadRandomPlugin()
+        audio_buffer, process_ctx, layout_ctx = _typed_noise("LAYOUT.5_1", seed=88)
+        with self.assertRaises(PluginPurityViolationError):
+            invoke_with_purity_guard(
+                plugin_id=plugin.plugin_id,
+                purity_contract=PluginPurityContract(
+                    audio_buffer="typed_f64_interleaved",
+                    randomness="process_context_seed",
+                    wall_clock="forbidden",
+                    thread_scheduling="forbidden",
+                ),
+                invoke=lambda: plugin.process_multichannel(
+                    audio_buffer,
+                    process_ctx.sample_rate_hz,
+                    {},
+                    _make_ctx(),
+                    layout_ctx,
+                    process_ctx,
+                ),
+            )
+
+    def test_wall_clock_behavior_is_rejected(self) -> None:
+        class BadTimePlugin:
+            plugin_id = "bad_time_probe"
+
+            def process_multichannel(
+                self,
+                audio_buffer: AudioBufferF64,
+                sample_rate: int,
+                params: dict[str, Any],
+                ctx: PluginContext,
+                layout_ctx: LayoutContext,
+                process_ctx: Any | None = None,
+            ) -> AudioBufferF64:
+                del sample_rate, params, ctx, layout_ctx, process_ctx
+                time.time()
+                return audio_buffer
+
+        plugin = BadTimePlugin()
+        audio_buffer, process_ctx, layout_ctx = _typed_noise("LAYOUT.5_1", seed=89)
+        with self.assertRaises(PluginPurityViolationError):
+            invoke_with_purity_guard(
+                plugin_id=plugin.plugin_id,
+                purity_contract=PluginPurityContract(
+                    audio_buffer="typed_f64_interleaved",
+                    randomness="forbidden",
+                    wall_clock="forbidden",
+                    thread_scheduling="forbidden",
+                ),
+                invoke=lambda: plugin.process_multichannel(
+                    audio_buffer,
+                    process_ctx.sample_rate_hz,
+                    {},
+                    _make_ctx(),
+                    layout_ctx,
+                    process_ctx,
+                ),
+            )
+
+    def test_thread_scheduling_behavior_is_rejected(self) -> None:
+        class BadThreadPlugin:
+            plugin_id = "bad_thread_probe"
+
+            def process_multichannel(
+                self,
+                audio_buffer: AudioBufferF64,
+                sample_rate: int,
+                params: dict[str, Any],
+                ctx: PluginContext,
+                layout_ctx: LayoutContext,
+                process_ctx: Any | None = None,
+            ) -> AudioBufferF64:
+                del sample_rate, params, ctx, layout_ctx, process_ctx
+                thread = threading.Thread(target=lambda: None)
+                thread.start()
+                return audio_buffer
+
+        plugin = BadThreadPlugin()
+        audio_buffer, process_ctx, layout_ctx = _typed_noise("LAYOUT.5_1", seed=90)
+        with self.assertRaises(PluginPurityViolationError):
+            invoke_with_purity_guard(
+                plugin_id=plugin.plugin_id,
+                purity_contract=PluginPurityContract(
+                    audio_buffer="typed_f64_interleaved",
+                    randomness="forbidden",
+                    wall_clock="forbidden",
+                    thread_scheduling="forbidden",
+                ),
+                invoke=lambda: plugin.process_multichannel(
+                    audio_buffer,
+                    process_ctx.sample_rate_hz,
+                    {},
+                    _make_ctx(),
+                    layout_ctx,
+                    process_ctx,
+                ),
+            )
 
 
 if __name__ == "__main__":

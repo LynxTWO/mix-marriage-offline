@@ -79,31 +79,33 @@ def _resolved_path(path_value: str) -> Optional[Path]:
 def _prefer_repo_src() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     src_dir = (repo_root / "src").resolve()
-    if not src_dir.is_dir():
+    desired_paths = [path for path in (src_dir, repo_root) if path.is_dir()]
+    if not desired_paths:
         return
 
-    existing_index = None
-    for index, entry in enumerate(sys.path):
-        if _resolved_path(entry) == src_dir:
-            existing_index = index
-            break
+    existing_entries = list(sys.path)
+    for desired_path in desired_paths:
+        for index, entry in enumerate(existing_entries):
+            if _resolved_path(entry) == desired_path:
+                sys.path.pop(index)
+                existing_entries.pop(index)
+                break
 
-    if existing_index == 0:
-        return
-
-    if existing_index is not None:
-        sys.path.pop(existing_index)
-
-    sys.path.insert(0, str(src_dir))
+    for desired_path in reversed(desired_paths):
+        sys.path.insert(0, str(desired_path))
 
     existing_pythonpath = os.environ.get("PYTHONPATH", "")
-    existing_entries = [entry for entry in existing_pythonpath.split(os.pathsep) if entry]
+    existing_python_entries = [
+        entry for entry in existing_pythonpath.split(os.pathsep) if entry
+    ]
     filtered_entries: list[str] = []
-    for entry in existing_entries:
-        if _resolved_path(entry) == src_dir:
+    for entry in existing_python_entries:
+        resolved = _resolved_path(entry)
+        if resolved in desired_paths:
             continue
         filtered_entries.append(entry)
-    filtered_entries.insert(0, str(src_dir))
+    for desired_path in reversed(desired_paths):
+        filtered_entries.insert(0, str(desired_path))
     os.environ["PYTHONPATH"] = os.pathsep.join(filtered_entries)
 
 

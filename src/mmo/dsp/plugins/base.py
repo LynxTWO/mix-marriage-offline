@@ -29,6 +29,7 @@ import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
+from mmo.dsp.buffer import AudioBufferF64, generic_channel_order
 from mmo.dsp.process_context import ProcessContext
 
 if TYPE_CHECKING:
@@ -89,13 +90,13 @@ class StereoPlugin(Protocol):
 
     def process_stereo(
         self,
-        buf_f32_or_f64: Any,
+        audio_buffer: AudioBufferF64,
         sample_rate: int,
         params: dict[str, Any],
         ctx: PluginContext,
         process_ctx: ProcessContext | None = None,
-    ) -> Any:
-        """Process stereo buffer and populate ``ctx.evidence_collector``."""
+    ) -> AudioBufferF64:
+        """Process a typed stereo buffer and populate ``ctx.evidence_collector``."""
 
 
 @dataclass(frozen=True)
@@ -254,20 +255,22 @@ class MultichannelPlugin(Protocol):
 
     def process_multichannel(
         self,
-        buf_f32_or_f64: Any,
+        audio_buffer: AudioBufferF64,
         sample_rate: int,
         params: dict[str, Any],
         ctx: PluginContext,
         layout_ctx: LayoutContext,
         process_ctx: ProcessContext | None = None,
-    ) -> Any:
+    ) -> AudioBufferF64:
         """Process a multichannel audio buffer with full layout awareness.
 
         Parameters
         ----------
-        buf_f32_or_f64:
-            NumPy array, shape ``(channels, samples)``.  Channel count must
-            match ``layout_ctx.num_channels``.
+        audio_buffer:
+            ``AudioBufferF64`` with explicit ``channel_order`` and
+            ``sample_rate_hz`` semantics. Legacy direct NumPy-array calls may
+            still be adapted in tests, but the runtime boundary always passes a
+            typed buffer.
         sample_rate:
             Audio sample rate in Hz.
         params:
@@ -282,6 +285,119 @@ class MultichannelPlugin(Protocol):
             Canonical DSP truth object for the current buffer. Prefer
             ``process_ctx.index_of("SPK.C")`` and related helpers in new code.
         """
+
+
+def precision_mode_numpy_dtype(*, np: Any, precision_mode: str) -> Any:
+    normalized = precision_mode.strip().lower()
+    if normalized in {"f32", "float32"}:
+        return np.float32
+    return np.float64
+
+
+def coerce_audio_buffer_for_process_context(
+    *,
+    value: Any,
+    plugin_id: str,
+    sample_rate_hz: int,
+    process_ctx: ProcessContext,
+) -> AudioBufferF64:
+    if not isinstance(value, AudioBufferF64):
+        raise PluginValidationError(
+            f"{plugin_id} requires AudioBufferF64 input at the typed runtime boundary.",
+        )
+    if value.sample_rate_hz != int(sample_rate_hz):
+        raise PluginValidationError(
+            f"{plugin_id} requires audio_buffer.sample_rate_hz to match sample_rate.",
+        )
+    if value.channel_order != tuple(process_ctx.channel_order):
+        raise PluginValidationError(
+            f"{plugin_id} requires audio_buffer.channel_order to match ProcessContext.channel_order.",
+        )
+    if value.channels != process_ctx.num_channels:
+        raise PluginValidationError(
+            f"{plugin_id} requires audio_buffer.channels to match ProcessContext.num_channels.",
+        )
+    return value
+
+
+def _layout_channel_order(
+    *,
+    layout_ctx: LayoutContext,
+    process_ctx: ProcessContext | None,
+) -> tuple[str, ...]:
+    if process_ctx is not None:
+        return tuple(process_ctx.channel_order)
+
+    raw_channel_order = getattr(layout_ctx.layout, "channel_order", ())
+    normalized = tuple(
+        speaker_id
+        for speaker_id in (
+            _process_ctx_speaker_id(item) for item in raw_channel_order
+        )
+        if speaker_id
+    )
+    if len(normalized) == layout_ctx.num_channels:
+        return normalized
+    return generic_channel_order(layout_ctx.num_channels)
+
+
+def coerce_multichannel_audio_buffer(
+    *,
+    value: Any,
+    plugin_id: str,
+    sample_rate_hz: int,
+    layout_ctx: LayoutContext,
+    process_ctx: ProcessContext | None = None,
+) -> tuple[AudioBufferF64, bool]:
+    if isinstance(value, AudioBufferF64):
+        channel_order = _layout_channel_order(
+            layout_ctx=layout_ctx,
+            process_ctx=process_ctx,
+        )
+        if value.sample_rate_hz != int(sample_rate_hz):
+            raise PluginValidationError(
+                f"{plugin_id} requires audio_buffer.sample_rate_hz to match sample_rate.",
+            )
+        if value.channels != layout_ctx.num_channels:
+            raise PluginValidationError(
+                f"{plugin_id} requires audio_buffer.channels to match layout_ctx.num_channels.",
+            )
+        if value.channel_order != channel_order:
+            raise PluginValidationError(
+                f"{plugin_id} requires audio_buffer.channel_order to match layout semantics.",
+            )
+        return value, True
+
+    import numpy as np
+
+    matrix = np.asarray(value)
+    if matrix.ndim != 2 or matrix.shape[0] != layout_ctx.num_channels:
+        raise PluginValidationError(
+            f"{plugin_id} requires a (channels, samples) matrix or AudioBufferF64 input.",
+        )
+    return (
+        AudioBufferF64.from_channel_matrix(
+            matrix,
+            channel_order=_layout_channel_order(
+                layout_ctx=layout_ctx,
+                process_ctx=process_ctx,
+            ),
+            sample_rate_hz=sample_rate_hz,
+        ),
+        False,
+    )
+
+
+def restore_multichannel_audio_buffer(
+    *,
+    audio_buffer: AudioBufferF64,
+    original_input_was_typed: bool,
+    np: Any,
+    dtype: Any,
+) -> Any:
+    if original_input_was_typed:
+        return audio_buffer
+    return audio_buffer.to_channel_matrix(np=np, dtype=dtype)
 
 
 def coerce_bool(value: Any) -> bool | None:

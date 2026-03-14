@@ -95,22 +95,53 @@ Resolvers must include:
 
 ### 3.3 Determinism
 
-Given identical inputs and settings, plugin outputs should be stable. Avoid
-randomness. If randomness is required, it must be seeded and logged.
+Given identical inputs and settings, plugin outputs must be stable.
+
+Determinism purity rules at the runtime boundary:
+
+- no unseeded randomness
+- no wall-clock or timer-driven behavior
+- no dependence on host thread scheduling
+
+If a plugin needs controlled randomness, it must derive it from
+`process_ctx.seed`, declare `capabilities.deterministic_seed_policy`, and set
+`capabilities.purity.randomness` to `process_context_seed`.
+
+The runtime host now enforces this contract. Calls to global RNG helpers,
+`time.*`, or thread / executor startup inside deterministic plugin execution
+raise a loud runtime failure instead of silently weakening reproducibility.
 
 ### 3.4 Safety gates are final
 
 Plugins can propose anything, but the core enforces gates. Plugins must not
 attempt to “bypass” gates or weaken the schema.
 
-### 3.5 Numeric precision
+### 3.5 Typed audio buffer boundary
+
+Audio-mutating plugin execution uses a typed boundary:
+
+- runtime audio is passed as `mmo.dsp.buffer.AudioBufferF64`
+- the buffer carries explicit `channel_order` and `sample_rate_hz`
+- channel routing must use semantic speaker IDs, not fixed slot assumptions
+
+`AudioBufferF64` stores interleaved float64 PCM plus metadata. Plugin code may
+adapt it to NumPy for DSP via the typed helpers:
+
+- `audio_buffer.to_frame_matrix(np=..., dtype=...)`
+- `audio_buffer.to_channel_matrix(np=..., dtype=...)`
+- `AudioBufferF64.from_frame_matrix(...)`
+- `AudioBufferF64.from_channel_matrix(...)`
+
+Returning a raw ndarray at the execution boundary is now a contract violation.
+
+### 3.6 Numeric precision
 
 - Internal audio buffers are float64 normalized [-1, 1).
 - All meters, detectors, and resolvers operating on PCM must use float64.
 - Plugins must not downcast precision.
 - Any future render/export must dither/quantize only at the final output stage.
 
-### 3.6 Canonical stage placement and mutation boundaries
+### 3.7 Canonical stage placement and mutation boundaries
 
 Plugins participate in the canonical seven-stage graph, but not every plugin
 type may run in every stage.
@@ -191,6 +222,20 @@ ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.detectors.resonance_detector:ResonanceDetector"
 capabilities:
   - "ISSUE.SPECTRAL.RESONANCE"
+```
+
+Renderer-capability manifests may now declare the typed-buffer + purity
+contract explicitly:
+
+```yaml
+capabilities:
+  max_channels: 32
+  deterministic_seed_policy: "none"
+  purity:
+    audio_buffer: "typed_f64_interleaved"
+    randomness: "forbidden"
+    wall_clock: "forbidden"
+    thread_scheduling: "forbidden"
 ```
 
 MMO records plugin metadata (including version and file hash) in output

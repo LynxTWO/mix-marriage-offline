@@ -49,6 +49,9 @@ ISSUE_SEMANTICS_LATENCY_FIXED_MISSING_SAMPLES = (
     "ISSUE.SEMANTICS.LATENCY_FIXED_MISSING_SAMPLES"
 )
 ISSUE_SEMANTICS_SEED_POLICY_INVALID = "ISSUE.SEMANTICS.SEED_POLICY_INVALID"
+ISSUE_SEMANTICS_PURITY_RANDOMNESS_CONFLICT = (
+    "ISSUE.SEMANTICS.PURITY_RANDOMNESS_CONFLICT"
+)
 ISSUE_SEMANTICS_BED_ONLY_OBJECT_CONFLICT = "ISSUE.SEMANTICS.BED_ONLY_OBJECT_CONFLICT"
 ISSUE_SEMANTICS_SPEAKER_POSITIONS_NO_LAYOUT = (
     "ISSUE.SEMANTICS.SPEAKER_POSITIONS_NO_LAYOUT"
@@ -241,6 +244,22 @@ def _validate_semantics(
                 f"[semantics] {ISSUE_SEMANTICS_SEED_POLICY_INVALID}: "
                 f"capabilities.deterministic_seed_policy {seed_policy!r} is not valid. "
                 f"Allowed: {sorted(semantics.valid_seed_policies)}"
+            )
+
+    purity = capabilities.get("purity")
+    if isinstance(purity, dict):
+        randomness = purity.get("randomness")
+        if seed_policy == "none" and randomness == "process_context_seed":
+            errors.append(
+                f"[semantics] {ISSUE_SEMANTICS_PURITY_RANDOMNESS_CONFLICT}: "
+                "capabilities.purity.randomness='process_context_seed' conflicts with "
+                "capabilities.deterministic_seed_policy='none'."
+            )
+        if seed_policy in {"seed_required", "seed_optional"} and randomness == "forbidden":
+            errors.append(
+                f"[semantics] {ISSUE_SEMANTICS_PURITY_RANDOMNESS_CONFLICT}: "
+                "capabilities.purity.randomness='forbidden' conflicts with "
+                "a seed-enabled deterministic_seed_policy."
             )
 
     # --- bed_only conflicts ---

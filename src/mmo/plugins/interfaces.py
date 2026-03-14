@@ -32,8 +32,30 @@ class PluginSceneCapabilities:
 
 
 @dataclass(frozen=True)
+class PluginPurityContract:
+    audio_buffer: str | None = None
+    randomness: str | None = None
+    wall_clock: str | None = None
+    thread_scheduling: str | None = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {}
+        if isinstance(self.audio_buffer, str) and self.audio_buffer:
+            payload["audio_buffer"] = self.audio_buffer
+        if isinstance(self.randomness, str) and self.randomness:
+            payload["randomness"] = self.randomness
+        if isinstance(self.wall_clock, str) and self.wall_clock:
+            payload["wall_clock"] = self.wall_clock
+        if isinstance(self.thread_scheduling, str) and self.thread_scheduling:
+            payload["thread_scheduling"] = self.thread_scheduling
+        return payload
+
+
+@dataclass(frozen=True)
 class PluginCapabilities:
     max_channels: int | None = None
+    deterministic_seed_policy: str | None = None
+    purity: PluginPurityContract | None = None
     supported_layout_ids: tuple[str, ...] | None = None
     supported_contexts: tuple[str, ...] | None = None
     scene: PluginSceneCapabilities | None = None
@@ -43,6 +65,12 @@ class PluginCapabilities:
         payload: Dict[str, Any] = {}
         if isinstance(self.max_channels, int):
             payload["max_channels"] = self.max_channels
+        if isinstance(self.deterministic_seed_policy, str):
+            payload["deterministic_seed_policy"] = self.deterministic_seed_policy
+        if self.purity is not None:
+            purity_payload = self.purity.to_dict()
+            if purity_payload:
+                payload["purity"] = purity_payload
         if self.supported_layout_ids is not None:
             payload["supported_layout_ids"] = list(self.supported_layout_ids)
         if self.supported_contexts is not None:

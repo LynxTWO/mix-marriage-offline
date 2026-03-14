@@ -6,12 +6,15 @@ import math
 from typing import Any
 
 from mmo.dsp.plugins.base import (
+    AudioBufferF64,
     ProcessContext,
     PluginContext,
     PluginValidationError,
+    coerce_audio_buffer_for_process_context,
     coerce_float,
     parse_bypass_for_stage,
     parse_macro_mix_for_stage,
+    precision_mode_numpy_dtype,
 )
 
 PLUGIN_ID = "gain_v0"
@@ -24,15 +27,22 @@ class GainV0Plugin:
 
     def process_stereo(
         self,
-        buf_f32_or_f64: Any,
+        audio_buffer: AudioBufferF64,
         sample_rate: int,
         params: dict[str, Any],
         ctx: PluginContext,
         process_ctx: ProcessContext | None = None,
-    ) -> Any:
-        del sample_rate, process_ctx
+    ) -> AudioBufferF64:
+        if process_ctx is None:
+            raise PluginValidationError(f"{PLUGIN_ID} requires ProcessContext.")
         import numpy as np
 
+        source_buffer = coerce_audio_buffer_for_process_context(
+            value=audio_buffer,
+            plugin_id=PLUGIN_ID,
+            sample_rate_hz=sample_rate,
+            process_ctx=process_ctx,
+        )
         gain_db = coerce_float(params.get("gain_db"))
         if gain_db is None:
             raise PluginValidationError(
@@ -43,10 +53,13 @@ class GainV0Plugin:
             plugin_id=PLUGIN_ID,
             params=params,
         )
-        processing_dtype = buf_f32_or_f64.dtype.type
+        processing_dtype = precision_mode_numpy_dtype(
+            np=np,
+            precision_mode=ctx.precision_mode,
+        )
+        rendered = source_buffer.to_frame_matrix(np=np, dtype=processing_dtype)
         linear_gain = float(math.pow(10.0, gain_db / 20.0))
 
-        rendered = buf_f32_or_f64
         if bypass:
             stage_what = "plugin stage bypassed"
             stage_why = (
@@ -101,4 +114,8 @@ class GainV0Plugin:
                 {"name": "bypass", "value": 1.0 if bypass else 0.0},
             ],
         )
-        return rendered
+        return AudioBufferF64.from_frame_matrix(
+            rendered,
+            channel_order=source_buffer.channel_order,
+            sample_rate_hz=source_buffer.sample_rate_hz,
+        )

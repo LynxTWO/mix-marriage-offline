@@ -3,7 +3,6 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   clamp,
   describeConfidence,
-  formatPercent,
   initDesignSystem,
   roundToStep,
   signedDb,
