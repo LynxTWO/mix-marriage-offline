@@ -65,8 +65,8 @@ Definition of done:
 - [x] Core DSP/render primitives exist.
 - [x] 32-channel, golden-fixture, plugin-mode audio, and fallback-sequence
       regression coverage exist.
-- [ ] Export finalization policy is documented as a stable public contract.
-- [ ] The stage graph is documented and fixed.
+- [x] Export finalization policy is documented as a stable public contract.
+- [x] The stage graph is documented and fixed.
 - [ ] Typed plugin buffers and determinism purity guarantees are enforced
       end-to-end.
 - [ ] Multichannel safety-class declarations and bypass/restrict behavior are

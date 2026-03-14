@@ -517,14 +517,14 @@ AI-readable layout export + validation (prevents overlaps/off-screen UI):
 The project is not considered complete until the DSP pipeline, plugin contracts,
 and render behavior below are implemented, documented, and covered by tests.
 What remains: the core DSP path is functional, but public export-policy docs,
-the locked stage graph, stricter plugin purity guarantees, and the final
-multichannel safety contract still need to be closed out.
+the stricter plugin purity guarantees and the final multichannel safety
+contract still need to be closed out.
 
 ### 4.9.1 DSP core guarantees
 
 - [x] Internal processing uses a documented floating-point format (default:
       64-bit float).
-- [ ] Export finalization has a documented, deterministic policy (per target
+- [x] Export finalization has a documented, deterministic policy (per target
       format/bit depth):
   - none (when exporting float),
   - TPDF (and optional high-pass TPDF),
@@ -545,7 +545,7 @@ multichannel safety contract still need to be closed out.
 
 ### 4.9.2 Canonical DSP stages (pipeline shape)
 
-- [ ] The engine implements a stable, documented stage graph (minimum):
+- [x] The engine implements a stable, documented stage graph (minimum):
   1. Input normalization and alignment (optional, conservative).
   2. Analysis/metering pass (no audio mutation).
   3. Scene inference pass (advisory only, writes intent with confidence).

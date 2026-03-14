@@ -173,6 +173,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   install/runtime expectations; release announcement templates now include an
   explicit "what ships today" vs "still in progress" split so future release
   notes do not regress into outdated language.
+- DSP contract docs now define one canonical seven-stage graph, explicitly mark
+  which stages are advisory-only vs audio-mutating, and document the deterministic
+  export-finalization receipt contract (`none` / `tpdf` / `tpdf_hp`, default
+  PCM behavior, and manifest/report emission points) so the render pipeline is
+  reviewable as a public contract instead of only by reading code.
 - CI now uses Node 24-ready GitHub Actions majors for `actions/checkout`,
   `actions/setup-python`, `actions/setup-node`, `actions/upload-artifact`, and
   `actions/download-artifact` where upstream publishes them.

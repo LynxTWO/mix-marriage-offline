@@ -132,6 +132,102 @@ PYTHONPATH=src python tools/analyze_stems.py /tmp/mmo_demo --out-report examples
 - Keep the session sample rate (44.1k, 48k, 96k). Do not mix rates inside one
   folder.
 
+This recommendation is about source stems you hand to MMO. MMO's own delivery
+export finalization contract is documented separately below.
+
+## Deterministic export finalization policy (v1)
+
+MMO keeps internal processing in float64 until the final delivery boundary.
+`src/mmo/dsp/export_finalize.py` is the canonical v1 contract for integer PCM
+export finalization.
+
+### What the core finalization step does
+
+- resolves the deterministic dither policy for the target integer PCM bit depth
+- derives a deterministic seed from `job_id`, `layout_id`, optional `stem_id`,
+  and `render_seed` using `sha256_v1`
+- clamps float64 samples to `[-1.0, 1.0)` before quantization
+- rounds to signed PCM integers and clamps again to the target integer range
+- emits an `export_finalization_receipt` into manifests and reports
+
+### Default policy by output type
+
+- Float export: `none`
+  - Normative rule: do not dither or noise-shape IEEE float output.
+  - Current v1 note: the shipped receipt schemas only model integer PCM
+    finalization (`bit_depth` enum `16 | 24 | 32`), so float-output receipts are
+    forward-looking and are not emitted by current renderers.
+- PCM 16-bit integer: default `tpdf`
+- PCM 24-bit integer: default `none`
+- PCM 32-bit integer (`pcm_s32le`): default `none`
+
+### Supported v1 dither policies
+
+- `none`: no dither
+- `tpdf`: deterministic triangular PDF dither
+- `tpdf_hp`: deterministic high-pass TPDF using the previous per-channel TPDF
+  sample as a simple error-shaping term
+
+`tpdf_hp` is the only spectrum-shaped variant in the core v1 contract. It is
+not a general psychoacoustic noise-shaping family.
+
+### Noise-shaped policy handling
+
+General noise-shaped export policies are **out of v1** for the core contract.
+That is intentional and enforced by the current receipt schemas, which only
+allow `none`, `tpdf`, and `tpdf_hp`.
+
+If a future release adds true noise-shaped export policies, it must do so
+explicitly by updating:
+
+- `src/mmo/dsp/export_finalize.py`
+- `schemas/render_manifest.schema.json`
+- `schemas/apply_manifest.schema.json`
+- `schemas/render_report.schema.json`
+
+No renderer or plugin may silently invent a new export policy string in v1.
+
+### Receipt fields and where they appear
+
+The deterministic export contract is emitted as `export_finalization_receipt`
+with these fields:
+
+- `bit_depth`
+- `dither_policy`
+- `seed_derivation`
+  - `algorithm`
+  - `job_id`
+  - `layout_id`
+  - optional `stem_id`
+  - `render_seed`
+- `clamp_behavior`
+- `target_peak_dbfs`
+
+Current receipt locations:
+
+- `render_manifest.renderer_manifests[*].outputs[*].export_finalization_receipt`
+- `apply_manifest.renderer_manifests[*].outputs[*].export_finalization_receipt`
+- `render_report.jobs[*].output_files[*].export_finalization_receipt`
+- `render_report.stage_evidence[*].evidence.export_finalization_receipt`
+
+The stage-evidence copy is useful for plan-only or report-level review. The
+per-output copy is the artifact-level receipt.
+
+### Target peak handling
+
+`target_peak_dbfs` records a renderer-selected delivery peak target when one has
+already been applied before byte serialization. Current shipped behavior is:
+
+- `mixdown_renderer` and `placement_mixdown_renderer` populate
+  `target_peak_dbfs` with `-1.0`
+- `gain_trim_renderer` uses `null`
+- plan-only/render-engine report assembly may also use `null` when it is only
+  describing the planned export policy rather than a measured peak-targeted
+  render
+
+So in v1, export finalization records peak-target intent when available, but
+`export_finalize.py` itself is the deterministic dither/clamp/quantize step.
+
 Avoid:
 
 - MP3/AAC or any other lossy exports. For lossless stems, use WAV, FLAC, or

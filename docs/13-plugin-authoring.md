@@ -56,6 +56,31 @@ manifests are fallback-only.
 - `ui_layout` is a relative path inside the plugin directory.
 - `config_schema` is a JSON Schema object (Draft 2020-12 compatible).
 
+## 2.1 Canonical stage graph for plugin authors
+
+Use the same stage names the architecture docs use and design the plugin around
+that boundary:
+
+- Stage 1, input normalization/alignment: core-only technical canonicalization.
+- Stage 2, analysis/metering: detector plugins only, advisory-only.
+- Stage 3, scene inference: resolver/scene logic only, advisory-only.
+- Stage 4, pre-render corrective pass: renderer plugins may apply bounded
+  corrective DSP.
+- Stage 5, render pass: renderer plugins may create target-layout audio.
+- Stage 6, post-render QA: advisory-only measurement/gates.
+- Stage 7, export pass: core-owned finalization for format/quantization/dither.
+
+If your plugin mutates audio, it belongs in stage 4 or 5. If it only emits
+measurements, intent, warnings, or confidence, it belongs in stage 2, 3, or 6.
+
+Hard rules:
+
+- Detectors and resolvers must not mutate audio.
+- Renderer plugins must not silently dither, quantize, or noise-shape inside
+  their own private output path before the core export-finalization contract.
+- Any audible change must be explainable as either bounded low-risk behavior or
+  an approved render action.
+
 ## 3. Config schema and UI hints checklist
 
 - Every GUI control parameter is declared under `config_schema.properties`.

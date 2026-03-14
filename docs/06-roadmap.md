@@ -30,9 +30,7 @@ polish items live in `PROJECT_WHEN_COMPLETE.md` section 9 and in `LATER` below.
 
 - Goal: close the remaining public-contract gaps in the DSP and plugin boundary.
 - Open blockers:
-- [PWC: export finalization policy is documented as a deterministic public contract](../PROJECT_WHEN_COMPLETE.md)
 - [PWC: processing decisions stay user-requested, approval-gated, or confidence-gated](../PROJECT_WHEN_COMPLETE.md)
-- [PWC: stable documented stage graph](../PROJECT_WHEN_COMPLETE.md)
 - [PWC: typed plugin buffers with explicit channel semantics](../PROJECT_WHEN_COMPLETE.md)
 - [PWC: plugin determinism purity constraints](../PROJECT_WHEN_COMPLETE.md)
 - [PWC: plugins declare multichannel/layout safety class](../PROJECT_WHEN_COMPLETE.md)

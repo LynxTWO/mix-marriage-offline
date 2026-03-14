@@ -45,6 +45,38 @@ Guidelines:
 - Keep thresholds conservative and stable across repeated renders.
 - Declare claims for both intended change and collateral safety bounds.
 
+## Canonical stage ownership
+
+The stage graph matters as much as the plugin math:
+
+- Stages 2, 3, and 6 are advisory-only and must not modify audio.
+- Stages 4 and 5 are the only stages where plugin DSP may make audible changes.
+- Stages 1 and 7 are technical boundary stages; they may change representation
+  for correctness or delivery, but not hide creative decisions.
+
+This is why export finalization is core-owned. Dither, quantization, clamp
+behavior, and final receipt emission are part of the public contract, not an
+undocumented renderer-specific side effect.
+
+## Export finalization mandate
+
+For v1, the deterministic export-finalization contract is deliberately narrow:
+
+- supported policies are `none`, `tpdf`, and `tpdf_hp`
+- 16-bit PCM defaults to `tpdf`
+- 24-bit and 32-bit integer PCM default to `none`
+- true noise-shaped export policies are out of v1 unless the schemas and code
+  are extended explicitly
+
+`tpdf_hp` is allowed because it is a disclosed high-pass TPDF variant already
+modeled in `export_finalize.py` and the manifest/report schemas. It should not
+be described as general-purpose psychoacoustic noise shaping.
+
+Plugins may declare `adds_noise` in their DSP traits when that is part of the
+creative or corrective algorithm, but that is separate from export finalization.
+No plugin may silently dither or quantize the final delivery outside the core
+receipt-bearing export boundary.
+
 ## Examples
 
 Linear, information-preserving renderer:

@@ -110,6 +110,34 @@ attempt to “bypass” gates or weaken the schema.
 - Plugins must not downcast precision.
 - Any future render/export must dither/quantize only at the final output stage.
 
+### 3.6 Canonical stage placement and mutation boundaries
+
+Plugins participate in the canonical seven-stage graph, but not every plugin
+type may run in every stage.
+
+- Stage 1, input normalization/alignment: core-owned boundary stage. Plugins do
+  not silently remap, resample, or align stems outside explicit host contracts.
+- Stage 2, analysis/metering: detector plugins run here. This stage is
+  advisory-only and must never mutate audio.
+- Stage 3, scene inference: resolver logic and scene-building helpers run here.
+  This stage is advisory-only and writes intent/confidence, not samples.
+- Stage 4, pre-render corrective pass: renderer plugins may apply bounded
+  low-risk or approved corrective DSP here.
+- Stage 5, render pass: renderer plugins may perform target-layout routing,
+  downmix, and target-aware render DSP here.
+- Stage 6, post-render QA: core-owned measurement/gate stage. Plugins may
+  contribute measurable claims that QA checks, but this stage does not rewrite
+  audio.
+- Stage 7, export pass: core-owned finalization stage. Renderer plugins do not
+  silently dither, noise-shape, or quantize earlier than this boundary.
+
+In short:
+
+- detectors and resolvers are advisory-only;
+- renderer plugins are the only plugin class allowed to mutate audio;
+- export finalization remains a deterministic core contract, not a plugin-local
+  side effect.
+
 ---
 
 ## 4) Plugin packaging (recommended)
@@ -238,6 +266,10 @@ Rules:
 - output files must be sample-aligned and length-matched to inputs
 - default behavior must prevent clipping unless user allows it
 - render manifest must list all produced files and applied actions
+- renderers may mutate audio only in the pre-render corrective pass or render
+  pass, never in analysis/scene/QA stages
+- renderers must leave final dither/quantization policy to the export
+  finalization contract and report the resulting receipt
 
 ---
 

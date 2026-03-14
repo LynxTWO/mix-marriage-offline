@@ -86,48 +86,128 @@ At the I/O boundary MMO supports five channel-ordering standards: `SMPTE`,
 
 ---
 
-## 5) High-level pipeline
+## 5) Canonical DSP stage graph
 
-1. **Validate**
+MMO uses one canonical DSP stage graph. The names below are normative even when
+specific CLI commands or reports expose a narrower subset of the pipeline.
+
+1. **Input normalization and alignment**
+   - Purpose: decode inputs, normalize channel-order semantics to internal
+     canonical `SMPTE`, and apply only conservative boundary operations such as
+     explicit resampling or alignment fixes.
+   - Audio mutation: **boundary-only**. This stage may change representation
+     (sample rate, channel ordering, alignment) but must not make taste-driven
+     tonal, balance, or spatial decisions.
+   - Primary artifacts: validation output in `report.json`, resampling receipts,
+     and pre-render stage notes.
+2. **Analysis / metering**
+   - Purpose: measure features, meters, and evidence used for validation and
+     later decisions.
+   - Audio mutation: **advisory only**. This stage never changes samples.
+   - Primary artifacts: `report.json` issues, evidence, feature rows, and
+     recommendations inputs.
+3. **Scene inference**
+   - Purpose: derive or refine layout-agnostic intent, confidence, and target
+     recommendations.
+   - Audio mutation: **advisory only**. It writes intent and confidence, not
+     audio.
+   - Primary artifacts: `scene.json`, render-intent blocks, target-selection
+     context, and recommendation state.
+4. **Pre-render corrective pass**
+   - Purpose: apply bounded-authority corrective DSP before the final render.
+   - Audio mutation: **yes**. This is the first stage allowed to mutate program
+     audio, and only within declared low-risk or approved authority.
+   - Primary artifacts: DSP hook receipts/events and renderer receipts tied to
+     `pre_bus_stem`, `bus`, and `post_master` boundaries.
+5. **Render pass**
+   - Purpose: convert scene intent into a target layout using routing, downmix,
+     placement, and other renderer-declared behavior.
+   - Audio mutation: **yes**. This stage owns the target-layout render.
+   - Primary artifacts: output audio files, `render_manifest.json`,
+     `apply_manifest.json`, and render job output rows.
+6. **Post-render QA**
+   - Purpose: measure rendered outputs, apply gates, compare downmix
+     similarity/correlation risk, and decide whether to accept, retry, or fail.
+   - Audio mutation: **advisory only**. QA measures audio and can trigger a
+     re-render or failure, but it does not silently rewrite the measured file.
+   - Primary artifacts: `render_qa.json`, fallback attempts/final state,
+     `qa_gates`, and explainable failure receipts.
+7. **Export pass**
+   - Purpose: finalize the delivery boundary: container/codec selection,
+     integer PCM quantization, deterministic dither policy, and export receipts.
+   - Audio mutation: **boundary-only**. This stage may change representation at
+     final serialization time, but no earlier stage may silently dither,
+     quantize, or noise-shape.
+   - Primary artifacts: output files plus `export_finalization_receipt` in
+     manifests and reports.
+
+### 5.1 What is advisory-only vs mutating
+
+The contract is intentionally strict:
+
+- Stages 2, 3, and 6 are advisory only. They may emit evidence, confidence,
+  gates, or failure decisions, but they do not modify sample data.
+- Stages 4 and 5 are the only stages allowed to make audible musical changes.
+- Stages 1 and 7 are boundary stages. They may change representation for
+  technical correctness or final delivery, but they are not a loophole for
+  hidden mix decisions.
+
+### 5.2 How current render reports map to the canonical graph
+
+`render_report.json` currently exposes deterministic stage rows that focus on
+render execution rather than the entire end-to-end pipeline:
+
+- `planning` is an orchestration/reporting stage, not one of the seven
+  canonical DSP stages.
+- `resampling` is the current render-report surface for canonical stage 1 when
+  rate conversion is requested or disclosed.
+- `dsp_hooks` covers the mutating corrective/render boundary used by current
+  renderer execution and hook receipts (canonical stages 4 and part of 5).
+- `qa_gates` is the render-report surface for canonical stage 6.
+- `export_finalize` is the render-report surface for canonical stage 7.
+
+Canonical stages 2 and 3 are primarily recorded in `report.json`, `scene.json`,
+and render-plan/request context rather than as `render_report.stage_id` values.
+
+## 6) High-level workflow around the stage graph
+
+1. **Validate and analyze**
    - inspect files, formats, metadata, durations, layouts, and checksums
-2. **Analyze**
-   - measure meters and features
-   - detect issues and emit evidence
-   - resolve recommendations under bounded-authority rules
-3. **Build intent**
+   - measure meters/features and emit evidence
+2. **Build intent**
    - optionally derive `scene.json`
    - optionally apply scene templates, locks, and target selection logic
-4. **Plan delivery**
+3. **Plan delivery**
    - expand one scene into one or many render jobs in `render_plan.json`
-5. **Render**
-   - execute safe-render or render-run paths
+4. **Execute render stages**
+   - run canonical stages 1 and 4 through 7 as needed for each job
    - enforce approvals, gates, QA, fallback sequencing, and output contracts
-6. **Compare and export**
+5. **Compare and export supporting artifacts**
    - compare revisions, export PDFs/CSVs, and write receipt/audit artifacts
 
 ---
 
-## 6) Scene and render contracts
+## 7) Scene and render contracts
 
 The architectural center of MMO is no longer just "analyze a stem folder." It is
 the scene/render contract chain.
 
-### 6.1 Scene
+### 7.1 Scene
 
 `scene.json` stores layout-agnostic intent. It captures choices that should
 survive across render targets and channel-order variants.
 
-### 6.2 Render plan
+### 7.2 Render plan
 
 `render_plan.json` expands one scene into concrete jobs for selected targets and
 contexts. This is where mix-once/render-many becomes explicit.
 
-### 6.3 Render execution
+### 7.3 Render execution
 
 `safe-render`, `render-run`, and related project workflows execute against the
 same plan/contract concepts and write explainable artifacts for what happened.
 
-### 6.4 Ordering standards
+### 7.4 Ordering standards
 
 MMO processes internally using canonical `SMPTE` ordering. It remaps at the
 boundary for `FILM`, `LOGIC_PRO`, `VST3`, and `AAF` when the selected
@@ -135,7 +215,7 @@ target/layout declares those variants.
 
 ---
 
-## 7) Plugins and safety gates
+## 8) Plugins and safety gates
 
 MMO supports detector, resolver, and renderer plugins.
 
@@ -160,7 +240,7 @@ Core gates enforce:
 
 ---
 
-## 8) Compare, QA, and audit
+## 9) Compare, QA, and audit
 
 Compare is a first-class part of the architecture.
 
@@ -176,7 +256,7 @@ so delivery decisions remain explainable after the audio files are exported.
 
 ---
 
-## 9) CLI and automation surface
+## 10) CLI and automation surface
 
 MMO's shipped CLI surface is broader than a minimal planned CLI.
 
@@ -196,7 +276,7 @@ That surface exists so the same contracts can serve:
 
 ---
 
-## 10) Desktop paths
+## 11) Desktop paths
 
 MMO currently ships two GUI paths:
 
@@ -213,7 +293,7 @@ Still in progress:
 
 ---
 
-## 11) Reproducibility and audit trail
+## 12) Reproducibility and audit trail
 
 Reproducibility remains a hard requirement.
 
@@ -232,7 +312,7 @@ review possible.
 
 ---
 
-## 12) Current implementation focus
+## 13) Current implementation focus
 
 This repo is not "foundation only" anymore. The current focus is finishing the
 remaining public-surface gaps around:
