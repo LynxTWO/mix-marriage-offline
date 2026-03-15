@@ -68,7 +68,7 @@ checklist references those files directly.
 - [x] docs/07-export-guides.md documents how users should export stems for best
       results.
 - [x] docs/06-roadmap.md clearly separates “now” vs “later.”
-- [ ] `README.md`, `docs/README.md`, installer-facing docs, and release-copy
+- [x] `README.md`, `docs/README.md`, installer-facing docs, and release-copy
       sources describe only shipped capabilities, supported artifacts, and
       current limitations.
 
@@ -293,7 +293,7 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
       deterministic `LAYOUT.32CH` artifact end-to-end (`nchannels == 32`,
       manifest `channel_order` length `32`, stable SHA-256 across two runs).
 - [x] CI runs on Windows, Linux, macOS (or documents any limitations).
-- [ ] Packaged binaries and one-click installers receive smoke checks on
+- [x] Packaged binaries and one-click installers receive smoke checks on
       Windows, macOS, and Linux against built release artifacts. Done:
       GitHub-hosted workflow pins now use Node 24-ready majors for
       `actions/checkout`, `actions/setup-python`, `actions/setup-node`,
@@ -302,10 +302,11 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
       matrix. Done: CI and local desktop-dev expectations now pin the current
       validated environment surface explicitly: Node 24 LTS for GUI/Tauri work,
       Rust 1.94.0 for the Tauri crate, and versioned GitHub-hosted runner images
-      instead of floating `*-latest` labels. What remains: broaden the golden
-      fixture matrix beyond the small stereo/surround/immersive corpus into
-      additional mixed-confidence and corrective-action edge cases, and smoke
-      the packaged release artifacts instead of only building them.
+      instead of floating `*-latest` labels. Done: PR CI and release CI now
+      build packaged Tauri desktop artifacts on Windows/macOS/Linux, launch the
+      packaged app in smoke mode, verify the bundled sidecar doctor plus the
+      validate -> analyze -> scene -> render happy path against a tiny fixture,
+      and assert the expected workspace artifact paths.
 
 ### 4.8 UX/CLI is usable for real work
 

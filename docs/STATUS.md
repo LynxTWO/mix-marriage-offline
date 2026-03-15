@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-03-13
+Last updated: 2026-03-14
 
 This is the single-page milestone checklist for current delivery phases.
 
@@ -54,11 +54,11 @@ Definition of done:
 - [ ] The primary Tauri app supports the required scene-lock editing behavior.
 - [x] Compare is loudness-matched by default and discloses the compensation
       used.
-- [ ] Cross-platform packaged desktop smoke tests are green.
+- [x] Cross-platform packaged desktop smoke tests are green.
 
 ## DSP Phase 1
 
-State: `in_progress`
+State: `done`
 
 Definition of done:
 
@@ -80,9 +80,9 @@ Definition of done:
 
 - [x] `README.md`, `docs/README.md`, installer-facing docs, and release-copy
       sources match shipped capabilities and current limitations.
-- [ ] Windows, macOS, and Linux release artifacts receive packaged binary smoke
+- [x] Windows, macOS, and Linux release artifacts receive packaged binary smoke
       checks.
-- [ ] Windows installer, macOS app bundle, and Linux AppImage outputs receive
+- [x] Windows installer, macOS app bundle, and Linux AppImage outputs receive
       installer-level smoke checks in release CI.
 
 ## Status System
@@ -105,6 +105,6 @@ Definition of done:
   the Pages-specific actions remain on their latest upstream majors.
 - GitHub-hosted runner labels are pinned to `ubuntu-24.04`, `windows-2025`, and
   `macos-15`, while GUI/Tauri dev paths now target Node 24 LTS and Rust 1.94.0.
-- Release CI already builds installers on all three OS targets, but packaged
-  artifact smoke coverage is still incomplete outside the existing Windows
-  passthrough checks.
+- PR CI and release CI now build packaged Tauri desktop bundles on Windows,
+  macOS, and Linux, launch the packaged app, and verify the bundled sidecar
+  doctor plus validate/analyze/scene/render against a tiny fixture.

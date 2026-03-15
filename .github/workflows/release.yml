@@ -170,8 +170,145 @@ jobs:
             dist/installers/*.sha256
           if-no-files-found: error
 
+  build-desktop-tauri-packaged:
+    needs: validate
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            artifact-name: mmo-desktop-tauri-bundles-linux
+            artifact-path: gui/desktop-tauri/src-tauri/target/release/bundle/**/*.AppImage
+            smoke-command: xvfb-run -a python tools/smoke_packaged_desktop.py --repo-root .
+            smoke-shell: bash
+            tauri-bundles: appimage
+          - os: windows-2025
+            artifact-name: mmo-desktop-tauri-bundles-windows
+            artifact-path: gui/desktop-tauri/src-tauri/target/release/bundle/**/*.msi
+            smoke-command: python tools/smoke_packaged_desktop.py --repo-root .
+            smoke-shell: pwsh
+            tauri-bundles: msi
+          - os: macos-15
+            artifact-name: mmo-desktop-tauri-bundles-macos
+            artifact-path: gui/desktop-tauri/src-tauri/target/release/bundle/**/*.app.zip
+            smoke-command: python tools/smoke_packaged_desktop.py --repo-root .
+            smoke-shell: bash
+            tauri-bundles: app
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: gui/desktop-tauri/package-lock.json
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Linux Tauri prerequisites
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          webkit_pkg=""
+          for candidate in libwebkit2gtk-4.1-dev libwebkit2gtk-4.0-dev; do
+            if apt-cache show "$candidate" >/dev/null 2>&1; then
+              webkit_pkg="$candidate"
+              break
+            fi
+          done
+          appindicator_pkg=""
+          for candidate in libayatana-appindicator3-dev libappindicator3-dev; do
+            if apt-cache show "$candidate" >/dev/null 2>&1; then
+              appindicator_pkg="$candidate"
+              break
+            fi
+          done
+          if [ -z "$webkit_pkg" ] || [ -z "$appindicator_pkg" ]; then
+            echo "Could not resolve Linux Tauri dependency packages on this runner." >&2
+            exit 1
+          fi
+          sudo apt-get install -y "$webkit_pkg" "$appindicator_pkg" ffmpeg librsvg2-dev patchelf xvfb
+
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install ffmpeg --no-progress -y
+
+      - name: Install FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: 1.94.0
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: gui/desktop-tauri/src-tauri -> target
+
+      - name: Install sidecar build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[truth,pdf,gui]" pyinstaller nuitka ordered-set zstandard
+
+      - name: Install desktop app dependencies
+        working-directory: gui/desktop-tauri
+        run: npm ci
+
+      - name: Install Playwright browser (Linux)
+        if: runner.os == 'Linux'
+        working-directory: gui/desktop-tauri
+        run: npx playwright install --with-deps firefox
+
+      - name: Install Playwright browser (non-Linux)
+        if: runner.os != 'Linux'
+        working-directory: gui/desktop-tauri
+        run: npx playwright install firefox
+
+      - name: Run desktop frontend lint
+        working-directory: gui/desktop-tauri
+        run: npm run lint --if-present
+
+      - name: Run desktop frontend tests
+        working-directory: gui/desktop-tauri
+        run: npm test --if-present
+
+      - name: Build desktop packaged bundle
+        working-directory: gui/desktop-tauri
+        env:
+          PYTHON: python
+        run: npm run tauri build -- --bundles ${{ matrix.tauri-bundles }}
+
+      - name: Smoke packaged desktop bundle
+        shell: ${{ matrix.smoke-shell }}
+        run: ${{ matrix.smoke-command }}
+
+      - name: Archive macOS app bundle
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          app_path="$(find gui/desktop-tauri/src-tauri/target/release/bundle -type d -name '*.app' | head -n 1)"
+          if [ -z "$app_path" ]; then
+            echo "Could not find built .app bundle." >&2
+            exit 1
+          fi
+          ditto -c -k --sequesterRsrc --keepParent "$app_path" "$app_path.zip"
+
+      - name: Upload desktop packaged bundle
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-path }}
+          if-no-files-found: error
+
   release:
-    needs: [build-python-dist, build-binaries, build-manual]
+    needs: [build-python-dist, build-binaries, build-desktop-tauri-packaged, build-manual]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -190,6 +327,13 @@ jobs:
           pattern: mmo-binaries-*
           merge-multiple: true
           path: dist/
+
+      - name: Download desktop packaged bundles
+        uses: actions/download-artifact@v7
+        with:
+          pattern: mmo-desktop-tauri-bundles-*
+          merge-multiple: true
+          path: dist/desktop/
 
       - name: Download manual PDF
         uses: actions/download-artifact@v7

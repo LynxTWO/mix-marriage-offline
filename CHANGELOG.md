@@ -87,6 +87,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Release-grade packaged desktop smoke gate:
+  - CI and release workflows now build packaged Tauri desktop bundles on
+    Windows, macOS, and Linux, then launch the packaged app and verify the
+    bundled sidecar doctor plus validate/analyze/scene/render happy path
+    against a tiny fixture.
+  - Added a packaged-app smoke harness so completion is gated on shipped-binary
+    behavior and expected workspace artifact paths, not only source-tree pytest.
+
 - Plugin multichannel/layout safety contract:
   - Renderer manifests now declare explicit `scene_scope` (`bed_only` vs
     `object_capable`) and `layout_safety` (`layout_agnostic` vs

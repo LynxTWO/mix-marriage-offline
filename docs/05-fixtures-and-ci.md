@@ -145,6 +145,8 @@ Minimum CI checks:
 - ontology validation (YAML consistency + ID uniqueness)
 - docs contract validation (including `docs/gui_parity.md` required links,
   screens, and behaviors)
+- packaged desktop smoke on Windows/macOS/Linux bundles so shipped-binary
+  behavior gates release readiness, not only source-tree pytest
 
 ---
 

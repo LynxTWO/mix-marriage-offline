@@ -39,8 +39,8 @@ the musical intent.
 
 - The Tauri desktop app is the primary GUI path, but it does not yet have full
   parity for scene-lock editing.
-- Cross-platform packaged desktop smoke coverage is still incomplete even though
-  release binaries are built for Windows, macOS, and Linux.
+- Cross-platform packaged desktop smoke coverage now gates the shipped Tauri
+  bundles on Windows, macOS, and Linux.
 - The legacy `mmo-gui` fallback remains available during the transition, but it
   is not the long-term primary GUI.
 - MMO does not claim to replace proprietary Atmos renderers or licensed Dolby

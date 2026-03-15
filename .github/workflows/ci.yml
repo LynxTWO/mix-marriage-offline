@@ -216,14 +216,23 @@ jobs:
       matrix:
         include:
           - os: ubuntu-24.04
-            artifact-name: mmo-desktop-tauri-linux
-            binary-path: gui/desktop-tauri/src-tauri/target/release/mmo-desktop-tauri
+            artifact-name: mmo-desktop-tauri-bundles-linux
+            artifact-path: gui/desktop-tauri/src-tauri/target/release/bundle/**/*.AppImage
+            smoke-command: xvfb-run -a python tools/smoke_packaged_desktop.py --repo-root .
+            smoke-shell: bash
+            tauri-bundles: appimage
           - os: windows-2025
-            artifact-name: mmo-desktop-tauri-windows
-            binary-path: gui/desktop-tauri/src-tauri/target/release/mmo-desktop-tauri.exe
+            artifact-name: mmo-desktop-tauri-bundles-windows
+            artifact-path: gui/desktop-tauri/src-tauri/target/release/bundle/**/*.msi
+            smoke-command: python tools/smoke_packaged_desktop.py --repo-root .
+            smoke-shell: pwsh
+            tauri-bundles: msi
           - os: macos-15
-            artifact-name: mmo-desktop-tauri-macos
-            binary-path: gui/desktop-tauri/src-tauri/target/release/mmo-desktop-tauri
+            artifact-name: mmo-desktop-tauri-bundles-macos
+            artifact-path: gui/desktop-tauri/src-tauri/target/release/bundle/**/*.app.zip
+            smoke-command: python tools/smoke_packaged_desktop.py --repo-root .
+            smoke-shell: bash
+            tauri-bundles: app
     steps:
       - uses: actions/checkout@v6
 
@@ -261,7 +270,16 @@ jobs:
             echo "Could not resolve Linux Tauri dependency packages on this runner." >&2
             exit 1
           fi
-          sudo apt-get install -y "$webkit_pkg" "$appindicator_pkg" librsvg2-dev patchelf
+          sudo apt-get install -y "$webkit_pkg" "$appindicator_pkg" ffmpeg librsvg2-dev patchelf xvfb
+
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install ffmpeg --no-progress -y
+
+      - name: Install FFmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -298,15 +316,31 @@ jobs:
         working-directory: gui/desktop-tauri
         run: npm test --if-present
 
-      - name: Build desktop release binary
+      - name: Build desktop packaged bundle
         working-directory: gui/desktop-tauri
         env:
           PYTHON: python
-        run: npm run tauri build -- --no-bundle
+        run: npm run tauri build -- --bundles ${{ matrix.tauri-bundles }}
 
-      - name: Upload desktop release binary
+      - name: Smoke packaged desktop bundle
+        shell: ${{ matrix.smoke-shell }}
+        run: ${{ matrix.smoke-command }}
+
+      - name: Archive macOS app bundle
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          app_path="$(find gui/desktop-tauri/src-tauri/target/release/bundle -type d -name '*.app' | head -n 1)"
+          if [ -z "$app_path" ]; then
+            echo "Could not find built .app bundle." >&2
+            exit 1
+          fi
+          ditto -c -k --sequesterRsrc --keepParent "$app_path" "$app_path.zip"
+
+      - name: Upload desktop packaged bundle
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact-name }}
-          path: ${{ matrix.binary-path }}
+          path: ${{ matrix.artifact-path }}
           if-no-files-found: error

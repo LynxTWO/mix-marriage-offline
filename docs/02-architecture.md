@@ -289,7 +289,8 @@ Tauri already covers the artifact-backed workflow sequence:
 Still in progress:
 
 - scene-lock editing parity in Tauri
-- complete packaged desktop smoke coverage on all release targets
+- further deterministic regression expansion beyond the shipped packaged-app
+  smoke gate
 
 ---
 
@@ -319,5 +320,4 @@ remaining public-surface gaps around:
 
 - release-copy accuracy and install/runtime guidance
 - Tauri parity for scene-lock editing
-- packaged desktop smoke coverage
 - continued deterministic regression expansion for render and compare flows

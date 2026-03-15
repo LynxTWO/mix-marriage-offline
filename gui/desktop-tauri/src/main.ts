@@ -1,3 +1,5 @@
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
 import {
@@ -11,6 +13,7 @@ import {
   artifactExists,
   buildWorkflowPaths,
   executeMmo,
+  isTauriRuntime,
   joinPath,
   readArtifactJson,
   resolveSiblingPath,
@@ -29,6 +32,41 @@ type CompareState = "A" | "B";
 type ArtifactTag = "ALL" | "AUDIO" | "JSON" | "QA" | "RECEIPT";
 
 type JsonObject = Record<string, unknown>;
+
+type DoctorRunResult = {
+  envDoctorPayload: JsonObject | null;
+  envDoctorResult: MmoRunResult;
+  ok: boolean;
+  pluginsResult: MmoRunResult;
+  versionResult: MmoRunResult;
+};
+
+type DesktopSmokeConfig = {
+  layoutStandard: string;
+  renderTarget: string;
+  sceneLocksPath: string | null;
+  stemsDir: string;
+  summaryPath: string;
+  workspaceDir: string;
+};
+
+type DesktopSmokeSummary = {
+  appLaunchVerified: boolean;
+  artifactPaths: Record<string, string>;
+  doctor: {
+    checks: JsonObject | null;
+    dataRoot: string;
+    envDoctorExitCode: number | null;
+    ok: boolean;
+    pluginsExitCode: number | null;
+    versionExitCode: number | null;
+  };
+  error: string;
+  ok: boolean;
+  renderTarget: string;
+  timelineTail: string[];
+  workspaceDir: string;
+};
 
 type ArtifactEntry = {
   id: string;
@@ -392,6 +430,29 @@ function average(values: number[]): number | null {
     return null;
   }
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+async function readDesktopSmokeConfig(): Promise<DesktopSmokeConfig | null> {
+  if (!isTauriRuntime()) {
+    return null;
+  }
+  try {
+    const payload = await invoke<DesktopSmokeConfig | null>("desktop_smoke_config");
+    if (payload === null) {
+      return null;
+    }
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function collectTimelineTail(ui: AppUi, maxItems: number): string[] {
+  const items = Array.from(ui.timeline.querySelectorAll(".timeline-item-body"));
+  return items
+    .slice(Math.max(0, items.length - maxItems))
+    .map((item) => item.textContent?.trim() ?? "")
+    .filter((line) => line.length > 0);
 }
 
 function formatNumber(value: number | null, digits = 1, suffix = ""): string {
@@ -2121,7 +2182,7 @@ async function refreshCompareArtifacts(paths: WorkflowPaths, aPath: string, bPat
   state.compareCompensationSource = derived.source;
 }
 
-async function runDoctor(ui: AppUi): Promise<void> {
+async function runDoctor(ui: AppUi): Promise<DoctorRunResult> {
   updateRuntimeMessage(ui, "Running sidecar doctor checks.");
   const versionResult = await runExecuteCommand(ui, "doctor", ["--version"]);
   const pluginsResult = await runExecuteCommand(ui, "doctor", [
@@ -2137,9 +2198,24 @@ async function runDoctor(ui: AppUi): Promise<void> {
     "--format",
     "json",
   ]);
+  let envDoctorPayload: JsonObject | null = null;
+  if (envDoctorResult.stdout.trim()) {
+    try {
+      envDoctorPayload = asObject(JSON.parse(envDoctorResult.stdout) as unknown);
+    } catch {
+      envDoctorPayload = null;
+    }
+  }
 
   const ok = versionResult.code === 0 && pluginsResult.code === 0 && envDoctorResult.code === 0;
   updateRuntimeMessage(ui, ok ? "Doctor passed. The packaged sidecar is ready." : "Doctor failed. Check the timeline.");
+  return {
+    envDoctorPayload,
+    envDoctorResult,
+    ok,
+    pluginsResult,
+    versionResult,
+  };
 }
 
 async function runValidate(ui: AppUi, controller: ReturnType<typeof initDesignSystem>): Promise<void> {
@@ -2417,6 +2493,131 @@ async function runWithBusy(
     state.busyStage = null;
     applyBusyState(ui);
     renderAll(ui);
+  }
+}
+
+async function runWithBusyStrict<T>(
+  ui: AppUi,
+  stage: CommandStage,
+  action: () => Promise<T>,
+  clearLogs = false,
+): Promise<T> {
+  if (state.busyStage !== null) {
+    throw new Error(`Another stage is already running: ${state.busyStage}`);
+  }
+  state.busyStage = stage;
+  applyBusyState(ui);
+  if (clearLogs) {
+    clearTimeline(ui);
+  }
+  try {
+    return await action();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    updateRuntimeMessage(ui, detail);
+    if (stage !== "doctor") {
+      const targetStage = ui.stages[stage as StageKey];
+      if (targetStage !== undefined) {
+        setStageStatus(targetStage, "fail", "Fail");
+      }
+    }
+    throw error;
+  } finally {
+    state.busyStage = null;
+    applyBusyState(ui);
+    renderAll(ui);
+  }
+}
+
+function buildDesktopSmokeSummary(
+  ui: AppUi,
+  config: DesktopSmokeConfig,
+  paths: WorkflowPaths,
+  doctorResult: DoctorRunResult | null,
+  error: string,
+): DesktopSmokeSummary {
+  const envDoctorPayload = doctorResult?.envDoctorPayload;
+  const checks = asObject(envDoctorPayload?.checks);
+  const pathPayload = asObject(envDoctorPayload?.paths);
+
+  return {
+    appLaunchVerified: true,
+    artifactPaths: {
+      busPlanCsvPath: paths.busPlanCsvPath,
+      busPlanPath: paths.busPlanPath,
+      projectValidationPath: paths.projectValidationPath,
+      renderManifestPath: paths.renderManifestPath,
+      renderQaPath: paths.renderQaPath,
+      renderReceiptPath: paths.renderReceiptPath,
+      reportPath: paths.reportPath,
+      scanReportPath: paths.scanReportPath,
+      sceneLintPath: paths.sceneLintPath,
+      scenePath: paths.scenePath,
+      stemsMapPath: paths.stemsMapPath,
+      workspaceDir: paths.workspaceDir,
+    },
+    doctor: {
+      checks,
+      dataRoot: asString(pathPayload?.data_root),
+      envDoctorExitCode: doctorResult?.envDoctorResult.code ?? null,
+      ok: doctorResult?.ok ?? false,
+      pluginsExitCode: doctorResult?.pluginsResult.code ?? null,
+      versionExitCode: doctorResult?.versionResult.code ?? null,
+    },
+    error,
+    ok: error.length === 0,
+    renderTarget: config.renderTarget,
+    timelineTail: collectTimelineTail(ui, 24),
+    workspaceDir: config.workspaceDir,
+  };
+}
+
+async function writeDesktopSmokeSummary(summaryPath: string, payload: DesktopSmokeSummary): Promise<void> {
+  const wrote = await writeArtifactText(
+    summaryPath,
+    `${JSON.stringify(payload, null, 2)}\n`,
+  );
+  if (!wrote) {
+    throw new Error(`Unable to write desktop smoke summary: ${summaryPath}`);
+  }
+}
+
+async function runDesktopSmoke(
+  ui: AppUi,
+  controller: ReturnType<typeof initDesignSystem>,
+  config: DesktopSmokeConfig,
+): Promise<void> {
+  const paths = buildWorkflowPaths(config.workspaceDir);
+  let doctorResult: DoctorRunResult | null = null;
+  let error = "";
+
+  ui.inputs.stemsDir.value = config.stemsDir;
+  ui.inputs.workspaceDir.value = config.workspaceDir;
+  ui.inputs.sceneLocksPath.value = config.sceneLocksPath ?? "";
+  ui.inputs.renderTarget.value = config.renderTarget;
+  ui.inputs.layoutStandard.value = config.layoutStandard;
+  renderAll(ui);
+
+  try {
+    doctorResult = await runWithBusyStrict(ui, "doctor", async () => runDoctor(ui), true);
+    if (!doctorResult.ok) {
+      throw new Error("Desktop smoke doctor failed.");
+    }
+    await runWithBusyStrict(ui, "validate", async () => runValidate(ui, controller), true);
+    await runWithBusyStrict(ui, "analyze", async () => runAnalyze(ui, controller), true);
+    await runWithBusyStrict(ui, "scene", async () => runScene(ui, controller), true);
+    await runWithBusyStrict(ui, "render", async () => runRender(ui, controller), true);
+  } catch (caught) {
+    error = caught instanceof Error ? caught.message : String(caught);
+  }
+
+  const summary = buildDesktopSmokeSummary(ui, config, paths, doctorResult, error);
+  await writeDesktopSmokeSummary(config.summaryPath, summary);
+
+  try {
+    await getCurrentWindow().close();
+  } catch {
+    window.close();
   }
 }
 
@@ -2907,6 +3108,12 @@ window.addEventListener("DOMContentLoaded", () => {
   );
 
   void (async () => {
+    const desktopSmokeConfig = await readDesktopSmokeConfig();
+    if (desktopSmokeConfig !== null) {
+      await runDesktopSmoke(ui, controller, desktopSmokeConfig);
+      return;
+    }
+
     const workspaceDir = ui.inputs.workspaceDir.value.trim();
     if (!workspaceDir) {
       return;

@@ -80,6 +80,19 @@ class TestTauriDesktopWorkflow(unittest.TestCase):
         self.assertIn('compareReportPath: joinPath(normalizedWorkspaceDir, "compare_report.json")', source)
         self.assertIn("readTextFile", source)
 
+    def test_packaged_smoke_automation_contract_exists(self) -> None:
+        frontend_path = _TAURI_ROOT / "src" / "main.ts"
+        frontend_source = frontend_path.read_text(encoding="utf-8")
+        self.assertIn('invoke<DesktopSmokeConfig | null>("desktop_smoke_config")', frontend_source)
+        self.assertIn("writeDesktopSmokeSummary(config.summaryPath, summary)", frontend_source)
+        self.assertIn("runDesktopSmoke(ui, controller, desktopSmokeConfig)", frontend_source)
+
+        backend_path = _TAURI_ROOT / "src-tauri" / "src" / "lib.rs"
+        backend_source = backend_path.read_text(encoding="utf-8")
+        self.assertIn('MMO_DESKTOP_SMOKE_SUMMARY_PATH', backend_source)
+        self.assertIn('fn desktop_smoke_config()', backend_source)
+        self.assertIn('tauri::generate_handler![desktop_smoke_config]', backend_source)
+
 
 if __name__ == "__main__":
     unittest.main()

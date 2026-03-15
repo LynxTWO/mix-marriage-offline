@@ -204,8 +204,6 @@ Keep contracts strict:
 ## 10) Remaining GUI parity work
 
 - Scene-lock editing in the primary Tauri app.
-- Cross-platform packaged smoke checks that exercise the shipped desktop
-  binaries end to end.
 
 ## 11) Non-goals (GUI)
 

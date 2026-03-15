@@ -57,5 +57,8 @@ GitHub Actions builds this app on Windows, macOS, and Linux. The workflow:
 - installs Node and Rust toolchains,
 - runs `npm run lint`,
 - installs the Playwright browser bundle and runs `npm test`,
-- builds a release binary with `npm run tauri build -- --no-bundle`,
-- uploads the resulting platform binary from `src-tauri/target/release/`.
+- builds packaged desktop bundles (`msi`, `app`, `AppImage`) with
+  `npm run tauri build -- --bundles ...`,
+- launches the packaged app in smoke mode so the bundled sidecar must pass
+  doctor plus validate/analyze/scene/render against a tiny fixture,
+- uploads the packaged bundle artifacts after smoke succeeds.

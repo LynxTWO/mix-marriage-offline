@@ -13,9 +13,11 @@ polish items live in `PROJECT_WHEN_COMPLETE.md` section 9 and in `LATER` below.
 ### Release Surface
 
 - Goal: make the shipped surface truthful and verifiable before calling v1 done.
+- Completion gate: source-tree pytest is not enough; Windows/macOS/Linux
+  packaged desktop artifacts must launch and pass bundled-sidecar smoke in CI
+  and release builds before v1 can be considered complete.
 - Open blockers:
-- [PWC: release-facing docs / README / release copy reflect shipped capabilities](../PROJECT_WHEN_COMPLETE.md)
-- [PWC: packaged binary + installer smoke checks run on Windows/macOS/Linux](../PROJECT_WHEN_COMPLETE.md)
+- none currently
 
 ### Tauri Workflow Parity
 

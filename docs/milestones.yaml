@@ -24,7 +24,7 @@ milestones:
 
   - id: RELEASE.SURFACE
     title: Release Surface
-    state: in_progress
+    state: done
     links:
       - docs/STATUS.md#release-surface
       - docs/06-roadmap.md#release-surface
