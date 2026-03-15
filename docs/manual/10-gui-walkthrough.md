@@ -25,8 +25,7 @@ Or launch the installed binary directly if you used a packaged install.
 
 ## Session setup
 
-Before running any stage, configure your session in the **session card** at the
-top of the window:
+Before running any stage, configure your session in the **session sidebar**:
 
 - **Stems dir** — folder containing your exported stem files.
 - **Workspace dir** — output folder where all artifacts will be written.
@@ -34,8 +33,17 @@ top of the window:
   SMPTE, FILM, VST3). Internally normalized to SMPTE.
 - **Render target** — the delivery target (e.g. stereo, 5.1, 7.1.4).
 
-These four fields persist across screen switches and are passed to every CLI
-command the GUI runs.
+Use the native **Browse...** buttons for stems, workspace, and optional
+scene-lock artifacts when running the packaged desktop app. Exact manual path
+entry still works, and the app keeps deterministic recent-path chips for stems,
+workspaces, scene-locks, and compare inputs so repeat sessions are faster.
+
+The empty state keeps the full hero treatment for onboarding. Once a workspace
+or artifact is loaded, the left rail automatically compacts so the active
+workflow screens get more horizontal room.
+
+These fields persist across screen switches and are passed to every CLI command
+the GUI runs.
 
 The **scale control** (top-right, three buttons: 90 / 100 / 115) adjusts the
 interface scale. Use 115 on a high-DPI or large display. Hold a modifier key
@@ -119,11 +127,15 @@ No extra processing is applied by the GUI.
 Review all written artifacts, receipts, and what changed.
 
 After a render completes, click **Refresh** (or navigate to Results). The
-screen surfaces:
+screen now leads with the artifact browser, selected artifact preview, final
+receipt, and what changed, while deeper QA and inspection widgets stay grouped
+under lower inspection sections instead of competing equally for attention.
+
+The screen surfaces:
 
 - **Artifact browser** — paths to every output artifact written in this run.
-  Use the detail slider (1–10) to control how many lines of context appear per
-  artifact.
+  Use the detail slider (1–10) inside the receipt summary card to control how
+  many lines of context appear per artifact.
 - **What changed** — a compact summary of output paths and recommendation
   deltas tied to the generated files.
 - **QA issues** — render QA issues from the receipt, listed by severity and
@@ -137,7 +149,8 @@ screen surfaces:
   - Gain reduction meter
 
 Everything on this screen is read from artifacts — nothing is computed by the
-GUI itself.
+GUI itself. Packaged desktop builds also expose native import buttons for the
+receipt, manifest, and render-QA artifacts.
 
 ![Results screen — receipt, QA issues, meters, and confidence chips](assets/screenshots/tauri_results_loaded.png)
 
@@ -147,19 +160,21 @@ GUI itself.
 
 Run a post-render or post-analysis comparison between two artifact states.
 
-1. Load **A** and **B** artifacts using the file inputs (compare report JSON,
-   QA paths for each side).
+1. Load **A** and **B** artifacts using exact paths, recent compare-input
+   chips, or the native JSON/folder picker buttons.
 2. Use the **A / B toggle** to switch the active audition state.
-3. Use the **compensation knob** (−12 to +12 dB, step 0.1) to loudness-match
-   the two sides for a fair listen. The knob records the compensation
-   method/amount — this is evaluation-only and disclosed in the readout.
+3. Use the **compensation knob** (−12 to +12 dB, step 0.1) in the lower
+   inspection section to loudness-match the two sides for a fair listen. The
+   knob records the compensation method/amount — this is evaluation-only and
+   disclosed in the summary.
 4. The screen shows:
-   - **Primary / secondary readout** — loudness and dynamics values for each
-     side.
-   - **Change summary** — delta chips showing what moved between A and B.
+   - **Compare summary** — the active A/B readout plus delta chips showing what
+     moved between A and B.
    - **Loudness match status** — the compensation amount and a "Fair listen"
      disclosure so you know the comparison is level-matched, not representative
      of the final mix level.
+   - **Lower inspection details** — compensation fine-tune and the raw
+     `compare_report.json` preview.
 
 The compare contract is the same as `mmo compare` from the CLI. The GUI passes
 real artifact inputs and reads the resulting `compare_report.json`.

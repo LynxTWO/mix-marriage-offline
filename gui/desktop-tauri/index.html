@@ -9,7 +9,7 @@
   </head>
 
   <body>
-    <main class="shell">
+    <main id="app-shell" class="shell" data-workspace-mode="hero">
       <section class="hero" data-section-id="header">
         <div class="hero-copy">
           <p class="eyebrow">Mix Marriage Offline</p>
@@ -86,38 +86,86 @@
               <h2>Shared paths and run config</h2>
             </div>
 
-            <label class="field">
-              <span class="field-label">Stems folder</span>
-              <input
-                id="stems-dir-input"
-                class="field-input"
-                type="text"
-                placeholder="/Users/me/stems or C:/Users/me/stems"
-                data-hit-target="true"
-              />
-            </label>
+            <div class="field">
+              <div class="field-heading">
+                <span class="field-label">Stems folder</span>
+                <button
+                  type="button"
+                  id="stems-dir-browse-button"
+                  class="button-secondary button-compact"
+                  data-hit-target="true"
+                >
+                  Browse...
+                </button>
+              </div>
+              <div class="input-action-row">
+                <input
+                  id="stems-dir-input"
+                  class="field-input"
+                  type="text"
+                  placeholder="/Users/me/stems or C:/Users/me/stems"
+                  data-hit-target="true"
+                />
+              </div>
+              <div class="recent-stack">
+                <p class="recent-label">Recent stems</p>
+                <div id="recent-stems-dir-list" class="recent-chip-row" aria-live="polite"></div>
+              </div>
+            </div>
 
-            <label class="field">
-              <span class="field-label">Workspace folder</span>
-              <input
-                id="workspace-dir-input"
-                class="field-input"
-                type="text"
-                placeholder="/Users/me/mmo-workspace or C:/Users/me/mmo-workspace"
-                data-hit-target="true"
-              />
-            </label>
+            <div class="field">
+              <div class="field-heading">
+                <span class="field-label">Workspace folder</span>
+                <button
+                  type="button"
+                  id="workspace-dir-browse-button"
+                  class="button-secondary button-compact"
+                  data-hit-target="true"
+                >
+                  Browse...
+                </button>
+              </div>
+              <div class="input-action-row">
+                <input
+                  id="workspace-dir-input"
+                  class="field-input"
+                  type="text"
+                  placeholder="/Users/me/mmo-workspace or C:/Users/me/mmo-workspace"
+                  data-hit-target="true"
+                />
+              </div>
+              <div class="recent-stack">
+                <p class="recent-label">Recent workspaces</p>
+                <div id="recent-workspace-dir-list" class="recent-chip-row" aria-live="polite"></div>
+              </div>
+            </div>
 
-            <label class="field">
-              <span class="field-label">Scene locks artifact</span>
-              <input
-                id="scene-locks-input"
-                class="field-input"
-                type="text"
-                placeholder="Optional scene_locks.yaml or scene_locks.json"
-                data-hit-target="true"
-              />
-            </label>
+            <div class="field">
+              <div class="field-heading">
+                <span class="field-label">Scene locks artifact</span>
+                <button
+                  type="button"
+                  id="scene-locks-browse-button"
+                  class="button-secondary button-compact"
+                  data-hit-target="true"
+                >
+                  Browse...
+                </button>
+              </div>
+              <div class="input-action-row">
+                <input
+                  id="scene-locks-input"
+                  class="field-input"
+                  type="text"
+                  placeholder="Optional scene_locks.yaml or scene_locks.json"
+                  data-hit-target="true"
+                />
+              </div>
+              <div class="recent-stack">
+                <p class="recent-label">Recent scene locks</p>
+                <div id="recent-scene-locks-list" class="recent-chip-row" aria-live="polite"></div>
+              </div>
+            </div>
 
             <div class="field-row">
               <label class="field">
@@ -349,14 +397,24 @@
             <div class="button-row">
               <button type="button" id="workflow-scene-button" data-hit-target="true">Build Scene</button>
             </div>
-            <label class="field">
-              <span class="field-label">Import scene.json</span>
+            <div class="field">
+              <div class="field-heading">
+                <span class="field-label">Import scene.json</span>
+                <button type="button" id="scene-json-browse-button" class="button-secondary button-compact" data-hit-target="true">
+                  Browse...
+                </button>
+              </div>
               <input id="scene-json-file-input" class="field-input" type="file" accept=".json,application/json" />
-            </label>
-            <label class="field">
-              <span class="field-label">Import scene_lint.json</span>
+            </div>
+            <div class="field">
+              <div class="field-heading">
+                <span class="field-label">Import scene_lint.json</span>
+                <button type="button" id="scene-lint-browse-button" class="button-secondary button-compact" data-hit-target="true">
+                  Browse...
+                </button>
+              </div>
               <input id="scene-lint-file-input" class="field-input" type="file" accept=".json,application/json" />
-            </label>
+            </div>
             <pre class="stage-output" id="output-scene">Scene build writes stems_map.json, bus_plan.json, scene.json, and scene_lint.json.</pre>
           </article>
 
@@ -566,18 +624,38 @@
                 <button type="button" class="tag-chip" data-artifact-tag="RECEIPT" data-hit-target="true">Receipt</button>
                 <button type="button" class="tag-chip" data-artifact-tag="AUDIO" data-hit-target="true">Audio</button>
               </div>
-              <label class="field">
-                <span class="field-label">Import safe_render_receipt.json</span>
-                <input id="results-receipt-file-input" class="field-input" type="file" accept=".json,application/json" />
-              </label>
-              <label class="field">
-                <span class="field-label">Import render_manifest.json</span>
-                <input id="results-manifest-file-input" class="field-input" type="file" accept=".json,application/json" />
-              </label>
-              <label class="field">
-                <span class="field-label">Import render_qa.json</span>
-                <input id="results-qa-file-input" class="field-input" type="file" accept=".json,application/json" />
-              </label>
+              <details class="details-block">
+                <summary>Import Results artifacts</summary>
+                <div class="inspection-stack">
+                  <div class="field">
+                    <div class="field-heading">
+                      <span class="field-label">Import safe_render_receipt.json</span>
+                      <button type="button" id="results-receipt-browse-button" class="button-secondary button-compact" data-hit-target="true">
+                        Browse...
+                      </button>
+                    </div>
+                    <input id="results-receipt-file-input" class="field-input" type="file" accept=".json,application/json" />
+                  </div>
+                  <div class="field">
+                    <div class="field-heading">
+                      <span class="field-label">Import render_manifest.json</span>
+                      <button type="button" id="results-manifest-browse-button" class="button-secondary button-compact" data-hit-target="true">
+                        Browse...
+                      </button>
+                    </div>
+                    <input id="results-manifest-file-input" class="field-input" type="file" accept=".json,application/json" />
+                  </div>
+                  <div class="field">
+                    <div class="field-heading">
+                      <span class="field-label">Import render_qa.json</span>
+                      <button type="button" id="results-qa-browse-button" class="button-secondary button-compact" data-hit-target="true">
+                        Browse...
+                      </button>
+                    </div>
+                    <input id="results-qa-file-input" class="field-input" type="file" accept=".json,application/json" />
+                  </div>
+                </div>
+              </details>
             </div>
 
             <div class="preset-browser-body">
@@ -594,47 +672,8 @@
           </article>
 
           <article
-            class="control-card widget"
-            data-widget-id="widget.results.detail_slider"
-            data-control-kind="SLIDER"
-            data-numeric-control="true"
-            data-direct-entry="true"
-            data-fine-adjust="true"
-            data-units="lines"
-          >
-            <div class="control-head">
-              <div>
-                <p class="control-label">Detail depth</p>
-                <p class="control-why">Control how much of the artifact trail is surfaced in the summary panes.</p>
-              </div>
-              <span class="control-unit">lines</span>
-            </div>
-            <button
-              id="results-detail-slider"
-              class="slider-surface"
-              type="button"
-              aria-label="Results detail slider"
-              aria-valuemin="1"
-              aria-valuemax="10"
-              aria-valuenow="6"
-              data-hit-target="true"
-            >
-              <span id="results-detail-fill" class="slider-fill"></span>
-              <span id="results-detail-thumb" class="slider-thumb"></span>
-            </button>
-            <label class="value-entry">
-              <span class="value-entry-label">Exact value</span>
-              <span class="value-entry-row">
-                <input id="results-detail-input" class="value-input" type="number" step="1" min="1" max="10" inputmode="numeric" />
-                <span class="control-unit control-unit-inline">lines</span>
-              </span>
-            </label>
-            <p id="results-detail-value" class="control-caption"></p>
-          </article>
-
-          <article
             class="control-card readout-card widget"
-            data-widget-id="widget.results.value_readout"
+            data-widget-id="widget.results.summary"
             data-control-kind="VALUE_READOUT"
             data-units="files"
           >
@@ -648,174 +687,44 @@
             <p id="results-readout-primary" class="readout-primary">No receipt loaded</p>
             <p id="results-readout-secondary" class="readout-secondary">Rendered outputs and QA state will appear here.</p>
             <p id="results-readout-note" class="control-caption">The readout stays anchored to safe_render_receipt.json.</p>
-          </article>
-
-          <article
-            class="control-card widget"
-            data-widget-id="widget.results.recommendation_confidence"
-            data-control-kind="VALUE_READOUT"
-            data-units="%"
-          >
-            <div class="control-head">
-              <div>
-                <p class="control-label">Recommendation confidence</p>
-                <p class="control-why">Keep advice explainable by showing how certain each recorded recommendation actually was.</p>
-              </div>
-              <div class="control-meta">
-                <div class="hint-group">
-                  <button
-                    id="results-confidence-hint-trigger"
-                    type="button"
-                    class="hint-trigger"
-                    aria-describedby="hint-results-confidence"
-                  >
-                    What / Why
-                  </button>
-                  <div id="hint-results-confidence" class="hint-overlay" role="note">
-                    <p><strong>What:</strong> Confidence is averaged from recorded recommendation deltas.</p>
-                    <p><strong>Why:</strong> Low-confidence advice stays visible as a hint, not a command.</p>
-                  </div>
-                </div>
-                <span class="control-unit">%</span>
-              </div>
-            </div>
-            <div id="results-confidence-list" class="confidence-list" aria-live="polite"></div>
-            <p id="results-confidence-note" class="control-caption">
-              Load a receipt to inspect recommendation certainty and gating.
-            </p>
-          </article>
-
-          <article
-            class="control-card widget"
-            data-widget-id="widget.results.gain_reduction"
-            data-control-kind="VALUE_READOUT"
-            data-units="dB"
-          >
-            <div class="control-head">
-              <div>
-                <p class="control-label">Gain reduction</p>
-                <p class="control-why">Surface the recorded level pullback so dynamics changes stay inspectable after render.</p>
-              </div>
-              <div class="control-meta">
-                <div class="hint-group">
-                  <button
-                    id="results-gain-hint-trigger"
-                    type="button"
-                    class="hint-trigger"
-                    aria-describedby="hint-results-gain"
-                  >
-                    What / Why
-                  </button>
-                  <div id="hint-results-gain" class="hint-overlay" role="note">
-                    <p><strong>What:</strong> This meter uses receipt deltas and render-QA level comparisons.</p>
-                    <p><strong>Why:</strong> It helps you verify that “safer” output did not quietly over-compress the mix.</p>
-                  </div>
-                </div>
-                <span class="control-unit">dB</span>
-              </div>
-            </div>
-            <p id="results-gain-reduction-value" class="readout-primary">n/a</p>
-            <div id="results-gain-reduction-meter" class="bar-meter" role="img" aria-label="Gain reduction meter">
-              <span class="bar-meter-track"></span>
-              <span class="bar-meter-fill"></span>
-            </div>
-            <svg
-              id="results-transfer-curve"
-              class="transfer-curve"
-              viewBox="0 0 120 80"
-              role="img"
-              aria-label="Transfer curve proxy"
+            <div class="section-divider" aria-hidden="true"></div>
+            <div
+              class="inline-control-block"
+              data-control-kind="SLIDER"
+              data-numeric-control="true"
+              data-direct-entry="true"
+              data-fine-adjust="true"
+              data-units="lines"
             >
-              <path id="results-transfer-curve-path" class="transfer-curve-path" d="M 0 80 L 120 0"></path>
-            </svg>
-            <p id="results-transfer-note" class="control-caption">Transfer curve proxy will appear when dynamics data is available.</p>
-          </article>
-
-          <article
-            class="control-card widget"
-            data-widget-id="widget.results.phase_correlation"
-            data-control-kind="VALUE_READOUT"
-            data-units="corr"
-          >
-            <div class="control-head">
-              <div>
-                <p class="control-label">Phase correlation</p>
-                <p class="control-why">Keep stereo coherence visible so mono collapse risks do not hide behind a “completed” badge.</p>
-              </div>
-              <div class="control-meta">
-                <div class="hint-group">
-                  <button
-                    id="results-phase-hint-trigger"
-                    type="button"
-                    class="hint-trigger"
-                    aria-describedby="hint-results-phase"
-                  >
-                    What / Why
-                  </button>
-                  <div id="hint-results-phase" class="hint-overlay" role="note">
-                    <p><strong>What:</strong> Stereo coherence is the mean L/R correlation from render QA.</p>
-                    <p><strong>Why:</strong> Lower values can feel wide but may cancel or smear in mono.</p>
-                  </div>
+              <div class="control-head control-head-compact">
+                <div>
+                  <p class="control-label">Detail depth</p>
+                  <p class="control-why">Control how much of the artifact trail is surfaced in the summary panes.</p>
                 </div>
-                <span class="control-unit">corr</span>
+                <span class="control-unit">lines</span>
               </div>
+              <button
+                id="results-detail-slider"
+                class="slider-surface"
+                type="button"
+                aria-label="Results detail slider"
+                aria-valuemin="1"
+                aria-valuemax="10"
+                aria-valuenow="6"
+                data-hit-target="true"
+              >
+                <span id="results-detail-fill" class="slider-fill"></span>
+                <span id="results-detail-thumb" class="slider-thumb"></span>
+              </button>
+              <label class="value-entry">
+                <span class="value-entry-label">Exact value</span>
+                <span class="value-entry-row">
+                  <input id="results-detail-input" class="value-input" type="number" step="1" min="1" max="10" inputmode="numeric" />
+                  <span class="control-unit control-unit-inline">lines</span>
+                </span>
+              </label>
+              <p id="results-detail-value" class="control-caption"></p>
             </div>
-            <p id="results-phase-correlation-value" class="readout-primary">n/a corr</p>
-            <div id="results-phase-correlation-meter" class="phase-meter" role="img" aria-label="Phase correlation meter">
-              <span class="phase-meter-track"></span>
-              <span class="phase-meter-zero"></span>
-              <span class="phase-meter-needle"></span>
-            </div>
-            <div class="phase-scale" aria-hidden="true">
-              <span>-1</span>
-              <span>0</span>
-              <span>+1</span>
-            </div>
-            <p id="results-phase-note" class="control-caption">Render QA thresholds will appear here.</p>
-          </article>
-
-          <article
-            class="control-card widget"
-            data-widget-id="widget.results.vectorscope"
-            data-control-kind="VALUE_READOUT"
-            data-units="L/R"
-          >
-            <div class="control-head">
-              <div>
-                <p class="control-label">Goniometer / vectorscope</p>
-                <p class="control-why">A deterministic stereo-shape proxy keeps spatial changes reviewable without requiring live playback.</p>
-              </div>
-              <div class="control-meta">
-                <div class="hint-group">
-                  <button
-                    id="results-vectorscope-hint-trigger"
-                    type="button"
-                    class="hint-trigger"
-                    aria-describedby="hint-results-vectorscope"
-                  >
-                    What / Why
-                  </button>
-                  <div id="hint-results-vectorscope" class="hint-overlay" role="note">
-                    <p><strong>What:</strong> This offline scope is derived from render-QA correlation, side/mid ratio, and crest.</p>
-                    <p><strong>Why:</strong> The same artifacts always draw the same spatial footprint, which keeps compare notes reproducible.</p>
-                  </div>
-                </div>
-                <span class="control-unit">L/R</span>
-              </div>
-            </div>
-            <svg
-              id="results-vectorscope"
-              class="scope-canvas"
-              viewBox="0 0 100 100"
-              role="img"
-              aria-label="Vectorscope proxy"
-            >
-              <path class="scope-grid-line" d="M 50 4 L 50 96"></path>
-              <path class="scope-grid-line" d="M 4 50 L 96 50"></path>
-              <path class="scope-grid-ring" d="M 50 10 C 72 10 90 28 90 50 C 90 72 72 90 50 90 C 28 90 10 72 10 50 C 10 28 28 10 50 10"></path>
-              <path id="results-vectorscope-path" class="scope-path" d="M 50 16 L 72 50 L 50 84 L 28 50 Z"></path>
-            </svg>
-            <p id="results-vectorscope-summary" class="control-caption">Load render QA to inspect the stereo footprint.</p>
           </article>
 
           <article class="signal-card widget" data-widget-id="widget.results.what_changed">
@@ -845,15 +754,175 @@
             <pre class="stage-output compact-output" id="results-what-changed-text">No receipt or manifest loaded.</pre>
           </article>
 
-          <article class="signal-card widget" data-widget-id="widget.results.qa">
-            <p class="signal-label">Render QA</p>
-            <pre class="stage-output compact-output" id="results-qa-text">No render QA loaded.</pre>
-          </article>
-
-          <article class="details-stack widget" data-widget-id="widget.results.json">
+          <article class="details-stack widget" data-widget-id="widget.results.preview">
             <details class="details-block" open>
               <summary>Selected artifact preview</summary>
               <pre class="stage-output" id="results-json-preview">No artifact selected.</pre>
+            </details>
+          </article>
+
+          <article class="details-stack widget" data-widget-id="widget.results.inspection">
+            <details class="details-block" open>
+              <summary>Confidence and QA detail</summary>
+              <div class="inspection-stack">
+                <section class="inspection-panel">
+                  <div class="control-head">
+                    <div>
+                      <p class="control-label">Recommendation confidence</p>
+                      <p class="control-why">Keep advice explainable by showing how certain each recorded recommendation actually was.</p>
+                    </div>
+                    <div class="control-meta">
+                      <div class="hint-group">
+                        <button
+                          id="results-confidence-hint-trigger"
+                          type="button"
+                          class="hint-trigger"
+                          aria-describedby="hint-results-confidence"
+                        >
+                          What / Why
+                        </button>
+                        <div id="hint-results-confidence" class="hint-overlay" role="note">
+                          <p><strong>What:</strong> Confidence is averaged from recorded recommendation deltas.</p>
+                          <p><strong>Why:</strong> Low-confidence advice stays visible as a hint, not a command.</p>
+                        </div>
+                      </div>
+                      <span class="control-unit">%</span>
+                    </div>
+                  </div>
+                  <div id="results-confidence-list" class="confidence-list" aria-live="polite"></div>
+                  <p id="results-confidence-note" class="control-caption">
+                    Load a receipt to inspect recommendation certainty and gating.
+                  </p>
+                </section>
+
+                <section class="inspection-panel">
+                  <p class="signal-label">Render QA</p>
+                  <pre class="stage-output compact-output" id="results-qa-text">No render QA loaded.</pre>
+                </section>
+              </div>
+            </details>
+
+            <details class="details-block">
+              <summary>Dynamics and stereo inspection</summary>
+              <div class="inspection-grid">
+                <section class="inspection-panel">
+                  <div class="control-head">
+                    <div>
+                      <p class="control-label">Gain reduction</p>
+                      <p class="control-why">Surface the recorded level pullback so dynamics changes stay inspectable after render.</p>
+                    </div>
+                    <div class="control-meta">
+                      <div class="hint-group">
+                        <button
+                          id="results-gain-hint-trigger"
+                          type="button"
+                          class="hint-trigger"
+                          aria-describedby="hint-results-gain"
+                        >
+                          What / Why
+                        </button>
+                        <div id="hint-results-gain" class="hint-overlay" role="note">
+                          <p><strong>What:</strong> This meter uses receipt deltas and render-QA level comparisons.</p>
+                          <p><strong>Why:</strong> It helps you verify that “safer” output did not quietly over-compress the mix.</p>
+                        </div>
+                      </div>
+                      <span class="control-unit">dB</span>
+                    </div>
+                  </div>
+                  <p id="results-gain-reduction-value" class="readout-primary">n/a</p>
+                  <div id="results-gain-reduction-meter" class="bar-meter" role="img" aria-label="Gain reduction meter">
+                    <span class="bar-meter-track"></span>
+                    <span class="bar-meter-fill"></span>
+                  </div>
+                  <svg
+                    id="results-transfer-curve"
+                    class="transfer-curve"
+                    viewBox="0 0 120 80"
+                    role="img"
+                    aria-label="Transfer curve proxy"
+                  >
+                    <path id="results-transfer-curve-path" class="transfer-curve-path" d="M 0 80 L 120 0"></path>
+                  </svg>
+                  <p id="results-transfer-note" class="control-caption">Transfer curve proxy will appear when dynamics data is available.</p>
+                </section>
+
+                <section class="inspection-panel">
+                  <div class="control-head">
+                    <div>
+                      <p class="control-label">Phase correlation</p>
+                      <p class="control-why">Keep stereo coherence visible so mono collapse risks do not hide behind a “completed” badge.</p>
+                    </div>
+                    <div class="control-meta">
+                      <div class="hint-group">
+                        <button
+                          id="results-phase-hint-trigger"
+                          type="button"
+                          class="hint-trigger"
+                          aria-describedby="hint-results-phase"
+                        >
+                          What / Why
+                        </button>
+                        <div id="hint-results-phase" class="hint-overlay" role="note">
+                          <p><strong>What:</strong> Stereo coherence is the mean L/R correlation from render QA.</p>
+                          <p><strong>Why:</strong> Lower values can feel wide but may cancel or smear in mono.</p>
+                        </div>
+                      </div>
+                      <span class="control-unit">corr</span>
+                    </div>
+                  </div>
+                  <p id="results-phase-correlation-value" class="readout-primary">n/a corr</p>
+                  <div id="results-phase-correlation-meter" class="phase-meter" role="img" aria-label="Phase correlation meter">
+                    <span class="phase-meter-track"></span>
+                    <span class="phase-meter-zero"></span>
+                    <span class="phase-meter-needle"></span>
+                  </div>
+                  <div class="phase-scale" aria-hidden="true">
+                    <span>-1</span>
+                    <span>0</span>
+                    <span>+1</span>
+                  </div>
+                  <p id="results-phase-note" class="control-caption">Render QA thresholds will appear here.</p>
+                </section>
+
+                <section class="inspection-panel">
+                  <div class="control-head">
+                    <div>
+                      <p class="control-label">Goniometer / vectorscope</p>
+                      <p class="control-why">A deterministic stereo-shape proxy keeps spatial changes reviewable without requiring live playback.</p>
+                    </div>
+                    <div class="control-meta">
+                      <div class="hint-group">
+                        <button
+                          id="results-vectorscope-hint-trigger"
+                          type="button"
+                          class="hint-trigger"
+                          aria-describedby="hint-results-vectorscope"
+                        >
+                          What / Why
+                        </button>
+                        <div id="hint-results-vectorscope" class="hint-overlay" role="note">
+                          <p><strong>What:</strong> This offline scope is derived from render-QA correlation, side/mid ratio, and crest.</p>
+                          <p><strong>Why:</strong> The same artifacts always draw the same spatial footprint, which keeps compare notes reproducible.</p>
+                        </div>
+                      </div>
+                      <span class="control-unit">L/R</span>
+                    </div>
+                  </div>
+                  <svg
+                    id="results-vectorscope"
+                    class="scope-canvas"
+                    viewBox="0 0 100 100"
+                    role="img"
+                    aria-label="Vectorscope proxy"
+                  >
+                    <path class="scope-grid-line" d="M 50 4 L 50 96"></path>
+                    <path class="scope-grid-line" d="M 4 50 L 96 50"></path>
+                    <path class="scope-grid-ring" d="M 50 10 C 72 10 90 28 90 50 C 90 72 72 90 50 90 C 28 90 10 72 10 50 C 10 28 28 10 50 10"></path>
+                    <path id="results-vectorscope-path" class="scope-path" d="M 50 16 L 72 50 L 50 84 L 28 50 Z"></path>
+                  </svg>
+                  <p id="results-vectorscope-summary" class="control-caption">Load render QA to inspect the stereo footprint.</p>
+                </section>
+              </div>
             </details>
           </article>
         </div>
@@ -878,112 +947,85 @@
         <div class="workflow-grid">
           <article class="action-card widget" data-widget-id="widget.compare.inputs">
             <p class="field-label">Inputs</p>
-            <label class="field">
-              <span class="field-label">A report or render artifact path</span>
+            <div class="field">
+              <div class="field-heading">
+                <span class="field-label">A report or render artifact path</span>
+                <div class="field-actions">
+                  <button type="button" id="compare-a-file-browse-button" class="button-secondary button-compact" data-hit-target="true">
+                    JSON...
+                  </button>
+                  <button type="button" id="compare-a-folder-browse-button" class="button-secondary button-compact" data-hit-target="true">
+                    Folder...
+                  </button>
+                </div>
+              </div>
               <input id="compare-a-input" class="field-input" type="text" placeholder="/path/to/report.json or render folder" />
-            </label>
-            <label class="field">
-              <span class="field-label">B report or render artifact path</span>
+              <div class="recent-stack">
+                <p class="recent-label">Recent compare inputs</p>
+                <div id="recent-compare-a-list" class="recent-chip-row" aria-live="polite"></div>
+              </div>
+            </div>
+            <div class="field">
+              <div class="field-heading">
+                <span class="field-label">B report or render artifact path</span>
+                <div class="field-actions">
+                  <button type="button" id="compare-b-file-browse-button" class="button-secondary button-compact" data-hit-target="true">
+                    JSON...
+                  </button>
+                  <button type="button" id="compare-b-folder-browse-button" class="button-secondary button-compact" data-hit-target="true">
+                    Folder...
+                  </button>
+                </div>
+              </div>
               <input id="compare-b-input" class="field-input" type="text" placeholder="/path/to/report.json or render folder" />
-            </label>
+              <div class="recent-stack">
+                <p class="recent-label">Recent compare inputs</p>
+                <div id="recent-compare-b-list" class="recent-chip-row" aria-live="polite"></div>
+              </div>
+            </div>
             <div class="button-row">
               <button type="button" id="workflow-compare-button" data-hit-target="true">Run Compare</button>
             </div>
-            <label class="field">
-              <span class="field-label">Import compare_report.json</span>
-              <input id="compare-report-file-input" class="field-input" type="file" accept=".json,application/json" />
-            </label>
-            <label class="field">
-              <span class="field-label">Import A render_qa.json</span>
-              <input id="compare-a-qa-file-input" class="field-input" type="file" accept=".json,application/json" />
-            </label>
-            <label class="field">
-              <span class="field-label">Import B render_qa.json</span>
-              <input id="compare-b-qa-file-input" class="field-input" type="file" accept=".json,application/json" />
-            </label>
+            <details class="details-block">
+              <summary>Import compare artifacts</summary>
+              <div class="inspection-stack">
+                <div class="field">
+                  <div class="field-heading">
+                    <span class="field-label">Import compare_report.json</span>
+                    <button type="button" id="compare-report-browse-button" class="button-secondary button-compact" data-hit-target="true">
+                      Browse...
+                    </button>
+                  </div>
+                  <input id="compare-report-file-input" class="field-input" type="file" accept=".json,application/json" />
+                </div>
+                <div class="field">
+                  <div class="field-heading">
+                    <span class="field-label">Import A render_qa.json</span>
+                    <button type="button" id="compare-a-qa-browse-button" class="button-secondary button-compact" data-hit-target="true">
+                      Browse...
+                    </button>
+                  </div>
+                  <input id="compare-a-qa-file-input" class="field-input" type="file" accept=".json,application/json" />
+                </div>
+                <div class="field">
+                  <div class="field-heading">
+                    <span class="field-label">Import B render_qa.json</span>
+                    <button type="button" id="compare-b-qa-browse-button" class="button-secondary button-compact" data-hit-target="true">
+                      Browse...
+                    </button>
+                  </div>
+                  <input id="compare-b-qa-file-input" class="field-input" type="file" accept=".json,application/json" />
+                </div>
+              </div>
+            </details>
             <pre class="stage-output" id="output-compare">Compare writes compare_report.json into the current workspace.</pre>
-          </article>
-
-          <article
-            class="control-card widget"
-            data-widget-id="widget.compare.ab_toggle"
-            data-control-kind="AB_TOGGLE"
-          >
-            <div class="control-head">
-              <div>
-                <p class="control-label">A/B state</p>
-                <p class="control-why">Switch between the two compared states while keeping the compensation explicit.</p>
-              </div>
-            </div>
-            <div id="ab-toggle" class="segmented-control segmented-control-wide" role="group" aria-label="A B toggle">
-              <button type="button" class="segmented-button" data-ab-state="A" data-hit-target="true">A</button>
-              <button type="button" class="segmented-button" data-ab-state="B" data-hit-target="true">B</button>
-            </div>
-            <p id="ab-compensation" class="control-caption">No loudness-match data loaded.</p>
-          </article>
-
-          <article
-            class="control-card widget"
-            data-widget-id="widget.compare.compensation_knob"
-            data-control-kind="KNOB"
-            data-numeric-control="true"
-            data-direct-entry="true"
-            data-fine-adjust="true"
-            data-units="dB"
-          >
-            <div class="control-head">
-              <div>
-                <p class="control-label">B compensation</p>
-                <p class="control-why">The default comes from A/B render QA loudness; you can still override it explicitly.</p>
-              </div>
-              <span class="control-unit">dB</span>
-            </div>
-            <button
-              id="compare-compensation-knob"
-              class="knob-surface"
-              type="button"
-              aria-label="Compare compensation knob"
-              aria-valuemin="-12"
-              aria-valuemax="12"
-              aria-valuenow="0"
-              data-hit-target="true"
-            >
-              <span class="knob-face">
-                <span class="knob-pointer"></span>
-              </span>
-            </button>
-            <label class="value-entry">
-              <span class="value-entry-label">Exact value</span>
-              <span class="value-entry-row">
-                <input id="compare-compensation-input" class="value-input" type="number" step="0.1" inputmode="decimal" />
-                <span class="control-unit control-unit-inline">dB</span>
-              </span>
-            </label>
-            <p id="compare-compensation-value" class="control-caption"></p>
-          </article>
-
-          <article
-            class="control-card readout-card widget"
-            data-widget-id="widget.compare.value_readout"
-            data-control-kind="VALUE_READOUT"
-            data-units="LUFS"
-          >
-            <div class="control-head">
-              <div>
-                <p class="control-label">Matched readout</p>
-                <p class="control-why">The active side keeps raw loudness and matched loudness disclosed together.</p>
-              </div>
-              <span class="control-unit">LUFS</span>
-            </div>
-            <p id="compare-readout-primary" class="readout-primary">No compare artifact loaded</p>
-            <p id="compare-readout-secondary" class="readout-secondary">A/B readout appears after compare_report.json is loaded.</p>
           </article>
 
           <article class="signal-card widget" data-widget-id="widget.compare.summary">
             <div class="control-head">
               <div>
-                <p class="signal-label">What changed</p>
-                <p class="control-why">Compare should stay plain-language first, then expose the raw diff trail underneath.</p>
+                <p class="signal-label">Compare summary</p>
+                <p class="control-why">Lead with what changed, loudness-match disclosure, and the active A/B readout before fine-tuning.</p>
               </div>
               <div class="control-meta">
                 <div class="hint-group">
@@ -1002,13 +1044,72 @@
                 </div>
               </div>
             </div>
+            <div class="compare-summary-top">
+              <div id="ab-toggle" class="segmented-control segmented-control-wide" role="group" aria-label="A B toggle">
+                <button type="button" class="segmented-button" data-ab-state="A" data-hit-target="true">A</button>
+                <button type="button" class="segmented-button" data-ab-state="B" data-hit-target="true">B</button>
+              </div>
+              <p id="ab-compensation" class="compare-disclosure">No loudness-match data loaded.</p>
+            </div>
+            <div class="compare-readout-block">
+              <div class="control-head control-head-compact">
+                <div>
+                  <p class="control-label">Matched readout</p>
+                  <p class="control-why">The active side keeps raw loudness and matched loudness disclosed together.</p>
+                </div>
+                <span class="control-unit">LUFS</span>
+              </div>
+              <p id="compare-readout-primary" class="readout-primary">No compare artifact loaded</p>
+              <p id="compare-readout-secondary" class="readout-secondary">A/B readout appears after compare_report.json is loaded.</p>
+            </div>
             <div id="compare-change-summary" class="change-summary-list" aria-live="polite"></div>
             <p id="compare-summary" class="signal-value">No compare artifact loaded.</p>
             <pre class="stage-output compact-output" id="compare-summary-note">Warnings and notes will appear here.</pre>
           </article>
 
-          <article class="details-stack widget" data-widget-id="widget.compare.json">
+          <article class="details-stack widget" data-widget-id="widget.compare.inspection">
             <details class="details-block" open>
+              <summary>Compensation fine-tune</summary>
+              <div
+                class="inline-control-block"
+                data-control-kind="KNOB"
+                data-numeric-control="true"
+                data-direct-entry="true"
+                data-fine-adjust="true"
+                data-units="dB"
+              >
+                <div class="control-head">
+                  <div>
+                    <p class="control-label">B compensation</p>
+                    <p class="control-why">The default comes from A/B render QA loudness; you can still override it explicitly.</p>
+                  </div>
+                  <span class="control-unit">dB</span>
+                </div>
+                <button
+                  id="compare-compensation-knob"
+                  class="knob-surface"
+                  type="button"
+                  aria-label="Compare compensation knob"
+                  aria-valuemin="-12"
+                  aria-valuemax="12"
+                  aria-valuenow="0"
+                  data-hit-target="true"
+                >
+                  <span class="knob-face">
+                    <span class="knob-pointer"></span>
+                  </span>
+                </button>
+                <label class="value-entry">
+                  <span class="value-entry-label">Exact value</span>
+                  <span class="value-entry-row">
+                    <input id="compare-compensation-input" class="value-input" type="number" step="0.1" inputmode="decimal" />
+                    <span class="control-unit control-unit-inline">dB</span>
+                  </span>
+                </label>
+                <p id="compare-compensation-value" class="control-caption"></p>
+              </div>
+            </details>
+            <details class="details-block">
               <summary>compare_report.json preview</summary>
               <pre class="stage-output" id="compare-json-preview">No compare artifact loaded.</pre>
             </details>

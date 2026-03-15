@@ -10,6 +10,15 @@ import {
   signedDb,
 } from "./design-system";
 import {
+  browseDirectory,
+  browseFile,
+  loadRecentPaths,
+  recordRecentPath,
+  saveRecentPaths,
+  type RecentPathGroup,
+  type RecentPathsState,
+} from "./desktop-paths";
+import {
   artifactExists,
   buildWorkflowPaths,
   executeMmo,
@@ -170,6 +179,24 @@ type AppUi = {
   artifactPreviewSummary: HTMLElement;
   artifactSearch: HTMLInputElement;
   artifactTagButtons: HTMLButtonElement[];
+  browseButtons: Record<
+    | "compareAFolder"
+    | "compareAFile"
+    | "compareAQa"
+    | "compareBFolder"
+    | "compareBFile"
+    | "compareBQa"
+    | "compareReport"
+    | "resultsManifest"
+    | "resultsQa"
+    | "resultsReceipt"
+    | "sceneJson"
+    | "sceneLint"
+    | "sceneLocksPath"
+    | "stemsDir"
+    | "workspaceDir",
+    HTMLButtonElement
+  >;
   buttons: Record<
     "analyze" | "compare" | "doctor" | "render" | "renderCancel" | "resultsRefresh" | "reveal" | "runAll" | "scene" | "validate",
     HTMLButtonElement
@@ -210,6 +237,10 @@ type AppUi = {
   renderConfigSummary: HTMLElement;
   renderOutputText: HTMLElement;
   renderProgressText: HTMLElement;
+  recents: Record<
+    "compareA" | "compareB" | "sceneLocksPath" | "stemsDir" | "workspaceDir",
+    HTMLElement
+  >;
   results: {
     browserList: HTMLElement;
     detailFill: HTMLElement;
@@ -236,6 +267,7 @@ type AppUi = {
     whatChangedText: HTMLElement;
   };
   runtimeMessage: HTMLElement;
+  shell: HTMLElement;
   scene: {
     focusCaption: HTMLElement;
     focusDot: HTMLElement;
@@ -343,6 +375,13 @@ const state = {
   currentCancelPath: null as string | null,
   dragState: null as DragState | null,
   nerdView: false,
+  recentPaths: {
+    compareInputs: [],
+    sceneLocksPaths: [],
+    stemsDirs: [],
+    version: 1,
+    workspaceDirs: [],
+  } as RecentPathsState,
   resultsArtifactSearch: "",
   resultsArtifactTag: "ALL" as ArtifactTag,
   resultsDetailLevel: 6,
@@ -372,6 +411,23 @@ function getUi(): AppUi {
     artifactTagButtons: Array.from(
       document.querySelectorAll<HTMLButtonElement>("#artifact-tag-row [data-artifact-tag]"),
     ),
+    browseButtons: {
+      compareAFolder: requiredElement("#compare-a-folder-browse-button"),
+      compareAFile: requiredElement("#compare-a-file-browse-button"),
+      compareAQa: requiredElement("#compare-a-qa-browse-button"),
+      compareBFolder: requiredElement("#compare-b-folder-browse-button"),
+      compareBFile: requiredElement("#compare-b-file-browse-button"),
+      compareBQa: requiredElement("#compare-b-qa-browse-button"),
+      compareReport: requiredElement("#compare-report-browse-button"),
+      resultsManifest: requiredElement("#results-manifest-browse-button"),
+      resultsQa: requiredElement("#results-qa-browse-button"),
+      resultsReceipt: requiredElement("#results-receipt-browse-button"),
+      sceneJson: requiredElement("#scene-json-browse-button"),
+      sceneLint: requiredElement("#scene-lint-browse-button"),
+      sceneLocksPath: requiredElement("#scene-locks-browse-button"),
+      stemsDir: requiredElement("#stems-dir-browse-button"),
+      workspaceDir: requiredElement("#workspace-dir-browse-button"),
+    },
     buttons: {
       analyze: requiredElement("#workflow-analyze-button"),
       compare: requiredElement("#workflow-compare-button"),
@@ -436,6 +492,13 @@ function getUi(): AppUi {
     renderConfigSummary: requiredElement("#render-config-summary"),
     renderOutputText: requiredElement("#render-output-text"),
     renderProgressText: requiredElement("#render-progress-text"),
+    recents: {
+      compareA: requiredElement("#recent-compare-a-list"),
+      compareB: requiredElement("#recent-compare-b-list"),
+      sceneLocksPath: requiredElement("#recent-scene-locks-list"),
+      stemsDir: requiredElement("#recent-stems-dir-list"),
+      workspaceDir: requiredElement("#recent-workspace-dir-list"),
+    },
     results: {
       browserList: requiredElement("#artifact-browser-list"),
       changeSummary: requiredElement("#results-change-summary"),
@@ -462,6 +525,7 @@ function getUi(): AppUi {
       whatChangedText: requiredElement("#results-what-changed-text"),
     },
     runtimeMessage: requiredElement("#runtime-message"),
+    shell: requiredElement("#app-shell"),
     scene: {
       focusCaption: requiredElement("#scene-focus-caption"),
       focusDot: requiredElement("#scene-focus-dot"),
@@ -760,6 +824,124 @@ function updateRuntimeMessage(ui: AppUi, text: string): void {
   ui.runtimeMessage.textContent = text;
 }
 
+function hasLoadedWorkspaceContext(ui: AppUi): boolean {
+  if (ui.inputs.workspaceDir.value.trim()) {
+    return true;
+  }
+  return Object.values(state.artifacts).some((artifact) => artifact !== null);
+}
+
+function updateWorkspaceMode(ui: AppUi): void {
+  ui.shell.dataset.workspaceMode = hasLoadedWorkspaceContext(ui) ? "compact" : "hero";
+}
+
+function persistRecentPathsState(): void {
+  void saveRecentPaths(state.recentPaths);
+}
+
+function commitRecentPath(ui: AppUi, group: RecentPathGroup, value: string): void {
+  const next = recordRecentPath(state.recentPaths, group, value);
+  if (JSON.stringify(next[group]) === JSON.stringify(state.recentPaths[group])) {
+    return;
+  }
+  state.recentPaths = next;
+  renderRecentPaths(ui);
+  persistRecentPathsState();
+}
+
+function defaultBrowsePath(currentValue: string, recents: string[]): string | undefined {
+  const trimmed = currentValue.trim();
+  return trimmed || recents[0];
+}
+
+function renderRecentChipList(
+  container: HTMLElement,
+  items: string[],
+  emptyLabel: string,
+  onSelect: (value: string) => void,
+): void {
+  container.innerHTML = "";
+  if (items.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "recent-chip-empty";
+    empty.textContent = emptyLabel;
+    container.append(empty);
+    return;
+  }
+
+  for (const item of items) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "recent-chip button-secondary";
+    button.textContent = item;
+    button.title = item;
+    button.addEventListener("click", () => {
+      onSelect(item);
+    });
+    container.append(button);
+  }
+}
+
+function renderRecentPaths(ui: AppUi): void {
+  renderRecentChipList(ui.recents.stemsDir, state.recentPaths.stemsDirs, "No stems folders yet.", (value) => {
+    ui.inputs.stemsDir.value = value;
+    commitRecentPath(ui, "stemsDirs", value);
+    renderAll(ui);
+  });
+  renderRecentChipList(ui.recents.workspaceDir, state.recentPaths.workspaceDirs, "No workspaces yet.", (value) => {
+    ui.inputs.workspaceDir.value = value;
+    commitRecentPath(ui, "workspaceDirs", value);
+    resetSceneLocksState("Inspect the project scene locks to edit deterministic overrides.");
+    renderAll(ui);
+  });
+  renderRecentChipList(ui.recents.sceneLocksPath, state.recentPaths.sceneLocksPaths, "No scene-lock artifacts yet.", (value) => {
+    ui.inputs.sceneLocksPath.value = value;
+    commitRecentPath(ui, "sceneLocksPaths", value);
+    renderAll(ui);
+  });
+  renderRecentChipList(ui.recents.compareA, state.recentPaths.compareInputs, "No compare inputs yet.", (value) => {
+    ui.compareInputs.aPath.value = value;
+    commitRecentPath(ui, "compareInputs", value);
+  });
+  renderRecentChipList(ui.recents.compareB, state.recentPaths.compareInputs, "No compare inputs yet.", (value) => {
+    ui.compareInputs.bPath.value = value;
+    commitRecentPath(ui, "compareInputs", value);
+  });
+}
+
+async function browseAndLoadJson(
+  input: HTMLInputElement,
+  options: {
+    defaultPath?: string;
+    label: string;
+    onFailure: () => void;
+    onLoad: (payload: JsonObject, sourceName: string) => void;
+    title: string;
+  },
+): Promise<void> {
+  if (!isTauriRuntime()) {
+    input.click();
+    return;
+  }
+
+  const path = await browseFile({
+    defaultPath: options.defaultPath,
+    extensions: ["json"],
+    label: options.label,
+    title: options.title,
+  });
+  if (!path) {
+    return;
+  }
+
+  const payload = await readArtifactJson<JsonObject>(path);
+  if (payload === null) {
+    options.onFailure();
+    return;
+  }
+  options.onLoad(payload, path);
+}
+
 function renderNerdView(ui: AppUi): void {
   ui.nerdView.state.textContent = state.nerdView ? "On" : "Off";
   ui.nerdView.state.classList.toggle("status-chip-ok", state.nerdView);
@@ -781,6 +963,9 @@ function applyBusyState(ui: AppUi): void {
   ui.buttons.renderCancel.disabled = !(busy && state.busyStage === "render" && state.currentCancelPath !== null);
   ui.scene.lockInspectButton.disabled = busy || !ui.inputs.workspaceDir.value.trim() || state.sceneLocks.isInspecting || state.sceneLocks.isSaving;
   ui.scene.lockSaveButton.disabled = busy || state.sceneLocks.isInspecting || state.sceneLocks.isSaving || !state.sceneLocks.dirty || state.sceneLocks.objects.length === 0;
+  for (const button of Object.values(ui.browseButtons)) {
+    button.disabled = busy;
+  }
 }
 
 function buildRenderCancelPath(paths: WorkflowPaths): string {
@@ -2543,6 +2728,8 @@ function updateRenderConfigSummary(ui: AppUi): void {
 }
 
 function renderAll(ui: AppUi): void {
+  updateWorkspaceMode(ui);
+  renderRecentPaths(ui);
   renderNerdView(ui);
   renderExpectedPaths(ui);
   renderValidate(ui);
@@ -3148,6 +3335,8 @@ async function runCompare(ui: AppUi): Promise<void> {
     : formatFailureOutput(result);
   setStageStatus(ui.stages.compare, result.code === 0 ? "pass" : "fail", result.code === 0 ? "Pass" : "Fail");
   assertSuccess(result, "compare");
+  commitRecentPath(ui, "compareInputs", aPath);
+  commitRecentPath(ui, "compareInputs", bPath);
   updateRuntimeMessage(ui, "Compare report written.");
 }
 
@@ -3331,6 +3520,79 @@ function bindJsonFileInput(
       return;
     }
     onLoad(payload, file.name);
+  });
+}
+
+function bindRecentInput(
+  ui: AppUi,
+  input: HTMLInputElement,
+  group: RecentPathGroup,
+  onChange?: () => void,
+): void {
+  input.addEventListener("change", () => {
+    commitRecentPath(ui, group, input.value);
+    onChange?.();
+  });
+}
+
+function bindDirectoryBrowseButton(
+  ui: AppUi,
+  button: HTMLButtonElement,
+  input: HTMLInputElement,
+  group: RecentPathGroup,
+  title: string,
+  afterSelect?: () => void,
+): void {
+  button.addEventListener("click", () => {
+    void (async () => {
+      const selectedPath = await browseDirectory({
+        defaultPath: defaultBrowsePath(input.value, state.recentPaths[group]),
+        title,
+      });
+      if (!selectedPath) {
+        if (!isTauriRuntime()) {
+          updateRuntimeMessage(ui, "Native folder pickers are available in packaged desktop builds.");
+        }
+        return;
+      }
+      input.value = selectedPath;
+      commitRecentPath(ui, group, selectedPath);
+      afterSelect?.();
+      renderAll(ui);
+    })();
+  });
+}
+
+function bindFilePathBrowseButton(
+  ui: AppUi,
+  button: HTMLButtonElement,
+  input: HTMLInputElement,
+  group: RecentPathGroup,
+  options: {
+    afterSelect?: () => void;
+    extensions: string[];
+    label: string;
+    title: string;
+  },
+): void {
+  button.addEventListener("click", () => {
+    void (async () => {
+      const selectedPath = await browseFile({
+        defaultPath: defaultBrowsePath(input.value, state.recentPaths[group]),
+        extensions: options.extensions,
+        label: options.label,
+        title: options.title,
+      });
+      if (!selectedPath) {
+        if (!isTauriRuntime()) {
+          updateRuntimeMessage(ui, "Native file pickers are available in packaged desktop builds.");
+        }
+        return;
+      }
+      input.value = selectedPath;
+      commitRecentPath(ui, group, selectedPath);
+      options.afterSelect?.();
+    })();
   });
 }
 
@@ -3541,6 +3803,78 @@ window.addEventListener("DOMContentLoaded", () => {
   ui.inputs.layoutStandard.addEventListener("change", () => {
     renderAll(ui);
   });
+  bindRecentInput(ui, ui.inputs.stemsDir, "stemsDirs");
+  bindRecentInput(ui, ui.inputs.workspaceDir, "workspaceDirs", () => {
+    resetSceneLocksState("Inspect the project scene locks to edit deterministic overrides.");
+    renderAll(ui);
+  });
+  bindRecentInput(ui, ui.inputs.sceneLocksPath, "sceneLocksPaths");
+  bindRecentInput(ui, ui.compareInputs.aPath, "compareInputs");
+  bindRecentInput(ui, ui.compareInputs.bPath, "compareInputs");
+
+  bindDirectoryBrowseButton(
+    ui,
+    ui.browseButtons.stemsDir,
+    ui.inputs.stemsDir,
+    "stemsDirs",
+    "Pick stems folder",
+  );
+  bindDirectoryBrowseButton(
+    ui,
+    ui.browseButtons.workspaceDir,
+    ui.inputs.workspaceDir,
+    "workspaceDirs",
+    "Pick workspace folder",
+    () => resetSceneLocksState("Inspect the project scene locks to edit deterministic overrides."),
+  );
+  bindFilePathBrowseButton(
+    ui,
+    ui.browseButtons.sceneLocksPath,
+    ui.inputs.sceneLocksPath,
+    "sceneLocksPaths",
+    {
+      afterSelect: () => renderAll(ui),
+      extensions: ["json", "yaml", "yml"],
+      label: "Scene locks",
+      title: "Pick scene-locks artifact",
+    },
+  );
+  bindFilePathBrowseButton(
+    ui,
+    ui.browseButtons.compareAFile,
+    ui.compareInputs.aPath,
+    "compareInputs",
+    {
+      extensions: ["json"],
+      label: "Compare input JSON",
+      title: "Pick compare A artifact",
+    },
+  );
+  bindDirectoryBrowseButton(
+    ui,
+    ui.browseButtons.compareAFolder,
+    ui.compareInputs.aPath,
+    "compareInputs",
+    "Pick compare A render folder",
+  );
+  bindFilePathBrowseButton(
+    ui,
+    ui.browseButtons.compareBFile,
+    ui.compareInputs.bPath,
+    "compareInputs",
+    {
+      extensions: ["json"],
+      label: "Compare input JSON",
+      title: "Pick compare B artifact",
+    },
+  );
+  bindDirectoryBrowseButton(
+    ui,
+    ui.browseButtons.compareBFolder,
+    ui.compareInputs.bPath,
+    "compareInputs",
+    "Pick compare B render folder",
+  );
 
   ui.nerdView.toggle.addEventListener("click", () => {
     state.nerdView = !state.nerdView;
@@ -3672,142 +4006,198 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  bindJsonFileInput(
-    ui.fileInputs.validateValidation,
-    (payload, sourceName) => {
-      state.artifacts.validation = payload;
-      state.artifactSources.validationPath = sourceName;
-      renderValidate(ui);
-      updateRuntimeMessage(ui, `Loaded validation artifact: ${sourceName}`);
-    },
-    () => updateRuntimeMessage(ui, "validation.json import is not valid JSON."),
-  );
-  bindJsonFileInput(
-    ui.fileInputs.analyzeReport,
-    (payload, sourceName) => {
-      state.artifacts.report = payload;
-      state.artifactSources.reportPath = sourceName;
-      renderAnalyze(ui);
-      controller.setScreen("analyze");
-      updateRuntimeMessage(ui, `Loaded report artifact: ${sourceName}`);
-    },
-    () => updateRuntimeMessage(ui, "report.json import is not valid JSON."),
-  );
-  bindJsonFileInput(
-    ui.fileInputs.analyzeScan,
-    (payload, sourceName) => {
-      state.artifacts.scan = payload;
-      state.artifactSources.scanPath = sourceName;
-      renderAnalyze(ui);
-      updateRuntimeMessage(ui, `Loaded scan artifact: ${sourceName}`);
-    },
-    () => updateRuntimeMessage(ui, "report.scan.json import is not valid JSON."),
-  );
-  bindJsonFileInput(
-    ui.fileInputs.sceneJson,
-    (payload, sourceName) => {
-      state.artifacts.scene = payload;
-      state.artifactSources.scenePath = sourceName;
-      renderScene(ui);
-      controller.setScreen("scene");
-      updateRuntimeMessage(ui, `Loaded scene artifact: ${sourceName}`);
-    },
-    () => updateRuntimeMessage(ui, "scene.json import is not valid JSON."),
-  );
-  bindJsonFileInput(
-    ui.fileInputs.sceneLint,
-    (payload, sourceName) => {
-      state.artifacts.sceneLint = payload;
-      state.artifactSources.sceneLintPath = sourceName;
-      renderScene(ui);
-      updateRuntimeMessage(ui, `Loaded scene lint artifact: ${sourceName}`);
-    },
-    () => updateRuntimeMessage(ui, "scene_lint.json import is not valid JSON."),
-  );
-  bindJsonFileInput(
-    ui.fileInputs.resultsReceipt,
-    (payload, sourceName) => {
-      state.artifacts.receipt = payload;
-      state.artifactSources.receiptPath = sourceName;
-      renderResults(ui);
-      controller.setScreen("results");
-      updateRuntimeMessage(ui, `Loaded safe-render receipt: ${sourceName}`);
-    },
-    () => updateRuntimeMessage(ui, "safe_render_receipt.json import is not valid JSON."),
-  );
-  bindJsonFileInput(
-    ui.fileInputs.resultsManifest,
-    (payload, sourceName) => {
-      state.artifacts.manifest = payload;
-      state.artifactSources.manifestPath = sourceName;
-      renderResults(ui);
-      updateRuntimeMessage(ui, `Loaded render manifest: ${sourceName}`);
-    },
-    () => updateRuntimeMessage(ui, "render_manifest.json import is not valid JSON."),
-  );
-  bindJsonFileInput(
-    ui.fileInputs.resultsQa,
-    (payload, sourceName) => {
-      state.artifacts.qa = payload;
-      state.artifactSources.qaPath = sourceName;
-      renderResults(ui);
-      updateRuntimeMessage(ui, `Loaded render QA: ${sourceName}`);
-    },
-    () => updateRuntimeMessage(ui, "render_qa.json import is not valid JSON."),
-  );
-  bindJsonFileInput(
-    ui.fileInputs.compareReport,
-    (payload, sourceName) => {
-      state.artifacts.compare = payload;
-      state.artifactSources.comparePath = sourceName;
-      const derived = deriveCompareCompensation();
-      state.compareCompensationDb = derived.db;
-      state.compareCompensationEvaluationOnly = derived.evaluationOnly;
-      state.compareCompensationMethodId = derived.methodId;
-      state.compareCompensationNote = derived.note;
-      state.compareCompensationSource = derived.source;
-      renderCompare(ui);
-      controller.setScreen("compare");
-      updateRuntimeMessage(ui, `Loaded compare report: ${sourceName}`);
-    },
-    () => updateRuntimeMessage(ui, "compare_report.json import is not valid JSON."),
-  );
-  bindJsonFileInput(
-    ui.fileInputs.compareAQa,
-    (payload, sourceName) => {
-      state.artifacts.compareAQa = payload;
-      state.artifactSources.compareAQaPath = sourceName;
-      const derived = deriveCompareCompensation();
-      if (state.compareCompensationSource !== "manual") {
-        state.compareCompensationDb = derived.db;
-        state.compareCompensationEvaluationOnly = derived.evaluationOnly;
-        state.compareCompensationMethodId = derived.methodId;
-        state.compareCompensationNote = derived.note;
-        state.compareCompensationSource = derived.source;
-      }
-      renderCompare(ui);
-      updateRuntimeMessage(ui, `Loaded A render QA: ${sourceName}`);
-    },
-    () => updateRuntimeMessage(ui, "A render_qa.json import is not valid JSON."),
-  );
-  bindJsonFileInput(
-    ui.fileInputs.compareBQa,
-    (payload, sourceName) => {
-      state.artifacts.compareBQa = payload;
-      state.artifactSources.compareBQaPath = sourceName;
-      const derived = deriveCompareCompensation();
-      if (state.compareCompensationSource !== "manual") {
-        state.compareCompensationDb = derived.db;
-        state.compareCompensationEvaluationOnly = derived.evaluationOnly;
-        state.compareCompensationMethodId = derived.methodId;
-        state.compareCompensationNote = derived.note;
-        state.compareCompensationSource = derived.source;
-      }
-      renderCompare(ui);
-      updateRuntimeMessage(ui, `Loaded B render QA: ${sourceName}`);
-    },
-    () => updateRuntimeMessage(ui, "B render_qa.json import is not valid JSON."),
-  );
+  const applyDerivedCompareCompensation = (force = false) => {
+    const derived = deriveCompareCompensation();
+    if (!force && state.compareCompensationSource === "manual") {
+      return;
+    }
+    state.compareCompensationDb = derived.db;
+    state.compareCompensationEvaluationOnly = derived.evaluationOnly;
+    state.compareCompensationMethodId = derived.methodId;
+    state.compareCompensationNote = derived.note;
+    state.compareCompensationSource = derived.source;
+  };
+
+  const loadValidationArtifact = (payload: JsonObject, sourceName: string) => {
+    state.artifacts.validation = payload;
+    state.artifactSources.validationPath = sourceName;
+    renderAll(ui);
+    updateRuntimeMessage(ui, `Loaded validation artifact: ${sourceName}`);
+  };
+  const loadReportArtifact = (payload: JsonObject, sourceName: string) => {
+    state.artifacts.report = payload;
+    state.artifactSources.reportPath = sourceName;
+    renderAll(ui);
+    controller.setScreen("analyze");
+    updateRuntimeMessage(ui, `Loaded report artifact: ${sourceName}`);
+  };
+  const loadScanArtifact = (payload: JsonObject, sourceName: string) => {
+    state.artifacts.scan = payload;
+    state.artifactSources.scanPath = sourceName;
+    renderAll(ui);
+    updateRuntimeMessage(ui, `Loaded scan artifact: ${sourceName}`);
+  };
+  const loadSceneArtifact = (payload: JsonObject, sourceName: string) => {
+    state.artifacts.scene = payload;
+    state.artifactSources.scenePath = sourceName;
+    renderAll(ui);
+    controller.setScreen("scene");
+    updateRuntimeMessage(ui, `Loaded scene artifact: ${sourceName}`);
+  };
+  const loadSceneLintArtifact = (payload: JsonObject, sourceName: string) => {
+    state.artifacts.sceneLint = payload;
+    state.artifactSources.sceneLintPath = sourceName;
+    renderAll(ui);
+    updateRuntimeMessage(ui, `Loaded scene lint artifact: ${sourceName}`);
+  };
+  const loadResultsReceiptArtifact = (payload: JsonObject, sourceName: string) => {
+    state.artifacts.receipt = payload;
+    state.artifactSources.receiptPath = sourceName;
+    renderAll(ui);
+    controller.setScreen("results");
+    updateRuntimeMessage(ui, `Loaded safe-render receipt: ${sourceName}`);
+  };
+  const loadResultsManifestArtifact = (payload: JsonObject, sourceName: string) => {
+    state.artifacts.manifest = payload;
+    state.artifactSources.manifestPath = sourceName;
+    renderAll(ui);
+    updateRuntimeMessage(ui, `Loaded render manifest: ${sourceName}`);
+  };
+  const loadResultsQaArtifact = (payload: JsonObject, sourceName: string) => {
+    state.artifacts.qa = payload;
+    state.artifactSources.qaPath = sourceName;
+    renderAll(ui);
+    updateRuntimeMessage(ui, `Loaded render QA: ${sourceName}`);
+  };
+  const loadCompareReportArtifact = (payload: JsonObject, sourceName: string) => {
+    state.artifacts.compare = payload;
+    state.artifactSources.comparePath = sourceName;
+    applyDerivedCompareCompensation(true);
+    renderAll(ui);
+    controller.setScreen("compare");
+    updateRuntimeMessage(ui, `Loaded compare report: ${sourceName}`);
+  };
+  const loadCompareAQaArtifact = (payload: JsonObject, sourceName: string) => {
+    state.artifacts.compareAQa = payload;
+    state.artifactSources.compareAQaPath = sourceName;
+    applyDerivedCompareCompensation();
+    renderAll(ui);
+    updateRuntimeMessage(ui, `Loaded A render QA: ${sourceName}`);
+  };
+  const loadCompareBQaArtifact = (payload: JsonObject, sourceName: string) => {
+    state.artifacts.compareBQa = payload;
+    state.artifactSources.compareBQaPath = sourceName;
+    applyDerivedCompareCompensation();
+    renderAll(ui);
+    updateRuntimeMessage(ui, `Loaded B render QA: ${sourceName}`);
+  };
+
+  bindJsonFileInput(ui.fileInputs.validateValidation, loadValidationArtifact, () => {
+    updateRuntimeMessage(ui, "validation.json import is not valid JSON.");
+  });
+  bindJsonFileInput(ui.fileInputs.analyzeReport, loadReportArtifact, () => {
+    updateRuntimeMessage(ui, "report.json import is not valid JSON.");
+  });
+  bindJsonFileInput(ui.fileInputs.analyzeScan, loadScanArtifact, () => {
+    updateRuntimeMessage(ui, "report.scan.json import is not valid JSON.");
+  });
+  bindJsonFileInput(ui.fileInputs.sceneJson, loadSceneArtifact, () => {
+    updateRuntimeMessage(ui, "scene.json import is not valid JSON.");
+  });
+  bindJsonFileInput(ui.fileInputs.sceneLint, loadSceneLintArtifact, () => {
+    updateRuntimeMessage(ui, "scene_lint.json import is not valid JSON.");
+  });
+  bindJsonFileInput(ui.fileInputs.resultsReceipt, loadResultsReceiptArtifact, () => {
+    updateRuntimeMessage(ui, "safe_render_receipt.json import is not valid JSON.");
+  });
+  bindJsonFileInput(ui.fileInputs.resultsManifest, loadResultsManifestArtifact, () => {
+    updateRuntimeMessage(ui, "render_manifest.json import is not valid JSON.");
+  });
+  bindJsonFileInput(ui.fileInputs.resultsQa, loadResultsQaArtifact, () => {
+    updateRuntimeMessage(ui, "render_qa.json import is not valid JSON.");
+  });
+  bindJsonFileInput(ui.fileInputs.compareReport, loadCompareReportArtifact, () => {
+    updateRuntimeMessage(ui, "compare_report.json import is not valid JSON.");
+  });
+  bindJsonFileInput(ui.fileInputs.compareAQa, loadCompareAQaArtifact, () => {
+    updateRuntimeMessage(ui, "A render_qa.json import is not valid JSON.");
+  });
+  bindJsonFileInput(ui.fileInputs.compareBQa, loadCompareBQaArtifact, () => {
+    updateRuntimeMessage(ui, "B render_qa.json import is not valid JSON.");
+  });
+
+  ui.browseButtons.sceneJson.addEventListener("click", () => {
+    void browseAndLoadJson(ui.fileInputs.sceneJson, {
+      defaultPath: state.artifactSources.scenePath || state.recentPaths.workspaceDirs[0],
+      label: "Scene artifact JSON",
+      onFailure: () => updateRuntimeMessage(ui, "scene.json import is not valid JSON."),
+      onLoad: loadSceneArtifact,
+      title: "Pick scene.json",
+    });
+  });
+  ui.browseButtons.sceneLint.addEventListener("click", () => {
+    void browseAndLoadJson(ui.fileInputs.sceneLint, {
+      defaultPath: state.artifactSources.sceneLintPath || state.recentPaths.workspaceDirs[0],
+      label: "Scene lint JSON",
+      onFailure: () => updateRuntimeMessage(ui, "scene_lint.json import is not valid JSON."),
+      onLoad: loadSceneLintArtifact,
+      title: "Pick scene_lint.json",
+    });
+  });
+  ui.browseButtons.resultsReceipt.addEventListener("click", () => {
+    void browseAndLoadJson(ui.fileInputs.resultsReceipt, {
+      defaultPath: state.artifactSources.receiptPath || state.recentPaths.workspaceDirs[0],
+      label: "Render receipt JSON",
+      onFailure: () => updateRuntimeMessage(ui, "safe_render_receipt.json import is not valid JSON."),
+      onLoad: loadResultsReceiptArtifact,
+      title: "Pick safe_render_receipt.json",
+    });
+  });
+  ui.browseButtons.resultsManifest.addEventListener("click", () => {
+    void browseAndLoadJson(ui.fileInputs.resultsManifest, {
+      defaultPath: state.artifactSources.manifestPath || state.recentPaths.workspaceDirs[0],
+      label: "Render manifest JSON",
+      onFailure: () => updateRuntimeMessage(ui, "render_manifest.json import is not valid JSON."),
+      onLoad: loadResultsManifestArtifact,
+      title: "Pick render_manifest.json",
+    });
+  });
+  ui.browseButtons.resultsQa.addEventListener("click", () => {
+    void browseAndLoadJson(ui.fileInputs.resultsQa, {
+      defaultPath: state.artifactSources.qaPath || state.recentPaths.workspaceDirs[0],
+      label: "Render QA JSON",
+      onFailure: () => updateRuntimeMessage(ui, "render_qa.json import is not valid JSON."),
+      onLoad: loadResultsQaArtifact,
+      title: "Pick render_qa.json",
+    });
+  });
+  ui.browseButtons.compareReport.addEventListener("click", () => {
+    void browseAndLoadJson(ui.fileInputs.compareReport, {
+      defaultPath: state.artifactSources.comparePath || state.recentPaths.workspaceDirs[0],
+      label: "Compare report JSON",
+      onFailure: () => updateRuntimeMessage(ui, "compare_report.json import is not valid JSON."),
+      onLoad: loadCompareReportArtifact,
+      title: "Pick compare_report.json",
+    });
+  });
+  ui.browseButtons.compareAQa.addEventListener("click", () => {
+    void browseAndLoadJson(ui.fileInputs.compareAQa, {
+      defaultPath: state.artifactSources.compareAQaPath || ui.compareInputs.aPath.value.trim() || state.recentPaths.compareInputs[0],
+      label: "Render QA JSON",
+      onFailure: () => updateRuntimeMessage(ui, "A render_qa.json import is not valid JSON."),
+      onLoad: loadCompareAQaArtifact,
+      title: "Pick A render_qa.json",
+    });
+  });
+  ui.browseButtons.compareBQa.addEventListener("click", () => {
+    void browseAndLoadJson(ui.fileInputs.compareBQa, {
+      defaultPath: state.artifactSources.compareBQaPath || ui.compareInputs.bPath.value.trim() || state.recentPaths.compareInputs[0],
+      label: "Render QA JSON",
+      onFailure: () => updateRuntimeMessage(ui, "B render_qa.json import is not valid JSON."),
+      onLoad: loadCompareBQaArtifact,
+      title: "Pick B render_qa.json",
+    });
+  });
 
   window.__MMO_DESKTOP_TEST__ = {
     hydrateSceneLocksInspect: (payload: JsonObject) => {
@@ -3818,11 +4208,14 @@ window.addEventListener("DOMContentLoaded", () => {
         ui,
       });
       ui.scene.lockEditorDetails.open = true;
-      renderScene(ui);
+      renderAll(ui);
     },
   };
 
   void (async () => {
+    state.recentPaths = await loadRecentPaths();
+    renderAll(ui);
+
     const desktopSmokeConfig = await readDesktopSmokeConfig();
     if (desktopSmokeConfig !== null) {
       await runDesktopSmoke(ui, controller, desktopSmokeConfig);
@@ -3840,6 +4233,7 @@ window.addEventListener("DOMContentLoaded", () => {
     if (await artifactExists(paths.compareReportPath)) {
       state.artifacts.compare = await readArtifactJson<JsonObject>(paths.compareReportPath);
       state.artifactSources.comparePath = paths.compareReportPath;
+      applyDerivedCompareCompensation(true);
     }
     renderAll(ui);
   })();

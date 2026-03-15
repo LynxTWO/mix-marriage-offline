@@ -211,6 +211,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Tauri loaded-workspace ergonomics pass:
+  - The desktop app now keeps the existing hero treatment for empty/onboarding
+    state, then switches to a more compact loaded-workspace sidebar once a
+    workspace or artifact is in play so Results/Compare get more horizontal
+    room.
+  - Session, scene-lock, Results, and Compare flows now expose native desktop
+    browse affordances plus deterministic recent-path chips for the repeat-use
+    paths that mattered most in packaged daily use.
+  - Results and Compare now visually prioritize summary/readout/selected
+    artifact context first, while deeper QA, meter, compensation, and raw JSON
+    inspection surfaces stay available in lower inspection sections instead of
+    reading like equal-weight cards.
+
 - Public docs and release-copy entry points now describe MMO as it ships today:
   deterministic scene/render contracts, compare, render-many, supported target
   and ordering standards, current Tauri-vs-fallback GUI status, and real

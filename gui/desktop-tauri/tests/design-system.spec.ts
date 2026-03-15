@@ -32,11 +32,8 @@ const screens: Record<ScreenKey, { buttonLabel: string; requiredWidgets: string[
       "widget.header.fine_adjust",
       "widget.header.tabs",
       "widget.compare.inputs",
-      "widget.compare.ab_toggle",
-      "widget.compare.compensation_knob",
-      "widget.compare.value_readout",
       "widget.compare.summary",
-      "widget.compare.json",
+      "widget.compare.inspection",
     ],
   },
   render: {
@@ -58,15 +55,10 @@ const screens: Record<ScreenKey, { buttonLabel: string; requiredWidgets: string[
       "widget.header.fine_adjust",
       "widget.header.tabs",
       "widget.results.browser",
-      "widget.results.detail_slider",
-      "widget.results.value_readout",
-      "widget.results.recommendation_confidence",
-      "widget.results.gain_reduction",
-      "widget.results.phase_correlation",
-      "widget.results.vectorscope",
+      "widget.results.summary",
       "widget.results.what_changed",
-      "widget.results.qa",
-      "widget.results.json",
+      "widget.results.preview",
+      "widget.results.inspection",
     ],
   },
   scene: {
@@ -116,6 +108,9 @@ function overlaps(left: WidgetBox, right: WidgetBox): boolean {
 async function openScreen(page: Parameters<typeof test>[0]["page"], screen: ScreenKey): Promise<void> {
   await page.getByRole("button", { name: screens[screen].buttonLabel, exact: true }).click();
   await expect(page.locator(`#screen-${screen}`)).toBeVisible();
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+  });
 }
 
 async function visibleWidgetBoxes(page: Parameters<typeof test>[0]["page"]): Promise<WidgetBox[]> {
@@ -193,8 +188,8 @@ test.describe("desktop workflow design system", () => {
     await page.goto("/");
     const cases: Array<{ screen: ScreenKey; selector: string }> = [
       { screen: "scene", selector: '[data-widget-id="widget.scene.xy_focus"]' },
-      { screen: "results", selector: '[data-widget-id="widget.results.detail_slider"]' },
-      { screen: "compare", selector: '[data-widget-id="widget.compare.compensation_knob"]' },
+      { screen: "results", selector: '[data-widget-id="widget.results.summary"]' },
+      { screen: "compare", selector: '[data-widget-id="widget.compare.inspection"]' },
     ];
 
     for (const { screen, selector } of cases) {
@@ -224,6 +219,60 @@ test.describe("desktop workflow design system", () => {
     await expect(page.locator("#fine-adjust-indicator")).toContainText("Fine adjust active");
     await page.keyboard.up("Shift");
     await expect(page.locator("#results-detail-value")).toContainText("6 line(s) of detail");
+  });
+
+  test("loaded workspace mode compacts the left rail after a workspace is chosen", async ({ page }) => {
+    await page.setViewportSize({ width: 1728, height: 1117 });
+    await page.goto("/");
+
+    const shell = page.locator("#app-shell");
+    const hero = page.locator('[data-section-id="header"]');
+    await expect(shell).toHaveAttribute("data-workspace-mode", "hero");
+    const emptyWidth = await hero.evaluate((element) => element.getBoundingClientRect().width);
+
+    await page.locator("#workspace-dir-input").fill("/tmp/mmo-workspace");
+    await page.locator("#workspace-dir-input").dispatchEvent("input");
+    await page.locator("#workspace-dir-input").dispatchEvent("change");
+
+    await expect(shell).toHaveAttribute("data-workspace-mode", "compact");
+    const loadedWidth = await hero.evaluate((element) => element.getBoundingClientRect().width);
+    expect(loadedWidth).toBeLessThan(emptyWidth);
+  });
+
+  test("session and compare recents persist in the desktop-safe fallback store", async ({ page }) => {
+    await page.goto("/");
+
+    await expect(page.locator("#stems-dir-browse-button")).toBeVisible();
+    await expect(page.locator("#workspace-dir-browse-button")).toBeVisible();
+    await openScreen(page, "compare");
+    await expect(page.locator("#compare-a-file-browse-button")).toBeVisible();
+    await expect(page.locator("#compare-b-folder-browse-button")).toBeVisible();
+
+    await page.locator("#stems-dir-input").fill("/tmp/stems-a");
+    await page.locator("#stems-dir-input").dispatchEvent("change");
+    await page.locator("#workspace-dir-input").fill("/tmp/workspace-a");
+    await page.locator("#workspace-dir-input").dispatchEvent("change");
+    await page.locator("#scene-locks-input").fill("/tmp/workspace-a/project/scene_locks.yaml");
+    await page.locator("#scene-locks-input").dispatchEvent("change");
+
+    await page.locator("#compare-a-input").fill("/tmp/render-a");
+    await page.locator("#compare-a-input").dispatchEvent("change");
+    await page.locator("#compare-b-input").fill("/tmp/render-b");
+    await page.locator("#compare-b-input").dispatchEvent("change");
+
+    await expect(page.locator("#recent-stems-dir-list")).toContainText("/tmp/stems-a");
+    await expect(page.locator("#recent-workspace-dir-list")).toContainText("/tmp/workspace-a");
+    await expect(page.locator("#recent-scene-locks-list")).toContainText("scene_locks.yaml");
+    await expect(page.locator("#recent-compare-a-list")).toContainText("/tmp/render-a");
+    await expect(page.locator("#recent-compare-b-list")).toContainText("/tmp/render-b");
+
+    await page.reload();
+
+    await expect(page.locator("#recent-stems-dir-list")).toContainText("/tmp/stems-a");
+    await expect(page.locator("#recent-workspace-dir-list")).toContainText("/tmp/workspace-a");
+    await openScreen(page, "compare");
+    await expect(page.locator("#recent-compare-a-list")).toContainText("/tmp/render-a");
+    await expect(page.locator("#recent-compare-b-list")).toContainText("/tmp/render-b");
   });
 
   test("scene screen shows generated scene summary plus lint and lock context", async ({ page }) => {
@@ -499,6 +548,7 @@ test.describe("desktop workflow design system", () => {
     await expect(page.locator("#results-transfer-note")).toContainText("threshold=-20.5 dB");
     await expect(page.locator("#results-vectorscope-summary")).toContainText("side/mid=-2.8 dB");
 
+    await page.getByText("Dynamics and stereo inspection", { exact: true }).click();
     await page.locator("#results-phase-hint-trigger").focus();
     await expect(page.locator("#hint-results-phase")).toBeVisible();
     await expect(page.locator("#hint-results-phase")).toContainText("Why:");
