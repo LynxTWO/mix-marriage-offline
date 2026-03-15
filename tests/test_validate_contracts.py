@@ -56,6 +56,14 @@ REQUIRED_REPO_DIRS = [
     "src",
 ]
 
+COPYTREE_IGNORE = shutil.ignore_patterns(
+    "__pycache__",
+    "node_modules",
+    "playwright-report",
+    "target",
+    "test-results",
+)
+
 
 class TestValidateContracts(unittest.TestCase):
     def _python_cmd(self) -> str:
@@ -70,7 +78,11 @@ class TestValidateContracts(unittest.TestCase):
     def _copy_repo_subset(self, destination: Path) -> None:
         repo_root = self._repo_root()
         for rel_dir in REQUIRED_REPO_DIRS:
-            shutil.copytree(repo_root / rel_dir, destination / rel_dir)
+            shutil.copytree(
+                repo_root / rel_dir,
+                destination / rel_dir,
+                ignore=COPYTREE_IGNORE,
+            )
 
         tools_dir = destination / "tools"
         tools_dir.mkdir(parents=True, exist_ok=True)

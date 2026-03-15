@@ -677,24 +677,32 @@
             data-control-kind="VALUE_READOUT"
             data-units="files"
           >
-            <div class="control-head">
-              <div>
-                <p class="control-label">Final receipt</p>
-                <p class="control-why">Keep the release decision tied to the written receipt and output count.</p>
+            <div
+              class="readout-block"
+              data-widget-id="widget.results.value_readout"
+              data-control-kind="VALUE_READOUT"
+              data-units="files"
+            >
+              <div class="control-head">
+                <div>
+                  <p class="control-label">Final receipt</p>
+                  <p class="control-why">Keep the release decision tied to the written receipt and output count.</p>
+                </div>
+                <span class="control-unit">files</span>
               </div>
-              <span class="control-unit">files</span>
+              <p id="results-readout-primary" class="readout-primary">No receipt loaded</p>
+              <p id="results-readout-secondary" class="readout-secondary">Rendered outputs and QA state will appear here.</p>
+              <p id="results-readout-note" class="control-caption">The readout stays anchored to safe_render_receipt.json.</p>
             </div>
-            <p id="results-readout-primary" class="readout-primary">No receipt loaded</p>
-            <p id="results-readout-secondary" class="readout-secondary">Rendered outputs and QA state will appear here.</p>
-            <p id="results-readout-note" class="control-caption">The readout stays anchored to safe_render_receipt.json.</p>
             <div class="section-divider" aria-hidden="true"></div>
             <div
               class="inline-control-block"
-              data-control-kind="SLIDER"
-              data-numeric-control="true"
-              data-direct-entry="true"
-              data-fine-adjust="true"
-              data-units="lines"
+            data-widget-id="widget.results.detail_slider"
+            data-control-kind="SLIDER"
+            data-numeric-control="true"
+            data-direct-entry="true"
+            data-fine-adjust="true"
+            data-units="lines"
             >
               <div class="control-head control-head-compact">
                 <div>
@@ -757,7 +765,11 @@
           <article class="details-stack widget" data-widget-id="widget.results.preview">
             <details class="details-block" open>
               <summary>Selected artifact preview</summary>
-              <pre class="stage-output" id="results-json-preview">No artifact selected.</pre>
+              <pre
+                class="stage-output"
+                id="results-json-preview"
+                data-widget-id="widget.results.json"
+              >No artifact selected.</pre>
             </details>
           </article>
 
@@ -795,7 +807,7 @@
                   </p>
                 </section>
 
-                <section class="inspection-panel">
+                <section class="inspection-panel" data-widget-id="widget.results.qa">
                   <p class="signal-label">Render QA</p>
                   <pre class="stage-output compact-output" id="results-qa-text">No render QA loaded.</pre>
                 </section>
@@ -1045,13 +1057,25 @@
               </div>
             </div>
             <div class="compare-summary-top">
-              <div id="ab-toggle" class="segmented-control segmented-control-wide" role="group" aria-label="A B toggle">
+              <div
+                id="ab-toggle"
+                class="segmented-control segmented-control-wide"
+                role="group"
+                aria-label="A B toggle"
+                data-widget-id="widget.compare.ab_toggle"
+                data-control-kind="AB_TOGGLE"
+              >
                 <button type="button" class="segmented-button" data-ab-state="A" data-hit-target="true">A</button>
                 <button type="button" class="segmented-button" data-ab-state="B" data-hit-target="true">B</button>
               </div>
               <p id="ab-compensation" class="compare-disclosure">No loudness-match data loaded.</p>
             </div>
-            <div class="compare-readout-block">
+            <div
+              class="compare-readout-block"
+              data-widget-id="widget.compare.value_readout"
+              data-control-kind="VALUE_READOUT"
+              data-units="LUFS"
+            >
               <div class="control-head control-head-compact">
                 <div>
                   <p class="control-label">Matched readout</p>
@@ -1072,6 +1096,7 @@
               <summary>Compensation fine-tune</summary>
               <div
                 class="inline-control-block"
+                data-widget-id="widget.compare.compensation_knob"
                 data-control-kind="KNOB"
                 data-numeric-control="true"
                 data-direct-entry="true"
@@ -1111,7 +1136,11 @@
             </details>
             <details class="details-block">
               <summary>compare_report.json preview</summary>
-              <pre class="stage-output" id="compare-json-preview">No compare artifact loaded.</pre>
+              <pre
+                class="stage-output"
+                id="compare-json-preview"
+                data-widget-id="widget.compare.json"
+              >No compare artifact loaded.</pre>
             </details>
           </article>
         </div>
