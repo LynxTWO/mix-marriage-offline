@@ -17,17 +17,17 @@ new parity work.
 
 CustomTkinter `mmo-gui` is the single fallback plan until Tauri parity lands. It
 remains available for bounded desktop workflows during the transition, but it is
-deprecated after parity lands.
+deprecated after parity lands. It will not receive new parity work.
 
-- Fallback walkthrough:
-  [CustomTkinter GUI walkthrough](manual/10-gui-walkthrough.md)
+- GUI walkthrough (Tauri):
+  [Desktop GUI walkthrough](manual/10-gui-walkthrough.md)
 
 ## Required Links
 
 - [Roadmap](06-roadmap.md)
 - [Project When Complete](../PROJECT_WHEN_COMPLETE.md)
 - [Tauri desktop README](../gui/desktop-tauri/README.md)
-- [CustomTkinter GUI walkthrough](manual/10-gui-walkthrough.md)
+- [Desktop GUI walkthrough (Tauri)](manual/10-gui-walkthrough.md)
 
 ## Required Screens
 

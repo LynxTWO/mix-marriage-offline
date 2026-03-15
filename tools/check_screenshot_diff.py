@@ -45,9 +45,9 @@ from pathlib import Path
 #: moved by a few pixels) fall well below this bar and pass silently.
 #:
 #: To update committed baselines after an intentional large GUI change, run:
-#:   xvfb-run -a python tools/capture_gui_screenshots.py \
-#:       --out-dir docs/manual/assets/screenshots
+#:   python tools/capture_tauri_screenshots.py --out-dir docs/manual/assets/screenshots
 #: and commit the result.
+#: (Legacy CTK baselines used: xvfb-run -a python tools/capture_gui_screenshots.py)
 THRESHOLD_MAE: float = 20.0
 
 
@@ -185,7 +185,7 @@ def main() -> int:
         print(
             "[screenshot-diff] To update committed baselines after an "
             "intentional GUI change, run:\n"
-            "    xvfb-run -a python tools/capture_gui_screenshots.py "
+            "    python tools/capture_tauri_screenshots.py "
             "--out-dir docs/manual/assets/screenshots\n"
             "and commit the result.",
             file=sys.stderr,

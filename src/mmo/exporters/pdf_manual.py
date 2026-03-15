@@ -525,6 +525,7 @@ def _parse_markdown(
     *,
     chapters_dir: Path | None = None,
     usable_width: float | None = None,
+    usable_height: float | None = None,
 ) -> list[Any]:
     """Parse a minimal Markdown subset into ReportLab flowables.
 
@@ -601,11 +602,17 @@ def _parse_markdown(
                         from PIL import Image as _PILImage  # noqa: PLC0415
                         from reportlab.platypus import Image as _RLImage  # noqa: PLC0415
                         max_w = usable_width if usable_width is not None else 14.0 * _cm
+                        max_h = usable_height if usable_height is not None else 18.0 * _cm
                         with _PILImage.open(img_path) as _pil:
                             orig_w, orig_h = _pil.size
-                        embed_h = max_w * orig_h / orig_w if orig_w > 0 else max_w
+                        if orig_w > 0 and orig_h > 0:
+                            scale = min(max_w / orig_w, max_h / orig_h)
+                            embed_w = orig_w * scale
+                            embed_h = orig_h * scale
+                        else:
+                            embed_w, embed_h = max_w, max_w
                         flowables.append(
-                            _RLImage(str(img_path), width=max_w, height=embed_h)
+                            _RLImage(str(img_path), width=embed_w, height=embed_h)
                         )
                         flowables.append(_Spacer(1, 0.3 * _cm))
                         img_embedded = True
@@ -868,20 +875,26 @@ class _ManualBuilder:
             bottomMargin=margin_b,
         )
 
+        frame_padding = 6.0  # ReportLab Frame default left/right/top/bottom padding
         frame = _Frame(
             margin_l,
             margin_b,
             page_w - margin_l - margin_r,
             page_h - margin_t - margin_b,
             id="main",
+            leftPadding=frame_padding,
+            rightPadding=frame_padding,
+            topPadding=frame_padding,
+            bottomPadding=frame_padding,
         )
         doc.addPageTemplates([_PageTemplate(id="main", frames=[frame])])
 
-        usable_width = page_w - margin_l - margin_r
-        story = self._build_story(toc, usable_width=usable_width)
+        usable_width = page_w - margin_l - margin_r - 2 * frame_padding
+        usable_height = page_h - margin_t - margin_b - 2 * frame_padding
+        story = self._build_story(toc, usable_width=usable_width, usable_height=usable_height)
         doc.multiBuild(story, canvasmaker=canvas_factory)
 
-    def _build_story(self, toc: Any, *, usable_width: float | None = None) -> list[Any]:
+    def _build_story(self, toc: Any, *, usable_width: float | None = None, usable_height: float | None = None) -> list[Any]:
         s = self._styles
         story: list[Any] = []
 
@@ -922,6 +935,7 @@ class _ManualBuilder:
                     s,
                     chapters_dir=self._chapters_dir,
                     usable_width=usable_width,
+                    usable_height=usable_height,
                 )
             )
             story.append(_PageBreak())

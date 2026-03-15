@@ -824,7 +824,7 @@ function renderSceneSummary(scene: JsonObject | null, lint: JsonObject | null): 
   if (warnings.length === 0) {
     lines.push(lint === null ? "- (scene lint report unavailable)" : "- (none)");
   } else {
-    for (const row of warnings.slice(0, state.resultsDetailLevel)) {
+    for (const row of warnings) {
       const path = asString(row.path);
       const message = asString(row.message);
       const issueId = asString(row.issue_id);
