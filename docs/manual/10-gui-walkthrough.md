@@ -9,6 +9,22 @@ workflow sequence: `Validate → Analyze → Scene → Render → Results → Co
 
 ---
 
+## How to read this chapter
+
+The screenshots in this chapter are **canonical captured states**. Each one
+shows a stable, reviewable moment in the app, not the only valid layout for
+that screen.
+
+The desktop app can change shape depending on what is loaded and what you have
+opened. Expect differences between empty and loaded workspace mode, hero and
+compact sidebar presentation, and collapsed versus expanded secondary panels.
+
+Native OS dialogs such as folder pickers, file pickers, and recent-path menus
+are intentionally described in text rather than shown as canonical screenshots.
+They vary by platform and are not part of the stable app baseline.
+
+---
+
 ## Launch
 
 Run the Tauri desktop app from the repo or your installed package:
@@ -23,9 +39,9 @@ Or launch the installed binary directly if you used a packaged install.
 
 ---
 
-## Session setup
+## Shared session shell
 
-Before running any stage, configure your session in the **session sidebar**:
+Before running any stage, configure the shared session shell:
 
 - **Stems dir** — folder containing your exported stem files.
 - **Workspace dir** — output folder where all artifacts will be written.
@@ -33,17 +49,16 @@ Before running any stage, configure your session in the **session sidebar**:
   SMPTE, FILM, VST3). Internally normalized to SMPTE.
 - **Render target** — the delivery target (e.g. stereo, 5.1, 7.1.4).
 
-Use the native **Browse...** buttons for stems, workspace, and optional
-scene-lock artifacts when running the packaged desktop app. Exact manual path
-entry still works, and the app keeps deterministic recent-path chips for stems,
-workspaces, scene-locks, and compare inputs so repeat sessions are faster.
+Use the native **Browse...** buttons for stems, workspace, compare inputs, and
+optional scene-lock artifacts when running the packaged desktop app. Exact path
+entry still works. The recent-workspace and recent-path menus may appear as
+hero chips in the empty state or as compact controls once a workspace is
+loaded, but they reuse the same deterministic history and set the same session
+values either way.
 
-The empty state keeps the full hero treatment for onboarding. Once a workspace
-or artifact is loaded, the left rail automatically compacts so the active
-workflow screens get more horizontal room.
-
-These fields persist across screen switches and are passed to every CLI command
-the GUI runs.
+These fields persist across screen switches. Set them once, then move through
+Validate, Analyze, Scene, Render, Results, and Compare without re-entering
+paths unless you want to change context.
 
 The **scale control** (top-right, three buttons: 90 / 100 / 115) adjusts the
 interface scale. Use 115 on a high-DPI or large display. Hold a modifier key
@@ -51,135 +66,147 @@ while adjusting a knob or slider to see the fine-adjust indicator.
 
 ---
 
-## Screen-by-screen
+**Canonical state: Session shell, loaded compact workspace mode**
+
+Once a workspace or artifact is loaded, the onboarding hero collapses into a
+more compact left rail so the active workflow screens get more horizontal room.
+On narrower windows, some secondary controls may move lower on the page or live
+inside collapsible sections, but the workflow and stored paths do not change.
+
+---
+
+## Canonical workflow states
 
 ### Validate
 
-Run deterministic project and stem checks before committing to later stages.
+**Canonical state: Validate screen, session-ready empty state**
+
+Use Validate to confirm the session is pointed at the right stems and workspace
+before you commit to later stages.
 
 1. Confirm your stems dir and workspace dir are set.
 2. Click **Run Validate**.
-3. The screen shows: artifact paths written, a summary of validation outcomes,
-   and a JSON preview of the validation report.
+3. Review the written artifact paths, validation summary, and report preview.
+
+If you already have a loaded workspace, Validate still works the same way, but
+the session shell usually appears in the compact loaded-workspace form instead
+of the full hero presentation shown here.
+
+![Validate screen, session-ready empty state](assets/screenshots/tauri_session_ready.png)
 
 Validation failures surface here with actionable messages. Fix them before
 moving to Analyze.
-
-![Validate screen — session controls and empty state](assets/screenshots/tauri_session_ready.png)
 
 ---
 
 ### Analyze
 
-Run CLI-backed analysis and persist the scan artifacts.
+Analyze is usually the first step where the app is clearly in loaded-workspace
+mode.
 
 1. Click **Run Analyze**.
-2. The screen shows: a summary of analysis outcomes, the raw scan log, and a
-   JSON preview of the analysis report.
+2. Review the analysis summary, scan log, and report preview.
 
-The same deterministic receipts and logs the CLI writes appear here. Nothing is
-synthesized — the GUI reads what the CLI wrote.
+The layout may be more compact than the Validate empty state, but the important
+workflow stays the same: run analysis, inspect the written artifacts, and keep
+moving forward with the same session shell values.
 
 ---
 
 ### Scene
 
-Inspect the generated scene intent and preview routing context.
+**Canonical state: Scene screen, loaded with lock context**
 
 1. Click **Build Scene**.
-2. The screen shows:
-   - **Scene summary** — perspective, objects count, beds count, confidence.
-   - **Focus XY pad** — discrete depth (50–100) and pan control for scene
-     focus exploration.
-   - **Scene locks** — inspect the current project scene-lock rows, adjust
-     perspective/role/front-only/surround/height overrides, and explicitly save
-     `scene_locks.yaml`.
-   - **Locks context** — the current scene locks YAML path plus lint warnings
-     from `mmo scene lint`.
-   - **Objects list** — individual scene objects with their routing context.
-   - **JSON preview** — the raw `scene.json`.
+2. Review the scene summary, focus controls, object routing context, current
+   scene-lock context, lint warnings, and scene preview.
 
-The scene is explainable: what was decided, why, and with what confidence.
-Lint warnings appear inline when the scene has ambiguous or conflicting context,
-and saving scene locks refreshes the scene preview/lint context for reruns.
+This is the canonical loaded state for understanding what MMO inferred before
+you render.
 
-![Scene screen — objects, locks, and lint context loaded](assets/screenshots/tauri_scene_loaded.png)
+![Scene screen, loaded with lock context](assets/screenshots/tauri_scene_loaded.png)
+
+**Canonical state: Scene screen, lock editor open**
+
+When you open the lock editor, the same Scene screen shifts into an editing
+state. Editable lock rows and save controls may appear inline or in a secondary
+panel depending on window width and sidebar state. Use this state to review or
+override perspective, role, front-only, surround, and height behavior, then
+save `scene_locks.yaml` and rerun as needed.
+
+If you are loading an existing locks file, use the **Browse...** button, a
+recent-path entry, or exact path input. The native OS picker itself is
+intentionally not shown here because it is not a canonical app state.
+
+Saving scene locks refreshes the lock context and warnings so you can confirm
+what changed before moving on to Render.
 
 ---
 
 ### Render
 
-Run a deterministic render from the GUI against the same CLI contract.
+Render is log-driven rather than screenshot-driven.
 
 1. Review the config summary (target, layout, stems dir, workspace).
 2. Click **Run Render**.
-3. The screen shows a **live progress log** with `[MMO-LIVE]` prefixed lines
-   streamed from `mmo safe-render --live-progress`.
+3. Watch the live progress log as the render runs.
 4. Click **Cancel** at any time to stop the render gracefully.
 
-The render writes the same output artifacts as `mmo safe-render` from the CLI.
-No extra processing is applied by the GUI.
+On smaller windows, the log and status sections may stack vertically or move
+below summary controls. The workflow stays the same: confirm settings, render,
+then move to Results.
 
 ---
 
 ### Results
 
-Review all written artifacts, receipts, and what changed.
+**Canonical state: Results screen, loaded default state**
 
 After a render completes, click **Refresh** (or navigate to Results). The
-screen now leads with the artifact browser, selected artifact preview, final
-receipt, and what changed, while deeper QA and inspection widgets stay grouped
-under lower inspection sections instead of competing equally for attention.
+default loaded state leads with the artifact browser, selected artifact
+preview, final receipt, and what changed.
 
-The screen surfaces:
+Use this state when you want a quick answer to: what was written, what changed,
+and which artifact should I inspect next?
 
-- **Artifact browser** — paths to every output artifact written in this run.
-  Use the detail slider (1–10) inside the receipt summary card to control how
-  many lines of context appear per artifact.
-- **What changed** — a compact summary of output paths and recommendation
-  deltas tied to the generated files.
-- **QA issues** — render QA issues from the receipt, listed by severity and
-  issue ID.
-- **Recommendation confidence** — confidence chips sourced from the receipt,
-  classified as high (≥75%), medium (≥50%), or low.
-- **Inspection meters** — deterministic, artifact-backed views:
-  - Vectorscope (goniometer)
-  - Transfer-curve proxy (when dynamics context is available)
-  - Phase correlation meter
-  - Gain reduction meter
+![Results screen, loaded default state](assets/screenshots/tauri_results_loaded.png)
 
-Everything on this screen is read from artifacts — nothing is computed by the
-GUI itself. Packaged desktop builds also expose native import buttons for the
-receipt, manifest, and render-QA artifacts.
+**Canonical state: Results screen, secondary inspection expanded**
 
-![Results screen — receipt, QA issues, meters, and confidence chips](assets/screenshots/tauri_results_loaded.png)
+Deeper QA, confidence, and inspection views live in secondary sections. Those
+sections can be collapsed, expanded, or pushed lower on the page as the window
+and sidebar change. Use section headings and labels, not exact vertical
+position, as your guide when you are inspecting QA issues, confidence rows, or
+artifact-backed meters.
+
+Import buttons and recent-path entry points for receipt or QA artifacts may move
+between the main summary area and lower inspection sections, but they still
+load the same underlying files.
 
 ---
 
 ### Compare
 
-Run a post-render or post-analysis comparison between two artifact states.
+**Canonical state: Compare screen, loaded loudness-matched state**
 
 1. Load **A** and **B** artifacts using exact paths, recent compare-input
-   chips, or the native JSON/folder picker buttons.
+   entries, or the **Browse...** buttons that open the native JSON/folder
+   picker.
 2. Use the **A / B toggle** to switch the active audition state.
 3. Use the **compensation knob** (−12 to +12 dB, step 0.1) in the lower
-   inspection section to loudness-match the two sides for a fair listen. The
-   knob records the compensation method/amount — this is evaluation-only and
-   disclosed in the summary.
-4. The screen shows:
-   - **Compare summary** — the active A/B readout plus delta chips showing what
-     moved between A and B.
-   - **Loudness match status** — the compensation amount and a "Fair listen"
-     disclosure so you know the comparison is level-matched, not representative
-     of the final mix level.
-   - **Lower inspection details** — compensation fine-tune and the raw
-     `compare_report.json` preview.
+   inspection section to loudness-match the two sides for a fair listen.
+4. Review the compare summary, delta chips, loudness-match disclosure, and any
+   lower inspection details you want to expand.
 
-The compare contract is the same as `mmo compare` from the CLI. The GUI passes
-real artifact inputs and reads the resulting `compare_report.json`.
+The default loaded state emphasizes the summary first. Compensation fine-tune
+and raw compare-report inspection live in lower sections that may expand,
+collapse, or move lower in the layout depending on available space.
 
-![Compare screen — A/B data loaded with loudness match active](assets/screenshots/tauri_compare_loaded.png)
+![Compare screen, loaded loudness-matched state](assets/screenshots/tauri_compare_loaded.png)
+
+The native picker dialog is intentionally not part of the canonical screenshot
+baseline. Use the screenshot for orientation and the text for the full compare
+workflow.
 
 ---
 
@@ -203,13 +230,18 @@ Playwright capture spec. To regenerate them locally:
 python tools/capture_tauri_screenshots.py --out-dir docs/manual/assets/screenshots
 ```
 
-This starts the Vite dev server automatically (via the Playwright `webServer`
-block) and captures four screens with realistic fixture data:
+This starts the dev server automatically and captures four canonical states with
+realistic fixture data:
 
-- `tauri_session_ready.png` — Validate screen, session controls, empty state
-- `tauri_scene_loaded.png` — Scene screen with objects, locks, and lint context
-- `tauri_results_loaded.png` — Results screen with receipt, QA, and meters
-- `tauri_compare_loaded.png` — Compare screen with A/B data and loudness match
+- `tauri_session_ready.png` — Validate screen, session-ready empty state
+- `tauri_scene_loaded.png` — Scene screen, loaded with lock context
+- `tauri_results_loaded.png` — Results screen, loaded default state
+- `tauri_compare_loaded.png` — Compare screen, loaded loudness-matched state
+
+Other meaningful GUI states in this chapter, such as the loaded compact session
+shell, the Scene lock editor open state, and Results secondary inspection
+expanded, are described in text because they are more dependent on viewport and
+panel state than on a single stable screenshot.
 
 After running, commit the updated PNGs. The perceptual diff checker
 (`tools/check_screenshot_diff.py`) validates that regenerated screenshots match

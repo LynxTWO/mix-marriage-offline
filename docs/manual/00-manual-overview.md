@@ -17,6 +17,11 @@ Conventions used here. CLI examples use `mmo ...` (installed) and also work as
 own. Targets can be written as full IDs (like `TARGET.STEREO.2_0`) or as
 shorthands (like `stereo`, `5.1`, `7.1.4`).
 
+GUI screenshots in this manual are canonical captured states. They orient you
+to one stable app moment, not every possible sidebar or panel arrangement.
+Native OS dialogs such as folder pickers and file pickers are described in text
+because they vary by platform and are not part of the canonical app baseline.
+
 MMO is offline-first. If something needs an external tool like FFmpeg, MMO will
 tell you and gate the feature instead of guessing.
 

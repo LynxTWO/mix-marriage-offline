@@ -85,6 +85,11 @@ Request “in band” perspective (machine-readable). mmo scene intent set --sce
 out/scene.json --scope scene --key perspective --value in_band --out
 out/scene.json
 
+If you are doing this from the desktop app, see the Scene section in the
+[Desktop GUI walkthrough](10-gui-walkthrough.md). It documents both the loaded
+Scene state and the lock-editor-open state, and it treats panel placement as
+stateful instead of assuming the editor always appears in one fixed shape.
+
 Pro notes. Locks exist because “taste” changes are high-risk in automation. If
 you know a boundary is non-negotiable, make it explicit as a lock. Use Assist
 mode plus a conservative user profile when you are working on unfamiliar stems.

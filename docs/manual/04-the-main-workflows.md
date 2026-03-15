@@ -54,3 +54,9 @@ long projects, and repeat delivery.
 Pro notes. Project scaffolds help you separate “ingest and classify” from
 “render and deliver.” They also make GUI payload building cleaner because file
 paths become stable and allowlisted.
+
+If you want to follow these same workflows in the Tauri desktop app, read the
+[Desktop GUI walkthrough](10-gui-walkthrough.md). That chapter follows the same
+`Validate → Analyze → Scene → Render → Results → Compare` order, but it
+describes canonical GUI states such as session-ready, loaded compact workspace,
+and loaded Results/Compare views instead of assuming one fixed screen shape.

@@ -230,6 +230,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   install/runtime expectations; release announcement templates now include an
   explicit "what ships today" vs "still in progress" split so future release
   notes do not regress into outdated language.
+- User Manual Chapter 10 now documents the Tauri desktop app as named canonical
+  UI states rather than one immutable screenshot per screen, and related manual
+  chapters now cross-link to that state-based walkthrough for workflows, locks,
+  sessions, Results, and Compare.
 - DSP contract docs now define one canonical seven-stage graph, explicitly mark
   which stages are advisory-only vs audio-mutating, and document the deterministic
   export-finalization receipt contract (`none` / `tpdf` / `tpdf_hp`, default

@@ -15,6 +15,12 @@ Bundles. A ui_bundle.json is a “pointer payload” that the GUI can consume. Y
 can build one from a report plus optional artifacts: mmo bundle --report
 out/report.json --out out/ui_bundle.json
 
+For the desktop-app view of these files, see the
+[Desktop GUI walkthrough](10-gui-walkthrough.md). That chapter maps projects,
+sessions, receipts, and compare inputs onto canonical GUI states such as the
+loaded compact workspace shell, Results loaded state, and Compare loaded state
+instead of assuming one static screen layout.
+
 Scene and render-plan artifacts. MMO can build a scene intent file and a render
 plan. Those exist to support mix-once, render-many pipelines. If you are not
 doing advanced delivery, you can ignore them.
