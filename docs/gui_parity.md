@@ -58,8 +58,9 @@ deprecated after parity lands. It will not receive new parity work.
       "what/why" hints, recommendation confidence indicators sourced from
       artifacts, and compact "what changed" summaries after run/apply/compare
       actions.
-- [ ] Scene locks edit: the GUI must support deterministic scene lock editing
-      and save the resulting lock artifact for repeatable reruns.
+- [x] Scene locks edit: the GUI supports deterministic scene lock editing,
+      explicit save to `scene_locks.yaml`, and refreshes scene context for
+      repeatable reruns.
 
 ## Explicitly Non-Blocking Here
 

@@ -25,8 +25,7 @@ polish items live in `PROJECT_WHEN_COMPLETE.md` section 9 and in `LATER` below.
   just a buildable shell.
 - Canonical checklist: [gui_parity.md](gui_parity.md)
 - Open blockers:
-- [PWC: compare is a first-class user-facing workflow across CLI and GUI](../PROJECT_WHEN_COMPLETE.md)
-- [PWC: primary Tauri GUI exposes validate -> analyze -> scene -> render -> results -> compare using CLI artifacts](../PROJECT_WHEN_COMPLETE.md)
+- none currently
 
 ### DSP And Plugin Contract Closure
 

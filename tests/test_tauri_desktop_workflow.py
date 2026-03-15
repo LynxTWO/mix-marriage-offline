@@ -53,6 +53,10 @@ class TestTauriDesktopWorkflow(unittest.TestCase):
             "results-refresh-button",
             "workspace-reveal-button",
             "timeline-list",
+            "scene-locks-inspect-button",
+            "scene-locks-save-button",
+            "scene-locks-editor",
+            "scene-locks-perspective-select",
             "screen-validate",
             "screen-analyze",
             "screen-scene",
@@ -75,6 +79,8 @@ class TestTauriDesktopWorkflow(unittest.TestCase):
         self.assertRegex(source, re.compile(r"Command\.sidecar\(SIDECAR_NAME,\s*args"))
         self.assertIn(".execute()", source)
         self.assertIn(".spawn()", source)
+        self.assertIn('["gui", "rpc"]', source)
+        self.assertIn("spawnedChild.write", source)
         self.assertIn('projectValidationPath: joinPath(projectDir, "validation.json")', source)
         self.assertIn('scenePath: joinPath(normalizedWorkspaceDir, "scene.json")', source)
         self.assertIn('compareReportPath: joinPath(normalizedWorkspaceDir, "compare_report.json")', source)

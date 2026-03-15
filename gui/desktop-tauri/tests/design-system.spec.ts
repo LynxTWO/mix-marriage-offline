@@ -156,6 +156,7 @@ function jsonFile(name: string, payload: unknown): { buffer: Buffer; mimeType: s
 test.describe("desktop workflow design system", () => {
   for (const viewport of viewports) {
     test(`widgets stay on-screen without overlaps at ${viewport.label}`, async ({ page }) => {
+      test.slow();
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.goto("/");
 
@@ -228,6 +229,7 @@ test.describe("desktop workflow design system", () => {
   test("scene screen shows generated scene summary plus lint and lock context", async ({ page }) => {
     await page.goto("/");
     await openScreen(page, "scene");
+    await page.locator("#workspace-dir-input").fill("/tmp/mmo-workspace");
 
     await page.locator("#scene-json-file-input").setInputFiles(jsonFile("scene.json", {
       intent: {
@@ -289,11 +291,56 @@ test.describe("desktop workflow design system", () => {
         },
       ],
     }));
+    await page.evaluate(() => {
+      const api = (window as typeof window & {
+        __MMO_DESKTOP_TEST__?: {
+          hydrateSceneLocksInspect: (payload: Record<string, unknown>) => void;
+        };
+      }).__MMO_DESKTOP_TEST__;
+      api?.hydrateSceneLocksInspect({
+        objects: [
+          {
+            confidence: 0.91,
+            inferred_role_id: "ROLE.VOCAL.LEAD",
+            label: "Vox",
+            object_id: "OBJ.VOX",
+            role_override_id: "",
+            stem_id: "STEM.VOX",
+          },
+          {
+            confidence: 0.66,
+            front_only_override: true,
+            inferred_role_id: "ROLE.GTR.ELECTRIC",
+            label: "Guitar",
+            object_id: "OBJ.GTR",
+            role_override_id: "ROLE.GTR.ELECTRIC",
+            stem_id: "STEM.GTR",
+            surround_cap_override: 0,
+          },
+        ],
+        overrides_count: 1,
+        perspective: "in_orchestra",
+        perspective_values: ["audience", "in_orchestra"],
+        role_options: [
+          { label: "Lead Vocal", role_id: "ROLE.VOCAL.LEAD" },
+          { label: "Electric Guitar", role_id: "ROLE.GTR.ELECTRIC" },
+        ],
+        scene_locks_path: "/tmp/project/scene_locks.yaml",
+        scene_path: "/tmp/project/drafts/scene.draft.json",
+      });
+    });
 
     await expect(page.locator("#scene-summary-text")).toContainText("Perspective:");
     await expect(page.locator("#scene-summary-text")).toContainText("OBJ.VOX");
     await expect(page.locator("#scene-locks-text")).toContainText("LOCK.PRESERVE_DYNAMICS");
+    await expect(page.locator("#scene-lock-summary-perspective")).toContainText("in_orchestra");
+    await expect(page.locator("#scene-lock-summary-rows")).toContainText("2 row(s)");
+    await expect(page.locator("#scene-lock-summary-path")).toContainText("scene_locks.yaml");
+    await expect(page.locator("#scene-locks-editor")).toContainText("Front-only");
     await expect(page.locator("#scene-focus-caption")).toContainText("Nearest:");
+
+    await page.locator("#scene-locks-perspective-select").selectOption("audience");
+    await expect(page.locator("#scene-lock-summary-dirty")).toContainText("Yes");
   });
 
   test("results screen is artifact-driven and ties changes back to output paths", async ({ page }) => {

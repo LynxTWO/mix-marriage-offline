@@ -21,11 +21,10 @@ reference when still useful.
 
 ## Still In Progress
 
-- Tauri scene-lock editing parity is not done yet.
-- Cross-platform packaged desktop smoke coverage now runs on Windows, macOS,
-  and Linux packaged bundles in CI and release builds.
+- Release-copy accuracy and broader deterministic regression expansion remain
+  in progress around the shipped desktop flow.
 - The legacy CustomTkinter GUI remains available as fallback-only while Tauri
-  parity closes out.
+  parity remains documented as a transition path.
 
 ## Start Here
 

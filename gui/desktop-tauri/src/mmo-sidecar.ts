@@ -1,8 +1,9 @@
-import { Command } from "@tauri-apps/plugin-shell";
+import { Command, type Child } from "@tauri-apps/plugin-shell";
 import { exists, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 const SIDECAR_NAME = "binaries/mmo";
 const LIVE_PREFIX = "[MMO-LIVE] ";
+const DEFAULT_RPC_TIMEOUT_MS = 15_000;
 
 export type MmoLivePayload = {
   confidence?: number | null;
@@ -38,6 +39,21 @@ export type MmoRunResult = {
   signal: number | null;
   stderr: string;
   stdout: string;
+};
+
+type MmoRpcEnvelope<T extends Record<string, unknown>> = {
+  error?: {
+    code?: string;
+    message?: string;
+  };
+  id?: string | null;
+  ok?: boolean;
+  result?: T;
+};
+
+type MmoRpcError = Error & {
+  rpcCode?: string;
+  rpcMessage?: string;
 };
 
 export type WorkflowPaths = {
@@ -210,6 +226,26 @@ function createSidecar(args: string[], options: MmoRunOptions): Command<string> 
   });
 }
 
+function parseRpcEnvelope<T extends Record<string, unknown>>(line: string): MmoRpcEnvelope<T> | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+  return parsed as MmoRpcEnvelope<T>;
+}
+
+function rpcError(code: string, message: string): MmoRpcError {
+  const error = new Error(`${code}: ${message}`) as MmoRpcError;
+  error.rpcCode = code;
+  error.rpcMessage = message;
+  return error;
+}
+
 export function buildWorkflowPaths(workspaceDir: string): WorkflowPaths {
   const normalizedWorkspaceDir = normalizePath(workspaceDir);
   const projectDir = joinPath(normalizedWorkspaceDir, "project");
@@ -362,4 +398,117 @@ export async function spawnMmo(
       settleReject(error);
     });
   });
+}
+
+export async function runMmoRpc<T extends Record<string, unknown>>(
+  method: string,
+  params: Record<string, unknown> = {},
+  options: MmoRunOptions & { timeoutMs?: number } = {},
+): Promise<T> {
+  if (!isTauriRuntime()) {
+    throw new Error("MMO GUI RPC is only available in the Tauri desktop runtime.");
+  }
+
+  const timeoutMs = options.timeoutMs ?? DEFAULT_RPC_TIMEOUT_MS;
+  const command = createSidecar(["gui", "rpc"], options);
+  const stdoutBuffer = new LineBuffer();
+  let child: Child | null = null;
+  try {
+    const response = await new Promise<MmoRpcEnvelope<T>>((resolve, reject) => {
+      let settled = false;
+      let stdout = "";
+      let stderr = "";
+
+      const settleResolve = (payload: MmoRpcEnvelope<T>) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        resolve(payload);
+      };
+
+      const settleReject = (error: unknown) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        reject(error);
+      };
+
+      const timer = window.setTimeout(() => {
+        settleReject(new Error(`RPC request timed out (${method}) after ${timeoutMs}ms.`));
+      }, timeoutMs);
+
+      command.stdout.on("data", (chunk) => {
+        const text = String(chunk);
+        stdout += text;
+        stdoutBuffer.push(text, (line) => {
+          const payload = parseRpcEnvelope<T>(line);
+          if (payload !== null) {
+            window.clearTimeout(timer);
+            settleResolve(payload);
+          }
+        });
+      });
+
+      command.stderr.on("data", (chunk) => {
+        stderr += String(chunk);
+      });
+
+      command.on("error", (message) => {
+        window.clearTimeout(timer);
+        settleReject(new Error(message));
+      });
+
+      command.on("close", ({ code, signal }) => {
+        stdoutBuffer.flush((line) => {
+          const payload = parseRpcEnvelope<T>(line);
+          if (payload !== null) {
+            settleResolve(payload);
+          }
+        });
+        window.clearTimeout(timer);
+        if (!settled) {
+          const stderrText = stderr.trim();
+          const stdoutText = stdout.trim();
+          const detail = stderrText || stdoutText || "RPC process closed before returning a response.";
+          settleReject(
+            new Error(
+              `RPC process exited (code=${code ?? "null"} signal=${signal ?? "null"}): ${detail}`,
+            ),
+          );
+        }
+      });
+
+      command.spawn()
+        .then(async (spawnedChild) => {
+          child = spawnedChild;
+          await spawnedChild.write(
+            `${JSON.stringify({
+              id: `desktop-rpc-${Date.now().toString(36)}`,
+              method,
+              params,
+            })}\n`,
+          );
+        })
+        .catch((error) => {
+          window.clearTimeout(timer);
+          settleReject(error);
+        });
+    });
+
+    if (response.ok !== true) {
+      const code = typeof response.error?.code === "string" ? response.error.code : "RPC.ERROR";
+      const message = typeof response.error?.message === "string"
+        ? response.error.message
+        : "Unknown RPC error.";
+      throw rpcError(code, message);
+    }
+    return (response.result ?? {}) as T;
+  } finally {
+    const activeChild = child as { kill: () => Promise<void> } | null;
+    if (activeChild !== null) {
+      await activeChild.kill().catch(() => undefined);
+    }
+  }
 }

@@ -406,9 +406,8 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
       by content hash.
 - [x] Project session JSON persistence exists for `scene + history + receipts`
       via `mmo project save/load`, with deterministic JSON output and strict
-      schema validation. What remains: the primary remaining Tauri parity item
-      is scene-lock editing in the primary GUI; compare/results artifact parity
-      is complete.
+      schema validation. Tauri parity for the primary workflow is complete,
+      including scene-lock editing plus compare/results artifact parity.
 
 ### 4.8.1 GUI is ergonomically safe and AI-readable (a work of art in itself, so creatives and nerds alike love it. Strong typography, cinematic color contrast, and intentional spacing/visual hierarchy so it feels crafted, not utilitarian, while still staying cross-platform and deterministic)
 
@@ -442,11 +441,11 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
       context: `_mmo_gui/stems_map.json` + `_mmo_gui/bus_plan.json` (+ CSV
       summary) are generated, and the Dashboard shows role counts with a
       hierarchical bus tree.
-- [x] Desktop GUI includes a read-only Scene tab after Analyze:
-      `_mmo_gui/scene.json` + `_mmo_gui/scene_lint.json` are generated, and the
-      tab surfaces perspective, object azimuth/width/depth/confidence rows,
-      bed-bus classification context, and lint warnings for object-vs-bed
-      explainability.
+- [x] Desktop GUI includes a first-class Scene tab after Analyze:
+      `_mmo_gui/scene.json` + `_mmo_gui/scene_lint.json` are generated, the tab
+      surfaces perspective/object/bed explainability plus lint warnings, and
+      the primary Tauri workflow can inspect/edit/save deterministic
+      `scene_locks.yaml` overrides with scene refresh for reruns.
 - [x] An isolated Tauri desktop scaffold now exists under `gui/desktop-tauri`,
       using a Vite frontend with cross-platform CI release-binary builds on
       Windows, macOS, and Linux.
@@ -467,9 +466,8 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
       disclosure).
 - [x] Any plugin/config UI is generated from JSON Schema with optional UI hints
       (example: x_mmo_ui or a dedicated ui_hints registry) so agents do not
-      hand-build one-off forms. What remains: the open Tauri parity behavior
-      tracked in `docs/gui_parity.md` is scene-lock editing in the primary
-      desktop workflow.
+      hand-build one-off forms. The required Tauri parity behaviors tracked in
+      `docs/gui_parity.md` are complete for the primary desktop workflow.
 
 Interaction standards (non-negotiable):
 

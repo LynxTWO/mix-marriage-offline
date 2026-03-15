@@ -17,7 +17,7 @@ Current delivery note:
 - The packaged Tauri app already covers
   `Validate -> Analyze -> Scene -> Render -> Results -> Compare`.
 - CustomTkinter is the fallback desktop path until Tauri parity lands.
-- The main remaining parity gap is scene-lock editing.
+- The primary Tauri workflow now includes deterministic scene-lock editing.
 - The enforceable rollout checklist lives in [gui_parity.md](gui_parity.md).
 
 ## Scene-first / render-many note

@@ -87,6 +87,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Tauri scene-lock editor parity:
+  - The primary desktop Scene screen now inspects, edits, and saves
+    deterministic `scene_locks.yaml` overrides through the existing
+    `scene.locks.inspect` / `scene.locks.save` GUI RPC contract.
+  - The desktop editor mirrors the proven web flow for perspective, per-row
+    role override, front-only, surround cap, and height cap edits, surfaces RPC
+    validation failures in the UI, and keeps manual scene-lock path entry as a
+    fallback path.
+  - After save, the desktop workflow refreshes scene-lock context, rebuilds or
+    re-lints the scene preview as needed, and updates the Scene screen status so
+    edit -> save -> render stays deterministic inside the primary app.
+
 - Release-grade packaged desktop smoke gate:
   - CI and release workflows now build packaged Tauri desktop bundles on
     Windows, macOS, and Linux, then launch the packaged app and verify the

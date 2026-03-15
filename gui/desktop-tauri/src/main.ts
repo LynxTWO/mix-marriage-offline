@@ -17,6 +17,7 @@ import {
   joinPath,
   readArtifactJson,
   resolveSiblingPath,
+  runMmoRpc,
   spawnMmo,
   type MmoLivePayload,
   type MmoLogKind,
@@ -30,6 +31,7 @@ type StageKey = Exclude<CommandStage, "doctor">;
 type StageState = "fail" | "idle" | "pass" | "running";
 type CompareState = "A" | "B";
 type ArtifactTag = "ALL" | "AUDIO" | "JSON" | "QA" | "RECEIPT";
+type SceneLockStatusTone = "error" | "info" | "ok";
 
 type JsonObject = Record<string, unknown>;
 
@@ -117,6 +119,49 @@ type DragState = {
   surface: HTMLElement;
 };
 
+type SceneLockRoleOption = {
+  label: string;
+  roleId: string;
+};
+
+type SceneLockRowState = {
+  confidence: number;
+  editFrontOnly: boolean;
+  editHeightCap: number;
+  editRoleId: string;
+  editSurroundCap: number;
+  inferredRoleId: string;
+  label: string;
+  objectId: string;
+  stemId: string;
+};
+
+type SceneLocksState = {
+  dirty: boolean;
+  isInspecting: boolean;
+  isSaving: boolean;
+  loadedSignature: string;
+  objects: SceneLockRowState[];
+  overridesCount: number;
+  perspective: string;
+  perspectiveValues: string[];
+  roleOptions: SceneLockRoleOption[];
+  sceneLocksPath: string;
+  scenePath: string;
+  statusMessage: string;
+  statusTone: SceneLockStatusTone;
+};
+
+type DesktopTestApi = {
+  hydrateSceneLocksInspect: (payload: JsonObject) => void;
+};
+
+declare global {
+  interface Window {
+    __MMO_DESKTOP_TEST__?: DesktopTestApi;
+  }
+}
+
 type AppUi = {
   abButtons: HTMLButtonElement[];
   artifactPaths: HTMLElement;
@@ -195,6 +240,16 @@ type AppUi = {
     focusCaption: HTMLElement;
     focusDot: HTMLElement;
     focusPad: HTMLButtonElement;
+    lockEditorDetails: HTMLDetailsElement;
+    lockInspectButton: HTMLButtonElement;
+    lockPerspectiveSelect: HTMLSelectElement;
+    lockRows: HTMLElement;
+    lockSaveButton: HTMLButtonElement;
+    lockStatus: HTMLElement;
+    lockSummaryDirty: HTMLElement;
+    lockSummaryPath: HTMLElement;
+    lockSummaryPerspective: HTMLElement;
+    lockSummaryRows: HTMLElement;
     jsonPreview: HTMLElement;
     locksText: HTMLElement;
     objectsList: HTMLElement;
@@ -213,6 +268,43 @@ type AppUi = {
     summaryText: HTMLElement;
   };
 };
+
+function defaultScenePerspectiveValues(): string[] {
+  return ["audience", "on_stage", "in_band", "in_orchestra"];
+}
+
+function sceneLocksSignature(rows: SceneLockRowState[], perspective: string): string {
+  return JSON.stringify({
+    perspective,
+    rows: rows.map((row) => ({
+      editFrontOnly: row.editFrontOnly,
+      editHeightCap: row.editHeightCap,
+      editRoleId: row.editRoleId,
+      editSurroundCap: row.editSurroundCap,
+      stemId: row.stemId,
+    })),
+  });
+}
+
+function emptySceneLocksState(): SceneLocksState {
+  const perspectiveValues = defaultScenePerspectiveValues();
+  const perspective = perspectiveValues[0] ?? "audience";
+  return {
+    dirty: false,
+    isInspecting: false,
+    isSaving: false,
+    loadedSignature: sceneLocksSignature([], perspective),
+    objects: [],
+    overridesCount: 0,
+    perspective,
+    perspectiveValues,
+    roleOptions: [],
+    sceneLocksPath: "",
+    scenePath: "",
+    statusMessage: "Inspect the project scene locks to edit deterministic overrides.",
+    statusTone: "info",
+  };
+}
 
 const state = {
   artifacts: {
@@ -254,6 +346,7 @@ const state = {
   resultsArtifactSearch: "",
   resultsArtifactTag: "ALL" as ArtifactTag,
   resultsDetailLevel: 6,
+  sceneLocks: emptySceneLocksState(),
   selectedArtifactId: "",
   sceneFocusDepth: 50,
   sceneFocusPan: 0,
@@ -373,6 +466,16 @@ function getUi(): AppUi {
       focusCaption: requiredElement("#scene-focus-caption"),
       focusDot: requiredElement("#scene-focus-dot"),
       focusPad: requiredElement("#scene-focus-pad"),
+      lockEditorDetails: requiredElement("#scene-locks-editor-details"),
+      lockInspectButton: requiredElement("#scene-locks-inspect-button"),
+      lockPerspectiveSelect: requiredElement("#scene-locks-perspective-select"),
+      lockRows: requiredElement("#scene-locks-editor"),
+      lockSaveButton: requiredElement("#scene-locks-save-button"),
+      lockStatus: requiredElement("#scene-locks-status"),
+      lockSummaryDirty: requiredElement("#scene-lock-summary-dirty"),
+      lockSummaryPath: requiredElement("#scene-lock-summary-path"),
+      lockSummaryPerspective: requiredElement("#scene-lock-summary-perspective"),
+      lockSummaryRows: requiredElement("#scene-lock-summary-rows"),
       jsonPreview: requiredElement("#scene-json-preview"),
       locksText: requiredElement("#scene-locks-text"),
       objectsList: requiredElement("#scene-objects-list"),
@@ -423,6 +526,66 @@ function asNumber(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+function clampUnitValue(value: unknown, fallback: number): number {
+  const numeric = asNumber(value);
+  if (numeric === null) {
+    return fallback;
+  }
+  return clamp(numeric, 0, 1);
+}
+
+function normalizeSceneLockRoleOptions(value: unknown): SceneLockRoleOption[] {
+  const normalized = asArray(value)
+    .map(asObject)
+    .filter((row): row is JsonObject => row !== null)
+    .map((row) => ({
+      label: asString(row.label).trim() || asString(row.role_id).trim(),
+      roleId: asString(row.role_id).trim(),
+    }))
+    .filter((row) => row.roleId.length > 0);
+  normalized.sort((left, right) => left.roleId.localeCompare(right.roleId));
+  return normalized;
+}
+
+function normalizeSceneLockRows(value: unknown): SceneLockRowState[] {
+  const rows: SceneLockRowState[] = [];
+  for (const item of asArray(value)) {
+    const row = asObject(item);
+    if (row === null) {
+      continue;
+    }
+    const stemId = asString(row.stem_id).trim();
+    if (!stemId) {
+      continue;
+    }
+    const objectId = asString(row.object_id).trim() || `OBJ.${stemId}`;
+    const label = asString(row.label).trim() || objectId;
+    const inferredRoleId = asString(row.inferred_role_id).trim();
+    const roleOverrideId = asString(row.role_override_id).trim();
+    const surroundOverride = asNumber(row.surround_cap_override);
+    const heightOverride = asNumber(row.height_cap_override);
+    const frontOnlyOverride = row.front_only_override === true || (surroundOverride !== null && surroundOverride <= 0);
+    rows.push({
+      confidence: clampUnitValue(row.confidence, 0),
+      editFrontOnly: frontOnlyOverride,
+      editHeightCap: heightOverride === null ? 1 : clampUnitValue(heightOverride, 1),
+      editRoleId: roleOverrideId,
+      editSurroundCap: frontOnlyOverride ? 0 : (surroundOverride === null ? 1 : clampUnitValue(surroundOverride, 1)),
+      inferredRoleId,
+      label,
+      objectId,
+      stemId,
+    });
+  }
+  rows.sort((left, right) => {
+    if (left.objectId !== right.objectId) {
+      return left.objectId.localeCompare(right.objectId);
+    }
+    return left.stemId.localeCompare(right.stemId);
+  });
+  return rows;
 }
 
 function average(values: number[]): number | null {
@@ -616,6 +779,8 @@ function applyBusyState(ui: AppUi): void {
   ui.buttons.resultsRefresh.disabled = busy;
   ui.buttons.reveal.disabled = busy || !ui.inputs.workspaceDir.value.trim();
   ui.buttons.renderCancel.disabled = !(busy && state.busyStage === "render" && state.currentCancelPath !== null);
+  ui.scene.lockInspectButton.disabled = busy || !ui.inputs.workspaceDir.value.trim() || state.sceneLocks.isInspecting || state.sceneLocks.isSaving;
+  ui.scene.lockSaveButton.disabled = busy || state.sceneLocks.isInspecting || state.sceneLocks.isSaving || !state.sceneLocks.dirty || state.sceneLocks.objects.length === 0;
 }
 
 function buildRenderCancelPath(paths: WorkflowPaths): string {
@@ -900,9 +1065,13 @@ function renderSceneLocks(scene: JsonObject | null, sceneLocksPath: string, lint
     return "No lint or lock context loaded.";
   }
   const lines = [
-    `scene_locks_path=${sceneLocksPath || "(not set)"}`,
+    `scene_locks_input=${sceneLocksPath || "(not set)"}`,
+    `editor_scene_locks_path=${state.sceneLocks.sceneLocksPath || "(not loaded)"}`,
+    `editor_scene_path=${state.sceneLocks.scenePath || "(not loaded)"}`,
     `scene_path=${state.artifactSources.scenePath || "(not loaded)"}`,
     `scene_lint_path=${state.artifactSources.sceneLintPath || "(not loaded)"}`,
+    `scene_lock_rows=${state.sceneLocks.objects.length}`,
+    `scene_lock_unsaved=${state.sceneLocks.dirty}`,
   ];
 
   const intent = asObject(scene.intent);
@@ -925,7 +1094,315 @@ function renderSceneLocks(scene: JsonObject | null, sceneLocksPath: string, lint
       `lint_counts=error:${asNumber(lintSummary.error_count) ?? 0} warn:${asNumber(lintSummary.warn_count) ?? 0}`,
     );
   }
+  if (state.sceneLocks.statusMessage.trim()) {
+    lines.push(`scene_lock_editor_status=${state.sceneLocks.statusMessage.trim()}`);
+  }
   return lines.join("\n");
+}
+
+function setSelectOptions(
+  select: HTMLSelectElement,
+  options: Array<{ label: string; value: string }>,
+  selectedValue: string,
+): void {
+  const nextMarkup = options
+    .map((option) => `<option value="${option.value}">${option.label}</option>`)
+    .join("");
+  if (select.innerHTML !== nextMarkup) {
+    select.innerHTML = nextMarkup;
+  }
+  select.value = options.some((option) => option.value === selectedValue)
+    ? selectedValue
+    : (options[0]?.value ?? "");
+}
+
+function syncSceneLocksDirty(): void {
+  state.sceneLocks.dirty = sceneLocksSignature(
+    state.sceneLocks.objects,
+    state.sceneLocks.perspective,
+  ) !== state.sceneLocks.loadedSignature;
+}
+
+function updateSceneLockRow(stemId: string, patch: Partial<SceneLockRowState>): void {
+  state.sceneLocks.objects = state.sceneLocks.objects.map((row) => {
+    if (row.stemId !== stemId) {
+      return row;
+    }
+    const next: SceneLockRowState = {
+      ...row,
+      ...patch,
+      editFrontOnly: (patch.editFrontOnly ?? row.editFrontOnly) === true,
+      editHeightCap: clampUnitValue(patch.editHeightCap ?? row.editHeightCap, row.editHeightCap),
+      editRoleId: typeof (patch.editRoleId ?? row.editRoleId) === "string"
+        ? (patch.editRoleId ?? row.editRoleId).trim()
+        : row.editRoleId,
+      editSurroundCap: clampUnitValue(patch.editSurroundCap ?? row.editSurroundCap, row.editSurroundCap),
+    };
+    if (next.editFrontOnly) {
+      next.editSurroundCap = 0;
+    }
+    return next;
+  });
+  syncSceneLocksDirty();
+}
+
+function hydrateSceneLocksInspect(
+  payload: JsonObject,
+  {
+    autoFillMode,
+    statusMessage,
+    statusTone,
+    ui,
+  }: {
+    autoFillMode: "always" | "if-empty";
+    statusMessage: string;
+    statusTone: SceneLockStatusTone;
+    ui: AppUi;
+  },
+): void {
+  const previousSceneLocksPath = state.sceneLocks.sceneLocksPath;
+  const perspectiveValues = asArray(payload.perspective_values)
+    .map((item) => asString(item).trim())
+    .filter(Boolean);
+  const normalizedPerspectiveValues = perspectiveValues.length > 0
+    ? perspectiveValues
+    : defaultScenePerspectiveValues();
+  const perspective = asString(payload.perspective).trim();
+  const nextPerspective = normalizedPerspectiveValues.includes(perspective)
+    ? perspective
+    : (normalizedPerspectiveValues[0] ?? "audience");
+  const objects = normalizeSceneLockRows(payload.objects);
+
+  state.sceneLocks = {
+    dirty: false,
+    isInspecting: false,
+    isSaving: state.sceneLocks.isSaving,
+    loadedSignature: sceneLocksSignature(objects, nextPerspective),
+    objects,
+    overridesCount: asNumber(payload.overrides_count) ?? 0,
+    perspective: nextPerspective,
+    perspectiveValues: normalizedPerspectiveValues,
+    roleOptions: normalizeSceneLockRoleOptions(payload.role_options),
+    sceneLocksPath: asString(payload.scene_locks_path).trim(),
+    scenePath: asString(payload.scene_path).trim(),
+    statusMessage,
+    statusTone,
+  };
+
+  const currentInputPath = ui.inputs.sceneLocksPath.value.trim();
+  if (
+    state.sceneLocks.sceneLocksPath &&
+    (
+      autoFillMode === "always" ||
+      currentInputPath.length === 0 ||
+      currentInputPath === previousSceneLocksPath
+    )
+  ) {
+    ui.inputs.sceneLocksPath.value = state.sceneLocks.sceneLocksPath;
+  }
+}
+
+function renderSceneLockEditor(ui: AppUi): void {
+  const workspaceDir = ui.inputs.workspaceDir.value.trim();
+  const hasRows = state.sceneLocks.objects.length > 0;
+  const globalBusy = state.busyStage !== null;
+  const editorBusy = state.sceneLocks.isInspecting || state.sceneLocks.isSaving;
+  const canInspect = workspaceDir.length > 0 && !globalBusy && !editorBusy;
+  const canSave = hasRows && state.sceneLocks.dirty && !globalBusy && !editorBusy;
+
+  ui.scene.lockInspectButton.disabled = !canInspect;
+  ui.scene.lockSaveButton.disabled = !canSave;
+  ui.scene.lockPerspectiveSelect.disabled = !hasRows || globalBusy || editorBusy;
+  ui.scene.lockSummaryPerspective.textContent = state.sceneLocks.perspective || "(not loaded)";
+  ui.scene.lockSummaryRows.textContent = hasRows
+    ? `${state.sceneLocks.objects.length} row(s), ${state.sceneLocks.overridesCount} override(s)`
+    : "No rows loaded.";
+  ui.scene.lockSummaryPath.textContent = state.sceneLocks.sceneLocksPath || "(project save path unavailable)";
+  ui.scene.lockSummaryDirty.textContent = state.sceneLocks.dirty ? "Yes" : "No";
+  ui.scene.lockStatus.textContent = state.sceneLocks.statusMessage;
+  ui.scene.lockStatus.dataset.tone = state.sceneLocks.statusTone;
+
+  setSelectOptions(
+    ui.scene.lockPerspectiveSelect,
+    state.sceneLocks.perspectiveValues.map((value) => ({ label: value, value })),
+    state.sceneLocks.perspective,
+  );
+
+  ui.scene.lockRows.innerHTML = "";
+  if (!workspaceDir) {
+    const empty = document.createElement("p");
+    empty.className = "scene-lock-empty";
+    empty.textContent = "Enter a workspace folder, then inspect the project scene locks to edit deterministic overrides.";
+    ui.scene.lockRows.append(empty);
+    return;
+  }
+  if (!hasRows) {
+    const empty = document.createElement("p");
+    empty.className = "scene-lock-empty";
+    empty.textContent = state.sceneLocks.isInspecting
+      ? "Loading scene lock rows..."
+      : "No scene lock rows loaded yet. Use Inspect Scene Locks to load the current project draft rows.";
+    ui.scene.lockRows.append(empty);
+    return;
+  }
+
+  for (const row of state.sceneLocks.objects) {
+    const card = document.createElement("article");
+    card.className = "scene-lock-row";
+
+    const header = document.createElement("div");
+    header.className = "scene-lock-row-header";
+
+    const title = document.createElement("div");
+    title.className = "scene-lock-row-title";
+    title.textContent = `${row.label} (${row.stemId})`;
+
+    const meta = document.createElement("div");
+    meta.className = "scene-lock-row-meta";
+    meta.textContent = `${row.objectId} · confidence ${(row.confidence * 100).toFixed(0)}%`;
+
+    header.append(title, meta);
+    card.append(header);
+
+    const controls = document.createElement("div");
+    controls.className = "scene-lock-row-controls";
+
+    const roleField = document.createElement("label");
+    roleField.className = "field scene-lock-field";
+    const roleLabel = document.createElement("span");
+    roleLabel.className = "field-label";
+    roleLabel.textContent = "Role override";
+    const roleSelect = document.createElement("select");
+    roleSelect.className = "field-input";
+    setSelectOptions(
+      roleSelect,
+      [
+        {
+          label: row.inferredRoleId ? `Auto (${row.inferredRoleId})` : "Auto",
+          value: "",
+        },
+        ...state.sceneLocks.roleOptions.map((option) => ({
+          label: `${option.roleId} · ${option.label}`,
+          value: option.roleId,
+        })),
+      ],
+      row.editRoleId,
+    );
+    roleSelect.disabled = globalBusy || editorBusy;
+    roleSelect.addEventListener("change", () => {
+      updateSceneLockRow(row.stemId, { editRoleId: roleSelect.value });
+      renderSceneLockEditor(ui);
+    });
+    roleField.append(roleLabel, roleSelect);
+    controls.append(roleField);
+
+    const frontOnlyLabel = document.createElement("label");
+    frontOnlyLabel.className = "toggle-inline scene-lock-front-toggle";
+    const frontOnlyInput = document.createElement("input");
+    frontOnlyInput.type = "checkbox";
+    frontOnlyInput.checked = row.editFrontOnly;
+    frontOnlyInput.disabled = globalBusy || editorBusy;
+    frontOnlyInput.addEventListener("change", () => {
+      updateSceneLockRow(row.stemId, {
+        editFrontOnly: frontOnlyInput.checked,
+        editSurroundCap: frontOnlyInput.checked ? 0 : (row.editSurroundCap <= 0 ? 1 : row.editSurroundCap),
+      });
+      renderSceneLockEditor(ui);
+    });
+    const frontOnlyText = document.createElement("span");
+    frontOnlyText.textContent = "Front-only";
+    frontOnlyLabel.append(frontOnlyInput, frontOnlyText);
+    controls.append(frontOnlyLabel);
+
+    const capGrid = document.createElement("div");
+    capGrid.className = "scene-lock-cap-grid";
+
+    const appendCapControl = (
+      label: string,
+      value: number,
+      disabled: boolean,
+      onChange: (nextValue: number) => void,
+      valueLabel: string,
+    ) => {
+      const field = document.createElement("label");
+      field.className = "field scene-lock-field";
+
+      const top = document.createElement("span");
+      top.className = "field-label";
+      top.textContent = label;
+
+      const rangeRow = document.createElement("div");
+      rangeRow.className = "scene-lock-range-row";
+
+      const slider = document.createElement("input");
+      slider.className = "scene-lock-range";
+      slider.type = "range";
+      slider.min = "0";
+      slider.max = "1";
+      slider.step = "0.01";
+      slider.value = value.toFixed(2);
+      slider.disabled = disabled;
+      slider.addEventListener("input", () => {
+        onChange(clampUnitValue(slider.value, value));
+        renderSceneLockEditor(ui);
+      });
+
+      const numberWrap = document.createElement("span");
+      numberWrap.className = "scene-lock-number-wrap";
+      const numberInput = document.createElement("input");
+      numberInput.className = "value-input scene-lock-number";
+      numberInput.type = "number";
+      numberInput.min = "0";
+      numberInput.max = "1";
+      numberInput.step = "0.01";
+      numberInput.value = value.toFixed(2);
+      numberInput.disabled = disabled;
+      numberInput.addEventListener("change", () => {
+        onChange(clampUnitValue(numberInput.value, value));
+        renderSceneLockEditor(ui);
+      });
+      const unit = document.createElement("span");
+      unit.className = "control-unit control-unit-inline";
+      unit.textContent = "ratio";
+      numberWrap.append(numberInput, unit);
+
+      rangeRow.append(slider, numberWrap);
+
+      const valueNote = document.createElement("span");
+      valueNote.className = "scene-lock-slider-value";
+      valueNote.textContent = valueLabel;
+
+      field.append(top, rangeRow, valueNote);
+      capGrid.append(field);
+    };
+
+    appendCapControl(
+      "Surround cap",
+      row.editSurroundCap,
+      row.editFrontOnly || globalBusy || editorBusy,
+      (nextValue) => {
+        updateSceneLockRow(row.stemId, {
+          editFrontOnly: nextValue > 0 ? false : row.editFrontOnly,
+          editSurroundCap: nextValue,
+        });
+      },
+      row.editFrontOnly ? "forced to 0.00 while front-only is enabled" : `${row.editSurroundCap.toFixed(2)} ratio`,
+    );
+
+    appendCapControl(
+      "Height cap",
+      row.editHeightCap,
+      globalBusy || editorBusy,
+      (nextValue) => {
+        updateSceneLockRow(row.stemId, { editHeightCap: nextValue });
+      },
+      `${row.editHeightCap.toFixed(2)} ratio`,
+    );
+
+    controls.append(capGrid);
+    card.append(controls);
+    ui.scene.lockRows.append(card);
+  }
 }
 
 function nearestSceneRow(): SceneRow | null {
@@ -2039,6 +2516,7 @@ function renderScene(ui: AppUi): void {
     ui.inputs.sceneLocksPath.value.trim(),
     state.artifacts.sceneLint,
   );
+  renderSceneLockEditor(ui);
   ui.scene.jsonPreview.textContent = serializeJson(
     state.artifacts.scene,
     state.nerdView ? 80 : 18,
@@ -2148,6 +2626,206 @@ async function refreshSceneArtifacts(paths: WorkflowPaths): Promise<void> {
   state.artifacts.sceneLint = await readArtifactJson<JsonObject>(paths.sceneLintPath);
   state.artifactSources.scenePath = paths.scenePath;
   state.artifactSources.sceneLintPath = paths.sceneLintPath;
+}
+
+function resetSceneLocksState(message = "Inspect the project scene locks to edit deterministic overrides."): void {
+  state.sceneLocks = {
+    ...emptySceneLocksState(),
+    statusMessage: message,
+  };
+}
+
+async function inspectSceneLocks(
+  ui: AppUi,
+  options: {
+    autoFillMode?: "always" | "if-empty";
+    quiet?: boolean;
+    statusMessage?: string;
+  } = {},
+): Promise<void> {
+  const workspaceDir = ui.inputs.workspaceDir.value.trim();
+  if (!workspaceDir) {
+    resetSceneLocksState("Workspace folder is required to inspect project scene locks.");
+    renderScene(ui);
+    if (!options.quiet) {
+      updateRuntimeMessage(ui, state.sceneLocks.statusMessage);
+    }
+    return;
+  }
+
+  state.sceneLocks.isInspecting = true;
+  state.sceneLocks.statusMessage = "Inspecting project scene locks...";
+  state.sceneLocks.statusTone = "info";
+  renderScene(ui);
+
+  try {
+    const result = await runMmoRpc<JsonObject>("scene.locks.inspect", {
+      project_dir: buildWorkflowPaths(workspaceDir).projectDir,
+    });
+    hydrateSceneLocksInspect(result, {
+      autoFillMode: options.autoFillMode ?? "if-empty",
+      statusMessage: options.statusMessage ?? "Scene lock rows loaded from the project draft.",
+      statusTone: "ok",
+      ui,
+    });
+    if (!options.quiet) {
+      updateRuntimeMessage(ui, state.sceneLocks.statusMessage);
+    }
+  } catch (error) {
+    state.sceneLocks.isInspecting = false;
+    state.sceneLocks.statusMessage = error instanceof Error ? error.message : String(error);
+    state.sceneLocks.statusTone = "error";
+    if (!options.quiet) {
+      updateRuntimeMessage(ui, state.sceneLocks.statusMessage);
+    }
+    throw error;
+  } finally {
+    state.sceneLocks.isInspecting = false;
+    renderScene(ui);
+  }
+}
+
+function sceneLockRowsForSave(): Array<Record<string, boolean | number | string>> {
+  return state.sceneLocks.objects.map((row) => ({
+    front_only: row.editFrontOnly === true,
+    height_cap: clampUnitValue(row.editHeightCap, 1),
+    role_id: row.editRoleId,
+    stem_id: row.stemId,
+    surround_cap: clampUnitValue(row.editSurroundCap, 1),
+  }));
+}
+
+async function refreshScenePreviewFromSavedLocks(
+  ui: AppUi,
+  sceneLocksPath: string,
+  projectScenePath: string,
+): Promise<{ lintPath: string; previewMode: "project_draft" | "workspace_scene"; scenePath: string }> {
+  const workspaceDir = ui.inputs.workspaceDir.value.trim();
+  if (!workspaceDir) {
+    state.artifacts.scene = await readArtifactJson<JsonObject>(projectScenePath);
+    state.artifactSources.scenePath = projectScenePath;
+    renderScene(ui);
+    return {
+      lintPath: "",
+      previewMode: "project_draft",
+      scenePath: projectScenePath,
+    };
+  }
+
+  const paths = buildWorkflowPaths(workspaceDir);
+  const hasWorkspaceSceneInputs = await artifactExists(paths.stemsMapPath)
+    && await artifactExists(paths.busPlanPath);
+  let previewScenePath = projectScenePath;
+  let previewMode: "project_draft" | "workspace_scene" = "project_draft";
+
+  if (hasWorkspaceSceneInputs) {
+    const buildArgs = [
+      "scene",
+      "build",
+      "--map",
+      paths.stemsMapPath,
+      "--bus",
+      paths.busPlanPath,
+      "--out",
+      paths.scenePath,
+      "--profile",
+      "PROFILE.ASSIST",
+      "--locks",
+      sceneLocksPath,
+    ];
+    const buildResult = await runExecuteCommand(ui, "scene", buildArgs);
+    assertSuccess(buildResult, "scene");
+    previewScenePath = paths.scenePath;
+    previewMode = "workspace_scene";
+  }
+
+  const lintArgs = [
+    "scene",
+    "lint",
+    "--scene",
+    previewScenePath,
+    "--out",
+    paths.sceneLintPath,
+    "--scene-locks",
+    sceneLocksPath,
+  ];
+  const lintResult = await runExecuteCommand(ui, "scene", lintArgs);
+  assertSuccess(lintResult, "scene");
+
+  if (previewMode === "workspace_scene") {
+    await refreshSceneArtifacts(paths);
+  } else {
+    state.artifacts.scene = await readArtifactJson<JsonObject>(previewScenePath);
+    state.artifacts.sceneLint = await readArtifactJson<JsonObject>(paths.sceneLintPath);
+    state.artifactSources.scenePath = previewScenePath;
+    state.artifactSources.sceneLintPath = paths.sceneLintPath;
+  }
+  renderScene(ui);
+
+  return {
+    lintPath: paths.sceneLintPath,
+    previewMode,
+    scenePath: previewScenePath,
+  };
+}
+
+async function saveSceneLocks(ui: AppUi): Promise<void> {
+  const workspaceDir = ui.inputs.workspaceDir.value.trim();
+  if (!workspaceDir) {
+    throw new Error("Workspace folder is required before saving scene locks.");
+  }
+  if (state.sceneLocks.objects.length === 0) {
+    throw new Error("Inspect scene locks first so the editor has rows to save.");
+  }
+
+  const projectDir = buildWorkflowPaths(workspaceDir).projectDir;
+  setStageStatus(ui.stages.scene, "running", "Saving");
+  state.sceneLocks.isSaving = true;
+  state.sceneLocks.statusMessage = "Saving scene_locks.yaml and refreshing scene context...";
+  state.sceneLocks.statusTone = "info";
+  renderScene(ui);
+  updateRuntimeMessage(ui, "Saving scene_locks.yaml through the packaged GUI RPC.");
+  try {
+    const saveResult = await runMmoRpc<JsonObject>("scene.locks.save", {
+      perspective: state.sceneLocks.perspective,
+      project_dir: projectDir,
+      rows: sceneLockRowsForSave(),
+    });
+
+    const savedSceneLocksPath = asString(saveResult.scene_locks_path).trim();
+    const savedScenePath = asString(saveResult.scene_path).trim();
+    ui.inputs.sceneLocksPath.value = savedSceneLocksPath;
+
+    await inspectSceneLocks(ui, {
+      autoFillMode: "always",
+      quiet: true,
+      statusMessage: "scene_locks.yaml saved. Refreshing scene preview and lint context...",
+    });
+
+    const refreshed = await refreshScenePreviewFromSavedLocks(ui, savedSceneLocksPath, savedScenePath);
+    const lintPathText = refreshed.lintPath || "(not written)";
+    ui.output.scene.textContent = [
+      `scene_locks=${savedSceneLocksPath}`,
+      `project_scene_draft=${savedScenePath}`,
+      `scene_preview=${refreshed.scenePath}`,
+      `scene_lint=${lintPathText}`,
+      `preview_mode=${refreshed.previewMode}`,
+      `overrides=${asNumber(saveResult.overrides_count) ?? state.sceneLocks.overridesCount}`,
+      `perspective=${asString(saveResult.perspective).trim() || state.sceneLocks.perspective}`,
+    ].join("\n");
+
+    state.sceneLocks.statusMessage = "scene_locks.yaml saved and scene context refreshed.";
+    state.sceneLocks.statusTone = "ok";
+    setStageStatus(ui.stages.scene, "pass", "Pass");
+    updateRuntimeMessage(ui, "scene_locks.yaml saved and the Scene screen was refreshed.");
+  } catch (error) {
+    state.sceneLocks.statusMessage = error instanceof Error ? error.message : String(error);
+    state.sceneLocks.statusTone = "error";
+    throw error;
+  } finally {
+    state.sceneLocks.isSaving = false;
+    renderScene(ui);
+  }
 }
 
 async function refreshResultsArtifacts(paths: WorkflowPaths): Promise<void> {
@@ -2348,6 +3026,15 @@ async function runScene(ui: AppUi, controller: ReturnType<typeof initDesignSyste
   }
   const lintResult = await runExecuteCommand(ui, "scene", lintArgs);
   await refreshSceneArtifacts(paths);
+  try {
+    await inspectSceneLocks(ui, {
+      autoFillMode: "if-empty",
+      quiet: true,
+    });
+  } catch {
+    state.sceneLocks.statusMessage = "Scene artifacts refreshed, but scene-lock editor data is unavailable for the current project state.";
+    state.sceneLocks.statusTone = "error";
+  }
   renderScene(ui);
   ui.output.scene.textContent = lintResult.code === 0
     ? [
@@ -2839,6 +3526,7 @@ window.addEventListener("DOMContentLoaded", () => {
   applyBusyState(ui);
 
   ui.inputs.workspaceDir.addEventListener("input", () => {
+    resetSceneLocksState("Inspect the project scene locks to edit deterministic overrides.");
     renderAll(ui);
   });
   ui.inputs.stemsDir.addEventListener("input", () => {
@@ -2887,6 +3575,20 @@ window.addEventListener("DOMContentLoaded", () => {
   bindCompareKnob(ui, controller);
   bindResultsDetailSlider(ui, controller);
   bindSceneFocus(ui, controller);
+
+  ui.scene.lockPerspectiveSelect.addEventListener("change", () => {
+    state.sceneLocks.perspective = ui.scene.lockPerspectiveSelect.value;
+    syncSceneLocksDirty();
+    renderScene(ui);
+  });
+  ui.scene.lockInspectButton.addEventListener("click", () => {
+    void inspectSceneLocks(ui).catch(() => undefined);
+  });
+  ui.scene.lockSaveButton.addEventListener("click", () => {
+    void runWithBusy(ui, "scene", async () => {
+      await saveSceneLocks(ui);
+    });
+  });
 
   ui.buttons.doctor.addEventListener("click", () => {
     void runWithBusy(ui, "doctor", async () => {
@@ -3106,6 +3808,19 @@ window.addEventListener("DOMContentLoaded", () => {
     },
     () => updateRuntimeMessage(ui, "B render_qa.json import is not valid JSON."),
   );
+
+  window.__MMO_DESKTOP_TEST__ = {
+    hydrateSceneLocksInspect: (payload: JsonObject) => {
+      hydrateSceneLocksInspect(payload, {
+        autoFillMode: "if-empty",
+        statusMessage: "Scene lock rows loaded for design-system testing.",
+        statusTone: "ok",
+        ui,
+      });
+      ui.scene.lockEditorDetails.open = true;
+      renderScene(ui);
+    },
+  };
 
   void (async () => {
     const desktopSmokeConfig = await readDesktopSmokeConfig();

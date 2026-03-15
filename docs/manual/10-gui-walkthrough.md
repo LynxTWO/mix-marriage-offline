@@ -83,16 +83,17 @@ Inspect the generated scene intent and preview routing context.
    - **Scene summary** — perspective, objects count, beds count, confidence.
    - **Focus XY pad** — discrete depth (50–100) and pan control for scene
      focus exploration.
-   - **Locks context** — the current scene locks YAML and any lint warnings
+   - **Scene locks** — inspect the current project scene-lock rows, adjust
+     perspective/role/front-only/surround/height overrides, and explicitly save
+     `scene_locks.yaml`.
+   - **Locks context** — the current scene locks YAML path plus lint warnings
      from `mmo scene lint`.
    - **Objects list** — individual scene objects with their routing context.
    - **JSON preview** — the raw `scene.json`.
 
 The scene is explainable: what was decided, why, and with what confidence.
-Lint warnings appear inline when the scene has ambiguous or conflicting context.
-
-> **Note:** GUI editing of scene locks is not yet implemented. To edit locks,
-> modify the locks YAML file directly and re-run Scene to reload.
+Lint warnings appear inline when the scene has ambiguous or conflicting context,
+and saving scene locks refreshes the scene preview/lint context for reruns.
 
 ![Scene screen — objects, locks, and lint context loaded](assets/screenshots/tauri_scene_loaded.png)
 

@@ -103,6 +103,7 @@ test.describe("MMO Tauri screenshot capture", () => {
   test("capture: scene screen (loaded)", async ({ page }) => {
     ensureOutDir();
     await openScreen(page, "scene");
+    await page.locator("#workspace-dir-input").fill("/tmp/mmo-workspace");
 
     await page.locator("#scene-json-file-input").setInputFiles(
       jsonFile("scene.json", {
@@ -170,6 +171,44 @@ test.describe("MMO Tauri screenshot capture", () => {
         ],
       }),
     );
+    await page.evaluate(() => {
+      const api = (window as typeof window & {
+        __MMO_DESKTOP_TEST__?: {
+          hydrateSceneLocksInspect: (payload: Record<string, unknown>) => void;
+        };
+      }).__MMO_DESKTOP_TEST__;
+      api?.hydrateSceneLocksInspect({
+        objects: [
+          {
+            confidence: 0.91,
+            inferred_role_id: "ROLE.VOCAL.LEAD",
+            label: "Vox",
+            object_id: "OBJ.VOX",
+            role_override_id: "",
+            stem_id: "STEM.VOX",
+          },
+          {
+            confidence: 0.66,
+            front_only_override: true,
+            inferred_role_id: "ROLE.GTR.ELECTRIC",
+            label: "Guitar",
+            object_id: "OBJ.GTR",
+            role_override_id: "ROLE.GTR.ELECTRIC",
+            stem_id: "STEM.GTR",
+            surround_cap_override: 0,
+          },
+        ],
+        overrides_count: 1,
+        perspective: "in_orchestra",
+        perspective_values: ["audience", "in_orchestra"],
+        role_options: [
+          { label: "Lead Vocal", role_id: "ROLE.VOCAL.LEAD" },
+          { label: "Electric Guitar", role_id: "ROLE.GTR.ELECTRIC" },
+        ],
+        scene_locks_path: "/tmp/project/scene_locks.yaml",
+        scene_path: "/tmp/project/drafts/scene.draft.json",
+      });
+    });
 
     await expect(page.locator("#scene-summary-text")).toContainText(
       "Perspective:",

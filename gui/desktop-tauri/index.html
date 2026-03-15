@@ -412,8 +412,57 @@
           </article>
 
           <article class="details-stack widget" data-widget-id="widget.scene.locks">
-            <details class="details-block" open>
-              <summary>Lint and lock context</summary>
+            <div class="panel-header panel-header-compact">
+              <p class="eyebrow eyebrow-panel">Scene locks</p>
+              <h3>Deterministic lock editor</h3>
+            </div>
+            <p class="panel-copy">
+              Inspect and save <code>scene_locks.yaml</code> from the project scaffold without leaving the desktop app.
+              Manual lock-path entry still works, but the in-app editor is the primary workflow.
+            </p>
+            <div class="scene-lock-toolbar">
+              <button type="button" id="scene-locks-inspect-button" data-hit-target="true">Inspect Scene Locks</button>
+              <button type="button" id="scene-locks-save-button" class="button-secondary" data-hit-target="true">
+                Save Scene Locks
+              </button>
+            </div>
+            <dl class="scene-lock-summary-list">
+              <div class="scene-lock-summary-row">
+                <dt>Perspective</dt>
+                <dd id="scene-lock-summary-perspective">Not loaded.</dd>
+              </div>
+              <div class="scene-lock-summary-row">
+                <dt>Rows</dt>
+                <dd id="scene-lock-summary-rows">No rows loaded.</dd>
+              </div>
+              <div class="scene-lock-summary-row">
+                <dt>Save path</dt>
+                <dd id="scene-lock-summary-path">(project save path unavailable)</dd>
+              </div>
+              <div class="scene-lock-summary-row">
+                <dt>Unsaved edits</dt>
+                <dd id="scene-lock-summary-dirty">No</dd>
+              </div>
+            </dl>
+            <p id="scene-locks-status" class="scene-lock-status" data-tone="info">
+              Inspect the project scene locks to edit deterministic overrides.
+            </p>
+            <details class="details-block scene-locks-editor-details" id="scene-locks-editor-details">
+              <summary>Scene lock rows</summary>
+              <label class="field">
+                <span class="field-label">Perspective</span>
+                <select id="scene-locks-perspective-select" class="field-input" data-hit-target="true">
+                  <option value="audience">audience</option>
+                </select>
+              </label>
+              <div class="scene-lock-rows" id="scene-locks-editor">
+                <p class="scene-lock-empty">
+                  Enter a workspace folder, then inspect the project scene locks to edit deterministic overrides.
+                </p>
+              </div>
+            </details>
+            <details class="details-block">
+              <summary>Lock + lint context</summary>
               <pre class="stage-output" id="scene-locks-text">No lint or lock context loaded.</pre>
             </details>
           </article>

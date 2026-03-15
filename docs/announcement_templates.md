@@ -23,7 +23,6 @@ Good claims to reuse when they are still true:
 
 Do not claim these are complete unless the repo status says so:
 
-- full Tauri parity for scene-lock editing
 - complete packaged desktop smoke coverage
 - replacement of proprietary/licensed Atmos renderers
 
@@ -57,7 +56,6 @@ scene-first delivery, compare, and mix-once/render-many workflows.
 ### Still in progress
 
 - [ONLY LIST REAL OPEN ITEMS THAT STILL APPLY]
-- Example: Tauri scene-lock editing parity is still in progress.
 - Example: packaged desktop smoke coverage is still being expanded.
 
 ### Install

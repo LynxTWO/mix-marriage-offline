@@ -36,7 +36,7 @@ Definition of done:
 
 ## MVP-GUI
 
-State: `in_progress`
+State: `done`
 
 Definition of done:
 
@@ -51,7 +51,7 @@ Definition of done:
 - [x] The primary Tauri app exposes Scene, Results, and Compare as
       artifact-backed workflow screens with the same files/contracts the CLI
       writes.
-- [ ] The primary Tauri app supports the required scene-lock editing behavior.
+- [x] The primary Tauri app supports the required scene-lock editing behavior.
 - [x] Compare is loudness-matched by default and discloses the compensation
       used.
 - [x] Cross-platform packaged desktop smoke tests are green.

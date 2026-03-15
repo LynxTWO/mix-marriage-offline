@@ -191,8 +191,8 @@ renderers.
 
 ## 11) Still not complete yet
 
-- Tauri scene-lock editing parity is still open.
-- Cross-platform packaged desktop smoke coverage is still incomplete.
+- Release-copy accuracy and broader deterministic regression expansion remain
+  in progress around the shipped desktop flow.
 - The legacy fallback GUI remains available during that gap, but it is not the
   long-term primary path.
 - MMO remains conservative about licensed Atmos-specific claims and workflows.
