@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-03-14
+Last updated: 2026-03-15
 
 This is the single-page milestone checklist for current delivery phases.
 
@@ -69,12 +69,12 @@ Definition of done:
 - [x] The stage graph is documented and fixed.
 - [x] Typed plugin buffers and determinism purity guarantees are enforced
       end-to-end.
-- [ ] Multichannel safety-class declarations and bypass/restrict behavior are
-      fully enforced.
+- [x] Multichannel safety-class declarations and bypass/restrict behavior are
+      fully enforced with evidence, receipt rows, and regression coverage.
 
 ## Release Surface
 
-State: `in_progress`
+State: `done`
 
 Definition of done:
 

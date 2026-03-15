@@ -95,7 +95,7 @@ Use `--once` to process once and exit instead of watching continuously.
 Primary GUI plan: the Tauri desktop app tracked in
 [gui_parity.md](gui_parity.md).
 
-Fallback GUI until parity: launch the CustomTkinter desktop shell with:
+Legacy fallback GUI: launch the CustomTkinter desktop shell with:
 
 ```bash
 mmo-gui
@@ -107,7 +107,7 @@ Or from a repo checkout:
 python -m mmo.gui.main
 ```
 
-`mmo-gui` is deprecated after Tauri parity lands.
+`mmo-gui` is deprecated and receives no new parity work.
 
 ## 7. Plugin marketplace (offline index)
 

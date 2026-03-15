@@ -30,19 +30,15 @@ the musical intent.
   delivery, including deterministic binaural/headphone preview flows.
 - Five supported channel-ordering standards at the I/O boundary: `SMPTE`,
   `FILM`, `LOGIC_PRO`, `VST3`, and `AAF`.
-- A shipped Tauri desktop app path for packaged releases, plus the legacy
-  CustomTkinter fallback GUI while Tauri parity is still finishing.
+- A shipped Tauri desktop app for packaged releases, with the legacy
+  CustomTkinter GUI retained as a deprecated fallback path.
 - Offline plugin marketplace/discovery, project/session artifacts, translation
   QA, downmix QA, and watch-folder batch automation.
 
-## Still Not Complete Yet
+## Current Limits
 
-- The Tauri desktop app is the primary GUI path, but it does not yet have full
-  parity for scene-lock editing.
-- Cross-platform packaged desktop smoke coverage now gates the shipped Tauri
-  bundles on Windows, macOS, and Linux.
-- The legacy `mmo-gui` fallback remains available during the transition, but it
-  is not the long-term primary GUI.
+- The legacy `mmo-gui` fallback remains available for bounded existing
+  workflows, but it is deprecated and no new GUI parity work lands there.
 - MMO does not claim to replace proprietary Atmos renderers or licensed Dolby
   workflows.
 
@@ -195,7 +191,7 @@ contracts.
 
 ## Desktop App Status
 
-MMO currently has two desktop paths:
+MMO ships one primary desktop app and keeps one legacy fallback path:
 
 - Primary path: the packaged Tauri desktop app in
   [gui/desktop-tauri/README.md](gui/desktop-tauri/README.md)
@@ -208,8 +204,8 @@ Tauri already covers the artifact-backed workflow sequence:
 Fallback GUI status:
 
 - still available for bounded desktop workflows
-- still useful when you want the old point-and-click pipeline quickly
-- intentionally treated as fallback-only until Tauri parity is complete
+- deprecated and legacy-only
+- receives no new parity work
 
 ## Documentation
 

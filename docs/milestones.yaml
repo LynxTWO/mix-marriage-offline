@@ -16,7 +16,7 @@ milestones:
 
   - id: DSP.PHASE1
     title: DSP Phase 1
-    state: in_progress
+    state: done
     links:
       - docs/STATUS.md#dsp-phase-1
       - docs/06-roadmap.md#dsp-and-plugin-contract-closure

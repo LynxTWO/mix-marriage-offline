@@ -205,7 +205,7 @@ the committed baselines within tolerance.
 ## Legacy fallback (deprecated)
 
 The CustomTkinter `mmo-gui` fallback (`python -m mmo.gui.main`) remains
-available during the transition period but is **deprecated**. It will not
+available as a legacy bounded workflow but is **deprecated**. It will not
 receive new parity work. For a zero-ambiguity workflow, use the Tauri app or
 the CLI directly.
 

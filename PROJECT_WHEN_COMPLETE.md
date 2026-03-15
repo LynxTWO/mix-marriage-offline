@@ -411,9 +411,10 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
 
 ### 4.8.1 GUI is ergonomically safe and AI-readable (a work of art in itself, so creatives and nerds alike love it. Strong typography, cinematic color contrast, and intentional spacing/visual hierarchy so it feels crafted, not utilitarian, while still staying cross-platform and deterministic)
 
-- [x] GUI delivery has one primary plan and one fallback until parity: Tauri is
-      the primary GUI plan, and CustomTkinter is the single fallback until
-      parity lands. The fallback is deprecated after parity lands.
+- [x] GUI delivery has one primary plan and one documented legacy fallback:
+      Tauri is the primary GUI plan, and CustomTkinter is the single fallback
+      path retained after parity lands. The fallback is deprecated after parity
+      lands.
 - [x] `docs/gui_parity.md` defines the required Tauri screens/behaviors and CI
       fails when the checklist loses required links, screens, or behaviors.
 - [x] Minimal desktop CustomTkinter shell exists for stems drop, target/layout

@@ -230,8 +230,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and the Tauri crate now pins Rust `1.94.0` instead of floating on `stable`.
 - Completion/status tracking now treats optional GUI maturity items as post-v1
   work, marks the shipped 32-channel / golden-fixture / plugin-mode regression
-  gates complete, and calls out the remaining release-surface, packaged-smoke,
-  and primary-GUI scene-lock parity blocker explicitly.
+  gates complete, and closes the former release-surface, packaged-smoke, and
+  scene-lock parity gaps now that the Tauri workflow and DSP safety contracts
+  are fully landed.
 
 ### Added (ontology and immersive coverage)
 
@@ -512,8 +513,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     capability allowlists.
   - Added authored layout manifests and desktop regression coverage for the new
     workflow screens, artifact import/rendering, and compare/result behaviors,
-    and updated `docs/gui_parity.md` to mark the completed screens while leaving
-    primary-GUI scene-lock editing as the remaining open item.
+    and updated `docs/gui_parity.md` to track the shipped screens and behaviors
+    through full scene-lock parity closure in the primary app.
 
 ### Fixed (GUI CLI passthrough and explicit scene inputs)
 

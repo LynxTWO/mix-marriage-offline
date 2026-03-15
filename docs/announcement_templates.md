@@ -45,7 +45,8 @@ scene-first delivery, compare, and mix-once/render-many workflows.
 - **Supported target families** - stereo, surround, immersive, and first-class
   binaural/headphone workflows.
 - **Desktop path** - the packaged Tauri desktop app remains the primary GUI
-  path, with the legacy `mmo-gui` fallback still available during parity work.
+  path, with the legacy `mmo-gui` fallback retained as a deprecated legacy
+  option for bounded existing workflows.
 
 ### What's new in this release
 
@@ -81,8 +82,8 @@ mmo env doctor --format text
 
 > MMO v[VERSION] is out: deterministic analysis, compare, scene-first
 > render-many delivery, five channel-ordering standards, and shipped desktop
-> workflows. Offline-first, explainable, and honest about what is still in
-> progress. [RELEASE URL]
+> workflows. Offline-first, explainable, and honest about its limits.
+> [RELEASE URL]
 
 ## Longer Announcement Template
 
@@ -101,7 +102,8 @@ What readers should know about the product today:
 - Render-many, channel-ordering standards, downmix QA, and headphone preview are
   part of the shipped surface.
 - The packaged Tauri app is the primary GUI path today.
-- The legacy `mmo-gui` fallback still exists while the last parity items close.
+- The legacy `mmo-gui` fallback still exists as a deprecated legacy path for
+  bounded existing workflows.
 
 What changed in this release:
 
@@ -109,7 +111,7 @@ What changed in this release:
 - [NEW ITEM 2]
 - [NEW ITEM 3]
 
-What is still not complete yet:
+Current limits:
 
 - [REAL OPEN ITEM 1]
 - [REAL OPEN ITEM 2]

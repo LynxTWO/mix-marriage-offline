@@ -2,7 +2,7 @@
 
 This file is the canonical GUI parity contract for MMO. Parity is complete only
 when the primary Tauri desktop app covers every required screen and behavior
-listed here.
+listed here. In the current repo, that exit rule is satisfied.
 
 ## Primary Plan
 
@@ -15,8 +15,8 @@ new parity work.
 
 ## Fallback Plan Until Parity
 
-CustomTkinter `mmo-gui` is the single fallback plan until Tauri parity lands. It
-remains available for bounded desktop workflows during the transition, but it is
+CustomTkinter `mmo-gui` was the single fallback plan until Tauri parity landed.
+It remains available only as a legacy bounded desktop workflow, but it is
 deprecated after parity lands. It will not receive new parity work.
 
 - GUI walkthrough (Tauri):
@@ -71,5 +71,6 @@ deprecated after parity lands. It will not receive new parity work.
 ## Exit Rule
 
 Parity lands when every required screen and required behavior above is complete
-in the Tauri app. At that point the CustomTkinter fallback remains documented
-only as a legacy path and is deprecated after parity lands.
+in the Tauri app. That condition is satisfied in the current repo, so the
+CustomTkinter fallback remains documented only as a legacy path and is
+deprecated after parity lands.

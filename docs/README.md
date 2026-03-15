@@ -17,14 +17,15 @@ reference when still useful.
 - Five supported channel-ordering standards: `SMPTE`, `FILM`, `LOGIC_PRO`,
   `VST3`, and `AAF`.
 - Tauri desktop workflow screens for
-  `Validate -> Analyze -> Scene -> Render -> Results -> Compare`.
+  `Validate -> Analyze -> Scene -> Render -> Results -> Compare`, including
+  deterministic scene-lock editing and artifact-backed results/compare parity.
 
-## Still In Progress
+## Current Limits
 
-- Release-copy accuracy and broader deterministic regression expansion remain
-  in progress around the shipped desktop flow.
-- The legacy CustomTkinter GUI remains available as fallback-only while Tauri
-  parity remains documented as a transition path.
+- The legacy CustomTkinter GUI remains available as a deprecated fallback-only
+  path for bounded existing workflows.
+- MMO does not replace proprietary Atmos renderers or licensed Dolby
+  workflows.
 
 ## Start Here
 
@@ -41,7 +42,7 @@ reference when still useful.
 - [18-channel-standards.md](18-channel-standards.md) Canonical channel-ordering
   standards contract.
 - [11-gui-vision.md](11-gui-vision.md) Current GUI direction, shipped surfaces,
-  and remaining parity work.
+  and legacy fallback notes.
 - [STATUS.md](STATUS.md) Live milestone checklist and current completion
   boundaries.
 - [milestones.yaml](milestones.yaml) Machine-readable milestone IDs, states, and
