@@ -153,6 +153,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - The desktop-tauri CI build step now exports `PYTHON=python`, and the Tauri
     README now mirrors the same `python -m pip ...` install flow.
 
+- Tauri Linux runtime dependency security patch:
+  - The desktop Tauri Rust app now vendors the current `glib 0.18.5` crate
+    with the upstream `VariantStrIter::impl_get` fix for
+    `GHSA-wrw7-89jp-8q8g`, and `Cargo.toml` patches crates.io to use that local
+    source until the wider Tauri GTK stack can move to a published `glib`
+    release outside the vulnerable advisory range.
+
 - Tauri desktop design-system Firefox regressions:
   - The isolated `gui/desktop-tauri` shell now uses a wide-screen app layout
     that keeps the scaled dashboard trim control reachable for exact-entry ->
