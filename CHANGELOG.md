@@ -87,6 +87,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Plugin multichannel/layout safety contract:
+  - Renderer manifests now declare explicit `scene_scope` (`bed_only` vs
+    `object_capable`) and `layout_safety` (`layout_agnostic` vs
+    `layout_specific`) in schema, ontology semantics, built-in manifests, and
+    packaged marketplace assets.
+  - The render pipeline now enforces those declarations by restricting
+    bed-only plugins to safe scene groups when possible, bypassing unsupported
+    layout-specific plugins, and recording the exact restriction/bypass reason
+    in renderer manifest skipped rows and notes.
+  - Added focused regression coverage for plugin safety validation plus
+    renderer restriction/bypass receipt behavior, and closed the remaining DSP
+    completion tracker items for plugin safety classification and decision
+    authority.
+
 - Compare fair-listen disclosure and preset-preview loudness safety:
   - `mmo compare` now writes deterministic `loudness_match` context into
     `compare_report.json` from sibling `render_qa.json` artifacts, including

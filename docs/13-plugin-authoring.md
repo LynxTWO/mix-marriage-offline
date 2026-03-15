@@ -37,9 +37,19 @@ manifests are fallback-only.
 - `entrypoint` imports successfully.
 - `capabilities` uses supported fields (`max_channels`, `channel_mode`,
   `link_groups`, `latency`, `deterministic_seed_policy`, `purity`, `dsp_traits`,
-  `bed_only`, `supported_standards`, `preferred_standard`,
+  `bed_only`, `scene_scope`, `layout_safety`, `supported_standards`, `preferred_standard`,
   `supported_layout_ids`, `supported_contexts`, `scene`, `notes`).
 - Renderer manifests must declare `capabilities.deterministic_seed_policy`.
+- Renderer manifests must explicitly declare `capabilities.scene_scope` as
+  `bed_only` or `object_capable`.
+- Renderer manifests must explicitly declare `capabilities.layout_safety` as
+  `layout_agnostic` or `layout_specific`.
+- If `capabilities.layout_safety` is `layout_specific`, declare
+  `supported_layout_ids` or `scene.supported_target_ids` so the host can
+  bypass unsupported targets with an explainable receipt instead of guessing.
+- Keep `scene_scope`, `bed_only`, and `scene.supports_objects` aligned. For
+  example, `scene_scope: "bed_only"` must not also claim
+  `scene.supports_objects: true`.
 - If the plugin crosses an audio-processing boundary, declare
   `capabilities.purity` so authors and validators agree on typed-buffer and
   determinism rules.
@@ -76,6 +86,8 @@ Manifest example:
 ```yaml
 capabilities:
   max_channels: 32
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
   deterministic_seed_policy: "seed_required"
   purity:
     audio_buffer: "typed_f64_interleaved"
@@ -137,6 +149,9 @@ Hard rules:
   their own private output path before the core export-finalization contract.
 - Any audible change must be explainable as either bounded low-risk behavior or
   an approved render action.
+- If the host cannot guarantee safe scene/layout handling from the manifest, it
+  will restrict the plugin to a safe subset or bypass it and record why in the
+  render manifest/receipt.
 
 ## 3. Config schema and UI hints checklist
 

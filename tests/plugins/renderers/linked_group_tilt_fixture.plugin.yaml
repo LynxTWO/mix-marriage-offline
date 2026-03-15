@@ -7,6 +7,8 @@ entrypoint: "linked_group_tilt_fixture:LinkedGroupTiltFixture"
 capabilities:
   max_channels: 32
   channel_mode: "linked_group"
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
   link_groups:
     - "front"
     - "surrounds"

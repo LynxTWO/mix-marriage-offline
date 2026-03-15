@@ -7,6 +7,8 @@ entrypoint: "true_multichannel_sumcheck_fixture:TrueMultichannelSumcheckFixture"
 capabilities:
   max_channels: 32
   channel_mode: "true_multichannel"
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
   deterministic_seed_policy: "seed_required"
   purity:
     audio_buffer: "typed_f64_interleaved"

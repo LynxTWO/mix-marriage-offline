@@ -73,6 +73,8 @@ class TestPluginModesGolden(unittest.TestCase):
         per_channel = entries[_PER_CHANNEL_PLUGIN_ID].manifest["capabilities"]
         self.assertGreaterEqual(per_channel["max_channels"], 32)
         self.assertEqual(per_channel["channel_mode"], "per_channel")
+        self.assertEqual(per_channel["scene_scope"], "object_capable")
+        self.assertEqual(per_channel["layout_safety"], "layout_agnostic")
         self.assertEqual(per_channel["deterministic_seed_policy"], "none")
         self.assertEqual(
             per_channel["purity"],
@@ -87,6 +89,8 @@ class TestPluginModesGolden(unittest.TestCase):
         linked_group = entries[_LINKED_GROUP_PLUGIN_ID].manifest["capabilities"]
         self.assertGreaterEqual(linked_group["max_channels"], 32)
         self.assertEqual(linked_group["channel_mode"], "linked_group")
+        self.assertEqual(linked_group["scene_scope"], "object_capable")
+        self.assertEqual(linked_group["layout_safety"], "layout_agnostic")
         self.assertEqual(
             linked_group["link_groups"],
             ["front", "surrounds", "heights"],
@@ -105,6 +109,8 @@ class TestPluginModesGolden(unittest.TestCase):
         true_multichannel = entries[_TRUE_MULTICHANNEL_PLUGIN_ID].manifest["capabilities"]
         self.assertGreaterEqual(true_multichannel["max_channels"], 32)
         self.assertEqual(true_multichannel["channel_mode"], "true_multichannel")
+        self.assertEqual(true_multichannel["scene_scope"], "object_capable")
+        self.assertEqual(true_multichannel["layout_safety"], "layout_agnostic")
         self.assertEqual(
             true_multichannel["deterministic_seed_policy"],
             "seed_required",

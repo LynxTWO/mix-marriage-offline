@@ -54,6 +54,9 @@ class PluginPurityContract:
 @dataclass(frozen=True)
 class PluginCapabilities:
     max_channels: int | None = None
+    bed_only: bool | None = None
+    scene_scope: str | None = None
+    layout_safety: str | None = None
     deterministic_seed_policy: str | None = None
     purity: PluginPurityContract | None = None
     supported_layout_ids: tuple[str, ...] | None = None
@@ -65,6 +68,12 @@ class PluginCapabilities:
         payload: Dict[str, Any] = {}
         if isinstance(self.max_channels, int):
             payload["max_channels"] = self.max_channels
+        if isinstance(self.bed_only, bool):
+            payload["bed_only"] = self.bed_only
+        if isinstance(self.scene_scope, str) and self.scene_scope:
+            payload["scene_scope"] = self.scene_scope
+        if isinstance(self.layout_safety, str) and self.layout_safety:
+            payload["layout_safety"] = self.layout_safety
         if isinstance(self.deterministic_seed_policy, str):
             payload["deterministic_seed_policy"] = self.deterministic_seed_policy
         if self.purity is not None:

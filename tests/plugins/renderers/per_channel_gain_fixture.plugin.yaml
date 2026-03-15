@@ -7,6 +7,8 @@ entrypoint: "per_channel_gain_fixture:PerChannelGainFixture"
 capabilities:
   max_channels: 32
   channel_mode: "per_channel"
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
   deterministic_seed_policy: "none"
   purity:
     audio_buffer: "typed_f64_interleaved"

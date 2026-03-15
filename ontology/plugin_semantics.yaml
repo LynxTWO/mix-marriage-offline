@@ -137,6 +137,49 @@ bed_only:
     Complementary to supports_objects in capabilities.scene. If bed_only: true,
     supports_objects must be absent or false in the manifest.
 
+scene_scope:
+  description: >
+    Explicit scene-scope safety class for host execution decisions. The host
+    uses this declaration to restrict plugins to safe bed/object groups when
+    stem-to-scene bindings are available, or to bypass the plugin with an
+    explainable receipt when safety cannot be guaranteed.
+  values:
+    bed_only:
+      id: "bed_only"
+      description: >
+        Plugin is safe only for bed audio. If object stems are present in scope,
+        the host must restrict execution to bed-mapped stems or bypass.
+    object_capable:
+      id: "object_capable"
+      description: >
+        Plugin can safely operate on both bed and object stems within its other
+        declared authority and layout limits.
+  notes: >
+    This field is explicit even when capabilities.bed_only is also declared.
+    scene_scope=bed_only must not conflict with supports_objects=true, and
+    scene_scope=object_capable must not conflict with bed_only=true.
+
+layout_safety:
+  description: >
+    Explicit layout-safety class for host execution decisions. The host uses
+    this declaration to decide whether a plugin is safe before layout-specific
+    routing, or whether it must be matched to declared target layouts.
+  values:
+    layout_agnostic:
+      id: "layout_agnostic"
+      description: >
+        Plugin behavior is safe without target-layout-specific assumptions.
+        It may run pre-render or on any compatible channel group.
+    layout_specific:
+      id: "layout_specific"
+      description: >
+        Plugin behavior depends on explicit layout support. The manifest must
+        declare supported layouts or supported target IDs so the host can
+        bypass unsupported targets with an explainable receipt.
+  notes: >
+    layout_specific requires either capabilities.supported_layout_ids or
+    layout-backed capabilities.scene.supported_target_ids.
+
 requires_speaker_positions:
   description: >
     Whether the plugin requires speaker position metadata (from the layout

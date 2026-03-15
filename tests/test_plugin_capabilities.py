@@ -19,7 +19,13 @@ def _write_manifest(
     *,
     plugin_id: str,
     capabilities_block: str,
+    inject_safety_defaults: bool = True,
 ) -> None:
+    capability_lines = capabilities_block.splitlines()
+    if inject_safety_defaults and not any("scene_scope:" in line for line in capability_lines):
+        capability_lines = ['  scene_scope: "object_capable"', *capability_lines]
+    if inject_safety_defaults and not any("layout_safety:" in line for line in capability_lines):
+        capability_lines = ['  layout_safety: "layout_agnostic"', *capability_lines]
     manifest_path = plugins_dir / "renderers" / f"{plugin_id}.plugin.yaml"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
@@ -35,7 +41,7 @@ def _write_manifest(
                 'ontology_min_version: "0.1.0"',
                 'entrypoint: "mmo.plugins.renderers.safe_renderer:SafeRenderer"',
                 "capabilities:",
-                capabilities_block,
+                *capability_lines,
                 "",
             ]
         ),
@@ -66,6 +72,16 @@ class TestPluginCapabilities(unittest.TestCase):
 
             expected_max_channels = 16 if plugin_id == "PLUGIN.RENDERER.MIXDOWN_BASELINE" else 32
             self.assertEqual(capabilities.max_channels, expected_max_channels)
+            if plugin_id == "PLUGIN.RENDERER.MIXDOWN_BASELINE":
+                self.assertEqual(capabilities.scene_scope, "bed_only")
+                self.assertEqual(capabilities.layout_safety, "layout_specific")
+                self.assertTrue(capabilities.bed_only)
+            elif plugin_id == "PLUGIN.RENDERER.GAIN_TRIM":
+                self.assertEqual(capabilities.scene_scope, "object_capable")
+                self.assertEqual(capabilities.layout_safety, "layout_agnostic")
+            else:
+                self.assertEqual(capabilities.scene_scope, "object_capable")
+                self.assertEqual(capabilities.layout_safety, "layout_specific")
             self.assertEqual(capabilities.deterministic_seed_policy, "none")
             self.assertIsNotNone(capabilities.purity)
             if capabilities.purity is None:
@@ -157,6 +173,7 @@ class TestPluginCapabilities(unittest.TestCase):
             instance_capabilities.to_dict(),
             {
                 "deterministic_seed_policy": "none",
+                "layout_safety": "layout_specific",
                 "max_channels": 32,
                 "notes": ["Deterministic gain/trim rendering; no boosts."],
                 "purity": {
@@ -165,6 +182,7 @@ class TestPluginCapabilities(unittest.TestCase):
                     "thread_scheduling": "forbidden",
                     "wall_clock": "forbidden",
                 },
+                "scene_scope": "object_capable",
                 "scene": {
                     "requires_speaker_positions": True,
                     "supported_target_ids": [
@@ -214,6 +232,87 @@ class TestPluginCapabilities(unittest.TestCase):
             result = validate_plugins(plugins_dir, Path("schemas/plugin.schema.json"))
 
         self.assertTrue(result["ok"], msg=result)
+
+    def test_validate_plugins_rejects_missing_scene_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            plugins_dir = Path(temp_dir)
+            _write_manifest(
+                plugins_dir,
+                plugin_id="PLUGIN.RENDERER.TEMP_MISSING_SCENE_SCOPE",
+                capabilities_block="\n".join(
+                    [
+                        "  max_channels: 2",
+                        '  layout_safety: "layout_agnostic"',
+                        '  deterministic_seed_policy: "none"',
+                        "  dsp_traits:",
+                        '    tier: "information_preserving"',
+                        '    linearity: "linear"',
+                        '    phase_behavior: "linear_phase"',
+                        "    adds_noise: false",
+                        "    introduces_harmonics: false",
+                        '    anti_aliasing: "na"',
+                        "    measurable_claims:",
+                        '      - metric_id: "METER.TRUE_PEAK_DBTP"',
+                        '        expected_direction: "within"',
+                        "        threshold: 0.2",
+                    ]
+                ),
+                inject_safety_defaults=False,
+            )
+
+            result = validate_plugins(plugins_dir, Path("schemas/plugin.schema.json"))
+
+        self.assertFalse(result["ok"])
+        messages = [
+            issue.get("message", "")
+            for issue in result.get("issues", [])
+            if isinstance(issue, dict)
+        ]
+        self.assertTrue(
+            any("capabilities.scene_scope must explicitly declare" in message for message in messages),
+            msg=messages,
+        )
+
+    def test_validate_plugins_rejects_layout_specific_without_declared_support(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            plugins_dir = Path(temp_dir)
+            _write_manifest(
+                plugins_dir,
+                plugin_id="PLUGIN.RENDERER.TEMP_LAYOUT_SPECIFIC_NO_SUPPORT",
+                capabilities_block="\n".join(
+                    [
+                        "  max_channels: 2",
+                        '  scene_scope: "object_capable"',
+                        '  layout_safety: "layout_specific"',
+                        '  deterministic_seed_policy: "none"',
+                        "  dsp_traits:",
+                        '    tier: "information_preserving"',
+                        '    linearity: "linear"',
+                        '    phase_behavior: "linear_phase"',
+                        "    adds_noise: false",
+                        "    introduces_harmonics: false",
+                        '    anti_aliasing: "na"',
+                        "    measurable_claims:",
+                        '      - metric_id: "METER.TRUE_PEAK_DBTP"',
+                        '        expected_direction: "within"',
+                        "        threshold: 0.2",
+                    ]
+                ),
+                inject_safety_defaults=False,
+            )
+
+            result = validate_plugins(plugins_dir, Path("schemas/plugin.schema.json"))
+
+        self.assertFalse(result["ok"])
+        messages = [
+            issue.get("message", "")
+            for issue in result.get("issues", [])
+            if isinstance(issue, dict)
+        ]
+        self.assertTrue(
+            any("capabilities.layout_safety='layout_specific' requires either" in message for message in messages),
+            msg=messages,
+        )
 
     def test_validate_plugins_rejects_purity_seed_policy_conflict(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

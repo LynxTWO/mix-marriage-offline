@@ -10,6 +10,9 @@ entrypoint: "mmo.plugins.renderers.mixdown_renderer:MixdownRenderer"
 capabilities:
   max_channels: 16
   channel_mode: "true_multichannel"
+  bed_only: true
+  scene_scope: "bed_only"
+  layout_safety: "layout_specific"
   deterministic_seed_policy: "none"
   purity:
     audio_buffer: "typed_f64_interleaved"
