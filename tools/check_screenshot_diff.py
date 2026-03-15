@@ -1,19 +1,19 @@
-"""Perceptual screenshot diff checker for MMO manual screenshots.
+"""Perceptual screenshot diff checker for MMO manual canonical-state screenshots.
 
-Compares committed (baseline) screenshots against freshly-generated ones and
-fails only when the mean absolute pixel difference exceeds a threshold.
+Compares the committed canonical-state baselines against freshly-generated
+screenshots and fails only when the mean absolute pixel difference exceeds a
+threshold.
 
-Pure PNG-compression jitter and minor animation-frame variance (observed MAE
-< 3.0) pass silently.  The default threshold of 20.0 means the average pixel
-across the *entire* image must shift by ~8 % of full scale — requiring a
-substantial layout change, major colour-scheme revision, or large widget
-addition/removal to trigger a failure.
+Small PNG-compression jitter and minor rendering variance are acceptable. The
+default threshold of 20.0 means the average pixel across the *entire* image
+must shift by ~8 % of full scale before CI treats it as a meaningful
+canonical-state or layout change.
 
 Usage::
 
     python tools/check_screenshot_diff.py \\
         --committed docs/manual/assets/screenshots \\
-        --generated /tmp/mmo-gui-screenshots
+        --generated /tmp/mmo-gui-screens
 
 Exit codes:
     0  — all files within tolerance.
@@ -26,6 +26,25 @@ import argparse
 import sys
 from pathlib import Path
 
+try:
+    from screenshot_baselines import (
+        CANONICAL_SCREENSHOTS,
+        SCREENSHOT_POLICY_PATH,
+        WALKTHROUGH_PATH,
+        canonical_filenames,
+        format_screenshot_inventory,
+        format_text_only_inventory,
+    )
+except ImportError:  # pragma: no cover - module mode fallback
+    from tools.screenshot_baselines import (
+        CANONICAL_SCREENSHOTS,
+        SCREENSHOT_POLICY_PATH,
+        WALKTHROUGH_PATH,
+        canonical_filenames,
+        format_screenshot_inventory,
+        format_text_only_inventory,
+    )
+
 
 # ---------------------------------------------------------------------------
 # Threshold
@@ -33,21 +52,13 @@ from pathlib import Path
 
 #: Maximum allowed per-channel mean absolute pixel difference (0–255 scale).
 #:
-#: Calibration (measured on ubuntu-24.04 with Python 3.12 / Pillow 11):
-#:   - gui_run_ready.png   jitter MAE ≈ 0.00  (fully deterministic)
-#:   - dashboard_safe.png  jitter MAE ≈ 2.31  (animation-frame variance)
-#:   - dashboard_extreme.png jitter MAE ≈ 1.21 (animation-frame variance)
-#:
-#: The threshold is set to 20.0 — nearly 9× the worst observed jitter —
-#: so only genuinely large visual changes (major panel add/remove, dramatic
-#: colour-scheme shift, significant layout restructure) will trip CI.
-#: Minor GUI tweaks (a label change, a small colour nudge, a single widget
-#: moved by a few pixels) fall well below this bar and pass silently.
+#: The threshold is set to 20.0 so minor pixel variance can pass while
+#: substantial canonical-state or layout changes still fail loudly.
 #:
 #: To update committed baselines after an intentional large GUI change, run:
 #:   python tools/capture_tauri_screenshots.py --out-dir docs/manual/assets/screenshots
-#: and commit the result.
-#: (Legacy CTK baselines used: xvfb-run -a python tools/capture_gui_screenshots.py)
+#: Then update the walkthrough chapter and screenshot policy README if the
+#: screen meaning changed, and commit the result.
 THRESHOLD_MAE: float = 20.0
 
 
@@ -58,27 +69,29 @@ THRESHOLD_MAE: float = 20.0
 def _mean_abs_diff(path_a: Path, path_b: Path) -> float:
     """Return the per-channel mean absolute pixel difference (0–255 scale)."""
     try:
-        import numpy as np  # noqa: PLC0415
-        from PIL import Image  # noqa: PLC0415
+        from PIL import Image, ImageChops, ImageStat  # noqa: PLC0415
     except ImportError as exc:
         print(
             f"[screenshot-diff] Missing dependency: {exc}\n"
             "Install with: pip install -e \".[screenshots]\"\n"
-            "Fallback: pip install pillow numpy",
+            "Fallback: pip install pillow",
             file=sys.stderr,
         )
         sys.exit(1)
 
-    arr_a = np.asarray(Image.open(path_a).convert("RGB"), dtype=float)
-    arr_b = np.asarray(Image.open(path_b).convert("RGB"), dtype=float)
+    with Image.open(path_a) as image_a, Image.open(path_b) as image_b:
+        rgb_a = image_a.convert("RGB")
+        rgb_b = image_b.convert("RGB")
 
-    if arr_a.shape != arr_b.shape:
+    if rgb_a.size != rgb_b.size:
         raise ValueError(
-            f"Image size mismatch: {path_a.name} is {arr_a.shape[:2]} "
-            f"but {path_b.name} is {arr_b.shape[:2]}"
+            f"Image size mismatch: {path_a.name} is {rgb_a.size[1]}x{rgb_a.size[0]} "
+            f"but {path_b.name} is {rgb_b.size[1]}x{rgb_b.size[0]}"
         )
 
-    return float(np.abs(arr_a - arr_b).mean())
+    diff_image = ImageChops.difference(rgb_a, rgb_b)
+    channel_means = ImageStat.Stat(diff_image).mean
+    return float(sum(channel_means) / len(channel_means))
 
 
 # ---------------------------------------------------------------------------
@@ -86,20 +99,36 @@ def _mean_abs_diff(path_a: Path, path_b: Path) -> float:
 # ---------------------------------------------------------------------------
 
 def _parse_args() -> argparse.Namespace:
+    epilog = (
+        "Committed canonical screenshot baselines:\n"
+        f"{format_screenshot_inventory(include_locations=True)}\n\n"
+        "Named canonical state that stays text-only:\n"
+        f"{format_text_only_inventory(include_locations=True)}\n\n"
+        "Small variance is acceptable. Large state/layout changes require "
+        "refreshed baselines plus manual chapter updates.\n"
+        "Native file pickers and other OS dialogs are intentionally excluded from "
+        "committed baselines.\n"
+        f"Policy + refresh guide: {SCREENSHOT_POLICY_PATH.as_posix()}"
+    )
     parser = argparse.ArgumentParser(
-        description="Perceptual screenshot diff checker for MMO manual screenshots.",
+        description=(
+            "Perceptual screenshot diff checker for MMO manual canonical-state "
+            "screenshots."
+        ),
+        epilog=epilog,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--committed",
         required=True,
         metavar="DIR",
-        help="Directory containing committed (baseline) screenshot PNGs.",
+        help="Directory containing committed canonical-state baseline PNGs.",
     )
     parser.add_argument(
         "--generated",
         required=True,
         metavar="DIR",
-        help="Directory containing freshly-generated screenshot PNGs.",
+        help="Directory containing freshly-generated canonical-state PNGs.",
     )
     parser.add_argument(
         "--threshold",
@@ -119,6 +148,7 @@ def main() -> int:
     committed_dir = Path(args.committed)
     generated_dir = Path(args.generated)
     threshold = args.threshold
+    expected_files = canonical_filenames()
 
     if not committed_dir.is_dir():
         print(
@@ -133,7 +163,9 @@ def main() -> int:
         )
         return 1
 
-    committed_pngs = sorted(committed_dir.glob("*.png"))
+    committed_pngs = {path.name: path for path in sorted(committed_dir.glob("*.png"))}
+    generated_pngs = {path.name: path for path in sorted(generated_dir.glob("*.png"))}
+
     if not committed_pngs:
         print(
             f"[screenshot-diff] No PNGs found in committed dir: {committed_dir}",
@@ -141,60 +173,97 @@ def main() -> int:
         )
         return 1
 
-    # (filename, mae_or_nan, status_string)
-    rows: list[tuple[str, float, str]] = []
-    failures: list[str] = []
+    extra_committed = sorted(set(committed_pngs) - set(expected_files))
+    extra_generated = sorted(set(generated_pngs) - set(expected_files))
+    if extra_committed:
+        print(
+            "[screenshot-diff] Ignoring non-canonical committed PNGs: "
+            f"{extra_committed}"
+        )
+    if extra_generated:
+        print(
+            "[screenshot-diff] Ignoring non-canonical generated PNGs: "
+            f"{extra_generated}"
+        )
 
-    for committed_path in committed_pngs:
-        name = committed_path.name
-        generated_path = generated_dir / name
+    # (filename, state_name, mae_or_nan, status_string)
+    rows: list[tuple[str, str, float, str]] = []
+    failures: list[tuple[str, str]] = []
 
-        if not generated_path.exists():
-            rows.append((name, float("nan"), "MISSING"))
-            failures.append(name)
+    for baseline in CANONICAL_SCREENSHOTS:
+        name = baseline.filename
+        state_name = baseline.state_name
+        committed_path = committed_pngs.get(name)
+        generated_path = generated_pngs.get(name)
+
+        if committed_path is None:
+            rows.append((name, state_name, float("nan"), "MISSING baseline"))
+            failures.append((name, state_name))
+            continue
+
+        if generated_path is None:
+            rows.append((name, state_name, float("nan"), "MISSING generated"))
+            failures.append((name, state_name))
             continue
 
         try:
             mae = _mean_abs_diff(committed_path, generated_path)
         except Exception as exc:  # noqa: BLE001
-            rows.append((name, float("nan"), f"ERROR: {exc}"))
-            failures.append(name)
+            rows.append((name, state_name, float("nan"), f"ERROR: {exc}"))
+            failures.append((name, state_name))
             continue
 
         status = "PASS" if mae <= threshold else "FAIL"
-        rows.append((name, mae, status))
+        rows.append((name, state_name, mae, status))
         if status == "FAIL":
-            failures.append(name)
+            failures.append((name, state_name))
 
     # Print results table.
     name_w = max(len(r[0]) for r in rows)
-    header = f"{'File':<{name_w}}  {'MAE':>8}  {'threshold':>10}  Status"
+    state_w = max(len(r[1]) for r in rows)
+    header = f"{'File':<{name_w}}  {'State':<{state_w}}  {'MAE':>8}  {'threshold':>10}  Status"
     print(f"\n{header}")
     print("-" * len(header))
-    for name, mae, status in rows:
+    for name, state_name, mae, status in rows:
         mae_str = f"{mae:8.3f}" if mae == mae else "     N/A"  # NaN check
-        print(f"{name:<{name_w}}  {mae_str}  {threshold:>10.1f}  {status}")
+        print(
+            f"{name:<{name_w}}  {state_name:<{state_w}}  "
+            f"{mae_str}  {threshold:>10.1f}  {status}"
+        )
     print()
 
     if failures:
+        failure_labels = [f"{name} ({state_name})" for name, state_name in failures]
         print(
             f"[screenshot-diff] FAILED: {len(failures)} file(s) exceed "
-            f"threshold (MAE > {threshold:.1f}): {failures}",
+            f"threshold (MAE > {threshold:.1f}) or are missing: {failure_labels}",
             file=sys.stderr,
         )
         print(
-            "[screenshot-diff] To update committed baselines after an "
-            "intentional GUI change, run:\n"
+            "[screenshot-diff] Small variance is acceptable. A failure usually "
+            "means the canonical state meaning/layout changed or the capture "
+            "drifted into the wrong state.",
+            file=sys.stderr,
+        )
+        print(
+            "[screenshot-diff] If the change is intentional, refresh the "
+            "committed baselines and update both:\n"
+            f"    {WALKTHROUGH_PATH.as_posix()}\n"
+            f"    {SCREENSHOT_POLICY_PATH.as_posix()}",
+            file=sys.stderr,
+        )
+        print(
+            "[screenshot-diff] Refresh command:\n"
             "    python tools/capture_tauri_screenshots.py "
-            "--out-dir docs/manual/assets/screenshots\n"
-            "and commit the result.",
+            "--out-dir docs/manual/assets/screenshots",
             file=sys.stderr,
         )
         return 1
 
     print(
-        f"[screenshot-diff] All {len(rows)} file(s) within tolerance "
-        f"(MAE ≤ {threshold:.1f})."
+        f"[screenshot-diff] All {len(rows)} canonical screenshot(s) within "
+        f"tolerance (MAE ≤ {threshold:.1f}). Small variance is acceptable; no "
+        "baseline refresh is needed."
     )
     return 0
 

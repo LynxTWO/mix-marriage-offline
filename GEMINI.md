@@ -41,11 +41,13 @@ Non-negotiables:
 - Keep GUI dashboard rendering deterministic (frame + surface snapshot
   signatures).
 - Keep explicit Tauri manual screenshot capture deterministic and canonical:
-  the opt-in capture flow should emit `tauri_session_ready`,
+  the opt-in capture flow should emit the named canonical states documented in
+  `docs/manual/assets/screenshots/README.md`: `tauri_session_ready`,
   `tauri_session_loaded_compact`, `tauri_scene_loaded`,
   `tauri_scene_locks_editor`, `tauri_results_loaded`, and
   `tauri_compare_loaded` from fixture-backed UI actions rather than
-  hand-curated images.
+  hand-curated images, and native OS dialogs should remain text-only instead of
+  entering the committed baseline set.
 - Route runtime progress/cancel/live-log wiring through `mmo.core.progress` and
   keep ETA/runtime diagnostics out of deterministic persisted artifacts.
   `render_report.stage_metrics` / `stage_evidence` must stay deterministic; use

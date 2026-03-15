@@ -238,6 +238,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   UI states rather than one immutable screenshot per screen, and related manual
   chapters now cross-link to that state-based walkthrough for workflows, locks,
   sessions, Results, and Compare.
+- Manual screenshot baseline policy now lives in
+  `docs/manual/assets/screenshots/README.md`, and the capture/diff tools now
+  print the same named canonical-state set plus clearer guidance for diff
+  interpretation, baseline refreshes, and text-only dynamic GUI states.
 - DSP contract docs now define one canonical seven-stage graph, explicitly mark
   which stages are advisory-only vs audio-mutating, and document the deterministic
   export-finalization receipt contract (`none` / `tpdf` / `tpdf_hp`, default

@@ -21,6 +21,8 @@ GUI screenshots in this manual are canonical captured states. They orient you
 to one stable app moment, not every possible sidebar or panel arrangement.
 Native OS dialogs such as folder pickers and file pickers are described in text
 because they vary by platform and are not part of the canonical app baseline.
+Contributor refresh policy and screenshot inventory live in
+[assets/screenshots/README.md](assets/screenshots/README.md).
 
 MMO is offline-first. If something needs an external tool like FFmpeg, MMO will
 tell you and gate the feature instead of guessing.
