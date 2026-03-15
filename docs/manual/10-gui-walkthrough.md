@@ -73,6 +73,8 @@ more compact left rail so the active workflow screens get more horizontal room.
 On narrower windows, some secondary controls may move lower on the page or live
 inside collapsible sections, but the workflow and stored paths do not change.
 
+![Session shell, loaded compact workspace mode](assets/screenshots/tauri_session_loaded_compact.png)
+
 ---
 
 ## Canonical workflow states
@@ -140,6 +142,8 @@ intentionally not shown here because it is not a canonical app state.
 
 Saving scene locks refreshes the lock context and warnings so you can confirm
 what changed before moving on to Render.
+
+![Scene screen, lock editor open](assets/screenshots/tauri_scene_locks_editor.png)
 
 ---
 
@@ -230,18 +234,18 @@ Playwright capture spec. To regenerate them locally:
 python tools/capture_tauri_screenshots.py --out-dir docs/manual/assets/screenshots
 ```
 
-This starts the dev server automatically and captures four canonical states with
+This starts the dev server automatically and captures six canonical states with
 realistic fixture data:
 
 - `tauri_session_ready.png` — Validate screen, session-ready empty state
+- `tauri_session_loaded_compact.png` — Session shell, loaded compact workspace mode
 - `tauri_scene_loaded.png` — Scene screen, loaded with lock context
+- `tauri_scene_locks_editor.png` — Scene screen, lock editor open
 - `tauri_results_loaded.png` — Results screen, loaded default state
 - `tauri_compare_loaded.png` — Compare screen, loaded loudness-matched state
 
-Other meaningful GUI states in this chapter, such as the loaded compact session
-shell, the Scene lock editor open state, and Results secondary inspection
-expanded, are described in text because they are more dependent on viewport and
-panel state than on a single stable screenshot.
+Results secondary inspection expanded remains text-only because it is still more
+dependent on viewport and panel state than on a single stable screenshot.
 
 After running, commit the updated PNGs. The perceptual diff checker
 (`tools/check_screenshot_diff.py`) validates that regenerated screenshots match

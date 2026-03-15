@@ -216,6 +216,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     state, then switches to a more compact loaded-workspace sidebar once a
     workspace or artifact is in play so Results/Compare get more horizontal
     room.
+  - The explicit Tauri screenshot-capture flow now writes six deterministic
+    canonical manual baselines instead of only four broad screens, adding
+    loaded compact-session coverage plus a distinct Scene lock-editor-open
+    capture driven by fixture-backed UI actions.
   - Session, scene-lock, Results, and Compare flows now expose native desktop
     browse affordances plus deterministic recent-path chips for the repeat-use
     paths that mattered most in packaged daily use.

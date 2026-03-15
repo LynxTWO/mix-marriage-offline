@@ -41,7 +41,9 @@ DEFAULT_OUT_DIR = "docs/manual/assets/screenshots"
 # Must match the filenames written by capture-screenshots.spec.ts.
 EXPECTED_FILES: tuple[str, ...] = (
     "tauri_session_ready.png",
+    "tauri_session_loaded_compact.png",
     "tauri_scene_loaded.png",
+    "tauri_scene_locks_editor.png",
     "tauri_results_loaded.png",
     "tauri_compare_loaded.png",
 )

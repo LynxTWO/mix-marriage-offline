@@ -19,7 +19,9 @@
  *
  * Output files:
  *   tauri_session_ready.png   — Validate screen, session controls, empty state
+ *   tauri_session_loaded_compact.png — Validate screen with loaded compact session shell
  *   tauri_scene_loaded.png    — Scene screen with objects, locks, and lint context
+ *   tauri_scene_locks_editor.png — Scene screen with lock editor open
  *   tauri_results_loaded.png  — Results screen with receipt, QA, meters, confidence
  *   tauri_compare_loaded.png  — Compare screen with A/B data and loudness match
  *
@@ -32,6 +34,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { expect, Page, test } from "@playwright/test";
+
+type JsonObject = Record<string, unknown>;
+
+type DesktopTestApi = {
+  clearMockRpcResults?: () => void;
+  setMockRpcResult?: (method: string, payload: JsonObject) => void;
+};
 
 // ---------------------------------------------------------------------------
 // Output directory
@@ -70,6 +79,161 @@ async function openScreen(page: Page, screen: string): Promise<void> {
   const label = screen.charAt(0).toUpperCase() + screen.slice(1);
   await page.getByRole("button", { name: label, exact: true }).click();
   await expect(page.locator(`#screen-${screen}`)).toBeVisible();
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+  });
+}
+
+const SESSION_FIXTURE = {
+  sceneLocksPath: "/tmp/mmo-workspace/project/scene_locks.yaml",
+  stemsDir: "/tmp/mmo-stems",
+  workspaceDir: "/tmp/mmo-workspace",
+};
+
+const SCENE_JSON_FIXTURE = {
+  intent: {
+    confidence: 0.74,
+    perspective: "in_orchestra",
+    locks: ["LOCK.PRESERVE_DYNAMICS"],
+  },
+  objects: [
+    {
+      object_id: "OBJ.VOX",
+      label: "Vox",
+      role_id: "ROLE.VOCAL.LEAD",
+      group_bus: "BUS.VOX",
+      intent: {
+        confidence: 0.91,
+        width: 0.4,
+        depth: 0.5,
+        locks: ["LOCK.NO_STEREO_WIDENING"],
+        position: { azimuth_deg: 0 },
+      },
+    },
+    {
+      object_id: "OBJ.GTR",
+      label: "Guitar",
+      role_id: "ROLE.GTR.ELECTRIC",
+      group_bus: "BUS.MUSIC",
+      intent: {
+        confidence: 0.66,
+        width: 0.3,
+        depth: 0.42,
+        locks: [],
+        position: { azimuth_deg: 24 },
+      },
+    },
+  ],
+  beds: [
+    {
+      bed_id: "BED.BUS.MUSIC",
+      bus_id: "BUS.MUSIC",
+      label: "Music Bed",
+      kind: "bed",
+      width_hint: 0.85,
+      intent: {
+        confidence: 0.82,
+        diffuse: 0.85,
+        locks: [],
+      },
+    },
+  ],
+};
+
+const SCENE_LINT_FIXTURE = {
+  summary: { error_count: 1, warn_count: 2 },
+  issues: [
+    {
+      severity: "warn",
+      issue_id: "ISSUE.SCENE_LINT.IMMERSIVE_LOW_CONFIDENCE",
+      path: "intent.confidence",
+      message:
+        "Immersive perspective is requested with low scene confidence.",
+    },
+  ],
+};
+
+const SCENE_LOCKS_INSPECT_FIXTURE = {
+  objects: [
+    {
+      confidence: 0.91,
+      inferred_role_id: "ROLE.VOCAL.LEAD",
+      label: "Vox",
+      object_id: "OBJ.VOX",
+      role_override_id: "",
+      stem_id: "STEM.VOX",
+    },
+    {
+      confidence: 0.66,
+      front_only_override: true,
+      inferred_role_id: "ROLE.GTR.ELECTRIC",
+      label: "Guitar",
+      object_id: "OBJ.GTR",
+      role_override_id: "ROLE.GTR.ELECTRIC",
+      stem_id: "STEM.GTR",
+      surround_cap_override: 0,
+    },
+  ],
+  overrides_count: 1,
+  perspective: "in_orchestra",
+  perspective_values: ["audience", "in_orchestra"],
+  role_options: [
+    { label: "Lead Vocal", role_id: "ROLE.VOCAL.LEAD" },
+    { label: "Electric Guitar", role_id: "ROLE.GTR.ELECTRIC" },
+  ],
+  scene_locks_path: "/tmp/mmo-workspace/project/scene_locks.yaml",
+  scene_path: "/tmp/mmo-workspace/project/drafts/scene.draft.json",
+};
+
+async function fillCommittedTextInput(
+  page: Page,
+  selector: string,
+  value: string,
+): Promise<void> {
+  const locator = page.locator(selector);
+  await locator.fill(value);
+  await locator.dispatchEvent("input");
+  await locator.dispatchEvent("change");
+}
+
+async function loadCompactWorkspaceShell(page: Page): Promise<void> {
+  await fillCommittedTextInput(page, "#stems-dir-input", SESSION_FIXTURE.stemsDir);
+  await fillCommittedTextInput(page, "#workspace-dir-input", SESSION_FIXTURE.workspaceDir);
+  await fillCommittedTextInput(page, "#scene-locks-input", SESSION_FIXTURE.sceneLocksPath);
+  await expect(page.locator("#app-shell")).toHaveAttribute("data-workspace-mode", "compact");
+}
+
+async function setDesktopRpcMock(
+  page: Page,
+  method: string,
+  payload: JsonObject,
+): Promise<void> {
+  await page.waitForFunction(() => Boolean((window as { __MMO_DESKTOP_TEST__?: DesktopTestApi }).__MMO_DESKTOP_TEST__));
+  await page.evaluate(
+    ({ method, payload }) => {
+      (window as { __MMO_DESKTOP_TEST__?: DesktopTestApi }).__MMO_DESKTOP_TEST__?.setMockRpcResult?.(method, payload);
+    },
+    { method, payload },
+  );
+}
+
+async function loadSceneWorkspace(page: Page): Promise<void> {
+  await fillCommittedTextInput(page, "#workspace-dir-input", SESSION_FIXTURE.workspaceDir);
+  await page.locator("#scene-json-file-input").setInputFiles(
+    jsonFile("scene.json", SCENE_JSON_FIXTURE),
+  );
+  await page.locator("#scene-lint-file-input").setInputFiles(
+    jsonFile("scene_lint.json", SCENE_LINT_FIXTURE),
+  );
+  await expect(page.locator("#scene-summary-text")).toContainText("Perspective:");
+}
+
+async function ensureSceneLockEditorOpen(page: Page): Promise<void> {
+  const details = page.locator("#scene-locks-editor-details");
+  const open = await details.evaluate((node) => (node as HTMLDetailsElement).open);
+  if (!open) {
+    await page.locator("#scene-locks-editor-details summary").click();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -98,126 +262,47 @@ test.describe("MMO Tauri screenshot capture", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 2. Scene screen — objects, locks, and lint context loaded
+  // 2. Validate screen — loaded workspace compacts the shared shell
+  // -------------------------------------------------------------------------
+  test("capture: validate screen (loaded compact session shell)", async ({ page }) => {
+    ensureOutDir();
+    await openScreen(page, "validate");
+    await loadCompactWorkspaceShell(page);
+    await page.screenshot({ path: outPath("tauri_session_loaded_compact.png"), fullPage: true });
+  });
+
+  // -------------------------------------------------------------------------
+  // 3. Scene screen — objects, locks, and lint context loaded
   // -------------------------------------------------------------------------
   test("capture: scene screen (loaded)", async ({ page }) => {
     ensureOutDir();
     await openScreen(page, "scene");
-    await page.locator("#workspace-dir-input").fill("/tmp/mmo-workspace");
-
-    await page.locator("#scene-json-file-input").setInputFiles(
-      jsonFile("scene.json", {
-        intent: {
-          confidence: 0.74,
-          perspective: "in_orchestra",
-          locks: ["LOCK.PRESERVE_DYNAMICS"],
-        },
-        objects: [
-          {
-            object_id: "OBJ.VOX",
-            label: "Vox",
-            role_id: "ROLE.VOCAL.LEAD",
-            group_bus: "BUS.VOX",
-            intent: {
-              confidence: 0.91,
-              width: 0.4,
-              depth: 0.5,
-              locks: ["LOCK.NO_STEREO_WIDENING"],
-              position: { azimuth_deg: 0 },
-            },
-          },
-          {
-            object_id: "OBJ.GTR",
-            label: "Guitar",
-            role_id: "ROLE.GTR.ELECTRIC",
-            group_bus: "BUS.MUSIC",
-            intent: {
-              confidence: 0.66,
-              width: 0.3,
-              depth: 0.42,
-              locks: [],
-              position: { azimuth_deg: 24 },
-            },
-          },
-        ],
-        beds: [
-          {
-            bed_id: "BED.BUS.MUSIC",
-            bus_id: "BUS.MUSIC",
-            label: "Music Bed",
-            kind: "bed",
-            width_hint: 0.85,
-            intent: {
-              confidence: 0.82,
-              diffuse: 0.85,
-              locks: [],
-            },
-          },
-        ],
-      }),
-    );
-
-    await page.locator("#scene-lint-file-input").setInputFiles(
-      jsonFile("scene_lint.json", {
-        summary: { error_count: 1, warn_count: 2 },
-        issues: [
-          {
-            severity: "warn",
-            issue_id: "ISSUE.SCENE_LINT.IMMERSIVE_LOW_CONFIDENCE",
-            path: "intent.confidence",
-            message:
-              "Immersive perspective is requested with low scene confidence.",
-          },
-        ],
-      }),
-    );
-    await page.evaluate(() => {
-      const api = (window as typeof window & {
-        __MMO_DESKTOP_TEST__?: {
-          hydrateSceneLocksInspect: (payload: Record<string, unknown>) => void;
-        };
-      }).__MMO_DESKTOP_TEST__;
-      api?.hydrateSceneLocksInspect({
-        objects: [
-          {
-            confidence: 0.91,
-            inferred_role_id: "ROLE.VOCAL.LEAD",
-            label: "Vox",
-            object_id: "OBJ.VOX",
-            role_override_id: "",
-            stem_id: "STEM.VOX",
-          },
-          {
-            confidence: 0.66,
-            front_only_override: true,
-            inferred_role_id: "ROLE.GTR.ELECTRIC",
-            label: "Guitar",
-            object_id: "OBJ.GTR",
-            role_override_id: "ROLE.GTR.ELECTRIC",
-            stem_id: "STEM.GTR",
-            surround_cap_override: 0,
-          },
-        ],
-        overrides_count: 1,
-        perspective: "in_orchestra",
-        perspective_values: ["audience", "in_orchestra"],
-        role_options: [
-          { label: "Lead Vocal", role_id: "ROLE.VOCAL.LEAD" },
-          { label: "Electric Guitar", role_id: "ROLE.GTR.ELECTRIC" },
-        ],
-        scene_locks_path: "/tmp/project/scene_locks.yaml",
-        scene_path: "/tmp/project/drafts/scene.draft.json",
-      });
-    });
-
-    await expect(page.locator("#scene-summary-text")).toContainText(
-      "Perspective:",
-    );
+    await loadSceneWorkspace(page);
+    await setDesktopRpcMock(page, "scene.locks.inspect", SCENE_LOCKS_INSPECT_FIXTURE);
+    await page.locator("#scene-locks-inspect-button").click();
+    await expect(page.locator("#scene-lock-summary-rows")).toContainText("2 row(s)");
+    await expect(page.locator("#scene-lock-summary-path")).toContainText("scene_locks.yaml");
     await page.screenshot({ path: outPath("tauri_scene_loaded.png"), fullPage: true });
   });
 
   // -------------------------------------------------------------------------
-  // 3. Results screen — receipt, manifest, QA loaded
+  // 4. Scene screen — lock editor open through inspect flow
+  // -------------------------------------------------------------------------
+  test("capture: scene screen (lock editor open)", async ({ page }) => {
+    ensureOutDir();
+    await openScreen(page, "scene");
+    await loadSceneWorkspace(page);
+    await ensureSceneLockEditorOpen(page);
+    await setDesktopRpcMock(page, "scene.locks.inspect", SCENE_LOCKS_INSPECT_FIXTURE);
+    await page.locator("#scene-locks-inspect-button").click();
+    await expect(page.locator("#scene-locks-editor")).toContainText("Front-only");
+    await page.locator("#scene-locks-perspective-select").selectOption("audience");
+    await expect(page.locator("#scene-lock-summary-dirty")).toContainText("Yes");
+    await page.screenshot({ path: outPath("tauri_scene_locks_editor.png"), fullPage: true });
+  });
+
+  // -------------------------------------------------------------------------
+  // 5. Results screen — receipt, manifest, QA loaded
   // -------------------------------------------------------------------------
   test("capture: results screen (loaded)", async ({ page }) => {
     ensureOutDir();
@@ -378,7 +463,7 @@ test.describe("MMO Tauri screenshot capture", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 4. Compare screen — A/B loaded, loudness match active
+  // 6. Compare screen — A/B loaded, loudness match active
   // -------------------------------------------------------------------------
   test("capture: compare screen (loaded)", async ({ page }) => {
     ensureOutDir();

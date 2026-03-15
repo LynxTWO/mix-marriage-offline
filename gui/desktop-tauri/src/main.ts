@@ -161,16 +161,6 @@ type SceneLocksState = {
   statusTone: SceneLockStatusTone;
 };
 
-type DesktopTestApi = {
-  hydrateSceneLocksInspect: (payload: JsonObject) => void;
-};
-
-declare global {
-  interface Window {
-    __MMO_DESKTOP_TEST__?: DesktopTestApi;
-  }
-}
-
 type AppUi = {
   abButtons: HTMLButtonElement[];
   artifactPaths: HTMLElement;
@@ -300,6 +290,8 @@ type AppUi = {
     summaryText: HTMLElement;
   };
 };
+
+const desktopTestRpcResults = new Map<string, JsonObject>();
 
 function defaultScenePerspectiveValues(): string[] {
   return ["audience", "on_stage", "in_band", "in_orchestra"];
@@ -579,6 +571,10 @@ function asArray(value: unknown): unknown[] {
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function cloneJsonObject<T extends JsonObject>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function asNumber(value: unknown): number | null {
@@ -4200,15 +4196,18 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   window.__MMO_DESKTOP_TEST__ = {
-    hydrateSceneLocksInspect: (payload: JsonObject) => {
-      hydrateSceneLocksInspect(payload, {
-        autoFillMode: "if-empty",
-        statusMessage: "Scene lock rows loaded for design-system testing.",
-        statusTone: "ok",
-        ui,
-      });
-      ui.scene.lockEditorDetails.open = true;
-      renderAll(ui);
+    clearMockRpcResults: () => {
+      desktopTestRpcResults.clear();
+    },
+    runMmoRpc: async (method) => {
+      const payload = desktopTestRpcResults.get(method);
+      if (payload === undefined) {
+        throw new Error(`No desktop test RPC mock registered for ${method}.`);
+      }
+      return cloneJsonObject(payload);
+    },
+    setMockRpcResult: (method: string, payload: JsonObject) => {
+      desktopTestRpcResults.set(method, cloneJsonObject(payload));
     },
   };
 

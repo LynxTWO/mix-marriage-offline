@@ -5,6 +5,23 @@ const SIDECAR_NAME = "binaries/mmo";
 const LIVE_PREFIX = "[MMO-LIVE] ";
 const DEFAULT_RPC_TIMEOUT_MS = 15_000;
 
+type DesktopTestApi = {
+  clearMockRpcResults?: () => void;
+  readArtifactText?: (path: string) => Promise<string | null> | string | null;
+  runMmoRpc?: (
+    method: string,
+    params?: Record<string, unknown>,
+    options?: { timeoutMs?: number },
+  ) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null;
+  setMockRpcResult?: (method: string, payload: Record<string, unknown>) => void;
+};
+
+declare global {
+  interface Window {
+    __MMO_DESKTOP_TEST__?: DesktopTestApi;
+  }
+}
+
 export type MmoLivePayload = {
   confidence?: number | null;
   eta_seconds?: number | null;
@@ -130,6 +147,13 @@ export function resolveSiblingPath(pathValue: string, leafName: string): string 
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+function desktopTestApi(): DesktopTestApi | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.__MMO_DESKTOP_TEST__ ?? null;
 }
 
 function normalizeCommandOutput(output: MmoRunResult): MmoRunResult {
@@ -284,6 +308,10 @@ export async function artifactExists(path: string): Promise<boolean> {
 }
 
 export async function readArtifactText(path: string): Promise<string | null> {
+  const testText = await desktopTestApi()?.readArtifactText?.(path);
+  if (typeof testText === "string") {
+    return testText;
+  }
   if (!path.trim() || !isTauriRuntime()) {
     return null;
   }
@@ -405,11 +433,15 @@ export async function runMmoRpc<T extends Record<string, unknown>>(
   params: Record<string, unknown> = {},
   options: MmoRunOptions & { timeoutMs?: number } = {},
 ): Promise<T> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_RPC_TIMEOUT_MS;
   if (!isTauriRuntime()) {
+    const mockResult = await desktopTestApi()?.runMmoRpc?.(method, params, { timeoutMs });
+    if (mockResult !== null && mockResult !== undefined) {
+      return mockResult as T;
+    }
     throw new Error("MMO GUI RPC is only available in the Tauri desktop runtime.");
   }
 
-  const timeoutMs = options.timeoutMs ?? DEFAULT_RPC_TIMEOUT_MS;
   const command = createSidecar(["gui", "rpc"], options);
   const stdoutBuffer = new LineBuffer();
   let child: Child | null = null;

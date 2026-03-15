@@ -40,6 +40,12 @@ Non-negotiables:
   reintroducing per-renderer quantize/dither code.
 - Keep GUI dashboard rendering deterministic (frame + surface snapshot
   signatures).
+- Keep explicit Tauri manual screenshot capture deterministic and canonical:
+  the opt-in capture flow should emit `tauri_session_ready`,
+  `tauri_session_loaded_compact`, `tauri_scene_loaded`,
+  `tauri_scene_locks_editor`, `tauri_results_loaded`, and
+  `tauri_compare_loaded` from fixture-backed UI actions rather than
+  hand-curated images.
 - Route runtime progress/cancel/live-log wiring through `mmo.core.progress` and
   keep ETA/runtime diagnostics out of deterministic persisted artifacts.
   `render_report.stage_metrics` / `stage_evidence` must stay deterministic; use

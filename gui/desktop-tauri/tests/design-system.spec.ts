@@ -12,6 +12,10 @@ type WidgetBox = {
   y: number;
 };
 
+type DesktopTestApi = {
+  setMockRpcResult?: (method: string, payload: Record<string, unknown>) => void;
+};
+
 const screens: Record<ScreenKey, { buttonLabel: string; requiredWidgets: string[] }> = {
   analyze: {
     buttonLabel: "Analyze",
@@ -340,44 +344,43 @@ test.describe("desktop workflow design system", () => {
         },
       ],
     }));
-    await page.evaluate(() => {
-      const api = (window as typeof window & {
-        __MMO_DESKTOP_TEST__?: {
-          hydrateSceneLocksInspect: (payload: Record<string, unknown>) => void;
-        };
-      }).__MMO_DESKTOP_TEST__;
-      api?.hydrateSceneLocksInspect({
-        objects: [
-          {
-            confidence: 0.91,
-            inferred_role_id: "ROLE.VOCAL.LEAD",
-            label: "Vox",
-            object_id: "OBJ.VOX",
-            role_override_id: "",
-            stem_id: "STEM.VOX",
-          },
-          {
-            confidence: 0.66,
-            front_only_override: true,
-            inferred_role_id: "ROLE.GTR.ELECTRIC",
-            label: "Guitar",
-            object_id: "OBJ.GTR",
-            role_override_id: "ROLE.GTR.ELECTRIC",
-            stem_id: "STEM.GTR",
-            surround_cap_override: 0,
-          },
-        ],
-        overrides_count: 1,
-        perspective: "in_orchestra",
-        perspective_values: ["audience", "in_orchestra"],
-        role_options: [
-          { label: "Lead Vocal", role_id: "ROLE.VOCAL.LEAD" },
-          { label: "Electric Guitar", role_id: "ROLE.GTR.ELECTRIC" },
-        ],
-        scene_locks_path: "/tmp/project/scene_locks.yaml",
-        scene_path: "/tmp/project/drafts/scene.draft.json",
-      });
+    await page.evaluate((payload) => {
+      (window as typeof window & {
+        __MMO_DESKTOP_TEST__?: DesktopTestApi;
+      }).__MMO_DESKTOP_TEST__?.setMockRpcResult?.("scene.locks.inspect", payload);
+    }, {
+      objects: [
+        {
+          confidence: 0.91,
+          inferred_role_id: "ROLE.VOCAL.LEAD",
+          label: "Vox",
+          object_id: "OBJ.VOX",
+          role_override_id: "",
+          stem_id: "STEM.VOX",
+        },
+        {
+          confidence: 0.66,
+          front_only_override: true,
+          inferred_role_id: "ROLE.GTR.ELECTRIC",
+          label: "Guitar",
+          object_id: "OBJ.GTR",
+          role_override_id: "ROLE.GTR.ELECTRIC",
+          stem_id: "STEM.GTR",
+          surround_cap_override: 0,
+        },
+      ],
+      overrides_count: 1,
+      perspective: "in_orchestra",
+      perspective_values: ["audience", "in_orchestra"],
+      role_options: [
+        { label: "Lead Vocal", role_id: "ROLE.VOCAL.LEAD" },
+        { label: "Electric Guitar", role_id: "ROLE.GTR.ELECTRIC" },
+      ],
+      scene_locks_path: "/tmp/project/scene_locks.yaml",
+      scene_path: "/tmp/project/drafts/scene.draft.json",
     });
+    await page.locator("#scene-locks-editor-details summary").click();
+    await page.locator("#scene-locks-inspect-button").click();
 
     await expect(page.locator("#scene-summary-text")).toContainText("Perspective:");
     await expect(page.locator("#scene-summary-text")).toContainText("OBJ.VOX");
