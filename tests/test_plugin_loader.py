@@ -51,6 +51,8 @@ def _write_renderer_plugin(
                 "capabilities:",
                 "  max_channels: 2",
                 f'  channel_mode: "{channel_mode}"',
+                '  scene_scope: "object_capable"',
+                '  layout_safety: "layout_agnostic"',
                 "",
             ]
         ),

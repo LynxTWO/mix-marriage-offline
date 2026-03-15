@@ -10,6 +10,8 @@ entrypoint: "mmo.plugins.renderers.placement_mixdown_renderer:PlacementMixdownRe
 capabilities:
   max_channels: 32
   channel_mode: "true_multichannel"
+  scene_scope: "object_capable"
+  layout_safety: "layout_specific"
   deterministic_seed_policy: "none"
   purity:
     audio_buffer: "typed_f64_interleaved"

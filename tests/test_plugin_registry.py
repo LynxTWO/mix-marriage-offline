@@ -20,11 +20,15 @@ from typing import Any, Dict
 from mmo.core.plugin_registry import (
     ISSUE_SEMANTICS_BED_ONLY_OBJECT_CONFLICT,
     ISSUE_SEMANTICS_CHANNEL_MODE_INVALID,
+    ISSUE_SEMANTICS_LAYOUT_SAFETY_INVALID,
+    ISSUE_SEMANTICS_LAYOUT_SPECIFIC_NO_LAYOUT,
     ISSUE_SEMANTICS_LATENCY_FIXED_MISSING_SAMPLES,
     ISSUE_SEMANTICS_LATENCY_TYPE_INVALID,
     ISSUE_SEMANTICS_LINK_GROUPS_INVALID,
     ISSUE_SEMANTICS_LINK_GROUPS_REQUIRES_LINKED_MODE,
     ISSUE_SEMANTICS_PURITY_RANDOMNESS_CONFLICT,
+    ISSUE_SEMANTICS_SCENE_SCOPE_INVALID,
+    ISSUE_SEMANTICS_SCENE_SCOPE_OBJECT_CONFLICT,
     ISSUE_SEMANTICS_SEED_POLICY_INVALID,
     ISSUE_SEMANTICS_SPEAKER_POSITIONS_NO_LAYOUT,
     PluginRegistryError,
@@ -57,6 +61,8 @@ def _base_manifest(**overrides: Any) -> Dict[str, Any]:
 
 
 def _renderer_manifest(**overrides: Any) -> Dict[str, Any]:
+    capabilities = overrides.pop("capabilities", None)
+    merge_capability_defaults = overrides.pop("merge_capability_defaults", True)
     base: Dict[str, Any] = {
         "plugin_id": "PLUGIN.RENDERER.TEST_OK",
         "plugin_type": "renderer",
@@ -64,6 +70,15 @@ def _renderer_manifest(**overrides: Any) -> Dict[str, Any]:
         "version": "0.1.0",
         "entrypoint": "mmo.plugins.renderers.safe_renderer:SafeRenderer",
     }
+    if isinstance(capabilities, dict):
+        if merge_capability_defaults:
+            merged_capabilities = {
+                "scene_scope": "object_capable",
+                "layout_safety": "layout_agnostic",
+            }
+            merged_capabilities.update(capabilities)
+            capabilities = merged_capabilities
+        base["capabilities"] = capabilities
     base.update(overrides)
     return base
 
@@ -185,6 +200,7 @@ class TestSchemaValidation(unittest.TestCase):
             capabilities={
                 "max_channels": 2,
                 "bed_only": True,
+                "scene_scope": "bed_only",
             }
         )
         errors = validate_manifest(manifest, schema_path=_SCHEMA_PATH)
@@ -373,6 +389,7 @@ class TestSemanticsValidation(unittest.TestCase):
             capabilities={
                 "max_channels": 8,
                 "bed_only": True,
+                "scene_scope": "bed_only",
                 "scene": {
                     "supports_objects": True,
                 },
@@ -449,6 +466,67 @@ class TestSemanticsValidation(unittest.TestCase):
         ]
         self.assertEqual(conflict_errors, [], msg=errors)
 
+    def test_missing_scene_scope_rejected(self) -> None:
+        manifest = _renderer_manifest(
+            capabilities={
+                "max_channels": 2,
+                "layout_safety": "layout_agnostic",
+            },
+            merge_capability_defaults=False,
+        )
+        errors = validate_manifest(manifest, schema_path=_SCHEMA_PATH, semantics=self.semantics)
+        self.assertTrue(
+            _errors_contain(errors, ISSUE_SEMANTICS_SCENE_SCOPE_INVALID),
+            msg=f"Expected scene_scope error; got: {errors}",
+        )
+
+    def test_invalid_layout_safety_rejected(self) -> None:
+        manifest = _renderer_manifest(
+            capabilities={
+                "max_channels": 2,
+                "scene_scope": "object_capable",
+                "layout_safety": "wild_guess",
+            },
+            merge_capability_defaults=False,
+        )
+        errors = validate_manifest(manifest, schema_path=_SCHEMA_PATH, semantics=self.semantics)
+        self.assertTrue(
+            _errors_contain(errors, ISSUE_SEMANTICS_LAYOUT_SAFETY_INVALID)
+            or _errors_contain(errors, "[schema]"),
+            msg=f"Expected layout_safety error; got: {errors}",
+        )
+
+    def test_object_capable_conflicts_with_bed_only_true(self) -> None:
+        manifest = _renderer_manifest(
+            capabilities={
+                "max_channels": 2,
+                "scene_scope": "object_capable",
+                "layout_safety": "layout_agnostic",
+                "bed_only": True,
+            },
+            merge_capability_defaults=False,
+        )
+        errors = validate_manifest(manifest, schema_path=_SCHEMA_PATH, semantics=self.semantics)
+        self.assertTrue(
+            _errors_contain(errors, ISSUE_SEMANTICS_SCENE_SCOPE_OBJECT_CONFLICT),
+            msg=f"Expected scene_scope conflict; got: {errors}",
+        )
+
+    def test_layout_specific_requires_supported_layout(self) -> None:
+        manifest = _renderer_manifest(
+            capabilities={
+                "max_channels": 2,
+                "scene_scope": "object_capable",
+                "layout_safety": "layout_specific",
+            },
+            merge_capability_defaults=False,
+        )
+        errors = validate_manifest(manifest, schema_path=_SCHEMA_PATH, semantics=self.semantics)
+        self.assertTrue(
+            _errors_contain(errors, ISSUE_SEMANTICS_LAYOUT_SPECIFIC_NO_LAYOUT),
+            msg=f"Expected layout_specific support error; got: {errors}",
+        )
+
 
 # ---------------------------------------------------------------------------
 # Determinism
@@ -497,6 +575,7 @@ class TestDeterminism(unittest.TestCase):
                 "latency": {"type": "bad"},
                 "deterministic_seed_policy": "also_bad",
                 "bed_only": True,
+                "scene_scope": "bed_only",
                 "scene": {"supports_objects": True},
             }
         )
@@ -599,12 +678,24 @@ class TestSemanticsDoc(unittest.TestCase):
         for sp in ("none", "seed_required", "seed_optional"):
             self.assertIn(sp, s.valid_seed_policies)
 
+    def test_valid_scene_scopes_complete(self) -> None:
+        s = load_semantics()
+        for scope in ("bed_only", "object_capable"):
+            self.assertIn(scope, s.valid_scene_scopes)
+
+    def test_valid_layout_safety_complete(self) -> None:
+        s = load_semantics()
+        for value in ("layout_agnostic", "layout_specific"):
+            self.assertIn(value, s.valid_layout_safety)
+
     def test_semantics_sets_are_frozenset(self) -> None:
         s = load_semantics()
         self.assertIsInstance(s.valid_channel_modes, frozenset)
         self.assertIsInstance(s.valid_link_groups, frozenset)
         self.assertIsInstance(s.valid_latency_types, frozenset)
         self.assertIsInstance(s.valid_seed_policies, frozenset)
+        self.assertIsInstance(s.valid_scene_scopes, frozenset)
+        self.assertIsInstance(s.valid_layout_safety, frozenset)
 
 
 # ---------------------------------------------------------------------------

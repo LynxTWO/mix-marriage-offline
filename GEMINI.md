@@ -65,6 +65,10 @@ Non-negotiables:
   `--scene-locks` must apply before placement policy and be re-applied before
   authority/eligibility checks, and receipt artifacts must preserve canonical
   scene/lock source provenance.
+- Keep renderer safety classes explicit and enforced: manifests with capability
+  objects must declare `scene_scope` and `layout_safety`, and the render
+  pipeline must either restrict plugins to a provably safe subset or bypass
+  them with explainable skipped receipt rows instead of guessing.
 - Keep scene-aware safe-render export artifacts deterministic and explainable:
   `--export-stems`, `--export-buses`, `--export-master/--no-export-master`, and
   `--export-layouts` must emit stable file paths + SHA-256 hashes in render

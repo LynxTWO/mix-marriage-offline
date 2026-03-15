@@ -230,6 +230,8 @@ contract explicitly:
 ```yaml
 capabilities:
   max_channels: 32
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
   deterministic_seed_policy: "none"
   purity:
     audio_buffer: "typed_f64_interleaved"
@@ -237,6 +239,22 @@ capabilities:
     wall_clock: "forbidden"
     thread_scheduling: "forbidden"
 ```
+
+Layout-specific renderers must also declare supported layouts or target IDs:
+
+```yaml
+capabilities:
+  scene_scope: "object_capable"
+  layout_safety: "layout_specific"
+  supported_layout_ids:
+    - "LAYOUT.5_1"
+    - "LAYOUT.7_1_4"
+```
+
+The host uses `scene_scope` and `layout_safety` to decide whether a renderer is
+safe to run as-is, whether it can be restricted to a safe bed/object subset, or
+whether it must be bypassed with explainable skipped rows in the render
+manifest/receipt.
 
 MMO records plugin metadata (including version and file hash) in output
 manifests.
@@ -311,6 +329,11 @@ Rules:
 - output files must be sample-aligned and length-matched to inputs
 - default behavior must prevent clipping unless user allows it
 - render manifest must list all produced files and applied actions
+- renderers receive only render-eligible recommendations; any tone/balance/
+  spatial change must come from explicit user intent or a recommendation that
+  already cleared approval and safety gates
+- if scene-scope or layout safety is not guaranteed, the host restricts the
+  renderer to the safe subset or bypasses it and records skipped evidence
 - renderers may mutate audio only in the pre-render corrective pass or render
   pass, never in analysis/scene/QA stages
 - renderers must leave final dither/quantization policy to the export

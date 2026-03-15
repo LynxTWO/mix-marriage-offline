@@ -10,6 +10,8 @@ entrypoint: "mmo.plugins.renderers.safe_renderer:SafeRenderer"
 numeric_precision: "float64"
 capabilities:
   max_channels: 32
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
   deterministic_seed_policy: "none"
   purity:
     audio_buffer: "typed_f64_interleaved"

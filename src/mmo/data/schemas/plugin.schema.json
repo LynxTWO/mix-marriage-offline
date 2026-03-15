@@ -128,6 +128,16 @@
           "type": "boolean",
           "description": "If true, plugin operates only on bed audio; cannot be applied to objects."
         },
+        "scene_scope": {
+          "type": "string",
+          "enum": ["bed_only", "object_capable"],
+          "description": "Explicit scene-scope safety contract for host restriction/bypass decisions."
+        },
+        "layout_safety": {
+          "type": "string",
+          "enum": ["layout_agnostic", "layout_specific"],
+          "description": "Explicit layout-safety contract for host restriction/bypass decisions."
+        },
         "supported_standards": {
           "type": "array",
           "items": {

@@ -9,6 +9,8 @@ ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.renderers.gain_trim_renderer:GainTrimRenderer"
 capabilities:
   max_channels: 32
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
   deterministic_seed_policy: "none"
   purity:
     audio_buffer: "typed_f64_interleaved"

@@ -13,7 +13,10 @@ from mmo.core.layout_export import ffmpeg_layout_string_from_channel_order
 from mmo.core.layout_negotiation import get_layout_channel_order
 from mmo.core.media_tags import TagBag, empty_tag_bag, tag_bag_from_mapping
 from mmo.core.precedence import apply_precedence, has_precedence_receipt
-from mmo.core.recommendations import normalize_recommendation_contract
+from mmo.core.recommendations import (
+    normalize_recommendation_contract,
+    normalize_recommendation_scope,
+)
 from mmo.core.tag_export import build_ffmpeg_tag_export_args, metadata_receipt_mapping
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.io import sha256_file
@@ -53,6 +56,12 @@ _FILE_SUFFIX_BY_FORMAT = {
 _BASELINE_RENDERER_ID = "PLUGIN.RENDERER.MIXDOWN_BASELINE"
 _SYSTEM_TRANSCODE_RECOMMENDATION_ID = "REC.SYSTEM.TRANSCODE"
 _SYSTEM_TRANSCODE_ACTION_ID = "ACTION.DOWNMIX.RENDER"
+_SYSTEM_PLUGIN_SAFETY_RECOMMENDATION_ID = "REC.SYSTEM.PLUGIN_SAFETY"
+_SYSTEM_PLUGIN_SAFETY_ACTION_ID = "ACTION.SYSTEM.PLUGIN_SAFETY"
+_SCENE_SCOPE_BED_ONLY = "bed_only"
+_SCENE_SCOPE_OBJECT_CAPABLE = "object_capable"
+_LAYOUT_SAFETY_AGNOSTIC = "layout_agnostic"
+_LAYOUT_SAFETY_SPECIFIC = "layout_specific"
 
 
 @dataclass(frozen=True)
@@ -119,6 +128,11 @@ def _coerce_plugin_capabilities(value: Any) -> PluginCapabilities | None:
             return raw_value
         return None
 
+    def _coerce_string(raw_value: Any) -> str | None:
+        if isinstance(raw_value, str) and raw_value.strip():
+            return raw_value.strip()
+        return None
+
     deterministic_seed_policy = None
     raw_seed_policy = value.get("deterministic_seed_policy")
     if isinstance(raw_seed_policy, str) and raw_seed_policy.strip():
@@ -183,6 +197,9 @@ def _coerce_plugin_capabilities(value: Any) -> PluginCapabilities | None:
     notes = _coerce_string_tuple(value.get("notes"))
     return PluginCapabilities(
         max_channels=max_channels,
+        bed_only=_coerce_bool(value.get("bed_only")),
+        scene_scope=_coerce_string(value.get("scene_scope")),
+        layout_safety=_coerce_string(value.get("layout_safety")),
         deterministic_seed_policy=deterministic_seed_policy,
         purity=purity,
         supported_layout_ids=supported_layout_ids,
@@ -465,6 +482,363 @@ def _recommendation_index(
             continue
         index[rec_id] = rec
     return index
+
+
+def _recommendation_ids(
+    recommendations: Iterable[Dict[str, Any]],
+) -> list[str]:
+    ids: list[str] = []
+    for rec in recommendations:
+        rec_id = _coerce_str(rec.get("recommendation_id")).strip()
+        if rec_id:
+            ids.append(rec_id)
+    return sorted(set(ids))
+
+
+def _scene_payload_for_plugin_safety(session: Dict[str, Any]) -> Dict[str, Any] | None:
+    scene_payload = session.get("scene_payload")
+    if isinstance(scene_payload, dict):
+        return scene_payload
+    scene = session.get("scene")
+    if isinstance(scene, dict):
+        return scene
+    return None
+
+
+def _scene_stem_reference_map(scene: Dict[str, Any] | None) -> Dict[str, Dict[str, list[str]]]:
+    if not isinstance(scene, dict):
+        return {}
+
+    refs: Dict[str, Dict[str, set[str]]] = {}
+    objects = scene.get("objects")
+    if isinstance(objects, list):
+        for obj in objects:
+            if not isinstance(obj, dict):
+                continue
+            stem_id = _coerce_str(obj.get("stem_id")).strip()
+            if not stem_id:
+                continue
+            object_id = _coerce_str(obj.get("object_id")).strip()
+            row = refs.setdefault(stem_id, {"objects": set(), "beds": set()})
+            if object_id:
+                row["objects"].add(object_id)
+
+    beds = scene.get("beds")
+    if isinstance(beds, list):
+        for bed in beds:
+            if not isinstance(bed, dict):
+                continue
+            bed_id = _coerce_str(bed.get("bed_id")).strip()
+            stem_ids = bed.get("stem_ids")
+            if not isinstance(stem_ids, list):
+                continue
+            for raw_stem_id in stem_ids:
+                stem_id = _coerce_str(raw_stem_id).strip()
+                if not stem_id:
+                    continue
+                row = refs.setdefault(stem_id, {"objects": set(), "beds": set()})
+                if bed_id:
+                    row["beds"].add(bed_id)
+
+    normalized: Dict[str, Dict[str, list[str]]] = {}
+    for stem_id in sorted(refs):
+        normalized[stem_id] = {
+            "objects": sorted(refs[stem_id]["objects"]),
+            "beds": sorted(refs[stem_id]["beds"]),
+        }
+    return normalized
+
+
+def _stem_reference_summary(refs: Dict[str, list[str]] | None) -> str:
+    if not isinstance(refs, dict):
+        return "scene_unmapped"
+    object_ids = refs.get("objects")
+    bed_ids = refs.get("beds")
+    parts: list[str] = []
+    if isinstance(object_ids, list) and object_ids:
+        parts.append("object:" + ",".join(object_ids))
+    if isinstance(bed_ids, list) and bed_ids:
+        parts.append("bed:" + ",".join(bed_ids))
+    return ";".join(parts) if parts else "scene_unmapped"
+
+
+def _scene_has_objects(scene_refs: Dict[str, Dict[str, list[str]]]) -> bool:
+    return any(row.get("objects") for row in scene_refs.values())
+
+
+def _current_target_layout_id(session: Dict[str, Any]) -> str:
+    target_layout_id = _coerce_str(session.get("target_layout_id")).strip()
+    if target_layout_id:
+        return target_layout_id
+    routing_plan = session.get("routing_plan")
+    if isinstance(routing_plan, dict):
+        render_targets = routing_plan.get("render_targets")
+        if isinstance(render_targets, dict):
+            candidate = _coerce_str(render_targets.get("layout_id")).strip()
+            if candidate:
+                return candidate
+    return ""
+
+
+def _supported_layout_ids_for_plugin(capabilities: PluginCapabilities | None) -> tuple[str, ...]:
+    if capabilities is None:
+        return ()
+    supported_layout_ids = tuple(capabilities.supported_layout_ids or ())
+    if supported_layout_ids:
+        return tuple(sorted(set(supported_layout_ids)))
+
+    scene = capabilities.scene
+    target_ids = tuple(scene.supported_target_ids or ()) if scene is not None else ()
+    if not target_ids:
+        return ()
+
+    try:
+        from mmo.core.registries.render_targets_registry import (  # noqa: WPS433
+            load_render_targets_registry,
+        )
+
+        registry = load_render_targets_registry()
+    except (RuntimeError, ValueError):
+        return ()
+
+    layout_ids: set[str] = set()
+    for target_id in target_ids:
+        try:
+            target_payload = registry.get_target(target_id)
+        except ValueError:
+            continue
+        layout_id = _coerce_str(target_payload.get("layout_id")).strip()
+        if layout_id:
+            layout_ids.add(layout_id)
+    return tuple(sorted(layout_ids))
+
+
+def _recommendation_scope_stem_id(rec: Mapping[str, Any]) -> str:
+    scope = normalize_recommendation_scope(rec)
+    return _coerce_str(scope.get("stem_id")).strip()
+
+
+def _plugin_safety_skip_entry(
+    *,
+    recommendation_id: str,
+    action_id: str,
+    reason: str,
+    details: Dict[str, Any],
+) -> Dict[str, Any]:
+    return {
+        "recommendation_id": recommendation_id,
+        "action_id": action_id,
+        "reason": reason,
+        "gate_summary": "",
+        "details": details,
+    }
+
+
+def _synthetic_plugin_safety_skip_entry(
+    *,
+    plugin_id: str,
+    reason: str,
+    details: Dict[str, Any],
+) -> Dict[str, Any]:
+    synthetic_details = dict(details)
+    synthetic_details.setdefault("plugin_id", plugin_id)
+    return _plugin_safety_skip_entry(
+        recommendation_id=_SYSTEM_PLUGIN_SAFETY_RECOMMENDATION_ID,
+        action_id=_SYSTEM_PLUGIN_SAFETY_ACTION_ID,
+        reason=reason,
+        details=synthetic_details,
+    )
+
+
+def _merge_manifest_notes(*notes: Any) -> str:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in notes:
+        if not isinstance(value, str):
+            continue
+        for item in value.split(";"):
+            token = item.strip()
+            if not token or token in seen:
+                continue
+            seen.add(token)
+            normalized.append(token)
+    return ";".join(normalized)
+
+
+def _apply_plugin_safety_contract(
+    *,
+    plugin: PluginEntry,
+    eligible: list[Dict[str, Any]],
+    session: Dict[str, Any],
+) -> tuple[list[Dict[str, Any]], list[Dict[str, Any]], list[str], bool]:
+    capabilities = plugin.capabilities
+    if capabilities is None:
+        return list(eligible), [], [], False
+
+    plugin_eligible = list(eligible)
+    skipped: list[Dict[str, Any]] = []
+    notes: list[str] = []
+    bypass = False
+
+    scene_scope = _coerce_str(capabilities.scene_scope).strip().lower()
+    if scene_scope == _SCENE_SCOPE_BED_ONLY:
+        scene_refs = _scene_stem_reference_map(_scene_payload_for_plugin_safety(session))
+        if scene_refs:
+            scene_has_objects = _scene_has_objects(scene_refs)
+            restricted: list[Dict[str, Any]] = []
+            for rec in plugin_eligible:
+                stem_id = _recommendation_scope_stem_id(rec)
+                action_id = _coerce_str(rec.get("action_id")).strip() or _SYSTEM_PLUGIN_SAFETY_ACTION_ID
+                recommendation_id = (
+                    _coerce_str(rec.get("recommendation_id")).strip()
+                    or _SYSTEM_PLUGIN_SAFETY_RECOMMENDATION_ID
+                )
+                if not stem_id:
+                    if scene_has_objects:
+                        skipped.append(
+                            _plugin_safety_skip_entry(
+                                recommendation_id=recommendation_id,
+                                action_id=action_id,
+                                reason="plugin_scene_scope_restricted",
+                                details={
+                                    "plugin_id": plugin.plugin_id,
+                                    "scene_scope": _SCENE_SCOPE_BED_ONLY,
+                                    "restriction": "bed_only_only",
+                                    "scope": dict(normalize_recommendation_scope(rec)),
+                                },
+                            )
+                        )
+                        continue
+                    restricted.append(rec)
+                    continue
+
+                refs = scene_refs.get(stem_id)
+                if refs is None:
+                    if scene_has_objects:
+                        skipped.append(
+                            _plugin_safety_skip_entry(
+                                recommendation_id=recommendation_id,
+                                action_id=action_id,
+                                reason="plugin_scene_scope_restricted",
+                                details={
+                                    "plugin_id": plugin.plugin_id,
+                                    "scene_scope": _SCENE_SCOPE_BED_ONLY,
+                                    "restriction": "bed_only_only",
+                                    "stem_id": stem_id,
+                                    "scene_reference": "scene_unmapped",
+                                },
+                            )
+                        )
+                        continue
+                    restricted.append(rec)
+                    continue
+
+                object_refs = refs.get("objects") or []
+                bed_refs = refs.get("beds") or []
+                if bed_refs and not object_refs:
+                    restricted.append(rec)
+                    continue
+
+                skipped.append(
+                    _plugin_safety_skip_entry(
+                        recommendation_id=recommendation_id,
+                        action_id=action_id,
+                        reason="plugin_scene_scope_restricted",
+                        details={
+                            "plugin_id": plugin.plugin_id,
+                            "scene_scope": _SCENE_SCOPE_BED_ONLY,
+                            "restriction": "bed_only_only",
+                            "stem_id": stem_id,
+                            "scene_reference": _stem_reference_summary(refs),
+                        },
+                    )
+                )
+
+            if skipped:
+                notes.append(
+                    "plugin_safety_restriction:"
+                    f"bed_only_kept={len(restricted)}"
+                    f",bed_only_skipped={len(skipped)}"
+                )
+            plugin_eligible = restricted
+            if scene_has_objects and not plugin_eligible:
+                bypass = True
+                notes.append("plugin_safety_bypass:bed_only_no_safe_recommendations")
+                if not skipped:
+                    skipped.append(
+                        _synthetic_plugin_safety_skip_entry(
+                            plugin_id=plugin.plugin_id,
+                            reason="plugin_scene_scope_unsupported",
+                            details={
+                                "scene_scope": _SCENE_SCOPE_BED_ONLY,
+                                "restriction": "bed_only_only",
+                            },
+                        )
+                    )
+
+    layout_safety = _coerce_str(capabilities.layout_safety).strip().lower()
+    if layout_safety == _LAYOUT_SAFETY_SPECIFIC:
+        target_layout_id = _current_target_layout_id(session)
+        supported_layout_ids = _supported_layout_ids_for_plugin(capabilities)
+        if target_layout_id:
+            if supported_layout_ids and target_layout_id not in supported_layout_ids:
+                bypass = True
+                notes.append(
+                    "plugin_safety_bypass:"
+                    f"layout_unsupported={target_layout_id}"
+                )
+                if plugin_eligible:
+                    for rec in plugin_eligible:
+                        recommendation_id = (
+                            _coerce_str(rec.get("recommendation_id")).strip()
+                            or _SYSTEM_PLUGIN_SAFETY_RECOMMENDATION_ID
+                        )
+                        action_id = (
+                            _coerce_str(rec.get("action_id")).strip()
+                            or _SYSTEM_PLUGIN_SAFETY_ACTION_ID
+                        )
+                        skipped.append(
+                            _plugin_safety_skip_entry(
+                                recommendation_id=recommendation_id,
+                                action_id=action_id,
+                                reason="plugin_layout_unsupported",
+                                details={
+                                    "plugin_id": plugin.plugin_id,
+                                    "layout_safety": _LAYOUT_SAFETY_SPECIFIC,
+                                    "target_layout_id": target_layout_id,
+                                    "supported_layout_ids": list(supported_layout_ids),
+                                },
+                            )
+                        )
+                else:
+                    skipped.append(
+                        _synthetic_plugin_safety_skip_entry(
+                            plugin_id=plugin.plugin_id,
+                            reason="plugin_layout_unsupported",
+                            details={
+                                "layout_safety": _LAYOUT_SAFETY_SPECIFIC,
+                                "target_layout_id": target_layout_id,
+                                "supported_layout_ids": list(supported_layout_ids),
+                            },
+                        )
+                    )
+                plugin_eligible = []
+            elif not supported_layout_ids:
+                bypass = True
+                notes.append("plugin_safety_bypass:layout_specific_without_supported_layouts")
+                skipped.append(
+                    _synthetic_plugin_safety_skip_entry(
+                        plugin_id=plugin.plugin_id,
+                        reason="plugin_layout_support_unknown",
+                        details={
+                            "layout_safety": _LAYOUT_SAFETY_SPECIFIC,
+                            "target_layout_id": target_layout_id,
+                        },
+                    )
+                )
+                plugin_eligible = []
+
+    return plugin_eligible, skipped, notes, bypass
 
 
 def _output_contributing_recommendation_ids(output: Dict[str, Any]) -> List[str]:
@@ -938,7 +1312,6 @@ def run_renderers(
             }
         )
     blocked_skipped = _merge_skipped_entries(blocked_skipped)
-    required_channels = _required_channels_for_recommendations(session, eligible)
     desired_formats = _normalize_output_formats(output_formats)
     needs_encode = any(fmt != "wav" for fmt in desired_formats)
     ffmpeg_cmd = resolve_ffmpeg_cmd() if needs_encode else None
@@ -949,9 +1322,21 @@ def run_renderers(
         if plugin.plugin_type != "renderer":
             continue
 
+        eligible_for_plugin, plugin_safety_skipped, plugin_safety_notes, plugin_bypassed = (
+            _apply_plugin_safety_contract(
+                plugin=plugin,
+                eligible=eligible,
+                session=session_for_plugins,
+            )
+        )
+        plugin_required_channels = _required_channels_for_recommendations(
+            session,
+            eligible_for_plugin,
+        )
+
         if (
             plugin.plugin_id == _BASELINE_RENDERER_ID
-            and eligible
+            and eligible_for_plugin
             and non_baseline_outputs_written
         ):
             manifests.append(
@@ -961,13 +1346,19 @@ def run_renderers(
                     "received_recommendation_ids": sorted(
                         {
                             rec_id
-                            for rec in eligible
+                            for rec in eligible_for_plugin
                             for rec_id in [_coerce_str(rec.get("recommendation_id"))]
                             if rec_id
                         }
                     ),
-                    "notes": "skipped_baseline_due_eligible_recommendations",
-                    "skipped": _merge_skipped_entries(blocked_skipped),
+                    "notes": _merge_manifest_notes(
+                        "skipped_baseline_due_eligible_recommendations",
+                        *plugin_safety_notes,
+                    ),
+                    "skipped": _merge_skipped_entries(
+                        blocked_skipped,
+                        plugin_safety_skipped,
+                    ),
                 }
             )
             continue
@@ -979,7 +1370,7 @@ def run_renderers(
             isinstance(plugin_max_channels, int)
             and not isinstance(plugin_max_channels, bool)
             and plugin_max_channels >= 1
-            and required_channels > plugin_max_channels
+            and plugin_required_channels > plugin_max_channels
         ):
             channel_limit_skipped = [
                 {
@@ -989,25 +1380,46 @@ def run_renderers(
                     "gate_summary": "",
                     "details": {
                         "plugin_id": plugin.plugin_id,
-                        "required_channels": required_channels,
+                        "required_channels": plugin_required_channels,
                         "max_channels": plugin_max_channels,
                     },
                 }
-                for rec in eligible
+                for rec in eligible_for_plugin
             ]
             manifests.append(
                 {
                     "renderer_id": plugin.plugin_id,
                     "outputs": [],
+                    "notes": _merge_manifest_notes(*plugin_safety_notes),
                     "skipped": _merge_skipped_entries(
                         blocked_skipped,
+                        plugin_safety_skipped,
                         channel_limit_skipped,
                     ),
                 }
             )
             continue
 
-        manifest = _call_renderer(plugin.instance, session_for_plugins, eligible, output_dir)
+        if plugin_bypassed:
+            manifests.append(
+                {
+                    "renderer_id": plugin.plugin_id,
+                    "outputs": [],
+                    "notes": _merge_manifest_notes(*plugin_safety_notes),
+                    "skipped": _merge_skipped_entries(
+                        blocked_skipped,
+                        plugin_safety_skipped,
+                    ),
+                }
+            )
+            continue
+
+        manifest = _call_renderer(
+            plugin.instance,
+            session_for_plugins,
+            eligible_for_plugin,
+            output_dir,
+        )
         if not isinstance(manifest, dict):
             manifest = {
                 "renderer_id": plugin.plugin_id,
@@ -1016,6 +1428,11 @@ def run_renderers(
             }
         if "renderer_id" not in manifest:
             manifest["renderer_id"] = plugin.plugin_id
+        manifest["received_recommendation_ids"] = _recommendation_ids(eligible_for_plugin)
+        manifest["notes"] = _merge_manifest_notes(
+            _coerce_str(manifest.get("notes")),
+            *plugin_safety_notes,
+        )
         _annotate_manifest_output_extremes(manifest, recs_by_id)
         plugin_skipped = _coerce_list(manifest.get("skipped"))
         transcode_skipped = _apply_output_formats_to_manifest(
@@ -1026,6 +1443,7 @@ def run_renderers(
         )
         manifest["skipped"] = _merge_skipped_entries(
             blocked_skipped,
+            plugin_safety_skipped,
             plugin_skipped,
             transcode_skipped,
         )

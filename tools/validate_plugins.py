@@ -288,6 +288,8 @@ def _validate_capabilities(
         "deterministic_seed_policy",
         "purity",
         "bed_only",
+        "scene_scope",
+        "layout_safety",
         "supported_standards",
         "preferred_standard",
         "supported_layout_ids",
@@ -324,6 +326,34 @@ def _validate_capabilities(
                 "file_path": str(manifest_path),
                 "max_channels": max_channels,
             },
+        )
+
+    scene_scope = capabilities.get("scene_scope")
+    valid_scene_scopes = {"bed_only", "object_capable"}
+    if scene_scope not in valid_scene_scopes:
+        _add_issue(
+            issues,
+            ISSUE_PLUGIN_CAPABILITIES_INVALID,
+            "error",
+            (
+                "capabilities.scene_scope must explicitly declare "
+                "'bed_only' or 'object_capable'."
+            ),
+            {"file_path": str(manifest_path), "value": scene_scope},
+        )
+
+    layout_safety = capabilities.get("layout_safety")
+    valid_layout_safety = {"layout_agnostic", "layout_specific"}
+    if layout_safety not in valid_layout_safety:
+        _add_issue(
+            issues,
+            ISSUE_PLUGIN_CAPABILITIES_INVALID,
+            "error",
+            (
+                "capabilities.layout_safety must explicitly declare "
+                "'layout_agnostic' or 'layout_specific'."
+            ),
+            {"file_path": str(manifest_path), "value": layout_safety},
         )
 
     seed_policy = capabilities.get("deterministic_seed_policy")
@@ -571,6 +601,50 @@ def _validate_capabilities(
                                 },
                             )
 
+    if scene_scope == "bed_only":
+        if capabilities.get("bed_only") is False:
+            _add_issue(
+                issues,
+                ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                "error",
+                "capabilities.scene_scope='bed_only' conflicts with capabilities.bed_only=false.",
+                {"file_path": str(manifest_path)},
+            )
+        if isinstance(scene, dict) and scene.get("supports_objects") is True:
+            _add_issue(
+                issues,
+                ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                "error",
+                (
+                    "capabilities.scene_scope='bed_only' conflicts with "
+                    "capabilities.scene.supports_objects=true."
+                ),
+                {"file_path": str(manifest_path)},
+            )
+    elif scene_scope == "object_capable":
+        if capabilities.get("bed_only") is True:
+            _add_issue(
+                issues,
+                ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                "error",
+                (
+                    "capabilities.scene_scope='object_capable' conflicts with "
+                    "capabilities.bed_only=true."
+                ),
+                {"file_path": str(manifest_path)},
+            )
+        if isinstance(scene, dict) and scene.get("supports_objects") is False:
+            _add_issue(
+                issues,
+                ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                "error",
+                (
+                    "capabilities.scene_scope='object_capable' conflicts with "
+                    "capabilities.scene.supports_objects=false."
+                ),
+                {"file_path": str(manifest_path)},
+            )
+
     if requires_speaker_positions:
         has_layout_support = bool(layout_values)
         has_target_layout_support = False
@@ -591,6 +665,22 @@ def _validate_capabilities(
                 (
                     "capabilities.scene.requires_speaker_positions=true requires either "
                     "capabilities.supported_layout_ids or layout-backed "
+                    "capabilities.scene.supported_target_ids."
+                ),
+                {"file_path": str(manifest_path)},
+            )
+
+    if layout_safety == "layout_specific":
+        has_layout_support = bool(layout_values)
+        has_target_support = bool(target_ids)
+        if not has_layout_support and not has_target_support:
+            _add_issue(
+                issues,
+                ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                "error",
+                (
+                    "capabilities.layout_safety='layout_specific' requires either "
+                    "capabilities.supported_layout_ids or "
                     "capabilities.scene.supported_target_ids."
                 ),
                 {"file_path": str(manifest_path)},

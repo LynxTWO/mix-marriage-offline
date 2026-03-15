@@ -516,8 +516,8 @@ AI-readable layout export + validation (prevents overlaps/off-screen UI):
 
 The project is not considered complete until the DSP pipeline, plugin contracts,
 and render behavior below are implemented, documented, and covered by tests.
-What remains: the core DSP path is functional, but the final multichannel
-safety contract still needs to be closed out.
+The remaining DSP/plugin contract items below are now closed unless new scope is
+added.
 
 ### 4.9.1 DSP core guarantees
 
@@ -536,7 +536,7 @@ safety contract still needs to be closed out.
         plus per-job receipts.
 - [x] Channel counts up to at least 32 are supported end-to-end.
 - [x] Plugin order is deterministic and serialized in reports.
-- [ ] Every processing decision that can affect tone/balance/spatialization is
+- [x] Every processing decision that can affect tone/balance/spatialization is
       either:
   - (a) explicitly requested by the user intent, or
   - (b) recommended with confidence and requires approval if high-impact, or
@@ -600,14 +600,14 @@ safety contract still needs to be closed out.
 
 ### 4.9.5 Multichannel and layout safety rules (DSP-level)
 
-- [ ] Plugins must declare whether they are:
+- [x] Plugins must declare whether they are:
   - bed-only
   - object-capable
   - layout-agnostic (works pre-render)
   - layout-specific (works post-render)
-- [ ] If a plugin cannot guarantee safe multichannel behavior, the engine must:
-  - [ ] restrict it to safe channel groups, or
-  - [ ] bypass it, and log a warning with evidence.
+- [x] If a plugin cannot guarantee safe multichannel behavior, the engine must:
+  - [x] restrict it to safe channel groups, or
+  - [x] bypass it, and log a warning with evidence.
 
 ### 4.9.6 Downmix QA and fallback behaviors (DSP-level)
 

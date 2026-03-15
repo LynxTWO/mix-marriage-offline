@@ -53,6 +53,14 @@ ISSUE_SEMANTICS_PURITY_RANDOMNESS_CONFLICT = (
     "ISSUE.SEMANTICS.PURITY_RANDOMNESS_CONFLICT"
 )
 ISSUE_SEMANTICS_BED_ONLY_OBJECT_CONFLICT = "ISSUE.SEMANTICS.BED_ONLY_OBJECT_CONFLICT"
+ISSUE_SEMANTICS_SCENE_SCOPE_INVALID = "ISSUE.SEMANTICS.SCENE_SCOPE_INVALID"
+ISSUE_SEMANTICS_SCENE_SCOPE_OBJECT_CONFLICT = (
+    "ISSUE.SEMANTICS.SCENE_SCOPE_OBJECT_CONFLICT"
+)
+ISSUE_SEMANTICS_LAYOUT_SAFETY_INVALID = "ISSUE.SEMANTICS.LAYOUT_SAFETY_INVALID"
+ISSUE_SEMANTICS_LAYOUT_SPECIFIC_NO_LAYOUT = (
+    "ISSUE.SEMANTICS.LAYOUT_SPECIFIC_NO_LAYOUT"
+)
 ISSUE_SEMANTICS_SPEAKER_POSITIONS_NO_LAYOUT = (
     "ISSUE.SEMANTICS.SPEAKER_POSITIONS_NO_LAYOUT"
 )
@@ -62,6 +70,8 @@ _VALID_CHANNEL_MODES = frozenset({"per_channel", "linked_group", "true_multichan
 _VALID_LINK_GROUPS = frozenset({"front", "surrounds", "heights", "all", "custom"})
 _VALID_LATENCY_TYPES = frozenset({"zero", "fixed", "dynamic"})
 _VALID_SEED_POLICIES = frozenset({"none", "seed_required", "seed_optional"})
+_VALID_SCENE_SCOPES = frozenset({"bed_only", "object_capable"})
+_VALID_LAYOUT_SAFETY = frozenset({"layout_agnostic", "layout_specific"})
 
 
 # ---------------------------------------------------------------------------
@@ -95,6 +105,14 @@ class SemanticsDoc:
     @property
     def valid_seed_policies(self) -> frozenset[str]:
         return _VALID_SEED_POLICIES
+
+    @property
+    def valid_scene_scopes(self) -> frozenset[str]:
+        return _VALID_SCENE_SCOPES
+
+    @property
+    def valid_layout_safety(self) -> frozenset[str]:
+        return _VALID_LAYOUT_SAFETY
 
 
 def load_semantics(semantics_path: Optional[Path] = None) -> SemanticsDoc:
@@ -262,10 +280,63 @@ def _validate_semantics(
                 "a seed-enabled deterministic_seed_policy."
             )
 
+    scene = capabilities.get("scene")
+    scene_scope = capabilities.get("scene_scope")
+    if scene_scope not in semantics.valid_scene_scopes:
+        errors.append(
+            f"[semantics] {ISSUE_SEMANTICS_SCENE_SCOPE_INVALID}: "
+            "capabilities.scene_scope must explicitly declare "
+            f"one of {sorted(semantics.valid_scene_scopes)}."
+        )
+    elif scene_scope == "bed_only":
+        if capabilities.get("bed_only") is False:
+            errors.append(
+                f"[semantics] {ISSUE_SEMANTICS_SCENE_SCOPE_OBJECT_CONFLICT}: "
+                "capabilities.scene_scope='bed_only' conflicts with "
+                "capabilities.bed_only=false."
+            )
+        if isinstance(scene, dict) and scene.get("supports_objects") is True:
+            errors.append(
+                f"[semantics] {ISSUE_SEMANTICS_SCENE_SCOPE_OBJECT_CONFLICT}: "
+                "capabilities.scene_scope='bed_only' conflicts with "
+                "capabilities.scene.supports_objects=true."
+            )
+    elif scene_scope == "object_capable":
+        if capabilities.get("bed_only") is True:
+            errors.append(
+                f"[semantics] {ISSUE_SEMANTICS_SCENE_SCOPE_OBJECT_CONFLICT}: "
+                "capabilities.scene_scope='object_capable' conflicts with "
+                "capabilities.bed_only=true."
+            )
+        if isinstance(scene, dict) and scene.get("supports_objects") is False:
+            errors.append(
+                f"[semantics] {ISSUE_SEMANTICS_SCENE_SCOPE_OBJECT_CONFLICT}: "
+                "capabilities.scene_scope='object_capable' conflicts with "
+                "capabilities.scene.supports_objects=false."
+            )
+
+    layout_safety = capabilities.get("layout_safety")
+    if layout_safety not in semantics.valid_layout_safety:
+        errors.append(
+            f"[semantics] {ISSUE_SEMANTICS_LAYOUT_SAFETY_INVALID}: "
+            "capabilities.layout_safety must explicitly declare "
+            f"one of {sorted(semantics.valid_layout_safety)}."
+        )
+    elif layout_safety == "layout_specific":
+        has_layout_ids = bool(capabilities.get("supported_layout_ids"))
+        target_ids = scene.get("supported_target_ids") if isinstance(scene, dict) else None
+        has_target_ids = isinstance(target_ids, list) and len(target_ids) > 0
+        if not has_layout_ids and not has_target_ids:
+            errors.append(
+                f"[semantics] {ISSUE_SEMANTICS_LAYOUT_SPECIFIC_NO_LAYOUT}: "
+                "capabilities.layout_safety='layout_specific' requires either "
+                "capabilities.supported_layout_ids or "
+                "capabilities.scene.supported_target_ids to be non-empty."
+            )
+
     # --- bed_only conflicts ---
     bed_only = capabilities.get("bed_only")
     if bed_only is True:
-        scene = capabilities.get("scene")
         if isinstance(scene, dict) and scene.get("supports_objects") is True:
             errors.append(
                 f"[semantics] {ISSUE_SEMANTICS_BED_ONLY_OBJECT_CONFLICT}: "
