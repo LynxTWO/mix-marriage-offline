@@ -277,6 +277,27 @@ test.describe("desktop workflow design system", () => {
     });
   }
 
+  test("top-level widgets stay height-bounded on mobile", async ({ page }) => {
+    test.slow();
+    const viewport = { width: 390, height: 844 };
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+
+    for (const screen of Object.keys(screens) as ScreenKey[]) {
+      await openScreen(page, screen);
+
+      for (const requiredWidget of screens[screen].requiredWidgets) {
+        const locator = page.locator(`[data-widget-id="${requiredWidget}"]`);
+        await locator.scrollIntoViewIfNeeded();
+        const widgetBox = await locator.boundingBox();
+        expect(widgetBox).not.toBeNull();
+        if (widgetBox) {
+          expect(widgetBox.height).toBeLessThanOrEqual(viewport.height);
+        }
+      }
+    }
+  });
+
   test("numeric controls expose units and exact entry fields", async ({ page }) => {
     await page.goto("/");
     const cases: Array<{ screen: ScreenKey; selector: string }> = [
@@ -686,6 +707,7 @@ test.describe("desktop workflow design system", () => {
     await expect(page.locator("#artifact-preview-active-file")).toContainText("preview_headphones.wav");
 
     await page.locator("#artifact-preview-play-button").click();
+    await expect(page.locator("#artifact-preview-transport-state")).not.toContainText("Loading");
     await expect(page.locator("#artifact-preview-transport-state")).toContainText("Playing");
 
     await page.locator("#artifact-preview-pause-button").click();
