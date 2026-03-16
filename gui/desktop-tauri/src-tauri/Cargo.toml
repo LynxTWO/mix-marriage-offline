@@ -18,7 +18,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-opener = "2"
@@ -27,7 +27,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 [patch.crates-io]
-# Tauri's current Linux GTK stack resolves through glib 0.18.x. Vendor the
-# one-line upstream fix for GHSA-wrw7-89jp-8q8g until the wider stack can move
-# to a non-vulnerable published release train.
+# Tauri 2.10.3's published Linux GTK stack still resolves gtk 0.18.2 ->
+# glib 0.18.5, and the published gtk-rs 0.18 line stops there today.
+# Keep this override only long enough to carry the GHSA-wrw7-89jp-8q8g fix plus
+# Rust 1.94 warning-clean backports without pinning older Rust or suppressing
+# warnings globally. Exit path: delete this override once published
+# Tauri/Wry/WebKitGTK crates resolve to a published glib newer than 0.18.5.
+# See vendor/glib-0.18.5/MMO_VENDOR_NOTES.md for the exact base + backports.
 glib = { path = "vendor/glib-0.18.5" }

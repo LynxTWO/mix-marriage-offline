@@ -187,6 +187,13 @@ Non-negotiables:
   Node 24 LTS for local/frontend work, pin GitHub-hosted runner images instead
   of relying on `*-latest`, and keep the Tauri Rust toolchain pinned rather than
   floating on the ambient `stable` channel.
+- Keep the temporary
+  `gui/desktop-tauri/src-tauri/vendor/glib-0.18.5` override documented and
+  minimal: published Tauri Linux GTK crates still resolve
+  `gtk 0.18.2 -> glib 0.18.5`, so keep only the security + current-Rust
+  compile-clean backports there and remove the override once published
+  dependencies move past `glib 0.18.5`. Do not fix future breakage by pinning
+  older Rust or globally suppressing warnings.
 - Keep scene QA lint deterministic and explainable: `mmo scene lint` must emit
   stable issue ordering/report payloads and cover missing stem IDs/refs/files,
   duplicate object/bus refs, placement range violations, lock-role/bus/layout

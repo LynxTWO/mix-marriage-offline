@@ -183,11 +183,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     README now mirrors the same `python -m pip ...` install flow.
 
 - Tauri Linux runtime dependency security patch:
-  - The desktop Tauri Rust app now vendors the current `glib 0.18.5` crate
-    with the upstream `VariantStrIter::impl_get` fix for
-    `GHSA-wrw7-89jp-8q8g`, and `Cargo.toml` patches crates.io to use that local
-    source until the wider Tauri GTK stack can move to a published `glib`
-    release outside the vulnerable advisory range.
+  - The desktop Tauri Rust app still vendors `glib 0.18.5` because published
+    `tauri 2.10.3` on Linux resolves through `gtk 0.18.2 -> glib 0.18.5`, and
+    the published `gtk-rs` `0.18` line stops there today.
+  - The vendored crate now carries both the upstream
+    `VariantStrIter::impl_get` fix for `GHSA-wrw7-89jp-8q8g` and the Rust 1.94
+    warning-clean signature backports needed for Linux AppImage builds that
+    treat warnings as errors.
+  - The override now includes a documented refresh recipe and exit path so it
+    can be removed as soon as the published Tauri GTK stack moves past
+    `glib 0.18.5`.
 
 - Tauri desktop design-system Firefox regressions:
   - The isolated `gui/desktop-tauri` shell now uses a wide-screen app layout
