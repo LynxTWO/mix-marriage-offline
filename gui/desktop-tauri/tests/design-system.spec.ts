@@ -186,6 +186,7 @@ async function installMediaTransportStub(page: Parameters<typeof test>[0]["page"
     const proto = HTMLMediaElement.prototype as HTMLMediaElement & {
       __mmoCurrentTime?: number;
       __mmoPaused?: boolean;
+      __mmoReadyState?: number;
       __mmoPlayPatched?: boolean;
     };
     if (proto.__mmoPlayPatched) {
@@ -207,12 +208,31 @@ async function installMediaTransportStub(page: Parameters<typeof test>[0]["page"
         (this as HTMLMediaElement & { __mmoCurrentTime?: number }).__mmoCurrentTime = value;
       },
     });
+    Object.defineProperty(HTMLMediaElement.prototype, "readyState", {
+      configurable: true,
+      get() {
+        return (this as HTMLMediaElement & { __mmoReadyState?: number }).__mmoReadyState ?? 0;
+      },
+    });
+    HTMLMediaElement.prototype.load = function load(): void {
+      (this as HTMLMediaElement & { __mmoReadyState?: number }).__mmoReadyState = 1;
+      queueMicrotask(() => {
+        this.dispatchEvent(new Event("loadedmetadata"));
+        (this as HTMLMediaElement & { __mmoReadyState?: number }).__mmoReadyState = 4;
+        this.dispatchEvent(new Event("canplay"));
+        this.dispatchEvent(new Event("canplaythrough"));
+      });
+    };
     HTMLMediaElement.prototype.play = async function play(): Promise<void> {
       (this as HTMLMediaElement & { __mmoPaused?: boolean }).__mmoPaused = false;
+      (this as HTMLMediaElement & { __mmoReadyState?: number }).__mmoReadyState = 4;
       if (((this as HTMLMediaElement & { __mmoCurrentTime?: number }).__mmoCurrentTime ?? 0) <= 0) {
         (this as HTMLMediaElement & { __mmoCurrentTime?: number }).__mmoCurrentTime = 0.25;
       }
+      this.dispatchEvent(new Event("loadedmetadata"));
+      this.dispatchEvent(new Event("canplay"));
       this.dispatchEvent(new Event("play"));
+      this.dispatchEvent(new Event("playing"));
     };
     HTMLMediaElement.prototype.pause = function pause(): void {
       (this as HTMLMediaElement & { __mmoPaused?: boolean }).__mmoPaused = true;

@@ -227,6 +227,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `min-width: 0`, `min-height: 0`, `scroll-margin-top`, and internal card
     scrolling at the workflow-grid level so tall Scene and Compare widgets stay
     inside the Firefox viewport without screen-specific overrides.
+  - The desktop-tauri Playwright media stub now models `readyState`, `load()`,
+    and readiness events so Firefox transport tests can leave `Loading` using
+    the same HTMLMediaElement lifecycle contract as the app.
   - Fine-adjust feedback now tracks explicit modifier-key state across `keydown`
     / `keyup` / blur-driven drag lifecycles, and composite numeric controls keep
     `Tab` focus local without scroll jumps so Firefox drag tests stay
