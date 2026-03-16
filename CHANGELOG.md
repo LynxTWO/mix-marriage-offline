@@ -126,6 +126,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Added a packaged-app smoke harness so completion is gated on shipped-binary
     behavior and expected workspace artifact paths, not only source-tree pytest.
 
+- Frozen Tauri sidecar CLI entrypoint contract:
+  - The default CLI binary build now freezes a dedicated absolute-import stub
+    (`src/mmo/_frozen_cli_entrypoint.py`) instead of freezing
+    `src/mmo/__main__.py` directly, so bundled sidecars stay package-safe
+    across macOS, Windows, and Linux.
+  - `python -m mmo` remains aligned with `mmo.cli:main`, and packaged desktop
+    smoke now fails fast by probing the bundled sidecar for `--version`,
+    bundled plugin validation, and `env doctor` before launching the full app
+    workflow.
+
 - Plugin multichannel/layout safety contract:
   - Renderer manifests now declare explicit `scene_scope` (`bed_only` vs
     `object_capable`) and `layout_safety` (`layout_agnostic` vs

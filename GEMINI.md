@@ -173,6 +173,10 @@ Non-negotiables:
   production dependency on `gui/server.mjs`, and keep desktop workflow actions
   invoking the packaged sidecar directly via Tauri shell `execute`/`spawn` with
   bundled data/plugin path resolution.
+- Keep the frozen CLI sidecar contract pinned to
+  `src/mmo/_frozen_cli_entrypoint.py` plus `mmo.cli:main`; do not point
+  packaged sidecar builds back at `src/mmo/__main__.py`, which exists to
+  preserve legitimate `python -m mmo` behavior.
 - Keep desktop Tauri CI building release binaries on Linux, macOS, and Windows:
   frontend lint/test steps should stay install-safe, and artifact uploads should
   come from `gui/desktop-tauri/src-tauri/target/release/`.

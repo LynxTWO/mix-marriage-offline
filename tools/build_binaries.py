@@ -16,7 +16,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = REPO_ROOT / "src"
-DEFAULT_ENTRYPOINT = SRC_DIR / "mmo" / "__main__.py"
+DEFAULT_ENTRYPOINT = SRC_DIR / "mmo" / "_frozen_cli_entrypoint.py"
 DEFAULT_GUI_ENTRYPOINT = SRC_DIR / "mmo" / "gui" / "__main__.py"
 
 

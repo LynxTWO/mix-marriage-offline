@@ -151,7 +151,24 @@ def _find_main_app_executable(
     )
 
 
-def _run_command(command: list[str], *, cwd: Path, env: dict[str, str] | None = None, label: str) -> None:
+def _find_sidecar_binary(root: Path, *, platform_tag: str) -> Path:
+    candidates = sorted(
+        path
+        for path in root.rglob("*")
+        if path.is_file() and _looks_like_sidecar_name(path.name, platform_tag)
+    )
+    if not candidates:
+        raise SmokeError(f"Could not find a packaged sidecar under {root}")
+    return candidates[0]
+
+
+def _run_command(
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str] | None = None,
+    label: str,
+) -> subprocess.CompletedProcess[str]:
     completed = subprocess.run(
         command,
         cwd=cwd,
@@ -162,12 +179,82 @@ def _run_command(command: list[str], *, cwd: Path, env: dict[str, str] | None = 
         encoding="utf-8",
     )
     if completed.returncode == 0:
-        return
+        return completed
     raise SmokeError(
         f"{label} failed with exit code {completed.returncode}\n"
         f"stdout:\n{completed.stdout}\n"
         f"stderr:\n{completed.stderr}"
     )
+
+
+def _probe_packaged_sidecar(
+    *,
+    bundle_root: Path,
+    platform_tag: str,
+    env: dict[str, str],
+) -> Path:
+    sidecar_path = _find_sidecar_binary(bundle_root, platform_tag=platform_tag)
+    sidecar_cwd = sidecar_path.parent
+
+    version_result = _run_command(
+        [str(sidecar_path), "--version"],
+        cwd=sidecar_cwd,
+        env=env,
+        label="sidecar-version",
+    )
+    version_text = version_result.stdout.strip() or version_result.stderr.strip()
+    if not version_text:
+        raise SmokeError("Packaged sidecar returned no version output.")
+
+    plugins_result = _run_command(
+        [
+            str(sidecar_path),
+            "plugins",
+            "validate",
+            "--bundled-only",
+            "--format",
+            "json",
+        ],
+        cwd=sidecar_cwd,
+        env=env,
+        label="sidecar-plugins-validate",
+    )
+    try:
+        plugins_payload = json.loads(plugins_result.stdout)
+    except json.JSONDecodeError as exc:
+        raise SmokeError(
+            "Packaged sidecar plugins validate output was not valid JSON.\n"
+            f"stdout:\n{plugins_result.stdout}\n"
+            f"stderr:\n{plugins_result.stderr}"
+        ) from exc
+    if not isinstance(plugins_payload, dict) or not bool(plugins_payload.get("ok")):
+        raise SmokeError(
+            "Packaged sidecar plugins validate probe did not report success.\n"
+            f"{json.dumps(plugins_payload, indent=2, sort_keys=True)}"
+        )
+    if plugins_payload.get("bundled_only") is not True:
+        raise SmokeError("Packaged sidecar plugins validate probe was not restricted to bundled plugins.")
+
+    env_doctor_result = _run_command(
+        [str(sidecar_path), "env", "doctor", "--format", "json"],
+        cwd=sidecar_cwd,
+        env=env,
+        label="sidecar-env-doctor",
+    )
+    try:
+        env_doctor_payload = json.loads(env_doctor_result.stdout)
+    except json.JSONDecodeError as exc:
+        raise SmokeError(
+            "Packaged sidecar env doctor output was not valid JSON.\n"
+            f"stdout:\n{env_doctor_result.stdout}\n"
+            f"stderr:\n{env_doctor_result.stderr}"
+        ) from exc
+    if not isinstance(env_doctor_payload, dict):
+        raise SmokeError("Packaged sidecar env doctor probe did not return a JSON object.")
+    if not isinstance(env_doctor_payload.get("checks"), dict):
+        raise SmokeError("Packaged sidecar env doctor probe did not include checks.")
+
+    return sidecar_path
 
 
 def _stage_windows_installer(*, artifact_path: Path, stage_root: Path, product_name: str) -> Path:
@@ -304,6 +391,17 @@ def _validate_summary(
     doctor = summary.get("doctor")
     if not isinstance(doctor, dict) or not bool(doctor.get("ok")):
         raise SmokeError("Doctor did not complete successfully in packaged smoke mode.")
+    for exit_code_key, command_label in (
+        ("versionExitCode", "--version"),
+        ("pluginsExitCode", "plugins validate"),
+        ("envDoctorExitCode", "env doctor"),
+    ):
+        if doctor.get(exit_code_key) != 0:
+            raise SmokeError(
+                "Doctor did not complete successfully in packaged smoke mode.\n"
+                f"sidecar_probe={command_label}\n"
+                f"exit_code={doctor.get(exit_code_key)!r}"
+            )
 
     checks = doctor.get("checks")
     if not isinstance(checks, dict):
@@ -436,13 +534,16 @@ def main() -> int:
         workspace_dir = temp_root / "workspace"
         workspace_dir.mkdir(parents=True, exist_ok=True)
         summary_path = temp_root / "desktop-smoke-summary.json"
+        sidecar_bundle_root: Path | None = None
 
         if platform_tag == "windows":
+            stage_root = temp_root / "installed"
             app_executable = _stage_windows_installer(
                 artifact_path=artifact_path,
-                stage_root=temp_root / "installed",
+                stage_root=stage_root,
                 product_name=product_name,
             )
+            sidecar_bundle_root = stage_root
             command = [str(app_executable)]
             launch_cwd = app_executable.parent
         elif platform_tag == "macos":
@@ -451,6 +552,7 @@ def main() -> int:
                 platform_tag=platform_tag,
                 product_name=product_name,
             )
+            sidecar_bundle_root = artifact_path
             command = [str(app_executable)]
             launch_cwd = app_executable.parent
         else:
@@ -469,6 +571,13 @@ def main() -> int:
         env["MMO_FFPROBE_PATH"] = _resolve_required_tool("ffprobe")
         if platform_tag == "linux" and artifact_path.suffix == ".AppImage":
             env.setdefault("APPIMAGE_EXTRACT_AND_RUN", "1")
+
+        if sidecar_bundle_root is not None:
+            _probe_packaged_sidecar(
+                bundle_root=sidecar_bundle_root,
+                platform_tag=platform_tag,
+                env=env,
+            )
 
         return_code, stdout, stderr = _launch_smoke_app(
             command=command,

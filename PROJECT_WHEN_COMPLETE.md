@@ -306,7 +306,10 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
       build packaged Tauri desktop artifacts on Windows/macOS/Linux, launch the
       packaged app in smoke mode, verify the bundled sidecar doctor plus the
       validate -> analyze -> scene -> render happy path against a tiny fixture,
-      and assert the expected workspace artifact paths.
+      and assert the expected workspace artifact paths. Done: packaged desktop
+      smoke now probes the bundled sidecar directly for `mmo --version`,
+      bundled plugin validation, and `mmo env doctor --format json` before the
+      app workflow so frozen-entrypoint regressions fail fast.
 
 ### 4.8 UX/CLI is usable for real work
 
@@ -462,7 +465,10 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
 - [x] The Tauri desktop app now stages a frozen `mmo` CLI as a sidecar, ships
       bundled MMO packaged data through that sidecar, and includes a Doctor
       screen that verifies `mmo --version`, bundled plugin validation, and
-      runtime path resolution without system Python/Node installs.
+      runtime path resolution without system Python/Node installs. Done: the
+      sidecar build contract is now pinned to a dedicated frozen-safe absolute
+      import stub so packaged binaries do not depend on `mmo.__main__`
+      semantics.
 - [x] The Tauri desktop app now runs prepare/validate/analyze/render directly
       through the packaged sidecar, streams live stdout/stderr into a desktop
       timeline, and writes deterministic artifacts under a user-provided
