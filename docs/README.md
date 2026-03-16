@@ -22,8 +22,8 @@ reference when still useful.
 
 ## Current Limits
 
-- The legacy CustomTkinter GUI remains available as a deprecated
-  compatibility-only path for bounded existing workflows.
+- Desktop claims and release assets must map to the shipped Tauri app or the
+  CLI; there is no secondary Python desktop shell.
 - MMO does not replace proprietary Atmos renderers or licensed Dolby
   workflows.
 

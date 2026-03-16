@@ -17,7 +17,7 @@ Usage::
 
     python tools/check_screenshot_diff.py \\
         --committed docs/manual/assets/screenshots \\
-        --generated /tmp/mmo-gui-screens
+        --generated /tmp/mmo-tauri-screens
 
 Exit codes:
     0  — all files within tolerance.

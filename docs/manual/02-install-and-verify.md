@@ -1,20 +1,20 @@
 # Install and verify
 
 Quick path (end users). Use the one-click release assets when you want “no
-Python required.” Those are distributed via GitHub Releases as Windows
-installer, macOS app bundle, and Linux AppImage.
+Python required.” GitHub Releases publish the Tauri desktop app as a Windows
+installer, macOS app bundle, and Linux AppImage, plus standalone CLI binaries
+for automation or headless workflows.
 
 Quick path (repo checkout / dev). MMO requires Python 3.12+ for source installs.
 
 Install base: pip install .
 
-Optional extras: pip install .[pdf] pip install .[gui] pip install .[watch]
+Optional extras: pip install .[pdf] pip install .[watch]
 
 Verify the CLI: mmo --help
 
-Verify the legacy GUI entry point: mmo-gui --help (If you installed with
-`.[gui]`, you can still launch the deprecated CustomTkinter shell as
-`mmo-gui`; the packaged Tauri app is the desktop app path.)
+Desktop note. The old CustomTkinter `mmo-gui` path is retired. Desktop app
+distribution is the Tauri bundle; standalone binaries are CLI-only.
 
 FFmpeg and ffprobe (required for core audio workflows). MMO expects
 FFmpeg/ffprobe for render, decode, metadata handling, and QA on real-world

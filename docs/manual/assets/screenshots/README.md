@@ -78,8 +78,8 @@ state.
    canonical state meaning or orientation text changed.
 
 ```bash
-python tools/capture_tauri_screenshots.py --out-dir /tmp/mmo-gui-screens
-python tools/check_screenshot_diff.py --committed docs/manual/assets/screenshots --generated /tmp/mmo-gui-screens
+python tools/capture_tauri_screenshots.py --out-dir /tmp/mmo-tauri-screens
+python tools/check_screenshot_diff.py --committed docs/manual/assets/screenshots --generated /tmp/mmo-tauri-screens
 ```
 
 If the GUI change is intentional and the canonical state meaning really did

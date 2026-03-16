@@ -41,8 +41,8 @@ State: `done`
 Definition of done:
 
 - [x] GUI contract docs and wireframes are documented.
-- [x] GUI delivery names Tauri as the desktop app path and retires
-      CustomTkinter from the parity contract.
+- [x] GUI delivery names Tauri as the desktop app path and removes the retired
+      CustomTkinter path from source, packaging, CI, and release workflows.
 - [x] `docs/gui_parity.md` defines required Tauri screens/behaviors and is
       validated in CI.
 - [x] Tauri desktop app builds in CI and uploads per-OS binaries.
@@ -80,10 +80,10 @@ Definition of done:
 
 - [x] `README.md`, `docs/README.md`, installer-facing docs, and release-copy
       sources match shipped capabilities and current limitations.
-- [x] Windows, macOS, and Linux release artifacts receive packaged binary smoke
-      checks.
-- [x] Windows installer, macOS app bundle, and Linux AppImage outputs receive
-      installer-level smoke checks in release CI.
+- [x] Windows, macOS, and Linux Tauri release bundles receive packaged-app
+      smoke checks.
+- [x] Standalone CLI binaries build on Windows, macOS, and Linux without a
+      legacy Python GUI dependency.
 
 ## Status System
 

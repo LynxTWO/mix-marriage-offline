@@ -257,8 +257,8 @@ in [assets/screenshots/README.md](assets/screenshots/README.md).
 Quick contributor loop:
 
 ```
-python tools/capture_tauri_screenshots.py --out-dir /tmp/mmo-gui-screens
-python tools/check_screenshot_diff.py --committed docs/manual/assets/screenshots --generated /tmp/mmo-gui-screens
+python tools/capture_tauri_screenshots.py --out-dir /tmp/mmo-tauri-screens
+python tools/check_screenshot_diff.py --committed docs/manual/assets/screenshots --generated /tmp/mmo-tauri-screens
 ```
 
 If the GUI change is intentional and one of the named canonical states has
@@ -275,12 +275,11 @@ part of the committed baseline set.
 
 ---
 
-## Legacy desktop shell (deprecated)
+## Retired desktop shell
 
-The CustomTkinter `mmo-gui` shell (`python -m mmo.gui.main`) remains available
-as a legacy bounded workflow but is **deprecated**. It sits outside the GUI
-parity contract. For a zero-ambiguity workflow, use the Tauri app or the CLI
-directly.
+The old CustomTkinter `mmo-gui` shell has been removed from the repository,
+package metadata, and release workflows. Use the Tauri app for desktop
+workflows or the CLI directly.
 
 The legacy walkthrough content (screenshots, CTK-specific flow) has been
 retired from this chapter. The parity checklist is tracked in

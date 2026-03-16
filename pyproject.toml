@@ -42,14 +42,12 @@ dependencies = [
 [project.optional-dependencies]
 pdf = ["reportlab>=4"]
 truth = []
-gui = ["customtkinter>=5.2.2"]
 screenshots = ["mss>=9", "Pillow>=10", "numpy>=2.0"]
 watch = ["watchdog>=4.0"]
 dev = ["pytest>=7.0", "pytest-xdist>=3.6.1"]
 
 [project.scripts]
 mmo = "mmo.cli:main"
-mmo-gui = "mmo.gui.main:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

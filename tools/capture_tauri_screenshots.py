@@ -18,7 +18,7 @@ Usage::
 
     python tools/capture_tauri_screenshots.py
     python tools/capture_tauri_screenshots.py --out-dir docs/manual/assets/screenshots
-    python tools/capture_tauri_screenshots.py --out-dir /tmp/mmo-gui-screens
+    python tools/capture_tauri_screenshots.py --out-dir /tmp/mmo-tauri-screens
 
 To update the committed baselines after an intentional GUI change, run with the
 default ``--out-dir`` (or point it at the committed path) and commit the result::

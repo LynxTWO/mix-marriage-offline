@@ -15,7 +15,6 @@ Optional extras:
 
 ```bash
 pip install .[pdf]
-pip install .[gui]
 pip install .[watch]
 ```
 
@@ -95,19 +94,9 @@ Use `--once` to process once and exit instead of watching continuously.
 Desktop app path: the Tauri desktop app tracked in
 [gui_parity.md](gui_parity.md).
 
-Legacy CustomTkinter shell: launch the desktop compatibility shell with:
-
-```bash
-mmo-gui
-```
-
-Or from a repo checkout:
-
-```bash
-python -m mmo.gui.main
-```
-
-`mmo-gui` is deprecated and outside the GUI parity contract.
+The old CustomTkinter `mmo-gui` path has been retired. It no longer ships in
+source installs or release artifacts. For headless or checkout workflows, use
+the CLI directly.
 
 ## 7. Plugin marketplace (offline index)
 

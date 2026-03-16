@@ -420,17 +420,13 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
 ### 4.8.1 GUI is ergonomically safe and AI-readable (a work of art in itself, so creatives and nerds alike love it. Strong typography, cinematic color contrast, and intentional spacing/visual hierarchy so it feels crafted, not utilitarian, while still staying cross-platform and deterministic)
 
 - [x] GUI delivery has one desktop app policy: Tauri is the shipped desktop
-      app path, and CustomTkinter is retained only as a deprecated legacy
-      compatibility shell outside the parity contract.
+      app path, and the retired CustomTkinter path is removed from source,
+      packaging, CI, and release workflows.
 - [x] `docs/gui_parity.md` defines the required Tauri screens/behaviors and CI
       fails when the checklist loses required links, screens, or behaviors.
-- [x] Minimal desktop CustomTkinter shell exists for stems drop, target/layout
-      selection, live logs, and bounded-authority approval flow before final
-      safe-render as a legacy compatibility workflow.
-- [x] Visualization Dashboard v1.1 exists as the current CustomTkinter legacy
-      GUI surface with deterministic spectrum/vectorscope/correlation visuals,
-      cinematic 3D speaker/object views, and explainable per-object intent cards
-      (`what/why/where/confidence`).
+- [x] Legacy CustomTkinter source, packaging, and release machinery are retired
+      so desktop distribution is Tauri-only and standalone frozen binaries are
+      CLI-only.
 - [x] GUI includes a bounded-authority `Preview on Headphones` action that
       forwards to `safe-render --preview-headphones` and writes deterministic
       binaural audition files.

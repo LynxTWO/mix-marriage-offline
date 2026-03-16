@@ -16,9 +16,9 @@ gain parity work or release-facing desktop workflow claims.
 
 ## Legacy Retirement Note
 
-CustomTkinter `mmo-gui` is no longer part of the GUI parity contract. It
-remains documented only as a deprecated legacy compatibility shell for bounded
-existing workflows.
+The old CustomTkinter desktop implementation has been removed from the repo,
+package metadata, CI, and release workflows. Desktop claims, screenshots, and
+smoke tests should point only to the Tauri app.
 
 - Legacy note:
   [Desktop GUI walkthrough](manual/10-gui-walkthrough.md)

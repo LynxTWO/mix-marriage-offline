@@ -99,8 +99,7 @@ explicit runtime dependencies, not hidden remote services.
 5. Run bounded safe-render or render-many delivery when requested.
 6. Export deterministic artifacts for reports, receipts, QA, and compare.
 
-The same core contracts are used by the CLI, the Tauri desktop app, and the
-retained legacy CustomTkinter shell when that compatibility path is used.
+The same core contracts are used by the CLI and the Tauri desktop app.
 
 ---
 
@@ -183,7 +182,7 @@ renderers.
 - compare workflow with artifact-backed fair-listen context
 - render-many delivery from one scene to multiple targets
 - supported stereo, surround, immersive, and binaural targets
-- Tauri desktop workflow path plus legacy CustomTkinter compatibility shell
+- Tauri desktop workflow path plus standalone CLI binaries
 - offline plugin marketplace, project/session persistence, and watch-folder
   automation
 
@@ -193,8 +192,6 @@ renderers.
 
 - Release-copy accuracy and broader deterministic regression expansion remain
   in progress around the shipped desktop flow.
-- The legacy CustomTkinter shell remains available for bounded compatibility
-  workflows, but the shipped desktop app path is Tauri.
 - MMO remains conservative about licensed Atmos-specific claims and workflows.
 
 ---

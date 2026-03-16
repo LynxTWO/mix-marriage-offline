@@ -16,8 +16,8 @@ Current delivery note:
 - Tauri is the shipped desktop app path.
 - The packaged Tauri app already covers
   `Validate -> Analyze -> Scene -> Render -> Results -> Compare`.
-- CustomTkinter is a deprecated legacy compatibility shell outside the parity
-  contract.
+- The retired CustomTkinter desktop path has been removed from source,
+  packaging, CI, and release workflows.
 - The Tauri workflow now includes deterministic scene-lock editing.
 - The enforceable rollout checklist lives in [gui_parity.md](gui_parity.md).
 
@@ -198,9 +198,7 @@ Keep contracts strict:
 - Tauri sidecar-driven workflow screens for validate, analyze, scene, render,
   results, and compare, including deterministic scene-lock editing.
 - Artifact-backed compare with loudness-match disclosure.
-- Legacy CustomTkinter compatibility workflow for bounded desktop runs.
-- Deterministic dashboard/design-system surfaces in the Tauri app and retained
-  legacy shell where implemented.
+- Deterministic dashboard/design-system surfaces in the Tauri app.
 
 ## 10) Remaining GUI parity work
 

@@ -22,10 +22,7 @@ targets and multiple channel-ordering standards. It can run translation checks
 compute downmix matrices and QA a downmix against a reference. It can scaffold
 projects, save sessions, and build GUI payload bundles. It can browse an offline
 plugin marketplace and install plugins into the user plugin directory. It
-includes a shipped Tauri desktop app, a deprecated legacy CustomTkinter
-desktop shell (`mmo-gui`) for bounded existing workflows, and an interactive
-terminal UI launcher. The CustomTkinter shell is outside the GUI parity
-contract.
+includes a shipped Tauri desktop app and an interactive terminal UI launcher.
 
 The design constraints are intentional. Determinism prevents “works on my
 machine” drift. Bounded authority prevents silent creative damage.

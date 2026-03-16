@@ -25,14 +25,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     for preview transport, compare A/B playback switching, and transport UI
     wiring.
 
+### Removed
+
+- **CustomTkinter desktop path retirement:**
+  - Removed the deprecated `src/mmo/gui` implementation, repo launchers, and
+    GUI-only tests/tools that existed only for the old CustomTkinter desktop
+    shell.
+  - Dropped the `mmo-gui` console entry point and the `.[gui]` install extra
+    from package metadata.
+  - Release and CI flows now treat Tauri bundles as the only desktop app
+    distribution, while standalone Python-free binaries are CLI-only.
+  - Repo-facing docs, manual pages, and release-copy templates no longer
+    present `mmo-gui` as a supported path.
+
 ### Changed
 
 - **Tauri-only GUI parity contract:**
   - `docs/gui_parity.md` and `tools/validate_gui_parity.py` now treat Tauri as
     the desktop app path without requiring a CustomTkinter fallback section.
-  - Repo-facing docs now describe `mmo-gui` as a deprecated legacy
-    compatibility shell outside the GUI parity contract instead of an active
-    fallback policy.
+  - Repo-facing docs now describe Tauri as the only desktop app path and note
+    that the retired CustomTkinter implementation has been removed.
 
 ## [1.1.3] — 2026-03-02
 

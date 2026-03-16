@@ -17,7 +17,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = REPO_ROOT / "src"
 DEFAULT_ENTRYPOINT = SRC_DIR / "mmo" / "_frozen_cli_entrypoint.py"
-DEFAULT_GUI_ENTRYPOINT = SRC_DIR / "mmo" / "gui" / "__main__.py"
 
 
 class BuildError(RuntimeError):
@@ -237,21 +236,6 @@ def _parse_args() -> argparse.Namespace:
         help="Base artifact name (platform and arch tags are appended).",
     )
     parser.add_argument(
-        "--with-gui",
-        action="store_true",
-        help="Also build a GUI artifact (CustomTkinter entrypoint).",
-    )
-    parser.add_argument(
-        "--gui-entrypoint",
-        default=str(DEFAULT_GUI_ENTRYPOINT.relative_to(REPO_ROOT)),
-        help="GUI entrypoint file to compile when --with-gui is set.",
-    )
-    parser.add_argument(
-        "--gui-name",
-        default="mmo-gui",
-        help="Base artifact name for the GUI binary.",
-    )
-    parser.add_argument(
         "--prefer",
         choices=("pyinstaller", "nuitka"),
         default="pyinstaller",
@@ -360,13 +344,6 @@ def main() -> int:
         print(f"error: entrypoint does not exist: {entrypoint}", file=sys.stderr)
         return 2
 
-    gui_entrypoint: Path | None = None
-    if args.with_gui:
-        gui_entrypoint = _resolve_entrypoint_path(repo_root, args.gui_entrypoint)
-        if not gui_entrypoint.exists():
-            print(f"error: gui entrypoint does not exist: {gui_entrypoint}", file=sys.stderr)
-            return 2
-
     if not src_dir.exists():
         print(f"error: src dir does not exist: {src_dir}", file=sys.stderr)
         return 2
@@ -385,33 +362,17 @@ def main() -> int:
     if args.prefer == "nuitka":
         backend_order.reverse()
 
-    build_specs: list[tuple[str, Path, tuple[str, ...]]] = [
-        (args.name, entrypoint, ())
-    ]
-    if gui_entrypoint is not None:
-        build_specs.append(
-            (
-                args.gui_name,
-                gui_entrypoint,
-                ("mmo.__main__", "mmo.cli"),
-            )
-        )
-
-    for artifact_name, artifact_entrypoint, hidden_imports in build_specs:
-        rc = _build_artifact(
-            repo_root=repo_root,
-            src_dir=src_dir,
-            output_dir=output_dir,
-            build_dir=build_dir,
-            entrypoint=artifact_entrypoint,
-            artifact_name=artifact_name,
-            hidden_imports=hidden_imports,
-            backend_order=backend_order,
-            no_archive=bool(args.no_archive),
-        )
-        if rc != 0:
-            return rc
-    return 0
+    return _build_artifact(
+        repo_root=repo_root,
+        src_dir=src_dir,
+        output_dir=output_dir,
+        build_dir=build_dir,
+        entrypoint=entrypoint,
+        artifact_name=args.name,
+        hidden_imports=(),
+        backend_order=backend_order,
+        no_archive=bool(args.no_archive),
+    )
 
 
 if __name__ == "__main__":

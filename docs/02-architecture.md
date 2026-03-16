@@ -21,8 +21,6 @@ As shipped today, MMO produces and consumes a family of deterministic artifacts:
 - `compare_report.json` for revision comparison
 
 The CLI and the packaged Tauri desktop app work against those same contracts.
-The retained CustomTkinter `mmo-gui` shell can still read the same artifacts
-where it remains available for legacy compatibility.
 
 ---
 
@@ -284,8 +282,8 @@ MMO's desktop app path is the packaged Tauri desktop app.
 Tauri already covers the artifact-backed workflow sequence:
 `Validate -> Analyze -> Scene -> Render -> Results -> Compare`.
 
-The legacy CustomTkinter `mmo-gui` shell remains available only for bounded
-compatibility workflows and sits outside the GUI parity contract.
+The retired CustomTkinter desktop path has been removed from source, package
+metadata, CI, and release workflows. Standalone binary distribution is CLI-only.
 
 Still in progress:
 
