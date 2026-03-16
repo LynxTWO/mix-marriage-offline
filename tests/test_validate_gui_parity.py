@@ -56,6 +56,7 @@ class TestValidateGuiParity(unittest.TestCase):
         self.assertEqual(returncode, 0, msg=payload)
         self.assertTrue(payload.get("ok"))
         self.assertEqual(payload.get("errors"), [])
+        self.assertEqual(payload.get("deprecated_headings"), [])
         self.assertEqual(payload.get("missing_screens"), [])
         self.assertEqual(payload.get("missing_behaviors"), [])
         self.assertEqual(payload.get("missing_links"), [])
@@ -63,21 +64,17 @@ class TestValidateGuiParity(unittest.TestCase):
     def test_missing_screen_item_fails(self) -> None:
         parity_text = (
             "# GUI parity checklist\n\n"
-            "## Primary Plan\n\n"
-            "Tauri is the primary GUI plan.\n"
-            "It is the only primary GUI plan that should gain new parity work.\n\n"
+            "## Desktop App Path\n\n"
+            "Tauri is the desktop app path.\n"
+            "It is the only GUI surface that should gain new parity work.\n\n"
             "- [Roadmap](06-roadmap.md)\n"
             "- [Project When Complete](../PROJECT_WHEN_COMPLETE.md)\n"
             "- [Tauri desktop README](../gui/desktop-tauri/README.md)\n\n"
-            "## Fallback Plan Until Parity\n\n"
-            "CustomTkinter is the fallback plan until parity.\n"
-            "It is deprecated after parity lands.\n\n"
-            "- [CustomTkinter GUI walkthrough](manual/10-gui-walkthrough.md)\n\n"
             "## Required Links\n\n"
             "- [Roadmap](06-roadmap.md)\n"
             "- [Project When Complete](../PROJECT_WHEN_COMPLETE.md)\n"
             "- [Tauri desktop README](../gui/desktop-tauri/README.md)\n"
-            "- [CustomTkinter GUI walkthrough](manual/10-gui-walkthrough.md)\n\n"
+            "- [Desktop GUI walkthrough](manual/10-gui-walkthrough.md)\n\n"
             "## Required Screens\n\n"
             "- [ ] Validate\n"
             "- [ ] Analyze\n"
@@ -99,16 +96,48 @@ class TestValidateGuiParity(unittest.TestCase):
         self.assertFalse(payload.get("ok"))
         self.assertIn("Compare", payload.get("missing_screens", []))
 
-    def test_missing_required_link_and_plan_phrase_fail(self) -> None:
+    def test_legacy_note_is_optional(self) -> None:
         parity_text = (
             "# GUI parity checklist\n\n"
-            "## Primary Plan\n\n"
-            "Tauri is the primary GUI plan.\n\n"
+            "## Desktop App Path\n\n"
+            "Tauri is the desktop app path.\n\n"
             "- [Roadmap](06-roadmap.md)\n"
             "- [Project When Complete](../PROJECT_WHEN_COMPLETE.md)\n"
             "- [Tauri desktop README](../gui/desktop-tauri/README.md)\n\n"
-            "## Fallback Plan Until Parity\n\n"
-            "CustomTkinter is the fallback plan until parity.\n\n"
+            "## Required Links\n\n"
+            "- [Roadmap](06-roadmap.md)\n"
+            "- [Project When Complete](../PROJECT_WHEN_COMPLETE.md)\n"
+            "- [Tauri desktop README](../gui/desktop-tauri/README.md)\n"
+            "- [Desktop GUI walkthrough](manual/10-gui-walkthrough.md)\n\n"
+            "## Required Screens\n\n"
+            "- [x] Validate\n"
+            "- [x] Analyze\n"
+            "- [x] Scene\n"
+            "- [x] Render\n"
+            "- [x] Results\n"
+            "- [x] Compare\n\n"
+            "## Required Behaviors\n\n"
+            "- [x] A/B loudness-comp compare\n"
+            "- [x] Scene locks edit\n\n"
+            "## Exit Rule\n\n"
+            "Parity lands in the Tauri app.\n"
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            _seed_temp_repo(temp_root, parity_text)
+            returncode, payload = _run_validator(repo_root=temp_root)
+
+        self.assertEqual(returncode, 0, msg=payload)
+        self.assertTrue(payload.get("ok"))
+
+    def test_missing_required_link_and_plan_phrase_fail(self) -> None:
+        parity_text = (
+            "# GUI parity checklist\n\n"
+            "## Desktop App Path\n\n"
+            "Tauri powers MMO on desktop.\n\n"
+            "- [Roadmap](06-roadmap.md)\n"
+            "- [Project When Complete](../PROJECT_WHEN_COMPLETE.md)\n"
+            "- [Tauri desktop README](../gui/desktop-tauri/README.md)\n\n"
             "## Required Links\n\n"
             "- [Roadmap](06-roadmap.md)\n"
             "- [Project When Complete](../PROJECT_WHEN_COMPLETE.md)\n"
@@ -139,10 +168,49 @@ class TestValidateGuiParity(unittest.TestCase):
         )
         self.assertTrue(
             any(
-                "deprecated after parity lands" in error
+                "desktop app path" in error
                 for error in payload.get("errors", [])
             ),
             msg=payload,
+        )
+
+    def test_deprecated_fallback_heading_fails(self) -> None:
+        parity_text = (
+            "# GUI parity checklist\n\n"
+            "## Desktop App Path\n\n"
+            "Tauri is the desktop app path.\n\n"
+            "- [Roadmap](06-roadmap.md)\n"
+            "- [Project When Complete](../PROJECT_WHEN_COMPLETE.md)\n"
+            "- [Tauri desktop README](../gui/desktop-tauri/README.md)\n\n"
+            "## Fallback Plan Until Parity\n\n"
+            "CustomTkinter is the fallback plan until parity.\n\n"
+            "## Required Links\n\n"
+            "- [Roadmap](06-roadmap.md)\n"
+            "- [Project When Complete](../PROJECT_WHEN_COMPLETE.md)\n"
+            "- [Tauri desktop README](../gui/desktop-tauri/README.md)\n"
+            "- [Desktop GUI walkthrough](manual/10-gui-walkthrough.md)\n\n"
+            "## Required Screens\n\n"
+            "- [x] Validate\n"
+            "- [x] Analyze\n"
+            "- [x] Scene\n"
+            "- [x] Render\n"
+            "- [x] Results\n"
+            "- [x] Compare\n\n"
+            "## Required Behaviors\n\n"
+            "- [x] A/B loudness-comp compare\n"
+            "- [x] Scene locks edit\n\n"
+            "## Exit Rule\n\n"
+            "Parity lands in the Tauri app.\n"
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            _seed_temp_repo(temp_root, parity_text)
+            returncode, payload = _run_validator(repo_root=temp_root)
+
+        self.assertNotEqual(returncode, 0, msg=payload)
+        self.assertIn(
+            "## Fallback Plan Until Parity",
+            payload.get("deprecated_headings", []),
         )
 
 

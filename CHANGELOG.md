@@ -25,6 +25,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     for preview transport, compare A/B playback switching, and transport UI
     wiring.
 
+### Changed
+
+- **Tauri-only GUI parity contract:**
+  - `docs/gui_parity.md` and `tools/validate_gui_parity.py` now treat Tauri as
+    the desktop app path without requiring a CustomTkinter fallback section.
+  - Repo-facing docs now describe `mmo-gui` as a deprecated legacy
+    compatibility shell outside the GUI parity contract instead of an active
+    fallback policy.
+
 ## [1.1.3] — 2026-03-02
 
 ### Fixed (continued)

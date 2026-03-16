@@ -22,8 +22,8 @@ reference when still useful.
 
 ## Current Limits
 
-- The legacy CustomTkinter GUI remains available as a deprecated fallback-only
-  path for bounded existing workflows.
+- The legacy CustomTkinter GUI remains available as a deprecated
+  compatibility-only path for bounded existing workflows.
 - MMO does not replace proprietary Atmos renderers or licensed Dolby
   workflows.
 
@@ -42,7 +42,7 @@ reference when still useful.
 - [18-channel-standards.md](18-channel-standards.md) Canonical channel-ordering
   standards contract.
 - [11-gui-vision.md](11-gui-vision.md) Current GUI direction, shipped surfaces,
-  and legacy fallback notes.
+  and legacy compatibility notes.
 - [STATUS.md](STATUS.md) Live milestone checklist and current completion
   boundaries.
 - [milestones.yaml](milestones.yaml) Machine-readable milestone IDs, states, and

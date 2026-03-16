@@ -1,25 +1,26 @@
 # GUI parity checklist
 
-This file is the canonical GUI parity contract for MMO. Parity is complete only
-when the primary Tauri desktop app covers every required screen and behavior
-listed here. In the current repo, that exit rule is satisfied.
+This file is the canonical GUI parity contract for MMO. The desktop app path is
+the Tauri app, and parity is complete only when that app covers every required
+screen and behavior listed here. In the current repo, that exit rule is
+satisfied.
 
-## Primary Plan
+## Desktop App Path
 
-Tauri is the primary GUI plan for MMO. It is the only GUI path that should gain
-new parity work.
+Tauri is the desktop app path for MMO. It is the only GUI surface that should
+gain parity work or release-facing desktop workflow claims.
 
-- Primary implementation: [Tauri desktop README](../gui/desktop-tauri/README.md)
+- Desktop implementation: [Tauri desktop README](../gui/desktop-tauri/README.md)
 - Product roadmap: [Roadmap](06-roadmap.md)
 - Completion gate: [Project When Complete](../PROJECT_WHEN_COMPLETE.md)
 
-## Fallback Plan Until Parity
+## Legacy Retirement Note
 
-CustomTkinter `mmo-gui` was the single fallback plan until Tauri parity landed.
-It remains available only as a legacy bounded desktop workflow, but it is
-deprecated after parity lands. It will not receive new parity work.
+CustomTkinter `mmo-gui` is no longer part of the GUI parity contract. It
+remains documented only as a deprecated legacy compatibility shell for bounded
+existing workflows.
 
-- GUI walkthrough (Tauri):
+- Legacy note:
   [Desktop GUI walkthrough](manual/10-gui-walkthrough.md)
 
 ## Required Links
@@ -71,6 +72,5 @@ deprecated after parity lands. It will not receive new parity work.
 ## Exit Rule
 
 Parity lands when every required screen and required behavior above is complete
-in the Tauri app. That condition is satisfied in the current repo, so the
-CustomTkinter fallback remains documented only as a legacy path and is
-deprecated after parity lands.
+in the Tauri app. That condition is satisfied in the current repo, so
+release-facing desktop workflow claims should point to Tauri.

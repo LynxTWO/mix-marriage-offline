@@ -23,8 +23,8 @@ main path. Optional GUI maturity and preset polish items live in
 
 ### Tauri Workflow Parity
 
-- Goal: land the primary desktop app as a real artifact-backed workflow, not
-  just a buildable shell.
+- Goal: keep the shipped Tauri desktop app aligned with the artifact-backed
+  workflow contract, not just a buildable shell.
 - Canonical checklist: [gui_parity.md](gui_parity.md)
 - Open blockers:
 - none currently

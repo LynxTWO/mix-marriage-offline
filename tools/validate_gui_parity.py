@@ -1,4 +1,4 @@
-"""Validate docs/gui_parity.md required plans, links, and checklist items."""
+"""Validate docs/gui_parity.md required contract links and checklist items."""
 
 from __future__ import annotations
 
@@ -10,13 +10,14 @@ from typing import Any
 
 
 REQUIRED_HEADINGS: tuple[str, ...] = (
-    "## Primary Plan",
-    "## Fallback Plan Until Parity",
+    "## Desktop App Path",
     "## Required Links",
     "## Required Screens",
     "## Required Behaviors",
     "## Exit Rule",
 )
+
+DEPRECATED_HEADINGS: tuple[str, ...] = ("## Fallback Plan Until Parity",)
 
 REQUIRED_LINK_PATHS: tuple[str, ...] = (
     "docs/06-roadmap.md",
@@ -114,6 +115,7 @@ def validate_gui_parity(*, repo_root: Path, parity_doc: Path) -> dict[str, Any]:
             "missing_behaviors": list(REQUIRED_BEHAVIORS),
             "screen_states": {},
             "behavior_states": {},
+            "deprecated_headings": [],
             "plan_errors": [],
             "errors": errors,
         }
@@ -131,12 +133,16 @@ def validate_gui_parity(*, repo_root: Path, parity_doc: Path) -> dict[str, Any]:
             "missing_behaviors": list(REQUIRED_BEHAVIORS),
             "screen_states": {},
             "behavior_states": {},
+            "deprecated_headings": [],
             "plan_errors": [],
             "errors": errors,
         }
 
     sections = _extract_sections(text)
     missing_headings = [heading for heading in REQUIRED_HEADINGS if heading not in sections]
+    deprecated_headings = [
+        heading for heading in DEPRECATED_HEADINGS if heading in sections
+    ]
 
     links = _extract_repo_relative_links(text=text, doc_path=parity_doc, repo_root=repo_root)
     missing_links = [path for path in REQUIRED_LINK_PATHS if path not in links]
@@ -158,28 +164,26 @@ def validate_gui_parity(*, repo_root: Path, parity_doc: Path) -> dict[str, Any]:
     ]
 
     plan_errors: list[str] = []
-    primary_text = sections.get("## Primary Plan", "")
-    fallback_text = sections.get("## Fallback Plan Until Parity", "")
+    desktop_path_text = sections.get("## Desktop App Path", "")
+    legacy_note_text = sections.get("## Legacy Retirement Note", "")
     exit_rule_text = sections.get("## Exit Rule", "")
-    if primary_text and "Tauri" not in primary_text:
-        plan_errors.append("Primary Plan must name Tauri as the primary GUI plan.")
-    if primary_text and "primary GUI plan" not in primary_text:
+    if desktop_path_text and "Tauri" not in desktop_path_text:
+        plan_errors.append("Desktop App Path must name Tauri as the desktop app path.")
+    if desktop_path_text and "desktop app path" not in desktop_path_text:
         plan_errors.append(
-            "Primary Plan must explicitly say it is the primary GUI plan."
+            "Desktop App Path must explicitly say it is the desktop app path."
         )
-    if fallback_text and "CustomTkinter" not in fallback_text:
+    if legacy_note_text and "fallback plan until parity" in legacy_note_text.lower():
         plan_errors.append(
-            "Fallback Plan Until Parity must name CustomTkinter as the fallback."
-        )
-    if fallback_text and "deprecated after parity lands" not in fallback_text:
-        plan_errors.append(
-            "Fallback Plan Until Parity must say CustomTkinter is deprecated after parity lands."
+            "Legacy Retirement Note must not describe an active fallback plan."
         )
     if exit_rule_text and "Tauri" not in exit_rule_text:
         plan_errors.append("Exit Rule must state that parity lands in the Tauri app.")
 
     for heading in missing_headings:
         errors.append(f"Missing required heading: {heading}")
+    for heading in deprecated_headings:
+        errors.append(f"Deprecated heading must be removed: {heading}")
     for path in missing_links:
         errors.append(f"Missing required link target: {path}")
     for path in broken_links:
@@ -200,6 +204,7 @@ def validate_gui_parity(*, repo_root: Path, parity_doc: Path) -> dict[str, Any]:
         "missing_behaviors": missing_behaviors,
         "screen_states": screen_states,
         "behavior_states": behavior_states,
+        "deprecated_headings": deprecated_headings,
         "plan_errors": plan_errors,
         "errors": errors,
     }

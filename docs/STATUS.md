@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-03-15
+Last updated: 2026-03-16
 
 This is the single-page milestone checklist for current delivery phases.
 
@@ -41,17 +41,17 @@ State: `done`
 Definition of done:
 
 - [x] GUI contract docs and wireframes are documented.
-- [x] GUI delivery names one primary plan (Tauri) and one fallback plan
-      (CustomTkinter) until parity.
+- [x] GUI delivery names Tauri as the desktop app path and retires
+      CustomTkinter from the parity contract.
 - [x] `docs/gui_parity.md` defines required Tauri screens/behaviors and is
       validated in CI.
 - [x] Tauri desktop app builds in CI and uploads per-OS binaries.
 - [x] The Tauri app can drive doctor/prepare/validate/analyze/render through the
       packaged sidecar.
-- [x] The primary Tauri app exposes Scene, Results, and Compare as
+- [x] The Tauri app exposes Scene, Results, and Compare as
       artifact-backed workflow screens with the same files/contracts the CLI
       writes.
-- [x] The primary Tauri app supports the required scene-lock editing behavior.
+- [x] The Tauri app supports the required scene-lock editing behavior.
 - [x] Compare is loudness-matched by default and discloses the compensation
       used.
 - [x] Cross-platform packaged desktop smoke tests are green.

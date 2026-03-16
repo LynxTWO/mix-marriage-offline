@@ -30,15 +30,16 @@ the musical intent.
   delivery, including deterministic binaural/headphone preview flows.
 - Five supported channel-ordering standards at the I/O boundary: `SMPTE`,
   `FILM`, `LOGIC_PRO`, `VST3`, and `AAF`.
-- A shipped Tauri desktop app for packaged releases, with the legacy
-  CustomTkinter GUI retained as a deprecated fallback path.
+- A shipped Tauri desktop app for packaged releases.
+- The legacy CustomTkinter `mmo-gui` shell remains available only as a
+  deprecated compatibility path for bounded existing workflows.
 - Offline plugin marketplace/discovery, project/session artifacts, translation
   QA, downmix QA, and watch-folder batch automation.
 
 ## Current Limits
 
-- The legacy `mmo-gui` fallback remains available for bounded existing
-  workflows, but it is deprecated and no new GUI parity work lands there.
+- The legacy `mmo-gui` compatibility shell remains available for bounded
+  existing workflows, but it is deprecated and outside the GUI parity contract.
 - MMO does not claim to replace proprietary Atmos renderers or licensed Dolby
   workflows.
 
@@ -71,7 +72,7 @@ Runtime expectations:
   render, metadata handling, and QA on real-world sessions.
 - NumPy is part of the base install.
 - ReportLab is only needed for PDF exports.
-- `.[gui]` installs the legacy fallback `mmo-gui` entrypoint.
+- `.[gui]` installs the legacy `mmo-gui` compatibility entrypoint.
 
 Verify your environment:
 
@@ -191,21 +192,17 @@ contracts.
 
 ## Desktop App Status
 
-MMO ships one primary desktop app and keeps one legacy fallback path:
-
-- Primary path: the packaged Tauri desktop app in
-  [gui/desktop-tauri/README.md](gui/desktop-tauri/README.md)
-- Fallback path: the legacy CustomTkinter `mmo-gui` flow documented in
-  [docs/manual/10-gui-walkthrough.md](docs/manual/10-gui-walkthrough.md)
+MMO's desktop app path is the packaged Tauri desktop app in
+[gui/desktop-tauri/README.md](gui/desktop-tauri/README.md).
 
 Tauri already covers the artifact-backed workflow sequence:
 `Validate -> Analyze -> Scene -> Render -> Results -> Compare`.
 
-Fallback GUI status:
+Legacy CustomTkinter note:
 
 - still available for bounded desktop workflows
 - deprecated and legacy-only
-- receives no new parity work
+- outside the GUI parity contract
 
 ## Documentation
 
@@ -229,7 +226,7 @@ docs/       Canonical docs and user manual
 ontology/   YAML source of truth for IDs, layouts, policies, and presets
 schemas/    JSON schemas for reports, scenes, renders, plugins, and projects
 src/        MMO engine, CLI, bundled data, and GUI bridge code
-gui/        Desktop app implementations (Tauri primary, CTK fallback)
+gui/        Desktop app implementations (Tauri app, legacy CTK shell)
 fixtures/   Deterministic audio and contract fixtures
 tests/      Cross-platform regression coverage
 tools/      Validation and workflow helper scripts

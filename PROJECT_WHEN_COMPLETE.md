@@ -404,7 +404,7 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
       are visible from results surfaces, `compare_report.json` records the
       deterministic loudness-match method/amount, and any evaluation-only
       compensation is disclosed in user-visible compare results. Done: the
-      primary Tauri workflow now adds contextual artifact quick actions
+      Tauri workflow now adds contextual artifact quick actions
       (copy/reveal/open sibling receipt-manifest-QA plus rerun compare/render
       shortcuts) anywhere the core workspace artifacts are surfaced, plus a
       bounded in-app audition transport for selected preview artifacts and
@@ -414,21 +414,20 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
       by content hash.
 - [x] Project session JSON persistence exists for `scene + history + receipts`
       via `mmo project save/load`, with deterministic JSON output and strict
-      schema validation. Tauri parity for the primary workflow is complete,
+      schema validation. Tauri parity for the desktop workflow is complete,
       including scene-lock editing plus compare/results artifact parity.
 
 ### 4.8.1 GUI is ergonomically safe and AI-readable (a work of art in itself, so creatives and nerds alike love it. Strong typography, cinematic color contrast, and intentional spacing/visual hierarchy so it feels crafted, not utilitarian, while still staying cross-platform and deterministic)
 
-- [x] GUI delivery has one primary plan and one documented legacy fallback:
-      Tauri is the primary GUI plan, and CustomTkinter is the single fallback
-      path retained after parity lands. The fallback is deprecated after parity
-      lands.
+- [x] GUI delivery has one desktop app policy: Tauri is the shipped desktop
+      app path, and CustomTkinter is retained only as a deprecated legacy
+      compatibility shell outside the parity contract.
 - [x] `docs/gui_parity.md` defines the required Tauri screens/behaviors and CI
       fails when the checklist loses required links, screens, or behaviors.
 - [x] Minimal desktop CustomTkinter shell exists for stems drop, target/layout
       selection, live logs, and bounded-authority approval flow before final
-      safe-render.
-- [x] Visualization Dashboard v1.1 exists as the current CustomTkinter fallback
+      safe-render as a legacy compatibility workflow.
+- [x] Visualization Dashboard v1.1 exists as the current CustomTkinter legacy
       GUI surface with deterministic spectrum/vectorscope/correlation visuals,
       cinematic 3D speaker/object views, and explainable per-object intent cards
       (`what/why/where/confidence`).
@@ -453,7 +452,7 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
 - [x] Desktop GUI includes a first-class Scene tab after Analyze:
       `_mmo_gui/scene.json` + `_mmo_gui/scene_lint.json` are generated, the tab
       surfaces perspective/object/bed explainability plus lint warnings, and
-      the primary Tauri workflow can inspect/edit/save deterministic
+      the Tauri workflow can inspect/edit/save deterministic
       `scene_locks.yaml` overrides with scene refresh for reruns.
 - [x] An isolated Tauri desktop scaffold now exists under `gui/desktop-tauri`,
       using a Vite frontend with cross-platform CI release-binary builds on
@@ -461,7 +460,7 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
 - [x] Canonical Tauri manual screenshots are regenerated in CI through
       `tools/capture_tauri_screenshots.py` and diffed against
       `docs/manual/assets/screenshots`, so screenshot regressions track the
-      shipped desktop workflow instead of the legacy Tk fallback GUI. Done: the
+      shipped desktop workflow instead of the legacy Tk GUI. Done: the
       canonical Tauri baselines now use a fixed-region `1280 x 900` CSS-pixel
       capture contract instead of unstable full-page document height.
 - [x] The Tauri desktop app now stages a frozen `mmo` CLI as a sidecar, ships
@@ -476,7 +475,7 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
       timeline, and writes deterministic artifacts under a user-provided
       workspace folder without requiring the Node `gui/server.mjs` runtime in
       production.
-- [x] The primary Tauri GUI exposes the same workflow as the CLI: validate ->
+- [x] The Tauri GUI exposes the same workflow as the CLI: validate ->
       analyze -> scene -> render -> results -> compare, using the same
       project/report/scene/render artifacts the CLI writes.
 - [x] GUI copy and structure follow the design system in
@@ -485,7 +484,7 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
 - [x] Any plugin/config UI is generated from JSON Schema with optional UI hints
       (example: x_mmo_ui or a dedicated ui_hints registry) so agents do not
       hand-build one-off forms. The required Tauri parity behaviors tracked in
-      `docs/gui_parity.md` are complete for the primary desktop workflow.
+      `docs/gui_parity.md` are complete for the desktop workflow.
 
 Interaction standards (non-negotiable):
 

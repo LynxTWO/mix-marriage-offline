@@ -12,9 +12,9 @@ Optional extras: pip install .[pdf] pip install .[gui] pip install .[watch]
 
 Verify the CLI: mmo --help
 
-Verify the GUI entry point: mmo-gui --help (If you installed with `.[gui]`, you
-can still launch the deprecated CustomTkinter fallback as `mmo-gui`; the
-packaged Tauri app is the primary desktop path.)
+Verify the legacy GUI entry point: mmo-gui --help (If you installed with
+`.[gui]`, you can still launch the deprecated CustomTkinter shell as
+`mmo-gui`; the packaged Tauri app is the desktop app path.)
 
 FFmpeg and ffprobe (required for core audio workflows). MMO expects
 FFmpeg/ffprobe for render, decode, metadata handling, and QA on real-world

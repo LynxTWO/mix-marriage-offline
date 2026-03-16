@@ -4,7 +4,7 @@ The GUI exists to reduce friction, not to hide the truth. It wraps the same CLI
 behaviors, keeps receipts, and writes the same artifacts the CLI writes. Every
 action is explainable, every output is traceable.
 
-The primary GUI is the **Tauri desktop app**. It covers the full artifact-backed
+The desktop app is the **Tauri desktop app**. It covers the full artifact-backed
 workflow sequence: `Validate → Analyze → Scene → Render → Results → Compare`.
 
 ---
@@ -275,12 +275,12 @@ part of the committed baseline set.
 
 ---
 
-## Legacy fallback (deprecated)
+## Legacy desktop shell (deprecated)
 
-The CustomTkinter `mmo-gui` fallback (`python -m mmo.gui.main`) remains
-available as a legacy bounded workflow but is **deprecated**. It will not
-receive new parity work. For a zero-ambiguity workflow, use the Tauri app or
-the CLI directly.
+The CustomTkinter `mmo-gui` shell (`python -m mmo.gui.main`) remains available
+as a legacy bounded workflow but is **deprecated**. It sits outside the GUI
+parity contract. For a zero-ambiguity workflow, use the Tauri app or the CLI
+directly.
 
 The legacy walkthrough content (screenshots, CTK-specific flow) has been
 retired from this chapter. The parity checklist is tracked in

@@ -13,11 +13,12 @@ artifact contracts:
 
 Current delivery note:
 
-- Tauri is the primary shipped desktop path.
+- Tauri is the shipped desktop app path.
 - The packaged Tauri app already covers
   `Validate -> Analyze -> Scene -> Render -> Results -> Compare`.
-- CustomTkinter is the deprecated legacy fallback desktop path.
-- The primary Tauri workflow now includes deterministic scene-lock editing.
+- CustomTkinter is a deprecated legacy compatibility shell outside the parity
+  contract.
+- The Tauri workflow now includes deterministic scene-lock editing.
 - The enforceable rollout checklist lives in [gui_parity.md](gui_parity.md).
 
 ## Scene-first / render-many note
@@ -197,9 +198,9 @@ Keep contracts strict:
 - Tauri sidecar-driven workflow screens for validate, analyze, scene, render,
   results, and compare, including deterministic scene-lock editing.
 - Artifact-backed compare with loudness-match disclosure.
-- Fallback CustomTkinter workflow for bounded desktop runs.
-- Deterministic dashboard/design-system surfaces in both desktop tracks where
-  implemented.
+- Legacy CustomTkinter compatibility workflow for bounded desktop runs.
+- Deterministic dashboard/design-system surfaces in the Tauri app and retained
+  legacy shell where implemented.
 
 ## 10) Remaining GUI parity work
 

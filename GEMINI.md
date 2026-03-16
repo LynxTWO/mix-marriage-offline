@@ -152,7 +152,7 @@ Non-negotiables:
   `drafts/scene.draft.json` so corrected intent can be re-rendered immediately.
 - Keep compare and preset-preview listening fairness explicit:
   `compare_report.json` must carry deterministic `loudness_match` metadata when
-  sibling `render_qa.json` artifacts exist, the primary Tauri compare screen
+  sibling `render_qa.json` artifacts exist, the Tauri compare screen
   should default to that fair-listen compensation while disclosing method +
   amount, desktop preview/compare playback must stay artifact-backed with only
   bounded transport controls (`play/pause/stop` + A/B switch) and no extra
@@ -167,9 +167,9 @@ Non-negotiables:
 - Keep the isolated Tauri desktop scaffold install-safe: `gui/desktop-tauri`
   should remain self-contained, Vite-based, and free of repo-root path
   assumptions.
-- Treat Tauri as the only primary GUI plan: parity requirements live in
-  `docs/gui_parity.md`, and `mmo-gui` (CustomTkinter) remains fallback-only
-  until those Tauri checklist items land.
+- Treat Tauri as the desktop app path: parity requirements live in
+  `docs/gui_parity.md`, and `mmo-gui` (CustomTkinter) is a deprecated legacy
+  compatibility shell outside that parity contract.
 - Keep the Tauri desktop app sidecar-driven and offline: stage the frozen `mmo`
   CLI via the repo's binary builder, bundle it through `externalBin`, avoid a
   production dependency on `gui/server.mjs`, and keep desktop workflow actions

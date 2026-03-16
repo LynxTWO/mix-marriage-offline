@@ -18,8 +18,8 @@ Good claims to reuse when they are still true:
 - supported channel-ordering standards: `SMPTE`, `FILM`, `LOGIC_PRO`, `VST3`,
   `AAF`
 - binaural/headphone preview and first-class headphone target
-- Tauri desktop app as the primary packaged GUI path
-- fallback `mmo-gui` as legacy transition path only
+- Tauri desktop app as the packaged desktop app path
+- legacy `mmo-gui` as a deprecated compatibility shell only
 
 Do not claim these are complete unless the repo status says so:
 
@@ -44,9 +44,9 @@ scene-first delivery, compare, and mix-once/render-many workflows.
   loudness-match context for fair listening.
 - **Supported target families** - stereo, surround, immersive, and first-class
   binaural/headphone workflows.
-- **Desktop path** - the packaged Tauri desktop app remains the primary GUI
-  path, with the legacy `mmo-gui` fallback retained as a deprecated legacy
-  option for bounded existing workflows.
+- **Desktop path** - the packaged Tauri desktop app is the shipped desktop app
+  path, and the legacy `mmo-gui` shell remains only as a deprecated
+  compatibility option for bounded existing workflows.
 
 ### What's new in this release
 
@@ -101,9 +101,9 @@ What readers should know about the product today:
 - `mmo compare` is a first-class workflow, not a side tool.
 - Render-many, channel-ordering standards, downmix QA, and headphone preview are
   part of the shipped surface.
-- The packaged Tauri app is the primary GUI path today.
-- The legacy `mmo-gui` fallback still exists as a deprecated legacy path for
-  bounded existing workflows.
+- The packaged Tauri app is the desktop app path today.
+- The legacy `mmo-gui` shell still exists as a deprecated compatibility path
+  for bounded existing workflows.
 
 What changed in this release:
 
