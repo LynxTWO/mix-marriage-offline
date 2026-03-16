@@ -223,6 +223,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `390x844` viewport by preserving wrapped tag rows and constraining internal
     scrolling instead of letting the single required widget grow past the
     visible screen.
+  - Mobile workflow cards now share a generic containment rule that adds
+    `min-width: 0`, `min-height: 0`, `scroll-margin-top`, and internal card
+    scrolling at the workflow-grid level so tall Scene and Compare widgets stay
+    inside the Firefox viewport without screen-specific overrides.
   - Fine-adjust feedback now tracks explicit modifier-key state across `keydown`
     / `keyup` / blur-driven drag lifecycles, and composite numeric controls keep
     `Tab` focus local without scroll jumps so Firefox drag tests stay

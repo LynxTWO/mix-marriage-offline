@@ -1429,6 +1429,13 @@ button:disabled {
   grid-column: span 12;
 }
 
+.workflow-grid > *,
+.session-grid > * {
+  min-width: 0;
+  min-height: 0;
+  scroll-margin-top: 1rem;
+}
+
 @media (min-width: 1101px) {
   .shell {
     grid-template-columns: minmax(24rem, 32rem) minmax(0, 1fr);
@@ -1562,14 +1569,17 @@ button:disabled {
     grid-column: span 1 !important;
   }
 
-  .workflow-grid > [data-widget-id="widget.compare.inputs"] {
-    max-height: calc(100vh - 8rem);
+  .workflow-grid > * {
+    max-height: calc(100vh - 7rem);
     overflow: auto;
+    overscroll-behavior: contain;
   }
 
-  .workflow-grid > [data-widget-id="widget.results.browser"] {
-    max-height: calc(100vh - 8rem);
-    overflow: auto;
+  .workflow-grid > * .details-block,
+  .workflow-grid > * .stage-output,
+  .workflow-grid > * .timeline-list,
+  .workflow-grid > * .scene-lock-rows {
+    min-height: 0;
   }
 
   .button-row,
