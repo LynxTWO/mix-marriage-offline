@@ -18,7 +18,9 @@ screenshots.
   give it a canonical state name.
 - Refresh screenshots only when a canonical state meaning changes: a new
   default layout, a different required panel, changed workflow emphasis, or a
-  materially different orientation surface for readers.
+  materially different orientation surface for readers. This also includes
+  intentional full-page layout changes that move those top-level orientation
+  surfaces enough to invalidate the committed baseline composition.
 - Do not commit native file pickers, OS dialogs, or other platform-specific
   transient states as baselines.
 - After intentional GUI changes, update both the screenshot baselines and the

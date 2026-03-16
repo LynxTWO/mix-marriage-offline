@@ -172,6 +172,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     / `keyup` / blur-driven drag lifecycles, and composite numeric controls keep
     `Tab` focus local without scroll jumps so Firefox drag tests stay
     deterministic.
+  - Layout overlap coverage now compares only top-level Tauri cards, so nested
+    readouts, sliders, and QA panes no longer trip false Firefox collisions
+    while the required card-level viewport checks stay intact.
+
+- Tauri manual screenshot CI alignment:
+  - The screenshot-diff workflow now regenerates the documented Tauri
+    canonical-state PNG set with `tools/capture_tauri_screenshots.py` plus the
+    matching Playwright/Node setup, instead of calling the legacy Tk capture
+    wrapper that only produced ignored non-canonical images.
+  - Refreshed the committed `tauri_results_loaded.png` baseline to match the
+    current Results-screen canonical loaded state after the newer inspection
+    layout changes.
 
 - Tauri GUI explainability + dynamics/spatial inspection parity:
   - The desktop Results screen now renders deterministic, artifact-backed gain

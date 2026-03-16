@@ -133,21 +133,33 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: gui/desktop-tauri/package-lock.json
+
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           allow-prereleases: true
 
-      - name: Install GUI + screenshot deps
+      - name: Install screenshot diff deps
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y xvfb python3-tk
           python -m pip install --upgrade pip
-          python -m pip install -e ".[gui,screenshots,pdf]"
+          python -m pip install -e ".[screenshots,pdf]"
+
+      - name: Install desktop screenshot frontend deps
+        working-directory: gui/desktop-tauri
+        run: npm ci
+
+      - name: Install Playwright browser
+        working-directory: gui/desktop-tauri
+        run: npx playwright install --with-deps firefox
 
       - name: Regenerate screenshots
         run: >
-          xvfb-run -a python tools/capture_gui_screenshots.py
+          python tools/capture_tauri_screenshots.py
           --out-dir /tmp/mmo-gui-screenshots
 
       - name: Upload generated screenshots for debugging

@@ -123,6 +123,11 @@ async function visibleWidgetBoxes(page: Parameters<typeof test>[0]["page"]): Pro
       if (!(node instanceof HTMLElement)) {
         return [];
       }
+      // Only compare top-level layout widgets. Nested controls intentionally sit
+      // inside their parent card and should not be treated as peer widgets.
+      if (node.parentElement?.closest("[data-widget-id]") !== null) {
+        return [];
+      }
       const style = window.getComputedStyle(node);
       if (style.display === "none" || style.visibility === "hidden" || node.hidden) {
         return [];

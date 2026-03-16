@@ -176,6 +176,8 @@ preview, final receipt, and what changed.
 
 Use this state when you want a quick answer to: what was written, what changed,
 and which artifact should I inspect next?
+Small vertical shifts lower on the page are acceptable as summary cards wrap,
+but the canonical loaded state still centers those same top-level surfaces.
 
 ![Results screen, loaded default state](assets/screenshots/tauri_results_loaded.png)
 

@@ -453,6 +453,10 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
 - [x] An isolated Tauri desktop scaffold now exists under `gui/desktop-tauri`,
       using a Vite frontend with cross-platform CI release-binary builds on
       Windows, macOS, and Linux.
+- [x] Canonical Tauri manual screenshots are regenerated in CI through
+      `tools/capture_tauri_screenshots.py` and diffed against
+      `docs/manual/assets/screenshots`, so screenshot regressions track the
+      shipped desktop workflow instead of the legacy Tk fallback GUI.
 - [x] The Tauri desktop app now stages a frozen `mmo` CLI as a sidecar, ships
       bundled MMO packaged data through that sidecar, and includes a Doctor
       screen that verifies `mmo --version`, bundled plugin validation, and
@@ -512,8 +516,10 @@ AI-readable layout export + validation (prevents overlaps/off-screen UI):
 - [x] A global GUI scale control exists (or responsive scaling equivalent) for
       laptop vs 4K displays. Done: Firefox design-system regression coverage now
       keeps required Tauri widgets inside viewport bounds at the mobile
-      breakpoint, and exact-entry -> drag flows retain visible fine-adjust
-      feedback without scroll-induced coordinate drift.
+      breakpoint, exact-entry -> drag flows retain visible fine-adjust
+      feedback without scroll-induced coordinate drift, and card-overlap
+      assertions now scope to top-level Tauri widgets so nested sub-controls do
+      not create false layout collisions.
 
 ## 4.9 DSP engine and plugin execution (Definition of Done)
 
