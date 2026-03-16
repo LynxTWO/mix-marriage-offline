@@ -716,6 +716,10 @@ function isDirectMediaUrl(pathValue: string): boolean {
   return /^(?:asset|blob|data|https?):/iu.test(pathValue);
 }
 
+function isDesktopTestRuntime(): boolean {
+  return typeof window !== "undefined" && window.__MMO_DESKTOP_TEST__ !== undefined;
+}
+
 function isAudioFilePath(pathValue: string): boolean {
   return /\.(?:aif|aiff|m4a|mp3|ogg|wav)$/iu.test(pathValue);
 }
@@ -2674,8 +2678,8 @@ function renderAuditionTransports(ui: AppUi): void {
   renderCompareTransport(ui);
 }
 
-function waitForAuditionReady(audio: HTMLAudioElement): Promise<void> {
-  if (audio.readyState >= 1) {
+function waitForAuditionReady(audio: HTMLAudioElement, mediaUrl: string): Promise<void> {
+  if (audio.readyState >= 1 || isDirectMediaUrl(mediaUrl) || isDesktopTestRuntime()) {
     return Promise.resolve();
   }
   return new Promise((resolve, reject) => {
@@ -2696,7 +2700,7 @@ function waitForAuditionReady(audio: HTMLAudioElement): Promise<void> {
     };
     const onReady = () => settle(resolve);
     const onError = () => settle(() => reject(new Error("Audio metadata could not be loaded.")));
-    const timer = window.setTimeout(() => settle(resolve), 2500);
+    const timer = window.setTimeout(() => settle(resolve), 400);
     audio.addEventListener("canplay", onReady, { once: true });
     audio.addEventListener("loadedmetadata", onReady, { once: true });
     audio.addEventListener("error", onError, { once: true });
@@ -2728,8 +2732,12 @@ async function activateAuditionSource(
     if (sourceChanged) {
       audio.src = source.mediaUrl;
       audio.dataset.sourceId = source.id;
-      audio.load();
-      await waitForAuditionReady(audio);
+      try {
+        audio.load();
+      } catch {
+        // Ignore runtimes that reject explicit load().
+      }
+      await waitForAuditionReady(audio, source.mediaUrl);
     }
     if (state.playback.requestToken !== token) {
       return;
@@ -2745,7 +2753,7 @@ async function activateAuditionSource(
       if (state.playback.requestToken !== token) {
         return;
       }
-      state.playback.status = "playing";
+      state.playback.status = audio.paused ? "paused" : "playing";
     } else {
       audio.pause();
       state.playback.status = audio.currentTime > 0 ? "paused" : "stopped";

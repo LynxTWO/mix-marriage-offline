@@ -230,6 +230,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - The desktop-tauri Playwright media stub now models `readyState`, `load()`,
     and readiness events so Firefox transport tests can leave `Loading` using
     the same HTMLMediaElement lifecycle contract as the app.
+  - Audition playback now treats readiness as advisory for direct URLs, desktop
+    test runtimes, and slow metadata so the transport resolves out of `Loading`
+    quickly instead of waiting for missing media events.
   - Fine-adjust feedback now tracks explicit modifier-key state across `keydown`
     / `keyup` / blur-driven drag lifecycles, and composite numeric controls keep
     `Tab` focus local without scroll jumps so Firefox drag tests stay
