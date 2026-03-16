@@ -21,9 +21,11 @@ import {
 import {
   artifactExists,
   buildWorkflowPaths,
+  dirname,
   executeMmo,
   isTauriRuntime,
   joinPath,
+  normalizePath,
   readArtifactJson,
   resolveSiblingPath,
   runMmoRpc,
@@ -41,6 +43,22 @@ type StageState = "fail" | "idle" | "pass" | "running";
 type CompareState = "A" | "B";
 type ArtifactTag = "ALL" | "AUDIO" | "JSON" | "QA" | "RECEIPT";
 type SceneLockStatusTone = "error" | "info" | "ok";
+type WorkflowPathKey =
+  | "workspace"
+  | "project"
+  | "projectValidation"
+  | "report"
+  | "scanReport"
+  | "stemsMap"
+  | "busPlan"
+  | "busPlanCsv"
+  | "scene"
+  | "sceneLint"
+  | "renderDir"
+  | "renderManifest"
+  | "renderReceipt"
+  | "renderQa"
+  | "compareReport";
 
 type JsonObject = Record<string, unknown>;
 
@@ -83,9 +101,17 @@ type ArtifactEntry = {
   id: string;
   path: string;
   previewText: string;
+  resolvedPath: string;
   summary: string;
   tag: ArtifactTag;
   title: string;
+};
+
+type QuickActionButtonSpec = {
+  disabled?: boolean;
+  label: string;
+  onClick: () => void;
+  title?: string;
 };
 
 type ChangeSummaryChip = {
@@ -162,6 +188,7 @@ type SceneLocksState = {
 };
 
 type AppUi = {
+  artifactPreviewActions: HTMLElement;
   abButtons: HTMLButtonElement[];
   artifactPaths: HTMLElement;
   artifactPreviewDelta: HTMLElement;
@@ -246,10 +273,12 @@ type AppUi = {
     phaseCorrelationMeter: HTMLElement;
     phaseCorrelationValue: HTMLElement;
     phaseNote: HTMLElement;
+    qaActions: HTMLElement;
     qaText: HTMLElement;
     readoutNote: HTMLElement;
     readoutPrimary: HTMLElement;
     readoutSecondary: HTMLElement;
+    summaryActions: HTMLElement;
     transferCurvePath: SVGPathElement;
     transferNote: HTMLElement;
     vectorscopePath: SVGPathElement;
@@ -384,6 +413,8 @@ const state = {
   timelineCount: 0,
 };
 
+let designController: ReturnType<typeof initDesignSystem> | null = null;
+
 function requiredElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
   if (element === null) {
@@ -394,6 +425,7 @@ function requiredElement<T extends Element>(selector: string): T {
 
 function getUi(): AppUi {
   return {
+    artifactPreviewActions: requiredElement("#artifact-preview-actions"),
     abButtons: Array.from(document.querySelectorAll<HTMLButtonElement>("#ab-toggle [data-ab-state]")),
     artifactPaths: requiredElement("#artifact-paths"),
     artifactPreviewDelta: requiredElement("#artifact-preview-delta"),
@@ -506,10 +538,12 @@ function getUi(): AppUi {
       phaseCorrelationMeter: requiredElement("#results-phase-correlation-meter"),
       phaseCorrelationValue: requiredElement("#results-phase-correlation-value"),
       phaseNote: requiredElement("#results-phase-note"),
+      qaActions: requiredElement("#results-qa-actions"),
       qaText: requiredElement("#results-qa-text"),
       readoutNote: requiredElement("#results-readout-note"),
       readoutPrimary: requiredElement("#results-readout-primary"),
       readoutSecondary: requiredElement("#results-readout-secondary"),
+      summaryActions: requiredElement("#results-summary-actions"),
       transferCurvePath: requiredElement("#results-transfer-curve-path"),
       transferNote: requiredElement("#results-transfer-note"),
       vectorscopePath: requiredElement("#results-vectorscope-path"),
@@ -742,6 +776,78 @@ function serializeJson(value: unknown, maxLines: number): string {
   return truncateLines(JSON.stringify(value, null, 2), maxLines);
 }
 
+const WORKSPACE_ROOT_ARTIFACT_LEAVES = new Set([
+  "bus_plan.json",
+  "bus_plan.summary.csv",
+  "compare_report.json",
+  "compare_report.pdf",
+  "render_manifest.json",
+  "render_qa.json",
+  "report.json",
+  "report.scan.json",
+  "safe_render_receipt.json",
+  "scene.json",
+  "scene_lint.json",
+  "stems_map.json",
+  "validation.json",
+]);
+
+function basename(pathValue: string): string {
+  const normalized = normalizePath(pathValue);
+  if (!normalized) {
+    return "";
+  }
+  const separatorIndex = normalized.lastIndexOf("/");
+  if (separatorIndex < 0) {
+    return normalized;
+  }
+  return normalized.slice(separatorIndex + 1);
+}
+
+function isAbsoluteLikePath(pathValue: string): boolean {
+  const normalized = normalizePath(pathValue);
+  if (!normalized) {
+    return false;
+  }
+  return (
+    normalized.startsWith("/")
+    || /^[A-Za-z]:\//u.test(normalized)
+    || normalized.startsWith("//")
+  );
+}
+
+function workspaceDirFromArtifactPath(pathValue: string): string {
+  const normalized = normalizePath(pathValue);
+  if (!normalized) {
+    return "";
+  }
+  const lower = normalized.toLowerCase();
+  const renderMarker = "/render/";
+  const renderIndex = lower.lastIndexOf(renderMarker);
+  if (renderIndex > 0) {
+    return normalized.slice(0, renderIndex);
+  }
+  if (lower.endsWith("/render")) {
+    return dirname(normalized);
+  }
+  const leaf = basename(normalized).toLowerCase();
+  if (WORKSPACE_ROOT_ARTIFACT_LEAVES.has(leaf)) {
+    return dirname(normalized);
+  }
+  return normalized;
+}
+
+function resolveArtifactPath(pathValue: string, paths: WorkflowPaths | null): string {
+  const normalized = normalizePath(pathValue);
+  if (!normalized) {
+    return "";
+  }
+  if (isAbsoluteLikePath(normalized) || paths === null) {
+    return normalized;
+  }
+  return joinPath(paths.workspaceDir, normalized);
+}
+
 function setStageStatus(element: HTMLElement, stateValue: StageState, label: string): void {
   element.textContent = label;
   element.className = `stage-status stage-status-${stateValue}`;
@@ -818,6 +924,51 @@ function clearTimeline(ui: AppUi): void {
 
 function updateRuntimeMessage(ui: AppUi, text: string): void {
   ui.runtimeMessage.textContent = text;
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (
+    typeof navigator !== "undefined"
+    && navigator.clipboard
+    && typeof navigator.clipboard.writeText === "function"
+  ) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const fallbackInput = document.createElement("textarea");
+  fallbackInput.value = text;
+  fallbackInput.setAttribute("readonly", "");
+  fallbackInput.style.opacity = "0";
+  fallbackInput.style.pointerEvents = "none";
+  fallbackInput.style.position = "fixed";
+  fallbackInput.style.top = "-1000px";
+  document.body.appendChild(fallbackInput);
+  fallbackInput.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(fallbackInput);
+  if (!copied) {
+    throw new Error("Clipboard write is unavailable in this desktop context.");
+  }
+}
+
+function renderQuickActionButtons(
+  container: HTMLElement,
+  buttons: QuickActionButtonSpec[],
+): void {
+  container.innerHTML = "";
+  for (const buttonSpec of buttons) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button-secondary button-compact";
+    button.textContent = buttonSpec.label;
+    button.disabled = buttonSpec.disabled === true;
+    if (buttonSpec.title) {
+      button.title = buttonSpec.title;
+    }
+    button.addEventListener("click", buttonSpec.onClick);
+    container.append(button);
+  }
 }
 
 function hasLoadedWorkspaceContext(ui: AppUi): boolean {
@@ -905,6 +1056,157 @@ function renderRecentPaths(ui: AppUi): void {
   });
 }
 
+function setWorkspaceInput(ui: AppUi, workspaceDir: string): void {
+  const normalized = normalizePath(workspaceDir);
+  if (!normalized || ui.inputs.workspaceDir.value.trim() === normalized) {
+    return;
+  }
+  ui.inputs.workspaceDir.value = normalized;
+  commitRecentPath(ui, "workspaceDirs", normalized);
+  resetSceneLocksState("Inspect the project scene locks to edit deterministic overrides.");
+}
+
+function setCompareInput(
+  ui: AppUi,
+  side: "aPath" | "bPath",
+  value: string,
+): void {
+  const normalized = normalizePath(value);
+  ui.compareInputs[side].value = normalized;
+  if (normalized) {
+    commitRecentPath(ui, "compareInputs", normalized);
+  }
+}
+
+function openResultsArtifact(ui: AppUi, artifactId: string, message: string): void {
+  state.selectedArtifactId = artifactId;
+  designController?.setScreen("results");
+  renderResults(ui);
+  updateRuntimeMessage(ui, message);
+}
+
+async function copyArtifactPath(ui: AppUi, pathValue: string, label: string): Promise<void> {
+  const normalized = normalizePath(pathValue);
+  if (!normalized) {
+    updateRuntimeMessage(ui, `No ${label.toLowerCase()} path is available to copy.`);
+    return;
+  }
+  await copyTextToClipboard(normalized);
+  updateRuntimeMessage(ui, `${label} path copied to the clipboard.`);
+}
+
+async function revealArtifactPath(ui: AppUi, pathValue: string, label: string): Promise<void> {
+  const normalized = normalizePath(pathValue);
+  if (!normalized) {
+    updateRuntimeMessage(ui, `No ${label.toLowerCase()} path is available to reveal.`);
+    return;
+  }
+  try {
+    await revealItemInDir(normalized);
+    updateRuntimeMessage(ui, `Revealed ${label.toLowerCase()} in the file manager.`);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    updateRuntimeMessage(ui, `Unable to reveal ${label.toLowerCase()}: ${detail}`);
+  }
+}
+
+function prepareCompareInputsFromCandidate(
+  ui: AppUi,
+  candidatePath: string,
+): { message: string; ready: boolean } {
+  const candidate = normalizePath(candidatePath);
+  if (!candidate) {
+    throw new Error("No compare-ready artifact path is available.");
+  }
+
+  let aPath = normalizePath(ui.compareInputs.aPath.value);
+  let bPath = normalizePath(ui.compareInputs.bPath.value);
+
+  if (!aPath && !bPath) {
+    aPath = candidate;
+  } else if (aPath === candidate || bPath === candidate) {
+    // Keep the selected artifact on the side where it already lives.
+  } else if (!aPath) {
+    aPath = candidate;
+  } else if (!bPath) {
+    bPath = candidate;
+  } else {
+    aPath = candidate;
+  }
+
+  setCompareInput(ui, "aPath", aPath);
+  setCompareInput(ui, "bPath", bPath);
+
+  const ready = Boolean(aPath && bPath);
+  if (!ready) {
+    return {
+      message: `Selected ${candidate} for compare. Pick the other side to rerun compare.`,
+      ready: false,
+    };
+  }
+  if (aPath === candidate && bPath) {
+    return {
+      message: `Rerunning compare with ${candidate} as A against the current B input.`,
+      ready: true,
+    };
+  }
+  if (bPath === candidate && aPath) {
+    return {
+      message: `Rerunning compare with ${candidate} as B against the current A input.`,
+      ready: true,
+    };
+  }
+  return {
+    message: `Rerunning compare from ${candidate}.`,
+    ready: true,
+  };
+}
+
+function queueCompareFromArtifact(ui: AppUi, candidatePath: string): void {
+  const candidate = normalizePath(candidatePath);
+  if (!candidate) {
+    updateRuntimeMessage(ui, "No compare-ready artifact path is available.");
+    return;
+  }
+
+  const workspaceDir = workspaceDirFromArtifactPath(candidate);
+  if (workspaceDir) {
+    setWorkspaceInput(ui, workspaceDir);
+  }
+
+  designController?.setScreen("compare");
+  const prepared = prepareCompareInputsFromCandidate(ui, candidate);
+  renderAll(ui);
+  if (!prepared.ready) {
+    updateRuntimeMessage(ui, prepared.message);
+    return;
+  }
+  void runWithBusy(ui, "compare", async () => {
+    updateRuntimeMessage(ui, prepared.message);
+    await runCompare(ui);
+  }, true);
+}
+
+function queueRenderFromWorkspace(ui: AppUi, workspaceDir: string): void {
+  const normalized = normalizePath(workspaceDir);
+  if (!normalized) {
+    updateRuntimeMessage(ui, "No render-ready workspace path is available.");
+    return;
+  }
+  if (designController === null) {
+    updateRuntimeMessage(ui, "Render controls are not ready yet.");
+    return;
+  }
+  const controller = designController;
+  setWorkspaceInput(ui, normalized);
+  controller.setScreen("render");
+  renderAll(ui);
+  void runWithBusy(ui, "render", async () => {
+    updateRuntimeMessage(ui, `Rerunning render from ${normalized}.`);
+    await runRender(ui, controller);
+  }, true);
+}
+
 async function browseAndLoadJson(
   input: HTMLInputElement,
   options: {
@@ -968,30 +1270,203 @@ function buildRenderCancelPath(paths: WorkflowPaths): string {
   return joinPath(paths.renderCancelDir, `safe_render.cancel.${Date.now().toString(36)}.json`);
 }
 
-function collectInputs(ui: AppUi): {
-  layoutStandard: string;
-  paths: WorkflowPaths;
-  renderTarget: string;
-  sceneLocksPath: string;
-  stemsDir: string;
-  workspaceDir: string;
-} {
-  const stemsDir = ui.inputs.stemsDir.value.trim();
+function collectWorkspacePaths(ui: AppUi): { paths: WorkflowPaths; workspaceDir: string } {
   const workspaceDir = ui.inputs.workspaceDir.value.trim();
-  if (!stemsDir) {
-    throw new Error("Enter a stems folder path first.");
-  }
   if (!workspaceDir) {
     throw new Error("Enter a workspace folder path first.");
   }
   return {
-    layoutStandard: ui.inputs.layoutStandard.value,
     paths: buildWorkflowPaths(workspaceDir),
-    renderTarget: ui.inputs.renderTarget.value,
-    sceneLocksPath: ui.inputs.sceneLocksPath.value.trim(),
-    stemsDir,
     workspaceDir,
   };
+}
+
+function collectWorkspaceAndStems(ui: AppUi): {
+  paths: WorkflowPaths;
+  stemsDir: string;
+  workspaceDir: string;
+} {
+  const stemsDir = ui.inputs.stemsDir.value.trim();
+  if (!stemsDir) {
+    throw new Error("Enter a stems folder path first.");
+  }
+  return {
+    ...collectWorkspacePaths(ui),
+    stemsDir,
+  };
+}
+
+function collectSceneInputs(ui: AppUi): {
+  paths: WorkflowPaths;
+  sceneLocksPath: string;
+  stemsDir: string;
+  workspaceDir: string;
+} {
+  return {
+    ...collectWorkspaceAndStems(ui),
+    sceneLocksPath: ui.inputs.sceneLocksPath.value.trim(),
+  };
+}
+
+function collectRenderInputs(ui: AppUi): {
+  layoutStandard: string;
+  paths: WorkflowPaths;
+  renderTarget: string;
+  sceneLocksPath: string;
+  workspaceDir: string;
+} {
+  return {
+    ...collectWorkspacePaths(ui),
+    layoutStandard: ui.inputs.layoutStandard.value,
+    renderTarget: ui.inputs.renderTarget.value,
+    sceneLocksPath: ui.inputs.sceneLocksPath.value.trim(),
+  };
+}
+
+function collectCompareInputs(ui: AppUi): {
+  aPath: string;
+  bPath: string;
+  paths: WorkflowPaths;
+  workspaceDir: string;
+} {
+  return {
+    ...collectWorkspacePaths(ui),
+    aPath: ui.compareInputs.aPath.value.trim(),
+    bPath: ui.compareInputs.bPath.value.trim(),
+  };
+}
+
+function buildResultsOpenButtons(
+  ui: AppUi,
+  options: {
+    labels?: Partial<Record<"manifest" | "qa" | "receipt", string>>;
+    skip?: string[];
+  } = {},
+): QuickActionButtonSpec[] {
+  const skip = new Set(options.skip ?? []);
+  const hasWorkspace = ui.inputs.workspaceDir.value.trim().length > 0;
+  const labels = {
+    manifest: options.labels?.manifest ?? "Manifest",
+    qa: options.labels?.qa ?? "QA",
+    receipt: options.labels?.receipt ?? "Receipt",
+  };
+  const buttons: QuickActionButtonSpec[] = [];
+  if (!skip.has("receipt")) {
+    buttons.push({
+      disabled: !hasWorkspace && state.artifacts.receipt === null && !state.artifactSources.receiptPath,
+      label: labels.receipt,
+      onClick: () => {
+        openResultsArtifact(ui, "receipt", "Opened safe-render receipt.");
+      },
+    });
+  }
+  if (!skip.has("manifest")) {
+    buttons.push({
+      disabled: !hasWorkspace && state.artifacts.manifest === null && !state.artifactSources.manifestPath,
+      label: labels.manifest,
+      onClick: () => {
+        openResultsArtifact(ui, "manifest", "Opened render manifest.");
+      },
+    });
+  }
+  if (!skip.has("qa")) {
+    buttons.push({
+      disabled: !hasWorkspace && state.artifacts.qa === null && !state.artifactSources.qaPath,
+      label: labels.qa,
+      onClick: () => {
+        openResultsArtifact(ui, "qa", "Opened render QA.");
+      },
+    });
+  }
+  return buttons;
+}
+
+function buildPathRowActionButtons(
+  ui: AppUi,
+  label: string,
+  pathKey: WorkflowPathKey,
+  pathValue: string,
+  paths: WorkflowPaths,
+): QuickActionButtonSpec[] {
+  const buttons: QuickActionButtonSpec[] = [];
+  buttons.push({
+    label: "Copy",
+    onClick: () => {
+      void copyArtifactPath(ui, pathValue, label);
+    },
+  });
+  buttons.push({
+    label: "Reveal",
+    onClick: () => {
+      void revealArtifactPath(ui, pathValue, label);
+    },
+  });
+
+  if (pathKey === "workspace" || pathKey === "report" || pathKey === "scene") {
+    buttons.push(
+      ...buildResultsOpenButtons(ui),
+      {
+        label: "Render",
+        onClick: () => {
+          const workspaceDir = pathKey === "workspace" ? pathValue : dirname(pathValue);
+          queueRenderFromWorkspace(ui, workspaceDir);
+        },
+      },
+    );
+  }
+
+  if (pathKey === "report") {
+    buttons.push({
+      label: "Compare",
+      onClick: () => {
+        queueCompareFromArtifact(ui, pathValue);
+      },
+    });
+  }
+
+  if (pathKey === "renderManifest" || pathKey === "renderReceipt" || pathKey === "renderQa") {
+    const skip = pathKey === "renderManifest"
+      ? ["manifest"]
+      : (pathKey === "renderReceipt" ? ["receipt"] : ["qa"]);
+    buttons.push(...buildResultsOpenButtons(ui, { skip }));
+    buttons.push({
+      label: "Compare",
+      onClick: () => {
+        queueCompareFromArtifact(ui, paths.workspaceDir);
+      },
+    });
+  }
+
+  return buttons;
+}
+
+function renderPathRow(
+  ui: AppUi,
+  container: HTMLElement,
+  label: string,
+  pathValue: string,
+  pathKey: WorkflowPathKey,
+  paths: WorkflowPaths,
+): void {
+  const row = document.createElement("div");
+  row.className = "path-row";
+
+  const dt = document.createElement("dt");
+  dt.textContent = label;
+
+  const dd = document.createElement("dd");
+  dd.textContent = pathValue;
+
+  row.append(dt, dd);
+  const actions = buildPathRowActionButtons(ui, label, pathKey, pathValue, paths);
+  if (actions.length > 0) {
+    const actionRow = document.createElement("div");
+    actionRow.className = "path-actions";
+    renderQuickActionButtons(actionRow, actions);
+    row.append(actionRow);
+  }
+
+  container.append(row);
 }
 
 function renderExpectedPaths(ui: AppUi): void {
@@ -1014,36 +1489,28 @@ function renderExpectedPaths(ui: AppUi): void {
   }
 
   const paths = buildWorkflowPaths(workspaceDir);
-  const rows: Array<[string, string]> = [
-    ["workspace", paths.workspaceDir],
-    ["project", paths.projectDir],
-    ["project validation", paths.projectValidationPath],
-    ["analysis report", paths.reportPath],
-    ["analysis scan", paths.scanReportPath],
-    ["stems map", paths.stemsMapPath],
-    ["bus plan", paths.busPlanPath],
-    ["bus plan csv", paths.busPlanCsvPath],
-    ["scene", paths.scenePath],
-    ["scene lint", paths.sceneLintPath],
-    ["render dir", paths.renderDir],
-    ["render manifest", paths.renderManifestPath],
-    ["safe-render receipt", paths.renderReceiptPath],
-    ["render qa", paths.renderQaPath],
-    ["compare report", paths.compareReportPath],
+  const rows: Array<{ key: WorkflowPathKey; label: string; value: string }> = [
+    { key: "workspace", label: "workspace", value: paths.workspaceDir },
+    { key: "project", label: "project", value: paths.projectDir },
+    { key: "projectValidation", label: "project validation", value: paths.projectValidationPath },
+    { key: "report", label: "analysis report", value: paths.reportPath },
+    { key: "scanReport", label: "analysis scan", value: paths.scanReportPath },
+    { key: "stemsMap", label: "stems map", value: paths.stemsMapPath },
+    { key: "busPlan", label: "bus plan", value: paths.busPlanPath },
+    { key: "busPlanCsv", label: "bus plan csv", value: paths.busPlanCsvPath },
+    { key: "scene", label: "scene", value: paths.scenePath },
+    { key: "sceneLint", label: "scene lint", value: paths.sceneLintPath },
+    { key: "renderDir", label: "render dir", value: paths.renderDir },
+    { key: "renderManifest", label: "render manifest", value: paths.renderManifestPath },
+    { key: "renderReceipt", label: "safe-render receipt", value: paths.renderReceiptPath },
+    { key: "renderQa", label: "render qa", value: paths.renderQaPath },
+    { key: "compareReport", label: "compare report", value: paths.compareReportPath },
   ];
 
-  for (const [label, value] of rows) {
-    const row = document.createElement("div");
-    row.className = "path-row";
-    const dt = document.createElement("dt");
-    dt.textContent = label;
-    const dd = document.createElement("dd");
-    dd.textContent = value;
-    row.append(dt, dd);
-    ui.artifactPaths.append(row);
-
-    if (label === "project" || label === "project validation") {
-      ui.validate.artifactPaths.append(row.cloneNode(true));
+  for (const row of rows) {
+    renderPathRow(ui, ui.artifactPaths, row.label, row.value, row.key, paths);
+    if (row.key === "project" || row.key === "projectValidation") {
+      renderPathRow(ui, ui.validate.artifactPaths, row.label, row.value, row.key, paths);
     }
   }
 
@@ -1693,10 +2160,14 @@ function buildArtifactEntries(paths: WorkflowPaths | null): ArtifactEntry[] {
     if (!path && payload === null) {
       return;
     }
+    const resolvedPath = resolveArtifactPath(path, paths);
     entries.push({
       id,
-      path,
-      previewText: serializeJson(payload, state.nerdView ? 60 : Math.max(12, state.resultsDetailLevel * 3)),
+      path: resolvedPath || path,
+      previewText: payload === null
+        ? "Artifact not loaded yet. Refresh Results or import the artifact to inspect it here."
+        : serializeJson(payload, state.nerdView ? 60 : Math.max(12, state.resultsDetailLevel * 3)),
+      resolvedPath,
       summary,
       tag,
       title,
@@ -1738,13 +2209,16 @@ function buildArtifactEntries(paths: WorkflowPaths | null): ArtifactEntry[] {
 
   for (const output of flattenManifestOutputs(state.artifacts.manifest)) {
     const outputId = asString(output.output_id) || asString(output.file_path);
+    const rawPath = asString(output.file_path);
+    const resolvedPath = resolveArtifactPath(rawPath, paths);
     entries.push({
       id: `audio:${outputId}`,
-      path: asString(output.file_path),
+      path: resolvedPath || rawPath,
       previewText: artifactPreviewForOutput(output),
+      resolvedPath,
       summary: `${asString(output.renderer_id) || "renderer"} · ${asString(output.format) || "audio"}`,
       tag: "AUDIO",
-      title: asString(output.file_path) || outputId,
+      title: rawPath || outputId,
     });
   }
 
@@ -2596,6 +3070,80 @@ function renderCompare(ui: AppUi): void {
   ui.compareJsonPreview.textContent = serializeJson(compare, state.nerdView ? 70 : 18);
 }
 
+function resultsCompareCandidate(
+  selected: ArtifactEntry | null,
+  paths: WorkflowPaths | null,
+): string {
+  if (selected === null || selected.id === "compare") {
+    return "";
+  }
+  if (selected.id === "receipt" || selected.id === "manifest" || selected.id === "qa" || selected.id.startsWith("audio:")) {
+    return paths?.workspaceDir || workspaceDirFromArtifactPath(selected.resolvedPath || selected.path);
+  }
+  return "";
+}
+
+function renderResultsActionRows(
+  ui: AppUi,
+  selected: ArtifactEntry | null,
+  paths: WorkflowPaths | null,
+): void {
+  const previewButtons: QuickActionButtonSpec[] = [];
+  const selectedPath = selected?.resolvedPath || selected?.path || "";
+  if (selected !== null && selectedPath) {
+    previewButtons.push(
+      {
+        label: "Copy path",
+        onClick: () => {
+          void copyArtifactPath(ui, selectedPath, selected.title);
+        },
+      },
+      {
+        label: "Reveal",
+        onClick: () => {
+          void revealArtifactPath(ui, selectedPath, selected.title);
+        },
+      },
+    );
+  }
+  if (selected !== null) {
+    const skip = selected.id === "receipt" || selected.id === "manifest" || selected.id === "qa"
+      ? [selected.id]
+      : [];
+    previewButtons.push(...buildResultsOpenButtons(ui, { skip }));
+  }
+  const compareCandidate = resultsCompareCandidate(selected, paths);
+  if (compareCandidate) {
+    previewButtons.push({
+      label: "Compare",
+      onClick: () => {
+        queueCompareFromArtifact(ui, compareCandidate);
+      },
+    });
+  }
+  renderQuickActionButtons(ui.artifactPreviewActions, previewButtons);
+
+  renderQuickActionButtons(
+    ui.results.summaryActions,
+    buildResultsOpenButtons(ui, {
+      labels: {
+        manifest: "Open manifest",
+        qa: "Open QA",
+        receipt: "Open receipt",
+      },
+    }),
+  );
+  renderQuickActionButtons(ui.results.qaActions, [{
+    disabled: ui.inputs.workspaceDir.value.trim().length === 0
+      && state.artifacts.qa === null
+      && !state.artifactSources.qaPath,
+    label: "Open QA",
+    onClick: () => {
+      openResultsArtifact(ui, "qa", "Opened render QA.");
+    },
+  }]);
+}
+
 function renderResults(ui: AppUi): void {
   const paths = ui.inputs.workspaceDir.value.trim()
     ? buildWorkflowPaths(ui.inputs.workspaceDir.value.trim())
@@ -2671,6 +3219,7 @@ function renderResults(ui: AppUi): void {
   ui.results.whatChangedText.textContent = renderWhatChanged(state.artifacts.receipt, state.artifacts.manifest);
   ui.results.qaText.textContent = renderQaText(state.artifacts.qa);
   ui.results.jsonPreview.textContent = selected?.previewText ?? "No artifact selected.";
+  renderResultsActionRows(ui, selected, paths);
 }
 
 function renderAnalyze(ui: AppUi): void {
@@ -3021,6 +3570,10 @@ async function refreshResultsArtifacts(paths: WorkflowPaths): Promise<void> {
 }
 
 function compareQaPath(candidatePath: string): string {
+  const workspaceDir = workspaceDirFromArtifactPath(candidatePath);
+  if (workspaceDir) {
+    return joinPath(workspaceDir, "render_qa.json");
+  }
   return resolveSiblingPath(candidatePath, "render_qa.json");
 }
 
@@ -3080,7 +3633,7 @@ async function runDoctor(ui: AppUi): Promise<DoctorRunResult> {
 }
 
 async function runValidate(ui: AppUi, controller: ReturnType<typeof initDesignSystem>): Promise<void> {
-  const { paths, stemsDir } = collectInputs(ui);
+  const { paths, stemsDir } = collectWorkspaceAndStems(ui);
   setStageStatus(ui.stages.validate, "running", "Running");
   ui.output.validate.textContent = `Refreshing project scaffold in\n${paths.projectDir}`;
   updateRuntimeMessage(ui, "Validating project workspace artifacts.");
@@ -3120,7 +3673,7 @@ async function runValidate(ui: AppUi, controller: ReturnType<typeof initDesignSy
 }
 
 async function runAnalyze(ui: AppUi, controller: ReturnType<typeof initDesignSystem>): Promise<void> {
-  const { paths, stemsDir } = collectInputs(ui);
+  const { paths, stemsDir } = collectWorkspaceAndStems(ui);
   setStageStatus(ui.stages.analyze, "running", "Running");
   ui.output.analyze.textContent = `Analyzing stems into\n${paths.reportPath}`;
   updateRuntimeMessage(ui, "Analyzing stems with the packaged MMO sidecar.");
@@ -3151,7 +3704,7 @@ async function runAnalyze(ui: AppUi, controller: ReturnType<typeof initDesignSys
 }
 
 async function runScene(ui: AppUi, controller: ReturnType<typeof initDesignSystem>): Promise<void> {
-  const { paths, sceneLocksPath, stemsDir } = collectInputs(ui);
+  const { paths, sceneLocksPath, stemsDir } = collectSceneInputs(ui);
   setStageStatus(ui.stages.scene, "running", "Running");
   ui.output.scene.textContent = `Building scene artifacts in\n${paths.workspaceDir}`;
   updateRuntimeMessage(ui, "Building stems map, bus plan, scene.json, and scene_lint.json.");
@@ -3235,7 +3788,7 @@ async function runScene(ui: AppUi, controller: ReturnType<typeof initDesignSyste
 }
 
 async function runRender(ui: AppUi, controller: ReturnType<typeof initDesignSystem>): Promise<void> {
-  const { layoutStandard, paths, renderTarget, sceneLocksPath } = collectInputs(ui);
+  const { layoutStandard, paths, renderTarget, sceneLocksPath } = collectRenderInputs(ui);
   setStageStatus(ui.stages.render, "running", "Running");
   state.currentCancelPath = buildRenderCancelPath(paths);
   applyBusyState(ui);
@@ -3301,9 +3854,7 @@ async function runRender(ui: AppUi, controller: ReturnType<typeof initDesignSyst
 }
 
 async function runCompare(ui: AppUi): Promise<void> {
-  const { paths } = collectInputs(ui);
-  const aPath = ui.compareInputs.aPath.value.trim();
-  const bPath = ui.compareInputs.bPath.value.trim();
+  const { aPath, bPath, paths } = collectCompareInputs(ui);
   if (!aPath || !bPath) {
     throw new Error("Enter both compare input paths first.");
   }
@@ -3770,6 +4321,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const controller = initDesignSystem({
     defaultScreen: "validate",
   });
+  designController = controller;
   const ui = getUi();
 
   for (const stage of Object.values(ui.stages)) {
@@ -3851,7 +4403,7 @@ window.addEventListener("DOMContentLoaded", () => {
     ui.browseButtons.compareAFolder,
     ui.compareInputs.aPath,
     "compareInputs",
-    "Pick compare A render folder",
+    "Pick compare A workspace folder",
   );
   bindFilePathBrowseButton(
     ui,
@@ -3869,7 +4421,7 @@ window.addEventListener("DOMContentLoaded", () => {
     ui.browseButtons.compareBFolder,
     ui.compareInputs.bPath,
     "compareInputs",
-    "Pick compare B render folder",
+    "Pick compare B workspace folder",
   );
 
   ui.nerdView.toggle.addEventListener("click", () => {

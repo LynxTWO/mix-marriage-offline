@@ -52,6 +52,9 @@ class TestTauriDesktopWorkflow(unittest.TestCase):
             "render-cancel-button",
             "results-refresh-button",
             "workspace-reveal-button",
+            "artifact-preview-actions",
+            "results-summary-actions",
+            "results-qa-actions",
             "timeline-list",
             "scene-locks-inspect-button",
             "scene-locks-save-button",
@@ -85,6 +88,21 @@ class TestTauriDesktopWorkflow(unittest.TestCase):
         self.assertIn('scenePath: joinPath(normalizedWorkspaceDir, "scene.json")', source)
         self.assertIn('compareReportPath: joinPath(normalizedWorkspaceDir, "compare_report.json")', source)
         self.assertIn("readTextFile", source)
+
+    def test_typescript_results_quick_actions_are_wired(self) -> None:
+        frontend_path = _TAURI_ROOT / "src" / "main.ts"
+        source = frontend_path.read_text(encoding="utf-8")
+
+        self.assertIn("copyTextToClipboard", source)
+        self.assertIn("queueCompareFromArtifact", source)
+        self.assertIn("queueRenderFromWorkspace", source)
+        self.assertIn("buildResultsOpenButtons", source)
+        self.assertIn("renderResultsActionRows", source)
+        self.assertIn('label: "Copy path"', source)
+        self.assertIn('label: "Reveal"', source)
+        self.assertIn('receipt: "Open receipt"', source)
+        self.assertIn('qa: "Open QA"', source)
+        self.assertIn('label: "Open QA"', source)
 
     def test_packaged_smoke_automation_contract_exists(self) -> None:
         frontend_path = _TAURI_ROOT / "src" / "main.ts"

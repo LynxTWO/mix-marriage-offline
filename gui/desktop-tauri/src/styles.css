@@ -1106,6 +1106,17 @@ button:disabled {
   gap: calc(var(--space-base) * 0.75);
 }
 
+.path-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--space-base) * 0.45);
+  align-items: center;
+}
+
+.path-actions-inline {
+  justify-content: end;
+}
+
 .path-row {
   display: grid;
   gap: calc(var(--space-base) * 0.25);

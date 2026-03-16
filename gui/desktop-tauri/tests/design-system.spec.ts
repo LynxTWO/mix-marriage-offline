@@ -550,6 +550,16 @@ test.describe("desktop workflow design system", () => {
     await expect(page.locator("#results-phase-correlation-value")).toContainText("0.14 corr");
     await expect(page.locator("#results-transfer-note")).toContainText("threshold=-20.5 dB");
     await expect(page.locator("#results-vectorscope-summary")).toContainText("side/mid=-2.8 dB");
+    await expect(page.locator("#results-summary-actions")).toContainText("Open receipt");
+    await expect(page.locator("#results-qa-actions")).toContainText("Open QA");
+
+    await page.getByRole("button", { name: /render\/2_0\/mix\.wav/i }).click();
+    await expect(page.locator("#artifact-preview-actions")).toContainText("Copy path");
+    await expect(page.locator("#artifact-preview-actions")).toContainText("Reveal");
+    await expect(page.locator("#artifact-preview-actions")).toContainText("Compare");
+
+    await page.locator("#results-qa-actions").getByRole("button", { name: "Open QA" }).click();
+    await expect(page.locator("#artifact-preview-name")).toContainText("Render QA");
 
     await page.getByText("Dynamics and stereo inspection", { exact: true }).click();
     await page.locator("#results-phase-hint-trigger").focus();

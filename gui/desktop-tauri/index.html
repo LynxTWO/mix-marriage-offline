@@ -667,6 +667,11 @@
                   Load or generate render artifacts to inspect them here.
                 </p>
                 <p id="artifact-preview-delta" class="control-caption"></p>
+                <div
+                  id="artifact-preview-actions"
+                  class="path-actions"
+                  aria-label="Artifact quick actions"
+                ></div>
               </div>
             </div>
           </article>
@@ -693,6 +698,11 @@
               <p id="results-readout-primary" class="readout-primary">No receipt loaded</p>
               <p id="results-readout-secondary" class="readout-secondary">Rendered outputs and QA state will appear here.</p>
               <p id="results-readout-note" class="control-caption">The readout stays anchored to safe_render_receipt.json.</p>
+              <div
+                id="results-summary-actions"
+                class="path-actions"
+                aria-label="Results summary quick actions"
+              ></div>
             </div>
             <div class="section-divider" aria-hidden="true"></div>
             <div
@@ -808,7 +818,17 @@
                 </section>
 
                 <section class="inspection-panel" data-widget-id="widget.results.qa">
-                  <p class="signal-label">Render QA</p>
+                  <div class="control-head control-head-compact">
+                    <div>
+                      <p class="signal-label">Render QA</p>
+                      <p class="control-why">Jump straight into the written QA artifact from the inspection card.</p>
+                    </div>
+                    <div
+                      id="results-qa-actions"
+                      class="path-actions path-actions-inline"
+                      aria-label="Render QA quick actions"
+                    ></div>
+                  </div>
                   <pre class="stage-output compact-output" id="results-qa-text">No render QA loaded.</pre>
                 </section>
               </div>
@@ -961,17 +981,17 @@
             <p class="field-label">Inputs</p>
             <div class="field">
               <div class="field-heading">
-                <span class="field-label">A report or render artifact path</span>
+                <span class="field-label">A workspace, report, or render artifact path</span>
                 <div class="field-actions">
                   <button type="button" id="compare-a-file-browse-button" class="button-secondary button-compact" data-hit-target="true">
                     JSON...
                   </button>
                   <button type="button" id="compare-a-folder-browse-button" class="button-secondary button-compact" data-hit-target="true">
-                    Folder...
+                    Workspace...
                   </button>
                 </div>
               </div>
-              <input id="compare-a-input" class="field-input" type="text" placeholder="/path/to/report.json or render folder" />
+              <input id="compare-a-input" class="field-input" type="text" placeholder="/path/to/workspace or /path/to/report.json" />
               <div class="recent-stack">
                 <p class="recent-label">Recent compare inputs</p>
                 <div id="recent-compare-a-list" class="recent-chip-row" aria-live="polite"></div>
@@ -979,17 +999,17 @@
             </div>
             <div class="field">
               <div class="field-heading">
-                <span class="field-label">B report or render artifact path</span>
+                <span class="field-label">B workspace, report, or render artifact path</span>
                 <div class="field-actions">
                   <button type="button" id="compare-b-file-browse-button" class="button-secondary button-compact" data-hit-target="true">
                     JSON...
                   </button>
                   <button type="button" id="compare-b-folder-browse-button" class="button-secondary button-compact" data-hit-target="true">
-                    Folder...
+                    Workspace...
                   </button>
                 </div>
               </div>
-              <input id="compare-b-input" class="field-input" type="text" placeholder="/path/to/report.json or render folder" />
+              <input id="compare-b-input" class="field-input" type="text" placeholder="/path/to/workspace or /path/to/report.json" />
               <div class="recent-stack">
                 <p class="recent-label">Recent compare inputs</p>
                 <div id="recent-compare-b-list" class="recent-chip-row" aria-live="polite"></div>

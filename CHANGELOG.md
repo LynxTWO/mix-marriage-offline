@@ -184,6 +184,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     required parity surfaces and verifies their labels, units, visibility, and
     no-overlap layout behavior.
 
+- Tauri artifact quick actions and rerun shortcuts:
+  - Path-bearing desktop artifact surfaces now expose contextual quick actions
+    for copy-path, reveal-in-file-manager, and opening sibling receipt /
+    manifest / QA artifacts without leaving the primary workflow.
+  - The Results screen adds direct receipt / manifest / QA open buttons,
+    selected-artifact compare shortcuts, and workspace/report/scene rerun
+    render shortcuts so artifact-first review loops stay fast.
+  - Desktop compare/render reruns no longer require a stems-folder field when
+    the command only needs existing workspace artifacts, and focused desktop UI
+    regression coverage now locks the new quick-action surface in place.
+
 - Ontology change validation now runs git subprocesses with explicit UTF-8
   decoding, reports decode-fallback warnings instead of crashing on Windows
   locale defaults, and stops base-ref diffing cleanly when base ontology files

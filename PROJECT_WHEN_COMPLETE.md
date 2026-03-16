@@ -400,7 +400,10 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
       artifact-backed compare flows (`current vs last run`, `report vs report`)
       are visible from results surfaces, `compare_report.json` records the
       deterministic loudness-match method/amount, and any evaluation-only
-      compensation is disclosed in user-visible compare results.
+      compensation is disclosed in user-visible compare results. Done: the
+      primary Tauri workflow now adds contextual artifact quick actions
+      (copy/reveal/open sibling receipt-manifest-QA plus rerun compare/render
+      shortcuts) anywhere the core workspace artifacts are surfaced.
 - [x] A “variant runner” can render multiple output variants
       (profiles/presets/targets) while reusing cached analysis artifacts keyed
       by content hash.
