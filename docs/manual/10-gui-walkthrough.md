@@ -13,8 +13,9 @@ workflow sequence: `Validate → Analyze → Scene → Render → Results → Co
 
 The screenshots in this chapter are **canonical captured states**. "Canonical
 state" means a deterministic, named app state used for docs and regression
-baselines. Each screenshot shows a stable, reviewable moment in the app, not
-the only valid layout for that screen.
+baselines. Each committed PNG is a fixed-region desktop capture, not a
+full-document render: it shows a stable, reviewable shell or screen frame that
+anchors the named state, not the only valid layout for that screen.
 
 The desktop app can change shape depending on what is loaded and what you have
 opened. Expect differences between empty and loaded workspace mode, hero and
@@ -76,6 +77,8 @@ Once a workspace or artifact is loaded, the onboarding hero collapses into a
 more compact left rail so the active workflow screens get more horizontal room.
 On narrower windows, some secondary controls may move lower on the page or live
 inside collapsible sections, but the workflow and stored paths do not change.
+The canonical screenshot uses the top-of-shell fixed frame because that is the
+most stable orientation surface for the loaded session contract.
 
 ![Session shell, loaded compact workspace mode](assets/screenshots/tauri_session_loaded_compact.png)
 
@@ -128,7 +131,9 @@ moving forward with the same session shell values.
    scene-lock context, lint warnings, and scene preview.
 
 This is the canonical loaded state for understanding what MMO inferred before
-you render.
+you render. The committed screenshot anchors the viewport on the Scene locks
+surface so the lock context stays visible without depending on full document
+height.
 
 ![Scene screen, loaded with lock context](assets/screenshots/tauri_scene_loaded.png)
 
@@ -145,7 +150,9 @@ recent-path entry, or exact path input. The native OS picker itself is
 intentionally not shown here because it is not a canonical app state.
 
 Saving scene locks refreshes the lock context and warnings so you can confirm
-what changed before moving on to Render.
+what changed before moving on to Render. The canonical screenshot keeps the
+viewport anchored on the lock editor itself so the edit surface stays visible
+in the fixed capture frame.
 
 ![Scene screen, lock editor open](assets/screenshots/tauri_scene_locks_editor.png)
 
@@ -178,6 +185,9 @@ Use this state when you want a quick answer to: what was written, what changed,
 and which artifact should I inspect next?
 Small vertical shifts lower on the page are acceptable as summary cards wrap,
 but the canonical loaded state still centers those same top-level surfaces.
+The committed PNG anchors on the loaded receipt / what-changed row so those
+answer-first surfaces stay visible inside the fixed frame; deeper inspection
+remains outside that frame unless the manual calls it out in text.
 
 ![Results screen, loaded default state](assets/screenshots/tauri_results_loaded.png)
 
@@ -217,6 +227,8 @@ audition the selected file without leaving Results.
 The default loaded state emphasizes the summary first. Compensation fine-tune
 and raw compare-report inspection live in lower sections that may expand,
 collapse, or move lower in the layout depending on available space.
+The canonical screenshot therefore uses the top-of-Compare fixed frame rather
+than a full-page capture.
 
 ![Compare screen, loaded loudness-matched state](assets/screenshots/tauri_compare_loaded.png)
 

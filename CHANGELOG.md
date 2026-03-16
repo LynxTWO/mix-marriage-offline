@@ -218,6 +218,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Refreshed the committed `tauri_results_loaded.png` baseline to match the
     current Results-screen canonical loaded state after the newer inspection
     layout changes.
+- Tauri canonical screenshot contract stabilization:
+  - `tools/check_screenshot_diff.py` now reports image-size mismatches in
+    correct `width x height` order.
+  - The Playwright capture flow now uses fixed-region `1280 x 900` CSS-pixel
+    desktop frames anchored to stable shell/screen regions instead of unstable
+    full-page document capture.
+  - Refreshed the committed Tauri manual PNG baselines under that fixed-region
+    contract and updated the walkthrough / screenshot policy docs to explain
+    fixed-region vs text-only canonical states.
 
 - Tauri GUI explainability + dynamics/spatial inspection parity:
   - The desktop Results screen now renders deterministic, artifact-backed gain

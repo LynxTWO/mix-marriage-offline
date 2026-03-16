@@ -5,6 +5,11 @@
  * loads realistic fixture data where relevant, and writes a PNG to the output
  * directory.
  *
+ * The committed manual baselines intentionally capture fixed, meaningful
+ * desktop regions instead of full-document height. Each PNG is a stable
+ * 1280 x 900 CSS-pixel viewport frame positioned around the canonical screen
+ * or widget state for that manual section.
+ *
  * These tests are skipped by default so they do not run during normal `npm test`
  * execution. Set MMO_CAPTURE_SCREENSHOTS=1 to enable them.
  *
@@ -51,6 +56,8 @@ const REPO_ROOT = path.resolve(__dirname, "../../..");
 const OUT_DIR =
   process.env.MMO_SCREENSHOT_DIR ??
   path.join(REPO_ROOT, "docs", "manual", "assets", "screenshots");
+const CANONICAL_VIEWPORT = { width: 1280, height: 900 } as const;
+const CANONICAL_TOP_MARGIN_PX = 24;
 
 function ensureOutDir(): void {
   fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -81,6 +88,79 @@ async function openScreen(page: Page, screen: string): Promise<void> {
   await expect(page.locator(`#screen-${screen}`)).toBeVisible();
   await page.evaluate(() => {
     window.scrollTo(0, 0);
+  });
+}
+
+async function settleLayout(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+  });
+}
+
+async function setDetailsOpen(
+  page: Page,
+  selector: string,
+  open: boolean,
+): Promise<void> {
+  const details = page.locator(selector);
+  await expect(details).toBeVisible();
+  const current = await details.evaluate((node) => (node as HTMLDetailsElement).open);
+  if (current === open) {
+    return;
+  }
+  await details.locator("summary").click();
+  await expect
+    .poll(async () => details.evaluate((node) => (node as HTMLDetailsElement).open))
+    .toBe(open);
+}
+
+type CanonicalCaptureOptions = {
+  anchorSelector: string;
+  viewportSelectors: string[];
+};
+
+async function captureCanonicalViewport(
+  page: Page,
+  filename: string,
+  options: CanonicalCaptureOptions,
+): Promise<void> {
+  const anchor = page.locator(options.anchorSelector);
+  await expect(page.locator("#app-shell")).toBeVisible();
+  await expect(anchor).toBeVisible();
+
+  await page.evaluate(
+    ({ selector, marginTop }) => {
+      const element = document.querySelector<HTMLElement>(selector);
+      if (!element) {
+        throw new Error(`Missing canonical screenshot anchor: ${selector}`);
+      }
+      element.scrollIntoView({ block: "start", inline: "nearest" });
+      if (marginTop > 0) {
+        window.scrollBy(0, -marginTop);
+      }
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    },
+    { selector: options.anchorSelector, marginTop: CANONICAL_TOP_MARGIN_PX },
+  );
+
+  await settleLayout(page);
+
+  for (const selector of options.viewportSelectors) {
+    await expect(page.locator(selector)).toBeInViewport();
+  }
+
+  await page.screenshot({
+    path: outPath(filename),
+    fullPage: false,
+    animations: "disabled",
+    caret: "hide",
+    scale: "css",
   });
 }
 
@@ -246,7 +326,7 @@ test.describe("MMO Tauri screenshot capture", () => {
     "Set MMO_CAPTURE_SCREENSHOTS=1 to run screenshot capture",
   );
 
-  test.use({ viewport: { width: 1280, height: 900 } });
+  test.use({ viewport: CANONICAL_VIEWPORT });
 
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
@@ -258,7 +338,14 @@ test.describe("MMO Tauri screenshot capture", () => {
   test("capture: validate screen (session ready)", async ({ page }) => {
     ensureOutDir();
     await openScreen(page, "validate");
-    await page.screenshot({ path: outPath("tauri_session_ready.png"), fullPage: true });
+    await captureCanonicalViewport(page, "tauri_session_ready.png", {
+      anchorSelector: "#app-shell",
+      viewportSelectors: [
+        "#screen-validate",
+        "#workflow-validate-button",
+        "#validate-summary-text",
+      ],
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -268,7 +355,14 @@ test.describe("MMO Tauri screenshot capture", () => {
     ensureOutDir();
     await openScreen(page, "validate");
     await loadCompactWorkspaceShell(page);
-    await page.screenshot({ path: outPath("tauri_session_loaded_compact.png"), fullPage: true });
+    await captureCanonicalViewport(page, "tauri_session_loaded_compact.png", {
+      anchorSelector: "#app-shell",
+      viewportSelectors: [
+        "#screen-validate",
+        "#workflow-validate-button",
+        "#validate-summary-text",
+      ],
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -278,11 +372,19 @@ test.describe("MMO Tauri screenshot capture", () => {
     ensureOutDir();
     await openScreen(page, "scene");
     await loadSceneWorkspace(page);
+    await setDetailsOpen(page, "#scene-locks-editor-details", false);
     await setDesktopRpcMock(page, "scene.locks.inspect", SCENE_LOCKS_INSPECT_FIXTURE);
     await page.locator("#scene-locks-inspect-button").click();
     await expect(page.locator("#scene-lock-summary-rows")).toContainText("2 row(s)");
     await expect(page.locator("#scene-lock-summary-path")).toContainText("scene_locks.yaml");
-    await page.screenshot({ path: outPath("tauri_scene_loaded.png"), fullPage: true });
+    await captureCanonicalViewport(page, "tauri_scene_loaded.png", {
+      anchorSelector: "[data-widget-id=\"widget.scene.locks\"]",
+      viewportSelectors: [
+        "#scene-locks-inspect-button",
+        "#scene-lock-summary-rows",
+        "#scene-lock-summary-path",
+      ],
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -298,7 +400,14 @@ test.describe("MMO Tauri screenshot capture", () => {
     await expect(page.locator("#scene-locks-editor")).toContainText("Front-only");
     await page.locator("#scene-locks-perspective-select").selectOption("audience");
     await expect(page.locator("#scene-lock-summary-dirty")).toContainText("Yes");
-    await page.screenshot({ path: outPath("tauri_scene_locks_editor.png"), fullPage: true });
+    await captureCanonicalViewport(page, "tauri_scene_locks_editor.png", {
+      anchorSelector: "[data-widget-id=\"widget.scene.locks\"]",
+      viewportSelectors: [
+        "#scene-locks-editor-details",
+        "#scene-locks-editor",
+        "#scene-lock-summary-dirty",
+      ],
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -459,7 +568,14 @@ test.describe("MMO Tauri screenshot capture", () => {
     await expect(page.locator("#results-readout-primary")).toContainText(
       "completed",
     );
-    await page.screenshot({ path: outPath("tauri_results_loaded.png"), fullPage: true });
+    await captureCanonicalViewport(page, "tauri_results_loaded.png", {
+      anchorSelector: "[data-widget-id=\"widget.results.summary\"]",
+      viewportSelectors: [
+        "#results-readout-primary",
+        "#results-change-summary",
+        "#results-what-changed-text",
+      ],
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -468,6 +584,8 @@ test.describe("MMO Tauri screenshot capture", () => {
   test("capture: compare screen (loaded)", async ({ page }) => {
     ensureOutDir();
     await openScreen(page, "compare");
+    await fillCommittedTextInput(page, "#compare-a-input", "/tmp/variant_a");
+    await fillCommittedTextInput(page, "#compare-b-input", "/tmp/variant_b");
 
     await page.locator("#compare-report-file-input").setInputFiles(
       jsonFile("compare_report.json", {
@@ -574,6 +692,13 @@ test.describe("MMO Tauri screenshot capture", () => {
     await expect(page.locator("#ab-compensation")).toContainText(
       "Fair listen on",
     );
-    await page.screenshot({ path: outPath("tauri_compare_loaded.png"), fullPage: true });
+    await captureCanonicalViewport(page, "tauri_compare_loaded.png", {
+      anchorSelector: "#screen-compare",
+      viewportSelectors: [
+        "#compare-a-input",
+        "#ab-compensation",
+        "#compare-readout-primary",
+      ],
+    });
   });
 });

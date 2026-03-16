@@ -461,7 +461,9 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
 - [x] Canonical Tauri manual screenshots are regenerated in CI through
       `tools/capture_tauri_screenshots.py` and diffed against
       `docs/manual/assets/screenshots`, so screenshot regressions track the
-      shipped desktop workflow instead of the legacy Tk fallback GUI.
+      shipped desktop workflow instead of the legacy Tk fallback GUI. Done: the
+      canonical Tauri baselines now use a fixed-region `1280 x 900` CSS-pixel
+      capture contract instead of unstable full-page document height.
 - [x] The Tauri desktop app now stages a frozen `mmo` CLI as a sidecar, ships
       bundled MMO packaged data through that sidecar, and includes a Doctor
       screen that verifies `mmo --version`, bundled plugin validation, and

@@ -4,6 +4,10 @@ Compares the committed canonical-state baselines against freshly-generated
 screenshots and fails only when the mean absolute pixel difference exceeds a
 threshold.
 
+The committed Tauri baselines use fixed-region desktop captures rather than
+full-page document renders, so CI fails on meaningful state/layout changes
+instead of unstable page-height drift.
+
 Small PNG-compression jitter and minor rendering variance are acceptable. The
 default threshold of 20.0 means the average pixel across the *entire* image
 must shift by ~8 % of full scale before CI treats it as a meaningful
@@ -66,6 +70,27 @@ THRESHOLD_MAE: float = 20.0
 # Core comparison
 # ---------------------------------------------------------------------------
 
+def _format_dimensions(size: tuple[int, int]) -> str:
+    """Return a human-readable image size in width x height order."""
+
+    width, height = size
+    return f"{width}x{height}"
+
+
+def _format_size_mismatch(
+    path_a: Path,
+    size_a: tuple[int, int],
+    path_b: Path,
+    size_b: tuple[int, int],
+) -> str:
+    """Return the canonical size-mismatch error message."""
+
+    return (
+        f"Image size mismatch: {path_a.name} is {_format_dimensions(size_a)} "
+        f"but {path_b.name} is {_format_dimensions(size_b)}"
+    )
+
+
 def _mean_abs_diff(path_a: Path, path_b: Path) -> float:
     """Return the per-channel mean absolute pixel difference (0–255 scale)."""
     try:
@@ -84,10 +109,7 @@ def _mean_abs_diff(path_a: Path, path_b: Path) -> float:
         rgb_b = image_b.convert("RGB")
 
     if rgb_a.size != rgb_b.size:
-        raise ValueError(
-            f"Image size mismatch: {path_a.name} is {rgb_a.size[1]}x{rgb_a.size[0]} "
-            f"but {path_b.name} is {rgb_b.size[1]}x{rgb_b.size[0]}"
-        )
+        raise ValueError(_format_size_mismatch(path_a, rgb_a.size, path_b, rgb_b.size))
 
     diff_image = ImageChops.difference(rgb_a, rgb_b)
     channel_means = ImageStat.Stat(diff_image).mean
@@ -104,6 +126,8 @@ def _parse_args() -> argparse.Namespace:
         f"{format_screenshot_inventory(include_locations=True)}\n\n"
         "Named canonical state that stays text-only:\n"
         f"{format_text_only_inventory(include_locations=True)}\n\n"
+        "Committed Tauri PNGs use fixed-region desktop viewport captures, not "
+        "full-page document renders.\n"
         "Small variance is acceptable. Large state/layout changes require "
         "refreshed baselines plus manual chapter updates.\n"
         "Native file pickers and other OS dialogs are intentionally excluded from "

@@ -9,8 +9,10 @@ The dev server does not need to be started manually — the Playwright
 automatically when the server is not already running.
 
 These screenshots are deterministic, named canonical app states for the manual
-and regression baselines. They do not attempt to capture every transient GUI
-state, and native OS dialogs stay text-only.
+and regression baselines. They use fixed 1280 x 900 CSS-pixel desktop frames
+anchored to meaningful shell or screen regions instead of unstable full-page
+document capture. They do not attempt to capture every transient GUI state,
+and native OS dialogs stay text-only.
 
 Usage::
 
@@ -70,6 +72,8 @@ def _parse_args() -> argparse.Namespace:
         f"{format_screenshot_inventory(include_locations=True)}\n\n"
         "Named canonical state that stays text-only:\n"
         f"{format_text_only_inventory(include_locations=True)}\n\n"
+        "Committed Tauri PNGs use fixed-region desktop viewport captures, not\n"
+        "full-page document renders.\n"
         "Native file pickers and other OS dialogs are intentionally excluded from\n"
         "committed baselines.\n"
         f"Policy + refresh guide: {SCREENSHOT_POLICY_PATH.as_posix()}"
@@ -125,6 +129,10 @@ def main() -> int:
     print(format_screenshot_inventory(include_locations=False))
     print("[tauri-capture] Named text-only canonical state:")
     print(format_text_only_inventory(include_locations=False))
+    print(
+        "[tauri-capture] Capture contract: fixed 1280 x 900 CSS-pixel desktop "
+        "frames anchored to stable shell/screen regions."
+    )
     print(
         "[tauri-capture] Native OS dialogs and other transient states are "
         "excluded from committed baselines."

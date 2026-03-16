@@ -46,8 +46,10 @@ Non-negotiables:
   `tauri_session_loaded_compact`, `tauri_scene_loaded`,
   `tauri_scene_locks_editor`, `tauri_results_loaded`, and
   `tauri_compare_loaded` from fixture-backed UI actions rather than
-  hand-curated images, and native OS dialogs should remain text-only instead of
-  entering the committed baseline set.
+  hand-curated images; committed PNGs should use the documented fixed-region
+  `1280 x 900` CSS-pixel capture contract (not unstable full-page document
+  renders), and native OS dialogs should remain text-only instead of entering
+  the committed baseline set.
 - Route runtime progress/cancel/live-log wiring through `mmo.core.progress` and
   keep ETA/runtime diagnostics out of deterministic persisted artifacts.
   `render_report.stage_metrics` / `stage_evidence` must stay deterministic; use
