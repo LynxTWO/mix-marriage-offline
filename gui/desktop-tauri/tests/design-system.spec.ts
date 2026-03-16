@@ -13,8 +13,13 @@ type WidgetBox = {
 };
 
 type DesktopTestApi = {
+  readArtifactText?: (path: string) => string | null;
+  resolveMediaUrl?: (path: string) => string | null;
   setMockRpcResult?: (method: string, payload: Record<string, unknown>) => void;
 };
+
+const TINY_WAV_DATA_URI =
+  "data:audio/wav;base64,UklGRiwAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQgAAAAAAPQBDP4AAA==";
 
 const screens: Record<ScreenKey, { buttonLabel: string; requiredWidgets: string[] }> = {
   analyze: {
@@ -155,6 +160,65 @@ function jsonFile(name: string, payload: unknown): { buffer: Buffer; mimeType: s
     mimeType: "application/json",
     name,
   };
+}
+
+async function installArtifactMocks(
+  page: Parameters<typeof test>[0]["page"],
+  options: {
+    mediaUrls?: Record<string, string>;
+    textFiles?: Record<string, string>;
+  },
+): Promise<void> {
+  await page.evaluate(({ mediaUrls, textFiles }) => {
+    const api = (window as Window & { __MMO_DESKTOP_TEST__?: DesktopTestApi }).__MMO_DESKTOP_TEST__;
+    if (!api) {
+      throw new Error("Desktop test API is not available.");
+    }
+    const mediaMap = mediaUrls ?? {};
+    const textMap = textFiles ?? {};
+    api.resolveMediaUrl = (path: string) => mediaMap[path] ?? null;
+    api.readArtifactText = (path: string) => textMap[path] ?? null;
+  }, options);
+}
+
+async function installMediaTransportStub(page: Parameters<typeof test>[0]["page"]): Promise<void> {
+  await page.evaluate(() => {
+    const proto = HTMLMediaElement.prototype as HTMLMediaElement & {
+      __mmoCurrentTime?: number;
+      __mmoPaused?: boolean;
+      __mmoPlayPatched?: boolean;
+    };
+    if (proto.__mmoPlayPatched) {
+      return;
+    }
+    proto.__mmoPlayPatched = true;
+    Object.defineProperty(HTMLMediaElement.prototype, "paused", {
+      configurable: true,
+      get() {
+        return (this as HTMLMediaElement & { __mmoPaused?: boolean }).__mmoPaused ?? true;
+      },
+    });
+    Object.defineProperty(HTMLMediaElement.prototype, "currentTime", {
+      configurable: true,
+      get() {
+        return (this as HTMLMediaElement & { __mmoCurrentTime?: number }).__mmoCurrentTime ?? 0;
+      },
+      set(value: number) {
+        (this as HTMLMediaElement & { __mmoCurrentTime?: number }).__mmoCurrentTime = value;
+      },
+    });
+    HTMLMediaElement.prototype.play = async function play(): Promise<void> {
+      (this as HTMLMediaElement & { __mmoPaused?: boolean }).__mmoPaused = false;
+      if (((this as HTMLMediaElement & { __mmoCurrentTime?: number }).__mmoCurrentTime ?? 0) <= 0) {
+        (this as HTMLMediaElement & { __mmoCurrentTime?: number }).__mmoCurrentTime = 0.25;
+      }
+      this.dispatchEvent(new Event("play"));
+    };
+    HTMLMediaElement.prototype.pause = function pause(): void {
+      (this as HTMLMediaElement & { __mmoPaused?: boolean }).__mmoPaused = true;
+      this.dispatchEvent(new Event("pause"));
+    };
+  });
 }
 
 test.describe("desktop workflow design system", () => {
@@ -570,6 +634,182 @@ test.describe("desktop workflow design system", () => {
     await page.locator("#results-phase-hint-trigger").focus();
     await expect(page.locator("#hint-results-phase")).toBeVisible();
     await expect(page.locator("#hint-results-phase")).toContainText("Why:");
+  });
+
+  test("results preview transport plays the selected audio artifact in-app", async ({ page }) => {
+    await page.goto("/");
+    await installMediaTransportStub(page);
+    await installArtifactMocks(page, {
+      mediaUrls: {
+        "/tmp/render/preview_headphones.wav": TINY_WAV_DATA_URI,
+      },
+    });
+    await openScreen(page, "results");
+
+    await page.locator("#results-manifest-file-input").setInputFiles(jsonFile("render_manifest.json", {
+      renderer_manifests: [
+        {
+          renderer_id: "RENDERER.SAFE",
+          outputs: [
+            {
+              output_id: "OUT.HEADPHONES",
+              file_path: "/tmp/render/preview_headphones.wav",
+              format: "wav",
+              layout_id: "LAYOUT.BINAURAL",
+            },
+          ],
+        },
+      ],
+    }));
+
+    await page.getByRole("button", { name: /preview_headphones\.wav/i }).click();
+    await expect(page.locator("#artifact-preview-active-file")).toContainText("preview_headphones.wav");
+
+    await page.locator("#artifact-preview-play-button").click();
+    await expect(page.locator("#artifact-preview-transport-state")).toContainText("Playing");
+
+    await page.locator("#artifact-preview-pause-button").click();
+    await expect(page.locator("#artifact-preview-transport-state")).toContainText("Paused");
+
+    await page.locator("#artifact-preview-stop-button").click();
+    await expect(page.locator("#artifact-preview-transport-state")).toContainText("Stopped");
+  });
+
+  test("compare transport resolves A/B audition files and switches during playback", async ({ page }) => {
+    await page.goto("/");
+    await installMediaTransportStub(page);
+    await openScreen(page, "compare");
+
+    const aWorkspace = "/tmp/variant_a";
+    const bWorkspace = "/tmp/variant_b";
+    const aAudioPath = "/tmp/variant_a/render/preview_a.headphones.wav";
+    const bAudioPath = "/tmp/variant_b/render/preview_b.headphones.wav";
+
+    await installArtifactMocks(page, {
+      mediaUrls: {
+        [aAudioPath]: TINY_WAV_DATA_URI,
+        [bAudioPath]: TINY_WAV_DATA_URI,
+      },
+      textFiles: {
+        [`${aWorkspace}/render_manifest.json`]: JSON.stringify({
+          renderer_manifests: [
+            {
+              renderer_id: "RENDERER.SAFE",
+              outputs: [
+                {
+                  output_id: "OUT.A",
+                  file_path: aAudioPath,
+                  format: "wav",
+                  layout_id: "LAYOUT.BINAURAL",
+                },
+              ],
+            },
+          ],
+        }),
+        [`${bWorkspace}/render_manifest.json`]: JSON.stringify({
+          renderer_manifests: [
+            {
+              renderer_id: "RENDERER.SAFE",
+              outputs: [
+                {
+                  output_id: "OUT.B",
+                  file_path: bAudioPath,
+                  format: "wav",
+                  layout_id: "LAYOUT.BINAURAL",
+                },
+              ],
+            },
+          ],
+        }),
+      },
+    });
+
+    await page.locator("#compare-a-input").fill(aWorkspace);
+    await page.locator("#compare-a-input").dispatchEvent("change");
+    await page.locator("#compare-b-input").fill(bWorkspace);
+    await page.locator("#compare-b-input").dispatchEvent("change");
+
+    await page.locator("#compare-report-file-input").setInputFiles(jsonFile("compare_report.json", {
+      a: {
+        label: "variant_a",
+        report_path: `${aWorkspace}/report.json`,
+        profile_id: "PROFILE.ASSIST",
+        preset_id: "PRESET.SAFE",
+      },
+      b: {
+        label: "variant_b",
+        report_path: `${bWorkspace}/report.json`,
+        profile_id: "PROFILE.FULL_SEND",
+        preset_id: "PRESET.WIDE",
+      },
+      diffs: {
+        profile_id: {
+          a: "PROFILE.ASSIST",
+          b: "PROFILE.FULL_SEND",
+        },
+        preset_id: {
+          a: "PRESET.SAFE",
+          b: "PRESET.WIDE",
+        },
+        meters: {
+          a: "METER.SAFE",
+          b: "METER.WIDE",
+        },
+        output_formats: {
+          a: ["wav"],
+          b: ["wav"],
+        },
+        metrics: {
+          downmix_qa: null,
+          mix_complexity: null,
+          change_flags: {
+            extreme_count: {
+              a: 0,
+              b: 0,
+              delta: 0,
+            },
+            translation_risk: {
+              a: "low",
+              b: "medium",
+              shift: 1,
+            },
+          },
+        },
+      },
+      notes: [
+        "Profile changed: PROFILE.ASSIST -> PROFILE.FULL_SEND.",
+      ],
+      warnings: [],
+      loudness_match: {
+        status: "matched",
+        enabled_by_default: true,
+        evaluation_only: true,
+        compensated_side: "b",
+        method_id: "COMPARE.LOUDNESS_MATCH.RENDER_QA.MEAN_INTEGRATED_LUFS",
+        measurement_unit_id: "UNIT.LUFS",
+        measurement_a: -14.0,
+        measurement_b: -15.2,
+        compensation_db: 1.2,
+        source_artifacts: {
+          a_render_qa_path: `${aWorkspace}/render_qa.json`,
+          b_render_qa_path: `${bWorkspace}/render_qa.json`,
+        },
+        details: "Default fair-listen applies +1.2 dB to B.",
+      },
+    }));
+
+    await expect(page.locator("#compare-transport-active-file")).toContainText("preview_a.headphones.wav");
+
+    await page.locator("#compare-transport-play-button").click();
+    await expect(page.locator("#compare-transport-state")).toContainText("Playing");
+
+    await page.getByRole("button", { name: "B", exact: true }).click();
+    await expect(page.locator("#compare-transport-active-file")).toContainText("preview_b.headphones.wav");
+    await expect(page.locator("#compare-transport-state")).toContainText("Playing");
+    await expect(page.locator("#compare-transport-note")).toContainText("Fair-listen gain on B: +1.2 dB.");
+
+    await page.locator("#compare-transport-stop-button").click();
+    await expect(page.locator("#compare-transport-state")).toContainText("Stopped");
   });
 
   test("compare screen uses compare artifact plus A/B render QA for loudness match", async ({ page }) => {

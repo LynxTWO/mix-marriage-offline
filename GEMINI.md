@@ -152,8 +152,11 @@ Non-negotiables:
   `compare_report.json` must carry deterministic `loudness_match` metadata when
   sibling `render_qa.json` artifacts exist, the primary Tauri compare screen
   should default to that fair-listen compensation while disclosing method +
-  amount, and any preset-preview compensation must stay bounded, explainable,
-  and evaluation-only unless the user explicitly commits it.
+  amount, desktop preview/compare playback must stay artifact-backed with only
+  bounded transport controls (`play/pause/stop` + A/B switch) and no extra
+  real-time DSP beyond the disclosed compare gain, and any preset-preview
+  compensation must stay bounded, explainable, and evaluation-only unless the
+  user explicitly commits it.
 - Keep Desktop GUI post-analyze scene preview deterministic and read-only:
   `_mmo_gui/scene.json` + `_mmo_gui/scene_lint.json` should be regenerated from
   `stems_map`/`bus_plan` with stable ordering, and the Scene tab should display

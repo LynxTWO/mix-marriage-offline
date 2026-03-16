@@ -403,7 +403,9 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
       compensation is disclosed in user-visible compare results. Done: the
       primary Tauri workflow now adds contextual artifact quick actions
       (copy/reveal/open sibling receipt-manifest-QA plus rerun compare/render
-      shortcuts) anywhere the core workspace artifacts are surfaced.
+      shortcuts) anywhere the core workspace artifacts are surfaced, plus a
+      bounded in-app audition transport for selected preview artifacts and
+      compare A/B playback.
 - [x] A “variant runner” can render multiple output variants
       (profiles/presets/targets) while reusing cached analysis artifacts keyed
       by content hash.

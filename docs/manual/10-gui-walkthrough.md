@@ -192,6 +192,9 @@ artifact-backed meters.
 Import buttons and recent-path entry points for receipt or QA artifacts may move
 between the main summary area and lower inspection sections, but they still
 load the same underlying files.
+When the selected artifact is an audio output, the preview card also exposes a
+small in-app transport with **Play**, **Pause**, and **Stop** so you can
+audition the selected file without leaving Results.
 
 ---
 
@@ -202,11 +205,14 @@ load the same underlying files.
 1. Load **A** and **B** artifacts using exact paths, recent compare-input
    entries, or the **Browse...** buttons that open the native JSON/folder
    picker.
-2. Use the **A / B toggle** to switch the active audition state.
-3. Use the **compensation knob** (−12 to +12 dB, step 0.1) in the lower
+2. Use **Play**, **Pause**, and **Stop** in the compare transport to audition
+   the resolved artifact-backed A/B files in-app.
+3. Use the **A / B toggle** to switch the active audition state; when playback
+   is already running, the app keeps your place and swaps to the other side.
+4. Use the **compensation knob** (−12 to +12 dB, step 0.1) in the lower
    inspection section to loudness-match the two sides for a fair listen.
-4. Review the compare summary, delta chips, loudness-match disclosure, and any
-   lower inspection details you want to expand.
+5. Review the compare summary, delta chips, loudness-match disclosure, and the
+   active-file readout before expanding any lower inspection details.
 
 The default loaded state emphasizes the summary first. Compensation fine-tune
 and raw compare-report inspection live in lower sections that may expand,

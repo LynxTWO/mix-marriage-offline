@@ -1,3 +1,4 @@
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { Command, type Child } from "@tauri-apps/plugin-shell";
 import { exists, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
@@ -8,6 +9,7 @@ const DEFAULT_RPC_TIMEOUT_MS = 15_000;
 type DesktopTestApi = {
   clearMockRpcResults?: () => void;
   readArtifactText?: (path: string) => Promise<string | null> | string | null;
+  resolveMediaUrl?: (path: string) => string | null;
   runMmoRpc?: (
     method: string,
     params?: Record<string, unknown>,
@@ -115,6 +117,10 @@ class LineBuffer {
 
 export function normalizePath(pathValue: string): string {
   return pathValue.trim().replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+function isDirectMediaUrl(pathValue: string): boolean {
+  return /^(?:asset|blob|data|https?):/iu.test(pathValue);
 }
 
 export function joinPath(basePath: string, leafName: string): string {
@@ -329,6 +335,29 @@ export async function readArtifactJson<T>(path: string): Promise<T | null> {
   }
   try {
     return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
+export function resolveArtifactMediaUrl(path: string): string | null {
+  const mockUrl = desktopTestApi()?.resolveMediaUrl?.(path);
+  if (typeof mockUrl === "string" && mockUrl.trim()) {
+    return mockUrl.trim();
+  }
+
+  const normalized = normalizePath(path);
+  if (!normalized) {
+    return null;
+  }
+  if (isDirectMediaUrl(normalized)) {
+    return normalized;
+  }
+  if (!isTauriRuntime()) {
+    return null;
+  }
+  try {
+    return convertFileSrc(normalized);
   } catch {
     return null;
   }

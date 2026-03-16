@@ -27,6 +27,7 @@ import {
   joinPath,
   normalizePath,
   readArtifactJson,
+  resolveArtifactMediaUrl,
   resolveSiblingPath,
   runMmoRpc,
   spawnMmo,
@@ -147,6 +148,36 @@ type ArtifactSourceState = {
   validationPath: string;
 };
 
+type AuditionSource = {
+  id: string;
+  label: string;
+  mediaUrl: string;
+  path: string;
+};
+
+type AuditionSourceState = {
+  candidatePath: string;
+  message: string;
+  source: AuditionSource | null;
+  status: "error" | "idle" | "loading" | "missing" | "ready";
+};
+
+type PlaybackContext = "compare" | "results" | null;
+
+type PlaybackState = {
+  context: PlaybackContext;
+  error: string;
+  requestToken: number;
+  sourceId: string;
+  status: "loading" | "paused" | "playing" | "stopped";
+};
+
+type CompareAuditionSourcesState = {
+  A: AuditionSourceState;
+  B: AuditionSourceState;
+  refreshToken: number;
+};
+
 type DragState = {
   onMove: (event: PointerEvent) => void;
   onUp: (event: PointerEvent) => void;
@@ -189,7 +220,16 @@ type SceneLocksState = {
 
 type AppUi = {
   artifactPreviewActions: HTMLElement;
+  artifactPreviewTransport: {
+    activeFile: HTMLElement;
+    note: HTMLElement;
+    pause: HTMLButtonElement;
+    play: HTMLButtonElement;
+    state: HTMLElement;
+    stop: HTMLButtonElement;
+  };
   abButtons: HTMLButtonElement[];
+  auditionAudio: HTMLAudioElement;
   artifactPaths: HTMLElement;
   artifactPreviewDelta: HTMLElement;
   artifactPreviewName: HTMLElement;
@@ -233,6 +273,14 @@ type AppUi = {
   compareChangeSummary: HTMLElement;
   compareSummary: HTMLElement;
   compareSummaryNote: HTMLElement;
+  compareTransport: {
+    activeFile: HTMLElement;
+    note: HTMLElement;
+    pause: HTMLButtonElement;
+    play: HTMLButtonElement;
+    state: HTMLElement;
+    stop: HTMLButtonElement;
+  };
   fileInputs: Record<
     "analyzeReport" | "analyzeScan" | "compareAQa" | "compareBQa" | "compareReport" | "resultsManifest" | "resultsQa" | "resultsReceipt" | "sceneJson" | "sceneLint" | "validateValidation",
     HTMLInputElement
@@ -392,10 +440,32 @@ const state = {
   compareCompensationMethodId: "",
   compareCompensationNote: "",
   compareCompensationSource: "none" as "compare_report" | "manual" | "none" | "render_qa",
+  compareAuditionSources: {
+    A: {
+      candidatePath: "",
+      message: "Set compare A to resolve an audition file.",
+      source: null,
+      status: "idle",
+    },
+    B: {
+      candidatePath: "",
+      message: "Set compare B to resolve an audition file.",
+      source: null,
+      status: "idle",
+    },
+    refreshToken: 0,
+  } as CompareAuditionSourcesState,
   compareState: "A" as CompareState,
   currentCancelPath: null as string | null,
   dragState: null as DragState | null,
   nerdView: false,
+  playback: {
+    context: null as PlaybackContext,
+    error: "",
+    requestToken: 0,
+    sourceId: "",
+    status: "stopped" as PlaybackState["status"],
+  },
   recentPaths: {
     compareInputs: [],
     sceneLocksPaths: [],
@@ -414,6 +484,9 @@ const state = {
 };
 
 let designController: ReturnType<typeof initDesignSystem> | null = null;
+let auditionAudioContext: AudioContext | null = null;
+let auditionAudioGainNode: GainNode | null = null;
+let auditionAudioSourceNode: MediaElementAudioSourceNode | null = null;
 
 function requiredElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -426,7 +499,16 @@ function requiredElement<T extends Element>(selector: string): T {
 function getUi(): AppUi {
   return {
     artifactPreviewActions: requiredElement("#artifact-preview-actions"),
+    artifactPreviewTransport: {
+      activeFile: requiredElement("#artifact-preview-active-file"),
+      note: requiredElement("#artifact-preview-transport-note"),
+      pause: requiredElement("#artifact-preview-pause-button"),
+      play: requiredElement("#artifact-preview-play-button"),
+      state: requiredElement("#artifact-preview-transport-state"),
+      stop: requiredElement("#artifact-preview-stop-button"),
+    },
     abButtons: Array.from(document.querySelectorAll<HTMLButtonElement>("#ab-toggle [data-ab-state]")),
+    auditionAudio: requiredElement("#audition-audio"),
     artifactPaths: requiredElement("#artifact-paths"),
     artifactPreviewDelta: requiredElement("#artifact-preview-delta"),
     artifactPreviewName: requiredElement("#artifact-preview-name"),
@@ -479,6 +561,14 @@ function getUi(): AppUi {
     compareChangeSummary: requiredElement("#compare-change-summary"),
     compareSummary: requiredElement("#compare-summary"),
     compareSummaryNote: requiredElement("#compare-summary-note"),
+    compareTransport: {
+      activeFile: requiredElement("#compare-transport-active-file"),
+      note: requiredElement("#compare-transport-note"),
+      pause: requiredElement("#compare-transport-pause-button"),
+      play: requiredElement("#compare-transport-play-button"),
+      state: requiredElement("#compare-transport-state"),
+      stop: requiredElement("#compare-transport-stop-button"),
+    },
     fileInputs: {
       analyzeReport: requiredElement("#analyze-report-file-input"),
       analyzeScan: requiredElement("#analyze-scan-file-input"),
@@ -620,6 +710,51 @@ function asNumber(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+function isDirectMediaUrl(pathValue: string): boolean {
+  return /^(?:asset|blob|data|https?):/iu.test(pathValue);
+}
+
+function isAudioFilePath(pathValue: string): boolean {
+  return /\.(?:aif|aiff|m4a|mp3|ogg|wav)$/iu.test(pathValue);
+}
+
+function audioContextConstructor(): typeof AudioContext | null {
+  if (typeof window.AudioContext === "function") {
+    return window.AudioContext;
+  }
+  const webkitWindow = window as Window & {
+    webkitAudioContext?: typeof AudioContext;
+  };
+  if (typeof webkitWindow.webkitAudioContext === "function") {
+    return webkitWindow.webkitAudioContext;
+  }
+  return null;
+}
+
+async function ensureAuditionGainNode(audio: HTMLAudioElement): Promise<GainNode | null> {
+  const AudioContextCtor = audioContextConstructor();
+  if (AudioContextCtor === null) {
+    return null;
+  }
+  if (auditionAudioContext === null) {
+    auditionAudioContext = new AudioContextCtor();
+  }
+  if (auditionAudioSourceNode === null || auditionAudioGainNode === null) {
+    auditionAudioSourceNode = auditionAudioContext.createMediaElementSource(audio);
+    auditionAudioGainNode = auditionAudioContext.createGain();
+    auditionAudioSourceNode.connect(auditionAudioGainNode);
+    auditionAudioGainNode.connect(auditionAudioContext.destination);
+  }
+  if (auditionAudioContext.state === "suspended") {
+    await auditionAudioContext.resume().catch(() => undefined);
+  }
+  return auditionAudioGainNode;
+}
+
+function gainDbToLinear(gainDb: number): number {
+  return 10 ** (gainDb / 20);
 }
 
 function clampUnitValue(value: unknown, fallback: number): number {
@@ -842,7 +977,7 @@ function resolveArtifactPath(pathValue: string, paths: WorkflowPaths | null): st
   if (!normalized) {
     return "";
   }
-  if (isAbsoluteLikePath(normalized) || paths === null) {
+  if (isDirectMediaUrl(normalized) || isAbsoluteLikePath(normalized) || paths === null) {
     return normalized;
   }
   return joinPath(paths.workspaceDir, normalized);
@@ -1049,10 +1184,14 @@ function renderRecentPaths(ui: AppUi): void {
   renderRecentChipList(ui.recents.compareA, state.recentPaths.compareInputs, "No compare inputs yet.", (value) => {
     ui.compareInputs.aPath.value = value;
     commitRecentPath(ui, "compareInputs", value);
+    scheduleCompareAuditionRefresh(ui);
+    renderCompare(ui);
   });
   renderRecentChipList(ui.recents.compareB, state.recentPaths.compareInputs, "No compare inputs yet.", (value) => {
     ui.compareInputs.bPath.value = value;
     commitRecentPath(ui, "compareInputs", value);
+    scheduleCompareAuditionRefresh(ui);
+    renderCompare(ui);
   });
 }
 
@@ -1177,6 +1316,7 @@ function queueCompareFromArtifact(ui: AppUi, candidatePath: string): void {
   designController?.setScreen("compare");
   const prepared = prepareCompareInputsFromCandidate(ui, candidate);
   renderAll(ui);
+  scheduleCompareAuditionRefresh(ui);
   if (!prepared.ready) {
     updateRuntimeMessage(ui, prepared.message);
     return;
@@ -2226,6 +2366,518 @@ function buildArtifactEntries(paths: WorkflowPaths | null): ArtifactEntry[] {
   return entries;
 }
 
+function auditionPathLabel(pathValue: string): string {
+  const normalized = normalizePath(pathValue);
+  if (!normalized) {
+    return "(no file)";
+  }
+  if (isDirectMediaUrl(normalized)) {
+    return "embedded audition audio";
+  }
+  return basename(normalized) || normalized;
+}
+
+function auditionReadyState(source: AuditionSource, message: string, candidatePath: string): AuditionSourceState {
+  return {
+    candidatePath,
+    message,
+    source,
+    status: "ready",
+  };
+}
+
+function auditionMissingState(candidatePath: string, message: string): AuditionSourceState {
+  return {
+    candidatePath,
+    message,
+    source: null,
+    status: "missing",
+  };
+}
+
+function auditionErrorState(candidatePath: string, message: string): AuditionSourceState {
+  return {
+    candidatePath,
+    message,
+    source: null,
+    status: "error",
+  };
+}
+
+function buildAuditionSource(
+  id: string,
+  label: string,
+  resolvedPath: string,
+): AuditionSourceState {
+  const mediaUrl = resolveArtifactMediaUrl(resolvedPath);
+  if (!mediaUrl) {
+    return auditionErrorState(
+      resolvedPath,
+      `Unable to open ${auditionPathLabel(resolvedPath)} for in-app playback in this runtime.`,
+    );
+  }
+  return auditionReadyState(
+    {
+      id,
+      label,
+      mediaUrl,
+      path: resolvedPath,
+    },
+    `Ready: ${auditionPathLabel(resolvedPath)}`,
+    resolvedPath,
+  );
+}
+
+function auditionOutputPriority(output: JsonObject): [number, number, string] {
+  const rawPath = asString(output.file_path).trim();
+  const normalized = rawPath.toLowerCase();
+  const format = asString(output.format).trim().toLowerCase();
+  const previewPriority = /(?:audition|binaural|headphone|preview)/u.test(normalized) ? 0 : 1;
+  const wavPriority = format === "wav" || normalized.endsWith(".wav") ? 0 : 1;
+  return [previewPriority, wavPriority, normalized];
+}
+
+function preferredAuditionOutput(manifest: JsonObject | null): JsonObject | null {
+  const outputs = flattenManifestOutputs(manifest).filter((output) => {
+    const filePath = asString(output.file_path).trim();
+    const format = asString(output.format).trim().toLowerCase();
+    return Boolean(filePath) && (
+      isDirectMediaUrl(filePath)
+      || isAudioFilePath(filePath)
+      || ["aif", "aiff", "m4a", "mp3", "ogg", "wav"].includes(format)
+    );
+  });
+  outputs.sort((left, right) => {
+    const leftPriority = auditionOutputPriority(left);
+    const rightPriority = auditionOutputPriority(right);
+    return (
+      leftPriority[0] - rightPriority[0]
+      || leftPriority[1] - rightPriority[1]
+      || leftPriority[2].localeCompare(rightPriority[2])
+    );
+  });
+  return outputs[0] ?? null;
+}
+
+function compareAuditionCandidatePath(sideKey: "a" | "b", ui: AppUi): string {
+  const inputPath = sideKey === "a" ? ui.compareInputs.aPath.value : ui.compareInputs.bPath.value;
+  if (inputPath.trim()) {
+    return normalizePath(inputPath);
+  }
+  const compareSide = asObject(state.artifacts.compare?.[sideKey]);
+  return normalizePath(asString(compareSide?.report_path));
+}
+
+async function resolveCompareAuditionSource(
+  side: CompareState,
+  candidatePath: string,
+): Promise<AuditionSourceState> {
+  const normalized = normalizePath(candidatePath);
+  if (!normalized) {
+    return auditionMissingState(
+      "",
+      `Set compare ${side} to a workspace, report, render artifact, or audition file.`,
+    );
+  }
+
+  if (isDirectMediaUrl(normalized) || isAudioFilePath(normalized)) {
+    return buildAuditionSource(
+      `compare:${side}:${normalized}`,
+      `${side} · ${auditionPathLabel(normalized)}`,
+      normalized,
+    );
+  }
+
+  const workspaceDir = workspaceDirFromArtifactPath(normalized);
+  if (!workspaceDir) {
+    return auditionMissingState(
+      normalized,
+      `Unable to derive a workspace for compare ${side}.`,
+    );
+  }
+
+  const manifestPath = joinPath(workspaceDir, "render_manifest.json");
+  const manifest = await readArtifactJson<JsonObject>(manifestPath);
+  if (manifest === null) {
+    return auditionMissingState(
+      normalized,
+      `No render_manifest.json found for compare ${side}.`,
+    );
+  }
+
+  const output = preferredAuditionOutput(manifest);
+  if (output === null) {
+    return auditionMissingState(
+      normalized,
+      `Compare ${side} has no playable audio outputs in render_manifest.json.`,
+    );
+  }
+
+  const resolvedOutputPath = resolveArtifactPath(
+    asString(output.file_path),
+    buildWorkflowPaths(workspaceDir),
+  );
+  if (!resolvedOutputPath) {
+    return auditionErrorState(
+      normalized,
+      `Compare ${side} resolved an empty audition path.`,
+    );
+  }
+
+  const resolved = buildAuditionSource(
+    `compare:${side}:${resolvedOutputPath}`,
+    `${side} · ${auditionPathLabel(resolvedOutputPath)}`,
+    resolvedOutputPath,
+  );
+  if (resolved.status !== "ready") {
+    return resolved;
+  }
+  return {
+    ...resolved,
+    message: `Compare ${side} uses ${auditionPathLabel(resolvedOutputPath)} from render_manifest.json.`,
+  };
+}
+
+function resultsAuditionSource(selected: ArtifactEntry | null): AuditionSourceState {
+  if (selected === null || selected.tag !== "AUDIO") {
+    return auditionMissingState(
+      "",
+      "Select an audio artifact in Results to preview it here.",
+    );
+  }
+  const resolvedPath = selected.resolvedPath || selected.path;
+  if (!resolvedPath) {
+    return auditionMissingState(
+      "",
+      "Selected audio artifact does not expose a playable path.",
+    );
+  }
+  const resolved = buildAuditionSource(
+    `results:${selected.id}:${resolvedPath}`,
+    selected.title || auditionPathLabel(resolvedPath),
+    resolvedPath,
+  );
+  if (resolved.status !== "ready") {
+    return resolved;
+  }
+  return {
+    ...resolved,
+    message: `Selected artifact: ${auditionPathLabel(resolvedPath)}`,
+  };
+}
+
+function activeCompareAuditionSource(): AuditionSource | null {
+  const active = state.compareAuditionSources[state.compareState];
+  return active.source;
+}
+
+function renderTransportStateLabel(
+  context: PlaybackContext,
+  sourceId: string,
+  fallback: string,
+): string {
+  if (state.playback.context !== context || state.playback.sourceId !== sourceId) {
+    return fallback;
+  }
+  if (state.playback.status === "loading") {
+    return "Loading";
+  }
+  if (state.playback.status === "playing") {
+    return "Playing";
+  }
+  if (state.playback.status === "paused") {
+    return "Paused";
+  }
+  return fallback;
+}
+
+async function applyAuditionGain(ui: AppUi, gainDb: number): Promise<void> {
+  const linear = gainDbToLinear(gainDb);
+  const gainNode = await ensureAuditionGainNode(ui.auditionAudio);
+  if (gainNode !== null) {
+    gainNode.gain.value = linear;
+    ui.auditionAudio.volume = 1;
+    return;
+  }
+  ui.auditionAudio.volume = clamp(linear, 0, 1);
+}
+
+function compareAuditionGainDb(): number {
+  return state.compareState === "B" ? state.compareCompensationDb : 0;
+}
+
+function renderResultsTransport(ui: AppUi, selected: ArtifactEntry | null): void {
+  const transportState = resultsAuditionSource(selected);
+  if (
+    state.playback.context === "results"
+    && (
+      transportState.source === null
+      || state.playback.sourceId !== transportState.source.id
+    )
+    && state.playback.status !== "stopped"
+  ) {
+    stopAuditionPlayback(ui);
+  }
+
+  const source = transportState.source;
+  const isCurrent = source !== null
+    && state.playback.context === "results"
+    && state.playback.sourceId === source.id;
+  ui.artifactPreviewTransport.state.textContent = source === null
+    ? (transportState.status === "error" ? "Unavailable" : "Stopped")
+    : renderTransportStateLabel("results", source.id, "Stopped");
+  ui.artifactPreviewTransport.activeFile.textContent = source === null
+    ? transportState.message
+    : `Active file: ${source.label}`;
+  ui.artifactPreviewTransport.note.textContent = [
+    transportState.message,
+    state.playback.context === "results" && state.playback.error ? state.playback.error : "",
+  ].filter(Boolean).join(" ");
+  ui.artifactPreviewTransport.play.disabled = source === null || state.playback.status === "loading";
+  ui.artifactPreviewTransport.pause.disabled = !isCurrent || state.playback.status !== "playing";
+  ui.artifactPreviewTransport.stop.disabled = !isCurrent || state.playback.status === "stopped";
+}
+
+function renderCompareTransport(ui: AppUi): void {
+  const activeState = state.compareAuditionSources[state.compareState];
+  const inactiveState = state.compareAuditionSources[state.compareState === "A" ? "B" : "A"];
+  const source = activeState.source;
+  const isCurrent = source !== null
+    && state.playback.context === "compare"
+    && state.playback.sourceId === source.id;
+  ui.compareTransport.state.textContent = source === null
+    ? (activeState.status === "loading" ? "Loading" : (activeState.status === "error" ? "Unavailable" : "Stopped"))
+    : renderTransportStateLabel("compare", source.id, "Stopped");
+  ui.compareTransport.activeFile.textContent = source === null
+    ? activeState.message
+    : `Active ${state.compareState}: ${auditionPathLabel(source.path)}`;
+  ui.compareTransport.note.textContent = [
+    `A: ${state.compareAuditionSources.A.source?.label ?? state.compareAuditionSources.A.message}`,
+    `B: ${state.compareAuditionSources.B.source?.label ?? state.compareAuditionSources.B.message}`,
+    source !== null && state.compareState === "B"
+      ? `Fair-listen gain on B: ${signedDb(state.compareCompensationDb)}.`
+      : "",
+    inactiveState.status === "loading" ? "Resolving alternate side..." : "",
+    state.playback.context === "compare" && state.playback.error ? state.playback.error : "",
+  ].filter(Boolean).join(" ");
+  ui.compareTransport.play.disabled = source === null || activeState.status === "loading" || state.playback.status === "loading";
+  ui.compareTransport.pause.disabled = !isCurrent || state.playback.status !== "playing";
+  ui.compareTransport.stop.disabled = !isCurrent || state.playback.status === "stopped";
+}
+
+function renderAuditionTransports(ui: AppUi): void {
+  const paths = ui.inputs.workspaceDir.value.trim()
+    ? buildWorkflowPaths(ui.inputs.workspaceDir.value.trim())
+    : null;
+  const selected = buildArtifactEntries(paths).find((entry) => entry.id === state.selectedArtifactId) ?? null;
+  renderResultsTransport(ui, selected);
+  renderCompareTransport(ui);
+}
+
+function waitForAuditionReady(audio: HTMLAudioElement): Promise<void> {
+  if (audio.readyState >= 1) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      audio.removeEventListener("canplay", onReady);
+      audio.removeEventListener("loadedmetadata", onReady);
+      audio.removeEventListener("error", onError);
+      window.clearTimeout(timer);
+    };
+    const settle = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      callback();
+    };
+    const onReady = () => settle(resolve);
+    const onError = () => settle(() => reject(new Error("Audio metadata could not be loaded.")));
+    const timer = window.setTimeout(() => settle(resolve), 2500);
+    audio.addEventListener("canplay", onReady, { once: true });
+    audio.addEventListener("loadedmetadata", onReady, { once: true });
+    audio.addEventListener("error", onError, { once: true });
+  });
+}
+
+async function activateAuditionSource(
+  ui: AppUi,
+  source: AuditionSource,
+  context: Exclude<PlaybackContext, null>,
+  options: {
+    autoplay: boolean;
+    gainDb: number;
+    preserveTime: number;
+  },
+): Promise<void> {
+  const token = state.playback.requestToken + 1;
+  state.playback.requestToken = token;
+  state.playback.context = context;
+  state.playback.error = "";
+  state.playback.sourceId = source.id;
+  state.playback.status = "loading";
+  renderAuditionTransports(ui);
+
+  const audio = ui.auditionAudio;
+  try {
+    await applyAuditionGain(ui, options.gainDb);
+    const sourceChanged = audio.dataset.sourceId !== source.id || audio.src !== source.mediaUrl;
+    if (sourceChanged) {
+      audio.src = source.mediaUrl;
+      audio.dataset.sourceId = source.id;
+      audio.load();
+      await waitForAuditionReady(audio);
+    }
+    if (state.playback.requestToken !== token) {
+      return;
+    }
+    try {
+      audio.currentTime = Math.max(0, options.preserveTime);
+    } catch {
+      // Some codecs refuse early seeks before metadata fully settles.
+    }
+    await applyAuditionGain(ui, options.gainDb);
+    if (options.autoplay) {
+      await audio.play();
+      if (state.playback.requestToken !== token) {
+        return;
+      }
+      state.playback.status = "playing";
+    } else {
+      audio.pause();
+      state.playback.status = audio.currentTime > 0 ? "paused" : "stopped";
+    }
+  } catch (error) {
+    if (state.playback.requestToken !== token) {
+      return;
+    }
+    state.playback.error = error instanceof Error ? error.message : String(error);
+    state.playback.status = "stopped";
+  }
+  renderAuditionTransports(ui);
+}
+
+function pauseAuditionPlayback(ui: AppUi): void {
+  ui.auditionAudio.pause();
+  state.playback.status = ui.auditionAudio.currentTime > 0 ? "paused" : "stopped";
+  renderAuditionTransports(ui);
+}
+
+function stopAuditionPlayback(ui: AppUi): void {
+  state.playback.requestToken += 1;
+  ui.auditionAudio.pause();
+  try {
+    ui.auditionAudio.currentTime = 0;
+  } catch {
+    // Ignore seek failures during stop.
+  }
+  state.playback.error = "";
+  state.playback.status = "stopped";
+  renderAuditionTransports(ui);
+}
+
+async function playResultsAudition(ui: AppUi): Promise<void> {
+  const paths = ui.inputs.workspaceDir.value.trim()
+    ? buildWorkflowPaths(ui.inputs.workspaceDir.value.trim())
+    : null;
+  const selected = buildArtifactEntries(paths).find((entry) => entry.id === state.selectedArtifactId) ?? null;
+  const transportState = resultsAuditionSource(selected);
+  if (transportState.source === null) {
+    state.playback.error = transportState.message;
+    renderAuditionTransports(ui);
+    return;
+  }
+  const preserveTime = (
+    state.playback.context === "results"
+    && state.playback.sourceId === transportState.source.id
+  )
+    ? ui.auditionAudio.currentTime
+    : 0;
+  await activateAuditionSource(ui, transportState.source, "results", {
+    autoplay: true,
+    gainDb: 0,
+    preserveTime,
+  });
+}
+
+async function playCompareAudition(
+  ui: AppUi,
+  options: {
+    autoplay: boolean;
+    preserveTime?: number;
+  } = { autoplay: true },
+): Promise<void> {
+  const active = activeCompareAuditionSource();
+  if (active === null) {
+    state.playback.error = state.compareAuditionSources[state.compareState].message;
+    renderAuditionTransports(ui);
+    return;
+  }
+  const preserveTime = options.preserveTime ?? (
+    state.playback.context === "compare" && state.playback.sourceId === active.id
+      ? ui.auditionAudio.currentTime
+      : 0
+  );
+  await activateAuditionSource(ui, active, "compare", {
+    autoplay: options.autoplay,
+    gainDb: compareAuditionGainDb(),
+    preserveTime,
+  });
+}
+
+async function refreshCompareAuditionSources(ui: AppUi): Promise<void> {
+  const aCandidate = compareAuditionCandidatePath("a", ui);
+  const bCandidate = compareAuditionCandidatePath("b", ui);
+  const token = state.compareAuditionSources.refreshToken + 1;
+  state.compareAuditionSources.refreshToken = token;
+  state.compareAuditionSources.A = aCandidate
+    ? {
+      candidatePath: aCandidate,
+      message: "Resolving compare A audition file...",
+      source: null,
+      status: "loading",
+    }
+    : auditionMissingState("", "Set compare A to resolve an audition file.");
+  state.compareAuditionSources.B = bCandidate
+    ? {
+      candidatePath: bCandidate,
+      message: "Resolving compare B audition file...",
+      source: null,
+      status: "loading",
+    }
+    : auditionMissingState("", "Set compare B to resolve an audition file.");
+  renderCompareTransport(ui);
+
+  const [resolvedA, resolvedB] = await Promise.all([
+    resolveCompareAuditionSource("A", aCandidate),
+    resolveCompareAuditionSource("B", bCandidate),
+  ]);
+  if (state.compareAuditionSources.refreshToken !== token) {
+    return;
+  }
+  state.compareAuditionSources.A = resolvedA;
+  state.compareAuditionSources.B = resolvedB;
+
+  const active = activeCompareAuditionSource();
+  if (
+    state.playback.context === "compare"
+    && state.playback.sourceId
+    && (active === null || state.playback.sourceId !== active.id)
+  ) {
+    stopAuditionPlayback(ui);
+  } else if (state.playback.context === "compare" && active !== null) {
+    void applyAuditionGain(ui, compareAuditionGainDb()).catch(() => undefined);
+  }
+  renderCompareTransport(ui);
+}
+
+function scheduleCompareAuditionRefresh(ui: AppUi): void {
+  void refreshCompareAuditionSources(ui).catch(() => undefined);
+}
+
 function summarizeReceipt(receipt: JsonObject | null, manifest: JsonObject | null, qa: JsonObject | null): string {
   if (receipt === null) {
     return "No receipt loaded";
@@ -3028,6 +3680,8 @@ function renderCompare(ui: AppUi): void {
     ? compensationNote
     : "No loudness-match data loaded.";
 
+  renderCompareTransport(ui);
+
   if (!compareExists) {
     ui.compareReadoutPrimary.textContent = "No compare artifact loaded";
     ui.compareReadoutSecondary.textContent = "A/B readout appears after compare_report.json is loaded.";
@@ -3220,6 +3874,7 @@ function renderResults(ui: AppUi): void {
   ui.results.qaText.textContent = renderQaText(state.artifacts.qa);
   ui.results.jsonPreview.textContent = selected?.previewText ?? "No artifact selected.";
   renderResultsActionRows(ui, selected, paths);
+  renderResultsTransport(ui, selected);
 }
 
 function renderAnalyze(ui: AppUi): void {
@@ -3872,6 +4527,7 @@ async function runCompare(ui: AppUi): Promise<void> {
     paths.compareReportPath,
   ]);
   await refreshCompareArtifacts(paths, aPath, bPath);
+  await refreshCompareAuditionSources(ui);
   renderCompare(ui);
   ui.output.compare.textContent = result.code === 0
     ? [
@@ -4212,6 +4868,9 @@ function bindCompareKnob(ui: AppUi, controller: ReturnType<typeof initDesignSyst
       state.compareCompensationNote = "Manual compare compensation override. Evaluation only until you explicitly render or commit a change.";
     }
     state.compareCompensationSource = source;
+    if (state.playback.context === "compare") {
+      void applyAuditionGain(ui, compareAuditionGainDb()).catch(() => undefined);
+    }
     renderCompare(ui);
   };
   ui.compareCompensation.input.addEventListener("change", () => {
@@ -4357,8 +5016,14 @@ window.addEventListener("DOMContentLoaded", () => {
     renderAll(ui);
   });
   bindRecentInput(ui, ui.inputs.sceneLocksPath, "sceneLocksPaths");
-  bindRecentInput(ui, ui.compareInputs.aPath, "compareInputs");
-  bindRecentInput(ui, ui.compareInputs.bPath, "compareInputs");
+  bindRecentInput(ui, ui.compareInputs.aPath, "compareInputs", () => {
+    scheduleCompareAuditionRefresh(ui);
+    renderCompare(ui);
+  });
+  bindRecentInput(ui, ui.compareInputs.bPath, "compareInputs", () => {
+    scheduleCompareAuditionRefresh(ui);
+    renderCompare(ui);
+  });
 
   bindDirectoryBrowseButton(
     ui,
@@ -4393,6 +5058,10 @@ window.addEventListener("DOMContentLoaded", () => {
     ui.compareInputs.aPath,
     "compareInputs",
     {
+      afterSelect: () => {
+        scheduleCompareAuditionRefresh(ui);
+        renderCompare(ui);
+      },
       extensions: ["json"],
       label: "Compare input JSON",
       title: "Pick compare A artifact",
@@ -4404,6 +5073,10 @@ window.addEventListener("DOMContentLoaded", () => {
     ui.compareInputs.aPath,
     "compareInputs",
     "Pick compare A workspace folder",
+    () => {
+      scheduleCompareAuditionRefresh(ui);
+      renderCompare(ui);
+    },
   );
   bindFilePathBrowseButton(
     ui,
@@ -4411,6 +5084,10 @@ window.addEventListener("DOMContentLoaded", () => {
     ui.compareInputs.bPath,
     "compareInputs",
     {
+      afterSelect: () => {
+        scheduleCompareAuditionRefresh(ui);
+        renderCompare(ui);
+      },
       extensions: ["json"],
       label: "Compare input JSON",
       title: "Pick compare B artifact",
@@ -4422,6 +5099,10 @@ window.addEventListener("DOMContentLoaded", () => {
     ui.compareInputs.bPath,
     "compareInputs",
     "Pick compare B workspace folder",
+    () => {
+      scheduleCompareAuditionRefresh(ui);
+      renderCompare(ui);
+    },
   );
 
   ui.nerdView.toggle.addEventListener("click", () => {
@@ -4449,10 +5130,61 @@ window.addEventListener("DOMContentLoaded", () => {
       if (compareState === undefined) {
         return;
       }
+      const preserveTime = ui.auditionAudio.currentTime;
+      const shouldResume = state.playback.context === "compare" && state.playback.status === "playing";
+      const shouldKeepPausedState = state.playback.context === "compare" && state.playback.status === "paused";
       state.compareState = compareState;
       renderCompare(ui);
+      if (shouldResume || shouldKeepPausedState) {
+        void playCompareAudition(ui, {
+          autoplay: shouldResume,
+          preserveTime,
+        });
+      }
     });
   }
+
+  ui.artifactPreviewTransport.play.addEventListener("click", () => {
+    void playResultsAudition(ui);
+  });
+  ui.artifactPreviewTransport.pause.addEventListener("click", () => {
+    pauseAuditionPlayback(ui);
+  });
+  ui.artifactPreviewTransport.stop.addEventListener("click", () => {
+    stopAuditionPlayback(ui);
+  });
+  ui.compareTransport.play.addEventListener("click", () => {
+    void playCompareAudition(ui);
+  });
+  ui.compareTransport.pause.addEventListener("click", () => {
+    pauseAuditionPlayback(ui);
+  });
+  ui.compareTransport.stop.addEventListener("click", () => {
+    stopAuditionPlayback(ui);
+  });
+
+  ui.auditionAudio.addEventListener("play", () => {
+    state.playback.error = "";
+    state.playback.status = "playing";
+    renderAuditionTransports(ui);
+  });
+  ui.auditionAudio.addEventListener("pause", () => {
+    if (state.playback.status === "loading") {
+      return;
+    }
+    state.playback.status = ui.auditionAudio.currentTime > 0 ? "paused" : "stopped";
+    renderAuditionTransports(ui);
+  });
+  ui.auditionAudio.addEventListener("ended", () => {
+    state.playback.status = "stopped";
+    state.playback.error = "";
+    renderAuditionTransports(ui);
+  });
+  ui.auditionAudio.addEventListener("error", () => {
+    state.playback.status = "stopped";
+    state.playback.error = "Audio playback failed for the active audition file.";
+    renderAuditionTransports(ui);
+  });
 
   bindCompareKnob(ui, controller);
   bindResultsDetailSlider(ui, controller);
@@ -4564,6 +5296,9 @@ window.addEventListener("DOMContentLoaded", () => {
     state.compareCompensationMethodId = derived.methodId;
     state.compareCompensationNote = derived.note;
     state.compareCompensationSource = derived.source;
+    if (state.playback.context === "compare") {
+      void applyAuditionGain(ui, compareAuditionGainDb()).catch(() => undefined);
+    }
   };
 
   const loadValidationArtifact = (payload: JsonObject, sourceName: string) => {
@@ -4622,6 +5357,7 @@ window.addEventListener("DOMContentLoaded", () => {
     state.artifactSources.comparePath = sourceName;
     applyDerivedCompareCompensation(true);
     renderAll(ui);
+    scheduleCompareAuditionRefresh(ui);
     controller.setScreen("compare");
     updateRuntimeMessage(ui, `Loaded compare report: ${sourceName}`);
   };
@@ -4630,6 +5366,7 @@ window.addEventListener("DOMContentLoaded", () => {
     state.artifactSources.compareAQaPath = sourceName;
     applyDerivedCompareCompensation();
     renderAll(ui);
+    scheduleCompareAuditionRefresh(ui);
     updateRuntimeMessage(ui, `Loaded A render QA: ${sourceName}`);
   };
   const loadCompareBQaArtifact = (payload: JsonObject, sourceName: string) => {
@@ -4637,6 +5374,7 @@ window.addEventListener("DOMContentLoaded", () => {
     state.artifactSources.compareBQaPath = sourceName;
     applyDerivedCompareCompensation();
     renderAll(ui);
+    scheduleCompareAuditionRefresh(ui);
     updateRuntimeMessage(ui, `Loaded B render QA: ${sourceName}`);
   };
 
@@ -4748,6 +5486,7 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   window.__MMO_DESKTOP_TEST__ = {
+    ...(window.__MMO_DESKTOP_TEST__ ?? {}),
     clearMockRpcResults: () => {
       desktopTestRpcResults.clear();
     },
@@ -4786,6 +5525,7 @@ window.addEventListener("DOMContentLoaded", () => {
       state.artifactSources.comparePath = paths.compareReportPath;
       applyDerivedCompareCompensation(true);
     }
+    scheduleCompareAuditionRefresh(ui);
     renderAll(ui);
   })();
 });

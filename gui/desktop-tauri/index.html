@@ -672,6 +672,30 @@
                   class="path-actions"
                   aria-label="Artifact quick actions"
                 ></div>
+                <div id="artifact-preview-transport" class="audition-transport" data-transport-mode="preview">
+                  <div class="control-head control-head-compact">
+                    <div>
+                      <p class="control-label">Preview transport</p>
+                      <p class="control-why">Play the selected artifact-backed audition file without leaving Results.</p>
+                    </div>
+                    <span id="artifact-preview-transport-state" class="status-chip">Stopped</span>
+                  </div>
+                  <div class="button-row">
+                    <button type="button" id="artifact-preview-play-button" data-hit-target="true">Play</button>
+                    <button type="button" id="artifact-preview-pause-button" class="button-secondary" data-hit-target="true">
+                      Pause
+                    </button>
+                    <button type="button" id="artifact-preview-stop-button" class="button-secondary" data-hit-target="true">
+                      Stop
+                    </button>
+                  </div>
+                  <p id="artifact-preview-active-file" class="control-caption">
+                    Select an audio artifact to preview it here.
+                  </p>
+                  <p id="artifact-preview-transport-note" class="control-caption">
+                    Playback stays bounded and artifact-backed from the selected render output.
+                  </p>
+                </div>
               </div>
             </div>
           </article>
@@ -1106,6 +1130,30 @@
               <p id="compare-readout-primary" class="readout-primary">No compare artifact loaded</p>
               <p id="compare-readout-secondary" class="readout-secondary">A/B readout appears after compare_report.json is loaded.</p>
             </div>
+            <div id="compare-transport" class="audition-transport" data-transport-mode="compare">
+              <div class="control-head control-head-compact">
+                <div>
+                  <p class="control-label">Audition transport</p>
+                  <p class="control-why">Play the resolved A/B audition files and switch sides without leaving Compare.</p>
+                </div>
+                <span id="compare-transport-state" class="status-chip">Stopped</span>
+              </div>
+              <div class="button-row">
+                <button type="button" id="compare-transport-play-button" data-hit-target="true">Play</button>
+                <button type="button" id="compare-transport-pause-button" class="button-secondary" data-hit-target="true">
+                  Pause
+                </button>
+                <button type="button" id="compare-transport-stop-button" class="button-secondary" data-hit-target="true">
+                  Stop
+                </button>
+              </div>
+              <p id="compare-transport-active-file" class="control-caption">
+                A/B audition files will appear here after the compare artifacts resolve.
+              </p>
+              <p id="compare-transport-note" class="control-caption">
+                Uses sibling render-manifest audio outputs when available and applies the current B fair-listen gain only during playback.
+              </p>
+            </div>
             <div id="compare-change-summary" class="change-summary-list" aria-live="polite"></div>
             <p id="compare-summary" class="signal-value">No compare artifact loaded.</p>
             <pre class="stage-output compact-output" id="compare-summary-note">Warnings and notes will appear here.</pre>
@@ -1166,5 +1214,6 @@
         </div>
       </section>
     </main>
+    <audio id="audition-audio" preload="metadata" hidden></audio>
   </body>
 </html>

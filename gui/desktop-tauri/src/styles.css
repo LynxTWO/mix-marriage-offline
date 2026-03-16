@@ -1019,6 +1019,34 @@ button:disabled {
   color: color-mix(in srgb, var(--theme-info) 82%, white);
 }
 
+.audition-transport {
+  display: grid;
+  gap: calc(var(--space-base) * 0.7);
+  padding: 0.9rem 0.95rem;
+  border-radius: calc(var(--radius-base) * 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.audition-transport[data-transport-mode="compare"] {
+  background:
+    linear-gradient(135deg, rgba(74, 163, 210, 0.08), rgba(255, 255, 255, 0.02)),
+    rgba(255, 255, 255, 0.03);
+}
+
+.audition-transport[data-transport-mode="preview"] {
+  margin-top: calc(var(--space-base) * 0.5);
+}
+
+.audition-transport .button-row {
+  flex-wrap: wrap;
+}
+
+.audition-transport .control-caption {
+  margin: 0;
+  word-break: break-word;
+}
+
 .scope-grid-line,
 .scope-grid-ring {
   fill: none;

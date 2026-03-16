@@ -38,6 +38,13 @@ class TestTauriDesktopWorkflow(unittest.TestCase):
             )
         )
 
+        tauri_conf_path = _TAURI_ROOT / "src-tauri" / "tauri.conf.json"
+        tauri_conf = json.loads(tauri_conf_path.read_text(encoding="utf-8"))
+        asset_protocol = tauri_conf["app"]["security"]["assetProtocol"]
+        self.assertTrue(asset_protocol["enable"])
+        self.assertIn("$HOME/**", asset_protocol["scope"])
+        self.assertIn("$TEMP/**", asset_protocol["scope"])
+
     def test_index_exposes_direct_workflow_controls(self) -> None:
         html_path = _TAURI_ROOT / "index.html"
         html = html_path.read_text(encoding="utf-8")
@@ -60,6 +67,13 @@ class TestTauriDesktopWorkflow(unittest.TestCase):
             "scene-locks-save-button",
             "scene-locks-editor",
             "scene-locks-perspective-select",
+            "artifact-preview-play-button",
+            "artifact-preview-pause-button",
+            "artifact-preview-stop-button",
+            "compare-transport-play-button",
+            "compare-transport-pause-button",
+            "compare-transport-stop-button",
+            "audition-audio",
             "screen-validate",
             "screen-analyze",
             "screen-scene",
@@ -98,6 +112,9 @@ class TestTauriDesktopWorkflow(unittest.TestCase):
         self.assertIn("queueRenderFromWorkspace", source)
         self.assertIn("buildResultsOpenButtons", source)
         self.assertIn("renderResultsActionRows", source)
+        self.assertIn("playResultsAudition", source)
+        self.assertIn("playCompareAudition", source)
+        self.assertIn("refreshCompareAuditionSources", source)
         self.assertIn('label: "Copy path"', source)
         self.assertIn('label: "Reveal"', source)
         self.assertIn('receipt: "Open receipt"', source)

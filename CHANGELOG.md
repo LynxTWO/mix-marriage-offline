@@ -6,6 +6,25 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Desktop audition transport for artifact-backed preview + compare:**
+  - The primary Tauri desktop workflow now adds in-app `Play`, `Pause`, and
+    `Stop` controls for selected Results audio artifacts and resolved Compare
+    A/B audition files.
+  - Compare playback can switch between A and B mid-audition while preserving
+    position, and the active file stays visible next to the loudness-matched
+    compare readout.
+  - Desktop playback remains bounded and artifact-backed: Results previews use
+    the selected manifest output, Compare resolves sibling
+    `render_manifest.json` audio outputs, and only the current B fair-listen
+    gain is applied during playback.
+  - Added Tauri asset-protocol configuration plus desktop regression coverage
+    for preview transport, compare A/B playback switching, and transport UI
+    wiring.
+
 ## [1.1.3] — 2026-03-02
 
 ### Fixed (continued)
