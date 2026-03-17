@@ -8,6 +8,7 @@ __pycache__/
 /.tmp_claude/
 /sandbox_tmp/
 /pytest-cache-files-*/
+test-results/
 *.scan.json
 *.pdf
 rendered/
