@@ -11,8 +11,8 @@ _GAIN_DB = 1.0
 _GAIN_LINEAR = math.pow(10.0, _GAIN_DB / 20.0)
 
 
-class PerChannelGainFixture:
-    plugin_id = "PLUGIN.RENDERER.TEST.PER_CHANNEL_GAIN"
+class StarterPerChannelGain:
+    plugin_id = "PLUGIN.RENDERER.STARTER.PER_CHANNEL_GAIN"
 
     def process_channel(
         self,
@@ -25,9 +25,10 @@ class PerChannelGainFixture:
     ) -> tuple[AudioBufferF64, dict[str, Any]]:
         del process_ctx
         if not isinstance(channel, AudioBufferF64):
-            raise TypeError("PerChannelGainFixture requires AudioBufferF64 input.")
+            raise TypeError("StarterPerChannelGain requires AudioBufferF64 input.")
         if channel.sample_rate_hz != sample_rate_hz:
             raise ValueError("AudioBufferF64 sample_rate_hz must match sample_rate_hz.")
+
         target_channel_ids = {
             channel_id.strip()
             for channel_id in params.get("target_channel_ids", [])
@@ -37,6 +38,7 @@ class PerChannelGainFixture:
         touched = spk_id in target_channel_ids
         if touched:
             rendered *= _GAIN_LINEAR
+
         return AudioBufferF64.from_channel_matrix(
             rendered,
             channel_order=channel.channel_order,
@@ -47,4 +49,25 @@ class PerChannelGainFixture:
             "gain_db": _GAIN_DB,
             "buffer_type": type(channel).__name__,
             "buffer_channel_order": list(channel.channel_order),
+        }
+
+    def render(  # type: ignore[no-untyped-def]
+        self,
+        session,
+        recommendations,
+        output_dir=None,
+    ):
+        del session, output_dir
+        received_ids = sorted(
+            {
+                rec.get("recommendation_id")
+                for rec in recommendations
+                if isinstance(rec, dict) and isinstance(rec.get("recommendation_id"), str)
+            }
+        )
+        return {
+            "renderer_id": self.plugin_id,
+            "outputs": [],
+            "received_recommendation_ids": received_ids,
+            "notes": "starter_example:per_channel_gain_receipt_only",
         }

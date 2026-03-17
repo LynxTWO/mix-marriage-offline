@@ -1,0 +1,33 @@
+plugin_id: "PLUGIN.RENDERER.STARTER.BAD_LAYOUT_SPECIFIC"
+plugin_type: "renderer"
+name: "Bad Layout-Specific Starter Example"
+version: "0.1.0"
+description: "Intentional invalid example: layout_specific without layout support."
+entrypoint: "starter_true_multichannel_checksum:StarterTrueMultichannelChecksum"
+capabilities:
+  max_channels: 32
+  channel_mode: "true_multichannel"
+  scene_scope: "object_capable"
+  layout_safety: "layout_specific"
+  latency:
+    type: "dynamic"
+  deterministic_seed_policy: "seed_required"
+  purity:
+    audio_buffer: "typed_f64_interleaved"
+    randomness: "process_context_seed"
+    wall_clock: "forbidden"
+    thread_scheduling: "forbidden"
+  supported_contexts:
+    - "render"
+  dsp_traits:
+    tier: "information_preserving"
+    linearity: "linear"
+    phase_behavior: "linear_phase"
+    adds_noise: false
+    introduces_harmonics: false
+    anti_aliasing: "na"
+    measurable_claims:
+      - metric_id: "METER.TRUE_PEAK_DBTP"
+        expected_direction: "within"
+        threshold: 0.5
+        note: "This file is supposed to fail validation."

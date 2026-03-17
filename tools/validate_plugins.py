@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager, suppress
 import importlib
 import json
 import sys
@@ -143,6 +144,7 @@ def _validate_schema(
 def _validate_entrypoint(
     entrypoint: str,
     manifest_path: Path,
+    plugin_root: Path,
     issues: List[Dict[str, Any]],
 ) -> None:
     if ":" not in entrypoint:
@@ -161,7 +163,8 @@ def _validate_entrypoint(
         sys.path.insert(0, str(root))
 
     try:
-        module = importlib.import_module(module_name)
+        with _plugin_import_paths(plugin_root):
+            module = importlib.import_module(module_name)
     except Exception as exc:
         _add_issue(
             issues,
@@ -180,6 +183,25 @@ def _validate_entrypoint(
             "Entrypoint symbol not found on module.",
             {"file_path": str(manifest_path), "entrypoint": entrypoint},
         )
+
+
+@contextmanager
+def _plugin_import_paths(plugin_root: Path):
+    resolved_root = plugin_root.expanduser().resolve()
+    candidates = (resolved_root, resolved_root.parent)
+    inserted: list[str] = []
+    try:
+        for candidate in candidates:
+            candidate_str = str(candidate)
+            if candidate_str in sys.path:
+                continue
+            sys.path.insert(0, candidate_str)
+            inserted.append(candidate_str)
+        yield
+    finally:
+        for candidate_str in inserted:
+            with suppress(ValueError):
+                sys.path.remove(candidate_str)
 
 
 def _validate_id_prefix(
@@ -861,7 +883,7 @@ def validate_plugins(plugins_dir: Path, schema_path: Path) -> Dict[str, Any]:
 
             entrypoint = data.get("entrypoint")
             if isinstance(entrypoint, str):
-                _validate_entrypoint(entrypoint, manifest_path, issues)
+                _validate_entrypoint(entrypoint, manifest_path, plugins_dir, issues)
             elif schema_ok:
                 _add_issue(
                     issues,

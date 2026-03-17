@@ -221,6 +221,9 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
 
 - [x] Plugin interface supports max_channels ≥ 32 and declares channel_mode +
       link groups.
+- [x] Contributor starter-pack examples under `examples/plugin_authoring/`
+      cover `per_channel`, `linked_group`, and `true_multichannel` execution,
+      plus manifest-backed safety and determinism expectations.
 - [x] Plugins report latency (fixed/dynamic) and host delay-comp policy.
 - [x] Plugins may suggest actions with confidence, but cannot override explicit
       user intent.

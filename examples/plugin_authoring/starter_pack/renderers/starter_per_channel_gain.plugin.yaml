@@ -1,0 +1,35 @@
+plugin_id: "PLUGIN.RENDERER.STARTER.PER_CHANNEL_GAIN"
+plugin_type: "renderer"
+name: "Starter Per-Channel Gain"
+version: "0.1.0"
+description: "Tiny starter example for per_channel execution with typed-buffer evidence."
+entrypoint: "starter_per_channel_gain:StarterPerChannelGain"
+capabilities:
+  max_channels: 32
+  channel_mode: "per_channel"
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  latency:
+    type: "zero"
+  deterministic_seed_policy: "none"
+  purity:
+    audio_buffer: "typed_f64_interleaved"
+    randomness: "forbidden"
+    wall_clock: "forbidden"
+    thread_scheduling: "forbidden"
+  supported_contexts:
+    - "render"
+  dsp_traits:
+    tier: "information_preserving"
+    linearity: "linear"
+    phase_behavior: "linear_phase"
+    adds_noise: false
+    introduces_harmonics: false
+    anti_aliasing: "na"
+    measurable_claims:
+      - metric_id: "METER.TRUE_PEAK_DBTP"
+        expected_direction: "within"
+        threshold: 0.5
+        note: "Applies a deterministic +1 dB gain only to named semantic speakers."
+  notes:
+    - "Starter example for object-capable, layout-agnostic per-channel processing."

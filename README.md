@@ -143,6 +143,12 @@ Recommended user docs:
 - [docs/18-channel-standards.md](docs/18-channel-standards.md)
 - [docs/STATUS.md](docs/STATUS.md)
 
+Plugin contributors should start here:
+
+- [docs/04-plugin-api.md](docs/04-plugin-api.md)
+- [docs/13-plugin-authoring.md](docs/13-plugin-authoring.md)
+- [examples/plugin_authoring/README.md](examples/plugin_authoring/README.md)
+
 ## Repo Layout
 
 ```text

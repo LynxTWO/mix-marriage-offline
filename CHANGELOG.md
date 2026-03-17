@@ -10,6 +10,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Plugin authoring starter pack and onboarding path:**
+  - Added `examples/plugin_authoring/` with three tiny, real starter plugins
+    covering `per_channel`, `linked_group`, and `true_multichannel` execution.
+  - Added a commented starter manifest template plus an intentionally invalid
+    manifest that demonstrates the common
+    `layout_specific`-without-layout-support validation failure.
+  - Added regression coverage that loads the starter pack, validates manifests,
+    checks deterministic mode behavior, and proves explainable bed-only
+    restriction plus layout-specific bypass receipts.
+  - Updated plugin docs and README links so contributors can copy a working
+    example without tracing through test-only fixtures.
+
 - **Desktop audition transport for artifact-backed preview + compare:**
   - The primary Tauri desktop workflow now adds in-app `Play`, `Pause`, and
     `Stop` controls for selected Results audio artifacts and resolved Compare

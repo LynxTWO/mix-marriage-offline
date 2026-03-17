@@ -11,8 +11,8 @@ _CHECKSUM_TONE_DBFS = -60.0
 _CHECKSUM_TONE_LINEAR = math.pow(10.0, _CHECKSUM_TONE_DBFS / 20.0)
 
 
-class TrueMultichannelSumcheckFixture:
-    plugin_id = "PLUGIN.RENDERER.TEST.TRUE_MULTICHANNEL_SUMCHECK"
+class StarterTrueMultichannelChecksum:
+    plugin_id = "PLUGIN.RENDERER.STARTER.TRUE_MULTICHANNEL_CHECKSUM"
 
     def process_true_multichannel(
         self,
@@ -23,9 +23,12 @@ class TrueMultichannelSumcheckFixture:
         process_ctx: Any,
     ) -> tuple[AudioBufferF64, dict[str, Any]]:
         if not isinstance(matrix, AudioBufferF64):
-            raise TypeError("TrueMultichannelSumcheckFixture requires AudioBufferF64 input.")
+            raise TypeError(
+                "StarterTrueMultichannelChecksum requires AudioBufferF64 input.",
+            )
         if matrix.sample_rate_hz != sample_rate_hz:
             raise ValueError("AudioBufferF64 sample_rate_hz must match sample_rate_hz.")
+
         rendered = matrix.to_channel_matrix(np=np, dtype=np.float64)
         expected_sum_min = float(params["expected_sum_min"])
         expected_sum_max = float(params["expected_sum_max"])
@@ -64,4 +67,33 @@ class TrueMultichannelSumcheckFixture:
             "seed": process_ctx.seed,
             "buffer_type": type(matrix).__name__,
             "buffer_channel_order": list(matrix.channel_order),
+        }
+
+    def render(  # type: ignore[no-untyped-def]
+        self,
+        session,
+        recommendations,
+        output_dir=None,
+    ):
+        del output_dir
+        target_layout_id = ""
+        if isinstance(session, dict):
+            raw_target_layout_id = session.get("target_layout_id")
+            if isinstance(raw_target_layout_id, str):
+                target_layout_id = raw_target_layout_id
+        received_ids = sorted(
+            {
+                rec.get("recommendation_id")
+                for rec in recommendations
+                if isinstance(rec, dict) and isinstance(rec.get("recommendation_id"), str)
+            }
+        )
+        note = "starter_example:true_multichannel_checksum_receipt_only"
+        if target_layout_id:
+            note = f"{note};starter_example:target_layout={target_layout_id}"
+        return {
+            "renderer_id": self.plugin_id,
+            "outputs": [],
+            "received_recommendation_ids": received_ids,
+            "notes": note,
         }

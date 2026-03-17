@@ -175,6 +175,10 @@ In short:
 
 ### 4.1 Directory layout (repo-local plugins)
 
+A fast way to start is copying one of the starter examples under
+`examples/plugin_authoring/starter_pack/` and then editing the manifest fields
+described in [13-plugin-authoring.md](13-plugin-authoring.md).
+
 A minimal plugin package:
 
 ```text
@@ -223,6 +227,13 @@ entrypoint: "mmo.plugins.detectors.resonance_detector:ResonanceDetector"
 capabilities:
   - "ISSUE.SPECTRAL.RESONANCE"
 ```
+
+Practical renderer examples that declare modern safety and determinism
+semantics live here:
+
+- `examples/plugin_authoring/starter_pack/renderers/starter_per_channel_gain.plugin.yaml`
+- `examples/plugin_authoring/starter_pack/renderers/starter_linked_group_bed.plugin.yaml`
+- `examples/plugin_authoring/starter_pack/renderers/starter_true_multichannel_checksum.plugin.yaml`
 
 Renderer-capability manifests may now declare the typed-buffer + purity
 contract explicitly:
@@ -397,12 +408,12 @@ If an ontology ID is deprecated:
 
 ## 10) How to write a plugin (quick start)
 
-1. Pick a type: detector, resolver, renderer.
-2. Choose the ontology IDs you will emit.
-3. Implement the interface class.
-4. Add a `plugin.yaml` manifest.
-5. Add at least one fixture test proving expected behavior.
-6. Submit a PR with documentation and test results.
+1. Copy the closest starter example from `examples/plugin_authoring/starter_pack/`.
+2. Rename the module, class, and `plugin_id`.
+3. Edit the manifest using `examples/plugin_authoring/starter_manifest.template.yaml`.
+4. Keep `scene_scope`, `layout_safety`, and determinism fields explicit.
+5. Add a tiny regression test or fixture before expanding the DSP logic.
+6. Run the validation commands in [13-plugin-authoring.md](13-plugin-authoring.md).
 
 ---
 

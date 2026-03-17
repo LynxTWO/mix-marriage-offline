@@ -12,10 +12,15 @@ from mmo.core.plugin_loader import load_plugin_root_entries
 from mmo.dsp.plugin_mode_runner import run_plugin_mode
 from mmo.dsp.process_context import build_process_context
 
-_FIXTURE_ROOT = Path(__file__).resolve().parent / "plugins"
-_PER_CHANNEL_PLUGIN_ID = "PLUGIN.RENDERER.TEST.PER_CHANNEL_GAIN"
-_LINKED_GROUP_PLUGIN_ID = "PLUGIN.RENDERER.TEST.LINKED_GROUP_TILT"
-_TRUE_MULTICHANNEL_PLUGIN_ID = "PLUGIN.RENDERER.TEST.TRUE_MULTICHANNEL_SUMCHECK"
+_FIXTURE_ROOT = (
+    Path(__file__).resolve().parents[1]
+    / "examples"
+    / "plugin_authoring"
+    / "starter_pack"
+)
+_PER_CHANNEL_PLUGIN_ID = "PLUGIN.RENDERER.STARTER.PER_CHANNEL_GAIN"
+_LINKED_GROUP_PLUGIN_ID = "PLUGIN.RENDERER.STARTER.LINKED_GROUP_BED"
+_TRUE_MULTICHANNEL_PLUGIN_ID = "PLUGIN.RENDERER.STARTER.TRUE_MULTICHANNEL_CHECKSUM"
 _PER_CHANNEL_GAIN_LINEAR = math.pow(10.0, 1.0 / 20.0)
 _LINKED_GROUP_GAIN_DB = 1.5
 _LINKED_GROUP_GAIN_LINEAR = math.pow(10.0, _LINKED_GROUP_GAIN_DB / 20.0)
@@ -89,8 +94,10 @@ class TestPluginModesGolden(unittest.TestCase):
         linked_group = entries[_LINKED_GROUP_PLUGIN_ID].manifest["capabilities"]
         self.assertGreaterEqual(linked_group["max_channels"], 32)
         self.assertEqual(linked_group["channel_mode"], "linked_group")
-        self.assertEqual(linked_group["scene_scope"], "object_capable")
+        self.assertTrue(linked_group["bed_only"])
+        self.assertEqual(linked_group["scene_scope"], "bed_only")
         self.assertEqual(linked_group["layout_safety"], "layout_agnostic")
+        self.assertEqual(linked_group["latency"], {"type": "fixed", "samples": 64})
         self.assertEqual(
             linked_group["link_groups"],
             ["front", "surrounds", "heights"],
@@ -110,7 +117,12 @@ class TestPluginModesGolden(unittest.TestCase):
         self.assertGreaterEqual(true_multichannel["max_channels"], 32)
         self.assertEqual(true_multichannel["channel_mode"], "true_multichannel")
         self.assertEqual(true_multichannel["scene_scope"], "object_capable")
-        self.assertEqual(true_multichannel["layout_safety"], "layout_agnostic")
+        self.assertEqual(true_multichannel["layout_safety"], "layout_specific")
+        self.assertEqual(
+            true_multichannel["supported_layout_ids"],
+            ["LAYOUT.5_1", "LAYOUT.7_1_4"],
+        )
+        self.assertEqual(true_multichannel["latency"], {"type": "dynamic"})
         self.assertEqual(
             true_multichannel["deterministic_seed_policy"],
             "seed_required",

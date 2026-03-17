@@ -74,8 +74,10 @@ reference when still useful.
 
 - [Status system (`STATUS.md` + `milestones.yaml`)](STATUS.md) Keep milestone
   checklist state and machine-readable milestone state aligned.
-- [13-plugin-authoring.md](13-plugin-authoring.md) Minimum viable plugin package
-  checklist for GUI-visible plugin metadata.
+- [13-plugin-authoring.md](13-plugin-authoring.md) Starter-pack workflow for
+  first plugins, including execution mode, determinism, and safety semantics.
+- [../examples/plugin_authoring/README.md](../examples/plugin_authoring/README.md)
+  Copyable manifests, example plugins, and an intentional invalid manifest.
 - [PR checklist template](../.github/pull_request_template.md) Required
   checklist for milestone links, changelog updates, and validation reporting.
 

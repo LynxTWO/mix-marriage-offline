@@ -1,204 +1,175 @@
-# Plugin Authoring: Minimum Viable Package
+# Plugin Authoring Starter Pack
 
-This checklist defines the minimum plugin package needed for GUI-visible
-metadata. Use it when creating a new plugin under `plugins/`.
+Use this doc when you want to ship a first MMO plugin quickly and correctly.
+The copyable examples live under `examples/plugin_authoring/`.
 
-## 1. Required package files
+## 1. Start from the closest example
 
-- `*.plugin.yaml` manifest (or `plugin.yaml`) with valid `plugin_id`,
-  `plugin_type`, `version`, and `entrypoint`.
-- `ui/layout.json` referenced by `ui_layout` in the manifest.
-- `config_schema` object in the manifest with parameter `properties`.
-- `x_mmo_ui` blocks on all parameters referenced by the layout.
+- `examples/plugin_authoring/starter_pack/renderers/starter_per_channel_gain.plugin.yaml`
+  with `examples/plugin_authoring/starter_pack/starter_per_channel_gain.py`
+  - best first copy for semantic-speaker, one-channel-at-a-time logic
+- `examples/plugin_authoring/starter_pack/renderers/starter_linked_group_bed.plugin.yaml`
+  with `examples/plugin_authoring/starter_pack/starter_linked_group_bed.py`
+  - best first copy for linked front/surround/height work plus bed-only safety
+- `examples/plugin_authoring/starter_pack/renderers/starter_true_multichannel_checksum.plugin.yaml`
+  with `examples/plugin_authoring/starter_pack/starter_true_multichannel_checksum.py`
+  - best first copy for full-buffer DSP with seeded determinism and
+    layout-specific safety
 
-Example starter pack:
+Also included:
 
-- `plugins/examples/gain_v0/gain_v0.plugin.yaml`
-- `plugins/examples/gain_v0/ui/layout.json`
+- `examples/plugin_authoring/starter_manifest.template.yaml`
+  - commented manifest template
+- `examples/plugin_authoring/invalid/layout_specific_without_layout.plugin.yaml`
+  - intentional mistake showing what MMO rejects
 
-## 1.1 External plugin roots
+## 2. Folder structure
 
-MMO now loads plugins from three roots:
+MMO scans a plugin root for `*.plugin.yaml` manifests. A minimal starter root
+can be this small:
 
-- Primary root: `--plugins` (default: `plugins/` in repo mode).
-- External root: `~/.mmo/plugins/` by default, or `--plugin-dir <path>` to
-  override.
-- Built-in packaged root: `mmo.data/plugins` (loaded last when present).
-
-External plugin manifests are automatically validated (schema + ontology
-semantics) before registration. Duplicate `plugin_id` values across
-primary/external roots are rejected deterministically; built-in packaged
-manifests are fallback-only.
-
-## 2. Manifest checklist
-
-- `plugin_id` matches schema pattern for the plugin type (for renderer:
-  `PLUGIN.RENDERER.*`).
-- `entrypoint` imports successfully.
-- `capabilities` uses supported fields (`max_channels`, `channel_mode`,
-  `link_groups`, `latency`, `deterministic_seed_policy`, `purity`, `dsp_traits`,
-  `bed_only`, `scene_scope`, `layout_safety`, `supported_standards`, `preferred_standard`,
-  `supported_layout_ids`, `supported_contexts`, `scene`, `notes`).
-- Renderer manifests must declare `capabilities.deterministic_seed_policy`.
-- Renderer manifests must explicitly declare `capabilities.scene_scope` as
-  `bed_only` or `object_capable`.
-- Renderer manifests must explicitly declare `capabilities.layout_safety` as
-  `layout_agnostic` or `layout_specific`.
-- If `capabilities.layout_safety` is `layout_specific`, declare
-  `supported_layout_ids` or `scene.supported_target_ids` so the host can
-  bypass unsupported targets with an explainable receipt instead of guessing.
-- Keep `scene_scope`, `bed_only`, and `scene.supports_objects` aligned. For
-  example, `scene_scope: "bed_only"` must not also claim
-  `scene.supports_objects: true`.
-- If the plugin crosses an audio-processing boundary, declare
-  `capabilities.purity` so authors and validators agree on typed-buffer and
-  determinism rules.
-- Renderer manifests must declare `capabilities.dsp_traits.tier` and
-  `capabilities.dsp_traits.linearity`.
-- If `capabilities.dsp_traits.linearity` is `nonlinear`, `anti_aliasing` must be
-  `oversampling` or `bandlimited` (not `none`).
-- Treat `capabilities.dsp_traits.measurable_claims` as the plugin truth
-  contract. Include at least one measurable claim with `metric_id` and expected
-  direction.
-- If `channel_mode` is `linked_group` or `true_multichannel`, declare
-  `supported_standards` (at minimum `["SMPTE"]`). Omit if the plugin is truly
-  channel-position-agnostic.
-- Never hard-code channel indices. Use `ProcessContext.channel_order` (list of
-  `SPK.*` IDs) to locate channels dynamically — safe for both SMPTE and Film
-  ordering.
-- `ui_layout` is a relative path inside the plugin directory.
-- `config_schema` is a JSON Schema object (Draft 2020-12 compatible).
-
-## 2.2 Typed audio boundary and purity contract
-
-Audio plugins now execute on `mmo.dsp.buffer.AudioBufferF64`, not anonymous raw
-NumPy buffers.
-
-Exact runtime expectations:
-
-- accept `AudioBufferF64` at the plugin boundary
-- respect `audio_buffer.channel_order` and `process_ctx.channel_order`
-- keep `audio_buffer.sample_rate_hz` aligned with the provided `sample_rate`
-- return `AudioBufferF64` from the boundary
-
-Manifest example:
-
-```yaml
-capabilities:
-  max_channels: 32
-  scene_scope: "object_capable"
-  layout_safety: "layout_agnostic"
-  deterministic_seed_policy: "seed_required"
-  purity:
-    audio_buffer: "typed_f64_interleaved"
-    randomness: "process_context_seed"
-    wall_clock: "forbidden"
-    thread_scheduling: "forbidden"
+```text
+my_plugin_root/
+  my_renderer.py
+  renderers/
+    my_renderer.plugin.yaml
 ```
 
-Python example:
+For repo-local examples, see:
 
-```python
-from mmo.dsp.buffer import AudioBufferF64
-
-def process_stereo(audio_buffer, sample_rate, params, ctx, process_ctx=None):
-    if not isinstance(audio_buffer, AudioBufferF64):
-        raise ValueError("AudioBufferF64 required at plugin boundary.")
-
-    frame_matrix = audio_buffer.to_frame_matrix(np=np, dtype=np.float64)
-    rendered = frame_matrix * 0.5
-    return AudioBufferF64.from_frame_matrix(
-        rendered,
-        channel_order=audio_buffer.channel_order,
-        sample_rate_hz=audio_buffer.sample_rate_hz,
-    )
+```text
+examples/plugin_authoring/
+  README.md
+  starter_manifest.template.yaml
+  invalid/
+    layout_specific_without_layout.plugin.yaml
+  starter_pack/
+    starter_per_channel_gain.py
+    starter_linked_group_bed.py
+    starter_true_multichannel_checksum.py
+    renderers/
+      starter_per_channel_gain.plugin.yaml
+      starter_linked_group_bed.plugin.yaml
+      starter_true_multichannel_checksum.plugin.yaml
 ```
 
-Determinism purity rules are enforced, not advisory:
+## 3. Manifest anatomy
 
-- Do not call global `random.*` helpers.
-- Do not call `numpy.random.*` helpers without an explicit seed.
-- Do not call `time.time()`, `time.perf_counter()`, or related wall-clock APIs.
-- Do not spawn threads, timers, or executors inside plugin execution.
+Start from `examples/plugin_authoring/starter_manifest.template.yaml`.
 
-If seeded randomness is part of the design, derive it from `process_ctx.seed`
-and use an explicit constructor such as `numpy.random.default_rng(process_ctx.seed)`.
-The runtime guard rejects unseeded RNG construction.
+Fields you should set deliberately:
 
-## 2.1 Canonical stage graph for plugin authors
+- `plugin_id`
+  - stable `PLUGIN.RENDERER.*`, `PLUGIN.DETECTOR.*`, or `PLUGIN.RESOLVER.*`
+- `entrypoint`
+  - `module:Class` inside the plugin root
+- `capabilities.channel_mode`
+  - `per_channel`, `linked_group`, or `true_multichannel`
+- `capabilities.max_channels`
+  - maximum channel count the plugin can process safely
+- `capabilities.link_groups`
+  - only for `linked_group`
+- `capabilities.latency`
+  - `zero`, `fixed`, or `dynamic`
+- `capabilities.deterministic_seed_policy`
+  - `none`, `seed_required`, or `seed_optional`
+- `capabilities.scene_scope`
+  - `bed_only` or `object_capable`
+- `capabilities.layout_safety`
+  - `layout_agnostic` or `layout_specific`
+- `capabilities.supported_layout_ids` or `capabilities.scene.supported_target_ids`
+  - required when `layout_safety` is `layout_specific`
+- `capabilities.dsp_traits`
+  - the measurable truth contract for renderer behavior
 
-Use the same stage names the architecture docs use and design the plugin around
-that boundary:
+Common safety mistake:
 
-- Stage 1, input normalization/alignment: core-only technical canonicalization.
-- Stage 2, analysis/metering: detector plugins only, advisory-only.
-- Stage 3, scene inference: resolver/scene logic only, advisory-only.
-- Stage 4, pre-render corrective pass: renderer plugins may apply bounded
-  corrective DSP.
-- Stage 5, render pass: renderer plugins may create target-layout audio.
-- Stage 6, post-render QA: advisory-only measurement/gates.
-- Stage 7, export pass: core-owned finalization for format/quantization/dither.
+- `layout_safety: "layout_specific"` without `supported_layout_ids` or
+  `scene.supported_target_ids`
+  - MMO rejects this with `ISSUE.SEMANTICS.LAYOUT_SPECIFIC_NO_LAYOUT`
 
-If your plugin mutates audio, it belongs in stage 4 or 5. If it only emits
-measurements, intent, warnings, or confidence, it belongs in stage 2, 3, or 6.
+## 4. Execution model overview
 
-Hard rules:
+MMO supports three channel execution modes for audio-mutating plugins:
 
-- Detectors and resolvers must not mutate audio.
-- Renderer plugins must not silently dither, quantize, or noise-shape inside
-  their own private output path before the core export-finalization contract.
-- Any audible change must be explainable as either bounded low-risk behavior or
-  an approved render action.
-- If the host cannot guarantee safe scene/layout handling from the manifest, it
-  will restrict the plugin to a safe subset or bypass it and record why in the
-  render manifest/receipt.
+- `per_channel`
+  - the host calls `process_channel(...)` once per semantic speaker
+  - best for fixed gain/trim or speaker-local correction
+- `linked_group`
+  - the host calls `process_linked_group(...)` for a declared semantic group
+  - best for front, surround, or height moves that must stay matched
+- `true_multichannel`
+  - the host calls `process_true_multichannel(...)` once with the full buffer
+  - best for processing that needs all channels at once
 
-## 3. Config schema and UI hints checklist
+In every mode:
 
-- Every GUI control parameter is declared under `config_schema.properties`.
-- Every GUI control parameter has a valid `x_mmo_ui` block:
-  - `widget` is one of `knob`, `fader`, `toggle`, `selector`, `xy`, `meter`,
-    `graph`.
-  - Use `units` / `step` / `min` / `max` where relevant.
-- Keep parameter names stable; layout `param_ref` resolution depends on these
-  names.
+- input is `AudioBufferF64`
+- output must be `AudioBufferF64`
+- routing should use `process_ctx.channel_order` and `SPK.*` IDs, never fixed
+  slot numbers
 
-## 4. UI layout checklist
+## 5. Determinism do and don't
 
-- Layout validates against `schemas/ui_layout.schema.json`.
-- Widgets fit the 12-column grid and avoid overlap.
-- Each widget has `widget_id`, `col_span`, `row_span`, and `param_ref`.
-- Layout widget `param_ref` values resolve to config parameters.
+Do:
 
-## 5. Validation checklist (must pass in CI)
+- derive any approved randomness from `process_ctx.seed`
+- return stable evidence dictionaries with sorted or deterministic values
+- keep behavior independent of wall clock and thread timing
 
-Run both commands and confirm deterministic output across repeated runs:
+Don't:
 
-```powershell
-python -m mmo plugins show --include-ui-hints --include-ui-layout-snapshot
-python -m mmo plugins ui-lint
+- call global `random.*`
+- call `numpy.random.*` without an explicit seed
+- call `time.time()`, `time.perf_counter()`, or similar APIs
+- spawn threads or executors inside plugin execution
+
+The runtime enforces these rules at the plugin boundary.
+
+## 6. Receipts and evidence expectations
+
+Two surfaces matter:
+
+- mode execution evidence
+  - `process_channel`, `process_linked_group`, and `process_true_multichannel`
+    may return `(AudioBufferF64, evidence_dict)`
+  - keep evidence short, deterministic, and directly tied to what changed
+- renderer manifest receipts
+  - `render(...)` returns a `RenderManifest`
+  - the host may further restrict or bypass the plugin based on
+    `scene_scope` and `layout_safety`, then records the why in `skipped[]` and
+    `notes`
+
+The starter pack examples intentionally demonstrate both:
+
+- the linked-group example is `bed_only`, so object recommendations are
+  restricted with an explainable skipped row
+- the true-multichannel example is `layout_specific`, so unsupported layouts
+  are bypassed with an explainable skipped row
+
+## 7. Quick test workflow
+
+Validate the examples and the authoring path with:
+
+```sh
+python -m pytest -q tests/test_plugin_modes_golden.py
+python -m pytest -q tests/test_plugin_authoring_examples.py
+python -m pytest -q tests/test_plugin_registry.py
+python -m pytest -q tests/test_renderer_runner.py
+python -m mmo plugins validate --plugins examples/plugin_authoring/starter_pack
 ```
 
-With external plugins:
+The last command now validates entrypoints relative to the plugin root, so it
+works for repo-local examples and external plugin directories the same way.
 
-```powershell
-python -m mmo plugins list --plugins plugins --plugin-dir ~/.mmo/plugins
-python -m mmo render --report report.json --plugins plugins `
-  --plugin-dir ~/.mmo/plugins --out-manifest render_manifest.json
-```
+## 8. GUI-visible extras
 
-Use `python -m mmo plugins show PLUGIN.RENDERER.EXAMPLE_GAIN_V0 ...` to target a
-specific plugin.
+If you also want MMO's plugin UI tooling to understand your plugin, add:
 
-Expected outcomes:
+- `config_schema`
+- `ui_layout`
+- `x_mmo_ui` hints on user-facing parameters
 
-- `plugins show` reports:
-  - `config_schema.present: True`
-  - `ui_layout.present: True`
-  - `ui_layout_snapshot.violations_count: 0`
-  - `ui_hints.present: True`
-- `plugins ui-lint` exits cleanly with no errors for the plugin.
-
-See [docs/16-audio-quality-mandates.md](./16-audio-quality-mandates.md) for
-digital-first DSP policy, truth-contract guidance, and measurable-claim
-examples.
+The GUI-oriented examples under `plugins/examples/` are still the right
+reference for that layer. The starter pack in `examples/plugin_authoring/`
+focuses on execution mode, determinism, and safety semantics first.

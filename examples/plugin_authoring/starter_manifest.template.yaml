@@ -1,0 +1,56 @@
+# Copy this file into your plugin root, then replace the example values.
+# The field-by-field walkthrough lives in docs/13-plugin-authoring.md.
+plugin_id: "PLUGIN.RENDERER.STARTER.COPY_ME"
+plugin_type: "renderer"
+name: "Copy Me Starter Renderer"
+version: "0.1.0"
+description: "Minimal starter manifest for an MMO renderer plugin."
+# module:Class inside the plugin root you pass to --plugins or --plugin-dir.
+entrypoint: "starter_per_channel_gain:StarterPerChannelGain"
+capabilities:
+  # Pick one: per_channel | linked_group | true_multichannel
+  channel_mode: "per_channel"
+  # Keep this at or above the biggest layout you intend to process.
+  max_channels: 32
+  # Declare host-facing safety explicitly so restrict/bypass receipts are clear.
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  # Declare link_groups only when channel_mode is linked_group.
+  # link_groups:
+  #   - "front"
+  #   - "surrounds"
+  #   - "heights"
+  # Tell the host how delay compensation should behave.
+  latency:
+    type: "zero"
+  # Determinism contract:
+  # none | seed_required | seed_optional
+  deterministic_seed_policy: "none"
+  purity:
+    audio_buffer: "typed_f64_interleaved"
+    randomness: "forbidden"
+    wall_clock: "forbidden"
+    thread_scheduling: "forbidden"
+  # For layout_specific plugins, declare supported_layout_ids or
+  # scene.supported_target_ids so the host can bypass unsupported layouts
+  # explainably instead of guessing.
+  # supported_layout_ids:
+  #   - "LAYOUT.5_1"
+  # supported_standards is optional for truly layout-agnostic plugins.
+  supported_contexts:
+    - "render"
+  # Renderer manifests also declare a tiny measurable truth contract.
+  dsp_traits:
+    tier: "information_preserving"
+    linearity: "linear"
+    phase_behavior: "linear_phase"
+    adds_noise: false
+    introduces_harmonics: false
+    anti_aliasing: "na"
+    measurable_claims:
+      - metric_id: "METER.TRUE_PEAK_DBTP"
+        expected_direction: "within"
+        threshold: 0.5
+        note: "Starter example stays bounded and deterministic."
+  notes:
+    - "Replace plugin_id, entrypoint, and measurable claims before shipping."

@@ -1,0 +1,49 @@
+plugin_id: "PLUGIN.RENDERER.STARTER.TRUE_MULTICHANNEL_CHECKSUM"
+plugin_type: "renderer"
+name: "Starter True-Multichannel Checksum"
+version: "0.1.0"
+description: "Tiny starter example for true_multichannel execution with seeded determinism and layout safety."
+entrypoint: "starter_true_multichannel_checksum:StarterTrueMultichannelChecksum"
+capabilities:
+  max_channels: 32
+  channel_mode: "true_multichannel"
+  scene_scope: "object_capable"
+  layout_safety: "layout_specific"
+  supported_layout_ids:
+    - "LAYOUT.5_1"
+    - "LAYOUT.7_1_4"
+  latency:
+    type: "dynamic"
+  deterministic_seed_policy: "seed_required"
+  purity:
+    audio_buffer: "typed_f64_interleaved"
+    randomness: "process_context_seed"
+    wall_clock: "forbidden"
+    thread_scheduling: "forbidden"
+  supported_standards:
+    - "SMPTE"
+    - "FILM"
+    - "LOGIC_PRO"
+    - "VST3"
+    - "AAF"
+  supported_contexts:
+    - "render"
+  scene:
+    supports_objects: true
+    supports_beds: true
+    supports_locks: true
+    requires_speaker_positions: true
+  dsp_traits:
+    tier: "information_preserving"
+    linearity: "linear"
+    phase_behavior: "linear_phase"
+    adds_noise: false
+    introduces_harmonics: false
+    anti_aliasing: "na"
+    measurable_claims:
+      - metric_id: "METER.TRUE_PEAK_DBTP"
+        expected_direction: "within"
+        threshold: 0.5
+        note: "Uses process_ctx.seed to write a deterministic checksum tone."
+  notes:
+    - "Starter example that the host may bypass on unsupported layouts."
