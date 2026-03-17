@@ -696,6 +696,11 @@ test.describe("MMO Tauri screenshot capture", () => {
     await expect(page.locator("#ab-compensation")).toContainText(
       "Fair listen on",
     );
+
+    // Pin the inspection panel to its canonical state: compensation open, JSON preview closed.
+    await setDetailsOpen(page, "#compare-compensation-details", true);
+    await setDetailsOpen(page, "#compare-json-preview-details", false);
+
     await captureCanonicalViewport(page, "tauri_compare_loaded.png", {
       anchorSelector: "[data-widget-id=\"widget.compare.summary\"]",
       viewportSelectors: [

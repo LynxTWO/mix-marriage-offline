@@ -38,10 +38,10 @@ captures.
 ## Capture contract
 
 - Fixed-region committed PNGs: all current Tauri baselines. Each image is a
-  stable 1280 x 900 CSS-pixel desktop frame. Session, Results, and Compare use
-  the top of the app shell or screen, except Results which anchors on the
-  loaded summary row; the Scene captures anchor on the Scene locks card so the
-  lock-context state remains visible inside the fixed frame.
+  stable 1280 x 900 CSS-pixel desktop frame. Session uses the top of the app
+  shell. Results and Compare anchor on their respective loaded summary widgets.
+  The Scene captures anchor on the Scene locks card so the lock-context state
+  remains visible inside the fixed frame.
 - Intentionally full-state committed PNGs: none in the current Tauri manual
   set. If that changes later, document the reason here before committing the
   baseline.
@@ -58,7 +58,7 @@ captures.
 | `tauri_scene_loaded.png` | Scene screen, loaded with lock context | Fixed region: Scene locks anchor in viewport | [Chapter 10 / Scene](../../10-gui-walkthrough.md#scene) |
 | `tauri_scene_locks_editor.png` | Scene screen, lock editor open | Fixed region: Scene locks anchor in viewport | [Chapter 10 / Scene](../../10-gui-walkthrough.md#scene) |
 | `tauri_results_loaded.png` | Results screen, loaded default state | Fixed region: Results summary anchor in viewport | [Chapter 10 / Results](../../10-gui-walkthrough.md#results) |
-| `tauri_compare_loaded.png` | Compare screen, loaded loudness-matched state | Fixed region: top of Compare screen | [Chapter 10 / Compare](../../10-gui-walkthrough.md#compare) |
+| `tauri_compare_loaded.png` | Compare screen, loaded loudness-matched state | Fixed region: Compare summary widget anchor in viewport | [Chapter 10 / Compare](../../10-gui-walkthrough.md#compare) |
 
 ## Named dynamic state without a committed PNG
 
