@@ -83,12 +83,16 @@ function jsonFile(
 }
 
 async function openScreen(page: Page, screen: string): Promise<void> {
-  const label = screen.charAt(0).toUpperCase() + screen.slice(1);
-  await page.getByRole("button", { name: label, exact: true }).click();
+  const tab = page.locator(`[data-screen-target="${screen}"]`).first();
+  await expect(tab).toBeVisible();
+  await expect(tab).toHaveAttribute("role", "tab");
+  await expect(tab).toHaveAttribute("aria-controls", `screen-${screen}`);
+  await tab.click();
   await expect(page.locator(`#screen-${screen}`)).toBeVisible();
   await page.evaluate(() => {
     window.scrollTo(0, 0);
   });
+  await settleLayout(page);
 }
 
 async function settleLayout(page: Page): Promise<void> {
@@ -693,11 +697,11 @@ test.describe("MMO Tauri screenshot capture", () => {
       "Fair listen on",
     );
     await captureCanonicalViewport(page, "tauri_compare_loaded.png", {
-      anchorSelector: "#screen-compare",
+      anchorSelector: "[data-widget-id=\"widget.compare.summary\"]",
       viewportSelectors: [
-        "#compare-a-input",
         "#ab-compensation",
         "#compare-readout-primary",
+        "#compare-change-summary",
       ],
     });
   });
