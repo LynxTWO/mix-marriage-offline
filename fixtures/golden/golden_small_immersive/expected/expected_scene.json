@@ -154,7 +154,7 @@
   "schema_version": "0.1.0",
   "source": {
     "created_from": "draft",
-    "stems_dir": "/SCENE/INTENT"
+    "stems_dir": "<FIXTURE_ROOT>"
   },
   "source_refs": {
     "bus_plan_ref": "bus_plan.json",
