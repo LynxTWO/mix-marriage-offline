@@ -1196,7 +1196,10 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
                 ]
             )
             self.assertEqual(exit_code, 1, msg=stderr)
-            self.assertIn("--scene-strict failed", stderr)
+            self.assertIn("Scene lint failed", stderr)
+            self.assertIn("safe-render: scene validation stopped the render.", stderr)
+            self.assertIn("--scene-strict found 1 error(s), 0 warning(s)", stderr)
+            self.assertIn("ISSUE.SCENE_LINT.MISSING_STEM_FILE", stderr)
 
     def test_scene_strict_rejects_scene_lint_errors(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1241,7 +1244,9 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
                 ]
             )
             self.assertEqual(exit_code, 1, msg=stderr)
-            self.assertIn("failed scene lint", stderr)
+            self.assertIn("Scene lint failed", stderr)
+            self.assertIn("safe-render: scene validation stopped the render.", stderr)
+            self.assertIn("--scene-strict found 1 error(s), 0 warning(s)", stderr)
             self.assertIn("ISSUE.SCENE_LINT.OUT_OF_RANGE_WIDTH", stderr)
 
 
