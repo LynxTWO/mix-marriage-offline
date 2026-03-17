@@ -26,6 +26,8 @@ reference when still useful.
   CLI; there is no secondary Python desktop shell.
 - MMO does not replace proprietary Atmos renderers or licensed Dolby
   workflows.
+- Automated packaged smoke is part of CI, but final human fresh-install
+  signoff still happens at release-candidate time before a v1 tag.
 
 ## Start Here
 

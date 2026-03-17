@@ -84,19 +84,35 @@ def _load_json_object(path: Path, *, label: str) -> dict[str, Any]:
     return payload
 
 
+def _compare_input_hint(path: Path) -> str:
+    return (
+        "Compare inputs must be either a workspace folder that already contains "
+        f"`report.json`, or the `report.json` file itself. Received: {path}"
+    )
+
+
 def load_report_from_path_or_dir(path: Path | str) -> tuple[dict[str, Any], Path]:
     candidate = Path(path)
     if candidate.is_dir():
         report_path = candidate / "report.json"
         if not report_path.exists():
-            raise ValueError(f"Missing report.json in directory: {candidate}")
+            raise ValueError(
+                "MMO could not find `report.json` in that compare folder. "
+                f"{_compare_input_hint(candidate)}"
+            )
     else:
         report_path = candidate
 
     if not report_path.exists():
-        raise ValueError(f"Report path does not exist: {report_path}")
+        raise ValueError(
+            "MMO could not find that compare input on disk. "
+            f"{_compare_input_hint(report_path)}"
+        )
     if report_path.is_dir():
-        raise ValueError(f"Expected report JSON file path, got directory: {report_path}")
+        raise ValueError(
+            "MMO expected a `report.json` file but received a folder path instead. "
+            f"{_compare_input_hint(report_path)}"
+        )
 
     report = _load_json_object(report_path, label="Report")
     return report, report_path.resolve()

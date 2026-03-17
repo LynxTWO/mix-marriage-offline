@@ -5,51 +5,86 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
 
-An open-source, offline mixing assistant for deterministic analysis,
-layout-agnostic scene intent, and mix-once/render-many delivery.
+MMO is an open-source, offline mixing assistant for stem folders.
+
+It does not "mix the song for you." Think of it more like a careful assistant
+in the room: it listens to your exported parts, writes down what it found,
+builds a speaker-placement plan, renders delivery versions, and leaves a clear
+paper trail so you can trust what happened.
 
 Website:
 [lynxtwo.github.io/mix-marriage-offline](https://lynxtwo.github.io/mix-marriage-offline/)
 
-MMO is not a DAW plugin and it is not "AI that mixes your song for you." It is a
-technical co-pilot that keeps the engineering side honest while the human keeps
-the musical intent.
+## Quick Translation Of MMO Terms
+
+- `stems folder`: the folder full of exported audio tracks from your DAW.
+- `workspace`: MMO's session notebook. This is the folder where it writes every
+  report, scene, render, and receipt.
+- `scene`: a speaker-placement plan. Think of it like a stage plot for your
+  mix, not a new audio bounce.
+- `receipt`: a packing slip for the render. It says what MMO changed, what it
+  refused to change, and why.
+- `QA`: the post-render quality check MMO runs on the files it wrote.
+
+## Recommended Install: Packaged Desktop App
+
+Most end users should start with the packaged desktop release from GitHub
+Releases.
+
+Release assets ship:
+
+- Windows installer
+- macOS app bundle
+- Linux AppImage
+- standalone CLI binaries for headless or automation workflows
+
+After install:
+
+1. Launch the MMO desktop app.
+2. Choose your `stems folder`.
+3. Choose your `workspace`.
+4. Run the workflow in order:
+   `Validate -> Analyze -> Scene -> Render -> Results -> Compare`
+
+If you want a quick confidence check before real work, open `Doctor` first.
+
+## What The Desktop Workflow Writes
+
+MMO keeps the main workflow artifact-first. In a normal desktop run, your
+workspace will contain files like these:
+
+- `project/validation.json`: the setup and file-structure check
+- `report.json`: the main analysis report
+- `report.scan.json`: the raw scan details behind the report
+- `stems_map.json`: MMO's stem classification map
+- `bus_plan.json`: the grouped routing draft
+- `bus_plan.summary.csv`: a spreadsheet-friendly bus summary
+- `scene.json`: the placement plan
+- `scene_lint.json`: scene warnings and errors
+- `render/`: the actual bounced audio files
+- `render_manifest.json`: the list of files MMO wrote
+- `safe_render_receipt.json`: what changed, what was blocked, and why
+- `render_qa.json`: the post-render QA report
+- `compare_report.json`: the A/B comparison report
+
+In the desktop app, the `Results` screen also gives you quick actions for the
+most important artifacts: `Receipt`, `Manifest`, and `QA`.
 
 ## What MMO Ships Today
 
-- Deterministic contract artifacts for analysis and delivery: `report.json`,
-  `scene.json`, `render_plan.json`, `render_report.json`,
-  `render_manifest.json`, `receipt.json`, and `compare_report.json`.
-- CLI workflows for `scan`, `analyze`, `run`, `safe-render`, `compare`,
-  `project`, `watch`, `scene`, `render-plan`, and `render-run`.
-- Mix-once/render-many delivery from one scene into multiple target layouts.
-- A compare workflow that can write `compare_report.json` and compare PDF
-  exports, with fair-listen `loudness_match` disclosure when sibling
-  `render_qa.json` artifacts exist.
-- First-class render targets for stereo, surround, immersive, and headphone
-  delivery, including deterministic binaural/headphone preview flows.
-- Five supported channel-ordering standards at the I/O boundary: `SMPTE`,
-  `FILM`, `LOGIC_PRO`, `VST3`, and `AAF`.
-- A shipped Tauri desktop app for packaged releases.
-- Standalone CLI binaries for Windows, macOS, and Linux packaged from the same
-  Python codebase.
-- Offline plugin marketplace/discovery, project/session artifacts, translation
-  QA, downmix QA, and watch-folder batch automation.
+- Packaged desktop workflow for `Validate -> Analyze -> Scene -> Render -> Results -> Compare`
+- Deterministic JSON artifacts that explain each step instead of hiding it
+- Mix-once/render-many delivery across stereo, surround, immersive, and
+  binaural targets
+- Fair-listen compare reporting with disclosed loudness compensation when
+  sibling `render_qa.json` files are available
+- Five channel-ordering standards at the I/O boundary:
+  `SMPTE`, `FILM`, `LOGIC_PRO`, `VST3`, and `AAF`
+- Offline plugin discovery plus bounded, receipt-backed recommendation flows
 
-## Current Limits
+## Source Install And CLI
 
-- MMO does not claim to replace proprietary Atmos renderers or licensed Dolby
-  workflows.
-
-## Install And Runtime Expectations
-
-Recommended for end users:
-
-- Download the packaged desktop release from GitHub Releases.
-- Release assets provide a Windows installer, macOS app bundle, and Linux
-  AppImage for the Tauri desktop app.
-
-Source install:
+If you want to run MMO from source:
 
 ```sh
 pip install .
@@ -64,152 +99,48 @@ pip install .[watch]
 
 Runtime expectations:
 
-- Python `3.12+` for source installs.
-- FFmpeg and ffprobe are expected for core audio workflows such as decode,
-  render, metadata handling, and QA on real-world sessions.
-- NumPy is part of the base install.
-- ReportLab is only needed for PDF exports.
+- Python `3.12+`
+- `ffmpeg` and `ffprobe` for real audio workflows
+- NumPy is part of the base install
+- ReportLab is only needed for PDF export
 
-Verify your environment:
+Verify the source install:
 
 ```sh
 mmo --help
 mmo env doctor --format text
 ```
 
-If FFmpeg or ffprobe are not on `PATH`, set `MMO_FFMPEG_PATH` and
-`MMO_FFPROBE_PATH`.
+If FFmpeg tools are not on `PATH`, set:
 
-## Current Workflow Snapshot
+- `MMO_FFMPEG_PATH=/path/to/ffmpeg`
+- `MMO_FFPROBE_PATH=/path/to/ffprobe`
 
-Quick one-button run:
+## Known Limits In v1
 
-```sh
-mmo run --stems ./stems --out out/run_001 --export-csv --export-pdf --bundle
-```
-
-What that gets you:
-
-- deterministic analysis artifacts in one output folder
-- `report.json` plus optional PDF/CSV exports
-- optional `scene.json`, `render_plan.json`, `ui_bundle.json`, and delivery
-  helpers when requested
-
-Project scaffold flow:
-
-```sh
-mmo project init --stems-root ./stems --out-dir ./project
-mmo project refresh --project-dir ./project --stems-root ./stems
-```
-
-This is the clean path for longer-running sessions, teams, and GUI-backed
-workspaces.
-
-## Compare Workflow
-
-MMO can compare two runs or two report folders and write a deterministic
-artifact describing what changed.
-
-```sh
-mmo compare \
-  --a out/run_a/report.json \
-  --b out/run_b/report.json \
-  --out out/compare_report.json \
-  --pdf out/compare_report.pdf
-```
-
-When sibling `render_qa.json` files are present, the compare artifact also
-records the evaluation-only loudness compensation MMO used for fair listening.
-
-## Mix-Once, Render-Many
-
-Safe-render is the bounded, receipt-driven render flow:
-
-```sh
-mmo safe-render \
-  --report out/run_001/report.json \
-  --render-many \
-  --render-many-targets stereo,5.1,7.1.4,binaural \
-  --layout-standard SMPTE \
-  --preview-headphones \
-  --out-dir out/deliverables \
-  --receipt-out out/receipt.json
-```
-
-What ships in this path today:
-
-- deterministic scene-aware render contracts
-- one scene rendered to many targets in one pass
-- conservative fallback sequencing and QA receipts
-- explicit approval gates for higher-impact recommendations
-- optional headphone preview WAVs via `--preview-headphones`
-
-`run --render-many` is also available when you want analyze plus delivery in one
-command:
-
-```sh
-mmo run \
-  --stems ./stems \
-  --out out/run_render_many \
-  --render-many \
-  --targets TARGET.STEREO.2_0,TARGET.SURROUND.5_1,TARGET.IMMERSIVE.7_1_4 \
-  --translation \
-  --deliverables-index \
-  --listen-pack
-```
-
-## Targets, Layouts, And Ordering Standards
-
-Current first-class render targets include:
-
-- stereo: `2.0`, `2.1`
-- front stage: `3.0`, `3.1`
-- surround: `4.0`, `4.1`, `5.1`, `7.1`
-- immersive: `5.1.2`, `5.1.4`, `7.1.2`, `7.1.4`, `9.1.6`
-- headphones: `binaural`
-
-The layout registry also includes additional layouts used for validation and
-routing contracts, including `7.1.6`, `SDDS 7.1`, and `32CH`.
-
-MMO keeps internal processing in canonical `SMPTE` order and remaps at the I/O
-boundary for these standards:
-
-| Standard    | Typical use                         |
-| ----------- | ----------------------------------- |
-| `SMPTE`     | broadcast, FFmpeg, WAV/FLAC/BWF     |
-| `FILM`      | Pro Tools and cinema-style ordering |
-| `LOGIC_PRO` | Logic Pro / DTS ordering            |
-| `VST3`      | Cubase / Nuendo 7.1+ ordering       |
-| `AAF`       | metadata-driven interchange         |
-
-See [docs/18-channel-standards.md](docs/18-channel-standards.md) and
-[docs/15-target-selection.md](docs/15-target-selection.md) for the canonical
-contracts.
-
-## Desktop App Status
-
-MMO's desktop app path is the packaged Tauri desktop app in
-[gui/desktop-tauri/README.md](gui/desktop-tauri/README.md).
-
-Tauri already covers the artifact-backed workflow sequence:
-`Validate -> Analyze -> Scene -> Render -> Results -> Compare`.
-
-The retired CustomTkinter desktop path has been removed from source installs,
-package metadata, CI, and release artifacts.
+- MMO is not a DAW plugin and it does not replace your creative judgement.
+- MMO does not claim to replace licensed Dolby or proprietary Atmos renderers.
+- Real audio workflows depend on `ffmpeg` and `ffprobe`; if those tools are
+  missing, MMO will stop and tell you instead of guessing.
+- `Compare` works best when both sides come from finished MMO workspaces or
+  from the matching `report.json` files inside those workspaces.
+- Automated packaged smoke runs already cover Windows, macOS, and Linux in CI.
+  Final human fresh-install signoff on release-candidate artifacts remains part
+  of the ship checklist before a v1 tag.
 
 ## Documentation
 
 Start here: [docs/README.md](docs/README.md)
 
-Recommended reads:
+Recommended user docs:
 
 - [docs/manual/00-manual-overview.md](docs/manual/00-manual-overview.md)
+- [docs/manual/02-install-and-verify.md](docs/manual/02-install-and-verify.md)
+- [docs/manual/10-gui-walkthrough.md](docs/manual/10-gui-walkthrough.md)
+- [docs/manual/13-troubleshooting.md](docs/manual/13-troubleshooting.md)
 - [docs/00-quickstart.md](docs/00-quickstart.md)
-- [docs/02-architecture.md](docs/02-architecture.md)
 - [docs/15-target-selection.md](docs/15-target-selection.md)
 - [docs/18-channel-standards.md](docs/18-channel-standards.md)
-- [docs/11-gui-vision.md](docs/11-gui-vision.md)
-- [docs/gui_parity.md](docs/gui_parity.md)
 - [docs/STATUS.md](docs/STATUS.md)
 
 ## Repo Layout

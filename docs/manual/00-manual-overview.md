@@ -12,6 +12,13 @@ that survive delivery.
 This manual uses two rails in the same chapter. “Quick path” is the shortest
 safe set of steps. “Pro notes” adds the reasoning, gotchas, and knobs.
 
+Plain-language glossary:
+
+- `stems folder`: the exported audio tracks from your DAW
+- `workspace`: MMO's notebook folder for reports, scenes, renders, and receipts
+- `scene`: the placement plan, like a stage plot for your mix
+- `receipt`: the render packing slip that explains what changed and why
+
 Conventions used here. CLI examples use `mmo ...` (installed) and also work as
 `python -m mmo ...` (repo checkout). Paths are examples. Replace them with your
 own. Targets can be written as full IDs (like `TARGET.STEREO.2_0`) or as

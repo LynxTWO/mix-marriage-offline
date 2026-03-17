@@ -1,51 +1,187 @@
 # Troubleshooting and common failures
 
-If something fails, do not guess. Run the doctor.
+When MMO fails, start with the first clear message. Do not guess past it.
 
-Environment checks. mmo env doctor --format text
+If you are using the desktop app, run `Doctor` first.
 
-PDF export fails. Install the PDF extra: pip install .[pdf]
+If you are using the CLI, run:
 
-Truth meters fail. NumPy is part of the base install now. Repair the source
-environment: pip install .
+```sh
+mmo env doctor --format text
+```
 
-FLAC or WavPack metadata warnings. Install FFmpeg/ffprobe, or set
-MMO_FFMPEG_PATH and MMO_FFPROBE_PATH.
+## MMO says to choose a stems folder or workspace first
 
-Scan reports “stems not aligned.” Re-export stems with consistent start time and
-duration. Do not trim silence differently per stem.
+What happened:
 
-Watch-folder misses a set. Increase --settle-seconds so partial copies are not
-processed early.
+- MMO does not know where your source audio lives, or where it should write its
+  artifacts.
 
-Safe-render says “blocked.” That means your current authority profile or locks
-stopped a risky action. Use `--dry-run` to inspect what would happen. Use
-`--approve` only when you intentionally accept the change.
+Why it happened:
 
-Safe-render reports `ISSUE.RENDER.NO_OUTPUTS`. No audio outputs were written. If
-you see NO_OUTPUTS, install/enable MIXDOWN_BASELINE renderer. Use
-`--allow-empty-outputs` only if you intentionally want a no-output pass.
+- one of the required path fields is empty
 
-GUI live-log error codes. [GUI.E2000] stage_failed — a pipeline stage exited
-with a nonzero return code. The log line includes `stage=<name>` and `rc=<code>`
-to identify which stage failed. A follow-up `first_error_line` entry shows the
-first "error:" or "Traceback" line from output. [GUI.E2001] spawn_failed — the
-GUI could not launch the subprocess at all. Check that the mmo package is
-installed and the executable path is valid. [GUI.STAGE] `<stage>` starting. /
-completed ok. — informational stage anchors for orientation.
+What to do next:
 
-Windows: unrecognized arguments with -m mmo. If the GUI live log shows
-`error: unrecognized arguments: -m mmo analyze ...` you are on a broken build
-(v1.1.0 Windows GUI). Upgrade to v1.1.1 or later. The v1.1.1 GUI executable
-handles `-m mmo <subcommand>` directly, matching the frozen build's internal
-invocation pattern.
+- `stems folder` should point at your exported audio tracks
+- `workspace` should point at the folder where you want MMO to write reports,
+  scenes, renders, and receipts
 
-Windows: default plugins folder. On Windows the GUI and CLI resolve the default
-user plugin directory to: %LOCALAPPDATA%\mmo\plugins (e.g.
-C:\Users\you\AppData\Local\mmo\plugins) If LOCALAPPDATA is not set, APPDATA and
-then USERPROFILE are tried. The old behaviour (v1.1.0 and earlier) fell back to
-a system path (System32/plugins) in some packaged builds. v1.1.1 fixes this.
-Override at any time with the MMO_PLUGIN_DIR environment variable.
+## Analyze fails before it gets going
 
-Pro notes. If you are debugging determinism, keep artifact folders and compare
-them. Use `mmo compare` between reports to see what changed.
+What happened:
+
+- MMO could not read the stems cleanly enough to analyze them
+
+Common reasons:
+
+- the stems folder path is wrong
+- the folder has no supported audio files
+- `ffmpeg` or `ffprobe` are missing
+
+What to do next:
+
+- confirm the stems folder really contains audio files
+- run `Doctor` or `mmo env doctor --format text`
+- install `ffmpeg` and `ffprobe`, or set `MMO_FFMPEG_PATH` and
+  `MMO_FFPROBE_PATH`
+
+## Scene Lock save fails
+
+What happened:
+
+- MMO refused to save one of the scene lock edits
+
+Why it happened:
+
+- a role override is malformed
+- a row is duplicated
+- the edit would create an invalid scene
+
+What to do next:
+
+- load the rows with `Inspect Scene Locks`
+- undo the last change
+- save again after simplifying the override
+
+Think of scene locks like taping notes onto a stage plot: if one note makes the
+plot contradictory, MMO stops instead of pretending it still makes sense.
+
+## Scene lint reports a failure
+
+What happened:
+
+- the placement draft references something MMO cannot trust yet
+
+Common reasons:
+
+- missing stem references
+- missing files
+- invalid lock combinations
+
+What to do next:
+
+- open `scene_lint.json`
+- fix the first error
+- rebuild the scene
+
+If you use `--scene-strict`, MMO will stop at this point on purpose instead of
+continuing into render.
+
+## Render says it was blocked
+
+What happened:
+
+- MMO stopped before writing audio
+
+Why it happened:
+
+- a safety gate blocked the current target or recommendation set
+
+What to do next:
+
+- open `safe_render_receipt.json`
+- read the blocked gate IDs and notes
+- rerun with `--dry-run` if you want to inspect the plan without writing audio
+- approve higher-risk changes only if you intentionally want them
+
+This is MMO acting like a careful assistant hitting pause before a risky bounce.
+
+## Render finished but wrote no audio
+
+What happened:
+
+- MMO completed the paperwork, but no renderer produced an output file
+
+What to do next:
+
+- open `safe_render_receipt.json`
+- open `render_qa.json`
+- confirm that at least one renderer in this build can write the chosen target
+
+Use `--allow-empty-outputs` only when you intentionally want a receipt-only
+pass.
+
+## Compare cannot load one of the inputs
+
+What happened:
+
+- MMO could not resolve one side of the A/B pair
+
+Why it happened:
+
+- the path is wrong
+- you pointed at the wrong folder
+- the folder does not contain `report.json`
+
+What to do next:
+
+- point Compare at a finished workspace folder, or at the `report.json` file
+  inside that workspace
+- make sure both sides exist on disk before running Compare
+
+## The desktop app opens, but no stage will run
+
+What happened:
+
+- the desktop shell opened, but the packaged audio helper did not launch
+
+Why it happened:
+
+- the sidecar backend is missing, blocked, or broken in that install
+
+What to do next:
+
+- run `Doctor`
+- if `Doctor` also fails, reinstall the packaged release
+- if you are a contributor, rebuild the sidecar from
+  `gui/desktop-tauri/README.md`
+
+## PDF export fails
+
+What happened:
+
+- MMO could not build a PDF report
+
+Why it happened:
+
+- ReportLab is missing
+
+What to do next:
+
+```sh
+pip install .[pdf]
+```
+
+## Watch-folder misses a set
+
+What happened:
+
+- MMO started reading a folder before all files finished copying
+
+What to do next:
+
+- increase `--settle-seconds`
+
+That gives MMO a longer "wait for the copy to finish" pause before it starts
+processing.

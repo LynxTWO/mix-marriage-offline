@@ -309,7 +309,9 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
       and assert the expected workspace artifact paths. Done: packaged desktop
       smoke now probes the bundled sidecar directly for `mmo --version`,
       bundled plugin validation, and `mmo env doctor --format json` before the
-      app workflow so frozen-entrypoint regressions fail fast.
+      app workflow so frozen-entrypoint regressions fail fast. Remaining RC
+      signoff: complete one human fresh-install walkthrough on the final
+      release-candidate desktop artifacts before tagging v1.
 
 ### 4.8 UX/CLI is usable for real work
 

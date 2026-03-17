@@ -25,6 +25,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     for preview transport, compare A/B playback switching, and transport UI
     wiring.
 
+### Changed
+
+- **Release-candidate hardening from a new-user point of view:**
+  - README and manual pages now lead with the packaged desktop workflow, define
+    MMO terms in plain language, and explain outputs using musician-friendly
+    analogies.
+  - The desktop app now explains missing folders, sidecar launch failures,
+    compare input mistakes, and common stage failures with "what happened /
+    why / what to do next" guidance.
+  - `safe-render` now explains blocked gates, no-output runs, and scene-strict
+    failures more clearly while keeping the receipt and QA artifacts as the
+    source of truth.
+  - Release tracking now calls out the remaining blocker honestly: automated
+    packaged smoke is green, and the last signoff item before a v1 tag is human
+    fresh-install verification on release-candidate artifacts.
+
+- **Tauri-only GUI parity contract:**
+  - `docs/gui_parity.md` and `tools/validate_gui_parity.py` now treat Tauri as
+    the desktop app path without requiring a CustomTkinter fallback section.
+  - Repo-facing docs now describe Tauri as the only desktop app path and note
+    that the retired CustomTkinter implementation has been removed.
+
 ### Removed
 
 - **CustomTkinter desktop path retirement:**
@@ -38,94 +60,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Repo-facing docs, manual pages, and release-copy templates no longer
     present `mmo-gui` as a supported path.
 
-### Changed
-
-- **Tauri-only GUI parity contract:**
-  - `docs/gui_parity.md` and `tools/validate_gui_parity.py` now treat Tauri as
-    the desktop app path without requiring a CustomTkinter fallback section.
-  - Repo-facing docs now describe Tauri as the only desktop app path and note
-    that the retired CustomTkinter implementation has been removed.
-
-## [1.1.3] — 2026-03-02
-
-### Fixed (continued)
-
-- **Windows packaged GUI `-m mmo` regression (critical hotfix):** GUI
-  passthrough now maps `-m mmo` to `mmo.__main__` for module execution while
-  preserving `sys.argv[0]` as `mmo`, so frozen builds execute the CLI entrypoint
-  correctly. (`src/mmo/gui/main.py`)
-- **Frozen GUI module inclusion for passthrough:** PyInstaller GUI builds now
-  add explicit hidden imports for `mmo.__main__` and `mmo.cli` so
-  `mmo-gui.exe -m mmo ...` and nested CLI execution paths are available in the
-  bundled binary. (`tools/build_binaries.py`)
-- **Release CI regression lock:** Windows release workflow now smoke-tests:
-  `mmo-gui.exe -m mmo --help` and
-  `mmo-gui.exe -m mmo.tools.analyze_stems --help`.
-  (`.github/workflows/release.yml`)
-- **Passthrough mapping unit coverage:** added helper-level test coverage for
-  `mmo -> mmo.__main__` mapping without executing module help output.
-  (`tests/test_gui_smoke.py`)
-
-## [1.1.2] — 2026-03-02 (broken on Windows packaged GUI)
-
 ### Fixed
 
-- **Packaged GUI `-m mmo*` passthrough (critical hotfix):** `mmo-gui` now
-  dispatches any `-m mmo...` module via `runpy` (not only `-m mmo`), so nested
-  frozen subprocess calls like `sys.executable -m mmo.tools.analyze_stems ...`
-  and `sys.executable -m mmo.tools.scan_session ...` execute correctly.
-  (`src/mmo/gui/main.py` — `_try_cli_passthrough`)
-- **Passthrough regression coverage:** added GUI passthrough tests for `mmo`,
-  `mmo.tools.analyze_stems`, `mmo.tools.scan_session`, and
-  `mmo.tools.export_report` with `--help` dispatch paths.
-  (`tests/test_gui_smoke.py`)
-- **PyInstaller module collection:** binary builds now explicitly collect
-  `mmo.tools` submodules so packaged GUI passthrough supports current and future
-  `mmo.tools.*` invocations. (`tools/build_binaries.py`)
+- Scene intent build/lint truthfulness:
+  - `scene build` now carries forward a real stems source path when one is
+    known, instead of falling back to the generic scene-intent placeholder.
+  - `scene lint` now accepts source stem IDs referenced through
+    `source_refs.stems_map_ref`, which fixes the packaged `stems classify ->
+    bus-plan -> scene build -> scene lint` path for scenes built from
+    `stems_map.json`.
 
-### Changed
-
-- **Release status:** `1.1.1` is marked as a broken release for packaged GUI
-  nested tool subprocesses (`-m mmo.tools.*`) and is superseded by `1.1.2`.
-- **Release status update:** `1.1.2` is now marked as broken for Windows
-  packaged GUI `-m mmo` execution due to missing `mmo.__main__` in frozen
-  bundles and is superseded by `1.1.3`.
-
-## [1.1.1] — 2026-03-01 (broken)
-
-### Fixed
-
-- **Windows GUI passthrough (critical):** The packaged GUI executable now
-  dispatches `sys.executable -m mmo <subcommand>` to the real CLI entrypoint
-  before any argparse processing, so frozen builds no longer abort with
-  `unrecognized arguments: -m mmo ...`. (`src/mmo/gui/main.py` —
-  `_try_cli_passthrough`)
-- **Windows default plugins directory:** `default_user_plugins_dir()` on Windows
-  now resolves to `%LOCALAPPDATA%\mmo\plugins` (with `APPDATA` / `USERPROFILE`
-  fallbacks) instead of incorrectly falling back to
-  `C:\Windows\System32\plugins` in frozen builds.
-  (`src/mmo/core/plugin_loader.py`)
-- **macOS / Linux plugin directories:** macOS resolves to
-  `~/Library/Application Support/mmo/plugins`; Linux honours
-  `$XDG_DATA_HOME/mmo/plugins` with fallback to `~/.local/share/mmo/plugins`.
-
-### Changed
-
-- **GUI live-log error codes:** `_run_command` now emits structured anchor
-  lines: `[GUI.E2001] spawn_failed` on subprocess launch failure,
-  `[GUI.E2000] stage_failed` on nonzero exit (with stage name and return code),
-  `[GUI.E2000] first_error_line` with the first meaningful error line from
-  output, `[GUI.STAGE] <stage> starting.` and
-  `[GUI.STAGE] <stage> completed ok.` for orientation.
-- **Docs — Chapter 13 (Troubleshooting):** Documents GUI error codes, the
-  Windows `-m mmo` broken-build note, and the corrected Windows default plugin
-  folder path.
-- **Docs — Chapter 11 (Plugins):** Lists platform-specific default plugin
-  directories.
-
-## [Unreleased]
-
-### Fixed
+- Frozen sidecar nested module passthrough:
+  - The frozen CLI entrypoint now forwards `-m mmo` and `-m mmo.tools.*`
+    module execution instead of treating the module name like a normal CLI
+    command.
+  - This fixes packaged desktop analyze flows that still launch internal
+    `mmo.tools.*` helpers through `sys.executable`.
 
 - Tauri scene-lock editor parity:
   - The primary desktop Scene screen now inspects, edits, and saves
@@ -146,6 +96,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     against a tiny fixture.
   - Added a packaged-app smoke harness so completion is gated on shipped-binary
     behavior and expected workspace artifact paths, not only source-tree pytest.
+
+- Packaged desktop smoke harness completion:
+  - The packaged smoke harness now captures stdout/stderr through temporary
+    files instead of waiting on inherited pipes to close, so AppImage/AppDir
+    runs return cleanly after the desktop app writes its smoke summary.
 
 - Frozen Tauri sidecar CLI entrypoint contract:
   - The default CLI binary build now freezes a dedicated absolute-import stub
@@ -1216,6 +1171,83 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `SFX5`) and avoid `ISSUE.VALIDATION.UNKNOWN_ROLE` false positives. Added
   generic synth recognition via `ROLE.SYNTH.OTHER` (`synth`/`synth01`) and
   `SubDrop` recognition under `ROLE.FX.IMPACT`.
+
+## [1.1.3] — 2026-03-02
+
+### Fixed (continued)
+
+- **Windows packaged GUI `-m mmo` regression (critical hotfix):** GUI
+  passthrough now maps `-m mmo` to `mmo.__main__` for module execution while
+  preserving `sys.argv[0]` as `mmo`, so frozen builds execute the CLI entrypoint
+  correctly. (`src/mmo/gui/main.py`)
+- **Frozen GUI module inclusion for passthrough:** PyInstaller GUI builds now
+  add explicit hidden imports for `mmo.__main__` and `mmo.cli` so
+  `mmo-gui.exe -m mmo ...` and nested CLI execution paths are available in the
+  bundled binary. (`tools/build_binaries.py`)
+- **Release CI regression lock:** Windows release workflow now smoke-tests:
+  `mmo-gui.exe -m mmo --help` and
+  `mmo-gui.exe -m mmo.tools.analyze_stems --help`.
+  (`.github/workflows/release.yml`)
+- **Passthrough mapping unit coverage:** added helper-level test coverage for
+  `mmo -> mmo.__main__` mapping without executing module help output.
+  (`tests/test_gui_smoke.py`)
+
+## [1.1.2] — 2026-03-02 (broken on Windows packaged GUI)
+
+### Fixed
+
+- **Packaged GUI `-m mmo*` passthrough (critical hotfix):** `mmo-gui` now
+  dispatches any `-m mmo...` module via `runpy` (not only `-m mmo`), so nested
+  frozen subprocess calls like `sys.executable -m mmo.tools.analyze_stems ...`
+  and `sys.executable -m mmo.tools.scan_session ...` execute correctly.
+  (`src/mmo/gui/main.py` — `_try_cli_passthrough`)
+- **Passthrough regression coverage:** added GUI passthrough tests for `mmo`,
+  `mmo.tools.analyze_stems`, `mmo.tools.scan_session`, and
+  `mmo.tools.export_report` with `--help` dispatch paths.
+  (`tests/test_gui_smoke.py`)
+- **PyInstaller module collection:** binary builds now explicitly collect
+  `mmo.tools` submodules so packaged GUI passthrough supports current and future
+  `mmo.tools.*` invocations. (`tools/build_binaries.py`)
+
+### Changed
+
+- **Release status:** `1.1.1` is marked as a broken release for packaged GUI
+  nested tool subprocesses (`-m mmo.tools.*`) and is superseded by `1.1.2`.
+- **Release status update:** `1.1.2` is now marked as broken for Windows
+  packaged GUI `-m mmo` execution due to missing `mmo.__main__` in frozen
+  bundles and is superseded by `1.1.3`.
+
+## [1.1.1] — 2026-03-01 (broken)
+
+### Fixed
+
+- **Windows GUI passthrough (critical):** The packaged GUI executable now
+  dispatches `sys.executable -m mmo <subcommand>` to the real CLI entrypoint
+  before any argparse processing, so frozen builds no longer abort with
+  `unrecognized arguments: -m mmo ...`. (`src/mmo/gui/main.py` —
+  `_try_cli_passthrough`)
+- **Windows default plugins directory:** `default_user_plugins_dir()` on Windows
+  now resolves to `%LOCALAPPDATA%\mmo\plugins` (with `APPDATA` / `USERPROFILE`
+  fallbacks) instead of incorrectly falling back to
+  `C:\Windows\System32\plugins` in frozen builds.
+  (`src/mmo/core/plugin_loader.py`)
+- **macOS / Linux plugin directories:** macOS resolves to
+  `~/Library/Application Support/mmo/plugins`; Linux honours
+  `$XDG_DATA_HOME/mmo/plugins` with fallback to `~/.local/share/mmo/plugins`.
+
+### Changed
+
+- **GUI live-log error codes:** `_run_command` now emits structured anchor
+  lines: `[GUI.E2001] spawn_failed` on subprocess launch failure,
+  `[GUI.E2000] stage_failed` on nonzero exit (with stage name and return code),
+  `[GUI.E2000] first_error_line` with the first meaningful error line from
+  output, `[GUI.STAGE] <stage> starting.` and
+  `[GUI.STAGE] <stage> completed ok.` for orientation.
+- **Docs — Chapter 13 (Troubleshooting):** Documents GUI error codes, the
+  Windows `-m mmo` broken-build note, and the corrected Windows default plugin
+  folder path.
+- **Docs — Chapter 11 (Plugins):** Lists platform-specific default plugin
+  directories.
 
 ## [1.1.0] — 2026-02-27
 

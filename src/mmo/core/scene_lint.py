@@ -173,6 +173,62 @@ def _path_text(path: Path | None) -> str | None:
     return path.resolve().as_posix()
 
 
+def _load_json_object(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    return payload
+
+
+def _resolve_scene_ref_path(
+    scene_payload: dict[str, Any],
+    *,
+    scene_path: Path,
+    key: str,
+) -> Path | None:
+    source_refs = scene_payload.get("source_refs")
+    if not isinstance(source_refs, dict):
+        return None
+    raw_path = _coerce_str(source_refs.get(key)).strip()
+    if not raw_path:
+        return None
+    candidate = Path(raw_path)
+    if candidate.is_absolute():
+        return candidate
+    return (scene_path.parent / candidate).resolve()
+
+
+def _known_source_stem_ids(
+    scene_payload: dict[str, Any],
+    *,
+    scene_path: Path,
+) -> set[str]:
+    stems_map_path = _resolve_scene_ref_path(
+        scene_payload,
+        scene_path=scene_path,
+        key="stems_map_ref",
+    )
+    if stems_map_path is None or not stems_map_path.is_file():
+        return set()
+
+    stems_map_payload = _load_json_object(stems_map_path)
+    assignments = stems_map_payload.get("assignments")
+    if not isinstance(assignments, list):
+        return set()
+
+    known_ids: set[str] = set()
+    for row in assignments:
+        if not isinstance(row, dict):
+            continue
+        stem_id = _coerce_str(row.get("file_id")).strip()
+        if stem_id:
+            known_ids.add(stem_id)
+    return known_ids
+
+
 def _scene_locks_map() -> dict[str, dict[str, Any]]:
     payload = load_scene_locks()
     locks = payload.get("locks")
@@ -477,6 +533,10 @@ def build_scene_lint_payload(
     known_bus_roots = _known_bus_roots(scene_payload)
     scene_stems_dir = _scene_stems_dir(scene_payload)
     available_stem_tokens = _available_scene_stem_tokens(scene_stems_dir)
+    known_source_stem_ids = _known_source_stem_ids(
+        scene_payload,
+        scene_path=scene_path,
+    )
 
     objects = scene_payload.get("objects")
     object_rows = (
@@ -588,6 +648,7 @@ def build_scene_lint_payload(
                 if (
                     available_stem_tokens
                     and normalized_stem_id.lower() not in available_stem_tokens
+                    and normalized_stem_id not in known_source_stem_ids
                 ):
                     issues.append(
                         _issue(
@@ -667,6 +728,8 @@ def build_scene_lint_payload(
         ]
         for stem_offset, stem_id in enumerate(stem_ids):
             if stem_id in known_object_stems:
+                continue
+            if stem_id in known_source_stem_ids:
                 continue
             if available_stem_tokens and stem_id.lower() in available_stem_tokens:
                 continue
@@ -749,7 +812,11 @@ def build_scene_lint_payload(
                     evidence={"object_id": object_id},
                 )
             )
-        elif available_stem_tokens and stem_id.lower() not in available_stem_tokens:
+        elif (
+            available_stem_tokens
+            and stem_id.lower() not in available_stem_tokens
+            and stem_id not in known_source_stem_ids
+        ):
             issues.append(
                 _issue(
                     severity=_SEVERITY_ERROR,

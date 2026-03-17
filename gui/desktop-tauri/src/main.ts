@@ -402,7 +402,7 @@ function emptySceneLocksState(): SceneLocksState {
     roleOptions: [],
     sceneLocksPath: "",
     scenePath: "",
-    statusMessage: "Inspect the project scene locks to edit deterministic overrides.",
+    statusMessage: "Inspect scene locks to fine-tune how MMO places each part in the room.",
     statusTone: "info",
   };
 }
@@ -886,8 +886,70 @@ function formatExitSummary(result: MmoRunResult): string {
   return `exit=${result.code ?? "null"} signal=${result.signal ?? "null"}`;
 }
 
+function failureOutputLines(text: string): string[] {
+  return text
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function firstMeaningfulFailureLine(result: MmoRunResult): string | null {
+  const lines = [
+    ...failureOutputLines(result.stderr),
+    ...failureOutputLines(result.stdout),
+  ];
+  if (lines.length === 0) {
+    return null;
+  }
+  const preferred = lines.find((line) => /error|failed|missing|invalid|traceback|blocked|not found/i.test(line));
+  return preferred ?? lines[0];
+}
+
+function stageFailureWhat(stageLabel: string): string {
+  switch (stageLabel) {
+    case "doctor":
+      return "Doctor could not finish the health check.";
+    case "validate":
+      return "Validate could not finish checking the session.";
+    case "analyze":
+      return "Analyze could not finish listening to the stems.";
+    case "scene":
+      return "Scene could not finish building the placement plan.";
+    case "render":
+      return "Render could not finish the bounce.";
+    case "compare":
+      return "Compare could not finish the A/B check.";
+    default:
+      return `${stageLabel} could not finish.`;
+  }
+}
+
+function stageFailureNextStep(stageLabel: string): string {
+  switch (stageLabel) {
+    case "doctor":
+      return "Run Doctor again after checking FFmpeg/ffprobe and the packaged install. If it still fails, reinstall the release build.";
+    case "validate":
+      return "Check that your stems folder and workspace folder are both set, then fix the first reported problem and rerun Validate.";
+    case "analyze":
+      return "Check that the stems folder exists, contains audio files, and that FFmpeg/ffprobe are available, then rerun Analyze.";
+    case "scene":
+      return "Open the first scene warning or error, fix the missing file or lock issue, then rebuild the scene.";
+    case "render":
+      return "Open the receipt or QA output, fix the first blocked item, then rerun Render.";
+    case "compare":
+      return "Choose two finished runs or two report.json files, then rerun Compare.";
+    default:
+      return "Fix the first reported problem and try the step again.";
+  }
+}
+
 function formatFailureOutput(result: MmoRunResult): string {
   const lines = [formatExitSummary(result)];
+  const reason = firstMeaningfulFailureLine(result);
+  if (reason) {
+    lines.push(`reason: ${reason}`);
+  }
   if (result.stderr.trim()) {
     lines.push(`stderr: ${result.stderr.trim()}`);
   }
@@ -1177,7 +1239,7 @@ function renderRecentPaths(ui: AppUi): void {
   renderRecentChipList(ui.recents.workspaceDir, state.recentPaths.workspaceDirs, "No workspaces yet.", (value) => {
     ui.inputs.workspaceDir.value = value;
     commitRecentPath(ui, "workspaceDirs", value);
-    resetSceneLocksState("Inspect the project scene locks to edit deterministic overrides.");
+    resetSceneLocksState("Inspect scene locks to fine-tune how MMO places each part in the room.");
     renderAll(ui);
   });
   renderRecentChipList(ui.recents.sceneLocksPath, state.recentPaths.sceneLocksPaths, "No scene-lock artifacts yet.", (value) => {
@@ -1206,7 +1268,7 @@ function setWorkspaceInput(ui: AppUi, workspaceDir: string): void {
   }
   ui.inputs.workspaceDir.value = normalized;
   commitRecentPath(ui, "workspaceDirs", normalized);
-  resetSceneLocksState("Inspect the project scene locks to edit deterministic overrides.");
+  resetSceneLocksState("Inspect scene locks to fine-tune how MMO places each part in the room.");
 }
 
 function setCompareInput(
@@ -1417,7 +1479,11 @@ function buildRenderCancelPath(paths: WorkflowPaths): string {
 function collectWorkspacePaths(ui: AppUi): { paths: WorkflowPaths; workspaceDir: string } {
   const workspaceDir = ui.inputs.workspaceDir.value.trim();
   if (!workspaceDir) {
-    throw new Error("Enter a workspace folder path first.");
+    throw new Error(
+      "Choose a workspace folder first.\n"
+      + "Why: MMO uses the workspace like a session notebook for reports, scenes, renders, and receipts.\n"
+      + "Next: Pick an empty or reusable folder where you want all outputs to live.",
+    );
   }
   return {
     paths: buildWorkflowPaths(workspaceDir),
@@ -1432,7 +1498,11 @@ function collectWorkspaceAndStems(ui: AppUi): {
 } {
   const stemsDir = ui.inputs.stemsDir.value.trim();
   if (!stemsDir) {
-    throw new Error("Enter a stems folder path first.");
+    throw new Error(
+      "Choose a stems folder first.\n"
+      + "Why: MMO needs the folder that holds the exported audio tracks it will listen to.\n"
+      + "Next: Pick the folder that contains your stem WAVs or similar audio files.",
+    );
   }
   return {
     ...collectWorkspacePaths(ui),
@@ -1908,6 +1978,77 @@ function setSelectOptions(
     : (options[0]?.value ?? "");
 }
 
+const RENDER_TARGET_SELECT_ALIASES: Record<string, string[]> = {
+  stereo: [
+    "TARGET.STEREO.2_0",
+    "TARGET.STEREO.2_0_ALT",
+    "LAYOUT.2_0",
+    "2.0",
+    "2_0",
+  ],
+  "5.1": [
+    "TARGET.SURROUND.5_1",
+    "LAYOUT.5_1",
+    "5_1",
+    "surround51",
+  ],
+  "7.1.4": [
+    "TARGET.IMMERSIVE.7_1_4",
+    "LAYOUT.7_1_4",
+    "7_1_4",
+    "immersive714",
+  ],
+  binaural: [
+    "TARGET.HEADPHONES.BINAURAL",
+    "LAYOUT.BINAURAL",
+    "headphone",
+    "headphones",
+  ],
+};
+
+function normalizeSelectAliasToken(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s-]+/gu, "_");
+}
+
+function supportedSelectOptions(select: HTMLSelectElement): string {
+  return Array.from(select.options)
+    .map((option) => `"${option.value}" (${option.label})`)
+    .join(", ");
+}
+
+function resolveSelectValue(
+  select: HTMLSelectElement,
+  requestedValue: string,
+  aliasesByValue: Record<string, string[]> = {},
+): string | null {
+  const trimmedRequestedValue = requestedValue.trim();
+  if (!trimmedRequestedValue) {
+    return null;
+  }
+  const optionValues = new Set(Array.from(select.options).map((option) => option.value));
+  if (optionValues.has(trimmedRequestedValue)) {
+    return trimmedRequestedValue;
+  }
+
+  const normalizedRequestedValue = normalizeSelectAliasToken(trimmedRequestedValue);
+  for (const optionValue of optionValues) {
+    if (normalizeSelectAliasToken(optionValue) === normalizedRequestedValue) {
+      return optionValue;
+    }
+  }
+
+  for (const [optionValue, aliases] of Object.entries(aliasesByValue)) {
+    if (!optionValues.has(optionValue)) {
+      continue;
+    }
+    const tokens = [optionValue, ...aliases];
+    if (tokens.some((token) => normalizeSelectAliasToken(token) === normalizedRequestedValue)) {
+      return optionValue;
+    }
+  }
+  return null;
+}
+
 function syncSceneLocksDirty(): void {
   state.sceneLocks.dirty = sceneLocksSignature(
     state.sceneLocks.objects,
@@ -2024,7 +2165,7 @@ function renderSceneLockEditor(ui: AppUi): void {
   if (!workspaceDir) {
     const empty = document.createElement("p");
     empty.className = "scene-lock-empty";
-    empty.textContent = "Enter a workspace folder, then inspect the project scene locks to edit deterministic overrides.";
+    empty.textContent = "Choose a workspace folder first, then inspect scene locks to fine-tune the placement plan.";
     ui.scene.lockRows.append(empty);
     return;
   }
@@ -2033,7 +2174,7 @@ function renderSceneLockEditor(ui: AppUi): void {
     empty.className = "scene-lock-empty";
     empty.textContent = state.sceneLocks.isInspecting
       ? "Loading scene lock rows..."
-      : "No scene lock rows loaded yet. Use Inspect Scene Locks to load the current project draft rows.";
+      : "No scene lock rows loaded yet. Use Inspect Scene Locks to load the current project draft.";
     ui.scene.lockRows.append(empty);
     return;
   }
@@ -3967,14 +4108,19 @@ async function runExecuteCommand(
   args: string[],
 ): Promise<MmoRunResult> {
   appendMeta(ui, stage, `$ mmo ${args.map(quoteArg).join(" ")}`);
-  const result = await executeMmo(args, {
-    onLogLine: (line) => {
-      appendTimeline(ui, stage, line.kind, line.text, line.payload);
-      if (stage === "render" && line.payload !== null) {
-        updateRenderProgress(ui, line.payload);
-      }
-    },
-  });
+  let result: MmoRunResult;
+  try {
+    result = await executeMmo(args, {
+      onLogLine: (line) => {
+        appendTimeline(ui, stage, line.kind, line.text, line.payload);
+        if (stage === "render" && line.payload !== null) {
+          updateRenderProgress(ui, line.payload);
+        }
+      },
+    });
+  } catch (error) {
+    throw sidecarLaunchFailure(stage, error);
+  }
   appendMeta(ui, stage, formatExitSummary(result));
   return result;
 }
@@ -3985,14 +4131,19 @@ async function runSpawnCommand(
   args: string[],
 ): Promise<MmoRunResult> {
   appendMeta(ui, stage, `$ mmo ${args.map(quoteArg).join(" ")}`);
-  const result = await spawnMmo(args, {
-    onLogLine: (line) => {
-      appendTimeline(ui, stage, line.kind, line.text, line.payload);
-      if (stage === "render" && line.payload !== null) {
-        updateRenderProgress(ui, line.payload);
-      }
-    },
-  });
+  let result: MmoRunResult;
+  try {
+    result = await spawnMmo(args, {
+      onLogLine: (line) => {
+        appendTimeline(ui, stage, line.kind, line.text, line.payload);
+        if (stage === "render" && line.payload !== null) {
+          updateRenderProgress(ui, line.payload);
+        }
+      },
+    });
+  } catch (error) {
+    throw sidecarLaunchFailure(stage, error);
+  }
   appendMeta(ui, stage, formatExitSummary(result));
   return result;
 }
@@ -4001,7 +4152,27 @@ function assertSuccess(result: MmoRunResult, stageLabel: string): void {
   if (result.code === 0) {
     return;
   }
-  throw new Error(`${stageLabel} failed (${formatExitSummary(result)}).`);
+  const reason = firstMeaningfulFailureLine(result);
+  throw new Error(
+    [
+      stageFailureWhat(stageLabel),
+      `Why: MMO stopped this step with ${formatExitSummary(result)}${reason ? `; first clue: ${reason}` : "."}`,
+      `Next: ${stageFailureNextStep(stageLabel)}`,
+    ].join("\n"),
+  );
+}
+
+function sidecarLaunchFailure(stage: CommandStage, error: unknown): Error {
+  const detail = error instanceof Error ? error.message : String(error);
+  const nextStep = stage === "doctor"
+    ? "Reinstall the packaged app or try a fresh release asset, then run Doctor again."
+    : "Run Doctor first. If Doctor also fails, reinstall the packaged app or try a fresh release asset.";
+  return new Error(
+    "MMO could not start its packaged audio helper.\n"
+    + "Why: the desktop shell opened, but the small background tool that does the real audio work did not launch.\n"
+    + `Next: ${nextStep}\n`
+    + `Details: ${detail}`,
+  );
 }
 
 async function refreshValidationArtifacts(paths: WorkflowPaths): Promise<void> {
@@ -4023,7 +4194,7 @@ async function refreshSceneArtifacts(paths: WorkflowPaths): Promise<void> {
   state.artifactSources.sceneLintPath = paths.sceneLintPath;
 }
 
-function resetSceneLocksState(message = "Inspect the project scene locks to edit deterministic overrides."): void {
+function resetSceneLocksState(message = "Inspect scene locks to fine-tune how MMO places each part in the room."): void {
   state.sceneLocks = {
     ...emptySceneLocksState(),
     statusMessage: message,
@@ -4040,7 +4211,9 @@ async function inspectSceneLocks(
 ): Promise<void> {
   const workspaceDir = ui.inputs.workspaceDir.value.trim();
   if (!workspaceDir) {
-    resetSceneLocksState("Workspace folder is required to inspect project scene locks.");
+    resetSceneLocksState(
+      "Choose a workspace folder first. MMO needs the project folder before it can load scene lock rows.",
+    );
     renderScene(ui);
     if (!options.quiet) {
       updateRuntimeMessage(ui, state.sceneLocks.statusMessage);
@@ -4167,10 +4340,18 @@ async function refreshScenePreviewFromSavedLocks(
 async function saveSceneLocks(ui: AppUi): Promise<void> {
   const workspaceDir = ui.inputs.workspaceDir.value.trim();
   if (!workspaceDir) {
-    throw new Error("Workspace folder is required before saving scene locks.");
+    throw new Error(
+      "Choose a workspace folder before saving scene locks.\n"
+      + "Why: MMO writes scene_locks.yaml into that project folder.\n"
+      + "Next: Pick the workspace you used for Validate/Analyze/Scene, then save again.",
+    );
   }
   if (state.sceneLocks.objects.length === 0) {
-    throw new Error("Inspect scene locks first so the editor has rows to save.");
+    throw new Error(
+      "Load the scene lock rows first.\n"
+      + "Why: MMO can only save edits for rows it has already loaded from the project.\n"
+      + "Next: Click Inspect Scene Locks, review the rows, then save your changes.",
+    );
   }
 
   const projectDir = buildWorkflowPaths(workspaceDir).projectDir;
@@ -4519,7 +4700,11 @@ async function runRender(ui: AppUi, controller: ReturnType<typeof initDesignSyst
 async function runCompare(ui: AppUi): Promise<void> {
   const { aPath, bPath, paths } = collectCompareInputs(ui);
   if (!aPath || !bPath) {
-    throw new Error("Enter both compare input paths first.");
+    throw new Error(
+      "Choose both Compare inputs first.\n"
+      + "Why: MMO needs two finished runs to A/B, like lining up two bounces on the same desk.\n"
+      + "Next: Pick either a workspace folder or a report.json file for A and B.",
+    );
   }
   setStageStatus(ui.stages.compare, "running", "Running");
   ui.output.compare.textContent = `Comparing\nA=${aPath}\nB=${bPath}`;
@@ -4677,12 +4862,34 @@ async function runDesktopSmoke(
   const paths = buildWorkflowPaths(config.workspaceDir);
   let doctorResult: DoctorRunResult | null = null;
   let error = "";
+  const resolvedRenderTarget = resolveSelectValue(
+    ui.inputs.renderTarget,
+    config.renderTarget,
+    RENDER_TARGET_SELECT_ALIASES,
+  );
+  const resolvedLayoutStandard = resolveSelectValue(ui.inputs.layoutStandard, config.layoutStandard);
 
   ui.inputs.stemsDir.value = config.stemsDir;
   ui.inputs.workspaceDir.value = config.workspaceDir;
   ui.inputs.sceneLocksPath.value = config.sceneLocksPath ?? "";
-  ui.inputs.renderTarget.value = config.renderTarget;
-  ui.inputs.layoutStandard.value = config.layoutStandard;
+  if (!resolvedRenderTarget) {
+    throw new Error(
+      "Desktop smoke could not choose a render target.\n"
+      + `Why: The smoke config asked for \"${config.renderTarget}\", but this build only offers `
+      + `${supportedSelectOptions(ui.inputs.renderTarget)}.\n`
+      + "Next: Update the smoke config to use one of the menu targets, or add the missing target to the desktop Render target menu.",
+    );
+  }
+  if (!resolvedLayoutStandard) {
+    throw new Error(
+      "Desktop smoke could not choose a layout standard.\n"
+      + `Why: The smoke config asked for \"${config.layoutStandard}\", but this build only offers `
+      + `${supportedSelectOptions(ui.inputs.layoutStandard)}.\n`
+      + "Next: Update the smoke config to use one of the menu standards, or add the missing standard to the desktop Layout standard menu.",
+    );
+  }
+  ui.inputs.renderTarget.value = resolvedRenderTarget;
+  ui.inputs.layoutStandard.value = resolvedLayoutStandard;
   renderAll(ui);
 
   try {
@@ -4997,13 +5204,13 @@ window.addEventListener("DOMContentLoaded", () => {
 
   updateRuntimeMessage(
     ui,
-    "Enter a stems folder and workspace folder. Desktop builds call the MMO sidecar directly.",
+    "Choose a stems folder and a workspace folder to get started. Think of the workspace as MMO's session notebook: every report, scene, render, and receipt lands there.",
   );
   renderAll(ui);
   applyBusyState(ui);
 
   ui.inputs.workspaceDir.addEventListener("input", () => {
-    resetSceneLocksState("Inspect the project scene locks to edit deterministic overrides.");
+    resetSceneLocksState("Inspect scene locks to fine-tune how MMO places each part in the room.");
     renderAll(ui);
   });
   ui.inputs.stemsDir.addEventListener("input", () => {
@@ -5020,7 +5227,7 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   bindRecentInput(ui, ui.inputs.stemsDir, "stemsDirs");
   bindRecentInput(ui, ui.inputs.workspaceDir, "workspaceDirs", () => {
-    resetSceneLocksState("Inspect the project scene locks to edit deterministic overrides.");
+    resetSceneLocksState("Inspect scene locks to fine-tune how MMO places each part in the room.");
     renderAll(ui);
   });
   bindRecentInput(ui, ui.inputs.sceneLocksPath, "sceneLocksPaths");
@@ -5046,7 +5253,7 @@ window.addEventListener("DOMContentLoaded", () => {
     ui.inputs.workspaceDir,
     "workspaceDirs",
     "Pick workspace folder",
-    () => resetSceneLocksState("Inspect the project scene locks to edit deterministic overrides."),
+    () => resetSceneLocksState("Inspect scene locks to fine-tune how MMO places each part in the room."),
   );
   bindFilePathBrowseButton(
     ui,
@@ -5254,7 +5461,11 @@ window.addEventListener("DOMContentLoaded", () => {
     void runWithBusy(ui, "render", async () => {
       const workspaceDir = ui.inputs.workspaceDir.value.trim();
       if (!workspaceDir) {
-        throw new Error("Enter a workspace folder path first.");
+        throw new Error(
+          "Choose a workspace folder first.\n"
+          + "Why: MMO refreshes Results from files already saved in that workspace.\n"
+          + "Next: Pick the workspace you used for Render, then refresh Results again.",
+        );
       }
       const paths = buildWorkflowPaths(workspaceDir);
       await refreshResultsArtifacts(paths);

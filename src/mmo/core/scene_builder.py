@@ -727,6 +727,31 @@ def _scene_intent_source_refs(
     return refs
 
 
+def _scene_intent_stems_dir(
+    stems_map: dict[str, Any],
+    bus_plan: dict[str, Any],
+) -> str:
+    bus_plan_source_obj = bus_plan.get("source")
+    if not isinstance(bus_plan_source_obj, dict):
+        bus_plan_source_obj = {}
+
+    candidates = (
+        _coerce_str(stems_map.get("stems_index_ref")).strip(),
+        _coerce_str(bus_plan_source_obj.get("stems_index_ref")).strip(),
+    )
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = Path(candidate)
+        if not path.is_absolute():
+            continue
+        if path.is_dir():
+            return path.resolve().as_posix()
+        if path.is_file():
+            return path.parent.resolve().as_posix()
+    return _SCENE_INTENT_STEMS_DIR
+
+
 def build_scene_from_bus_plan(
     stems_map: dict[str, Any],
     bus_plan: dict[str, Any],
@@ -1026,7 +1051,7 @@ def build_scene_from_bus_plan(
         "scene_id": _scene_intent_scene_id(scene_rows_for_id),
         "generated_utc": generated_utc,
         "source": {
-            "stems_dir": _SCENE_INTENT_STEMS_DIR,
+            "stems_dir": _scene_intent_stems_dir(stems_map, bus_plan),
             "created_from": _SCENE_INTENT_CREATED_FROM,
         },
         "source_refs": source_refs,

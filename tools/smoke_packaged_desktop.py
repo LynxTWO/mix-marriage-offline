@@ -327,51 +327,66 @@ def _launch_smoke_app(
     summary_path: Path,
     timeout_s: float,
 ) -> tuple[int | None, str, str]:
-    process = subprocess.Popen(
-        command,
-        cwd=cwd,
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-    )
+    def _read_capture(handle: Any) -> str:
+        handle.flush()
+        handle.seek(0)
+        return handle.read()
 
-    started_at = time.monotonic()
-    while True:
-        if summary_path.is_file():
-            break
-        return_code = process.poll()
-        if return_code is not None:
-            stdout, stderr = process.communicate()
-            raise SmokeError(
-                "Packaged app exited before writing the smoke summary.\n"
-                f"exit_code={return_code}\nstdout:\n{stdout}\nstderr:\n{stderr}"
-            )
-        if time.monotonic() - started_at > timeout_s:
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stdout_capture, tempfile.TemporaryFile(
+        mode="w+",
+        encoding="utf-8",
+    ) as stderr_capture:
+        process = subprocess.Popen(
+            command,
+            cwd=cwd,
+            env=env,
+            stdout=stdout_capture,
+            stderr=stderr_capture,
+            text=True,
+            encoding="utf-8",
+        )
+
+        started_at = time.monotonic()
+        while True:
+            if summary_path.is_file():
+                break
+            return_code = process.poll()
+            if return_code is not None:
+                stdout = _read_capture(stdout_capture)
+                stderr = _read_capture(stderr_capture)
+                raise SmokeError(
+                    "Packaged app exited before writing the smoke summary.\n"
+                    f"exit_code={return_code}\nstdout:\n{stdout}\nstderr:\n{stderr}"
+                )
+            if time.monotonic() - started_at > timeout_s:
+                process.terminate()
+                try:
+                    process.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                stdout = _read_capture(stdout_capture)
+                stderr = _read_capture(stderr_capture)
+                raise SmokeError(
+                    "Timed out waiting for the packaged app smoke summary.\n"
+                    f"stdout:\n{stdout}\nstderr:\n{stderr}"
+                )
+            time.sleep(1.0)
+
+        summary_seen_at = time.monotonic()
+        while process.poll() is None and time.monotonic() - summary_seen_at <= 30:
+            time.sleep(1.0)
+        if process.poll() is None:
             process.terminate()
             try:
-                stdout, stderr = process.communicate(timeout=15)
+                process.wait(timeout=15)
             except subprocess.TimeoutExpired:
                 process.kill()
-                stdout, stderr = process.communicate()
-            raise SmokeError(
-                "Timed out waiting for the packaged app smoke summary.\n"
-                f"stdout:\n{stdout}\nstderr:\n{stderr}"
-            )
-        time.sleep(1.0)
+                process.wait()
 
-    try:
-        stdout, stderr = process.communicate(timeout=30)
-    except subprocess.TimeoutExpired:
-        process.terminate()
-        try:
-            stdout, stderr = process.communicate(timeout=15)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            stdout, stderr = process.communicate()
-
-    return process.returncode, stdout, stderr
+        stdout = _read_capture(stdout_capture)
+        stderr = _read_capture(stderr_capture)
+        return process.returncode, stdout, stderr
 
 
 def _validate_summary(

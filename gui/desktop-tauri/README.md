@@ -1,64 +1,90 @@
 # MMO Desktop Tauri App
 
-This directory contains the isolated Tauri 2 desktop app for MMO. It is the
-primary packaged desktop path and ships a frozen `mmo` CLI as a Tauri sidecar.
+This directory contains the shipped MMO desktop app.
 
-Current workflow coverage includes:
+For end users, this folder is not the normal starting point. Use the packaged
+release assets from GitHub Releases instead of running local build commands.
 
-- `Doctor` sidecar verification,
-- `Prepare` project/workspace creation,
-- `Validate` project artifact checks,
-- `Analyze` stems into `report.json`,
-- `Scene` artifact inspection,
-- `Render` via `safe-render --live-progress` with live timeline logs,
-- `Results` artifact review,
-- `Compare` workflow entry points.
+## What the packaged app covers
 
-Desktop production builds do not require the Node `gui/server.mjs` runtime.
+The desktop app drives the same artifact-backed workflow as the CLI:
+
+- `Doctor`
+- `Validate`
+- `Analyze`
+- `Scene`
+- `Render`
+- `Results`
+- `Compare`
+
+It writes the same core artifacts a release user should expect:
+
+- `project/validation.json`
+- `report.json`
+- `report.scan.json`
+- `stems_map.json`
+- `bus_plan.json`
+- `scene.json`
+- `scene_lint.json`
+- `render_manifest.json`
+- `safe_render_receipt.json`
+- `render_qa.json`
+- `compare_report.json`
+
+## Packaged release note
+
+The desktop app launches a bundled MMO sidecar behind the scenes. Think of that
+sidecar as the audio engine: the app shell is the front desk, and the sidecar
+does the real analysis and render work.
+
+If the app opens but no stage will run, start with `Doctor`. If `Doctor` also
+fails, the packaged install likely needs to be reinstalled.
 
 ## Local development
 
-1. Install the Tauri prerequisites for your OS and use Node 24 LTS:
-   [Tauri prerequisites](https://tauri.app/start/prerequisites/) If you use
-   `nvm`, run `nvm use` from the repo root first.
-2. Install the pinned Rust toolchain for the Tauri crate if needed:
+Prerequisites:
+
+1. Install the Tauri prerequisites for your OS:
+   [https://tauri.app/start/prerequisites/](https://tauri.app/start/prerequisites/)
+2. Use Node `24.x`
+3. Install the pinned Rust toolchain if needed:
    `rustup toolchain install 1.94.0`
-3. Install desktop dependencies: `npm install`
-4. Install Python sidecar build dependencies from the repo root:
-   `python -m pip install -e ".[truth,pdf,gui]" pyinstaller` If your machine
-   only has `python3`, use `python3` here and set `PYTHON=python3` when running
-   the desktop build commands.
-5. Run the frontend only: `npm run dev`
-6. Run the desktop UI tests: `npm test`
-7. Prepare the MMO sidecar manually if you want: `npm run prepare-sidecar`
-8. Run the desktop app: `npm run tauri dev`
 
-In the app:
+Setup:
 
-1. Use the `Dashboard` and `Presets` screens to exercise the design-system
-   controls and scale presets.
-2. Paste a stems folder path on `Run`.
-3. Paste a workspace folder path on `Run`.
-4. Run `Doctor` if you want to verify the packaged runtime first.
-5. Run `Run All` to execute prepare -> validate -> analyze -> render directly
-   through the sidecar.
-6. Use `Reveal Workspace` to open the artifact folder after the run.
+1. Run `npm install`
+2. From the repo root, install Python build dependencies:
+   `python -m pip install -e ".[truth,pdf]" pyinstaller`
+3. If your system uses `python3` instead of `python`, set `PYTHON=python3` for
+   the sidecar build commands
 
-`tauri dev` and `tauri build` automatically call `npm run prepare-sidecar`
-through `beforeDevCommand` / `beforeBuildCommand`. The prepare step skips the
-sidecar rebuild when the staged binary in `src-tauri/binaries/` is newer than
-the MMO Python sources and packaged data.
+Useful commands:
 
-## CI
+- `npm run lint`
+- `npm test`
+- `npm run prepare-sidecar`
+- `npm run tauri dev`
+- `npm run tauri build -- --bundles appimage`
 
-GitHub Actions builds this app on Windows, macOS, and Linux. The workflow:
+Notes:
 
-- installs Python + PyInstaller so the frozen MMO sidecar can be built,
-- installs Node and Rust toolchains,
-- runs `npm run lint`,
-- installs the Playwright browser bundle and runs `npm test`,
-- builds packaged desktop bundles (`msi`, `app`, `AppImage`) with
-  `npm run tauri build -- --bundles ...`,
-- launches the packaged app in smoke mode so the bundled sidecar must pass
-  doctor plus validate/analyze/scene/render against a tiny fixture,
-- uploads the packaged bundle artifacts after smoke succeeds.
+- `tauri dev` and `tauri build` automatically run `npm run prepare-sidecar`
+- desktop production builds do not require the old `gui/server.mjs` runtime
+- there is no `.[gui]` Python extra anymore; Tauri is the only shipped desktop
+  app path
+
+## CI and packaged smoke
+
+GitHub Actions builds this app on Windows, macOS, and Linux.
+
+The workflows:
+
+- build the frozen MMO sidecar
+- build packaged Tauri bundles
+- launch the packaged app in smoke mode
+- verify `Doctor` plus the `Validate -> Analyze -> Scene -> Render` path
+- assert that the expected workspace artifacts were written
+
+The packaged smoke harness lives at:
+
+- `tools/smoke_packaged_desktop.py`

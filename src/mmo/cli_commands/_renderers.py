@@ -58,7 +58,7 @@ __all__ = [
 
 ISSUE_RENDER_NO_OUTPUTS = "ISSUE.RENDER.NO_OUTPUTS"
 _NO_OUTPUTS_WARNING_MESSAGE = (
-    "No audio outputs were written. This build may not include a mixdown renderer yet."
+    "No audio files were written. MMO finished the paperwork, but no renderer produced a bounce for this target."
 )
 _FALLBACK_STEP_SEQUENCE = (
     "reduce_surround",
@@ -68,6 +68,84 @@ _FALLBACK_STEP_SEQUENCE = (
     "front_bias",
     "safety_collapse",
 )
+
+
+def _format_list_preview(values: list[str], *, limit: int = 4) -> str:
+    if not values:
+        return ""
+    preview = values[:limit]
+    label = ", ".join(preview)
+    if len(values) > limit:
+        label = f"{label}, +{len(values) - limit} more"
+    return label
+
+
+def _plugin_safety_receipt_notes(
+    manifests: list[dict[str, Any]],
+) -> list[str]:
+    notes: list[str] = []
+    seen: set[str] = set()
+    for manifest in manifests:
+        if not isinstance(manifest, dict):
+            continue
+        renderer_id = _coerce_str(manifest.get("renderer_id")).strip() or "unknown_renderer"
+        skipped_rows = manifest.get("skipped")
+        if not isinstance(skipped_rows, list):
+            continue
+        for row in skipped_rows:
+            if not isinstance(row, dict):
+                continue
+            reason = _coerce_str(row.get("reason")).strip()
+            details = row.get("details")
+            if not isinstance(details, dict):
+                details = {}
+
+            note = ""
+            if reason == "plugin_scene_scope_restricted":
+                note = (
+                    f"Renderer {renderer_id} was limited to bed audio only, so MMO skipped "
+                    "object-style material for safety."
+                )
+            elif reason == "plugin_scene_scope_unsupported":
+                note = (
+                    f"Renderer {renderer_id} was bypassed because this scene needs object-aware "
+                    "placement and that renderer only supports bed audio."
+                )
+            elif reason == "plugin_layout_unsupported":
+                target_layout_id = _coerce_str(details.get("target_layout_id")).strip()
+                supported_layout_ids = [
+                    _coerce_str(item).strip()
+                    for item in details.get("supported_layout_ids", [])
+                    if _coerce_str(item).strip()
+                ]
+                supported_label = _format_list_preview(supported_layout_ids)
+                note = (
+                    f"Renderer {renderer_id} was bypassed for safety because it does not support "
+                    f"{target_layout_id or 'this target layout'}"
+                )
+                if supported_label:
+                    note += f" (it declares support for {supported_label})."
+                else:
+                    note += "."
+            elif reason == "plugin_layout_support_unknown":
+                target_layout_id = _coerce_str(details.get("target_layout_id")).strip()
+                note = (
+                    f"Renderer {renderer_id} was bypassed because it is layout-specific and did "
+                    f"not declare safe support for {target_layout_id or 'this target layout'}."
+                )
+            elif reason == "plugin_channel_limit":
+                required_channels = details.get("required_channels")
+                max_channels = details.get("max_channels")
+                note = (
+                    f"Renderer {renderer_id} was skipped because this scene needs "
+                    f"{required_channels} channel(s), but that renderer is limited to "
+                    f"{max_channels}."
+                )
+
+            if note and note not in seen:
+                seen.add(note)
+                notes.append(note)
+    return notes
 
 
 def _merged_render_export_options(
@@ -1782,6 +1860,13 @@ def _prepare_safe_render_scene_inputs(
         )
         if error_count > 0 or warn_count > 0:
             print(render_scene_lint_text(lint_payload), file=sys.stderr)
+            if not scene_strict:
+                print(
+                    "safe-render: continuing because --scene-strict is off."
+                    " Review the scene-lint report above if the placement looks"
+                    " surprising, or rerun with --scene-strict to stop here.",
+                    file=sys.stderr,
+                )
         if scene_strict and scene_lint_has_errors(lint_payload):
             issue_ids = sorted(
                 {
@@ -1794,8 +1879,11 @@ def _prepare_safe_render_scene_inputs(
             if len(issue_ids) > 6:
                 issue_ids_label = f"{issue_ids_label}, +{len(issue_ids) - 6} more"
             raise ValueError(
-                "safe-render: --scene-strict failed scene lint "
-                f"({error_count} error(s), {warn_count} warning(s); issue_ids={issue_ids_label})."
+                "safe-render: scene validation stopped the render. "
+                f"Why: --scene-strict found {error_count} error(s), {warn_count} warning(s), "
+                f"and issue_ids={issue_ids_label}. "
+                "Next: fix the scene or rerun without --scene-strict only if you intentionally "
+                "want MMO to continue past scene errors."
             )
 
     if scene_payload is not None:
@@ -1817,7 +1905,9 @@ def _prepare_safe_render_scene_inputs(
             known_role_ids = set(list_roles())
         except (RuntimeError, ValueError) as exc:
             raise ValueError(
-                f"safe-render: failed to load roles registry for --scene-strict: {exc}"
+                "safe-render: scene validation could not load the roles registry. "
+                f"Why: {exc}. "
+                "Next: repair the install or bundled data before using --scene-strict."
             ) from exc
         missing_role_refs = sorted(
             role_id
@@ -1832,9 +1922,11 @@ def _prepare_safe_render_scene_inputs(
             if missing_role_refs:
                 details.append("missing roles: " + ", ".join(missing_role_refs))
             raise ValueError(
-                "safe-render: --scene-strict failed ("
+                "safe-render: scene validation stopped the render. "
+                "Why: "
                 + "; ".join(details)
-                + ")."
+                + ". Next: rebuild the scene so it points at real stems and known roles, "
+                + "or rerun without --scene-strict only if you are reviewing the draft."
             )
 
     return (
@@ -2099,6 +2191,14 @@ def _run_safe_render_command(
                 f"safe-render: preflight BLOCKED by gates: {', '.join(blocked_gates)}",
                 file=sys.stderr,
             )
+            print(
+                "safe-render: render stopped before audio was written.",
+                file=sys.stderr,
+            )
+            print(
+                "safe-render: next=review the receipt JSON or rerun with --dry-run to see what MMO was protecting.",
+                file=sys.stderr,
+            )
             if receipt_out_path is not None:
                 block_receipt_id = _build_receipt_id(
                     _coerce_str(report.get("report_id")),
@@ -2133,6 +2233,11 @@ def _run_safe_render_command(
                     "fallback_attempts": [],
                     "fallback_final": _default_fallback_final(final_outcome="not_run"),
                     "notes": [
+                        (
+                            "MMO stopped before rendering because preflight safety gates blocked "
+                            "this target. Review this receipt or rerun with --dry-run to inspect "
+                            "the blocked recommendations."
+                        ),
                         "preflight_blocked=true",
                         f"blocked_gates={', '.join(blocked_gates)}",
                         f"target={target}",
@@ -2427,7 +2532,11 @@ def _run_safe_render_command(
 
         if out_dir is None:
             print(
-                "safe-render: --out-dir is required for full render (not --dry-run).",
+                "safe-render: full render needs --out-dir so MMO knows where to write the audio files.",
+                file=sys.stderr,
+            )
+            print(
+                "safe-render: next=choose an output folder, or rerun with --dry-run if you only want the receipt.",
                 file=sys.stderr,
             )
             return 1
@@ -2527,6 +2636,15 @@ def _run_safe_render_command(
             print(
                 f"safe-render: {ISSUE_RENDER_NO_OUTPUTS}"
                 f" message={_NO_OUTPUTS_WARNING_MESSAGE}",
+                file=sys.stderr,
+            )
+            print(
+                "safe-render: render finished without writing any audio files.",
+                file=sys.stderr,
+            )
+            print(
+                "safe-render: next=check the receipt/QA files and confirm at least one renderer can write the selected target. "
+                "Use --allow-empty-outputs only when a receipt-only pass is intentional.",
                 file=sys.stderr,
             )
             progress.emit_log(
@@ -2716,6 +2834,7 @@ def _run_safe_render_command(
             receipt["notes"].append("fallback_applied=true")
         if fallback_final.get("safety_collapse_applied") is True:
             receipt["notes"].append("safety_collapse_applied=true")
+        receipt["notes"].extend(_plugin_safety_receipt_notes(manifests))
         receipt["notes"].append(
             "fallback_final_outcome="
             f"{_coerce_str(fallback_final.get('final_outcome')).strip() or 'not_run'}"
@@ -2750,8 +2869,8 @@ def _run_safe_render_command(
         exit_code = 0
         if no_outputs_issue is not None and not allow_empty_outputs:
             print(
-                "safe-render: failing because outputs=0"
-                " (override with --allow-empty-outputs).",
+                "safe-render: failing because outputs=0."
+                " Override with --allow-empty-outputs only if a receipt-only pass is intentional.",
                 file=sys.stderr,
             )
             exit_code = 1
@@ -2764,7 +2883,8 @@ def _run_safe_render_command(
             )
         elif no_outputs_issue is not None and allow_empty_outputs:
             print(
-                "safe-render: outputs=0 allowed by --allow-empty-outputs.",
+                "safe-render: outputs=0 allowed by --allow-empty-outputs."
+                " Receipt and QA files were still written for review.",
                 file=sys.stderr,
             )
 

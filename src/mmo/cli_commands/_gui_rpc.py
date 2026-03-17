@@ -908,7 +908,11 @@ def _build_scene_locks_inspect_payload(project_dir: Path) -> dict[str, Any]:
     resolved_project_dir = project_dir.resolve()
     if not resolved_project_dir.exists() or not resolved_project_dir.is_dir():
         raise _RpcMethodError(
-            message=f"Project directory does not exist: {resolved_project_dir.as_posix()}",
+            message=(
+                "MMO could not find that project folder. "
+                f"Expected a real workspace project at {resolved_project_dir.as_posix()}. "
+                "Run Validate and Scene first, then try Inspect Scene Locks again."
+            ),
         )
 
     scene_path, scene_payload = _load_scene_from_project(resolved_project_dir)
@@ -938,7 +942,10 @@ def _normalize_role_override(value: Any) -> str | None:
     if not role_id.startswith("ROLE."):
         raise _RpcRequestError(
             code="RPC.INVALID_PARAMS",
-            message="scene.locks.save row role_id must start with ROLE. when provided.",
+            message=(
+                "Scene lock role overrides must start with ROLE. "
+                "Leave the field blank if you want MMO to keep its current guess."
+            ),
         )
     return role_id
 
@@ -958,18 +965,21 @@ def _merge_scene_lock_rows(
         if not isinstance(raw_row, dict):
             raise _RpcRequestError(
                 code="RPC.INVALID_PARAMS",
-                message="scene.locks.save rows must contain only objects.",
+                message="Scene lock rows must be objects.",
             )
         stem_id = _coerce_string(raw_row.get("stem_id")).strip()
         if not stem_id:
             raise _RpcRequestError(
                 code="RPC.INVALID_PARAMS",
-                message="scene.locks.save row stem_id must be a non-empty string.",
+                message="Each scene lock row needs a stem_id so MMO knows which part you are editing.",
             )
         if stem_id in seen_stem_ids:
             raise _RpcRequestError(
                 code="RPC.INVALID_PARAMS",
-                message=f"scene.locks.save rows include duplicate stem_id: {stem_id}",
+                message=(
+                    "Scene lock rows include the same stem twice: "
+                    f"{stem_id}. Remove the duplicate row and save again."
+                ),
             )
         seen_stem_ids.add(stem_id)
 
@@ -1018,7 +1028,12 @@ def _merge_scene_lock_rows(
 
 def _write_scene_locks_yaml(path: Path, payload: dict[str, Any]) -> None:
     if yaml is None:
-        raise _RpcMethodError(message="PyYAML is required to write scene_locks.yaml.")
+        raise _RpcMethodError(
+            message=(
+                "MMO cannot save scene_locks.yaml because the YAML writer is missing "
+                "from this install."
+            ),
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     rendered = yaml.safe_dump(payload, sort_keys=False)
     if not rendered.endswith("\n"):
@@ -1057,8 +1072,9 @@ def _validated_scene_with_updates(
         message = _coerce_string(issue.get("message")).strip() or "Scene intent validation failed."
         raise _RpcMethodError(
             message=(
-                "scene.locks.save produced invalid scene intent: "
-                f"{issue_id}: {message}"
+                "Scene Lock save stopped because one override would create an invalid scene. "
+                f"Why: {issue_id}: {message}. "
+                "Next: undo the last lock change or relax that override, then save again."
             ),
         )
     return updated_scene
@@ -1105,8 +1121,8 @@ def _handle_scene_locks_save(params: dict[str, Any]) -> dict[str, Any]:
             raise _RpcRequestError(
                 code="RPC.INVALID_PARAMS",
                 message=(
-                    "scene.locks.save perspective must be one of: "
-                    f"{expected}"
+                    "Scene perspective must be one of: "
+                    f"{expected}."
                 ),
             )
         perspective = normalized_perspective
@@ -1115,13 +1131,13 @@ def _handle_scene_locks_save(params: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw_rows, list):
         raise _RpcRequestError(
             code="RPC.INVALID_PARAMS",
-            message="scene.locks.save param 'rows' must be an array.",
+            message="Scene lock save expects 'rows' to be a list.",
         )
     rows = [row for row in raw_rows if isinstance(row, dict)]
     if len(rows) != len(raw_rows):
         raise _RpcRequestError(
             code="RPC.INVALID_PARAMS",
-            message="scene.locks.save rows must contain only objects.",
+            message="Scene lock rows must be objects.",
         )
 
     try:

@@ -178,6 +178,24 @@ class TestCompareCore(unittest.TestCase):
             self.assertEqual(from_dir_path, from_file_path)
             self.assertEqual(from_file_path, report_path.resolve())
 
+    def test_load_report_from_path_or_dir_explains_missing_report_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            with self.assertRaises(ValueError) as exc_info:
+                load_report_from_path_or_dir(temp_path)
+        message = str(exc_info.exception)
+        self.assertIn("could not find `report.json`", message)
+        self.assertIn("workspace folder", message)
+
+    def test_load_report_from_path_or_dir_explains_missing_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            missing_path = Path(temp_dir) / "missing" / "report.json"
+            with self.assertRaises(ValueError) as exc_info:
+                load_report_from_path_or_dir(missing_path)
+        message = str(exc_info.exception)
+        self.assertIn("could not find that compare input on disk", message)
+        self.assertIn("report.json", message)
+
     def test_build_compare_report_is_deterministic_and_schema_valid(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         validator = _schema_validator(repo_root / "schemas" / "compare_report.schema.json")

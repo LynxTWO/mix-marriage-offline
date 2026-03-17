@@ -74,7 +74,7 @@ Definition of done:
 
 ## Release Surface
 
-State: `done`
+State: `in_progress`
 
 Definition of done:
 
@@ -84,6 +84,8 @@ Definition of done:
       smoke checks.
 - [x] Standalone CLI binaries build on Windows, macOS, and Linux without a
       legacy Python GUI dependency.
+- [ ] Human fresh-install signoff on release-candidate packaged artifacts is
+      complete across Windows, macOS, and Linux.
 
 ## Status System
 
@@ -108,3 +110,7 @@ Definition of done:
 - PR CI and release CI now build packaged Tauri desktop bundles on Windows,
   macOS, and Linux, launch the packaged app, and verify the bundled sidecar
   doctor plus validate/analyze/scene/render against a tiny fixture.
+- Release-candidate hardening now includes a docs reality pass and clearer
+  musician-facing failure guidance, but the final manual fresh-install signoff
+  on packaged artifacts remains the last release-surface blocker before a v1
+  tag.

@@ -7,9 +7,9 @@ This roadmap is split into two tracks:
 
 ## NOW
 
-Only true v1 completion blockers belong here. The current repo has no open v1
-completion blockers; keep this section empty unless a real blocker reopens the
-main path. Optional GUI maturity and preset polish items live in
+Only true v1 completion blockers belong here. The remaining blocker is small
+and explicit: final human fresh-install signoff on the release-candidate
+desktop artifacts. Optional GUI maturity and preset polish items live in
 `PROJECT_WHEN_COMPLETE.md` section 9 and in `LATER` below.
 
 ### Release Surface
@@ -19,7 +19,11 @@ main path. Optional GUI maturity and preset polish items live in
   packaged desktop artifacts must launch and pass bundled-sidecar smoke in CI
   and release builds before v1 can be considered complete.
 - Open blockers:
-- none currently
+- automated packaged smoke is already green in CI and release workflows
+- docs and common failure messages now match the shipped desktop workflow more
+  closely
+- remaining blocker: complete one human fresh-install walkthrough on the
+  release-candidate packaged artifacts before tagging v1
 
 ### Tauri Workflow Parity
 

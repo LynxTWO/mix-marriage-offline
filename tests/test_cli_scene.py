@@ -403,6 +403,52 @@ class TestCliScene(unittest.TestCase):
                 scene_path_b.read_text(encoding="utf-8"),
             )
 
+    def test_scene_cli_build_from_stems_map_and_bus_plan_lints_cleanly(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        stems_map_path = repo_root / "tests" / "fixtures" / "scene_intent" / "tiny_stems_map.json"
+        bus_plan_path = repo_root / "tests" / "fixtures" / "scene_intent" / "tiny_bus_plan.json"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            scene_path = temp_path / "scene.json"
+            lint_path = temp_path / "scene_lint.json"
+
+            build_exit = main(
+                [
+                    "scene",
+                    "build",
+                    "--map",
+                    str(stems_map_path),
+                    "--bus",
+                    str(bus_plan_path),
+                    "--profile",
+                    "PROFILE.ASSIST",
+                    "--out",
+                    str(scene_path),
+                ]
+            )
+            self.assertEqual(build_exit, 0)
+
+            lint_exit = main(
+                [
+                    "scene",
+                    "lint",
+                    "--scene",
+                    str(scene_path),
+                    "--out",
+                    str(lint_path),
+                ]
+            )
+            self.assertEqual(lint_exit, 0)
+
+            lint_payload = json.loads(lint_path.read_text(encoding="utf-8"))
+            summary = lint_payload.get("summary")
+            self.assertIsInstance(summary, dict)
+            if not isinstance(summary, dict):
+                return
+            self.assertTrue(summary.get("ok"))
+            self.assertEqual(summary.get("error_count"), 0)
+
     def test_scene_cli_build_from_stems_map_bus_plan_with_locks(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         validator = _schema_validator(repo_root / "schemas" / "scene.schema.json")

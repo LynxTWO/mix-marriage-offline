@@ -70,6 +70,33 @@ class TestFrozenCliEntrypoint(unittest.TestCase):
         )
         self.assertRegex(completed.stdout.strip(), re.compile(r"\b\d+\.\d+\.\d+\b"))
 
+    def test_frozen_entrypoint_supports_mmo_tools_module_passthrough(self) -> None:
+        env = os.environ.copy()
+        existing_pythonpath = env.get("PYTHONPATH", "")
+        src_path = os.fspath(_REPO_ROOT / "src")
+        env["PYTHONPATH"] = (
+            src_path
+            if not existing_pythonpath
+            else os.pathsep.join((src_path, existing_pythonpath))
+        )
+
+        completed = subprocess.run(
+            [sys.executable, os.fspath(_FROZEN_ENTRYPOINT), "-m", "mmo.tools.analyze_stems", "--help"],
+            cwd=_REPO_ROOT,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+
+        self.assertEqual(
+            completed.returncode,
+            0,
+            msg=f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}",
+        )
+        self.assertIn("Scan stems, run the plugin pipeline", completed.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
