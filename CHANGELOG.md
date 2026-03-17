@@ -37,6 +37,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     for preview transport, compare A/B playback switching, and transport UI
     wiring.
 
+- **Desktop keyboard workflow and accessibility pass:**
+  - The Tauri desktop shell now exposes real tab semantics for major screens,
+    visible shortcut hints, and keyboard shortcuts for workspace/stems pickers,
+    Validate, Render, Results search, and major panel switching.
+  - Results artifacts now support arrow-key selection with roving focus, and
+    the Results detail slider, Compare compensation control, and Scene focus
+    pad all support keyboard adjustment in addition to exact-entry fields and
+    drag interactions.
+  - Focus visibility is stronger across interactive controls, Results/Compare
+    stay less cramped on narrower desktop widths, and the manual now documents
+    the keyboard-first desktop path explicitly.
+
 ### Changed
 
 - **Release-candidate hardening from a new-user point of view:**

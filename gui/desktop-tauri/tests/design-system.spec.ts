@@ -115,7 +115,7 @@ function overlaps(left: WidgetBox, right: WidgetBox): boolean {
 }
 
 async function openScreen(page: Parameters<typeof test>[0]["page"], screen: ScreenKey): Promise<void> {
-  await page.getByRole("button", { name: screens[screen].buttonLabel, exact: true }).click();
+  await page.getByRole("tab", { name: screens[screen].buttonLabel, exact: true }).click();
   await expect(page.locator(`#screen-${screen}`)).toBeVisible();
   await page.evaluate(() => {
     window.scrollTo(0, 0);
@@ -280,6 +280,43 @@ async function installNeverResolvingAudioContext(
   });
 }
 
+async function installButtonClickCounter(
+  page: Parameters<typeof test>[0]["page"],
+  selector: string,
+  key: string,
+): Promise<void> {
+  await page.evaluate(({ key: counterKey, selector: targetSelector }) => {
+    const target = document.querySelector(targetSelector);
+    if (!(target instanceof HTMLButtonElement)) {
+      throw new Error(`Missing button for click counter: ${targetSelector}`);
+    }
+    const store = (window as Window & {
+      __mmoClickCounts?: Record<string, number>;
+    }).__mmoClickCounts ?? {};
+    store[counterKey] = 0;
+    target.addEventListener("click", () => {
+      store[counterKey] = (store[counterKey] ?? 0) + 1;
+    });
+    (window as Window & {
+      __mmoClickCounts?: Record<string, number>;
+    }).__mmoClickCounts = store;
+  }, {
+    key,
+    selector,
+  });
+}
+
+async function buttonClickCount(
+  page: Parameters<typeof test>[0]["page"],
+  key: string,
+): Promise<number> {
+  return await page.evaluate((counterKey) => {
+    return (window as Window & {
+      __mmoClickCounts?: Record<string, number>;
+    }).__mmoClickCounts?.[counterKey] ?? 0;
+  }, key);
+}
+
 test.describe("desktop workflow design system", () => {
   for (const viewport of viewports) {
     test(`widgets stay on-screen without overlaps at ${viewport.label}`, async ({ page }) => {
@@ -372,6 +409,75 @@ test.describe("desktop workflow design system", () => {
     await expect(page.locator("#fine-adjust-indicator")).toContainText("Fine adjust active");
     await page.keyboard.up("Shift");
     await expect(page.locator("#results-detail-value")).toContainText("6 line(s) of detail");
+  });
+
+  test("screen tabs expose tab semantics and keyboard navigation", async ({ page }) => {
+    await page.goto("/");
+
+    const validateTab = page.getByRole("tab", { name: "Validate", exact: true });
+    const analyzeTab = page.getByRole("tab", { name: "Analyze", exact: true });
+    const compareTab = page.getByRole("tab", { name: "Compare", exact: true });
+
+    await expect(validateTab).toHaveAttribute("aria-selected", "true");
+    await validateTab.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(analyzeTab).toBeFocused();
+    await expect(analyzeTab).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#screen-analyze")).toBeVisible();
+
+    await page.keyboard.press("End");
+    await expect(compareTab).toBeFocused();
+    await expect(compareTab).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#screen-compare")).toBeVisible();
+  });
+
+  test("keyboard shortcuts switch screens, focus Results search, and trigger core actions", async ({ page }) => {
+    await page.goto("/");
+    await installButtonClickCounter(page, "#workflow-render-button", "render");
+    await installButtonClickCounter(page, "#workflow-validate-button", "validate");
+    await installButtonClickCounter(page, "#stems-dir-browse-button", "stems");
+    await installButtonClickCounter(page, "#workspace-dir-browse-button", "workspace");
+
+    await page.keyboard.press("Alt+2");
+    await expect(page.getByRole("tab", { name: "Analyze", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#workflow-analyze-button")).toBeFocused();
+
+    await page.keyboard.press("/");
+    await expect(page.getByRole("tab", { name: "Results", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#artifact-search")).toBeFocused();
+
+    await page.keyboard.press("Alt+Shift+V");
+    await expect.poll(async () => await buttonClickCount(page, "validate")).toBe(1);
+
+    await page.keyboard.press("Alt+Shift+R");
+    await expect.poll(async () => await buttonClickCount(page, "render")).toBe(1);
+
+    await page.keyboard.press("Alt+Shift+S");
+    await expect.poll(async () => await buttonClickCount(page, "stems")).toBe(1);
+
+    await page.keyboard.press("Alt+Shift+W");
+    await expect.poll(async () => await buttonClickCount(page, "workspace")).toBe(1);
+  });
+
+  test("keyboard focus styles stay visible on interactive controls", async ({ page }) => {
+    await page.goto("/");
+    await page.keyboard.press("Tab");
+
+    const focusStyles = await page.evaluate(() => {
+      const element = document.activeElement;
+      if (!(element instanceof HTMLElement)) {
+        return null;
+      }
+      const style = window.getComputedStyle(element);
+      return {
+        boxShadow: style.boxShadow,
+        outlineWidth: style.outlineWidth,
+      };
+    });
+
+    expect(focusStyles).not.toBeNull();
+    expect(focusStyles?.outlineWidth).not.toBe("0px");
+    expect(focusStyles?.boxShadow).not.toBe("none");
   });
 
   test("loaded workspace mode compacts the left rail after a workspace is chosen", async ({ page }) => {
@@ -702,7 +808,7 @@ test.describe("desktop workflow design system", () => {
     await expect(page.locator("#results-summary-actions")).toContainText("Open receipt");
     await expect(page.locator("#results-qa-actions")).toContainText("Open QA");
 
-    await page.getByRole("button", { name: /render\/2_0\/mix\.wav/i }).click();
+    await page.getByRole("option", { name: /render\/2_0\/mix\.wav/i }).click();
     await expect(page.locator("#artifact-preview-actions")).toContainText("Copy path");
     await expect(page.locator("#artifact-preview-actions")).toContainText("Reveal");
     await expect(page.locator("#artifact-preview-actions")).toContainText("Compare");
@@ -714,6 +820,67 @@ test.describe("desktop workflow design system", () => {
     await page.locator("#results-phase-hint-trigger").focus();
     await expect(page.locator("#hint-results-phase")).toBeVisible();
     await expect(page.locator("#hint-results-phase")).toContainText("Why:");
+  });
+
+  test("results artifact browser supports arrow-key selection", async ({ page }) => {
+    await page.goto("/");
+    await openScreen(page, "results");
+
+    await page.locator("#results-receipt-file-input").setInputFiles(jsonFile("safe_render_receipt.json", {
+      status: "completed",
+      recommendations_summary: {
+        total: 1,
+        eligible: 1,
+        auto_eligible: 1,
+        approved_by_user: 0,
+        blocked: 0,
+        applied: 1,
+      },
+      applied_recommendations: [
+        {
+          recommendation_id: "REC.RENDER.001",
+          action_id: "ACTION.UTILITY.GAIN",
+          scope: { stem_id: "STEM.VOX" },
+          deltas: [
+            {
+              param_id: "PARAM.UTILITY.GAIN_DB",
+              from: 0,
+              to: -1.5,
+              unit: "dB",
+              confidence: 0.88,
+              evidence_ref: "EVID.GAIN.001",
+            },
+          ],
+        },
+      ],
+    }));
+    await page.locator("#results-manifest-file-input").setInputFiles(jsonFile("render_manifest.json", {
+      renderer_manifests: [
+        {
+          renderer_id: "PLUGIN.RENDERER.SAFE",
+          outputs: [
+            {
+              output_id: "OUT.001",
+              file_path: "render/2_0/mix.wav",
+              format: "wav",
+              layout_id: "LAYOUT.2_0",
+            },
+          ],
+        },
+      ],
+    }));
+
+    const selectedArtifact = page.locator("#artifact-browser-list [aria-selected='true']");
+    await expect(selectedArtifact).toContainText("Final receipt");
+    await selectedArtifact.focus();
+
+    await page.keyboard.press("ArrowDown");
+    await expect(page.locator("#artifact-browser-list [aria-selected='true']")).toContainText("Render manifest");
+    await expect(page.locator("#artifact-preview-name")).toContainText("Render manifest");
+
+    await page.keyboard.press("End");
+    await expect(page.locator("#artifact-browser-list [aria-selected='true']")).toContainText("render/2_0/mix.wav");
+    await expect(page.locator("#artifact-preview-name")).toContainText("render/2_0/mix.wav");
   });
 
   test("results preview transport plays the selected audio artifact in-app", async ({ page }) => {
@@ -742,7 +909,7 @@ test.describe("desktop workflow design system", () => {
       ],
     }));
 
-    await page.getByRole("button", { name: /preview_headphones\.wav/i }).click();
+    await page.getByRole("option", { name: /preview_headphones\.wav/i }).click();
     await expect(page.locator("#artifact-preview-active-file")).toContainText("preview_headphones.wav");
 
     await page.locator("#artifact-preview-play-button").click();
@@ -754,6 +921,33 @@ test.describe("desktop workflow design system", () => {
 
     await page.locator("#artifact-preview-stop-button").click();
     await expect(page.locator("#artifact-preview-transport-state")).toContainText("Stopped");
+  });
+
+  test("slider, knob, and scene focus pad respond to keyboard input", async ({ page }) => {
+    await page.goto("/");
+
+    await openScreen(page, "results");
+    await page.locator("#results-detail-slider").focus();
+    await page.keyboard.press("End");
+    await expect(page.locator("#results-detail-input")).toHaveValue("10");
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.locator("#results-detail-input")).toHaveValue("9");
+
+    await openScreen(page, "compare");
+    await page.locator("#compare-compensation-knob").focus();
+    await page.keyboard.press("ArrowUp");
+    await expect(page.locator("#compare-compensation-input")).toHaveValue("0.5");
+    await page.keyboard.down("Shift");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.up("Shift");
+    await expect(page.locator("#compare-compensation-input")).toHaveValue("0.4");
+
+    await openScreen(page, "scene");
+    await page.locator("#scene-focus-pad").focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.locator("#scene-focus-pan-input")).toHaveValue("10");
+    await page.keyboard.press("ArrowUp");
+    await expect(page.locator("#scene-focus-depth-input")).toHaveValue("60");
   });
 
   test("compare transport resolves A/B audition files and switches during playback", async ({ page }) => {

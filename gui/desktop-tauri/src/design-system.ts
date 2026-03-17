@@ -35,6 +35,15 @@ const SCALE_PRESETS: ScalePreset[] = [
   { scaleId: "comfort", label: "115%", factor: 1.15 },
 ];
 
+export const SCREEN_ORDER: ScreenKey[] = [
+  "validate",
+  "analyze",
+  "scene",
+  "render",
+  "results",
+  "compare",
+];
+
 function requiredElement<T extends HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector);
   if (element === null) {
@@ -123,6 +132,13 @@ export function initDesignSystem(options: InitOptions = {}): DesignSystemControl
     screen: options.defaultScreen ?? "validate",
     shiftKeyActive: false,
   };
+  const screenButtonByKey = new Map<ScreenKey, HTMLButtonElement>();
+  for (const button of screenButtons) {
+    const key = button.dataset.screenTarget as ScreenKey | undefined;
+    if (key !== undefined) {
+      screenButtonByKey.set(key, button);
+    }
+  }
 
   const updateFineAdjustIndicator = () => {
     const active = state.ctrlKeyActive || state.shiftKeyActive || state.fineAdjustContext !== null;
@@ -150,14 +166,27 @@ export function initDesignSystem(options: InitOptions = {}): DesignSystemControl
 
   const updateScreens = () => {
     for (const panel of screenPanels) {
-      panel.hidden = panel.dataset.screenPanel !== state.screen;
+      const active = panel.dataset.screenPanel === state.screen;
+      panel.hidden = !active;
+      panel.setAttribute("aria-hidden", active ? "false" : "true");
+      panel.tabIndex = active ? 0 : -1;
     }
     for (const button of screenButtons) {
       const active = button.dataset.screenTarget === state.screen;
+      button.setAttribute("aria-selected", active ? "true" : "false");
       button.setAttribute("aria-pressed", active ? "true" : "false");
+      button.tabIndex = active ? 0 : -1;
       button.classList.toggle("is-active", active);
     }
     options.onScreenChange?.(state.screen);
+  };
+
+  const activateScreen = (screen: ScreenKey, focusButton = false) => {
+    state.screen = screen;
+    updateScreens();
+    if (focusButton) {
+      screenButtonByKey.get(screen)?.focus({ preventScroll: true });
+    }
   };
 
   const syncModifierState = (event: Pick<KeyboardEvent, "ctrlKey" | "metaKey" | "shiftKey">) => {
@@ -183,8 +212,31 @@ export function initDesignSystem(options: InitOptions = {}): DesignSystemControl
       if (screen === undefined) {
         return;
       }
-      state.screen = screen;
-      updateScreens();
+      activateScreen(screen);
+    });
+    button.addEventListener("keydown", (event) => {
+      const currentKey = button.dataset.screenTarget as ScreenKey | undefined;
+      if (currentKey === undefined) {
+        return;
+      }
+      const currentIndex = SCREEN_ORDER.indexOf(currentKey);
+      if (currentIndex === -1) {
+        return;
+      }
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") {
+        nextIndex = currentIndex === 0 ? SCREEN_ORDER.length - 1 : currentIndex - 1;
+      } else if (event.key === "ArrowRight") {
+        nextIndex = currentIndex === SCREEN_ORDER.length - 1 ? 0 : currentIndex + 1;
+      } else if (event.key === "Home") {
+        nextIndex = 0;
+      } else if (event.key === "End") {
+        nextIndex = SCREEN_ORDER.length - 1;
+      } else {
+        return;
+      }
+      event.preventDefault();
+      activateScreen(SCREEN_ORDER[nextIndex], true);
     });
   }
 
@@ -216,8 +268,7 @@ export function initDesignSystem(options: InitOptions = {}): DesignSystemControl
       updateFineAdjustIndicator();
     },
     setScreen: (screen: ScreenKey) => {
-      state.screen = screen;
-      updateScreens();
+      activateScreen(screen);
     },
   };
 }

@@ -41,6 +41,34 @@ The same session shell stays with you as you move through:
 
 `Validate -> Analyze -> Scene -> Render -> Results -> Compare`
 
+## Keyboard and navigation
+
+You can run the main desktop workflow without bouncing between mouse-only
+controls.
+
+Global shortcuts:
+
+- `Alt+1` through `Alt+6`: switch between `Validate`, `Analyze`, `Scene`,
+  `Render`, `Results`, and `Compare`
+- `Alt+Shift+W`: open the workspace folder picker
+- `Alt+Shift+S`: open the stems folder picker
+- `Alt+Shift+V`: run `Validate`
+- `Alt+Shift+R`: run `Render`
+- `/`: jump to the Results artifact search field when you are not already typing
+  in a text field
+
+Keyboard workflow notes:
+
+- the screen tabs use real tab semantics, so arrow keys move between major
+  panels
+- the Results artifact browser uses arrow keys plus `Home` and `End` to move
+  selection
+- numeric controls such as the Results detail slider, Compare compensation
+  control, and Scene focus pad accept keyboard adjustment as well as direct
+  number entry
+- visible focus rings are intentional; if you lose your place, press `Tab` and
+  follow the highlight
+
 ## Validate
 
 Validate is the soundcheck for your folder setup.

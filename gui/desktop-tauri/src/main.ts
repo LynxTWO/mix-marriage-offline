@@ -7,7 +7,9 @@ import {
   describeConfidence,
   initDesignSystem,
   roundToStep,
+  SCREEN_ORDER,
   signedDb,
+  type ScreenKey,
 } from "./design-system";
 import {
   browseDirectory,
@@ -113,6 +115,15 @@ type QuickActionButtonSpec = {
   label: string;
   onClick: () => void;
   title?: string;
+};
+
+const SCREEN_SHORTCUT_LABELS: Record<ScreenKey, string> = {
+  analyze: "Alt+2",
+  compare: "Alt+6",
+  render: "Alt+4",
+  results: "Alt+5",
+  scene: "Alt+3",
+  validate: "Alt+1",
 };
 
 type ChangeSummaryChip = {
@@ -334,6 +345,8 @@ type AppUi = {
     whatChangedText: HTMLElement;
   };
   runtimeMessage: HTMLElement;
+  screenPanels: Record<ScreenKey, HTMLElement>;
+  screenTabs: Record<ScreenKey, HTMLButtonElement>;
   shell: HTMLElement;
   scene: {
     focusCaption: HTMLElement;
@@ -642,6 +655,22 @@ function getUi(): AppUi {
       whatChangedText: requiredElement("#results-what-changed-text"),
     },
     runtimeMessage: requiredElement("#runtime-message"),
+    screenPanels: {
+      analyze: requiredElement("#screen-analyze"),
+      compare: requiredElement("#screen-compare"),
+      render: requiredElement("#screen-render"),
+      results: requiredElement("#screen-results"),
+      scene: requiredElement("#screen-scene"),
+      validate: requiredElement("#screen-validate"),
+    },
+    screenTabs: {
+      analyze: requiredElement("#screen-tab-analyze"),
+      compare: requiredElement("#screen-tab-compare"),
+      render: requiredElement("#screen-tab-render"),
+      results: requiredElement("#screen-tab-results"),
+      scene: requiredElement("#screen-tab-scene"),
+      validate: requiredElement("#screen-tab-validate"),
+    },
     shell: requiredElement("#app-shell"),
     scene: {
       focusCaption: requiredElement("#scene-focus-caption"),
@@ -681,6 +710,144 @@ function getUi(): AppUi {
       summaryText: requiredElement("#analyze-summary-text"),
     },
   };
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  const selector = "input, textarea, select, [contenteditable=''], [contenteditable='true']";
+  return target.matches(selector) || target.closest(selector) !== null;
+}
+
+function isDisabledElement(element: HTMLElement): boolean {
+  return "disabled" in element && Boolean((element as HTMLButtonElement | HTMLInputElement | HTMLSelectElement).disabled);
+}
+
+function focusPrimaryControlForScreen(ui: AppUi, screen: ScreenKey): void {
+  const target: HTMLElement = (() => {
+    switch (screen) {
+      case "analyze":
+        return ui.buttons.analyze;
+      case "compare":
+        return ui.compareInputs.aPath;
+      case "render":
+        return ui.buttons.render;
+      case "results":
+        return ui.artifactSearch;
+      case "scene":
+        return ui.buttons.scene;
+      case "validate":
+      default:
+        return ui.buttons.validate;
+    }
+  })();
+  if (!isDisabledElement(target)) {
+    target.focus({ preventScroll: true });
+    return;
+  }
+  ui.screenPanels[screen].focus({ preventScroll: true });
+}
+
+function setScreenAndFocus(
+  ui: AppUi,
+  controller: ReturnType<typeof initDesignSystem>,
+  screen: ScreenKey,
+): void {
+  controller.setScreen(screen);
+  window.requestAnimationFrame(() => {
+    focusPrimaryControlForScreen(ui, screen);
+  });
+}
+
+function resultsArtifactButtons(ui: AppUi): HTMLButtonElement[] {
+  return Array.from(
+    ui.results.browserList.querySelectorAll<HTMLButtonElement>("[data-artifact-entry-id]"),
+  );
+}
+
+function focusResultsArtifactButton(ui: AppUi, artifactId: string): void {
+  window.requestAnimationFrame(() => {
+    const button = resultsArtifactButtons(ui).find((item) => item.dataset.artifactEntryId === artifactId) ?? null;
+    if (button === null) {
+      return;
+    }
+    button.focus({ preventScroll: true });
+    button.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+    });
+  });
+}
+
+function selectResultsArtifact(
+  ui: AppUi,
+  artifactId: string,
+  options: { focusSelection?: boolean } = {},
+): void {
+  if (!artifactId) {
+    return;
+  }
+  state.selectedArtifactId = artifactId;
+  renderResults(ui);
+  if (options.focusSelection) {
+    focusResultsArtifactButton(ui, artifactId);
+  }
+}
+
+function moveSelectedResultsArtifact(
+  ui: AppUi,
+  direction: "first" | "last" | "next" | "previous",
+): void {
+  const buttons = resultsArtifactButtons(ui);
+  if (buttons.length === 0) {
+    return;
+  }
+  const selectedIndex = buttons.findIndex((button) => {
+    return button.dataset.artifactEntryId === state.selectedArtifactId;
+  });
+  const activeIndex = buttons.findIndex((button) => button === document.activeElement);
+  const currentIndex = activeIndex >= 0 ? activeIndex : (selectedIndex >= 0 ? selectedIndex : 0);
+
+  let nextIndex = currentIndex;
+  if (direction === "first") {
+    nextIndex = 0;
+  } else if (direction === "last") {
+    nextIndex = buttons.length - 1;
+  } else if (direction === "next") {
+    nextIndex = currentIndex >= buttons.length - 1 ? buttons.length - 1 : currentIndex + 1;
+  } else if (direction === "previous") {
+    nextIndex = currentIndex <= 0 ? 0 : currentIndex - 1;
+  }
+
+  const nextId = buttons[nextIndex]?.dataset.artifactEntryId ?? "";
+  if (!nextId) {
+    return;
+  }
+  selectResultsArtifact(ui, nextId, { focusSelection: true });
+}
+
+function applyShortcutMetadata(ui: AppUi): void {
+  for (const screen of SCREEN_ORDER) {
+    const button = ui.screenTabs[screen];
+    const shortcut = SCREEN_SHORTCUT_LABELS[screen];
+    button.title = `${button.textContent?.trim() || screen} (${shortcut})`;
+    button.setAttribute("aria-keyshortcuts", shortcut);
+  }
+
+  ui.browseButtons.workspaceDir.title = "Browse workspace folder (Alt+Shift+W)";
+  ui.browseButtons.workspaceDir.setAttribute("aria-keyshortcuts", "Alt+Shift+W");
+  ui.browseButtons.stemsDir.title = "Browse stems folder (Alt+Shift+S)";
+  ui.browseButtons.stemsDir.setAttribute("aria-keyshortcuts", "Alt+Shift+S");
+  ui.buttons.validate.title = "Run Validate (Alt+Shift+V)";
+  ui.buttons.validate.setAttribute("aria-keyshortcuts", "Alt+Shift+V");
+  ui.buttons.render.title = "Run Render (Alt+Shift+R)";
+  ui.buttons.render.setAttribute("aria-keyshortcuts", "Alt+Shift+R");
+  ui.artifactSearch.title = "Jump to Results search (/)";
+  ui.artifactSearch.setAttribute("aria-keyshortcuts", "/");
+  ui.results.detailSlider.title = "Adjust Results detail depth with arrow keys, Home/End, or drag";
+  ui.compareCompensation.knob.title = "Adjust B compensation with arrow keys, Home/End, or drag";
+  ui.scene.focusPad.title = "Adjust scene focus with arrow keys or drag";
 }
 
 function asObject(value: unknown): JsonObject | null {
@@ -1194,9 +1361,7 @@ function renderQuickActionButtons(
     button.className = "button-secondary button-compact";
     button.textContent = buttonSpec.label;
     button.disabled = buttonSpec.disabled === true;
-    if (buttonSpec.title) {
-      button.title = buttonSpec.title;
-    }
+    button.title = buttonSpec.title ?? buttonSpec.label;
     button.addEventListener("click", buttonSpec.onClick);
     container.append(button);
   }
@@ -2397,6 +2562,10 @@ function renderSceneFocus(ui: AppUi): void {
   const x = ((pan + 90) / 180) * 100;
   ui.scene.focusDot.style.setProperty("--xy-x", x.toFixed(2));
   ui.scene.focusDot.style.setProperty("--xy-y", depth.toFixed(2));
+  ui.scene.focusPad.setAttribute(
+    "aria-label",
+    `Scene focus XY pad, pan ${Math.round(pan)} degrees, depth ${Math.round(depth)} percent`,
+  );
 
   const nearest = nearestSceneRow();
   if (nearest === null) {
@@ -3861,6 +4030,7 @@ function renderCompare(ui: AppUi): void {
   const compensationRatio = (state.compareCompensationDb + 12) / 24;
   ui.compareCompensation.knob.style.setProperty("--control-ratio", clamp(compensationRatio, 0, 1).toFixed(4));
   ui.compareCompensation.knob.setAttribute("aria-valuenow", state.compareCompensationDb.toFixed(1));
+  ui.compareCompensation.knob.setAttribute("aria-valuetext", signedDb(state.compareCompensationDb));
   ui.compareCompensation.input.value = state.compareCompensationDb.toFixed(1);
   ui.compareCompensation.value.textContent = signedDb(state.compareCompensationDb);
 
@@ -3997,6 +4167,7 @@ function renderResults(ui: AppUi): void {
     : null;
   const entries = buildArtifactEntries(paths);
   const query = state.resultsArtifactSearch.trim().toLowerCase();
+  ui.artifactSearch.value = state.resultsArtifactSearch;
   const filtered = entries.filter((entry) => {
     if (state.resultsArtifactTag !== "ALL" && entry.tag !== state.resultsArtifactTag) {
       return false;
@@ -4022,6 +4193,13 @@ function renderResults(ui: AppUi): void {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "preset-button";
+    button.id = `artifact-option-${entry.id.replace(/[^a-z0-9_-]/giu, "-")}`;
+    button.dataset.artifactEntryId = entry.id;
+    button.setAttribute("role", "option");
+    button.setAttribute("aria-label", `${entry.title}. ${entry.tag}. ${entry.summary}`);
+    button.setAttribute("aria-selected", entry.id === state.selectedArtifactId ? "true" : "false");
+    button.tabIndex = entry.id === state.selectedArtifactId ? 0 : -1;
+    button.title = `${entry.title}\n${entry.summary}`;
     button.textContent = entry.title;
     if (entry.id === state.selectedArtifactId) {
       button.classList.add("is-active");
@@ -4030,10 +4208,23 @@ function renderResults(ui: AppUi): void {
     meta.textContent = `${entry.tag} · ${entry.summary}`;
     button.append(meta);
     button.addEventListener("click", () => {
-      state.selectedArtifactId = entry.id;
-      renderResults(ui);
+      selectResultsArtifact(ui, entry.id);
     });
     ui.results.browserList.append(button);
+  }
+
+  const selectedOptionId = filtered.find((entry) => entry.id === state.selectedArtifactId)?.id ?? "";
+  if (selectedOptionId) {
+    const selectedButton = resultsArtifactButtons(ui).find((button) => {
+      return button.dataset.artifactEntryId === selectedOptionId;
+    }) ?? null;
+    if (selectedButton !== null) {
+      ui.results.browserList.setAttribute("aria-activedescendant", selectedButton.id);
+    } else {
+      ui.results.browserList.removeAttribute("aria-activedescendant");
+    }
+  } else {
+    ui.results.browserList.removeAttribute("aria-activedescendant");
   }
 
   const selected = filtered.find((entry) => entry.id === state.selectedArtifactId) ?? null;
@@ -4043,6 +4234,7 @@ function renderResults(ui: AppUi): void {
 
   ui.results.detailSlider.style.setProperty("--slider-ratio", ((state.resultsDetailLevel - 1) / 9).toFixed(4));
   ui.results.detailSlider.setAttribute("aria-valuenow", state.resultsDetailLevel.toString());
+  ui.results.detailSlider.setAttribute("aria-valuetext", `${state.resultsDetailLevel} line(s) of detail`);
   ui.results.detailInput.value = state.resultsDetailLevel.toString();
   ui.results.detailValue.textContent = `${state.resultsDetailLevel} line(s) of detail`;
   renderChangeSummary(
@@ -5114,6 +5306,27 @@ function bindResultsDetailSlider(ui: AppUi, controller: ReturnType<typeof initDe
       window.addEventListener("mouseup", mouseUp);
     });
   });
+  ui.results.detailSlider.addEventListener("keydown", (event) => {
+    let nextValue: number | null = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+      nextValue = state.resultsDetailLevel + 1;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+      nextValue = state.resultsDetailLevel - 1;
+    } else if (event.key === "PageUp") {
+      nextValue = state.resultsDetailLevel + 2;
+    } else if (event.key === "PageDown") {
+      nextValue = state.resultsDetailLevel - 2;
+    } else if (event.key === "Home") {
+      nextValue = minimum;
+    } else if (event.key === "End") {
+      nextValue = maximum;
+    }
+    if (nextValue === null) {
+      return;
+    }
+    event.preventDefault();
+    applyValue(nextValue);
+  });
 }
 
 function bindCompareKnob(ui: AppUi, controller: ReturnType<typeof initDesignSystem>): void {
@@ -5181,6 +5394,30 @@ function bindCompareKnob(ui: AppUi, controller: ReturnType<typeof initDesignSyst
       window.addEventListener("mouseup", mouseUp);
     });
   });
+  ui.compareCompensation.knob.addEventListener("keydown", (event) => {
+    const fineAdjust = controller.isFineAdjust(event);
+    const arrowStep = fineAdjust ? 0.1 : 0.5;
+    const pageStep = fineAdjust ? 0.5 : 2;
+    let nextValue: number | null = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+      nextValue = state.compareCompensationDb + arrowStep;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+      nextValue = state.compareCompensationDb - arrowStep;
+    } else if (event.key === "PageUp") {
+      nextValue = state.compareCompensationDb + pageStep;
+    } else if (event.key === "PageDown") {
+      nextValue = state.compareCompensationDb - pageStep;
+    } else if (event.key === "Home") {
+      nextValue = minimum;
+    } else if (event.key === "End") {
+      nextValue = maximum;
+    }
+    if (nextValue === null) {
+      return;
+    }
+    event.preventDefault();
+    applyValue(nextValue, "manual");
+  });
 }
 
 function bindSceneFocus(ui: AppUi, controller: ReturnType<typeof initDesignSystem>): void {
@@ -5233,6 +5470,24 @@ function bindSceneFocus(ui: AppUi, controller: ReturnType<typeof initDesignSyste
     ui.scene.focusPad.addEventListener("pointerup", onUp);
     ui.scene.focusPad.addEventListener("pointercancel", onUp);
   });
+  ui.scene.focusPad.addEventListener("keydown", (event) => {
+    const step = controller.isFineAdjust(event) ? 5 : 10;
+    let nextPan = state.sceneFocusPan;
+    let nextDepth = state.sceneFocusDepth;
+    if (event.key === "ArrowLeft") {
+      nextPan -= step;
+    } else if (event.key === "ArrowRight") {
+      nextPan += step;
+    } else if (event.key === "ArrowUp") {
+      nextDepth += step;
+    } else if (event.key === "ArrowDown") {
+      nextDepth -= step;
+    } else {
+      return;
+    }
+    event.preventDefault();
+    applyFocus(nextPan, nextDepth);
+  });
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -5252,6 +5507,7 @@ window.addEventListener("DOMContentLoaded", () => {
   );
   renderAll(ui);
   applyBusyState(ui);
+  applyShortcutMetadata(ui);
 
   ui.inputs.workspaceDir.addEventListener("input", () => {
     resetSceneLocksState("Inspect scene locks to fine-tune how MMO places each part in the room.");
@@ -5373,6 +5629,33 @@ window.addEventListener("DOMContentLoaded", () => {
     state.resultsArtifactSearch = ui.artifactSearch.value;
     renderResults(ui);
   });
+  ui.results.browserList.addEventListener("keydown", (event) => {
+    const target = event.target instanceof HTMLElement
+      ? event.target.closest<HTMLButtonElement>("[data-artifact-entry-id]")
+      : null;
+    if (target === null) {
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      event.preventDefault();
+      moveSelectedResultsArtifact(ui, "next");
+      return;
+    }
+    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      moveSelectedResultsArtifact(ui, "previous");
+      return;
+    }
+    if (event.key === "Home") {
+      event.preventDefault();
+      moveSelectedResultsArtifact(ui, "first");
+      return;
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      moveSelectedResultsArtifact(ui, "last");
+    }
+  });
   for (const button of ui.artifactTagButtons) {
     button.addEventListener("click", () => {
       const tag = button.dataset.artifactTag as ArtifactTag | undefined;
@@ -5402,6 +5685,76 @@ window.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+  window.addEventListener("keydown", (event) => {
+    if (event.defaultPrevented || event.repeat) {
+      return;
+    }
+    if (!event.altKey && !event.ctrlKey && !event.metaKey && event.key === "/" && !isEditableTarget(event.target)) {
+      event.preventDefault();
+      setScreenAndFocus(ui, controller, "results");
+      window.requestAnimationFrame(() => {
+        ui.artifactSearch.focus({ preventScroll: true });
+        ui.artifactSearch.select();
+      });
+      return;
+    }
+    if (event.ctrlKey || event.metaKey) {
+      return;
+    }
+
+    if (event.altKey && !event.shiftKey) {
+      const screen = (() => {
+        switch (event.code) {
+          case "Digit1":
+            return "validate";
+          case "Digit2":
+            return "analyze";
+          case "Digit3":
+            return "scene";
+          case "Digit4":
+            return "render";
+          case "Digit5":
+            return "results";
+          case "Digit6":
+            return "compare";
+          default:
+            return null;
+        }
+      })();
+      if (screen !== null) {
+        event.preventDefault();
+        setScreenAndFocus(ui, controller, screen);
+      }
+      return;
+    }
+
+    if (!event.altKey || !event.shiftKey) {
+      return;
+    }
+
+    switch (event.code) {
+      case "KeyR":
+        event.preventDefault();
+        setScreenAndFocus(ui, controller, "render");
+        ui.buttons.render.click();
+        break;
+      case "KeyS":
+        event.preventDefault();
+        ui.browseButtons.stemsDir.click();
+        break;
+      case "KeyV":
+        event.preventDefault();
+        setScreenAndFocus(ui, controller, "validate");
+        ui.buttons.validate.click();
+        break;
+      case "KeyW":
+        event.preventDefault();
+        ui.browseButtons.workspaceDir.click();
+        break;
+      default:
+        break;
+    }
+  });
 
   ui.artifactPreviewTransport.play.addEventListener("click", () => {
     void playResultsAudition(ui);

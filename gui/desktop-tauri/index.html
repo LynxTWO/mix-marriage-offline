@@ -56,26 +56,85 @@
 
           <article class="widget compact-widget" data-widget-id="widget.header.tabs">
             <p class="field-label">Workflow Screens</p>
-            <nav class="screen-tabs" aria-label="Primary screens">
-              <button type="button" class="screen-tab" data-screen-target="validate" aria-pressed="true">
+            <nav class="screen-tabs" aria-label="Primary screens" role="tablist">
+              <button
+                type="button"
+                id="screen-tab-validate"
+                class="screen-tab"
+                data-screen-target="validate"
+                role="tab"
+                aria-controls="screen-validate"
+                aria-selected="true"
+                tabindex="0"
+              >
                 Validate
               </button>
-              <button type="button" class="screen-tab" data-screen-target="analyze" aria-pressed="false">
+              <button
+                type="button"
+                id="screen-tab-analyze"
+                class="screen-tab"
+                data-screen-target="analyze"
+                role="tab"
+                aria-controls="screen-analyze"
+                aria-selected="false"
+                tabindex="-1"
+              >
                 Analyze
               </button>
-              <button type="button" class="screen-tab" data-screen-target="scene" aria-pressed="false">
+              <button
+                type="button"
+                id="screen-tab-scene"
+                class="screen-tab"
+                data-screen-target="scene"
+                role="tab"
+                aria-controls="screen-scene"
+                aria-selected="false"
+                tabindex="-1"
+              >
                 Scene
               </button>
-              <button type="button" class="screen-tab" data-screen-target="render" aria-pressed="false">
+              <button
+                type="button"
+                id="screen-tab-render"
+                class="screen-tab"
+                data-screen-target="render"
+                role="tab"
+                aria-controls="screen-render"
+                aria-selected="false"
+                tabindex="-1"
+              >
                 Render
               </button>
-              <button type="button" class="screen-tab" data-screen-target="results" aria-pressed="false">
+              <button
+                type="button"
+                id="screen-tab-results"
+                class="screen-tab"
+                data-screen-target="results"
+                role="tab"
+                aria-controls="screen-results"
+                aria-selected="false"
+                tabindex="-1"
+              >
                 Results
               </button>
-              <button type="button" class="screen-tab" data-screen-target="compare" aria-pressed="false">
+              <button
+                type="button"
+                id="screen-tab-compare"
+                class="screen-tab"
+                data-screen-target="compare"
+                role="tab"
+                aria-controls="screen-compare"
+                aria-selected="false"
+                tabindex="-1"
+              >
                 Compare
               </button>
             </nav>
+            <p id="workflow-shortcuts-note" class="control-caption">
+              <kbd>Alt+1</kbd> to <kbd>Alt+6</kbd> switch screens. <kbd>Alt+Shift+W</kbd> workspace,
+              <kbd>Alt+Shift+S</kbd> stems, <kbd>Alt+Shift+V</kbd> validate, <kbd>Alt+Shift+R</kbd> render,
+              <kbd>/</kbd> jumps to Results search.
+            </p>
           </article>
         </div>
 
@@ -276,6 +335,9 @@
         class="panel screen-panel"
         data-screen-panel="validate"
         data-section-id="validate"
+        role="tabpanel"
+        tabindex="-1"
+        aria-labelledby="screen-tab-validate"
       >
         <div class="panel-header">
           <p class="eyebrow eyebrow-panel">Validate</p>
@@ -327,6 +389,9 @@
         data-screen-panel="analyze"
         data-section-id="analyze"
         hidden
+        role="tabpanel"
+        tabindex="-1"
+        aria-labelledby="screen-tab-analyze"
       >
         <div class="panel-header">
           <p class="eyebrow eyebrow-panel">Analyze</p>
@@ -381,6 +446,9 @@
         data-screen-panel="scene"
         data-section-id="scene"
         hidden
+        role="tabpanel"
+        tabindex="-1"
+        aria-labelledby="screen-tab-scene"
       >
         <div class="panel-header">
           <p class="eyebrow eyebrow-panel">Scene</p>
@@ -439,7 +507,14 @@
               </div>
               <span class="control-unit">deg / %</span>
             </div>
-            <button id="scene-focus-pad" type="button" class="xy-pad" aria-label="Scene focus XY pad" data-hit-target="true">
+            <button
+              id="scene-focus-pad"
+              type="button"
+              class="xy-pad"
+              aria-label="Scene focus XY pad"
+              aria-describedby="scene-focus-caption"
+              data-hit-target="true"
+            >
               <span class="xy-grid"></span>
               <span id="scene-focus-dot" class="xy-dot"></span>
             </button>
@@ -540,6 +615,9 @@
         data-screen-panel="render"
         data-section-id="render"
         hidden
+        role="tabpanel"
+        tabindex="-1"
+        aria-labelledby="screen-tab-render"
       >
         <div class="panel-header">
           <p class="eyebrow eyebrow-panel">Render</p>
@@ -587,6 +665,9 @@
         data-screen-panel="results"
         data-section-id="results"
         hidden
+        role="tabpanel"
+        tabindex="-1"
+        aria-labelledby="screen-tab-results"
       >
         <div class="panel-header">
           <p class="eyebrow eyebrow-panel">Results</p>
@@ -614,8 +695,12 @@
                   class="field-input"
                   type="search"
                   placeholder="Search receipt, qa, manifest, wav..."
+                  aria-describedby="artifact-search-shortcut-note"
                   data-hit-target="true"
                 />
+                <span id="artifact-search-shortcut-note" class="control-caption">
+                  Press <kbd>/</kbd> outside text fields to jump here.
+                </span>
               </label>
               <div class="tag-row" id="artifact-tag-row" role="group" aria-label="Artifact filters">
                 <button type="button" class="tag-chip" data-artifact-tag="ALL" data-hit-target="true">All</button>
@@ -659,7 +744,13 @@
             </div>
 
             <div class="preset-browser-body">
-              <div id="artifact-browser-list" class="preset-list" aria-live="polite"></div>
+              <div
+                id="artifact-browser-list"
+                class="preset-list"
+                role="listbox"
+                aria-label="Results artifacts"
+                aria-live="polite"
+              ></div>
               <div class="preset-preview">
                 <p class="field-label">Artifact preview</p>
                 <h3 id="artifact-preview-name">No artifact selected</h3>
@@ -749,10 +840,13 @@
                 id="results-detail-slider"
                 class="slider-surface"
                 type="button"
+                role="slider"
                 aria-label="Results detail slider"
+                aria-describedby="results-detail-value"
                 aria-valuemin="1"
                 aria-valuemax="10"
                 aria-valuenow="6"
+                aria-valuetext="6 line(s) of detail"
                 data-hit-target="true"
               >
                 <span id="results-detail-fill" class="slider-fill"></span>
@@ -990,6 +1084,9 @@
         data-screen-panel="compare"
         data-section-id="compare"
         hidden
+        role="tabpanel"
+        tabindex="-1"
+        aria-labelledby="screen-tab-compare"
       >
         <div class="panel-header">
           <p class="eyebrow eyebrow-panel">Compare</p>
@@ -1182,10 +1279,13 @@
                   id="compare-compensation-knob"
                   class="knob-surface"
                   type="button"
+                  role="slider"
                   aria-label="Compare compensation knob"
+                  aria-describedby="compare-compensation-value"
                   aria-valuemin="-12"
                   aria-valuemax="12"
                   aria-valuenow="0"
+                  aria-valuetext="+0.0 dB"
                   data-hit-target="true"
                 >
                   <span class="knob-face">

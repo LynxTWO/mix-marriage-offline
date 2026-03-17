@@ -30,6 +30,9 @@ Native OS dialogs such as folder pickers and file pickers are described in text
 because they vary by platform and are not part of the canonical app baseline.
 Contributor refresh policy and screenshot inventory live in
 [assets/screenshots/README.md](assets/screenshots/README.md).
+The desktop app also includes a documented keyboard path with visible focus
+states; see [Desktop GUI walkthrough](10-gui-walkthrough.md) for the current
+shortcut list and panel-navigation rules.
 
 MMO is offline-first. If something needs an external tool like FFmpeg, MMO will
 tell you and gate the feature instead of guessing.

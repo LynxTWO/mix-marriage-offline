@@ -494,6 +494,9 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
 
 Interaction standards (non-negotiable):
 
+- [x] Primary desktop workflow supports keyboard-first operation: visible focus
+      states, major-panel shortcuts, tab semantics, Results artifact-browser
+      selection, and keyboard adjustment for slider/knob/XY controls.
 - [x] Every numeric control supports direct text entry (exact value).
 - [x] Every drag control supports a fine-adjust modifier (Shift/Ctrl is fine)
       with visible on-screen feedback while engaged.

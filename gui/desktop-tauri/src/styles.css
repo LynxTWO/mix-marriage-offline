@@ -24,6 +24,9 @@
   --panel-gap: calc(var(--space-base) * 2);
   --surface-border: color-mix(in srgb, var(--theme-text) 12%, transparent);
   --surface-glow: rgba(0, 0, 0, 0.3);
+  --focus-ring-color: color-mix(in srgb, var(--theme-info) 78%, white);
+  --focus-ring-outline: 2px solid var(--focus-ring-color);
+  --focus-ring-shadow: 0 0 0 0.24rem color-mix(in srgb, var(--theme-info) 28%, transparent);
   background:
     radial-gradient(circle at top left, rgba(74, 163, 210, 0.14), transparent 28%),
     radial-gradient(circle at top right, rgba(194, 136, 64, 0.18), transparent 24%),
@@ -78,8 +81,10 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 summary:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--theme-info) 72%, white);
+  outline: var(--focus-ring-outline);
   outline-offset: 2px;
+  border-color: var(--focus-ring-color);
+  box-shadow: var(--focus-ring-shadow);
 }
 
 code,
@@ -89,6 +94,21 @@ pre,
 .stage-label,
 .stage-status {
   font-family: var(--theme-mono-font), "SFMono-Regular", Consolas, monospace;
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.45rem;
+  padding: 0.08rem 0.4rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.26);
+  color: white;
+  font-family: var(--theme-mono-font), "SFMono-Regular", Consolas, monospace;
+  font-size: 0.82em;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 [hidden] {
@@ -116,6 +136,20 @@ pre,
   border-radius: calc(var(--radius-base) * 1.4);
   background: color-mix(in srgb, var(--theme-surface) 92%, black);
   box-shadow: 0 24px 72px var(--surface-glow);
+}
+
+.hero:focus-within,
+.panel:focus-within,
+.signal-card:focus-within,
+.control-card:focus-within,
+.action-card:focus-within,
+.preset-browser:focus-within,
+.details-block:focus-within,
+.session-card:focus-within {
+  border-color: color-mix(in srgb, var(--theme-info) 34%, var(--surface-border));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--theme-info) 18%, transparent),
+    0 24px 72px var(--surface-glow);
 }
 
 .hero::before,
@@ -466,6 +500,7 @@ button:disabled {
   opacity: 0.72;
 }
 
+.screen-tab[aria-selected="true"],
 .screen-tab[aria-pressed="true"],
 .screen-tab.is-active,
 .segmented-button.is-active,
@@ -1134,6 +1169,13 @@ button:disabled {
   gap: calc(var(--space-base) * 0.75);
 }
 
+#artifact-browser-list {
+  max-height: 24rem;
+  overflow: auto;
+  align-content: start;
+  padding-right: 0.2rem;
+}
+
 .path-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1337,6 +1379,10 @@ button:disabled {
   text-align: left;
 }
 
+.preset-button[role="option"][aria-selected="true"] {
+  scroll-margin-block: calc(var(--space-base) * 0.75);
+}
+
 .preset-button small {
   color: var(--theme-text-muted);
 }
@@ -1517,6 +1563,25 @@ button:disabled {
     align-self: end;
     justify-self: end;
     max-width: 34ch;
+  }
+}
+
+@media (min-width: 1101px) and (max-width: 1480px) {
+  .preset-browser-body {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-grid > [data-widget-id="widget.results.summary"],
+  .workflow-grid > [data-widget-id="widget.results.what_changed"] {
+    grid-column: span 6;
+  }
+
+  .workflow-grid > [data-widget-id="widget.results.preview"],
+  .workflow-grid > [data-widget-id="widget.results.inspection"],
+  .workflow-grid > [data-widget-id="widget.compare.inputs"],
+  .workflow-grid > [data-widget-id="widget.compare.summary"],
+  .workflow-grid > [data-widget-id="widget.compare.inspection"] {
+    grid-column: span 12;
   }
 }
 
