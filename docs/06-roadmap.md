@@ -7,9 +7,10 @@ This roadmap is split into two tracks:
 
 ## NOW
 
-Only true v1 completion blockers belong here. The remaining blocker is small
-and explicit: final human fresh-install signoff on the release-candidate
-desktop artifacts. Optional GUI maturity and preset polish items live in
+Only true v1 completion blockers belong here. `1.0.0-rc.1` is tagged as the
+first public release candidate. The remaining blocker before stable `1.0.0` is
+human fresh-install signoff on the release-candidate desktop artifacts.
+Optional GUI maturity and preset polish items live in
 `PROJECT_WHEN_COMPLETE.md` section 9 and in `LATER` below.
 
 ### Release Surface
@@ -23,7 +24,7 @@ desktop artifacts. Optional GUI maturity and preset polish items live in
 - docs and common failure messages now match the shipped desktop workflow more
   closely
 - remaining blocker: complete one human fresh-install walkthrough on the
-  release-candidate packaged artifacts before tagging v1
+  `1.0.0-rc.1` packaged artifacts before tagging stable `1.0.0`
 
 ### Tauri Workflow Parity
 

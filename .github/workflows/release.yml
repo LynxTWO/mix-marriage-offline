@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v1.0.0)"
+        description: "Release tag (e.g. v1.0.0-rc.1)"
         required: true
-        default: "v1.0.0"
+        default: "v1.0.0-rc.1"
 
 env:
   RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
@@ -327,4 +327,4 @@ jobs:
           body_path: CHANGELOG.md
           files: dist/**
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(env.RELEASE_TAG, '-rc') }}

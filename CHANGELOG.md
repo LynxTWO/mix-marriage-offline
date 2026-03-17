@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.0-rc.1] — 2026-03-17
+
+First public release candidate. This build represents the real shipped product:
+a Tauri desktop app with full workflow parity, deterministic scene/render
+contracts, compare reporting, plugin authoring onboarding, and cross-platform
+packaged artifacts. The older `1.0.0`–`1.1.3` tags below were internal
+CustomTkinter-era builds that no longer represent the intended public baseline.
+
 ### Added
 
 - **Plugin authoring starter pack and onboarding path:**
@@ -1211,6 +1219,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `SFX5`) and avoid `ISSUE.VALIDATION.UNKNOWN_ROLE` false positives. Added
   generic synth recognition via `ROLE.SYNTH.OTHER` (`synth`/`synth01`) and
   `SubDrop` recognition under `ROLE.FX.IMPACT`.
+
+### Known limits in rc.1
+
+- Human fresh-install signoff on release-candidate packaged artifacts is not yet
+  complete across all three platforms (Windows, macOS, Linux).
+- Optional post-v1 GUI maturity items (macro controls, mood selectors, safe-mode
+  toggle, reference matcher, history scrub, soundstage views) are tracked but not
+  shipping in this RC.
+- Compare works best when both sides come from finished MMO workspaces.
+- Real audio workflows depend on FFmpeg/ffprobe; MMO stops and tells you if they
+  are missing.
+
+---
+
+**Pre-Tauri history.** The entries below document the older CustomTkinter-based
+desktop line (`1.0.0`–`1.1.3`). Those builds are superseded by the Tauri
+desktop app shipped in `1.0.0-rc.1` above.
 
 ## [1.1.3] — 2026-03-02
 

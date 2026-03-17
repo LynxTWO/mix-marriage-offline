@@ -212,6 +212,17 @@ evaluation-only loudness compensation it used for a fair listen.
 Think of this screen as two printed mix notes on one desk: MMO lines them up so
 you can hear and read the differences more fairly.
 
+In loaded compare mode the summary panel follows this visual hierarchy top to
+bottom:
+
+1. **What changed** — objective delta chips and the summary headline
+2. **A/B state and loudness disclosure** — toggle + fair-listen compensation
+   note
+3. **Matched readout and audition transport** — LUFS readout and play controls
+4. **Compensation fine-tune** — knob and numeric input (in the detail row below)
+5. **Raw artifact preview** — collapsible `compare_report.json` (closed by
+   default)
+
 ![Compare screen, loaded loudness-matched state](assets/screenshots/tauri_compare_loaded.png)
 
 ## Recommended order

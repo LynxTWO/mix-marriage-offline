@@ -1082,6 +1082,27 @@ button:disabled {
   word-break: break-word;
 }
 
+/* Compare left rail: quieter than the active compare content */
+[data-widget-id="widget.compare.inputs"] {
+  border-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
+  gap: calc(var(--space-base) * 0.6);
+}
+
+[data-widget-id="widget.compare.inputs"] > .field-label:first-child {
+  color: var(--theme-text-muted);
+  letter-spacing: 0.14em;
+}
+
+/* Compensation knob: compact so it doesn't dominate the detail area */
+[data-widget-id="widget.compare.compensation_knob"] .knob-surface {
+  width: min(7rem, 100%);
+}
+
+/* JSON preview: cap height when expanded */
+#compare-json-preview {
+  max-height: 20rem;
+}
+
 .scope-grid-line,
 .scope-grid-ring {
   fill: none;

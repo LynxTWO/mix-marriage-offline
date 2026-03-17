@@ -316,8 +316,8 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
       packaged smoke now accepts both staged `mmo-$TARGET_TRIPLE` names and
       post-bundle bare `mmo` sidecars, and missing-sidecar failures print short
       bundle-directory receipts for faster triage. Remaining RC signoff:
-      complete one human fresh-install walkthrough on the final
-      release-candidate desktop artifacts before tagging v1.
+      complete one human fresh-install walkthrough on the `1.0.0-rc.1`
+      desktop artifacts before tagging stable `1.0.0`.
 
 ### 4.8 UX/CLI is usable for real work
 

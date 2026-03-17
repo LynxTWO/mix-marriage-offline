@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-03-16
+Last updated: 2026-03-17
 
 This is the single-page milestone checklist for current delivery phases.
 
@@ -74,7 +74,7 @@ Definition of done:
 
 ## Release Surface
 
-State: `in_progress`
+State: `in_progress` — version `1.0.0-rc.1` tagged as first public release candidate
 
 Definition of done:
 
@@ -84,6 +84,7 @@ Definition of done:
       smoke checks.
 - [x] Standalone CLI binaries build on Windows, macOS, and Linux without a
       legacy Python GUI dependency.
+- [x] All shipped metadata surfaces agree on `1.0.0-rc.1`.
 - [ ] Human fresh-install signoff on release-candidate packaged artifacts is
       complete across Windows, macOS, and Linux.
 
@@ -111,6 +112,6 @@ Definition of done:
   macOS, and Linux, launch the packaged app, and verify the bundled sidecar
   doctor plus validate/analyze/scene/render against a tiny fixture.
 - Release-candidate hardening now includes a docs reality pass and clearer
-  musician-facing failure guidance, but the final manual fresh-install signoff
-  on packaged artifacts remains the last release-surface blocker before a v1
-  tag.
+  musician-facing failure guidance. `1.0.0-rc.1` is tagged as the first public
+  release candidate; final manual fresh-install signoff on packaged artifacts
+  remains the last release-surface blocker before a stable `1.0.0` tag.

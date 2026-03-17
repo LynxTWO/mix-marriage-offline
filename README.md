@@ -116,7 +116,14 @@ If FFmpeg tools are not on `PATH`, set:
 - `MMO_FFMPEG_PATH=/path/to/ffmpeg`
 - `MMO_FFPROBE_PATH=/path/to/ffprobe`
 
-## Known Limits In v1
+## Release Status
+
+The current public release is `1.0.0-rc.1` — the first real release candidate
+of the Tauri-based desktop app. It is stable enough for public testing but is
+not yet the final `1.0.0`. Older GitHub tags (`1.0.0`–`1.1.3`) represent the
+retired CustomTkinter-based line and are no longer the intended product.
+
+## Known Limits In rc.1
 
 - MMO is not a DAW plugin and it does not replace your creative judgement.
 - MMO does not claim to replace licensed Dolby or proprietary Atmos renderers.
@@ -124,9 +131,8 @@ If FFmpeg tools are not on `PATH`, set:
   missing, MMO will stop and tell you instead of guessing.
 - `Compare` works best when both sides come from finished MMO workspaces or
   from the matching `report.json` files inside those workspaces.
-- Automated packaged smoke runs already cover Windows, macOS, and Linux in CI.
-  Final human fresh-install signoff on release-candidate artifacts remains part
-  of the ship checklist before a v1 tag.
+- Human fresh-install signoff on release-candidate packaged artifacts is still
+  in progress across Windows, macOS, and Linux.
 
 ## Documentation
 
