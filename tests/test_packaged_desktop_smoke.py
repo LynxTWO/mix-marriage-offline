@@ -72,16 +72,19 @@ class TestPackagedDesktopSmoke(unittest.TestCase):
             "ok": True,
         }
 
-    def test_sidecar_name_detection_matches_target_triples(self) -> None:
+    def test_sidecar_name_detection_matches_staged_and_bundled_names(self) -> None:
         self.assertTrue(
             self.module._looks_like_sidecar_name("mmo-x86_64-pc-windows-msvc.exe", "windows")
         )
+        self.assertTrue(self.module._looks_like_sidecar_name("mmo.exe", "windows"))
         self.assertTrue(
             self.module._looks_like_sidecar_name("mmo-aarch64-apple-darwin", "macos")
         )
+        self.assertTrue(self.module._looks_like_sidecar_name("mmo", "macos"))
         self.assertTrue(
             self.module._looks_like_sidecar_name("mmo-x86_64-unknown-linux-gnu", "linux")
         )
+        self.assertTrue(self.module._looks_like_sidecar_name("mmo", "linux"))
         self.assertFalse(
             self.module._looks_like_sidecar_name("mmo-desktop-tauri.exe", "windows")
         )
@@ -165,6 +168,40 @@ class TestPackagedDesktopSmoke(unittest.TestCase):
                     [str(sidecar_path), "env", "doctor", "--format", "json"],
                 ],
             )
+
+    def test_find_sidecar_binary_prefers_exact_mmo_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle_root = Path(temp_dir)
+            staged_sidecar = bundle_root / "Contents" / "MacOS" / "mmo-aarch64-apple-darwin"
+            bundled_sidecar = bundle_root / "Contents" / "MacOS" / "mmo"
+            staged_sidecar.parent.mkdir(parents=True, exist_ok=True)
+            staged_sidecar.write_text("staged", encoding="utf-8")
+            bundled_sidecar.write_text("bundled", encoding="utf-8")
+
+            resolved = self.module._find_sidecar_binary(bundle_root, platform_tag="macos")
+
+            self.assertEqual(resolved, bundled_sidecar)
+
+    def test_find_sidecar_binary_error_lists_likely_macos_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle_root = Path(temp_dir)
+            macos_dir = bundle_root / "Contents" / "MacOS"
+            frameworks_dir = bundle_root / "Contents" / "Frameworks"
+            resources_dir = bundle_root / "Contents" / "Resources"
+            macos_dir.mkdir(parents=True, exist_ok=True)
+            frameworks_dir.mkdir(parents=True, exist_ok=True)
+            resources_dir.mkdir(parents=True, exist_ok=True)
+            (macos_dir / "MMO Desktop").write_text("app", encoding="utf-8")
+            (frameworks_dir / "MMO Desktop Helper").write_text("helper", encoding="utf-8")
+
+            with self.assertRaisesRegex(self.module.SmokeError, "Contents/MacOS") as context:
+                self.module._find_sidecar_binary(bundle_root, platform_tag="macos")
+
+            message = str(context.exception)
+            self.assertIn("Contents/MacOS", message)
+            self.assertIn("Contents/Frameworks", message)
+            self.assertIn("Contents/Resources", message)
+            self.assertIn("MMO Desktop", message)
 
     def test_validate_summary_requires_zero_doctor_probe_exit_codes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

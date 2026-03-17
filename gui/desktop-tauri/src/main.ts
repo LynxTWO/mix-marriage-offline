@@ -487,6 +487,7 @@ let designController: ReturnType<typeof initDesignSystem> | null = null;
 let auditionAudioContext: AudioContext | null = null;
 let auditionAudioGainNode: GainNode | null = null;
 let auditionAudioSourceNode: MediaElementAudioSourceNode | null = null;
+const AUDITION_GAIN_SETUP_TIMEOUT_MS = 250;
 
 function requiredElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -737,6 +738,16 @@ function audioContextConstructor(): typeof AudioContext | null {
   return null;
 }
 
+function auditionGainSetupTimeout<T>(fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    window.setTimeout(() => resolve(fallback), AUDITION_GAIN_SETUP_TIMEOUT_MS);
+  });
+}
+
+function isAuditionContextRunning(context: AudioContext): boolean {
+  return context.state === "running";
+}
+
 async function ensureAuditionGainNode(audio: HTMLAudioElement): Promise<GainNode | null> {
   const AudioContextCtor = audioContextConstructor();
   if (AudioContextCtor === null) {
@@ -751,8 +762,27 @@ async function ensureAuditionGainNode(audio: HTMLAudioElement): Promise<GainNode
     auditionAudioSourceNode.connect(auditionAudioGainNode);
     auditionAudioGainNode.connect(auditionAudioContext.destination);
   }
-  if (auditionAudioContext.state === "suspended") {
-    await auditionAudioContext.resume().catch(() => undefined);
+  if (auditionAudioContext.state === "closed") {
+    return null;
+  }
+  if (auditionAudioContext.state !== "running") {
+    const resumed = await Promise.race([
+      (async () => {
+        try {
+          await auditionAudioContext.resume();
+        } catch {
+          return false;
+        }
+        return isAuditionContextRunning(auditionAudioContext);
+      })(),
+      auditionGainSetupTimeout(false),
+    ]);
+    if (!resumed && !isAuditionContextRunning(auditionAudioContext)) {
+      return null;
+    }
+  }
+  if (!isAuditionContextRunning(auditionAudioContext)) {
+    return null;
   }
   return auditionAudioGainNode;
 }
@@ -2738,7 +2768,21 @@ function renderTransportStateLabel(
 
 async function applyAuditionGain(ui: AppUi, gainDb: number): Promise<void> {
   const linear = gainDbToLinear(gainDb);
-  const gainNode = await ensureAuditionGainNode(ui.auditionAudio);
+  if (isDesktopTestRuntime()) {
+    ui.auditionAudio.volume = clamp(linear, 0, 1);
+    return;
+  }
+
+  let gainNode: GainNode | null = null;
+  try {
+    gainNode = await Promise.race([
+      ensureAuditionGainNode(ui.auditionAudio),
+      auditionGainSetupTimeout<GainNode | null>(null),
+    ]);
+  } catch {
+    gainNode = null;
+  }
+
   if (gainNode !== null) {
     gainNode.gain.value = linear;
     ui.auditionAudio.volume = 1;

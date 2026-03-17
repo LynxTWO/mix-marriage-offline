@@ -62,6 +62,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Desktop audition transport fail-open behavior:
+  - `applyAuditionGain` no longer blocks playback while waiting on Web Audio
+    gain-node setup; desktop tests now use `audio.volume` directly, and real
+    runtimes fall back to HTML media volume if `AudioContext` setup or
+    `resume()` does not become usable quickly.
+  - Added a Tauri design-system regression that hangs `AudioContext.resume()`
+    and proves the compare transport still leaves `Loading`.
+
+- Packaged desktop smoke sidecar discovery:
+  - The smoke harness now accepts both staged sidecar names like
+    `mmo-aarch64-apple-darwin` and post-bundle bare `mmo` binaries, which
+    fixes macOS false negatives when Tauri strips the target suffix at bundle
+    time.
+  - Missing-sidecar failures now include short listings of likely bundle
+    directories so future packaging changes produce an actionable receipt.
+
 - Scene intent build/lint truthfulness:
   - `scene build` now carries forward a real stems source path when one is
     known, instead of falling back to the generic scene-intent placeholder.

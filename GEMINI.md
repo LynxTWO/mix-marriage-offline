@@ -156,9 +156,10 @@ Non-negotiables:
   should default to that fair-listen compensation while disclosing method +
   amount, desktop preview/compare playback must stay artifact-backed with only
   bounded transport controls (`play/pause/stop` + A/B switch) and no extra
-  real-time DSP beyond the disclosed compare gain, and any preset-preview
-  compensation must stay bounded, explainable, and evaluation-only unless the
-  user explicitly commits it.
+  real-time DSP beyond the disclosed compare gain, Web Audio gain-node setup
+  must fail open to `audio.volume` if the browser context is unavailable or too
+  slow to resume, and any preset-preview compensation must stay bounded,
+  explainable, and evaluation-only unless the user explicitly commits it.
 - Keep Desktop GUI post-analyze scene preview deterministic and read-only:
   `_mmo_gui/scene.json` + `_mmo_gui/scene_lint.json` should be regenerated from
   `stems_map`/`bus_plan` with stable ordering, and the Scene tab should display
@@ -174,7 +175,10 @@ Non-negotiables:
   CLI via the repo's binary builder, bundle it through `externalBin`, avoid a
   production dependency on `gui/server.mjs`, and keep desktop workflow actions
   invoking the packaged sidecar directly via Tauri shell `execute`/`spawn` with
-  bundled data/plugin path resolution.
+  bundled data/plugin path resolution. Packaged smoke sidecar discovery must
+  accept both staged `mmo-$TARGET_TRIPLE` filenames and post-bundle bare `mmo`
+  binaries, and missing-sidecar failures should print likely bundle-directory
+  listings instead of failing silently.
 - Keep the frozen CLI sidecar contract pinned to
   `src/mmo/_frozen_cli_entrypoint.py` plus `mmo.cli:main`; do not point
   packaged sidecar builds back at `src/mmo/__main__.py`, which exists to

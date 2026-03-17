@@ -241,6 +241,45 @@ async function installMediaTransportStub(page: Parameters<typeof test>[0]["page"
   });
 }
 
+async function installNeverResolvingAudioContext(
+  page: Parameters<typeof test>[0]["page"],
+): Promise<void> {
+  await page.evaluate(() => {
+    class HangingAudioContext {
+      destination = {};
+      state = "suspended";
+
+      createMediaElementSource(): { connect: () => void } {
+        return {
+          connect() {
+            // No-op stub for transport regression coverage.
+          },
+        };
+      }
+
+      createGain(): { connect: () => void; gain: { value: number } } {
+        return {
+          connect() {
+            // No-op stub for transport regression coverage.
+          },
+          gain: { value: 1 },
+        };
+      }
+
+      resume(): Promise<void> {
+        return new Promise(() => undefined);
+      }
+    }
+
+    Object.defineProperty(window, "AudioContext", {
+      configurable: true,
+      writable: true,
+      value: HangingAudioContext,
+    });
+    delete (window as Window & { __MMO_DESKTOP_TEST__?: DesktopTestApi }).__MMO_DESKTOP_TEST__;
+  });
+}
+
 test.describe("desktop workflow design system", () => {
   for (const viewport of viewports) {
     test(`widgets stay on-screen without overlaps at ${viewport.label}`, async ({ page }) => {
@@ -852,6 +891,22 @@ test.describe("desktop workflow design system", () => {
 
     await page.locator("#compare-transport-stop-button").click();
     await expect(page.locator("#compare-transport-state")).toContainText("Stopped");
+  });
+
+  test("stuck AudioContext resume cannot trap compare transport in Loading", async ({ page }) => {
+    await page.goto("/");
+    await installMediaTransportStub(page);
+    await openScreen(page, "compare");
+
+    await page.locator("#compare-a-input").fill(TINY_WAV_DATA_URI);
+    await page.locator("#compare-a-input").dispatchEvent("change");
+    await expect(page.locator("#compare-transport-active-file")).toContainText("embedded audition audio");
+
+    await installNeverResolvingAudioContext(page);
+
+    await page.locator("#compare-transport-play-button").click();
+    await expect(page.locator("#compare-transport-state")).not.toContainText("Loading");
+    await expect(page.locator("#compare-transport-state")).toContainText(/Playing|Paused|Stopped/);
   });
 
   test("compare screen uses compare artifact plus A/B render QA for loudness match", async ({ page }) => {

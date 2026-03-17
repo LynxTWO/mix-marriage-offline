@@ -79,7 +79,13 @@ def _find_artifact(*, bundle_root: Path, platform_tag: str) -> Path:
 
 
 def _looks_like_sidecar_name(name: str, platform_tag: str) -> bool:
+    path = Path(name)
     normalized = name.casefold()
+    stem = path.stem.casefold()
+
+    if stem == "mmo":
+        return True
+
     if not normalized.startswith("mmo-"):
         return False
     if platform_tag == "windows":
@@ -89,6 +95,52 @@ def _looks_like_sidecar_name(name: str, platform_tag: str) -> bool:
     if platform_tag == "linux":
         return "linux" in normalized or "gnu" in normalized
     return False
+
+
+def _sidecar_search_directories(root: Path, *, platform_tag: str) -> tuple[Path, ...]:
+    if platform_tag == "macos":
+        return (
+            root / "Contents" / "MacOS",
+            root / "Contents" / "Frameworks",
+            root / "Contents" / "Resources",
+        )
+    if platform_tag == "windows":
+        return (
+            root,
+            root / "bin",
+        )
+    if platform_tag == "linux":
+        return (
+            root,
+            root / "bin",
+            root / "usr" / "bin",
+        )
+    return (root,)
+
+
+def _describe_directory_entries(path: Path, *, max_entries: int = 8) -> str:
+    if not path.exists():
+        return "(missing)"
+    if not path.is_dir():
+        return "(not a directory)"
+    entries = sorted(child.name for child in path.iterdir())
+    if not entries:
+        return "(empty)"
+    visible = entries[:max_entries]
+    if len(entries) > max_entries:
+        visible.append(f"... (+{len(entries) - max_entries} more)")
+    return ", ".join(visible)
+
+
+def _sidecar_search_receipt(root: Path, *, platform_tag: str) -> str:
+    lines = ["Likely bundle directories:"]
+    for directory in _sidecar_search_directories(root, platform_tag=platform_tag):
+        try:
+            label = directory.relative_to(root).as_posix()
+        except ValueError:
+            label = directory.as_posix()
+        lines.append(f"- {label}: {_describe_directory_entries(directory)}")
+    return "\n".join(lines)
 
 
 def _main_app_score(path: Path, *, platform_tag: str, product_name: str) -> int:
@@ -158,8 +210,19 @@ def _find_sidecar_binary(root: Path, *, platform_tag: str) -> Path:
         if path.is_file() and _looks_like_sidecar_name(path.name, platform_tag)
     )
     if not candidates:
-        raise SmokeError(f"Could not find a packaged sidecar under {root}")
-    return candidates[0]
+        raise SmokeError(
+            f"Could not find a packaged sidecar under {root}\n"
+            f"{_sidecar_search_receipt(root, platform_tag=platform_tag)}"
+        )
+    return min(
+        candidates,
+        key=lambda path: (
+            0 if path.stem.casefold() == "mmo" else 1,
+            len(path.name),
+            path.name.casefold(),
+            path.as_posix().casefold(),
+        ),
+    )
 
 
 def _run_command(

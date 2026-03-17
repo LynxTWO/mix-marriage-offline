@@ -309,8 +309,11 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
       and assert the expected workspace artifact paths. Done: packaged desktop
       smoke now probes the bundled sidecar directly for `mmo --version`,
       bundled plugin validation, and `mmo env doctor --format json` before the
-      app workflow so frozen-entrypoint regressions fail fast. Remaining RC
-      signoff: complete one human fresh-install walkthrough on the final
+      app workflow so frozen-entrypoint regressions fail fast. Done: macOS
+      packaged smoke now accepts both staged `mmo-$TARGET_TRIPLE` names and
+      post-bundle bare `mmo` sidecars, and missing-sidecar failures print short
+      bundle-directory receipts for faster triage. Remaining RC signoff:
+      complete one human fresh-install walkthrough on the final
       release-candidate desktop artifacts before tagging v1.
 
 ### 4.8 UX/CLI is usable for real work
@@ -410,7 +413,9 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
       (copy/reveal/open sibling receipt-manifest-QA plus rerun compare/render
       shortcuts) anywhere the core workspace artifacts are surfaced, plus a
       bounded in-app audition transport for selected preview artifacts and
-      compare A/B playback.
+      compare A/B playback. Done: audition gain setup now fails open to
+      `audio.volume` if Web Audio gain-node setup stalls, so playback cannot be
+      trapped in `Loading` by a suspended `AudioContext`.
 - [x] A “variant runner” can render multiple output variants
       (profiles/presets/targets) while reusing cached analysis artifacts keyed
       by content hash.
