@@ -60,6 +60,7 @@ EXTERNAL_CHECKS: tuple[ExternalCheckSpec, ...] = (
     ExternalCheckSpec("DOCS.GUI_PARITY", "tools/validate_gui_parity.py", ("--repo-root", ".")),
     ExternalCheckSpec("GUI.TAURI_DESIGN", "tools/validate_tauri_design_system.py", ("--repo-root", ".")),
     ExternalCheckSpec("DOCS.USER_MANUAL", "tools/validate_user_manual.py", ("--repo-root", ".")),
+    ExternalCheckSpec("MSI.VERSION", "tools/validate_msi_version.py", ("--repo-root", ".")),
 )
 
 SCHEMA_SMOKE_CHECK_ID = "SCHEMAS"

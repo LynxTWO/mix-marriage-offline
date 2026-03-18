@@ -22,6 +22,7 @@ REQUIRED_CHECK_IDS = [
     "DOCS.GUI_PARITY",
     "GUI.TAURI_DESIGN",
     "DOCS.USER_MANUAL",
+    "MSI.VERSION",
     "SCENE.REGISTRIES",
     "TRANSLATION.REGISTRIES",
     "ROLES.REGISTRIES",
@@ -43,6 +44,7 @@ REQUIRED_TOOL_SCRIPTS = [
     "validate_gui_parity.py",
     "validate_tauri_design_system.py",
     "validate_user_manual.py",
+    "validate_msi_version.py",
 ]
 
 REQUIRED_REPO_DIRS = [

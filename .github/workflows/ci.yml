@@ -29,8 +29,9 @@ jobs:
 
       # Runs all contract sub-checks in one pass: UI.SPECS, UI.EXAMPLES,
       # ONTOLOGY.REFS, PLUGINS, PLUGINS.UI, PKG.MIRROR, DOCS.MILESTONES,
-      # DOCS.GUI_PARITY, GUI.TAURI_DESIGN, DOCS.USER_MANUAL, plus internal
-      # schema, scene/translation/roles/gates/targets registry checks.
+      # DOCS.GUI_PARITY, GUI.TAURI_DESIGN, DOCS.USER_MANUAL, MSI.VERSION,
+      # plus internal schema, scene/translation/roles/gates/targets registry
+      # checks.
       - name: Validate contracts
         run: python tools/validate_contracts.py
 
@@ -67,8 +68,9 @@ jobs:
 
       # Runs all contract sub-checks in one pass: UI.SPECS, UI.EXAMPLES,
       # ONTOLOGY.REFS, PLUGINS, PLUGINS.UI, PKG.MIRROR, DOCS.MILESTONES,
-      # DOCS.GUI_PARITY, GUI.TAURI_DESIGN, DOCS.USER_MANUAL, plus internal
-      # schema, scene/translation/roles/gates/targets registry checks.
+      # DOCS.GUI_PARITY, GUI.TAURI_DESIGN, DOCS.USER_MANUAL, MSI.VERSION,
+      # plus internal schema, scene/translation/roles/gates/targets registry
+      # checks.
       - name: Validate contracts
         run: python tools/validate_contracts.py
 
@@ -110,8 +112,9 @@ jobs:
 
       # Runs all contract sub-checks in one pass: UI.SPECS, UI.EXAMPLES,
       # ONTOLOGY.REFS, PLUGINS, PLUGINS.UI, PKG.MIRROR, DOCS.MILESTONES,
-      # DOCS.GUI_PARITY, GUI.TAURI_DESIGN, DOCS.USER_MANUAL, plus internal
-      # schema, scene/translation/roles/gates/targets registry checks.
+      # DOCS.GUI_PARITY, GUI.TAURI_DESIGN, DOCS.USER_MANUAL, MSI.VERSION,
+      # plus internal schema, scene/translation/roles/gates/targets registry
+      # checks.
       - name: Validate contracts
         run: python tools/validate_contracts.py
 
