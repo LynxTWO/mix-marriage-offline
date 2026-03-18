@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v1.0.0-rc.1)"
+        description: "Release tag (e.g. v1.0.0)"
         required: true
-        default: "v1.0.0-rc.1"
+        default: "v1.0.0"
 
 env:
   RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
@@ -148,12 +148,13 @@ jobs:
             dist/mmo-*
           if-no-files-found: error
 
-  # ── Windows MSI prerelease version mapping ──────────────────────────
-  # MSI requires numeric-only prerelease identifiers (max 65535).
-  # The public app version stays SemVer: 1.0.0-rc.1
+  # ── Windows MSI version mapping ─────────────────────────────────────
+  # MSI requires numeric-only version identifiers (max 65535 per component).
+  # The public app version stays SemVer (e.g. 1.0.0 or 1.0.1-rc.1).
   # For MSI bundling only, tauri.conf.json sets bundle.windows.wix.version
   # to a 4-part numeric form:
-  #   1.0.0-rc.N  →  1.0.0.N   (4th component = RC number)
+  #   X.Y.Z       →  X.Y.Z.0   (stable: build component = 0)
+  #   X.Y.Z-rc.N  →  X.Y.Z.N   (prerelease: 4th component = RC number)
   # This override is scoped to WiX/MSI; Linux/macOS bundles use the
   # SemVer app version unchanged.
   # ────────────────────────────────────────────────────────────────────
@@ -167,20 +168,14 @@ jobs:
           - os: ubuntu-24.04
             artifact-name: mmo-desktop-tauri-bundles-linux
             artifact-path: gui/desktop-tauri/src-tauri/target/release/bundle/**/*.AppImage
-            smoke-command: xvfb-run -a python tools/smoke_packaged_desktop.py --repo-root .
-            smoke-shell: bash
             tauri-bundles: appimage
           - os: windows-2025
             artifact-name: mmo-desktop-tauri-bundles-windows
             artifact-path: gui/desktop-tauri/src-tauri/target/release/bundle/**/*.msi
-            smoke-command: python tools/smoke_packaged_desktop.py --repo-root .
-            smoke-shell: pwsh
             tauri-bundles: msi
           - os: macos-15
             artifact-name: mmo-desktop-tauri-bundles-macos
             artifact-path: gui/desktop-tauri/src-tauri/target/release/bundle/**/*.app.zip
-            smoke-command: python tools/smoke_packaged_desktop.py --repo-root .
-            smoke-shell: bash
             tauri-bundles: app
     steps:
       - uses: actions/checkout@v6
@@ -224,7 +219,12 @@ jobs:
       - name: Install FFmpeg (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: choco install ffmpeg --no-progress -y
+        run: |
+          choco install ffmpeg --no-progress -y
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+            throw "FFmpeg install failed or is not on PATH after choco install."
+          }
+          ffmpeg -version | Select-Object -First 1
 
       - name: Install FFmpeg (macOS)
         if: runner.os == 'macOS'
@@ -271,9 +271,20 @@ jobs:
           PYTHON: python
         run: npm run tauri build -- --bundles ${{ matrix.tauri-bundles }}
 
-      - name: Smoke packaged desktop bundle
-        shell: ${{ matrix.smoke-shell }}
-        run: ${{ matrix.smoke-command }}
+      - name: Smoke packaged desktop bundle (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: xvfb-run -a python tools/smoke_packaged_desktop.py --repo-root .
+
+      - name: Smoke packaged desktop bundle (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: python tools/smoke_packaged_desktop.py --repo-root .
+
+      - name: Smoke packaged desktop bundle (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: python tools/smoke_packaged_desktop.py --repo-root .
 
       - name: Archive macOS app bundle
         if: runner.os == 'macOS'

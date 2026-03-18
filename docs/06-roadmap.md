@@ -7,10 +7,9 @@ This roadmap is split into two tracks:
 
 ## NOW
 
-Only true v1 completion blockers belong here. `1.0.0-rc.1` is tagged as the
-first public release candidate. The remaining blocker before stable `1.0.0` is
-human fresh-install signoff on the release-candidate desktop artifacts.
-Optional GUI maturity and preset polish items live in
+No v1 completion blockers remain. `1.0.0` is tagged as the first stable public
+release after human fresh-install signoff on Windows, macOS, and Linux packaged
+artifacts. Optional GUI maturity and preset polish items live in
 `PROJECT_WHEN_COMPLETE.md` section 9 and in `LATER` below.
 
 ### Release Surface
@@ -19,12 +18,7 @@ Optional GUI maturity and preset polish items live in
 - Completion gate: source-tree pytest is not enough; Windows/macOS/Linux
   packaged desktop artifacts must launch and pass bundled-sidecar smoke in CI
   and release builds before v1 can be considered complete.
-- Open blockers:
-- automated packaged smoke is already green in CI and release workflows
-- docs and common failure messages now match the shipped desktop workflow more
-  closely
-- remaining blocker: complete one human fresh-install walkthrough on the
-  `1.0.0-rc.1` packaged artifacts before tagging stable `1.0.0`
+- Open blockers: none — all gates passed
 
 ### Tauri Workflow Parity
 

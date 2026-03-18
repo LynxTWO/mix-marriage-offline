@@ -236,12 +236,13 @@ jobs:
         working-directory: gui
         run: npm test
 
-  # ── Windows MSI prerelease version mapping ──────────────────────────
-  # MSI requires numeric-only prerelease identifiers (max 65535).
-  # The public app version stays SemVer: 1.0.0-rc.1
+  # ── Windows MSI version mapping ─────────────────────────────────────
+  # MSI requires numeric-only version identifiers (max 65535 per component).
+  # The public app version stays SemVer (e.g. 1.0.0 or 1.0.1-rc.1).
   # For MSI bundling only, tauri.conf.json sets bundle.windows.wix.version
   # to a 4-part numeric form:
-  #   1.0.0-rc.N  →  1.0.0.N   (4th component = RC number)
+  #   X.Y.Z       →  X.Y.Z.0   (stable: build component = 0)
+  #   X.Y.Z-rc.N  →  X.Y.Z.N   (prerelease: 4th component = RC number)
   # ────────────────────────────────────────────────────────────────────
   desktop-tauri:
     runs-on: ${{ matrix.os }}
@@ -303,7 +304,12 @@ jobs:
       - name: Install FFmpeg (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: choco install ffmpeg --no-progress -y
+        run: |
+          choco install ffmpeg --no-progress -y
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+            throw "FFmpeg install failed or is not on PATH after choco install."
+          }
+          ffmpeg -version | Select-Object -First 1
 
       - name: Install FFmpeg (macOS)
         if: runner.os == 'macOS'

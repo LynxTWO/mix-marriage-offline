@@ -8,6 +8,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-03-17
+
+First stable public release. Graduates `1.0.0-rc.1` to stable after human
+fresh-install signoff on Windows, macOS, and Linux packaged artifacts.
+
+### Added
+
+- Automated MSI prerelease version consistency check (`tools/validate_msi_version.py`,
+  integrated into `validate_contracts.py` as the `MSI.VERSION` sub-check).
+- Plugin semantics drift guard test (`tests/test_plugin_semantics_drift.py`)
+  that asserts Python frozenset constants match `ontology/plugin_semantics.yaml`.
+- Contract sub-check inventory comments in CI workflow steps for auditability.
+
+### Changed
+
+- All shipped metadata surfaces graduated from `1.0.0-rc.1` to `1.0.0`.
+- Release workflow default tag updated from `v1.0.0-rc.1` to `v1.0.0`.
+- MSI bundle version updated from `1.0.0.1` (rc.1 mapping) to `1.0.0.0` (stable).
+- README, STATUS, roadmap, and completion docs rewritten for stable release.
+
 ## [1.0.0-rc.1] — 2026-03-17
 
 First public release candidate. This build represents the real shipped product:

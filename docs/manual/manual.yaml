@@ -4,7 +4,7 @@
 # Used by tooling and TOC generators. Do not reorder without updating filenames.
 
 title: "MMO User Manual"
-version: "1.0.0-rc.1"
+version: "1.0.0"
 
 chapters:
   - id: "ch00"
