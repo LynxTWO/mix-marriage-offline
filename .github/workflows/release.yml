@@ -168,20 +168,14 @@ jobs:
           - os: ubuntu-24.04
             artifact-name: mmo-desktop-tauri-bundles-linux
             artifact-path: gui/desktop-tauri/src-tauri/target/release/bundle/**/*.AppImage
-            smoke-command: xvfb-run -a python tools/smoke_packaged_desktop.py --repo-root .
-            smoke-shell: bash
             tauri-bundles: appimage
           - os: windows-2025
             artifact-name: mmo-desktop-tauri-bundles-windows
             artifact-path: gui/desktop-tauri/src-tauri/target/release/bundle/**/*.msi
-            smoke-command: python tools/smoke_packaged_desktop.py --repo-root .
-            smoke-shell: pwsh
             tauri-bundles: msi
           - os: macos-15
             artifact-name: mmo-desktop-tauri-bundles-macos
             artifact-path: gui/desktop-tauri/src-tauri/target/release/bundle/**/*.app.zip
-            smoke-command: python tools/smoke_packaged_desktop.py --repo-root .
-            smoke-shell: bash
             tauri-bundles: app
     steps:
       - uses: actions/checkout@v6
@@ -272,9 +266,20 @@ jobs:
           PYTHON: python
         run: npm run tauri build -- --bundles ${{ matrix.tauri-bundles }}
 
-      - name: Smoke packaged desktop bundle
-        shell: ${{ matrix.smoke-shell }}
-        run: ${{ matrix.smoke-command }}
+      - name: Smoke packaged desktop bundle (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: xvfb-run -a python tools/smoke_packaged_desktop.py --repo-root .
+
+      - name: Smoke packaged desktop bundle (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: python tools/smoke_packaged_desktop.py --repo-root .
+
+      - name: Smoke packaged desktop bundle (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: python tools/smoke_packaged_desktop.py --repo-root .
 
       - name: Archive macOS app bundle
         if: runner.os == 'macOS'
