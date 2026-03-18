@@ -27,6 +27,10 @@ jobs:
       - name: Validate ontology additive-change policy
         run: python tools/validate_ontology_changes.py --repo-root . --base-ref origin/main --require-base-ref
 
+      # Runs all contract sub-checks in one pass: UI.SPECS, UI.EXAMPLES,
+      # ONTOLOGY.REFS, PLUGINS, PLUGINS.UI, PKG.MIRROR, DOCS.MILESTONES,
+      # DOCS.GUI_PARITY, GUI.TAURI_DESIGN, DOCS.USER_MANUAL, plus internal
+      # schema, scene/translation/roles/gates/targets registry checks.
       - name: Validate contracts
         run: python tools/validate_contracts.py
 
@@ -61,6 +65,10 @@ jobs:
       - name: Validate ontology additive-change policy
         run: python tools/validate_ontology_changes.py --repo-root . --base-ref origin/main --require-base-ref
 
+      # Runs all contract sub-checks in one pass: UI.SPECS, UI.EXAMPLES,
+      # ONTOLOGY.REFS, PLUGINS, PLUGINS.UI, PKG.MIRROR, DOCS.MILESTONES,
+      # DOCS.GUI_PARITY, GUI.TAURI_DESIGN, DOCS.USER_MANUAL, plus internal
+      # schema, scene/translation/roles/gates/targets registry checks.
       - name: Validate contracts
         run: python tools/validate_contracts.py
 
@@ -100,6 +108,10 @@ jobs:
       - name: Validate ontology additive-change policy
         run: python tools/validate_ontology_changes.py --repo-root . --base-ref origin/main --require-base-ref
 
+      # Runs all contract sub-checks in one pass: UI.SPECS, UI.EXAMPLES,
+      # ONTOLOGY.REFS, PLUGINS, PLUGINS.UI, PKG.MIRROR, DOCS.MILESTONES,
+      # DOCS.GUI_PARITY, GUI.TAURI_DESIGN, DOCS.USER_MANUAL, plus internal
+      # schema, scene/translation/roles/gates/targets registry checks.
       - name: Validate contracts
         run: python tools/validate_contracts.py
 
