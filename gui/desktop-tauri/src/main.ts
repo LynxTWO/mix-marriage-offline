@@ -767,16 +767,14 @@ function resultsArtifactButtons(ui: AppUi): HTMLButtonElement[] {
 }
 
 function focusResultsArtifactButton(ui: AppUi, artifactId: string): void {
-  window.requestAnimationFrame(() => {
-    const button = resultsArtifactButtons(ui).find((item) => item.dataset.artifactEntryId === artifactId) ?? null;
-    if (button === null) {
-      return;
-    }
-    button.focus({ preventScroll: true });
-    button.scrollIntoView({
-      block: "nearest",
-      inline: "nearest",
-    });
+  const button = resultsArtifactButtons(ui).find((item) => item.dataset.artifactEntryId === artifactId) ?? null;
+  if (button === null) {
+    return;
+  }
+  button.focus({ preventScroll: true });
+  button.scrollIntoView({
+    block: "nearest",
+    inline: "nearest",
   });
 }
 
