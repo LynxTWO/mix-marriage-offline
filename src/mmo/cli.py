@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-from mmo import __version__ as _MMO_VERSION
+from mmo import __version_display__ as _MMO_VERSION
 
 # ── Transcode constants (stdlib-only dep, always safe) ──────────────────────
 try:

@@ -68,7 +68,7 @@ class TestFrozenCliEntrypoint(unittest.TestCase):
             0,
             msg=f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}",
         )
-        self.assertRegex(completed.stdout.strip(), re.compile(r"\b\d+\.\d+\.\d+\b"))
+        self.assertRegex(completed.stdout.strip(), re.compile(r"\b\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b"))
 
     def test_frozen_entrypoint_supports_mmo_tools_module_passthrough(self) -> None:
         env = os.environ.copy()
