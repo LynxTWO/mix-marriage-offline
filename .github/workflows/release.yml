@@ -270,6 +270,84 @@ jobs:
           PYTHON: python
         run: npm run tauri build -- --bundles msi,nsis
 
+      # Optional Windows code-signing env hooks for release CI:
+      # - MMO_WINDOWS_CERT_BASE64: base64-encoded .pfx contents
+      # - MMO_WINDOWS_CERT_PASSWORD: password for the .pfx
+      # - MMO_WINDOWS_CERT_THUMBPRINT: expected SHA-1 certificate thumbprint
+      # - MMO_WINDOWS_TIMESTAMP_URL: RFC3161 timestamp URL
+      - name: Prepare optional Windows code signing
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          MMO_WINDOWS_CERT_BASE64: ${{ secrets.MMO_WINDOWS_CERT_BASE64 }}
+          MMO_WINDOWS_CERT_PASSWORD: ${{ secrets.MMO_WINDOWS_CERT_PASSWORD }}
+          MMO_WINDOWS_CERT_THUMBPRINT: ${{ secrets.MMO_WINDOWS_CERT_THUMBPRINT }}
+          MMO_WINDOWS_TIMESTAMP_URL: ${{ secrets.MMO_WINDOWS_TIMESTAMP_URL }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:MMO_WINDOWS_CERT_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:MMO_WINDOWS_CERT_PASSWORD) -or
+              [string]::IsNullOrWhiteSpace($env:MMO_WINDOWS_CERT_THUMBPRINT)) {
+            Write-Host "Windows code signing disabled: signing secrets are not fully configured."
+            "MMO_WINDOWS_SIGNING_ENABLED=false" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            exit 0
+          }
+
+          $certPath = Join-Path $env:RUNNER_TEMP "mmo-windows-signing-cert.pfx"
+          [System.IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:MMO_WINDOWS_CERT_BASE64))
+          $securePassword = ConvertTo-SecureString -String $env:MMO_WINDOWS_CERT_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $certPath -Password $securePassword -CertStoreLocation Cert:\CurrentUser\My -Exportable
+          Remove-Item $certPath -Force
+
+          if (-not $cert) {
+            throw "Failed to import the Windows signing certificate into Cert:\\CurrentUser\\My."
+          }
+
+          $expectedThumbprint = $env:MMO_WINDOWS_CERT_THUMBPRINT.Replace(" ", "").ToUpperInvariant()
+          $actualThumbprint = $cert.Thumbprint.Replace(" ", "").ToUpperInvariant()
+          if ($actualThumbprint -ne $expectedThumbprint) {
+            throw "Imported certificate thumbprint mismatch. Expected $expectedThumbprint, got $actualThumbprint."
+          }
+
+          $timestampUrl = if ([string]::IsNullOrWhiteSpace($env:MMO_WINDOWS_TIMESTAMP_URL)) {
+            "http://timestamp.digicert.com"
+          } else {
+            $env:MMO_WINDOWS_TIMESTAMP_URL.Trim()
+          }
+
+          "MMO_WINDOWS_SIGNING_ENABLED=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "MMO_WINDOWS_CERT_THUMBPRINT_EFFECTIVE=$actualThumbprint" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "MMO_WINDOWS_TIMESTAMP_URL_EFFECTIVE=$timestampUrl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Windows code signing enabled for thumbprint $actualThumbprint."
+
+      - name: Sign Windows installers (optional)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if ($env:MMO_WINDOWS_SIGNING_ENABLED -ne "true") {
+            Write-Host "Skipping Windows installer signing."
+            exit 0
+          }
+
+          $signtool = Get-Command signtool -ErrorAction SilentlyContinue
+          if (-not $signtool) {
+            throw "signtool is not available on PATH."
+          }
+
+          $artifacts = Get-ChildItem -Path "gui/desktop-tauri/src-tauri/target/release/bundle" -Recurse -File |
+            Where-Object { $_.Name -like "*-setup.exe" -or $_.Extension -eq ".msi" } |
+            Sort-Object FullName
+          if (-not $artifacts) {
+            throw "Could not find built Windows installer artifacts to sign."
+          }
+
+          foreach ($artifact in $artifacts) {
+            Write-Host "Signing Windows artifact: $($artifact.FullName)"
+            & $signtool.Source sign /fd SHA256 /sha1 $env:MMO_WINDOWS_CERT_THUMBPRINT_EFFECTIVE /tr $env:MMO_WINDOWS_TIMESTAMP_URL_EFFECTIVE /td SHA256 $artifact.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "signtool sign failed for $($artifact.FullName) with exit code $LASTEXITCODE."
+            }
+          }
+
       - name: Build desktop packaged bundle (non-Windows)
         if: runner.os != 'Windows'
         working-directory: gui/desktop-tauri
