@@ -182,6 +182,58 @@ class TestPackagedDesktopSmoke(unittest.TestCase):
 
             self.assertEqual(resolved, bundled_sidecar)
 
+    def test_find_artifact_windows_prefers_nsis_setup_exe_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle_root = Path(temp_dir)
+            msi_path = bundle_root / "msi" / "MMO Desktop_1.0.0_x64_en-US.msi"
+            nsis_path = bundle_root / "nsis" / "MMO Desktop_1.0.0_x64-setup.exe"
+            msi_path.parent.mkdir(parents=True, exist_ok=True)
+            nsis_path.parent.mkdir(parents=True, exist_ok=True)
+            msi_path.write_text("msi", encoding="utf-8")
+            nsis_path.write_text("nsis", encoding="utf-8")
+
+            resolved = self.module._find_artifact(bundle_root=bundle_root, platform_tag="windows")
+
+            self.assertEqual(resolved, nsis_path)
+
+    def test_choose_windows_installed_app_prefers_new_path_over_preexisting(self) -> None:
+        product_name = "MMO Desktop"
+        existing = Path("C:/Users/test/AppData/Local/Programs/MMO Desktop/MMO Desktop.exe")
+        fresh = Path("C:/Program Files/MMO Desktop/MMO Desktop.exe")
+
+        resolved = self.module._choose_windows_installed_app(
+            [existing, fresh],
+            preexisting_candidates={self.module._normalize_path_text(existing)},
+            product_name=product_name,
+        )
+
+        self.assertEqual(resolved, fresh)
+
+    def test_windows_install_receipt_lists_log_and_launch_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            install_root = root / "Programs" / "MMO Desktop"
+            install_root.mkdir(parents=True, exist_ok=True)
+            (install_root / "MMO Desktop.exe").write_text("app", encoding="utf-8")
+            install_log = root / "install.log"
+            install_log.write_text("install ok\nsecond line\n", encoding="utf-8")
+
+            receipt = self.module._windows_install_receipt(
+                product_name="MMO Desktop",
+                env={"LOCALAPPDATA": str(root)},
+                installer_path=root / "MMO Desktop-setup.exe",
+                install_log_path=install_log,
+                install_root=install_root,
+                launch_stdout="stdout line",
+                launch_stderr="stderr line",
+            )
+
+            self.assertIn("installer path", receipt)
+            self.assertIn(str(install_log), receipt)
+            self.assertIn("stdout line", receipt)
+            self.assertIn("stderr line", receipt)
+            self.assertIn("MMO Desktop.exe", receipt)
+
     def test_find_sidecar_binary_error_lists_likely_macos_directories(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             bundle_root = Path(temp_dir)

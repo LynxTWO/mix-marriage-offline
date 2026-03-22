@@ -6,6 +6,7 @@ import argparse
 import json
 import math
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -14,7 +15,7 @@ import tempfile
 import time
 import wave
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BUNDLE_ROOT = REPO_ROOT / "gui" / "desktop-tauri" / "src-tauri" / "target" / "release" / "bundle"
@@ -24,6 +25,16 @@ DEFAULT_LAYOUT_STANDARD = "SMPTE"
 
 class SmokeError(RuntimeError):
     """Raised when the packaged desktop smoke flow fails."""
+
+
+class WindowsInstallResult(NamedTuple):
+    """Resolved details from a real Windows installer run."""
+
+    app_executable: Path
+    install_log_path: Path
+    install_root: Path
+    installer_kind: str
+    installer_path: Path
 
 
 def _platform_tag() -> str:
@@ -57,7 +68,7 @@ def _read_product_name(repo_root: Path) -> str:
 
 def _artifact_suffixes_for_platform(platform_tag: str) -> tuple[str, ...]:
     if platform_tag == "windows":
-        return (".msi",)
+        return (".msi", "-setup.exe")
     if platform_tag == "macos":
         return (".app",)
     if platform_tag == "linux":
@@ -75,6 +86,17 @@ def _find_artifact(*, bundle_root: Path, platform_tag: str) -> Path:
     if not candidates:
         suffix_text = ", ".join(suffixes)
         raise SmokeError(f"No {suffix_text} artifact found under {bundle_root}")
+    if platform_tag == "windows":
+        # Prefer the NSIS setup executable when present because it most closely
+        # matches the end-user setup flow. Fall back to MSI if it is the only
+        # Windows installer artifact available.
+        candidates.sort(
+            key=lambda path: (
+                0 if path.name.casefold().endswith("-setup.exe") else 1,
+                path.name.casefold(),
+                path.as_posix().casefold(),
+            )
+        )
     return candidates[0]
 
 
@@ -250,6 +272,20 @@ def _run_command(
     )
 
 
+def _artifact_kind(path: Path, *, platform_tag: str) -> str:
+    name = path.name.casefold()
+    if platform_tag == "windows":
+        if name.endswith("-setup.exe"):
+            return "nsis"
+        if path.suffix.lower() == ".msi":
+            return "msi"
+    if platform_tag == "macos" and path.suffix.lower() == ".app":
+        return "app"
+    if platform_tag == "linux" and path.suffix == ".AppImage":
+        return "appimage"
+    raise SmokeError(f"Unsupported {platform_tag} artifact path: {path}")
+
+
 def _probe_packaged_sidecar(
     *,
     bundle_root: Path,
@@ -320,21 +356,375 @@ def _probe_packaged_sidecar(
     return sidecar_path
 
 
-def _stage_windows_installer(*, artifact_path: Path, stage_root: Path, product_name: str) -> Path:
-    stage_root.mkdir(parents=True, exist_ok=True)
-    command = [
-        "msiexec",
-        "/a",
-        str(artifact_path),
-        "/qn",
-        f"TARGETDIR={stage_root}",
-    ]
-    _run_command(command, cwd=stage_root, label="msiexec-admin")
+def _dedupe_paths(paths: list[Path]) -> list[Path]:
+    seen: set[str] = set()
+    deduped: list[Path] = []
+    for path in paths:
+        normalized = _normalize_path_text(path)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(path)
+    return deduped
 
-    preferred = stage_root / f"{product_name}.exe"
-    if preferred.is_file():
-        return preferred
-    return _find_main_app_executable(stage_root, platform_tag="windows", product_name=product_name)
+
+def _coerce_windows_executable_path(value: str) -> Path | None:
+    text = value.strip().strip('"')
+    if not text:
+        return None
+    lowered = text.casefold()
+    marker = ".exe"
+    if marker in lowered:
+        text = text[: lowered.index(marker) + len(marker)]
+    candidate = Path(text)
+    if candidate.suffix.lower() != ".exe":
+        return None
+    return candidate
+
+
+def _read_windows_install_roots_from_registry(product_name: str) -> list[Path]:
+    if not sys.platform.startswith("win"):
+        return []
+    try:
+        import winreg
+    except ImportError:
+        return []
+
+    uninstall_key = r"Software\Microsoft\Windows\CurrentVersion\Uninstall"
+    display_name_needles = {
+        product_name.casefold(),
+        product_name.casefold().replace(" ", ""),
+    }
+
+    def _matches_display_name(value: str) -> bool:
+        normalized = value.casefold()
+        compact = normalized.replace(" ", "")
+        return any(needle in {normalized, compact} or needle in normalized or needle in compact for needle in display_name_needles)
+
+    candidates: list[Path] = []
+    hive_specs = [
+        (winreg.HKEY_CURRENT_USER, winreg.KEY_READ, "HKCU"),
+        (winreg.HKEY_LOCAL_MACHINE, winreg.KEY_READ | getattr(winreg, "KEY_WOW64_64KEY", 0), "HKLM64"),
+        (winreg.HKEY_LOCAL_MACHINE, winreg.KEY_READ | getattr(winreg, "KEY_WOW64_32KEY", 0), "HKLM32"),
+    ]
+    for hive, access, _label in hive_specs:
+        try:
+            with winreg.OpenKey(hive, uninstall_key, 0, access) as root_key:
+                index = 0
+                while True:
+                    try:
+                        child_name = winreg.EnumKey(root_key, index)
+                    except OSError:
+                        break
+                    index += 1
+                    try:
+                        with winreg.OpenKey(root_key, child_name, 0, access) as child_key:
+                            display_name, _ = winreg.QueryValueEx(child_key, "DisplayName")
+                            if not isinstance(display_name, str) or not _matches_display_name(display_name):
+                                continue
+
+                            install_location: str | None = None
+                            display_icon: str | None = None
+                            try:
+                                install_location_value, _ = winreg.QueryValueEx(child_key, "InstallLocation")
+                                if isinstance(install_location_value, str) and install_location_value.strip():
+                                    install_location = install_location_value.strip()
+                            except OSError:
+                                pass
+                            try:
+                                display_icon_value, _ = winreg.QueryValueEx(child_key, "DisplayIcon")
+                                if isinstance(display_icon_value, str) and display_icon_value.strip():
+                                    display_icon = display_icon_value.strip()
+                            except OSError:
+                                pass
+
+                            if install_location:
+                                candidates.append(Path(install_location))
+                            if display_icon:
+                                executable = _coerce_windows_executable_path(display_icon)
+                                if executable is not None:
+                                    candidates.append(executable.parent)
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+
+    return _dedupe_paths(candidates)
+
+
+def _product_name_tokens(product_name: str) -> tuple[str, ...]:
+    return tuple(token for token in re.split(r"[\s._-]+", product_name.casefold()) if token)
+
+
+def _windows_dir_name_matches_product(name: str, *, product_name: str) -> bool:
+    normalized = name.casefold()
+    compact = normalized.replace(" ", "").replace("-", "").replace("_", "")
+    compact_product = product_name.casefold().replace(" ", "").replace("-", "").replace("_", "")
+    if compact_product and compact_product in compact:
+        return True
+    return any(token in normalized for token in _product_name_tokens(product_name))
+
+
+def _windows_candidate_install_dirs(*, product_name: str, env: dict[str, str]) -> list[Path]:
+    roots: list[Path] = []
+    local_app_data = env.get("LOCALAPPDATA")
+    if local_app_data:
+        local_root = Path(local_app_data)
+        roots.append(local_root / "Programs" / product_name)
+        roots.append(local_root / product_name)
+        programs_dir = local_root / "Programs"
+        if programs_dir.is_dir():
+            for child in sorted(programs_dir.iterdir(), key=lambda path: path.name.casefold()):
+                if child.is_dir() and _windows_dir_name_matches_product(child.name, product_name=product_name):
+                    roots.append(child)
+
+    for env_name in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"):
+        base = env.get(env_name)
+        if not base:
+            continue
+        base_path = Path(base)
+        roots.append(base_path / product_name)
+        if base_path.is_dir():
+            for child in sorted(base_path.iterdir(), key=lambda path: path.name.casefold()):
+                if child.is_dir() and _windows_dir_name_matches_product(child.name, product_name=product_name):
+                    roots.append(child)
+
+    roots.extend(_read_windows_install_roots_from_registry(product_name))
+    return _dedupe_paths(roots)
+
+
+def _find_windows_installed_app_candidates(*, product_name: str, env: dict[str, str]) -> list[Path]:
+    candidates: list[Path] = []
+    for install_dir in _windows_candidate_install_dirs(product_name=product_name, env=env):
+        if install_dir.is_file() and install_dir.suffix.lower() == ".exe":
+            candidates.append(install_dir)
+            continue
+        if not install_dir.is_dir():
+            continue
+        try:
+            candidates.append(
+                _find_main_app_executable(
+                    install_dir,
+                    platform_tag="windows",
+                    product_name=product_name,
+                )
+            )
+        except SmokeError:
+            continue
+    return _dedupe_paths(candidates)
+
+
+def _choose_windows_installed_app(
+    candidates: list[Path],
+    *,
+    preexisting_candidates: set[str],
+    product_name: str,
+) -> Path:
+    if not candidates:
+        raise SmokeError("Could not locate the installed Windows app executable after installer run.")
+    return max(
+        candidates,
+        key=lambda path: (
+            1 if _normalize_path_text(path) not in preexisting_candidates else 0,
+            _main_app_score(path, platform_tag="windows", product_name=product_name),
+            -len(path.parts),
+            path.as_posix().casefold(),
+        ),
+    )
+
+
+def _read_log_tail(path: Path, *, max_lines: int = 40) -> str:
+    if not path.exists():
+        return "(missing)"
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as exc:
+        return f"(unreadable: {exc})"
+    if not lines:
+        return "(empty)"
+    if len(lines) <= max_lines:
+        return "\n".join(lines)
+    return "\n".join(lines[-max_lines:])
+
+
+def _windows_install_receipt(
+    *,
+    product_name: str,
+    env: dict[str, str],
+    installer_path: Path | None,
+    install_log_path: Path | None,
+    install_root: Path | None,
+    launch_stdout: str,
+    launch_stderr: str,
+) -> str:
+    lines: list[str] = ["Windows installer receipt:"]
+    lines.append(f"- installer path: {installer_path if installer_path is not None else '(unknown)'}")
+    lines.append(f"- install log path: {install_log_path if install_log_path is not None else '(unknown)'}")
+    if install_root is not None:
+        lines.append(f"- install root: {install_root}")
+
+    lines.append("- likely install directory contents:")
+    search_dirs = _windows_candidate_install_dirs(product_name=product_name, env=env)
+    if install_root is not None:
+        search_dirs = _dedupe_paths([install_root, *search_dirs])
+    for directory in search_dirs[:8]:
+        lines.append(f"  {directory}: {_describe_directory_entries(directory)}")
+
+    if install_log_path is not None:
+        lines.append("- install log tail:")
+        lines.append(_read_log_tail(install_log_path))
+
+    lines.append("- launched app stdout:")
+    lines.append(launch_stdout.strip() or "(empty)")
+    lines.append("- launched app stderr:")
+    lines.append(launch_stderr.strip() or "(empty)")
+    return "\n".join(lines)
+
+
+def _run_windows_installer(
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    install_log_path: Path,
+    label: str,
+) -> None:
+    completed = subprocess.run(
+        command,
+        cwd=cwd,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if label == "nsis-install":
+        install_log_path.write_text(
+            "\n".join(
+                [
+                    f"label={label}",
+                    f"command={json.dumps(command)}",
+                    f"exit_code={completed.returncode}",
+                    "stdout:",
+                    completed.stdout,
+                    "stderr:",
+                    completed.stderr,
+                ]
+            ),
+            encoding="utf-8",
+        )
+    if completed.returncode == 0:
+        return
+    raise SmokeError(
+        f"{label} failed with exit code {completed.returncode}\n"
+        f"install_log={install_log_path}\n"
+        f"stdout:\n{completed.stdout}\n"
+        f"stderr:\n{completed.stderr}\n"
+        f"log_tail:\n{_read_log_tail(install_log_path)}"
+    )
+
+
+def _install_windows_msi(
+    *,
+    artifact_path: Path,
+    temp_root: Path,
+    product_name: str,
+    env: dict[str, str],
+) -> WindowsInstallResult:
+    install_log_path = temp_root / "msi-install.log"
+    preexisting_candidates = {
+        _normalize_path_text(path)
+        for path in _find_windows_installed_app_candidates(product_name=product_name, env=env)
+    }
+    _run_windows_installer(
+        [
+            "msiexec",
+            "/i",
+            str(artifact_path),
+            "/qn",
+            "/norestart",
+            "/l*v",
+            str(install_log_path),
+            "ALLUSERS=2",
+            "MSIINSTALLPERUSER=1",
+        ],
+        cwd=temp_root,
+        env=env,
+        install_log_path=install_log_path,
+        label="msiexec-install",
+    )
+
+    candidates = _find_windows_installed_app_candidates(product_name=product_name, env=env)
+    app_executable = _choose_windows_installed_app(
+        candidates,
+        preexisting_candidates=preexisting_candidates,
+        product_name=product_name,
+    )
+    return WindowsInstallResult(
+        app_executable=app_executable,
+        install_log_path=install_log_path,
+        install_root=app_executable.parent,
+        installer_kind="msi",
+        installer_path=artifact_path,
+    )
+
+
+def _install_windows_nsis(
+    *,
+    artifact_path: Path,
+    temp_root: Path,
+    product_name: str,
+    env: dict[str, str],
+) -> WindowsInstallResult:
+    install_log_path = temp_root / "nsis-install.log"
+    preexisting_candidates = {
+        _normalize_path_text(path)
+        for path in _find_windows_installed_app_candidates(product_name=product_name, env=env)
+    }
+    _run_windows_installer(
+        [str(artifact_path), "/S"],
+        cwd=artifact_path.parent,
+        env=env,
+        install_log_path=install_log_path,
+        label="nsis-install",
+    )
+
+    candidates = _find_windows_installed_app_candidates(product_name=product_name, env=env)
+    app_executable = _choose_windows_installed_app(
+        candidates,
+        preexisting_candidates=preexisting_candidates,
+        product_name=product_name,
+    )
+    return WindowsInstallResult(
+        app_executable=app_executable,
+        install_log_path=install_log_path,
+        install_root=app_executable.parent,
+        installer_kind="nsis",
+        installer_path=artifact_path,
+    )
+
+
+def _install_windows_bundle(
+    *,
+    artifact_path: Path,
+    temp_root: Path,
+    product_name: str,
+    env: dict[str, str],
+) -> WindowsInstallResult:
+    installer_kind = _artifact_kind(artifact_path, platform_tag="windows")
+    if installer_kind == "nsis":
+        return _install_windows_nsis(
+            artifact_path=artifact_path,
+            temp_root=temp_root,
+            product_name=product_name,
+            env=env,
+        )
+    return _install_windows_msi(
+        artifact_path=artifact_path,
+        temp_root=temp_root,
+        product_name=product_name,
+        env=env,
+    )
 
 
 def _write_wave(
@@ -606,6 +996,10 @@ def main() -> int:
         return 2
 
     temp_root = Path(tempfile.mkdtemp(prefix="mmo-desktop-smoke-")).resolve()
+    env = os.environ.copy()
+    windows_install_result: WindowsInstallResult | None = None
+    launch_stdout = ""
+    launch_stderr = ""
     try:
         fixture_root = temp_root / "fixture"
         stems_dir = _create_tiny_fixture(fixture_root)
@@ -615,15 +1009,15 @@ def main() -> int:
         sidecar_bundle_root: Path | None = None
 
         if platform_tag == "windows":
-            stage_root = temp_root / "installed"
-            app_executable = _stage_windows_installer(
+            windows_install_result = _install_windows_bundle(
                 artifact_path=artifact_path,
-                stage_root=stage_root,
+                temp_root=temp_root,
                 product_name=product_name,
+                env=env,
             )
-            sidecar_bundle_root = stage_root
-            command = [str(app_executable)]
-            launch_cwd = app_executable.parent
+            sidecar_bundle_root = windows_install_result.install_root
+            command = [str(windows_install_result.app_executable)]
+            launch_cwd = windows_install_result.app_executable.parent
         elif platform_tag == "macos":
             app_executable = _find_main_app_executable(
                 artifact_path,
@@ -637,7 +1031,6 @@ def main() -> int:
             command = [str(artifact_path)]
             launch_cwd = artifact_path.parent
 
-        env = os.environ.copy()
         env["MMO_CACHE_DIR"] = os.fspath(temp_root / "cache")
         env["MMO_TEMP_DIR"] = os.fspath(temp_root / "temp")
         env["MMO_DESKTOP_SMOKE_LAYOUT_STANDARD"] = args.layout_standard
@@ -664,6 +1057,8 @@ def main() -> int:
             summary_path=summary_path,
             timeout_s=float(args.timeout_seconds),
         )
+        launch_stdout = stdout
+        launch_stderr = stderr
 
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
         if not isinstance(summary, dict):
@@ -685,10 +1080,36 @@ def main() -> int:
             "summary_path": summary_path.as_posix(),
             "workspace_dir": workspace_dir.as_posix(),
         }
+        if windows_install_result is not None:
+            payload.update(
+                {
+                    "install_log_path": windows_install_result.install_log_path.as_posix(),
+                    "install_root": windows_install_result.install_root.as_posix(),
+                    "installer_kind": windows_install_result.installer_kind,
+                    "installer_path": windows_install_result.installer_path.as_posix(),
+                    "launched_app": windows_install_result.app_executable.as_posix(),
+                }
+            )
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
     except SmokeError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        message = str(exc)
+        if platform_tag == "windows":
+            install_log_path = windows_install_result.install_log_path if windows_install_result is not None else temp_root / "installer.log"
+            install_root = windows_install_result.install_root if windows_install_result is not None else None
+            message = (
+                f"{message}\n"
+                + _windows_install_receipt(
+                    product_name=product_name,
+                    env=env,
+                    installer_path=artifact_path,
+                    install_log_path=install_log_path,
+                    install_root=install_root,
+                    launch_stdout=launch_stdout,
+                    launch_stderr=launch_stderr,
+                )
+            )
+        print(f"error: {message}", file=sys.stderr)
         return 1
     finally:
         if args.keep_temp:
