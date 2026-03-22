@@ -171,8 +171,6 @@ jobs:
             tauri-bundles: appimage
           - os: windows-2025
             artifact-name: mmo-desktop-tauri-bundles-windows
-            artifact-path: gui/desktop-tauri/src-tauri/target/release/bundle/**/*.msi
-            tauri-bundles: msi
           - os: macos-15
             artifact-name: mmo-desktop-tauri-bundles-macos
             artifact-path: gui/desktop-tauri/src-tauri/target/release/bundle/**/*.app.zip
@@ -265,7 +263,15 @@ jobs:
         working-directory: gui/desktop-tauri
         run: npm test --if-present
 
-      - name: Build desktop packaged bundle
+      - name: Build desktop packaged bundle (Windows)
+        if: runner.os == 'Windows'
+        working-directory: gui/desktop-tauri
+        env:
+          PYTHON: python
+        run: npm run tauri build -- --bundles msi,nsis
+
+      - name: Build desktop packaged bundle (non-Windows)
+        if: runner.os != 'Windows'
         working-directory: gui/desktop-tauri
         env:
           PYTHON: python
@@ -298,7 +304,18 @@ jobs:
           fi
           ditto -c -k --sequesterRsrc --keepParent "$app_path" "$app_path.zip"
 
-      - name: Upload desktop packaged bundle
+      - name: Upload desktop packaged bundle (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: |
+            gui/desktop-tauri/src-tauri/target/release/bundle/**/*.msi
+            gui/desktop-tauri/src-tauri/target/release/bundle/**/*-setup.exe
+          if-no-files-found: error
+
+      - name: Upload desktop packaged bundle (non-Windows)
+        if: runner.os != 'Windows'
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact-name }}
