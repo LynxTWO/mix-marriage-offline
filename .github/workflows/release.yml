@@ -263,13 +263,6 @@ jobs:
         working-directory: gui/desktop-tauri
         run: npm test --if-present
 
-      - name: Build desktop packaged bundle (Windows)
-        if: runner.os == 'Windows'
-        working-directory: gui/desktop-tauri
-        env:
-          PYTHON: python
-        run: npm run tauri build -- --bundles msi,nsis
-
       # Optional Windows code-signing env hooks for release CI:
       # - MMO_WINDOWS_CERT_BASE64: base64-encoded .pfx contents
       # - MMO_WINDOWS_CERT_PASSWORD: password for the .pfx
@@ -318,6 +311,124 @@ jobs:
           "MMO_WINDOWS_CERT_THUMBPRINT_EFFECTIVE=$actualThumbprint" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "MMO_WINDOWS_TIMESTAMP_URL_EFFECTIVE=$timestampUrl" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Windows code signing enabled for thumbprint $actualThumbprint."
+
+      - name: Build desktop app payload (Windows signing-aware)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: gui/desktop-tauri
+        env:
+          PYTHON: python
+        run: |
+          if ($env:MMO_WINDOWS_SIGNING_ENABLED -eq "true") {
+            Write-Host "Windows signing enabled: building the desktop payload without bundling first."
+            npm run tauri build -- --no-bundle --no-sign
+          } else {
+            Write-Host "Windows signing disabled: building Windows installers directly."
+            npm run tauri build -- --bundles msi,nsis --no-sign
+          }
+
+      - name: Sign Windows app payload binaries (optional)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if ($env:MMO_WINDOWS_SIGNING_ENABLED -ne "true") {
+            Write-Host "Skipping Windows payload signing."
+            exit 0
+          }
+
+          $signtool = Get-Command signtool -ErrorAction SilentlyContinue
+          if (-not $signtool) {
+            throw "signtool is not available on PATH."
+          }
+
+          $config = Get-Content "gui/desktop-tauri/src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
+          $productName = [string]$config.productName
+          if ([string]::IsNullOrWhiteSpace($productName)) {
+            throw "Missing productName in gui/desktop-tauri/src-tauri/tauri.conf.json."
+          }
+
+          $releaseDir = Resolve-Path "gui/desktop-tauri/src-tauri/target/release"
+          $desktopExe = Get-Item (Join-Path $releaseDir "$productName.exe") -ErrorAction SilentlyContinue
+          if (-not $desktopExe) {
+            $desktopExe = Get-ChildItem -Path $releaseDir -File -Filter "*.exe" |
+              Where-Object { $_.Name -notlike "mmo*.exe" -and $_.Name -notin @("crashpad_handler.exe", "uninstall.exe") } |
+              Sort-Object @{ Expression = { if ($_.Name -eq "$productName.exe") { 0 } else { 1 } } }, FullName |
+              Select-Object -First 1
+          }
+
+          $payloads = @()
+          if ($desktopExe) {
+            $payloads += $desktopExe
+          }
+          $payloads += @(Get-ChildItem -Path "gui/desktop-tauri/src-tauri/binaries" -File -Filter "*.exe" -ErrorAction SilentlyContinue | Sort-Object FullName)
+          $payloads = @($payloads | Sort-Object FullName -Unique)
+          if (-not $payloads) {
+            throw "Could not find Windows payload binaries to sign."
+          }
+
+          foreach ($payload in $payloads) {
+            Write-Host "Signing Windows payload binary: $($payload.FullName)"
+            & $signtool.Source sign /fd SHA256 /sha1 $env:MMO_WINDOWS_CERT_THUMBPRINT_EFFECTIVE /tr $env:MMO_WINDOWS_TIMESTAMP_URL_EFFECTIVE /td SHA256 $payload.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "signtool sign failed for $($payload.FullName) with exit code $LASTEXITCODE."
+            }
+          }
+
+      - name: Verify Windows app payload signatures (pre-bundle)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $config = Get-Content "gui/desktop-tauri/src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
+          $productName = [string]$config.productName
+          $releaseDir = Resolve-Path "gui/desktop-tauri/src-tauri/target/release"
+          $desktopExe = Get-Item (Join-Path $releaseDir "$productName.exe") -ErrorAction SilentlyContinue
+          if (-not $desktopExe) {
+            $desktopExe = Get-ChildItem -Path $releaseDir -File -Filter "*.exe" |
+              Where-Object { $_.Name -notlike "mmo*.exe" -and $_.Name -notin @("crashpad_handler.exe", "uninstall.exe") } |
+              Sort-Object @{ Expression = { if ($_.Name -eq "$productName.exe") { 0 } else { 1 } } }, FullName |
+              Select-Object -First 1
+          }
+
+          $payloads = @()
+          if ($desktopExe) {
+            $payloads += $desktopExe
+          }
+          $payloads += @(Get-ChildItem -Path "gui/desktop-tauri/src-tauri/binaries" -File -Filter "*.exe" -ErrorAction SilentlyContinue | Sort-Object FullName)
+          $payloads = @($payloads | Sort-Object FullName -Unique)
+          if (-not $payloads) {
+            if ($env:MMO_WINDOWS_SIGNING_ENABLED -eq "true") {
+              throw "Could not find Windows payload binaries to verify."
+            }
+            Write-Warning "No Windows payload binaries were found to verify."
+            exit 0
+          }
+
+          foreach ($payload in $payloads) {
+            $signature = Get-AuthenticodeSignature -FilePath $payload.FullName
+            $subject = if ($signature.SignerCertificate) {
+              $signature.SignerCertificate.Subject
+            } else {
+              "(none)"
+            }
+            Write-Host "Authenticode receipt: path=$($payload.FullName) status=$($signature.Status) signer=$subject"
+            if ($env:MMO_WINDOWS_SIGNING_ENABLED -eq "true" -and $signature.Status -ne "Valid") {
+              throw "Expected a valid Authenticode signature on $($payload.FullName), got $($signature.Status)."
+            }
+          }
+
+      - name: Bundle desktop installers from signed payload (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: gui/desktop-tauri
+        env:
+          PYTHON: python
+        run: |
+          if ($env:MMO_WINDOWS_SIGNING_ENABLED -ne "true") {
+            Write-Host "Skipping signed-payload bundling because Windows signing is disabled."
+            exit 0
+          }
+
+          npm run tauri bundle -- --bundles msi,nsis --no-sign
 
       - name: Sign Windows installers (optional)
         if: runner.os == 'Windows'
@@ -373,8 +484,98 @@ jobs:
             throw "Could not find a built Windows installer under $bundleRoot."
           }
 
+          $statePath = Join-Path $env:RUNNER_TEMP "mmo-windows-install-state.json"
+          "MMO_WINDOWS_INSTALL_STATE_PATH=$statePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Smoking packaged installer artifact: $($installer.FullName)"
-          python tools/smoke_packaged_desktop.py --repo-root . --artifact "$($installer.FullName)"
+          Write-Host "Windows install state path: $statePath"
+          python tools/smoke_packaged_desktop.py --repo-root . --artifact "$($installer.FullName)" --windows-install-state-path "$statePath" --defer-windows-cleanup
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          "MMO_WINDOWS_INSTALL_SMOKE_OK=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Verify installed Windows payload signatures
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:MMO_WINDOWS_INSTALL_STATE_PATH)) {
+            Write-Host "No Windows install state path was recorded."
+            exit 0
+          }
+
+          if (-not (Test-Path $env:MMO_WINDOWS_INSTALL_STATE_PATH)) {
+            if ($env:MMO_WINDOWS_INSTALL_SMOKE_OK -eq "true") {
+              throw "Expected Windows install state at $env:MMO_WINDOWS_INSTALL_STATE_PATH after a successful smoke run."
+            }
+            Write-Warning "Windows install state file is missing; the smoke step likely failed before install receipts were persisted."
+            exit 0
+          }
+
+          $state = Get-Content $env:MMO_WINDOWS_INSTALL_STATE_PATH -Raw | ConvertFrom-Json
+          Write-Host "Installed artifact path: $($state.artifact_path)"
+          Write-Host "Installer log path: $($state.install_log_path)"
+          Write-Host "Detected install location: $($state.install_root)"
+
+          $targets = @()
+          if (-not [string]::IsNullOrWhiteSpace([string]$state.installed_app_path)) {
+            if (Test-Path $state.installed_app_path) {
+              $targets += Get-Item $state.installed_app_path
+            } elseif ($env:MMO_WINDOWS_SIGNING_ENABLED -eq "true" -and $env:MMO_WINDOWS_INSTALL_SMOKE_OK -eq "true") {
+              throw "Installed desktop app executable is missing: $($state.installed_app_path)"
+            } else {
+              Write-Warning "Installed desktop app executable is missing: $($state.installed_app_path)"
+            }
+          }
+
+          if ($state.installed_sidecar_paths) {
+            foreach ($sidecarPath in $state.installed_sidecar_paths) {
+              if (Test-Path $sidecarPath) {
+                $targets += Get-Item $sidecarPath
+              } elseif ($env:MMO_WINDOWS_SIGNING_ENABLED -eq "true" -and $env:MMO_WINDOWS_INSTALL_SMOKE_OK -eq "true") {
+                throw "Installed sidecar executable is missing: $sidecarPath"
+              } else {
+                Write-Warning "Installed sidecar executable is missing: $sidecarPath"
+              }
+            }
+          } else {
+            Write-Host "Installed sidecar paths: (none recorded)"
+          }
+
+          $targets = @($targets | Sort-Object FullName -Unique)
+          if (-not $targets) {
+            if ($env:MMO_WINDOWS_SIGNING_ENABLED -eq "true" -and $env:MMO_WINDOWS_INSTALL_SMOKE_OK -eq "true") {
+              throw "No installed Windows payload binaries were available for signature verification."
+            }
+            Write-Warning "No installed Windows payload binaries were available for signature verification."
+            exit 0
+          }
+
+          foreach ($target in $targets) {
+            $signature = Get-AuthenticodeSignature -FilePath $target.FullName
+            $subject = if ($signature.SignerCertificate) {
+              $signature.SignerCertificate.Subject
+            } else {
+              "(none)"
+            }
+            Write-Host "Installed Authenticode receipt: path=$($target.FullName) status=$($signature.Status) signer=$subject"
+            if ($env:MMO_WINDOWS_SIGNING_ENABLED -eq "true" -and $env:MMO_WINDOWS_INSTALL_SMOKE_OK -eq "true" -and $signature.Status -ne "Valid") {
+              throw "Expected a valid installed Authenticode signature on $($target.FullName), got $($signature.Status)."
+            }
+          }
+
+      - name: Cleanup Windows smoke install (best effort)
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:MMO_WINDOWS_INSTALL_STATE_PATH)) {
+            Write-Host "No Windows install state path was recorded; nothing to clean up."
+            exit 0
+          }
+
+          python tools/smoke_packaged_desktop.py --cleanup-windows-install-state "$env:MMO_WINDOWS_INSTALL_STATE_PATH"
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
 
       - name: Smoke packaged desktop bundle (macOS)
         if: runner.os == 'macOS'
