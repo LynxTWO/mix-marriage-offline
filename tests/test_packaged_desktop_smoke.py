@@ -196,6 +196,21 @@ class TestPackagedDesktopSmoke(unittest.TestCase):
 
             self.assertEqual(resolved, nsis_path)
 
+    def test_find_sidecar_binaries_returns_all_windows_sidecars(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle_root = Path(temp_dir)
+            exact_sidecar = bundle_root / "mmo.exe"
+            staged_sidecar = bundle_root / "bin" / "mmo-x86_64-pc-windows-msvc.exe"
+            app_exe = bundle_root / "MMO Desktop.exe"
+            staged_sidecar.parent.mkdir(parents=True, exist_ok=True)
+            exact_sidecar.write_text("exact", encoding="utf-8")
+            staged_sidecar.write_text("staged", encoding="utf-8")
+            app_exe.write_text("app", encoding="utf-8")
+
+            resolved = self.module._find_sidecar_binaries(bundle_root, platform_tag="windows")
+
+            self.assertEqual(resolved, [staged_sidecar, exact_sidecar])
+
     def test_choose_windows_installed_app_prefers_new_path_over_preexisting(self) -> None:
         product_name = "MMO Desktop"
         existing = Path("C:/Users/test/AppData/Local/Programs/MMO Desktop/MMO Desktop.exe")
@@ -233,6 +248,109 @@ class TestPackagedDesktopSmoke(unittest.TestCase):
             self.assertIn("stdout line", receipt)
             self.assertIn("stderr line", receipt)
             self.assertIn("MMO Desktop.exe", receipt)
+
+    def test_choose_windows_uninstall_command_prefers_uninstall_exe(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            install_root = root / "Programs" / "MMO Desktop"
+            install_root.mkdir(parents=True, exist_ok=True)
+            uninstall_exe = install_root / "uninstall.exe"
+            uninstall_exe.write_text("stub", encoding="utf-8")
+            artifact_path = root / "MMO Desktop-setup.exe"
+            artifact_path.write_text("nsis", encoding="utf-8")
+            uninstall_log_path = root / "windows-uninstall.log"
+
+            strategy, command, notes = self.module._choose_windows_uninstall_command(
+                install_root=install_root,
+                installer_kind="nsis",
+                artifact_path=artifact_path,
+                product_name="MMO Desktop",
+                uninstall_log_path=uninstall_log_path,
+            )
+
+            self.assertEqual(strategy, "uninstall-exe")
+            self.assertEqual(command, [str(uninstall_exe), "/S"])
+            self.assertEqual(notes, ())
+
+    def test_choose_windows_uninstall_command_normalizes_registry_msiexec(self) -> None:
+        install_root = Path("C:/Users/test/AppData/Local/Programs/MMO Desktop")
+        uninstall_log_path = Path("C:/Temp/windows-uninstall.log")
+        registry_entry = self.module.WindowsInstallEntry(
+            display_name="MMO Desktop",
+            install_location=install_root,
+            display_icon=install_root / "MMO Desktop.exe",
+            uninstall_command='MsiExec.exe /I{12345678-ABCD-4321-DCBA-87654321ABCD}',
+            quiet_uninstall_command=None,
+        )
+
+        with mock.patch.object(self.module, "_read_windows_install_entries", return_value=[registry_entry]):
+            strategy, command, notes = self.module._choose_windows_uninstall_command(
+                install_root=install_root,
+                installer_kind="msi",
+                artifact_path=Path("C:/Temp/MMO Desktop.msi"),
+                product_name="MMO Desktop",
+                uninstall_log_path=uninstall_log_path,
+            )
+
+        self.assertEqual(strategy, "registry-msiexec")
+        self.assertEqual(
+            command,
+            [
+                "msiexec",
+                "/x",
+                "{12345678-ABCD-4321-DCBA-87654321ABCD}",
+                "/qn",
+                "/norestart",
+                "/l*v",
+                str(uninstall_log_path),
+            ],
+        )
+        self.assertEqual(notes, ())
+
+    def test_cleanup_windows_install_removes_residual_root_after_uninstall_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            install_root = root / "AppData" / "Local" / "Programs" / "MMO Desktop"
+            install_root.mkdir(parents=True, exist_ok=True)
+            (install_root / "uninstall.exe").write_text("stub", encoding="utf-8")
+            (install_root / "MMO Desktop.exe").write_text("app", encoding="utf-8")
+            artifact_path = root / "MMO Desktop-setup.exe"
+            artifact_path.write_text("nsis", encoding="utf-8")
+            install_log_path = root / "nsis-install.log"
+            install_log_path.write_text("install ok", encoding="utf-8")
+            cleanup_completed = subprocess.CompletedProcess(
+                [str(install_root / "uninstall.exe"), "/S"],
+                1,
+                stdout="cleanup stdout",
+                stderr="cleanup stderr",
+            )
+
+            with mock.patch.object(
+                self.module,
+                "_run_windows_cleanup_command",
+                return_value=cleanup_completed,
+            ) as cleanup_mock:
+                result = self.module._cleanup_windows_install(
+                    state={
+                        "artifact_path": artifact_path.as_posix(),
+                        "install_log_path": install_log_path.as_posix(),
+                        "install_root": install_root.as_posix(),
+                        "installer_kind": "nsis",
+                        "product_name": "MMO Desktop",
+                    },
+                    env={"LOCALAPPDATA": str(root / "AppData" / "Local")},
+                )
+
+            self.assertTrue(result.attempted)
+            self.assertTrue(result.ok)
+            self.assertTrue(result.removed_install_root)
+            self.assertIn("residual-rmtree", result.strategy or "")
+            self.assertTrue(any("exited 1" in note for note in result.notes))
+            self.assertFalse(install_root.exists())
+            self.assertEqual(
+                cleanup_mock.call_args.kwargs["uninstall_log_path"],
+                install_log_path.with_name("windows-uninstall.log"),
+            )
 
     def test_find_sidecar_binary_error_lists_likely_macos_directories(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

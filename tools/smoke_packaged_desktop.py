@@ -7,6 +7,7 @@ import json
 import math
 import os
 import re
+import shlex
 import shutil
 import struct
 import subprocess
@@ -35,6 +36,29 @@ class WindowsInstallResult(NamedTuple):
     install_root: Path
     installer_kind: str
     installer_path: Path
+
+
+class WindowsInstallEntry(NamedTuple):
+    """Windows uninstall metadata discovered from the registry."""
+
+    display_name: str
+    install_location: Path | None
+    display_icon: Path | None
+    uninstall_command: str | None
+    quiet_uninstall_command: str | None
+
+
+class WindowsCleanupResult(NamedTuple):
+    """Best-effort cleanup result for a Windows real-install smoke run."""
+
+    attempted: bool
+    ok: bool
+    strategy: str | None
+    install_root: Path | None
+    uninstall_log_path: Path | None
+    removed_install_root: bool
+    command: tuple[str, ...]
+    notes: tuple[str, ...]
 
 
 def _platform_tag() -> str:
@@ -225,12 +249,16 @@ def _find_main_app_executable(
     )
 
 
-def _find_sidecar_binary(root: Path, *, platform_tag: str) -> Path:
-    candidates = sorted(
+def _find_sidecar_binaries(root: Path, *, platform_tag: str) -> list[Path]:
+    return sorted(
         path
         for path in root.rglob("*")
         if path.is_file() and _looks_like_sidecar_name(path.name, platform_tag)
     )
+
+
+def _find_sidecar_binary(root: Path, *, platform_tag: str) -> Path:
+    candidates = _find_sidecar_binaries(root, platform_tag=platform_tag)
     if not candidates:
         raise SmokeError(
             f"Could not find a packaged sidecar under {root}\n"
@@ -382,7 +410,7 @@ def _coerce_windows_executable_path(value: str) -> Path | None:
     return candidate
 
 
-def _read_windows_install_roots_from_registry(product_name: str) -> list[Path]:
+def _read_windows_install_entries(product_name: str) -> list[WindowsInstallEntry]:
     if not sys.platform.startswith("win"):
         return []
     try:
@@ -401,7 +429,7 @@ def _read_windows_install_roots_from_registry(product_name: str) -> list[Path]:
         compact = normalized.replace(" ", "")
         return any(needle in {normalized, compact} or needle in normalized or needle in compact for needle in display_name_needles)
 
-    candidates: list[Path] = []
+    entries: list[WindowsInstallEntry] = []
     hive_specs = [
         (winreg.HKEY_CURRENT_USER, winreg.KEY_READ, "HKCU"),
         (winreg.HKEY_LOCAL_MACHINE, winreg.KEY_READ | getattr(winreg, "KEY_WOW64_64KEY", 0), "HKLM64"),
@@ -425,6 +453,8 @@ def _read_windows_install_roots_from_registry(product_name: str) -> list[Path]:
 
                             install_location: str | None = None
                             display_icon: str | None = None
+                            uninstall_command: str | None = None
+                            quiet_uninstall_command: str | None = None
                             try:
                                 install_location_value, _ = winreg.QueryValueEx(child_key, "InstallLocation")
                                 if isinstance(install_location_value, str) and install_location_value.strip():
@@ -437,18 +467,55 @@ def _read_windows_install_roots_from_registry(product_name: str) -> list[Path]:
                                     display_icon = display_icon_value.strip()
                             except OSError:
                                 pass
+                            try:
+                                uninstall_value, _ = winreg.QueryValueEx(child_key, "UninstallString")
+                                if isinstance(uninstall_value, str) and uninstall_value.strip():
+                                    uninstall_command = uninstall_value.strip()
+                            except OSError:
+                                pass
+                            try:
+                                quiet_uninstall_value, _ = winreg.QueryValueEx(child_key, "QuietUninstallString")
+                                if isinstance(quiet_uninstall_value, str) and quiet_uninstall_value.strip():
+                                    quiet_uninstall_command = quiet_uninstall_value.strip()
+                            except OSError:
+                                pass
 
-                            if install_location:
-                                candidates.append(Path(install_location))
-                            if display_icon:
-                                executable = _coerce_windows_executable_path(display_icon)
-                                if executable is not None:
-                                    candidates.append(executable.parent)
+                            entries.append(
+                                WindowsInstallEntry(
+                                    display_name=display_name.strip(),
+                                    install_location=Path(install_location) if install_location else None,
+                                    display_icon=_coerce_windows_executable_path(display_icon) if display_icon else None,
+                                    uninstall_command=uninstall_command,
+                                    quiet_uninstall_command=quiet_uninstall_command,
+                                )
+                            )
                     except OSError:
                         continue
         except OSError:
             continue
 
+    deduped_entries: list[WindowsInstallEntry] = []
+    seen: set[tuple[str, str | None, str | None]] = set()
+    for entry in entries:
+        key = (
+            entry.display_name.casefold(),
+            _normalize_path_text(entry.install_location) if entry.install_location is not None else None,
+            _normalize_path_text(entry.display_icon) if entry.display_icon is not None else None,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped_entries.append(entry)
+    return deduped_entries
+
+
+def _read_windows_install_roots_from_registry(product_name: str) -> list[Path]:
+    candidates: list[Path] = []
+    for entry in _read_windows_install_entries(product_name):
+        if entry.install_location is not None:
+            candidates.append(entry.install_location)
+        if entry.display_icon is not None:
+            candidates.append(entry.display_icon.parent)
     return _dedupe_paths(candidates)
 
 
@@ -580,6 +647,349 @@ def _windows_install_receipt(
     lines.append(launch_stderr.strip() or "(empty)")
     return "\n".join(lines)
 
+
+def _windows_cleanup_payload(result: WindowsCleanupResult) -> dict[str, Any]:
+    return {
+        "attempted": result.attempted,
+        "command": list(result.command),
+        "install_root": result.install_root.as_posix() if result.install_root is not None else "",
+        "notes": list(result.notes),
+        "ok": result.ok,
+        "removed_install_root": result.removed_install_root,
+        "strategy": result.strategy or "",
+        "uninstall_log_path": result.uninstall_log_path.as_posix() if result.uninstall_log_path is not None else "",
+    }
+
+
+def _windows_cleanup_receipt(result: WindowsCleanupResult) -> str:
+    lines = ["Windows cleanup receipt:"]
+    lines.append(f"- attempted: {result.attempted}")
+    lines.append(f"- ok: {result.ok}")
+    lines.append(f"- strategy: {result.strategy or '(none)'}")
+    lines.append(f"- command: {' '.join(result.command) if result.command else '(none)'}")
+    lines.append(f"- install root: {result.install_root if result.install_root is not None else '(unknown)'}")
+    lines.append(f"- removed install root: {result.removed_install_root}")
+    if result.uninstall_log_path is not None:
+        lines.append(f"- uninstall log path: {result.uninstall_log_path}")
+        lines.append("- uninstall log tail:")
+        lines.append(_read_log_tail(result.uninstall_log_path))
+    if result.notes:
+        lines.extend(f"- note: {note}" for note in result.notes)
+    return "\n".join(lines)
+
+
+def _windows_install_state_payload(
+    *,
+    artifact_path: Path,
+    product_name: str,
+    temp_root: Path,
+    install_result: WindowsInstallResult,
+    installed_sidecar_paths: list[Path],
+) -> dict[str, Any]:
+    return {
+        "artifact_path": artifact_path.as_posix(),
+        "install_log_path": install_result.install_log_path.as_posix(),
+        "install_root": install_result.install_root.as_posix(),
+        "installed_app_path": install_result.app_executable.as_posix(),
+        "installed_sidecar_paths": [path.as_posix() for path in installed_sidecar_paths],
+        "installer_kind": install_result.installer_kind,
+        "installer_path": install_result.installer_path.as_posix(),
+        "product_name": product_name,
+        "temp_root": temp_root.as_posix(),
+    }
+
+
+def _write_windows_install_state(state_path: Path, payload: dict[str, Any]) -> None:
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _load_windows_install_state(state_path: Path) -> dict[str, Any] | None:
+    if not state_path.exists():
+        return None
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _parse_windows_command(command_text: str) -> list[str]:
+    try:
+        parts = shlex.split(command_text, posix=False)
+    except ValueError:
+        parts = [command_text]
+    return [part.strip() for part in parts if isinstance(part, str) and part.strip()]
+
+
+def _is_msiexec_command(command: list[str]) -> bool:
+    if not command:
+        return False
+    executable = Path(command[0].strip('"')).name.casefold()
+    return executable in {"msiexec", "msiexec.exe"}
+
+
+def _normalize_msiexec_uninstall_command(
+    command: list[str],
+    *,
+    uninstall_log_path: Path,
+) -> list[str]:
+    normalized = ["msiexec"]
+    extras: list[str] = []
+    target_parts: list[str] = []
+    index = 1
+    while index < len(command):
+        part = command[index]
+        lowered = part.casefold()
+        if lowered in {"/i", "-i", "/x", "-x"}:
+            if index + 1 < len(command):
+                target_parts.append(command[index + 1])
+                index += 2
+                continue
+            index += 1
+            continue
+        if re.match(r"^[/-][ix].+", lowered):
+            target_parts.append(part[2:])
+            index += 1
+            continue
+        if lowered in {"/qn", "/quiet", "/passive", "/promptrestart", "/forcerestart", "/norestart"}:
+            index += 1
+            continue
+        if lowered in {"/l*v", "/lv", "/l*vx", "/log"}:
+            index += 2 if index + 1 < len(command) else 1
+            continue
+        extras.append(part)
+        index += 1
+
+    normalized.append("/x")
+    normalized.extend(target_parts)
+    normalized.extend(extras)
+    if not any(part.casefold() in {"/qn", "/quiet"} for part in normalized):
+        normalized.append("/qn")
+    if not any(part.casefold() == "/norestart" for part in normalized):
+        normalized.append("/norestart")
+    normalized.extend(["/l*v", str(uninstall_log_path)])
+    return normalized
+
+
+def _windows_entry_matches_install_root(entry: WindowsInstallEntry, install_root: Path) -> bool:
+    candidate_paths = [
+        entry.install_location,
+        entry.display_icon.parent if entry.display_icon is not None else None,
+    ]
+    install_root_text = _normalize_path_text(install_root)
+    for candidate in candidate_paths:
+        if candidate is None:
+            continue
+        candidate_text = _normalize_path_text(candidate)
+        if candidate_text == install_root_text:
+            return True
+        if candidate_text.startswith(f"{install_root_text}/"):
+            return True
+        if install_root_text.startswith(f"{candidate_text}/"):
+            return True
+    return False
+
+
+def _matching_windows_install_entries(*, install_root: Path, product_name: str) -> list[WindowsInstallEntry]:
+    return [
+        entry
+        for entry in _read_windows_install_entries(product_name)
+        if _windows_entry_matches_install_root(entry, install_root)
+    ]
+
+
+def _expected_windows_install_parent_roots(env: dict[str, str]) -> list[Path]:
+    roots: list[Path] = []
+    local_app_data = env.get("LOCALAPPDATA")
+    if local_app_data:
+        local_root = Path(local_app_data)
+        roots.extend([local_root / "Programs", local_root])
+    for env_name in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"):
+        base = env.get(env_name)
+        if base:
+            roots.append(Path(base))
+    return _dedupe_paths(roots)
+
+
+def _is_safe_windows_install_root(*, install_root: Path, product_name: str, env: dict[str, str]) -> bool:
+    if not _windows_dir_name_matches_product(install_root.name, product_name=product_name):
+        return False
+    return any(_path_is_under(install_root, root) for root in _expected_windows_install_parent_roots(env))
+
+
+def _choose_windows_uninstall_command(
+    *,
+    install_root: Path,
+    installer_kind: str,
+    artifact_path: Path,
+    product_name: str,
+    uninstall_log_path: Path,
+) -> tuple[str | None, list[str] | None, tuple[str, ...]]:
+    notes: list[str] = []
+    uninstall_exe = install_root / "uninstall.exe"
+    if uninstall_exe.is_file():
+        return ("uninstall-exe", [str(uninstall_exe), "/S"], tuple(notes))
+
+    for entry in _matching_windows_install_entries(install_root=install_root, product_name=product_name):
+        for label, command_text in (
+            ("registry-quiet-uninstall", entry.quiet_uninstall_command),
+            ("registry-uninstall", entry.uninstall_command),
+        ):
+            if not command_text:
+                continue
+            parsed = _parse_windows_command(command_text)
+            if not parsed:
+                continue
+            if _is_msiexec_command(parsed):
+                return (
+                    "registry-msiexec",
+                    _normalize_msiexec_uninstall_command(parsed, uninstall_log_path=uninstall_log_path),
+                    tuple(notes),
+                )
+            executable = _coerce_windows_executable_path(parsed[0])
+            if executable is not None and executable.name.casefold() == "uninstall.exe":
+                remainder = list(parsed[1:])
+                if not any(arg.casefold() == "/s" for arg in remainder):
+                    remainder.append("/S")
+                return (label, [str(executable), *remainder], tuple(notes))
+            notes.append(
+                f"Skipped registry uninstall command for '{entry.display_name}' because it may require interaction."
+            )
+
+    if installer_kind == "msi":
+        return (
+            "artifact-msiexec",
+            [
+                "msiexec",
+                "/x",
+                str(artifact_path),
+                "/qn",
+                "/norestart",
+                "/l*v",
+                str(uninstall_log_path),
+            ],
+            tuple(notes),
+        )
+
+    return (None, None, tuple(notes))
+
+
+def _run_windows_cleanup_command(
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    uninstall_log_path: Path | None,
+) -> subprocess.CompletedProcess[str]:
+    completed = subprocess.run(
+        command,
+        cwd=cwd,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if uninstall_log_path is not None and not uninstall_log_path.exists():
+        uninstall_log_path.write_text(
+            "\n".join(
+                [
+                    f"command={json.dumps(command)}",
+                    f"exit_code={completed.returncode}",
+                    "stdout:",
+                    completed.stdout,
+                    "stderr:",
+                    completed.stderr,
+                ]
+            ),
+            encoding="utf-8",
+        )
+    return completed
+
+
+def _cleanup_windows_install(
+    *,
+    state: dict[str, Any],
+    env: dict[str, str],
+) -> WindowsCleanupResult:
+    product_name = str(state.get("product_name", "")).strip()
+    install_root_raw = state.get("install_root")
+    artifact_path_raw = state.get("artifact_path")
+    installer_kind = str(state.get("installer_kind", "")).strip().casefold()
+    install_root = Path(install_root_raw).resolve() if isinstance(install_root_raw, str) and install_root_raw else None
+    artifact_path = Path(artifact_path_raw).resolve() if isinstance(artifact_path_raw, str) and artifact_path_raw else None
+    uninstall_log_path = None
+    if isinstance(state.get("install_log_path"), str) and state["install_log_path"]:
+        uninstall_log_path = Path(str(state["install_log_path"])).with_name("windows-uninstall.log")
+
+    notes: list[str] = []
+    if install_root is None or artifact_path is None or not product_name:
+        notes.append("Windows install state did not include enough information for cleanup.")
+        return WindowsCleanupResult(
+            attempted=False,
+            ok=False,
+            strategy=None,
+            install_root=install_root,
+            uninstall_log_path=uninstall_log_path,
+            removed_install_root=False,
+            command=(),
+            notes=tuple(notes),
+        )
+
+    strategy, command, selection_notes = _choose_windows_uninstall_command(
+        install_root=install_root,
+        installer_kind=installer_kind,
+        artifact_path=artifact_path,
+        product_name=product_name,
+        uninstall_log_path=uninstall_log_path or (install_root / "windows-uninstall.log"),
+    )
+    notes.extend(selection_notes)
+
+    attempted = False
+    removed_install_root = False
+    command_tuple: tuple[str, ...] = ()
+    command_ok = False
+    if command:
+        attempted = True
+        command_tuple = tuple(command)
+        completed = _run_windows_cleanup_command(
+            command,
+            cwd=install_root.parent if install_root.parent.exists() else Path.cwd(),
+            env=env,
+            uninstall_log_path=uninstall_log_path,
+        )
+        command_ok = completed.returncode == 0
+        if not command_ok:
+            notes.append(f"Uninstall command exited {completed.returncode}.")
+    else:
+        notes.append("No safe uninstall command was available.")
+
+    if install_root.exists():
+        if _is_safe_windows_install_root(install_root=install_root, product_name=product_name, env=env):
+            try:
+                shutil.rmtree(install_root)
+                removed_install_root = not install_root.exists()
+                if removed_install_root:
+                    strategy = f"{strategy} + residual-rmtree" if strategy else "residual-rmtree"
+            except OSError as exc:
+                notes.append(f"Residual install-root cleanup failed: {exc}")
+        else:
+            notes.append("Skipped residual install-root cleanup because the path was not an expected MMO install directory.")
+
+    ok = (command_ok and not install_root.exists()) or removed_install_root or not install_root.exists()
+    return WindowsCleanupResult(
+        attempted=attempted,
+        ok=ok,
+        strategy=strategy,
+        install_root=install_root,
+        uninstall_log_path=uninstall_log_path,
+        removed_install_root=removed_install_root,
+        command=command_tuple,
+        notes=tuple(notes),
+    )
 
 def _run_windows_installer(
     command: list[str],
@@ -975,14 +1385,89 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Keep the temporary smoke workspace on disk for debugging.",
     )
+    parser.add_argument(
+        "--windows-install-state-path",
+        default="",
+        help="Optional JSON path for persisting Windows install state for later signature checks or cleanup.",
+    )
+    parser.add_argument(
+        "--defer-windows-cleanup",
+        action="store_true",
+        help="Do not uninstall the Windows smoke install automatically; requires --windows-install-state-path.",
+    )
+    parser.add_argument(
+        "--cleanup-windows-install-state",
+        default="",
+        help="Run best-effort Windows uninstall cleanup from a saved install-state JSON file, then exit.",
+    )
     return parser.parse_args()
+
+
+def _cleanup_windows_install_state(
+    *,
+    state_path: Path,
+    keep_temp: bool,
+) -> int:
+    payload = _load_windows_install_state(state_path)
+    if payload is None:
+        print(
+            json.dumps(
+                {
+                    "cleanup": {
+                        "attempted": False,
+                        "notes": ["Windows install state file was missing or unreadable."],
+                        "ok": False,
+                    },
+                    "state_path": state_path.as_posix(),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+
+    cleanup_result = _cleanup_windows_install(state=payload, env=os.environ.copy())
+    temp_root_raw = payload.get("temp_root")
+    if not keep_temp and isinstance(temp_root_raw, str) and temp_root_raw:
+        shutil.rmtree(Path(temp_root_raw), ignore_errors=True)
+
+    print(
+        json.dumps(
+            {
+                "cleanup": _windows_cleanup_payload(cleanup_result),
+                "state_path": state_path.as_posix(),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
 
 
 def main() -> int:
     args = _parse_args()
+    if args.cleanup_windows_install_state:
+        return _cleanup_windows_install_state(
+            state_path=Path(args.cleanup_windows_install_state).resolve(),
+            keep_temp=bool(args.keep_temp),
+        )
+
+    if args.defer_windows_cleanup and not args.windows_install_state_path:
+        print(
+            "error: --defer-windows-cleanup requires --windows-install-state-path",
+            file=sys.stderr,
+        )
+        return 2
+
     repo_root = Path(args.repo_root).resolve()
     platform_tag = _platform_tag()
     product_name = _read_product_name(repo_root)
+    windows_install_state_path = (
+        Path(args.windows_install_state_path).resolve()
+        if isinstance(args.windows_install_state_path, str) and args.windows_install_state_path.strip()
+        else None
+    )
+    defer_windows_cleanup = bool(args.defer_windows_cleanup)
 
     if args.artifact:
         artifact_path = Path(args.artifact).resolve()
@@ -998,6 +1483,10 @@ def main() -> int:
     temp_root = Path(tempfile.mkdtemp(prefix="mmo-desktop-smoke-")).resolve()
     env = os.environ.copy()
     windows_install_result: WindowsInstallResult | None = None
+    installed_sidecar_paths: list[Path] = []
+    cleanup_result: WindowsCleanupResult | None = None
+    result_payload: dict[str, Any] | None = None
+    error_message: str | None = None
     launch_stdout = ""
     launch_stderr = ""
     try:
@@ -1016,6 +1505,21 @@ def main() -> int:
                 env=env,
             )
             sidecar_bundle_root = windows_install_result.install_root
+            installed_sidecar_paths = _find_sidecar_binaries(
+                sidecar_bundle_root,
+                platform_tag=platform_tag,
+            )
+            if windows_install_state_path is not None:
+                _write_windows_install_state(
+                    windows_install_state_path,
+                    _windows_install_state_payload(
+                        artifact_path=artifact_path,
+                        product_name=product_name,
+                        temp_root=temp_root,
+                        install_result=windows_install_result,
+                        installed_sidecar_paths=installed_sidecar_paths,
+                    ),
+                )
             command = [str(windows_install_result.app_executable)]
             launch_cwd = windows_install_result.app_executable.parent
         elif platform_tag == "macos":
@@ -1085,21 +1589,59 @@ def main() -> int:
                 {
                     "install_log_path": windows_install_result.install_log_path.as_posix(),
                     "install_root": windows_install_result.install_root.as_posix(),
+                    "installed_sidecar_paths": [path.as_posix() for path in installed_sidecar_paths],
                     "installer_kind": windows_install_result.installer_kind,
                     "installer_path": windows_install_result.installer_path.as_posix(),
                     "launched_app": windows_install_result.app_executable.as_posix(),
                 }
             )
-        print(json.dumps(payload, indent=2, sort_keys=True))
-        return 0
+        if defer_windows_cleanup and windows_install_result is not None:
+            payload["cleanup_deferred"] = True
+            if windows_install_state_path is not None:
+                payload["windows_install_state_path"] = windows_install_state_path.as_posix()
+        result_payload = payload
     except SmokeError as exc:
-        message = str(exc)
+        error_message = str(exc)
+    finally:
+        if platform_tag == "windows" and windows_install_result is not None and not defer_windows_cleanup:
+            cleanup_result = _cleanup_windows_install(
+                state=_windows_install_state_payload(
+                    artifact_path=artifact_path,
+                    product_name=product_name,
+                    temp_root=temp_root,
+                    install_result=windows_install_result,
+                    installed_sidecar_paths=installed_sidecar_paths,
+                ),
+                env=env,
+            )
+
+        if args.keep_temp or defer_windows_cleanup:
+            reason = (
+                " for deferred Windows cleanup"
+                if defer_windows_cleanup and not args.keep_temp
+                else ""
+            )
+            print(f"packaged desktop smoke temp root kept at {temp_root}{reason}", file=sys.stderr)
+        else:
+            shutil.rmtree(temp_root, ignore_errors=True)
+
+    if result_payload is not None:
+        if cleanup_result is not None:
+            result_payload["cleanup"] = _windows_cleanup_payload(cleanup_result)
+        print(json.dumps(result_payload, indent=2, sort_keys=True))
+        return 0
+
+    if error_message is not None:
         if platform_tag == "windows":
-            install_log_path = windows_install_result.install_log_path if windows_install_result is not None else temp_root / "installer.log"
+            install_log_path = (
+                windows_install_result.install_log_path
+                if windows_install_result is not None
+                else temp_root / "installer.log"
+            )
             install_root = windows_install_result.install_root if windows_install_result is not None else None
-            message = (
-                f"{message}\n"
-                + _windows_install_receipt(
+            message_parts = [
+                error_message,
+                _windows_install_receipt(
                     product_name=product_name,
                     env=env,
                     installer_path=artifact_path,
@@ -1107,15 +1649,21 @@ def main() -> int:
                     install_root=install_root,
                     launch_stdout=launch_stdout,
                     launch_stderr=launch_stderr,
+                ),
+            ]
+            if cleanup_result is not None:
+                message_parts.append(_windows_cleanup_receipt(cleanup_result))
+            elif defer_windows_cleanup and windows_install_result is not None:
+                message_parts.append(
+                    "Windows cleanup receipt:\n"
+                    "- attempted: False\n"
+                    "- note: Cleanup was deferred to a follow-up step."
                 )
-            )
-        print(f"error: {message}", file=sys.stderr)
+            error_message = "\n".join(message_parts)
+        print(f"error: {error_message}", file=sys.stderr)
         return 1
-    finally:
-        if args.keep_temp:
-            print(f"packaged desktop smoke temp root kept at {temp_root}", file=sys.stderr)
-        else:
-            shutil.rmtree(temp_root, ignore_errors=True)
+
+    return 0
 
 
 if __name__ == "__main__":
