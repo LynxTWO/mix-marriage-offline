@@ -282,10 +282,21 @@ jobs:
         shell: bash
         run: xvfb-run -a python tools/smoke_packaged_desktop.py --repo-root .
 
-      - name: Smoke packaged desktop bundle (Windows)
+      - name: Smoke packaged desktop installer (Windows real install)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: python tools/smoke_packaged_desktop.py --repo-root .
+        run: |
+          $bundleRoot = Resolve-Path "gui/desktop-tauri/src-tauri/target/release/bundle"
+          $installer = Get-ChildItem -Path $bundleRoot -Recurse -File |
+            Where-Object { $_.Name -like "*-setup.exe" -or $_.Extension -eq ".msi" } |
+            Sort-Object @{ Expression = { if ($_.Name.ToLowerInvariant().EndsWith("-setup.exe")) { 0 } else { 1 } } }, FullName |
+            Select-Object -First 1
+          if (-not $installer) {
+            throw "Could not find a built Windows installer under $bundleRoot."
+          }
+
+          Write-Host "Smoking packaged installer artifact: $($installer.FullName)"
+          python tools/smoke_packaged_desktop.py --repo-root . --artifact "$($installer.FullName)"
 
       - name: Smoke packaged desktop bundle (macOS)
         if: runner.os == 'macOS'
