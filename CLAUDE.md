@@ -104,6 +104,9 @@ Never delete or modify anything else unless it is an explicit PR change.
 If you need to use local scan outputs, treat them as _inputs only_ and do not
 stage them.
 
+- Do not infer success from artifact existence alone. A written file, completed command, or preserved diagnostic output is not automatically a valid deliverable.
+- Where validity matters, expose explicit machine-readable status, failure reason, and warning state.
+
 ## Engineering thoroughness
 
 Avoid speculative complexity: no abstractions for a single use, no hypothetical
@@ -120,6 +123,12 @@ However, do not skip defensive correctness at real system boundaries:
 - Cover real failure paths users will actually hit in CI or cross-platform
   installs, even if infrequent. Low-probability + high-pain edge cases belong in
   the code.
+- Verify the reported gap before implementing the fix. If the requested behavior is already enforced indirectly, prefer clarifying visibility, coverage, or comments over adding duplicate enforcement.
+- Do not code from audit language alone; inspect the actual code path, contract, and tests first.
+- Validation order should usually be:
+  1. direct-path tests for the changed contract
+  2. adjacent regressions
+  3. broader smoke / packaged / determinism suites only when warranted
 
 The line: no complexity for hypothetical futures; full thoroughness for real
 operating environments.
@@ -140,6 +149,15 @@ model.
   expectations.
 - Plugins must not bypass gates. Plugins may propose or render within contract,
   but must respect gate outcomes and gate feedback.
+
+## Environment truth first
+
+Before making or validating changes, confirm:
+- active branch
+- working directory
+- correct interpreter / venv
+- whether `pytest` and required dependencies exist in that environment
+- exact validation command that will be used
 
 ## Running tests safely (Windows)
 

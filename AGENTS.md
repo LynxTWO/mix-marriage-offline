@@ -30,6 +30,15 @@ All changes must remain install-safe and cross-platform:
 - `python tools/run_policy_fixtures.py` runs policy fixtures and compares
   against expected `ISSUE.VALIDATION.*` IDs.
 
+## Environment Preflight
+
+Before implementing or validating a change, confirm:
+- active branch and working directory
+- correct Python interpreter / virtualenv for this repo
+- whether `pytest` and required extras are installed in that environment
+- exact test command that will be used for verification
+- whether `PYTHONPATH=src` or repo runners are required in this host environment
+
 ## Coding Style & Naming Conventions
 
 - YAML/JSON: use consistent ordering, stable IDs, and explicit units.
@@ -46,6 +55,9 @@ All changes must remain install-safe and cross-platform:
   intentionally.
 - When adding a new rule or policy, add a matching fixture and a minimal test
   that proves it.
+- Run targeted tests for the changed contract first, then adjacent regressions, then broader smoke tests if needed.
+- A test command that did not actually execute in the correct environment does not count as validation.
+- If validation is blocked by environment issues, report the exact blocker and do not present the change as fully verified.
 
 ## Change Discipline
 
@@ -55,11 +67,15 @@ All changes must remain install-safe and cross-platform:
   - one-line imperative title,
   - 3�6 bullets describing what changed and why,
   - short list of files touched.
+- Prefer one shared resolver or contract implementation per concept; do not add parallel desktop-only, CLI-only, or render-only logic unless the divergence is intentional and documented.
+- Verify the reported gap before implementing a fix. If the behavior already exists, improve visibility or coverage instead of duplicating enforcement.
 
 ## Pull Request Notes
 
 - Keep changes small and focused; avoid sweeping refactors.
 - Call out any ontology or schema changes explicitly and link related fixtures.
+- Do not treat artifact existence as proof of success. If output validity matters, expose explicit machine-readable status and failure reasons.
+- Preserve diagnostic artifacts when useful, but keep diagnostics separate from successful deliverables.
 
 ## Living Docs Convention
 

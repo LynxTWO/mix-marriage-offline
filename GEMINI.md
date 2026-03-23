@@ -13,6 +13,14 @@ Read these first (source of truth):
 
 Non-negotiables:
 
+## Execution heuristics from repo history
+
+- Verify the environment before coding: interpreter, venv, pytest availability, required extras, and exact validation command.
+- Verify the reported gap before implementing a fix. If the contract already exists, improve visibility or tests instead of duplicating logic.
+- Prefer one shared resolver per concept. Do not add parallel workflow-specific logic unless the divergence is intentional and documented.
+- Do not infer success from artifact existence. If a file is written but semantically invalid, the result must still be marked invalid.
+- Preserve diagnostics without promoting them to success.
+- Run targeted tests first, then adjacent regressions, then broader smoke/determinism checks.
 - Offline-first, deterministic behavior, explainability, bounded authority.
 - Keep medium/high recommendation contracts explicit: recommendation payloads
   and safe-render receipts must disclose exact deltas, scope, and rollback
