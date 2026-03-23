@@ -421,9 +421,44 @@ test.describe("MMO Tauri screenshot capture", () => {
     ensureOutDir();
     await openScreen(page, "results");
 
+    const deliverablesSummary = {
+      overall_status: "success",
+      deliverable_count: 1,
+      success_count: 1,
+      failed_count: 0,
+      partial_count: 0,
+      invalid_master_count: 0,
+      valid_master_count: 1,
+      mixed_outcomes: false,
+      result_bucket: "valid_master",
+      top_failure_reason: null,
+      top_failure_status: null,
+    };
+    const deliverables = [
+      {
+        deliverable_id: "DELIV.LAYOUT.2_0.2CH",
+        artifact_role: "master",
+        target_layout_id: "LAYOUT.2_0",
+        channel_count: 2,
+        output_ids: ["OUT.001"],
+        status: "success",
+        is_valid_master: true,
+        planned_stem_count: 1,
+        decoded_stem_count: 1,
+        prepared_stem_count: 1,
+        skipped_stem_count: 0,
+        rendered_frame_count: 4800,
+        duration_seconds: 0.1,
+        failure_reason: null,
+        warning_codes: [],
+      },
+    ];
+
     await page.locator("#results-receipt-file-input").setInputFiles(
       jsonFile("safe_render_receipt.json", {
         status: "completed",
+        deliverables_summary: deliverablesSummary,
+        deliverables,
         recommendations_summary: {
           total: 2,
           eligible: 2,
@@ -501,6 +536,8 @@ test.describe("MMO Tauri screenshot capture", () => {
 
     await page.locator("#results-manifest-file-input").setInputFiles(
       jsonFile("render_manifest.json", {
+        deliverables_summary: deliverablesSummary,
+        deliverables,
         renderer_manifests: [
           {
             renderer_id: "PLUGIN.RENDERER.SAFE",
@@ -521,6 +558,8 @@ test.describe("MMO Tauri screenshot capture", () => {
 
     await page.locator("#results-qa-file-input").setInputFiles(
       jsonFile("render_qa.json", {
+        deliverables_summary: deliverablesSummary,
+        deliverables,
         thresholds: {
           correlation_warn_lte: -0.2,
           polarity_error_correlation_lte: -0.6,
@@ -570,7 +609,7 @@ test.describe("MMO Tauri screenshot capture", () => {
     );
 
     await expect(page.locator("#results-readout-primary")).toContainText(
-      "completed",
+      "Valid master render",
     );
     await captureCanonicalViewport(page, "tauri_results_loaded.png", {
       anchorSelector: "[data-widget-id=\"widget.results.summary\"]",

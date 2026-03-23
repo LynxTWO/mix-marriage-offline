@@ -41,6 +41,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `workspace/project` scaffold remains the scope of `project validate`, and the
   validation result now declares that workspace-root scene/render outputs are
   outside that scope instead of implying a full-workspace pass.
+- Safe-render, manifests, receipts, QA payloads, UI bundles, and the Tauri
+  desktop Results screen now share one truthful render-outcome summary:
+  `result_bucket` distinguishes valid masters, partial success,
+  diagnostics-only renders, full failure, and success-without-master cases,
+  while `top_failure_reason` / `top_failure_status` surface the leading failure
+  cause without inferring success from “artifact exists”.
 
 ### Fixed
 
@@ -59,6 +65,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   ref instead of persisting a directory-like pointer, and relative
   `scene.source.stems_dir` refs now resolve correctly through scene lint,
   render-plan bridging, and render-run audio flows.
+- The desktop render/results flow and `safe-render` CLI output no longer say
+  “completed” when only diagnostic artifacts exist: partial runs are marked as
+  partial, diagnostics-only WAVs are labeled as failed/diagnostic masters, and
+  the top failure reason is visible in both the CLI summary line and the
+  desktop Results view.
 
 ## [1.0.0] — 2026-03-17
 

@@ -654,8 +654,43 @@ test.describe("desktop workflow design system", () => {
     await page.goto("/");
     await openScreen(page, "results");
 
+    const deliverablesSummary = {
+      overall_status: "success",
+      deliverable_count: 1,
+      success_count: 1,
+      failed_count: 0,
+      partial_count: 0,
+      invalid_master_count: 0,
+      valid_master_count: 1,
+      mixed_outcomes: false,
+      result_bucket: "valid_master",
+      top_failure_reason: null,
+      top_failure_status: null,
+    };
+    const deliverables = [
+      {
+        deliverable_id: "DELIV.LAYOUT.2_0.2CH",
+        artifact_role: "master",
+        target_layout_id: "LAYOUT.2_0",
+        channel_count: 2,
+        output_ids: ["OUT.001"],
+        status: "success",
+        is_valid_master: true,
+        planned_stem_count: 1,
+        decoded_stem_count: 1,
+        prepared_stem_count: 1,
+        skipped_stem_count: 0,
+        rendered_frame_count: 4800,
+        duration_seconds: 0.1,
+        failure_reason: null,
+        warning_codes: [],
+      },
+    ];
+
     await page.locator("#results-receipt-file-input").setInputFiles(jsonFile("safe_render_receipt.json", {
       status: "completed",
+      deliverables_summary: deliverablesSummary,
+      deliverables,
       recommendations_summary: {
         total: 2,
         eligible: 2,
@@ -730,6 +765,8 @@ test.describe("desktop workflow design system", () => {
       qa_issues: [],
     }));
     await page.locator("#results-manifest-file-input").setInputFiles(jsonFile("render_manifest.json", {
+      deliverables_summary: deliverablesSummary,
+      deliverables,
       renderer_manifests: [
         {
           renderer_id: "PLUGIN.RENDERER.SAFE",
@@ -751,6 +788,8 @@ test.describe("desktop workflow design system", () => {
         correlation_warn_lte: -0.2,
         polarity_error_correlation_lte: -0.6,
       },
+      deliverables_summary: deliverablesSummary,
+      deliverables,
       jobs: [
         {
           job_id: "JOB.001",
@@ -794,11 +833,13 @@ test.describe("desktop workflow design system", () => {
       ],
     }));
 
-    await expect(page.locator("#results-readout-primary")).toContainText("completed");
+    await expect(page.locator("#results-readout-primary")).toContainText("Valid master render");
     await expect(page.locator("#results-change-summary")).toContainText("Applied 1");
+    await expect(page.locator("#results-change-summary")).toContainText("Valid master render");
     await expect(page.locator("#results-what-changed-text")).toContainText("render/2_0/mix.wav");
     await expect(page.locator("#results-qa-text")).toContainText("ISSUE.RENDER.QA.TRUE_PEAK_WARN");
     await expect(page.locator("#artifact-browser-list")).toContainText("render/2_0/mix.wav");
+    await expect(page.locator("#artifact-browser-list")).toContainText("Valid master");
     await expect(page.locator("#results-confidence-list")).toContainText("REC.RENDER.001");
     await expect(page.locator("#results-confidence-list")).toContainText("81% High");
     await expect(page.locator("#results-gain-reduction-value")).toContainText("2.4 dB");
@@ -822,12 +863,263 @@ test.describe("desktop workflow design system", () => {
     await expect(page.locator("#hint-results-phase")).toContainText("Why:");
   });
 
+  test("results screen calls out diagnostics-only render failures", async ({ page }) => {
+    await page.goto("/");
+    await openScreen(page, "results");
+
+    const deliverablesSummary = {
+      overall_status: "failed",
+      deliverable_count: 1,
+      success_count: 0,
+      failed_count: 1,
+      partial_count: 0,
+      invalid_master_count: 0,
+      valid_master_count: 0,
+      mixed_outcomes: false,
+      result_bucket: "full_failure",
+      top_failure_reason: "RENDER_RESULT.NO_DECODABLE_STEMS",
+      top_failure_status: "failed",
+    };
+    const deliverables = [
+      {
+        deliverable_id: "DELIV.LAYOUT.2_0.2CH",
+        artifact_role: "master",
+        target_layout_id: "LAYOUT.2_0",
+        channel_count: 2,
+        output_ids: ["OUT.FAIL.001"],
+        status: "failed",
+        is_valid_master: false,
+        planned_stem_count: 1,
+        decoded_stem_count: 0,
+        prepared_stem_count: 0,
+        skipped_stem_count: 1,
+        rendered_frame_count: 0,
+        duration_seconds: 0,
+        failure_reason: "RENDER_RESULT.NO_DECODABLE_STEMS",
+        warning_codes: ["RENDER_RESULT.NO_DECODABLE_STEMS"],
+      },
+    ];
+
+    await page.locator("#results-receipt-file-input").setInputFiles(jsonFile("safe_render_receipt.json", {
+      status: "blocked",
+      deliverables_summary: deliverablesSummary,
+      deliverables,
+      recommendations_summary: {
+        total: 0,
+        eligible: 0,
+        auto_eligible: 0,
+        approved_by_user: 0,
+        blocked: 0,
+        applied: 0,
+      },
+      qa_issues: [
+        {
+          severity: "error",
+          issue_id: "ISSUE.RENDER.ALL_MASTERS_INVALID",
+          output_path: "render/failed/master.wav",
+          message: "Artifacts were kept for diagnostics, but no valid master was produced.",
+        },
+      ],
+    }));
+    await page.locator("#results-manifest-file-input").setInputFiles(jsonFile("render_manifest.json", {
+      deliverables_summary: deliverablesSummary,
+      deliverables,
+      renderer_manifests: [
+        {
+          renderer_id: "PLUGIN.RENDERER.SAFE",
+          outputs: [
+            {
+              output_id: "OUT.FAIL.001",
+              file_path: "render/failed/master.wav",
+              format: "wav",
+              layout_id: "LAYOUT.2_0",
+            },
+          ],
+          skipped: [],
+        },
+      ],
+    }));
+    await page.locator("#results-qa-file-input").setInputFiles(jsonFile("render_qa.json", {
+      deliverables_summary: deliverablesSummary,
+      deliverables,
+      jobs: [],
+      issues: [
+        {
+          severity: "error",
+          issue_id: "ISSUE.RENDER.QA.SILENT_OUTPUT",
+          output_path: "render/failed/master.wav",
+          message: "Rendered output is effectively silent.",
+        },
+      ],
+      thresholds: {},
+    }));
+
+    await expect(page.locator("#results-readout-primary")).toContainText("Full failure");
+    await expect(page.locator("#results-readout-primary")).toContainText("No decodable stems");
+    await expect(page.locator("#results-change-summary")).toContainText("Reason No decodable stems");
+    await expect(page.locator("#artifact-browser-list")).toContainText("Failed master");
+    await expect(page.locator("#artifact-browser-list")).not.toContainText("Valid master");
+  });
+
+  test("results screen distinguishes partial success across layouts", async ({ page }) => {
+    await page.goto("/");
+    await openScreen(page, "results");
+
+    const deliverablesSummary = {
+      overall_status: "partial",
+      deliverable_count: 2,
+      success_count: 1,
+      failed_count: 1,
+      partial_count: 0,
+      invalid_master_count: 0,
+      valid_master_count: 1,
+      mixed_outcomes: true,
+      result_bucket: "partial_success",
+      top_failure_reason: "RENDER_RESULT.NO_DECODABLE_STEMS",
+      top_failure_status: "failed",
+    };
+    const deliverables = [
+      {
+        deliverable_id: "DELIV.LAYOUT.2_0.2CH",
+        artifact_role: "master",
+        target_layout_id: "LAYOUT.2_0",
+        channel_count: 2,
+        output_ids: ["OUT.OK.001"],
+        status: "success",
+        is_valid_master: true,
+        planned_stem_count: 1,
+        decoded_stem_count: 1,
+        prepared_stem_count: 1,
+        skipped_stem_count: 0,
+        rendered_frame_count: 4800,
+        duration_seconds: 0.1,
+        failure_reason: null,
+        warning_codes: [],
+      },
+      {
+        deliverable_id: "DELIV.LAYOUT.5_1.6CH",
+        artifact_role: "master",
+        target_layout_id: "LAYOUT.5_1",
+        channel_count: 6,
+        output_ids: [],
+        status: "failed",
+        is_valid_master: false,
+        planned_stem_count: null,
+        decoded_stem_count: null,
+        prepared_stem_count: null,
+        skipped_stem_count: null,
+        rendered_frame_count: null,
+        duration_seconds: null,
+        failure_reason: "RENDER_RESULT.NO_DECODABLE_STEMS",
+        warning_codes: ["RENDER_RESULT.NO_DECODABLE_STEMS"],
+      },
+    ];
+
+    await page.locator("#results-receipt-file-input").setInputFiles(jsonFile("safe_render_receipt.json", {
+      status: "completed",
+      deliverables_summary: deliverablesSummary,
+      deliverables,
+      recommendations_summary: {
+        total: 1,
+        eligible: 1,
+        auto_eligible: 1,
+        approved_by_user: 0,
+        blocked: 0,
+        applied: 1,
+      },
+      applied_recommendations: [
+        {
+          recommendation_id: "REC.RENDER.010",
+          action_id: "ACTION.UTILITY.GAIN",
+          scope: { stem_id: "STEM.KICK" },
+          deltas: [
+            {
+              param_id: "PARAM.UTILITY.GAIN_DB",
+              from: 0,
+              to: -1.0,
+              unit: "dB",
+              confidence: 0.72,
+              evidence_ref: "EVID.GAIN.010",
+            },
+          ],
+        },
+      ],
+      qa_issues: [],
+    }));
+    await page.locator("#results-manifest-file-input").setInputFiles(jsonFile("render_manifest.json", {
+      deliverables_summary: deliverablesSummary,
+      deliverables,
+      renderer_manifests: [
+        {
+          renderer_id: "PLUGIN.RENDERER.SAFE",
+          outputs: [
+            {
+              output_id: "OUT.OK.001",
+              file_path: "render/2_0/master.wav",
+              format: "wav",
+              layout_id: "LAYOUT.2_0",
+            },
+          ],
+          skipped: [],
+        },
+      ],
+    }));
+    await page.locator("#results-qa-file-input").setInputFiles(jsonFile("render_qa.json", {
+      deliverables_summary: deliverablesSummary,
+      deliverables,
+      jobs: [],
+      issues: [],
+      thresholds: {},
+    }));
+
+    await expect(page.locator("#results-readout-primary")).toContainText("Partial success");
+    await expect(page.locator("#results-readout-primary")).toContainText("No decodable stems");
+    await expect(page.locator("#results-change-summary")).toContainText("Valid masters 1");
+    await expect(page.locator("#results-change-summary")).toContainText("Failed 1");
+    await expect(page.locator("#results-change-summary")).toContainText("Reason No decodable stems");
+  });
+
   test("results artifact browser supports arrow-key selection", async ({ page }) => {
     await page.goto("/");
     await openScreen(page, "results");
 
+    const deliverablesSummary = {
+      overall_status: "success",
+      deliverable_count: 1,
+      success_count: 1,
+      failed_count: 0,
+      partial_count: 0,
+      invalid_master_count: 0,
+      valid_master_count: 1,
+      mixed_outcomes: false,
+      result_bucket: "valid_master",
+      top_failure_reason: null,
+      top_failure_status: null,
+    };
+    const deliverables = [
+      {
+        deliverable_id: "DELIV.LAYOUT.2_0.2CH",
+        artifact_role: "master",
+        target_layout_id: "LAYOUT.2_0",
+        channel_count: 2,
+        output_ids: ["OUT.001"],
+        status: "success",
+        is_valid_master: true,
+        planned_stem_count: 1,
+        decoded_stem_count: 1,
+        prepared_stem_count: 1,
+        skipped_stem_count: 0,
+        rendered_frame_count: 4800,
+        duration_seconds: 0.1,
+        failure_reason: null,
+        warning_codes: [],
+      },
+    ];
+
     await page.locator("#results-receipt-file-input").setInputFiles(jsonFile("safe_render_receipt.json", {
       status: "completed",
+      deliverables_summary: deliverablesSummary,
+      deliverables,
       recommendations_summary: {
         total: 1,
         eligible: 1,
@@ -855,6 +1147,8 @@ test.describe("desktop workflow design system", () => {
       ],
     }));
     await page.locator("#results-manifest-file-input").setInputFiles(jsonFile("render_manifest.json", {
+      deliverables_summary: deliverablesSummary,
+      deliverables,
       renderer_manifests: [
         {
           renderer_id: "PLUGIN.RENDERER.SAFE",

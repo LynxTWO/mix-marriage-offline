@@ -15,6 +15,7 @@ from mmo.core.deliverables_index import (
 )
 from mmo.core.deliverables import summarize_deliverables
 from mmo.core.deliverables import (
+    RENDER_RESULT_NO_OUTPUT_ARTIFACT,
     RENDER_RESULT_NO_DECODABLE_STEMS,
     RENDER_RESULT_SILENT_OUTPUT,
 )
@@ -264,8 +265,27 @@ def _portable_renderer_manifests(
     )
 
 
-def _deliverable_result_payload(deliverables: list[dict[str, Any]]) -> dict[str, Any]:
-    return summarize_deliverables(deliverables)
+def _deliverable_result_payload(
+    deliverables: list[dict[str, Any]],
+    *,
+    fallback_status: str | None = None,
+    fallback_failure_reason: str | None = None,
+) -> dict[str, Any]:
+    return summarize_deliverables(
+        deliverables,
+        fallback_status=fallback_status,
+        fallback_failure_reason=fallback_failure_reason,
+    )
+
+
+def _deliverable_result_bucket(summary: dict[str, Any]) -> str:
+    return _coerce_str(summary.get("result_bucket")).strip() or (
+        _coerce_str(summary.get("overall_status")).strip() or "none"
+    )
+
+
+def _deliverable_top_failure_reason(summary: dict[str, Any]) -> str:
+    return _coerce_str(summary.get("top_failure_reason")).strip()
 
 
 def _master_deliverables_invalid_for_safe_render(
@@ -533,12 +553,18 @@ def _run_render_command(
     )
     print(
         "render:"
-        f" result={_coerce_str(deliverables_summary.get('overall_status')).strip() or 'none'}"
+        f" result={_deliverable_result_bucket(deliverables_summary)}"
+        f" overall_status={_coerce_str(deliverables_summary.get('overall_status')).strip() or 'none'}"
         f" deliverables={deliverables_summary.get('deliverable_count', 0)}"
         f" success={deliverables_summary.get('success_count', 0)}"
         f" partial={deliverables_summary.get('partial_count', 0)}"
         f" failed={deliverables_summary.get('failed_count', 0)}"
-        f" invalid_master={deliverables_summary.get('invalid_master_count', 0)}",
+        f" invalid_master={deliverables_summary.get('invalid_master_count', 0)}"
+        + (
+            f" top_failure_reason={_deliverable_top_failure_reason(deliverables_summary)}"
+            if _deliverable_top_failure_reason(deliverables_summary)
+            else ""
+        ),
         file=sys.stderr,
     )
     return 0
@@ -665,12 +691,18 @@ def _run_apply_command(
     )
     print(
         "apply:"
-        f" result={_coerce_str(deliverables_summary.get('overall_status')).strip() or 'none'}"
+        f" result={_deliverable_result_bucket(deliverables_summary)}"
+        f" overall_status={_coerce_str(deliverables_summary.get('overall_status')).strip() or 'none'}"
         f" deliverables={deliverables_summary.get('deliverable_count', 0)}"
         f" success={deliverables_summary.get('success_count', 0)}"
         f" partial={deliverables_summary.get('partial_count', 0)}"
         f" failed={deliverables_summary.get('failed_count', 0)}"
-        f" invalid_master={deliverables_summary.get('invalid_master_count', 0)}",
+        f" invalid_master={deliverables_summary.get('invalid_master_count', 0)}"
+        + (
+            f" top_failure_reason={_deliverable_top_failure_reason(deliverables_summary)}"
+            if _deliverable_top_failure_reason(deliverables_summary)
+            else ""
+        ),
         file=sys.stderr,
     )
 
@@ -2837,8 +2869,15 @@ def _run_safe_render_command(
             preview_skipped = preview_manifest.get("skipped")
             preview_output_count = len(preview_outputs) if isinstance(preview_outputs, list) else 0
             preview_skipped_count = len(preview_skipped) if isinstance(preview_skipped, list) else 0
+        output_count = _count_manifest_outputs(manifests)
         deliverables = build_deliverables_for_renderer_manifests(manifests)
-        deliverables_summary = _deliverable_result_payload(deliverables)
+        deliverables_summary = _deliverable_result_payload(
+            deliverables,
+            fallback_status="failed" if output_count == 0 else None,
+            fallback_failure_reason=(
+                RENDER_RESULT_NO_OUTPUT_ARTIFACT if output_count == 0 else None
+            ),
+        )
         render_manifest = {
             "schema_version": "0.1.0",
             "report_id": _coerce_str(report.get("report_id")),
@@ -2859,7 +2898,6 @@ def _run_safe_render_command(
                 json.dumps(render_manifest, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
-        output_count = _count_manifest_outputs(manifests)
         no_outputs_issue: dict[str, Any] | None = None
         all_masters_invalid_issue: dict[str, Any] | None = None
         if output_count == 0:
@@ -3039,10 +3077,12 @@ def _run_safe_render_command(
                 else []
             ),
         )
-        render_result_status = (
+        render_result_status = _deliverable_result_bucket(deliverables_summary)
+        render_overall_status = (
             _coerce_str(deliverables_summary.get("overall_status")).strip()
             or ("failed" if output_count == 0 else "success")
         )
+        top_failure_reason = _deliverable_top_failure_reason(deliverables_summary)
         receipt = {
             "schema_version": "0.1.0",
             "receipt_id": receipt_id,
@@ -3079,6 +3119,7 @@ def _run_safe_render_command(
                 f"renderers={','.join(renderer_ids) if renderer_ids else '<none>'}",
                 f"outputs={output_count}",
                 f"deliverable_result={render_result_status}",
+                f"deliverable_overall_status={render_overall_status}",
                 f"allow_empty_outputs={'true' if allow_empty_outputs else 'false'}",
                 (
                     "headphone_preview="
@@ -3133,6 +3174,8 @@ def _run_safe_render_command(
             "fallback_final_outcome="
             f"{_coerce_str(fallback_final.get('final_outcome')).strip() or 'not_run'}"
         )
+        if top_failure_reason:
+            receipt["notes"].append(f"top_failure_reason={top_failure_reason}")
         if no_outputs_issue is not None:
             receipt["notes"].append(f"{ISSUE_RENDER_NO_OUTPUTS}: {_NO_OUTPUTS_WARNING_MESSAGE}")
         if all_masters_invalid_issue is not None:
@@ -3194,16 +3237,23 @@ def _run_safe_render_command(
             )
 
         print(
-            f"safe-render: completed"
+            f"safe-render:"
             f" result={render_result_status}"
+            f" overall_status={render_overall_status}"
             f" deliverables={deliverables_summary.get('deliverable_count', 0)}"
+            f" valid_masters={deliverables_summary.get('valid_master_count', 0)}"
             f" success={deliverables_summary.get('success_count', 0)}"
             f" partial={deliverables_summary.get('partial_count', 0)}"
             f" failed={deliverables_summary.get('failed_count', 0)}"
             f" invalid_master={deliverables_summary.get('invalid_master_count', 0)}"
             f" outputs={output_count}"
             f" qa_errors={qa_error_count}"
-            f" qa_warns={len(qa_issues) - qa_error_count}",
+            f" qa_warns={len(qa_issues) - qa_error_count}"
+            + (
+                f" top_failure_reason={top_failure_reason}"
+                if top_failure_reason
+                else ""
+            ),
             file=sys.stderr,
         )
         return exit_code

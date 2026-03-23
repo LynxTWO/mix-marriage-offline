@@ -74,6 +74,21 @@ def _write_16bit_wav(
         handle.writeframes(struct.pack(f"<{len(samples)}h", *samples))
 
 
+def _write_empty_wav(path: Path, *, channels: int = 2, rate: int = 48000) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(channels)
+        handle.setsampwidth(2)
+        handle.setframerate(rate)
+        handle.writeframes(b"")
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
 def _write_hot_wav(
     path: Path,
     *,
@@ -570,6 +585,67 @@ class TestSafeRenderWorkspaceResolution(unittest.TestCase):
 class TestSafeRenderFullRender(unittest.TestCase):
     """Full render: audio is written, receipt + manifest produced."""
 
+    def _run_safe_render_with_mocked_renderers(
+        self,
+        *,
+        manifest_builder,
+    ) -> tuple[int, dict, dict, dict, str]:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            stems_dir = temp / "stems"
+            _write_16bit_wav(stems_dir / "kick.wav", amplitude=0.45)
+
+            report = _make_report(
+                stems_dir,
+                "kick.wav",
+                "kick",
+                clip_count=0,
+                peak_dbfs=-6.0,
+                recommendations=[],
+            )
+            report_path = temp / "report.json"
+            report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+            out_dir = temp / "renders"
+            manifest_path = temp / "render_manifest.json"
+            qa_path = temp / "qa.json"
+            receipt_path = temp / "receipt.json"
+
+            def _fake_run_renderers(*_args, **kwargs) -> list[dict]:
+                output_dir = kwargs.get("output_dir")
+                self.assertIsInstance(output_dir, Path)
+                if not isinstance(output_dir, Path):
+                    return []
+                return manifest_builder(output_dir)
+
+            with mock.patch("mmo.core.pipeline.load_plugins", return_value=[]):
+                with mock.patch("mmo.core.pipeline.run_renderers", side_effect=_fake_run_renderers):
+                    exit_code, _stdout, stderr = _run_main(
+                        [
+                            "safe-render",
+                            "--report",
+                            str(report_path),
+                            "--plugins",
+                            str(_PLUGINS_DIR),
+                            "--target",
+                            "stereo",
+                            "--out-dir",
+                            str(out_dir),
+                            "--out-manifest",
+                            str(manifest_path),
+                            "--qa-out",
+                            str(qa_path),
+                            "--receipt-out",
+                            str(receipt_path),
+                            "--force",
+                        ]
+                    )
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            qa = json.loads(qa_path.read_text(encoding="utf-8"))
+            return exit_code, manifest, receipt, qa, stderr
+
     def test_full_render_low_risk_auto_applied(self) -> None:
         schema = json.loads(
             (_SCHEMAS_DIR / "safe_render_receipt.schema.json").read_text(encoding="utf-8")
@@ -743,6 +819,8 @@ class TestSafeRenderFullRender(unittest.TestCase):
             self.assertEqual(receipt_summary, manifest_summary)
             self.assertEqual(qa_summary, manifest_summary)
             self.assertGreater(manifest_summary.get("deliverable_count", 0), 0)
+            self.assertEqual(manifest_summary.get("result_bucket"), "valid_master")
+            self.assertIsNone(manifest_summary.get("top_failure_reason"))
 
             deliverables = manifest.get("deliverables")
             self.assertIsInstance(deliverables, list)
@@ -765,11 +843,182 @@ class TestSafeRenderFullRender(unittest.TestCase):
 
             overall_status = str(manifest_summary.get("overall_status") or "").strip()
             self.assertTrue(overall_status)
-            self.assertIn(f"result={overall_status}", stderr)
+            self.assertIn("result=valid_master", stderr)
+            self.assertIn(f"overall_status={overall_status}", stderr)
             self.assertIn(
                 f"deliverables={manifest_summary.get('deliverable_count', 0)}",
                 stderr,
             )
+
+    def test_cli_exit_code_zero_for_valid_master_summary(self) -> None:
+        def _manifest_builder(out_dir: Path) -> list[dict]:
+            output_path = out_dir / "LAYOUT.2_0" / "master.wav"
+            _write_16bit_wav(output_path, channels=2, amplitude=0.35)
+            return [
+                {
+                    "renderer_id": "PLUGIN.RENDERER.SAFE",
+                    "outputs": [
+                        {
+                            "output_id": "OUT.STEREO.WAV",
+                            "file_path": "LAYOUT.2_0/master.wav",
+                            "format": "wav",
+                            "layout_id": "LAYOUT.2_0",
+                            "channel_count": 2,
+                            "sample_rate_hz": 48000,
+                            "sha256": _sha256_file(output_path),
+                            "metadata": {
+                                "artifact_role": "master",
+                                "target_layout_id": "LAYOUT.2_0",
+                                "render_result": {
+                                    "artifact_role": "master",
+                                    "planned_stem_count": 1,
+                                    "decoded_stem_count": 1,
+                                    "prepared_stem_count": 1,
+                                    "skipped_stem_count": 0,
+                                    "rendered_frame_count": 4800,
+                                    "duration_seconds": 0.1,
+                                    "warning_codes": [],
+                                    "target_layout_id": "LAYOUT.2_0",
+                                },
+                            },
+                        }
+                    ],
+                    "skipped": [],
+                }
+            ]
+
+        exit_code, manifest, receipt, qa, stderr = self._run_safe_render_with_mocked_renderers(
+            manifest_builder=_manifest_builder,
+        )
+
+        self.assertEqual(exit_code, 0, msg=stderr)
+        manifest_summary = manifest.get("deliverables_summary")
+        self.assertEqual(receipt.get("deliverables_summary"), manifest_summary)
+        self.assertEqual(qa.get("deliverables_summary"), manifest_summary)
+        self.assertIsInstance(manifest_summary, dict)
+        if not isinstance(manifest_summary, dict):
+            return
+        self.assertEqual(manifest_summary.get("overall_status"), "success")
+        self.assertEqual(manifest_summary.get("result_bucket"), "valid_master")
+        self.assertIsNone(manifest_summary.get("top_failure_reason"))
+        self.assertIn("result=valid_master", stderr)
+
+    def test_cli_exit_code_zero_for_partial_success_summary(self) -> None:
+        def _manifest_builder(out_dir: Path) -> list[dict]:
+            output_path = out_dir / "LAYOUT.2_0" / "master.wav"
+            _write_16bit_wav(output_path, channels=2, amplitude=0.35)
+            return [
+                {
+                    "renderer_id": "PLUGIN.RENDERER.SAFE",
+                    "outputs": [
+                        {
+                            "output_id": "OUT.STEREO.WAV",
+                            "file_path": "LAYOUT.2_0/master.wav",
+                            "format": "wav",
+                            "layout_id": "LAYOUT.2_0",
+                            "channel_count": 2,
+                            "sample_rate_hz": 48000,
+                            "sha256": _sha256_file(output_path),
+                            "metadata": {
+                                "artifact_role": "master",
+                                "target_layout_id": "LAYOUT.2_0",
+                                "render_result": {
+                                    "artifact_role": "master",
+                                    "planned_stem_count": 1,
+                                    "decoded_stem_count": 1,
+                                    "prepared_stem_count": 1,
+                                    "skipped_stem_count": 0,
+                                    "rendered_frame_count": 4800,
+                                    "duration_seconds": 0.1,
+                                    "warning_codes": [],
+                                    "target_layout_id": "LAYOUT.2_0",
+                                },
+                            },
+                        }
+                    ],
+                    "notes": "LAYOUT.5_1:rendered_silence:no_decodable_stems",
+                    "skipped": [],
+                }
+            ]
+
+        exit_code, manifest, receipt, qa, stderr = self._run_safe_render_with_mocked_renderers(
+            manifest_builder=_manifest_builder,
+        )
+
+        self.assertEqual(exit_code, 0, msg=stderr)
+        manifest_summary = manifest.get("deliverables_summary")
+        self.assertEqual(receipt.get("deliverables_summary"), manifest_summary)
+        self.assertEqual(qa.get("deliverables_summary"), manifest_summary)
+        self.assertIsInstance(manifest_summary, dict)
+        if not isinstance(manifest_summary, dict):
+            return
+        self.assertEqual(manifest_summary.get("overall_status"), "partial")
+        self.assertEqual(manifest_summary.get("result_bucket"), "partial_success")
+        self.assertEqual(
+            manifest_summary.get("top_failure_reason"),
+            "RENDER_RESULT.NO_DECODABLE_STEMS",
+        )
+        self.assertIn("result=partial_success", stderr)
+        self.assertIn("top_failure_reason=RENDER_RESULT.NO_DECODABLE_STEMS", stderr)
+
+    def test_cli_exit_code_one_for_full_failure_summary(self) -> None:
+        def _manifest_builder(out_dir: Path) -> list[dict]:
+            output_path = out_dir / "LAYOUT.2_0" / "master.wav"
+            _write_empty_wav(output_path, channels=2)
+            return [
+                {
+                    "renderer_id": "PLUGIN.RENDERER.SAFE",
+                    "outputs": [
+                        {
+                            "output_id": "OUT.STEREO.WAV",
+                            "file_path": "LAYOUT.2_0/master.wav",
+                            "format": "wav",
+                            "layout_id": "LAYOUT.2_0",
+                            "channel_count": 2,
+                            "sample_rate_hz": 48000,
+                            "sha256": _sha256_file(output_path),
+                            "metadata": {
+                                "artifact_role": "master",
+                                "target_layout_id": "LAYOUT.2_0",
+                                "render_result": {
+                                    "artifact_role": "master",
+                                    "planned_stem_count": 1,
+                                    "decoded_stem_count": 0,
+                                    "prepared_stem_count": 0,
+                                    "skipped_stem_count": 1,
+                                    "rendered_frame_count": 0,
+                                    "duration_seconds": 0.0,
+                                    "failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+                                    "warning_codes": ["RENDER_RESULT.NO_DECODABLE_STEMS"],
+                                    "target_layout_id": "LAYOUT.2_0",
+                                },
+                            },
+                        }
+                    ],
+                    "skipped": [],
+                }
+            ]
+
+        exit_code, manifest, receipt, qa, stderr = self._run_safe_render_with_mocked_renderers(
+            manifest_builder=_manifest_builder,
+        )
+
+        self.assertEqual(exit_code, 1, msg=stderr)
+        manifest_summary = manifest.get("deliverables_summary")
+        self.assertEqual(receipt.get("deliverables_summary"), manifest_summary)
+        self.assertEqual(qa.get("deliverables_summary"), manifest_summary)
+        self.assertIsInstance(manifest_summary, dict)
+        if not isinstance(manifest_summary, dict):
+            return
+        self.assertEqual(manifest_summary.get("overall_status"), "failed")
+        self.assertEqual(manifest_summary.get("result_bucket"), "full_failure")
+        self.assertEqual(
+            manifest_summary.get("top_failure_reason"),
+            "RENDER_RESULT.NO_DECODABLE_STEMS",
+        )
+        self.assertEqual(receipt.get("status"), "blocked")
+        self.assertIn("result=full_failure", stderr)
+        self.assertIn("top_failure_reason=RENDER_RESULT.NO_DECODABLE_STEMS", stderr)
 
     def test_full_render_zero_decoded_artifacts_are_preserved_but_fail(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -823,6 +1072,11 @@ class TestSafeRenderFullRender(unittest.TestCase):
             if not isinstance(manifest_summary, dict):
                 return
             self.assertEqual(manifest_summary.get("overall_status"), "failed")
+            self.assertEqual(manifest_summary.get("result_bucket"), "full_failure")
+            self.assertEqual(
+                manifest_summary.get("top_failure_reason"),
+                "RENDER_RESULT.NO_DECODABLE_STEMS",
+            )
             self.assertEqual(manifest_summary.get("valid_master_count"), 0)
 
             deliverables = manifest.get("deliverables")
@@ -860,6 +1114,7 @@ class TestSafeRenderFullRender(unittest.TestCase):
             self.assertIn("ISSUE.RENDER.ALL_MASTERS_INVALID", error_ids)
             self.assertIn("ISSUE.RENDER.QA.SILENT_OUTPUT", error_ids)
             self.assertIn("all rendered masters are invalid", stderr)
+            self.assertIn("result=full_failure", stderr)
 
     def test_full_render_preview_headphones_writes_binaural_outputs(self) -> None:
         recs = [

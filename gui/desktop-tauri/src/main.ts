@@ -42,7 +42,7 @@ import {
 
 type CommandStage = "analyze" | "compare" | "doctor" | "render" | "scene" | "validate";
 type StageKey = Exclude<CommandStage, "doctor">;
-type StageState = "fail" | "idle" | "pass" | "running";
+type StageState = "fail" | "idle" | "pass" | "running" | "warn";
 type CompareState = "A" | "B";
 type ArtifactTag = "ALL" | "AUDIO" | "JSON" | "QA" | "RECEIPT";
 type SceneLockStatusTone = "error" | "info" | "ok";
@@ -128,6 +128,23 @@ const SCREEN_SHORTCUT_LABELS: Record<ScreenKey, string> = {
 
 type ChangeSummaryChip = {
   label: string;
+  tone: "danger" | "info" | "ok" | "warn";
+};
+
+type DeliverableResultBucket =
+  | "diagnostics_only"
+  | "full_failure"
+  | "partial_success"
+  | "success_no_master"
+  | "unknown"
+  | "valid_master";
+
+type RenderOutcomeSummary = {
+  bucket: DeliverableResultBucket;
+  deliverablesSummary: JsonObject;
+  label: string;
+  topFailureReason: string | null;
+  topFailureReasonLabel: string | null;
   tone: "danger" | "info" | "ok" | "warn";
 };
 
@@ -2616,7 +2633,243 @@ function flattenManifestOutputs(manifest: JsonObject | null): JsonObject[] {
   return outputs;
 }
 
-function artifactPreviewForOutput(output: JsonObject): string {
+const DELIVERABLE_FAILURE_REASON_LABELS: Record<string, string> = {
+  "RENDER_RESULT.DOWNMIX_QA_FAILED": "Downmix similarity QA failed",
+  "RENDER_RESULT.FALLBACK_APPLIED": "Fallback processing was required",
+  "RENDER_RESULT.MISSING_CHANNEL_ORDER": "Missing channel order metadata",
+  "RENDER_RESULT.NO_DECODABLE_STEMS": "No decodable stems",
+  "RENDER_RESULT.NO_OUTPUT_ARTIFACT": "No output artifacts were written",
+  "RENDER_RESULT.PLACEMENT_POLICY_UNAVAILABLE": "Placement policy unavailable",
+  "RENDER_RESULT.SAFETY_COLLAPSE_APPLIED": "Safety collapse was applied",
+  "RENDER_RESULT.SILENT_OUTPUT": "Rendered output is effectively silent",
+  "RENDER_RESULT.STEM_DECODE_FAILED": "Stem decode failed",
+  "RENDER_RESULT.STEMS_SKIPPED": "Some stems were skipped",
+};
+
+function resolveDeliverables(
+  receipt: JsonObject | null,
+  manifest: JsonObject | null,
+  qa: JsonObject | null,
+): JsonObject[] {
+  const candidates = [
+    asArray(manifest?.deliverables),
+    asArray(receipt?.deliverables),
+    asArray(qa?.deliverables),
+  ];
+  for (const candidate of candidates) {
+    const deliverables = candidate
+      .map(asObject)
+      .filter((row): row is JsonObject => row !== null);
+    if (deliverables.length > 0) {
+      return deliverables;
+    }
+  }
+  return [];
+}
+
+function deliverableFailureReason(deliverable: JsonObject): string | null {
+  const explicitReason = asString(deliverable.failure_reason).trim();
+  if (explicitReason) {
+    return explicitReason;
+  }
+  const warningCodes = asArray(deliverable.warning_codes)
+    .map(asString)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return warningCodes[0] ?? null;
+}
+
+function humanizeFailureReason(reason: string): string {
+  const normalized = reason.trim();
+  if (!normalized) {
+    return "Unknown failure";
+  }
+  const mapped = DELIVERABLE_FAILURE_REASON_LABELS[normalized];
+  if (mapped) {
+    return mapped;
+  }
+  const segments = normalized.split(".");
+  const suffix = normalized.includes(".")
+    ? (segments[segments.length - 1] || normalized)
+    : normalized;
+  return suffix
+    .toLowerCase()
+    .split("_")
+    .filter(Boolean)
+    .map((token) => token[0].toUpperCase() + token.slice(1))
+    .join(" ");
+}
+
+function deriveDeliverableResultBucket(summary: JsonObject): DeliverableResultBucket {
+  const explicitBucket = asString(summary.result_bucket).trim();
+  if (
+    explicitBucket === "diagnostics_only"
+    || explicitBucket === "full_failure"
+    || explicitBucket === "partial_success"
+    || explicitBucket === "success_no_master"
+    || explicitBucket === "valid_master"
+  ) {
+    return explicitBucket;
+  }
+
+  const overallStatus = asString(summary.overall_status).trim();
+  const validMasterCount = asNumber(summary.valid_master_count) ?? 0;
+  if (overallStatus === "success") {
+    return validMasterCount > 0 ? "valid_master" : "success_no_master";
+  }
+  if (overallStatus === "partial") {
+    return "partial_success";
+  }
+  if (overallStatus === "invalid_master") {
+    return "diagnostics_only";
+  }
+  if (overallStatus === "failed") {
+    return "full_failure";
+  }
+  return "unknown";
+}
+
+function renderOutcomeLabel(bucket: DeliverableResultBucket): string {
+  switch (bucket) {
+    case "valid_master":
+      return "Valid master render";
+    case "success_no_master":
+      return "Successful artifacts (no master)";
+    case "partial_success":
+      return "Partial success";
+    case "diagnostics_only":
+      return "Invalid render with diagnostics";
+    case "full_failure":
+      return "Full failure";
+    default:
+      return "Unknown render result";
+  }
+}
+
+function renderOutcomeTone(bucket: DeliverableResultBucket): "danger" | "info" | "ok" | "warn" {
+  switch (bucket) {
+    case "valid_master":
+      return "ok";
+    case "partial_success":
+      return "warn";
+    case "diagnostics_only":
+    case "full_failure":
+      return "danger";
+    case "success_no_master":
+    case "unknown":
+    default:
+      return "info";
+  }
+}
+
+function resolveRenderOutcomeSummary(
+  receipt: JsonObject | null,
+  manifest: JsonObject | null,
+  qa: JsonObject | null,
+): RenderOutcomeSummary | null {
+  const deliverablesSummary = resolveDeliverablesSummary(receipt, manifest, qa);
+  if (deliverablesSummary === null) {
+    return null;
+  }
+
+  const deliverables = resolveDeliverables(receipt, manifest, qa);
+  const bucket = deriveDeliverableResultBucket(deliverablesSummary);
+  let topFailureReason = asString(deliverablesSummary.top_failure_reason).trim() || null;
+  if (topFailureReason === null) {
+    const rankedFailures = deliverables
+      .map((deliverable) => {
+        const status = asString(deliverable.status).trim();
+        const reason = deliverableFailureReason(deliverable);
+        let priority = 99;
+        if (status === "failed") {
+          priority = 0;
+        } else if (status === "invalid_master") {
+          priority = 1;
+        } else if (status === "partial") {
+          priority = 2;
+        }
+        return { priority, reason, status };
+      })
+      .filter((row) => row.priority < 99 && row.reason);
+    rankedFailures.sort((left, right) => {
+      return left.priority - right.priority || String(left.reason).localeCompare(String(right.reason));
+    });
+    topFailureReason = rankedFailures[0]?.reason ?? null;
+  }
+
+  return {
+    bucket,
+    deliverablesSummary,
+    label: renderOutcomeLabel(bucket),
+    topFailureReason,
+    topFailureReasonLabel: topFailureReason ? humanizeFailureReason(topFailureReason) : null,
+    tone: renderOutcomeTone(bucket),
+  };
+}
+
+function resolveOutputDeliverable(output: JsonObject, deliverables: JsonObject[]): JsonObject | null {
+  const outputId = asString(output.output_id).trim();
+  if (!outputId) {
+    return null;
+  }
+  return deliverables.find((deliverable) => {
+    return asArray(deliverable.output_ids).map(asString).includes(outputId);
+  }) ?? null;
+}
+
+function summarizeManifestArtifact(
+  receipt: JsonObject | null,
+  manifest: JsonObject | null,
+  qa: JsonObject | null,
+): string {
+  const outputCount = flattenManifestOutputs(manifest).length;
+  const renderOutcome = resolveRenderOutcomeSummary(receipt, manifest, qa);
+  if (renderOutcome === null) {
+    return `${outputCount} output artifact(s) in manifest`;
+  }
+  const summary = renderOutcome.deliverablesSummary;
+  return [
+    renderOutcome.label,
+    renderOutcome.topFailureReasonLabel ? `reason=${renderOutcome.topFailureReasonLabel}` : "",
+    `outputs=${outputCount}`,
+    `valid_masters=${asNumber(summary.valid_master_count) ?? 0}`,
+  ].filter(Boolean).join(" · ");
+}
+
+function summarizeOutputArtifact(output: JsonObject, deliverable: JsonObject | null): string {
+  const parts: string[] = [];
+  if (deliverable !== null) {
+    const artifactRole = asString(deliverable.artifact_role).trim();
+    const status = asString(deliverable.status).trim();
+    if (artifactRole === "master") {
+      if (deliverable.is_valid_master === true) {
+        parts.push("Valid master");
+      } else if (status === "invalid_master") {
+        parts.push("Diagnostic master");
+      } else if (status === "failed") {
+        parts.push("Failed master");
+      } else if (status === "partial") {
+        parts.push("Partial master");
+      } else {
+        parts.push("Master artifact");
+      }
+    } else if (artifactRole === "processed_stem") {
+      parts.push(status === "partial" ? "Partial stem artifact" : "Processed stem");
+    } else if (artifactRole === "processed_bus") {
+      parts.push(status === "partial" ? "Partial bus artifact" : "Processed bus");
+    }
+
+    const failureReason = deliverableFailureReason(deliverable);
+    if (failureReason !== null && status !== "success") {
+      parts.push(humanizeFailureReason(failureReason));
+    }
+  }
+  parts.push(asString(output.format) || "audio");
+  parts.push(asString(output.renderer_id) || "renderer");
+  return parts.filter(Boolean).join(" · ");
+}
+
+function artifactPreviewForOutput(output: JsonObject, deliverable: JsonObject | null = null): string {
   const lines = [
     `renderer_id=${asString(output.renderer_id) || "-"}`,
     `output_id=${asString(output.output_id) || "-"}`,
@@ -2625,11 +2878,21 @@ function artifactPreviewForOutput(output: JsonObject): string {
     `format=${asString(output.format) || "-"}`,
     `recommendation_id=${asString(output.recommendation_id) || "-"}`,
   ];
+  if (deliverable !== null) {
+    lines.push(`deliverable_status=${asString(deliverable.status) || "-"}`);
+    lines.push(`is_valid_master=${String(deliverable.is_valid_master === true)}`);
+    lines.push(`failure_reason=${deliverableFailureReason(deliverable) || "-"}`);
+  }
   return lines.join("\n");
 }
 
 function buildArtifactEntries(paths: WorkflowPaths | null): ArtifactEntry[] {
   const entries: ArtifactEntry[] = [];
+  const deliverables = resolveDeliverables(
+    state.artifacts.receipt,
+    state.artifacts.manifest,
+    state.artifacts.qa,
+  );
 
   const pushJsonEntry = (
     id: string,
@@ -2670,7 +2933,11 @@ function buildArtifactEntries(paths: WorkflowPaths | null): ArtifactEntry[] {
     state.artifactSources.manifestPath || paths?.renderManifestPath || "",
     "JSON",
     state.artifacts.manifest,
-    `${flattenManifestOutputs(state.artifacts.manifest).length} output artifact(s) in manifest`,
+    summarizeManifestArtifact(
+      state.artifacts.receipt,
+      state.artifacts.manifest,
+      state.artifacts.qa,
+    ),
   );
   pushJsonEntry(
     "qa",
@@ -2693,12 +2960,13 @@ function buildArtifactEntries(paths: WorkflowPaths | null): ArtifactEntry[] {
     const outputId = asString(output.output_id) || asString(output.file_path);
     const rawPath = asString(output.file_path);
     const resolvedPath = resolveArtifactPath(rawPath, paths);
+    const deliverable = resolveOutputDeliverable(output, deliverables);
     entries.push({
       id: `audio:${outputId}`,
       path: resolvedPath || rawPath,
-      previewText: artifactPreviewForOutput(output),
+      previewText: artifactPreviewForOutput(output, deliverable),
       resolvedPath,
-      summary: `${asString(output.renderer_id) || "renderer"} · ${asString(output.format) || "audio"}`,
+      summary: summarizeOutputArtifact(output, deliverable),
       tag: "AUDIO",
       title: rawPath || outputId,
     });
@@ -3260,16 +3528,18 @@ function summarizeReceipt(receipt: JsonObject | null, manifest: JsonObject | nul
   if (receipt === null) {
     return "No receipt loaded";
   }
-  const deliverablesSummary = resolveDeliverablesSummary(receipt, manifest, qa);
+  const renderOutcome = resolveRenderOutcomeSummary(receipt, manifest, qa);
   const summary = asObject(receipt.recommendations_summary);
-  if (deliverablesSummary !== null) {
+  if (renderOutcome !== null) {
+    const deliverablesSummary = renderOutcome.deliverablesSummary;
     return [
-      `${asString(deliverablesSummary.overall_status) || "unknown"} deliverables`,
+      renderOutcome.label,
+      renderOutcome.topFailureReasonLabel ? `reason=${renderOutcome.topFailureReasonLabel}` : "",
       `deliverables=${asNumber(deliverablesSummary.deliverable_count) ?? 0}`,
       `valid_masters=${asNumber(deliverablesSummary.valid_master_count) ?? 0}`,
       `applied=${asNumber(summary?.applied) ?? 0}`,
       `qa_issues=${asArray(qa?.issues).length || asArray(receipt.qa_issues).length}`,
-    ].join(" · ");
+    ].filter(Boolean).join(" · ");
   }
   return [
     `${asString(receipt.status) || "unknown"} receipt`,
@@ -3551,21 +3821,29 @@ function receiptChangeSummaryChips(
   const status = asString(receipt.status);
   const qaCount = asArray(qa?.issues).length || asArray(receipt.qa_issues).length;
   const outputCount = flattenManifestOutputs(manifest).length;
-  const deliverablesSummary = resolveDeliverablesSummary(receipt, manifest, qa);
+  const renderOutcome = resolveRenderOutcomeSummary(receipt, manifest, qa);
   const chips: ChangeSummaryChip[] = [];
 
-  if (deliverablesSummary !== null) {
-    const overallStatus = asString(deliverablesSummary.overall_status);
+  if (renderOutcome !== null) {
+    const deliverablesSummary = renderOutcome.deliverablesSummary;
     chips.push({
-      label: overallStatus || "deliverables loaded",
-      tone:
-        overallStatus === "failed" || overallStatus === "invalid_master"
-          ? "danger"
-          : (overallStatus === "partial" ? "warn" : "ok"),
+      label: renderOutcome.label,
+      tone: renderOutcome.tone,
     });
+    if (renderOutcome.topFailureReasonLabel) {
+      chips.push({
+        label: `Reason ${renderOutcome.topFailureReasonLabel}`,
+        tone: renderOutcome.tone,
+      });
+    }
     chips.push({
       label: `Valid masters ${asNumber(deliverablesSummary.valid_master_count) ?? 0}`,
-      tone: (asNumber(deliverablesSummary.valid_master_count) ?? 0) > 0 ? "ok" : "warn",
+      tone:
+        (asNumber(deliverablesSummary.valid_master_count) ?? 0) > 0
+          ? "ok"
+          : (renderOutcome.bucket === "diagnostics_only" || renderOutcome.bucket === "full_failure"
+            ? "danger"
+            : "warn"),
     });
   } else {
     chips.push({
@@ -3577,7 +3855,8 @@ function receiptChangeSummaryChips(
     label: `Applied ${asNumber(summary?.applied) ?? asArray(receipt.applied_recommendations).length}`,
     tone: (asNumber(summary?.applied) ?? asArray(receipt.applied_recommendations).length) > 0 ? "ok" : "info",
   });
-  if (deliverablesSummary !== null) {
+  if (renderOutcome !== null) {
+    const deliverablesSummary = renderOutcome.deliverablesSummary;
     chips.push({
       label: `Failed ${asNumber(deliverablesSummary.failed_count) ?? 0}`,
       tone: (asNumber(deliverablesSummary.failed_count) ?? 0) > 0 ? "danger" : "info",
@@ -4974,15 +5253,34 @@ async function runRender(ui: AppUi, controller: ReturnType<typeof initDesignSyst
     state.artifacts.qa,
   );
   const canceled = result.code === 130;
+  const renderOutcome = resolveRenderOutcomeSummary(
+    state.artifacts.receipt,
+    state.artifacts.manifest,
+    state.artifacts.qa,
+  );
+  const renderStageState: StageState = result.code !== 0
+    ? "fail"
+    : (renderOutcome?.bucket === "partial_success" ? "warn" : "pass");
+  const renderStageLabel = result.code !== 0
+    ? (canceled ? "Canceled" : "Fail")
+    : (renderOutcome?.bucket === "partial_success" ? "Partial" : "Pass");
   setStageStatus(
     ui.stages.render,
-    result.code === 0 ? "pass" : "fail",
-    result.code === 0 ? "Pass" : (canceled ? "Canceled" : "Fail"),
+    renderStageState,
+    renderStageLabel,
   );
   state.currentCancelPath = null;
   applyBusyState(ui);
   assertSuccess(result, "render");
-  updateRuntimeMessage(ui, "Render completed and wrote artifacts into the workspace.");
+  if (renderOutcome?.bucket === "partial_success") {
+    updateRuntimeMessage(ui, "Render finished with partial success. MMO wrote a valid master, but at least one deliverable still failed.");
+  } else if (renderOutcome?.bucket === "valid_master") {
+    updateRuntimeMessage(ui, "Render finished with a valid master and wrote artifacts into the workspace.");
+  } else if (renderOutcome?.bucket === "success_no_master") {
+    updateRuntimeMessage(ui, "Render finished and wrote artifacts into the workspace, but no master deliverable was requested.");
+  } else {
+    updateRuntimeMessage(ui, "Render finished and wrote artifacts into the workspace.");
+  }
   controller.setScreen("results");
 }
 

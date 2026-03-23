@@ -358,6 +358,10 @@ Note: schema contracts use `schemas/*.schema.json` naming (not
 - [x] `safe-render` always produces baseline WAV outputs for supported
       2.0/5.1/7.1/7.1.4/9.1.6 layout targets, even when no recommendations are
       render-eligible.
+- [x] CLI/desktop render results are truthful about outcome state: valid
+      masters, partial success, diagnostics-only artifacts, and full failure
+      now display distinct status buckets with a top failure reason, and file
+      existence alone no longer implies render success.
 - [x] Scene-driven placement rendering supports one layout-agnostic scene
       feeding conservative `2.0/5.1/7.1/7.1.4/7.1.6/9.1.6` outputs with
       deterministic role/azimuth-aware object stage routing (perspective-gated

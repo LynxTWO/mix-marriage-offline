@@ -1154,6 +1154,11 @@ button:disabled {
   background: rgba(74, 210, 138, 0.16);
 }
 
+.stage-status-warn {
+  color: var(--theme-warning);
+  background: rgba(224, 184, 74, 0.16);
+}
+
 .stage-status-fail {
   color: var(--theme-danger);
   background: rgba(210, 75, 75, 0.16);

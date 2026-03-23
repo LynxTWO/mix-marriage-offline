@@ -19,6 +19,19 @@ _DELIVERABLE_STATUSES = (
     DELIVERABLE_STATUS_INVALID_MASTER,
 )
 
+DELIVERABLE_RESULT_BUCKET_VALID_MASTER = "valid_master"
+DELIVERABLE_RESULT_BUCKET_SUCCESS_NO_MASTER = "success_no_master"
+DELIVERABLE_RESULT_BUCKET_PARTIAL_SUCCESS = "partial_success"
+DELIVERABLE_RESULT_BUCKET_DIAGNOSTICS_ONLY = "diagnostics_only"
+DELIVERABLE_RESULT_BUCKET_FULL_FAILURE = "full_failure"
+_DELIVERABLE_RESULT_BUCKETS = (
+    DELIVERABLE_RESULT_BUCKET_VALID_MASTER,
+    DELIVERABLE_RESULT_BUCKET_SUCCESS_NO_MASTER,
+    DELIVERABLE_RESULT_BUCKET_PARTIAL_SUCCESS,
+    DELIVERABLE_RESULT_BUCKET_DIAGNOSTICS_ONLY,
+    DELIVERABLE_RESULT_BUCKET_FULL_FAILURE,
+)
+
 RENDER_RESULT_DOWNMIX_QA_FAILED = "RENDER_RESULT.DOWNMIX_QA_FAILED"
 RENDER_RESULT_FALLBACK_APPLIED = "RENDER_RESULT.FALLBACK_APPLIED"
 RENDER_RESULT_MISSING_CHANNEL_ORDER = "RENDER_RESULT.MISSING_CHANNEL_ORDER"
@@ -50,6 +63,11 @@ _LAYOUT_FAILURE_CODES_BY_SUFFIX = {
     "rendered_silence:no_decodable_stems": RENDER_RESULT_NO_DECODABLE_STEMS,
     "safety_collapse_applied": RENDER_RESULT_SAFETY_COLLAPSE_APPLIED,
     "silent_output": RENDER_RESULT_SILENT_OUTPUT,
+}
+_FAILURE_STATUS_PRIORITY = {
+    DELIVERABLE_STATUS_FAILED: 0,
+    DELIVERABLE_STATUS_INVALID_MASTER: 1,
+    DELIVERABLE_STATUS_PARTIAL: 2,
 }
 
 
@@ -356,6 +374,39 @@ def _first_nonempty_string(values: Sequence[str]) -> str | None:
         normalized = value.strip()
         if normalized:
             return normalized
+    return None
+
+
+def _normalized_failure_reason(deliverable: dict[str, Any]) -> str | None:
+    failure_reason = _coerce_str(deliverable.get("failure_reason")).strip()
+    if failure_reason:
+        return failure_reason
+
+    warning_codes = _normalized_code_list(deliverable.get("warning_codes"))
+    preferred_reason = next(
+        (code for code in warning_codes if code in _FAILURE_REASON_WARNING_CODES),
+        None,
+    )
+    if preferred_reason is not None:
+        return preferred_reason
+    return _first_nonempty_string(warning_codes)
+
+
+def _summary_result_bucket(
+    *,
+    overall_status: str | None,
+    valid_master_count: int,
+) -> str | None:
+    if overall_status == DELIVERABLE_STATUS_SUCCESS:
+        if valid_master_count > 0:
+            return DELIVERABLE_RESULT_BUCKET_VALID_MASTER
+        return DELIVERABLE_RESULT_BUCKET_SUCCESS_NO_MASTER
+    if overall_status == DELIVERABLE_STATUS_PARTIAL:
+        return DELIVERABLE_RESULT_BUCKET_PARTIAL_SUCCESS
+    if overall_status == DELIVERABLE_STATUS_INVALID_MASTER:
+        return DELIVERABLE_RESULT_BUCKET_DIAGNOSTICS_ONLY
+    if overall_status == DELIVERABLE_STATUS_FAILED:
+        return DELIVERABLE_RESULT_BUCKET_FULL_FAILURE
     return None
 
 
@@ -727,7 +778,12 @@ def build_deliverables_from_renderer_manifests(
     return all_deliverables
 
 
-def summarize_deliverables(deliverables: Sequence[dict[str, Any]]) -> dict[str, Any]:
+def summarize_deliverables(
+    deliverables: Sequence[dict[str, Any]],
+    *,
+    fallback_status: str | None = None,
+    fallback_failure_reason: str | None = None,
+) -> dict[str, Any]:
     summary: dict[str, Any] = {
         "overall_status": None,
         "deliverable_count": 0,
@@ -737,8 +793,12 @@ def summarize_deliverables(deliverables: Sequence[dict[str, Any]]) -> dict[str, 
         "invalid_master_count": 0,
         "valid_master_count": 0,
         "mixed_outcomes": False,
+        "result_bucket": None,
+        "top_failure_reason": None,
+        "top_failure_status": None,
     }
     statuses: list[str] = []
+    failure_counts: dict[tuple[int, str, str], int] = {}
     for deliverable in deliverables:
         if not isinstance(deliverable, dict):
             continue
@@ -751,8 +811,34 @@ def summarize_deliverables(deliverables: Sequence[dict[str, Any]]) -> dict[str, 
             continue
         statuses.append(status)
         summary[f"{status}_count"] += 1
+        if status != DELIVERABLE_STATUS_SUCCESS:
+            failure_reason = _normalized_failure_reason(deliverable) or ""
+            failure_key = (
+                _FAILURE_STATUS_PRIORITY.get(status, len(_FAILURE_STATUS_PRIORITY)),
+                status,
+                failure_reason,
+            )
+            failure_counts[failure_key] = failure_counts.get(failure_key, 0) + 1
 
     if not statuses:
+        normalized_fallback_status = (
+            fallback_status.strip()
+            if isinstance(fallback_status, str) and fallback_status.strip() in _DELIVERABLE_STATUSES
+            else None
+        )
+        normalized_fallback_reason = (
+            fallback_failure_reason.strip()
+            if isinstance(fallback_failure_reason, str) and fallback_failure_reason.strip()
+            else None
+        )
+        if normalized_fallback_status is not None:
+            summary["overall_status"] = normalized_fallback_status
+            summary["top_failure_status"] = normalized_fallback_status
+            summary["top_failure_reason"] = normalized_fallback_reason
+            summary["result_bucket"] = _summary_result_bucket(
+                overall_status=normalized_fallback_status,
+                valid_master_count=int(summary["valid_master_count"]),
+            )
         return summary
 
     unique_statuses = set(statuses)
@@ -768,4 +854,19 @@ def summarize_deliverables(deliverables: Sequence[dict[str, Any]]) -> dict[str, 
         summary["overall_status"] = DELIVERABLE_STATUS_INVALID_MASTER
     else:
         summary["overall_status"] = DELIVERABLE_STATUS_FAILED
+
+    if failure_counts:
+        top_failure_key = min(
+            failure_counts.keys(),
+            key=lambda item: (item[0], -failure_counts[item], item[2], item[1]),
+        )
+        top_failure_status = top_failure_key[1]
+        top_failure_reason = top_failure_key[2] or None
+        summary["top_failure_status"] = top_failure_status
+        summary["top_failure_reason"] = top_failure_reason
+
+    summary["result_bucket"] = _summary_result_bucket(
+        overall_status=_coerce_str(summary.get("overall_status")).strip() or None,
+        valid_master_count=int(summary["valid_master_count"]),
+    )
     return summary

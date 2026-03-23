@@ -152,6 +152,9 @@ class TestDeliverablesGrouping(unittest.TestCase):
                 "invalid_master_count": 0,
                 "valid_master_count": 0,
                 "mixed_outcomes": False,
+                "result_bucket": "success_no_master",
+                "top_failure_reason": None,
+                "top_failure_status": None,
             },
         )
 
@@ -276,6 +279,9 @@ class TestDeliverablesGrouping(unittest.TestCase):
                 "invalid_master_count": 0,
                 "valid_master_count": 1,
                 "mixed_outcomes": True,
+                "result_bucket": "partial_success",
+                "top_failure_reason": "RENDER_RESULT.MISSING_CHANNEL_ORDER",
+                "top_failure_status": "failed",
             },
         )
 

@@ -94,6 +94,9 @@ class TestRenderResultContract(unittest.TestCase):
                 "invalid_master_count": 0,
                 "valid_master_count": 2,
                 "mixed_outcomes": False,
+                "result_bucket": "valid_master",
+                "top_failure_reason": None,
+                "top_failure_status": None,
             },
         )
 
@@ -148,6 +151,9 @@ class TestRenderResultContract(unittest.TestCase):
                 "invalid_master_count": 0,
                 "valid_master_count": 0,
                 "mixed_outcomes": False,
+                "result_bucket": "full_failure",
+                "top_failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+                "top_failure_status": "failed",
             },
         )
 
@@ -215,4 +221,20 @@ class TestRenderResultContract(unittest.TestCase):
         self.assertEqual(
             deliverables[0].get("failure_reason"),
             "RENDER_RESULT.DOWNMIX_QA_FAILED",
+        )
+        self.assertEqual(
+            summarize_deliverables(deliverables),
+            {
+                "overall_status": "invalid_master",
+                "deliverable_count": 1,
+                "success_count": 0,
+                "failed_count": 0,
+                "partial_count": 0,
+                "invalid_master_count": 1,
+                "valid_master_count": 0,
+                "mixed_outcomes": False,
+                "result_bucket": "diagnostics_only",
+                "top_failure_reason": "RENDER_RESULT.DOWNMIX_QA_FAILED",
+                "top_failure_status": "invalid_master",
+            },
         )
