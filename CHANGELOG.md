@@ -28,6 +28,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (`not_applicable`, `measurement_failed`, `invalid_due_to_silence`) and emit
   hard errors when silent or non-measurable loudness, peak, similarity, or
   correlation data would otherwise drift through as a pass.
+- Render outputs now preserve a uniform decodable source sample rate by
+  default, mixed-rate sessions declare a canonical sample-rate policy
+  explicitly, and manifests/render reports expose structured resample
+  provenance (`uniform_source_sample_rate_hz`, output rate, policy reason,
+  stage, method, and resampled stem count) whenever rates differ.
 
 ### Fixed
 

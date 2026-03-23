@@ -46,7 +46,27 @@ def _write_mono_wav(
 
 
 class TestResamplingPolicy(unittest.TestCase):
-    def test_choose_target_rate_prefers_family_majority_then_higher_exact_rate(self) -> None:
+    def test_choose_target_rate_preserves_uniform_source_rate_by_default(self) -> None:
+        selected, receipt = choose_target_rate_for_session(
+            [
+                {"stem_id": "STEM.44100.A", "sample_rate_hz": 44_100},
+                {"stem_id": "STEM.44100.B", "sample_rate_hz": 44_100},
+                {"stem_id": "STEM.44100.C", "sample_rate_hz": 44_100},
+            ]
+        )
+
+        self.assertEqual(selected, 44_100)
+        self.assertEqual(receipt.get("selection_policy"), "uniform_source_rate_preserve")
+        self.assertEqual(receipt.get("selection_reason"), "uniform_source_sample_rate_hz")
+        self.assertEqual(receipt.get("uniform_source_sample_rate_hz"), 44_100)
+        self.assertEqual(receipt.get("output_sample_rate_hz"), 44_100)
+        self.assertEqual(receipt.get("sample_rate_policy"), "uniform_source_rate_preserve")
+        self.assertEqual(
+            receipt.get("sample_rate_policy_reason"),
+            "all_decodable_stems_share_one_rate",
+        )
+
+    def test_choose_target_rate_declares_canonical_rate_for_mixed_sessions(self) -> None:
         selected, receipt = choose_target_rate_for_session(
             [
                 {"stem_id": "STEM.44100.A", "sample_rate_hz": 44_100},
@@ -62,8 +82,13 @@ class TestResamplingPolicy(unittest.TestCase):
         self.assertEqual(receipt.get("selected_family_sample_rate_hz"), 44_100)
         self.assertEqual(receipt.get("selected_family_reason"), "majority")
         self.assertEqual(receipt.get("selection_reason"), "tie_higher_sample_rate")
+        self.assertEqual(receipt.get("uniform_source_sample_rate_hz"), None)
+        self.assertEqual(receipt.get("sample_rate_policy"), "mixed_rate_canonical_selection")
+        self.assertEqual(
+            receipt.get("sample_rate_policy_reason"),
+            "mixed_decodable_source_rates_require_canonical_target",
+        )
 
-    def test_choose_target_rate_prefers_48000_for_44100_48000_majority_and_tie(self) -> None:
         majority_selected, majority_receipt = choose_target_rate_for_session(
             [
                 {"stem_id": "STEM.48000.A", "sample_rate_hz": 48_000},
@@ -84,6 +109,10 @@ class TestResamplingPolicy(unittest.TestCase):
         self.assertEqual(
             tie_receipt.get("selected_family_reason"),
             "tie_higher_sample_rate_family",
+        )
+        self.assertEqual(
+            tie_receipt.get("sample_rate_policy"),
+            "mixed_rate_canonical_selection",
         )
 
     def test_iter_resampled_float64_samples_has_expected_frame_count_monotonicity(self) -> None:
@@ -213,6 +242,23 @@ class TestResamplingPolicy(unittest.TestCase):
             self.assertIn("resampling_receipt", job)
             promoted_receipt = job["resampling_receipt"]
             self.assertEqual(promoted_receipt.get("target_sample_rate_hz"), 48_000)
+            self.assertEqual(promoted_receipt.get("output_sample_rate_hz"), 48_000)
+            self.assertEqual(promoted_receipt.get("uniform_source_sample_rate_hz"), None)
+            self.assertEqual(
+                promoted_receipt.get("sample_rate_policy"),
+                "mixed_rate_canonical_selection",
+            )
+            self.assertEqual(
+                promoted_receipt.get("sample_rate_policy_reason"),
+                "mixed_decodable_source_rates_require_canonical_target",
+            )
+            self.assertTrue(promoted_receipt.get("resample_applied"))
+            self.assertEqual(promoted_receipt.get("resample_stage"), "decode")
+            self.assertEqual(
+                promoted_receipt.get("resample_method_id"),
+                "linear_interpolation_v1",
+            )
+            self.assertEqual(promoted_receipt.get("resampled_stem_count"), 1)
 
             resampled_stem_ids = {
                 row.get("stem_id")
@@ -228,6 +274,163 @@ class TestResamplingPolicy(unittest.TestCase):
                 if isinstance(row, dict)
             }
             self.assertIn("metadata_sample_rate_invalid", warning_names)
+
+    def test_uniform_44100_session_renders_at_44100_without_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            out_dir = temp_path / "renders"
+            _write_mono_wav(stems_dir / "stem_a.wav", sample_rate_hz=44_100, frequency_hz=220.0)
+            _write_mono_wav(stems_dir / "stem_b.wav", sample_rate_hz=44_100, frequency_hz=330.0)
+
+            manifest = MixdownRenderer().render(
+                {
+                    "stems_dir": stems_dir.resolve().as_posix(),
+                    "stems": [
+                        {"stem_id": "STEM.A", "file_path": "stem_a.wav"},
+                        {"stem_id": "STEM.B", "file_path": "stem_b.wav"},
+                    ],
+                },
+                [],
+                out_dir,
+            )
+
+            outputs = manifest.get("outputs")
+            self.assertIsInstance(outputs, list)
+            if not isinstance(outputs, list):
+                return
+            stereo_row = next(
+                (
+                    row
+                    for row in outputs
+                    if isinstance(row, dict) and row.get("layout_id") == "LAYOUT.2_0"
+                ),
+                None,
+            )
+            self.assertIsInstance(stereo_row, dict)
+            if not isinstance(stereo_row, dict):
+                return
+
+            self.assertEqual(stereo_row.get("sample_rate_hz"), 44_100)
+            rendered_path = out_dir / Path(str(stereo_row.get("file_path", "")))
+            with wave.open(str(rendered_path), "rb") as handle:
+                self.assertEqual(handle.getframerate(), 44_100)
+
+            metadata = stereo_row.get("metadata")
+            self.assertIsInstance(metadata, dict)
+            if not isinstance(metadata, dict):
+                return
+            resampling = metadata.get("resampling")
+            self.assertIsInstance(resampling, dict)
+            if not isinstance(resampling, dict):
+                return
+            self.assertEqual(resampling.get("output_sample_rate_hz"), 44_100)
+            self.assertEqual(resampling.get("uniform_source_sample_rate_hz"), 44_100)
+            self.assertEqual(
+                resampling.get("sample_rate_policy"),
+                "uniform_source_rate_preserve",
+            )
+            self.assertFalse(resampling.get("resample_applied"))
+            self.assertEqual(resampling.get("resample_stage"), "not_applied")
+
+    def test_uniform_48000_session_renders_at_48000_without_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            out_dir = temp_path / "renders"
+            _write_mono_wav(stems_dir / "stem_a.wav", sample_rate_hz=48_000, frequency_hz=220.0)
+            _write_mono_wav(stems_dir / "stem_b.wav", sample_rate_hz=48_000, frequency_hz=330.0)
+
+            manifest = MixdownRenderer().render(
+                {
+                    "stems_dir": stems_dir.resolve().as_posix(),
+                    "stems": [
+                        {"stem_id": "STEM.A", "file_path": "stem_a.wav"},
+                        {"stem_id": "STEM.B", "file_path": "stem_b.wav"},
+                    ],
+                },
+                [],
+                out_dir,
+            )
+
+            outputs = manifest.get("outputs")
+            self.assertIsInstance(outputs, list)
+            if not isinstance(outputs, list):
+                return
+            stereo_row = next(
+                (
+                    row
+                    for row in outputs
+                    if isinstance(row, dict) and row.get("layout_id") == "LAYOUT.2_0"
+                ),
+                None,
+            )
+            self.assertIsInstance(stereo_row, dict)
+            if not isinstance(stereo_row, dict):
+                return
+
+            self.assertEqual(stereo_row.get("sample_rate_hz"), 48_000)
+            rendered_path = out_dir / Path(str(stereo_row.get("file_path", "")))
+            with wave.open(str(rendered_path), "rb") as handle:
+                self.assertEqual(handle.getframerate(), 48_000)
+
+    def test_render_contract_override_changes_output_rate_and_logs_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            stems_dir = temp_path / "stems"
+            out_dir = temp_path / "renders"
+            _write_mono_wav(stems_dir / "stem_a.wav", sample_rate_hz=44_100, frequency_hz=220.0)
+            _write_mono_wav(stems_dir / "stem_b.wav", sample_rate_hz=44_100, frequency_hz=330.0)
+
+            manifest = MixdownRenderer().render(
+                {
+                    "stems_dir": stems_dir.resolve().as_posix(),
+                    "sample_rate_hz": 48_000,
+                    "stems": [
+                        {"stem_id": "STEM.A", "file_path": "stem_a.wav"},
+                        {"stem_id": "STEM.B", "file_path": "stem_b.wav"},
+                    ],
+                },
+                [],
+                out_dir,
+            )
+
+            outputs = manifest.get("outputs")
+            self.assertIsInstance(outputs, list)
+            if not isinstance(outputs, list):
+                return
+            stereo_row = next(
+                (
+                    row
+                    for row in outputs
+                    if isinstance(row, dict) and row.get("layout_id") == "LAYOUT.2_0"
+                ),
+                None,
+            )
+            self.assertIsInstance(stereo_row, dict)
+            if not isinstance(stereo_row, dict):
+                return
+
+            self.assertEqual(stereo_row.get("sample_rate_hz"), 48_000)
+            metadata = stereo_row.get("metadata")
+            self.assertIsInstance(metadata, dict)
+            if not isinstance(metadata, dict):
+                return
+            resampling = metadata.get("resampling")
+            self.assertIsInstance(resampling, dict)
+            if not isinstance(resampling, dict):
+                return
+            self.assertEqual(resampling.get("uniform_source_sample_rate_hz"), 44_100)
+            self.assertEqual(resampling.get("output_sample_rate_hz"), 48_000)
+            self.assertEqual(resampling.get("sample_rate_policy"), "explicit_override")
+            self.assertEqual(
+                resampling.get("sample_rate_policy_reason"),
+                "render_contract_target",
+            )
+            self.assertTrue(resampling.get("resample_applied"))
+            self.assertEqual(resampling.get("resample_stage"), "decode")
+            self.assertEqual(resampling.get("resample_method_id"), "linear_interpolation_v1")
+            self.assertEqual(resampling.get("resampled_stem_count"), 2)
 
 
 if __name__ == "__main__":

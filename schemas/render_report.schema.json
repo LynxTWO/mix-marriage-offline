@@ -492,6 +492,10 @@
         "selected_sample_rate_hz",
         "selected_family_sample_rate_hz",
         "selected_family_reason",
+        "uniform_source_sample_rate_hz",
+        "output_sample_rate_hz",
+        "sample_rate_policy",
+        "sample_rate_policy_reason",
         "sample_rate_counts",
         "family_sample_rate_counts",
         "selected_family_sample_rate_counts",
@@ -506,6 +510,13 @@
         "selected_sample_rate_hz": { "type": "integer", "minimum": 1 },
         "selected_family_sample_rate_hz": { "type": "integer", "minimum": 1 },
         "selected_family_reason": { "type": "string", "minLength": 1 },
+        "uniform_source_sample_rate_hz": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "output_sample_rate_hz": { "type": "integer", "minimum": 1 },
+        "sample_rate_policy": { "type": "string", "minLength": 1 },
+        "sample_rate_policy_reason": { "type": "string", "minLength": 1 },
         "sample_rate_counts": {
           "type": "array",
           "items": { "$ref": "#/$defs/sample_rate_count" }
@@ -559,6 +570,14 @@
         "algorithm",
         "selection",
         "target_sample_rate_hz",
+        "output_sample_rate_hz",
+        "uniform_source_sample_rate_hz",
+        "sample_rate_policy",
+        "sample_rate_policy_reason",
+        "resample_applied",
+        "resample_stage",
+        "resample_method_id",
+        "resampled_stem_count",
         "counts",
         "resampled_stems",
         "native_rate_stems",
@@ -568,6 +587,17 @@
         "algorithm": { "type": "string", "minLength": 1 },
         "selection": { "$ref": "#/$defs/resampling_selection" },
         "target_sample_rate_hz": { "type": "integer", "minimum": 1 },
+        "output_sample_rate_hz": { "type": "integer", "minimum": 1 },
+        "uniform_source_sample_rate_hz": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "sample_rate_policy": { "type": "string", "minLength": 1 },
+        "sample_rate_policy_reason": { "type": "string", "minLength": 1 },
+        "resample_applied": { "type": "boolean" },
+        "resample_stage": { "type": "string", "minLength": 1 },
+        "resample_method_id": { "type": "string", "minLength": 1 },
+        "resampled_stem_count": { "type": "integer", "minimum": 0 },
         "counts": { "$ref": "#/$defs/resampling_counts" },
         "resampled_stems": {
           "type": "array",

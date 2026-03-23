@@ -47,7 +47,7 @@ from mmo.dsp.export_finalize import (
 )
 from mmo.dsp.io import sha256_file, write_wav_ixml_chunk
 from mmo.dsp.process_context import build_process_context
-from mmo.dsp.sample_rate import choose_target_rate_for_session
+from mmo.dsp.sample_rate import build_resampling_receipt, choose_target_rate_for_session
 from mmo.plugins.interfaces import Recommendation, RenderManifest, RendererPlugin
 
 _PLUGIN_ID = "PLUGIN.RENDERER.PLACEMENT_MIXDOWN_V1"
@@ -597,22 +597,22 @@ def _infer_stem_copy_format(source_path: Path) -> str:
 def _resolve_explicit_render_sample_rate_hz(
     session: Dict[str, Any],
     render_intent: dict[str, Any],
-) -> int | None:
-    candidates: list[Any] = [
-        session.get("render_sample_rate_hz"),
-        render_intent.get("render_sample_rate_hz"),
-        session.get("sample_rate_hz"),
-        render_intent.get("sample_rate_hz"),
+) -> tuple[int | None, str | None]:
+    candidates: list[tuple[str, Any]] = [
+        ("explicit_user_choice", session.get("render_sample_rate_hz")),
+        ("explicit_export_target", render_intent.get("render_sample_rate_hz")),
+        ("render_contract_target", session.get("sample_rate_hz")),
+        ("render_contract_target", render_intent.get("sample_rate_hz")),
     ]
     options_payload = session.get("options")
     if isinstance(options_payload, dict):
-        candidates.append(options_payload.get("render_sample_rate_hz"))
+        candidates.append(("explicit_user_choice", options_payload.get("render_sample_rate_hz")))
 
-    for candidate in candidates:
+    for reason, candidate in candidates:
         value = _coerce_int(candidate)
         if value is not None and value > 0:
-            return value
-    return None
+            return value, reason
+    return None, None
 
 
 def _resampling_warning_row(
@@ -1494,19 +1494,21 @@ def _prepare_layout_stems(
                 }
             )
 
-    explicit_sample_rate_hz = _resolve_explicit_render_sample_rate_hz(
+    explicit_sample_rate_hz, explicit_sample_rate_reason = _resolve_explicit_render_sample_rate_hz(
         session,
         render_intent,
     )
     sample_rate_hz, selection_receipt = choose_target_rate_for_session(
         stem_meta_rows,
         explicit_rate=explicit_sample_rate_hz,
+        explicit_rate_reason=explicit_sample_rate_reason,
         default=_DEFAULT_SAMPLE_RATE_HZ,
     )
 
     notes.append(
         f"{layout_id}:render_sample_rate_selected:{sample_rate_hz}:"
-        f"{_coerce_str(selection_receipt.get('selection_reason'))}"
+        f"{_coerce_str(selection_receipt.get('sample_rate_policy')).strip()}:"
+        f"{_coerce_str(selection_receipt.get('sample_rate_policy_reason')).strip()}"
     )
 
     prepared_stems: list[_PreparedStem] = []
@@ -1593,24 +1595,20 @@ def _prepare_layout_stems(
         sample_rate_hz,
         stem_mix_modes,
         notes,
-        {
-            "algorithm": "linear_interpolation_v1",
-            "selection": selection_receipt,
-            "target_sample_rate_hz": sample_rate_hz,
-            "counts": {
-                "input_stem_count": len(stems),
-                "planned_stem_count": len(decode_plans),
-                "decoded_stem_count": 0,
-                "prepared_stem_count": len(prepared_stems),
-                "resampled_stem_count": len(resampled_stems),
-                "native_rate_stem_count": len(native_rate_stems),
-                "skipped_stem_count": max(0, len(stems) - len(decode_plans)),
-                "decoder_warning_count": len(list(selection_receipt.get("decoder_warnings") or [])),
-            },
-            "resampled_stems": resampled_stems,
-            "native_rate_stems": native_rate_stems,
-            "decoder_warnings": list(selection_receipt.get("decoder_warnings") or []),
-        },
+        build_resampling_receipt(
+            selection=selection_receipt,
+            output_sample_rate_hz=sample_rate_hz,
+            input_stem_count=len(stems),
+            planned_stem_count=len(decode_plans),
+            decoded_stem_count=0,
+            prepared_stem_count=len(prepared_stems),
+            skipped_stem_count=max(0, len(stems) - len(decode_plans)),
+            resampled_stems=resampled_stems,
+            native_rate_stems=native_rate_stems,
+            decoder_warnings=list(selection_receipt.get("decoder_warnings") or []),
+            resample_stage="decode",
+            resample_method_id="linear_interpolation_v1",
+        ),
         decorrelation_receipt,
     )
 

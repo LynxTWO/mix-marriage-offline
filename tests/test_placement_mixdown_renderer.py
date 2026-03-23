@@ -1034,6 +1034,14 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
         self.assertIsInstance(resampling, dict)
         if isinstance(resampling, dict):
             self.assertEqual(resampling.get("target_sample_rate_hz"), 48000)
+            self.assertEqual(resampling.get("output_sample_rate_hz"), 48000)
+            self.assertEqual(resampling.get("uniform_source_sample_rate_hz"), 48000)
+            self.assertEqual(
+                resampling.get("sample_rate_policy"),
+                "uniform_source_rate_preserve",
+            )
+            self.assertFalse(resampling.get("resample_applied"))
+            self.assertEqual(resampling.get("resample_stage"), "not_applied")
             self.assertEqual(resampling.get("resampled_stems"), [])
 
     def test_renderer_resampling_policy_majority_then_higher_tiebreak(self) -> None:
@@ -1087,6 +1095,11 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
                 self.assertIsInstance(selection, dict)
                 if isinstance(selection, dict):
                     self.assertEqual(selection.get("selection_reason"), "majority")
+                self.assertEqual(
+                    resampling.get("sample_rate_policy"),
+                    "mixed_rate_canonical_selection",
+                )
+                self.assertTrue(resampling.get("resample_applied"))
                 resampled = resampling.get("resampled_stems")
                 self.assertIsInstance(resampled, list)
                 if isinstance(resampled, list):
@@ -1124,6 +1137,79 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
                         selection.get("selected_family_reason"),
                         "tie_higher_sample_rate_family",
                     )
+                self.assertEqual(
+                    resampling.get("sample_rate_policy"),
+                    "mixed_rate_canonical_selection",
+                )
+
+    def test_renderer_resampling_export_target_override_logs_reason(self) -> None:
+        from mmo.core.placement_policy import build_render_intent as real_build_render_intent
+
+        fake_ffprobe = _write_fake_ffprobe(self.temp)
+        fake_ffmpeg = _write_fake_ffmpeg(self.temp)
+        _write_mono_wav(self.stems_dir / "override_a.wav", sample_rate_hz=44_100, freq_hz=180.0)
+        _write_mono_wav(self.stems_dir / "override_b.wav", sample_rate_hz=44_100, freq_hz=240.0)
+
+        session = {
+            "stems_dir": self.stems_dir.resolve().as_posix(),
+            "stems": [
+                {"stem_id": "STEM.OVERRIDE.A", "file_path": "override_a.wav"},
+                {"stem_id": "STEM.OVERRIDE.B", "file_path": "override_b.wav"},
+            ],
+            "scene_payload": _scene_payload_for_stem_ids(
+                self.stems_dir,
+                ["STEM.OVERRIDE.A", "STEM.OVERRIDE.B"],
+            ),
+            "options": {
+                "layout_ids": ["LAYOUT.2_0"],
+            },
+        }
+
+        def _build_export_target_intent(scene: dict[str, Any], layout_id: str) -> dict[str, Any] | None:
+            intent = real_build_render_intent(scene, layout_id)
+            if not isinstance(intent, dict):
+                return intent
+            mutated = dict(intent)
+            mutated["render_sample_rate_hz"] = 48_000
+            return mutated
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "MMO_FFPROBE_PATH": str(fake_ffprobe),
+                "MMO_FFMPEG_PATH": str(fake_ffmpeg),
+            },
+            clear=False,
+        ), mock.patch(
+            "mmo.plugins.renderers.placement_mixdown_renderer.build_render_intent",
+            side_effect=_build_export_target_intent,
+        ):
+            manifest = PlacementMixdownRenderer().render(session, [], self.out_dir / "export_target")
+
+        stereo_row = _output_by_layout(manifest).get("LAYOUT.2_0")
+        self.assertIsInstance(stereo_row, dict)
+        if not isinstance(stereo_row, dict):
+            return
+        self.assertEqual(stereo_row.get("sample_rate_hz"), 48_000)
+        metadata = stereo_row.get("metadata")
+        self.assertIsInstance(metadata, dict)
+        if not isinstance(metadata, dict):
+            return
+        resampling = metadata.get("resampling")
+        self.assertIsInstance(resampling, dict)
+        if not isinstance(resampling, dict):
+            return
+        self.assertEqual(resampling.get("uniform_source_sample_rate_hz"), 44_100)
+        self.assertEqual(resampling.get("output_sample_rate_hz"), 48_000)
+        self.assertEqual(resampling.get("sample_rate_policy"), "explicit_override")
+        self.assertEqual(
+            resampling.get("sample_rate_policy_reason"),
+            "explicit_export_target",
+        )
+        self.assertTrue(resampling.get("resample_applied"))
+        self.assertEqual(resampling.get("resample_stage"), "decode")
+        self.assertEqual(resampling.get("resample_method_id"), "linear_interpolation_v1")
+        self.assertEqual(resampling.get("resampled_stem_count"), 2)
 
 
 if __name__ == "__main__":

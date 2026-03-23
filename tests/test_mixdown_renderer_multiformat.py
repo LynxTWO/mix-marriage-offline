@@ -167,6 +167,19 @@ class TestMixdownRendererMultiformat(unittest.TestCase):
             if not isinstance(resampling, dict):
                 return
             self.assertEqual(resampling.get("target_sample_rate_hz"), 44100)
+            self.assertEqual(resampling.get("output_sample_rate_hz"), 44100)
+            self.assertEqual(resampling.get("uniform_source_sample_rate_hz"), None)
+            self.assertEqual(
+                resampling.get("sample_rate_policy"),
+                "mixed_rate_canonical_selection",
+            )
+            self.assertEqual(
+                resampling.get("sample_rate_policy_reason"),
+                "mixed_decodable_source_rates_require_canonical_target",
+            )
+            self.assertTrue(resampling.get("resample_applied"))
+            self.assertEqual(resampling.get("resample_stage"), "decode")
+            self.assertEqual(resampling.get("resample_method_id"), "linear_interpolation_v1")
             selection = resampling.get("selection")
             self.assertIsInstance(selection, dict)
             if isinstance(selection, dict):

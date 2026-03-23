@@ -23,6 +23,25 @@ def _coerce_positive_int(value: Any) -> int | None:
     return None
 
 
+def _coerce_non_negative_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value >= 0 else None
+    if isinstance(value, float):
+        if not value.is_integer():
+            return None
+        candidate = int(value)
+        return candidate if candidate >= 0 else None
+    if isinstance(value, str) and value.strip():
+        try:
+            candidate = int(value.strip())
+        except ValueError:
+            return None
+        return candidate if candidate >= 0 else None
+    return None
+
+
 def _coerce_str(value: Any) -> str:
     if isinstance(value, str):
         return value
@@ -79,12 +98,15 @@ def choose_target_rate_for_session(
     stems_meta: Sequence[Any],
     *,
     explicit_rate: Any = None,
+    explicit_rate_reason: str | None = None,
     default: Any = 48_000,
 ) -> tuple[int, dict[str, Any]]:
     """Choose a deterministic session target sample rate.
 
     Policy:
     - If ``explicit_rate`` is a positive integer, use it.
+    - Otherwise preserve the shared decodable source sample rate when every
+      decodable stem reports the same rate.
     - Otherwise choose the dominant sample-rate family first (44.1k-derived vs
       48k-derived, with exact rates as their own family when neither applies).
     - Within the winning family, choose the exact sample rate by majority, with
@@ -170,19 +192,38 @@ def choose_target_rate_for_session(
     ]
 
     explicit_sample_rate_hz = _coerce_positive_int(explicit_rate)
+    explicit_policy_reason = _coerce_str(explicit_rate_reason).strip() or "explicit_sample_rate_hz"
+    uniform_source_sample_rate_hz = None
+    if observed_rates:
+        unique_observed_rates = sorted(set(observed_rates))
+        if len(unique_observed_rates) == 1:
+            uniform_source_sample_rate_hz = unique_observed_rates[0]
+
     selection_policy = "family_majority_then_exact_majority_then_higher_tiebreak"
+    selection_reason = "default_sample_rate_hz"
     selected_family_sample_rate_hz = _sample_rate_family_hz(default_rate)
     selected_family_reason = "default_sample_rate_hz"
+    sample_rate_policy = "fallback_default_rate"
+    sample_rate_policy_reason = "no_decodable_source_sample_rate"
 
     if explicit_sample_rate_hz is not None:
         selected_sample_rate_hz = explicit_sample_rate_hz
         selection_policy = "explicit_override"
-        selection_reason = "explicit_sample_rate_hz"
+        selection_reason = explicit_policy_reason
         selected_family_sample_rate_hz = _sample_rate_family_hz(selected_sample_rate_hz)
         selected_family_reason = "explicit_sample_rate_hz"
+        sample_rate_policy = "explicit_override"
+        sample_rate_policy_reason = explicit_policy_reason
     elif not observed_rates:
         selected_sample_rate_hz = default_rate
-        selection_reason = "default_sample_rate_hz"
+    elif uniform_source_sample_rate_hz is not None:
+        selected_sample_rate_hz = uniform_source_sample_rate_hz
+        selection_policy = "uniform_source_rate_preserve"
+        selection_reason = "uniform_source_sample_rate_hz"
+        selected_family_sample_rate_hz = _sample_rate_family_hz(selected_sample_rate_hz)
+        selected_family_reason = "uniform_source_sample_rate_hz"
+        sample_rate_policy = "uniform_source_rate_preserve"
+        sample_rate_policy_reason = "all_decodable_stems_share_one_rate"
     else:
         max_family_count = max(family_counts.values())
         candidate_families = [
@@ -212,6 +253,8 @@ def choose_target_rate_for_session(
                 _coerce_str(exact_selection_receipt.get("selection_reason")).strip()
                 or "majority"
             )
+        sample_rate_policy = "mixed_rate_canonical_selection"
+        sample_rate_policy_reason = "mixed_decodable_source_rates_require_canonical_target"
 
     selected_family_exact_counts = Counter(
         family_rates.get(selected_family_sample_rate_hz, ())
@@ -249,6 +292,10 @@ def choose_target_rate_for_session(
         "selected_sample_rate_hz": selected_sample_rate_hz,
         "selected_family_sample_rate_hz": selected_family_sample_rate_hz,
         "selected_family_reason": selected_family_reason,
+        "uniform_source_sample_rate_hz": uniform_source_sample_rate_hz,
+        "output_sample_rate_hz": selected_sample_rate_hz,
+        "sample_rate_policy": sample_rate_policy,
+        "sample_rate_policy_reason": sample_rate_policy_reason,
         "sample_rate_counts": sample_rate_counts,
         "family_sample_rate_counts": family_sample_rate_counts,
         "selected_family_sample_rate_counts": selected_family_sample_rate_counts,
@@ -256,6 +303,98 @@ def choose_target_rate_for_session(
         "stem_count_considered": len(observed_rates),
         "stem_sample_rates": stem_sample_rates,
         "decoder_warnings": decoder_warnings,
+    }
+
+
+def build_resampling_receipt(
+    *,
+    selection: Mapping[str, Any],
+    output_sample_rate_hz: Any,
+    input_stem_count: Any,
+    planned_stem_count: Any,
+    decoded_stem_count: Any,
+    skipped_stem_count: Any,
+    resampled_stems: Sequence[Any],
+    native_rate_stems: Sequence[Any],
+    decoder_warnings: Sequence[Any] | None = None,
+    prepared_stem_count: Any = None,
+    resample_stage: str = "decode",
+    resample_method_id: str = "linear_interpolation_v1",
+) -> dict[str, Any]:
+    normalized_selection = dict(selection)
+    selected_sample_rate_hz = _coerce_positive_int(
+        normalized_selection.get("selected_sample_rate_hz")
+    )
+    target_sample_rate_hz = _coerce_positive_int(output_sample_rate_hz)
+    if target_sample_rate_hz is None:
+        target_sample_rate_hz = selected_sample_rate_hz
+    if target_sample_rate_hz is None:
+        raise ValueError("output_sample_rate_hz must be positive")
+
+    uniform_source_sample_rate_hz = _coerce_positive_int(
+        normalized_selection.get("uniform_source_sample_rate_hz")
+    )
+    sample_rate_policy = (
+        _coerce_str(normalized_selection.get("sample_rate_policy")).strip()
+        or _coerce_str(normalized_selection.get("selection_policy")).strip()
+        or "fallback_default_rate"
+    )
+    sample_rate_policy_reason = (
+        _coerce_str(normalized_selection.get("sample_rate_policy_reason")).strip()
+        or _coerce_str(normalized_selection.get("selection_reason")).strip()
+        or "no_decodable_source_sample_rate"
+    )
+    normalized_selection["uniform_source_sample_rate_hz"] = uniform_source_sample_rate_hz
+    normalized_selection["output_sample_rate_hz"] = target_sample_rate_hz
+    normalized_selection["sample_rate_policy"] = sample_rate_policy
+    normalized_selection["sample_rate_policy_reason"] = sample_rate_policy_reason
+
+    normalized_resampled_stems = [
+        dict(row) for row in resampled_stems if isinstance(row, Mapping)
+    ]
+    normalized_native_rate_stems = [
+        dict(row) for row in native_rate_stems if isinstance(row, Mapping)
+    ]
+    normalized_decoder_warnings = [
+        dict(row) for row in (decoder_warnings or []) if isinstance(row, Mapping)
+    ]
+    resampled_stem_count = len(normalized_resampled_stems)
+    resample_applied = resampled_stem_count > 0
+    normalized_stage = _coerce_str(resample_stage).strip()
+    if not normalized_stage:
+        normalized_stage = "decode" if resample_applied else "not_applied"
+    if not resample_applied:
+        normalized_stage = "not_applied"
+
+    counts: dict[str, Any] = {
+        "input_stem_count": _coerce_non_negative_int(input_stem_count) or 0,
+        "planned_stem_count": _coerce_non_negative_int(planned_stem_count) or 0,
+        "decoded_stem_count": _coerce_non_negative_int(decoded_stem_count) or 0,
+        "resampled_stem_count": resampled_stem_count,
+        "native_rate_stem_count": len(normalized_native_rate_stems),
+        "skipped_stem_count": _coerce_non_negative_int(skipped_stem_count) or 0,
+        "decoder_warning_count": len(normalized_decoder_warnings),
+    }
+    prepared_count = _coerce_non_negative_int(prepared_stem_count)
+    if prepared_count is not None:
+        counts["prepared_stem_count"] = prepared_count
+
+    return {
+        "algorithm": _coerce_str(resample_method_id).strip() or "linear_interpolation_v1",
+        "selection": normalized_selection,
+        "target_sample_rate_hz": target_sample_rate_hz,
+        "output_sample_rate_hz": target_sample_rate_hz,
+        "uniform_source_sample_rate_hz": uniform_source_sample_rate_hz,
+        "sample_rate_policy": sample_rate_policy,
+        "sample_rate_policy_reason": sample_rate_policy_reason,
+        "resample_applied": resample_applied,
+        "resample_stage": normalized_stage,
+        "resample_method_id": _coerce_str(resample_method_id).strip() or "linear_interpolation_v1",
+        "resampled_stem_count": resampled_stem_count,
+        "counts": counts,
+        "resampled_stems": normalized_resampled_stems,
+        "native_rate_stems": normalized_native_rate_stems,
+        "decoder_warnings": normalized_decoder_warnings,
     }
 
 

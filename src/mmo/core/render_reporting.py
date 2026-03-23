@@ -38,6 +38,12 @@ def _coerce_float(value: Any) -> float | None:
     return None
 
 
+def _coerce_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    return None
+
+
 def _coerce_channel_order(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -597,6 +603,22 @@ def _normalize_resampling_selection(value: Any) -> dict[str, Any] | None:
     if not selected_family_reason:
         selected_family_reason = selection_reason
 
+    uniform_source_sample_rate_hz = _coerce_int(value.get("uniform_source_sample_rate_hz"))
+    if uniform_source_sample_rate_hz is not None and uniform_source_sample_rate_hz <= 0:
+        uniform_source_sample_rate_hz = None
+
+    output_sample_rate_hz = _coerce_int(value.get("output_sample_rate_hz"))
+    if output_sample_rate_hz is None or output_sample_rate_hz <= 0:
+        output_sample_rate_hz = selected_sample_rate_hz
+
+    sample_rate_policy = _coerce_str(value.get("sample_rate_policy")).strip()
+    if not sample_rate_policy:
+        sample_rate_policy = selection_policy
+
+    sample_rate_policy_reason = _coerce_str(value.get("sample_rate_policy_reason")).strip()
+    if not sample_rate_policy_reason:
+        sample_rate_policy_reason = selection_reason
+
     sample_rate_counts = _normalize_exact_sample_rate_counts(value.get("sample_rate_counts"))
     family_sample_rate_counts = _normalize_family_sample_rate_counts(
         value.get("family_sample_rate_counts")
@@ -616,6 +638,10 @@ def _normalize_resampling_selection(value: Any) -> dict[str, Any] | None:
         "selected_sample_rate_hz": selected_sample_rate_hz,
         "selected_family_sample_rate_hz": selected_family_sample_rate_hz,
         "selected_family_reason": selected_family_reason,
+        "uniform_source_sample_rate_hz": uniform_source_sample_rate_hz,
+        "output_sample_rate_hz": output_sample_rate_hz,
+        "sample_rate_policy": sample_rate_policy,
+        "sample_rate_policy_reason": sample_rate_policy_reason,
         "sample_rate_counts": sample_rate_counts,
         "family_sample_rate_counts": family_sample_rate_counts,
         "selected_family_sample_rate_counts": selected_family_sample_rate_counts,
@@ -637,8 +663,18 @@ def _normalize_resampling_receipt(value: Any) -> dict[str, Any] | None:
     target_sample_rate_hz = _coerce_int(value.get("target_sample_rate_hz"))
     if target_sample_rate_hz is None or target_sample_rate_hz <= 0:
         target_sample_rate_hz = int(selection["selected_sample_rate_hz"])
+    output_sample_rate_hz = _coerce_int(value.get("output_sample_rate_hz"))
+    if output_sample_rate_hz is None or output_sample_rate_hz <= 0:
+        output_sample_rate_hz = target_sample_rate_hz
+    uniform_source_sample_rate_hz = _coerce_int(value.get("uniform_source_sample_rate_hz"))
+    if uniform_source_sample_rate_hz is None or uniform_source_sample_rate_hz <= 0:
+        candidate_uniform_rate = _coerce_int(selection.get("uniform_source_sample_rate_hz"))
+        uniform_source_sample_rate_hz = (
+            candidate_uniform_rate if candidate_uniform_rate is not None and candidate_uniform_rate > 0 else None
+        )
 
     algorithm = _coerce_str(value.get("algorithm")).strip() or "linear_interpolation_v1"
+    resample_method_id = _coerce_str(value.get("resample_method_id")).strip() or algorithm
     resampled_stems = _normalize_resampled_stem_rows(value.get("resampled_stems"))
     native_rate_stems = _normalize_native_rate_stem_rows(value.get("native_rate_stems"))
     decoder_warnings = _normalize_resampling_warning_rows(value.get("decoder_warnings"))
@@ -660,10 +696,44 @@ def _normalize_resampling_receipt(value: Any) -> dict[str, Any] | None:
     if counts["native_rate_stem_count"] <= 0:
         counts["native_rate_stem_count"] = len(native_rate_stems)
 
+    sample_rate_policy = _coerce_str(value.get("sample_rate_policy")).strip()
+    if not sample_rate_policy:
+        sample_rate_policy = _coerce_str(selection.get("sample_rate_policy")).strip()
+    if not sample_rate_policy:
+        sample_rate_policy = _coerce_str(selection.get("selection_policy")).strip()
+
+    sample_rate_policy_reason = _coerce_str(value.get("sample_rate_policy_reason")).strip()
+    if not sample_rate_policy_reason:
+        sample_rate_policy_reason = _coerce_str(selection.get("sample_rate_policy_reason")).strip()
+    if not sample_rate_policy_reason:
+        sample_rate_policy_reason = _coerce_str(selection.get("selection_reason")).strip()
+
+    resample_applied = _coerce_bool(value.get("resample_applied"))
+    if resample_applied is None:
+        resample_applied = counts["resampled_stem_count"] > 0
+
+    resample_stage = _coerce_str(value.get("resample_stage")).strip()
+    if not resample_stage:
+        resample_stage = "decode" if resample_applied else "not_applied"
+    if not resample_applied:
+        resample_stage = "not_applied"
+
+    resampled_stem_count = _coerce_int(value.get("resampled_stem_count"))
+    if resampled_stem_count is None or resampled_stem_count < 0:
+        resampled_stem_count = counts["resampled_stem_count"]
+
     return {
         "algorithm": algorithm,
         "selection": selection,
         "target_sample_rate_hz": target_sample_rate_hz,
+        "output_sample_rate_hz": output_sample_rate_hz,
+        "uniform_source_sample_rate_hz": uniform_source_sample_rate_hz,
+        "sample_rate_policy": sample_rate_policy,
+        "sample_rate_policy_reason": sample_rate_policy_reason,
+        "resample_applied": resample_applied,
+        "resample_stage": resample_stage,
+        "resample_method_id": resample_method_id,
+        "resampled_stem_count": resampled_stem_count,
         "counts": counts,
         "resampled_stems": resampled_stems,
         "native_rate_stems": native_rate_stems,
@@ -879,10 +949,31 @@ def build_render_report_from_plan(
             selection = resampling_receipt.get("selection") or {}
             counts = resampling_receipt.get("counts") or {}
             target_sample_rate_hz = _coerce_int(resampling_receipt.get("target_sample_rate_hz"))
+            output_sample_rate_hz = _coerce_int(resampling_receipt.get("output_sample_rate_hz"))
+            uniform_source_sample_rate_hz = _coerce_int(
+                resampling_receipt.get("uniform_source_sample_rate_hz")
+            )
+            resample_applied = _coerce_bool(resampling_receipt.get("resample_applied"))
             resampling_metrics = list(common_metrics)
             if target_sample_rate_hz is not None and target_sample_rate_hz > 0:
                 resampling_metrics.append(
                     {"name": "sample_rate_hz", "value": float(target_sample_rate_hz), "unit": "Hz"}
+                )
+            if output_sample_rate_hz is not None and output_sample_rate_hz > 0:
+                resampling_metrics.append(
+                    {
+                        "name": "output_sample_rate_hz",
+                        "value": float(output_sample_rate_hz),
+                        "unit": "Hz",
+                    }
+                )
+            if uniform_source_sample_rate_hz is not None and uniform_source_sample_rate_hz > 0:
+                resampling_metrics.append(
+                    {
+                        "name": "uniform_source_sample_rate_hz",
+                        "value": float(uniform_source_sample_rate_hz),
+                        "unit": "Hz",
+                    }
                 )
             resampling_metrics.extend(
                 [
@@ -895,9 +986,14 @@ def build_render_report_from_plan(
                 ]
             )
             resampling_notes = [
+                f"sample_rate_policy={_coerce_str(resampling_receipt.get('sample_rate_policy')).strip()}",
+                f"sample_rate_policy_reason={_coerce_str(resampling_receipt.get('sample_rate_policy_reason')).strip()}",
                 f"selection_policy={_coerce_str(selection.get('selection_policy')).strip()}",
                 f"selection_reason={_coerce_str(selection.get('selection_reason')).strip()}",
                 f"selected_family_sample_rate_hz={_coerce_int(selection.get('selected_family_sample_rate_hz')) or 0}",
+                f"resample_applied={bool(resample_applied)}",
+                f"resample_stage={_coerce_str(resampling_receipt.get('resample_stage')).strip()}",
+                f"resample_method_id={_coerce_str(resampling_receipt.get('resample_method_id')).strip()}",
                 f"status={status}",
             ]
             resampling_notes.extend(
