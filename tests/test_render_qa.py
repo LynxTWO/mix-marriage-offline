@@ -11,7 +11,12 @@ import jsonschema
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
-from mmo.core.render_qa import build_render_qa_payload, render_qa_has_error_issues
+from mmo.core.render_qa import (
+    _DEFAULT_THRESHOLDS,
+    _build_qa_issues,
+    build_render_qa_payload,
+    render_qa_has_error_issues,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCHEMAS_DIR = REPO_ROOT / "schemas"
@@ -55,6 +60,53 @@ def _write_stereo_pcm16_wav(
 
 
 class TestRenderQABuilder(unittest.TestCase):
+    def test_none_metrics_fail_when_source_audio_exists(self) -> None:
+        issues = _build_qa_issues(
+            jobs=[
+                {
+                    "job_id": "JOB.001",
+                    "input": {
+                        "path": "/tmp/input.wav",
+                        "metrics": {
+                            "peak_dbfs": -6.0,
+                            "integrated_lufs": -18.0,
+                            "true_peak_dbtp": -3.0,
+                        },
+                    },
+                    "outputs": [
+                        {
+                            "path": "/tmp/output.wav",
+                            "channel_count": 2,
+                            "metrics": {
+                                "peak_dbfs": None,
+                                "integrated_lufs": None,
+                                "true_peak_dbtp": None,
+                                "correlation_lr": None,
+                                "clip_sample_count": None,
+                            },
+                            "polarity_risk": False,
+                        }
+                    ],
+                    "comparisons": [],
+                }
+            ],
+            thresholds=dict(_DEFAULT_THRESHOLDS),
+            plugin_chain_used=False,
+        )
+        issue_map = {
+            issue["issue_id"]: issue
+            for issue in issues
+            if isinstance(issue, dict)
+        }
+        self.assertIn("ISSUE.RENDER.QA.SILENT_OUTPUT", issue_map)
+        self.assertIn("ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE", issue_map)
+        self.assertIn("ISSUE.RENDER.QA.PEAK_NON_MEASURABLE", issue_map)
+        self.assertIn("ISSUE.RENDER.QA.CORRELATION_NON_MEASURABLE", issue_map)
+        self.assertEqual(
+            issue_map["ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE"]["measurement_state"],
+            "invalid_due_to_silence",
+        )
+
     def test_build_payload_is_deterministic_and_schema_valid(self) -> None:
         validator = _schema_validator("render_qa.schema.json")
         temp_root = (REPO_ROOT / "sandbox_tmp" / "test_render_qa").resolve()

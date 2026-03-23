@@ -6,7 +6,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional
 
+from mmo.core.deliverables import SILENT_OUTPUT_PEAK_DBFS_LTE
 from mmo.core.loudness_methods import DEFAULT_LOUDNESS_METHOD_ID
+from mmo.core.qa_states import (
+    MEASUREMENT_STATE_INVALID_DUE_TO_SILENCE,
+    MEASUREMENT_STATE_MEASURED,
+    classify_measurement_state,
+)
 from mmo.resources import ontology_dir
 
 from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples
@@ -196,6 +202,36 @@ def _issue(
         "evidence": evidence,
         "message": message,
     }
+
+
+def _finite_metric(value: Any) -> Optional[float]:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        candidate = float(value)
+        if math.isfinite(candidate):
+            return candidate
+    return None
+
+
+def _downmix_metrics_are_effectively_silent(
+    metrics: Dict[str, Any],
+    *,
+    meters: str,
+) -> bool:
+    if meters == "truth":
+        true_peak = _finite_metric(metrics.get("true_peak"))
+        if true_peak is not None:
+            return true_peak <= SILENT_OUTPUT_PEAK_DBFS_LTE
+        return _finite_metric(metrics.get("lufs")) is None
+
+    peak_linear = _finite_metric(metrics.get("peak"))
+    if peak_linear is None:
+        return False
+    if peak_linear <= 0.0:
+        return True
+    peak_dbfs = 20.0 * math.log10(peak_linear)
+    return peak_dbfs <= SILENT_OUTPUT_PEAK_DBFS_LTE
 
 
 def _normalize_source_pre_filters_for_log(value: Any) -> Dict[str, List[Dict[str, Any]]]:
@@ -821,21 +857,134 @@ def run_downmix_qa(
             }
         }
 
+    base_evidence = [
+        {"evidence_id": "EVID.DOWNMIX.QA.SRC_PATH", "value": str(src_path)},
+        {"evidence_id": "EVID.DOWNMIX.QA.REF_PATH", "value": str(ref_path)},
+        {"evidence_id": "EVID.FILE.PATH", "value": str(src_path)},
+        {"evidence_id": "EVID.FILE.PATH", "value": str(ref_path)},
+    ]
+    if resolved_policy_id:
+        base_evidence.append(
+            {"evidence_id": "EVID.DOWNMIX.POLICY_ID", "value": resolved_policy_id}
+        )
+    if matrix_id:
+        base_evidence.append(
+            {"evidence_id": "EVID.DOWNMIX.MATRIX_ID", "value": matrix_id}
+        )
+
+    fold_silent = _downmix_metrics_are_effectively_silent(fold_metrics, meters=meters)
+    ref_silent = _downmix_metrics_are_effectively_silent(ref_metrics, meters=meters)
+    measurement_states: Dict[str, str] = {}
+
     if meters == "truth":
-        lufs_delta = fold_metrics["lufs"] - ref_metrics["lufs"]
-        tp_delta = fold_metrics["true_peak"] - ref_metrics["true_peak"]
-        corr_delta = fold_metrics["correlation"] - ref_metrics["correlation"]
+        fold_lufs = _finite_metric(fold_metrics.get("lufs"))
+        ref_lufs = _finite_metric(ref_metrics.get("lufs"))
+        fold_true_peak = _finite_metric(fold_metrics.get("true_peak"))
+        ref_true_peak = _finite_metric(ref_metrics.get("true_peak"))
+        fold_corr = _finite_metric(fold_metrics.get("correlation"))
+        ref_corr = _finite_metric(ref_metrics.get("correlation"))
+
+        measurement_states["similarity"] = classify_measurement_state(
+            measured=(
+                fold_lufs is not None
+                and ref_lufs is not None
+                and fold_true_peak is not None
+                and ref_true_peak is not None
+            ),
+            silent=fold_silent or ref_silent,
+        )
+        measurement_states["correlation"] = classify_measurement_state(
+            measured=fold_corr is not None and ref_corr is not None,
+            silent=(
+                fold_silent
+                or ref_silent
+                or measurement_states["similarity"]
+                == MEASUREMENT_STATE_INVALID_DUE_TO_SILENCE
+            ),
+        )
+
+        if measurement_states["similarity"] != MEASUREMENT_STATE_MEASURED:
+            issues.append(
+                _issue(
+                    "ISSUE.DOWNMIX.QA.SIMILARITY_NON_MEASURABLE",
+                    90,
+                    (
+                        "Folded downmix similarity could not be measured "
+                        f"({measurement_states['similarity']})."
+                    ),
+                    base_evidence,
+                )
+            )
+        if measurement_states["correlation"] != MEASUREMENT_STATE_MEASURED:
+            issues.append(
+                _issue(
+                    "ISSUE.DOWNMIX.QA.CORRELATION_NON_MEASURABLE",
+                    90,
+                    (
+                        "Folded downmix correlation could not be measured "
+                        f"({measurement_states['correlation']})."
+                    ),
+                    base_evidence,
+                )
+            )
+        if issues:
+            log_payload = {
+                "matrix_id": matrix_id,
+                "policy_id": resolved_policy_id,
+                "source_layout_id": source_layout_id,
+                "target_layout_id": target_layout_id,
+                "src_channels": src_channels,
+                "ref_channels": ref_channels,
+                "sample_rate_hz": src_sample_rate,
+                "seconds_available": seconds_available,
+                "max_seconds": max_seconds,
+                "seconds_compared": seconds_compared,
+                "tolerances": {
+                    "lufs": tolerance_lufs,
+                    "true_peak_db": tolerance_true_peak_db,
+                    "correlation": tolerance_corr,
+                },
+                "measurement_states": measurement_states,
+                "decode_backend": "ffmpeg_f64le",
+                "remainder_samples_dropped": remainder_samples_dropped,
+                "source_pre_filters_applied": source_pre_filters_applied,
+                "source_pre_filters": source_pre_filters_for_log,
+            }
+            log_json = json.dumps(log_payload, sort_keys=True, separators=(",", ":"))
+            measurements.append(
+                {
+                    "evidence_id": "EVID.DOWNMIX.QA.LOG",
+                    "value": log_json,
+                    "unit_id": "UNIT.NONE",
+                }
+            )
+            return {
+                "downmix_qa": {
+                    "src_path": str(src_path),
+                    "ref_path": str(ref_path),
+                    "policy_id": resolved_policy_id,
+                    "matrix_id": matrix_id,
+                    "sample_rate_hz": src_sample_rate,
+                    "issues": issues,
+                    "measurements": measurements,
+                    "log": log_json,
+                }
+            }
+
+        lufs_delta = fold_lufs - ref_lufs
+        tp_delta = fold_true_peak - ref_true_peak
+        corr_delta = fold_corr - ref_corr
 
         measurements.extend(
             [
                 {
                     "evidence_id": "EVID.DOWNMIX.QA.LUFS_FOLD",
-                    "value": fold_metrics["lufs"],
+                    "value": fold_lufs,
                     "unit_id": "UNIT.LUFS",
                 },
                 {
                     "evidence_id": "EVID.DOWNMIX.QA.LUFS_REF",
-                    "value": ref_metrics["lufs"],
+                    "value": ref_lufs,
                     "unit_id": "UNIT.LUFS",
                 },
                 {
@@ -845,12 +994,12 @@ def run_downmix_qa(
                 },
                 {
                     "evidence_id": "EVID.DOWNMIX.QA.TRUE_PEAK_FOLD",
-                    "value": fold_metrics["true_peak"],
+                    "value": fold_true_peak,
                     "unit_id": "UNIT.DBTP",
                 },
                 {
                     "evidence_id": "EVID.DOWNMIX.QA.TRUE_PEAK_REF",
-                    "value": ref_metrics["true_peak"],
+                    "value": ref_true_peak,
                     "unit_id": "UNIT.DBTP",
                 },
                 {
@@ -860,12 +1009,12 @@ def run_downmix_qa(
                 },
                 {
                     "evidence_id": "EVID.DOWNMIX.QA.CORR_FOLD",
-                    "value": fold_metrics["correlation"],
+                    "value": fold_corr,
                     "unit_id": "UNIT.CORRELATION",
                 },
                 {
                     "evidence_id": "EVID.DOWNMIX.QA.CORR_REF",
-                    "value": ref_metrics["correlation"],
+                    "value": ref_corr,
                     "unit_id": "UNIT.CORRELATION",
                 },
                 {
@@ -876,31 +1025,16 @@ def run_downmix_qa(
             ]
         )
 
-        base_evidence = [
-            {"evidence_id": "EVID.DOWNMIX.QA.SRC_PATH", "value": str(src_path)},
-            {"evidence_id": "EVID.DOWNMIX.QA.REF_PATH", "value": str(ref_path)},
-            {"evidence_id": "EVID.FILE.PATH", "value": str(src_path)},
-            {"evidence_id": "EVID.FILE.PATH", "value": str(ref_path)},
-        ]
-        if resolved_policy_id:
-            base_evidence.append(
-                {"evidence_id": "EVID.DOWNMIX.POLICY_ID", "value": resolved_policy_id}
-            )
-        if matrix_id:
-            base_evidence.append(
-                {"evidence_id": "EVID.DOWNMIX.MATRIX_ID", "value": matrix_id}
-            )
-
         if abs(lufs_delta) > tolerance_lufs:
             evidence = base_evidence + [
                 {
                     "evidence_id": "EVID.DOWNMIX.QA.LUFS_FOLD",
-                    "value": fold_metrics["lufs"],
+                    "value": fold_lufs,
                     "unit_id": "UNIT.LUFS",
                 },
                 {
                     "evidence_id": "EVID.DOWNMIX.QA.LUFS_REF",
-                    "value": ref_metrics["lufs"],
+                    "value": ref_lufs,
                     "unit_id": "UNIT.LUFS",
                 },
                 {
@@ -922,12 +1056,12 @@ def run_downmix_qa(
             evidence = base_evidence + [
                 {
                     "evidence_id": "EVID.DOWNMIX.QA.TRUE_PEAK_FOLD",
-                    "value": fold_metrics["true_peak"],
+                    "value": fold_true_peak,
                     "unit_id": "UNIT.DBTP",
                 },
                 {
                     "evidence_id": "EVID.DOWNMIX.QA.TRUE_PEAK_REF",
-                    "value": ref_metrics["true_peak"],
+                    "value": ref_true_peak,
                     "unit_id": "UNIT.DBTP",
                 },
                 {
@@ -949,12 +1083,12 @@ def run_downmix_qa(
             evidence = base_evidence + [
                 {
                     "evidence_id": "EVID.DOWNMIX.QA.CORR_FOLD",
-                    "value": fold_metrics["correlation"],
+                    "value": fold_corr,
                     "unit_id": "UNIT.CORRELATION",
                 },
                 {
                     "evidence_id": "EVID.DOWNMIX.QA.CORR_REF",
-                    "value": ref_metrics["correlation"],
+                    "value": ref_corr,
                     "unit_id": "UNIT.CORRELATION",
                 },
                 {
@@ -972,17 +1106,83 @@ def run_downmix_qa(
                 )
             )
     else:
-        corr_delta = fold_metrics["correlation"] - ref_metrics["correlation"]
+        fold_corr = _finite_metric(fold_metrics.get("correlation"))
+        ref_corr = _finite_metric(ref_metrics.get("correlation"))
+        measurement_states["similarity"] = classify_measurement_state(
+            measured=False,
+            applicable=False,
+        )
+        measurement_states["correlation"] = classify_measurement_state(
+            measured=fold_corr is not None and ref_corr is not None,
+            silent=fold_silent or ref_silent,
+        )
+        if measurement_states["correlation"] != MEASUREMENT_STATE_MEASURED:
+            issues.append(
+                _issue(
+                    "ISSUE.DOWNMIX.QA.CORRELATION_NON_MEASURABLE",
+                    90,
+                    (
+                        "Folded downmix correlation could not be measured "
+                        f"({measurement_states['correlation']})."
+                    ),
+                    base_evidence,
+                )
+            )
+        if issues:
+            log_payload = {
+                "matrix_id": matrix_id,
+                "policy_id": resolved_policy_id,
+                "source_layout_id": source_layout_id,
+                "target_layout_id": target_layout_id,
+                "src_channels": src_channels,
+                "ref_channels": ref_channels,
+                "sample_rate_hz": src_sample_rate,
+                "seconds_available": seconds_available,
+                "max_seconds": max_seconds,
+                "seconds_compared": seconds_compared,
+                "tolerances": {
+                    "lufs": tolerance_lufs,
+                    "true_peak_db": tolerance_true_peak_db,
+                    "correlation": tolerance_corr,
+                },
+                "measurement_states": measurement_states,
+                "decode_backend": "ffmpeg_f64le",
+                "remainder_samples_dropped": remainder_samples_dropped,
+                "source_pre_filters_applied": source_pre_filters_applied,
+                "source_pre_filters": source_pre_filters_for_log,
+            }
+            log_json = json.dumps(log_payload, sort_keys=True, separators=(",", ":"))
+            measurements.append(
+                {
+                    "evidence_id": "EVID.DOWNMIX.QA.LOG",
+                    "value": log_json,
+                    "unit_id": "UNIT.NONE",
+                }
+            )
+            return {
+                "downmix_qa": {
+                    "src_path": str(src_path),
+                    "ref_path": str(ref_path),
+                    "policy_id": resolved_policy_id,
+                    "matrix_id": matrix_id,
+                    "sample_rate_hz": src_sample_rate,
+                    "issues": issues,
+                    "measurements": measurements,
+                    "log": log_json,
+                }
+            }
+
+        corr_delta = fold_corr - ref_corr
         measurements.extend(
             [
                 {
                     "evidence_id": "EVID.DOWNMIX.QA.CORR_FOLD",
-                    "value": fold_metrics["correlation"],
+                    "value": fold_corr,
                     "unit_id": "UNIT.CORRELATION",
                 },
                 {
                     "evidence_id": "EVID.DOWNMIX.QA.CORR_REF",
-                    "value": ref_metrics["correlation"],
+                    "value": ref_corr,
                     "unit_id": "UNIT.CORRELATION",
                 },
                 {
@@ -992,30 +1192,16 @@ def run_downmix_qa(
                 },
             ]
         )
-        base_evidence = [
-            {"evidence_id": "EVID.DOWNMIX.QA.SRC_PATH", "value": str(src_path)},
-            {"evidence_id": "EVID.DOWNMIX.QA.REF_PATH", "value": str(ref_path)},
-            {"evidence_id": "EVID.FILE.PATH", "value": str(src_path)},
-            {"evidence_id": "EVID.FILE.PATH", "value": str(ref_path)},
-        ]
-        if resolved_policy_id:
-            base_evidence.append(
-                {"evidence_id": "EVID.DOWNMIX.POLICY_ID", "value": resolved_policy_id}
-            )
-        if matrix_id:
-            base_evidence.append(
-                {"evidence_id": "EVID.DOWNMIX.MATRIX_ID", "value": matrix_id}
-            )
         if abs(corr_delta) > tolerance_corr:
             evidence = base_evidence + [
                 {
                     "evidence_id": "EVID.DOWNMIX.QA.CORR_FOLD",
-                    "value": fold_metrics["correlation"],
+                    "value": fold_corr,
                     "unit_id": "UNIT.CORRELATION",
                 },
                 {
                     "evidence_id": "EVID.DOWNMIX.QA.CORR_REF",
-                    "value": ref_metrics["correlation"],
+                    "value": ref_corr,
                     "unit_id": "UNIT.CORRELATION",
                 },
                 {
@@ -1049,6 +1235,7 @@ def run_downmix_qa(
             "true_peak_db": tolerance_true_peak_db,
             "correlation": tolerance_corr,
         },
+        "measurement_states": measurement_states,
         "decode_backend": "ffmpeg_f64le",
         "remainder_samples_dropped": remainder_samples_dropped,
         "source_pre_filters_applied": source_pre_filters_applied,

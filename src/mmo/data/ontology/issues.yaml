@@ -927,6 +927,32 @@ issues:
       - "EVID.DOWNMIX.QA.CORR_REF"
       - "EVID.DOWNMIX.QA.CORR_DELTA"
 
+  ISSUE.DOWNMIX.QA.SIMILARITY_NON_MEASURABLE:
+    label: "Downmix similarity non-measurable"
+    description: "Folded downmix similarity measurements are unavailable or invalid, so the compare cannot pass."
+    issue_type: "downmix_qa"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+      - "EVID.DOWNMIX.QA.REF_PATH"
+      - "EVID.DOWNMIX.QA.SRC_PATH"
+      - "EVID.DOWNMIX.POLICY_ID"
+      - "EVID.DOWNMIX.MATRIX_ID"
+
+  ISSUE.DOWNMIX.QA.CORRELATION_NON_MEASURABLE:
+    label: "Downmix correlation non-measurable"
+    description: "Folded downmix correlation could not be measured reliably, so mono-compatibility compare is invalid."
+    issue_type: "downmix_qa"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.FILE.PATH"
+      - "EVID.DOWNMIX.QA.REF_PATH"
+      - "EVID.DOWNMIX.QA.SRC_PATH"
+      - "EVID.DOWNMIX.POLICY_ID"
+      - "EVID.DOWNMIX.MATRIX_ID"
+
   ISSUE.DOWNMIX.QA.SAMPLE_RATE_MISMATCH:
     label: "Sample rate mismatch"
     description: "Source and reference sample rates do not match; QA compare is invalid."

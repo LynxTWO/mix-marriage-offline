@@ -10,6 +10,10 @@ from typing import Any, Iterator, Sequence
 
 from mmo.core.deliverables import SILENT_OUTPUT_PEAK_DBFS_LTE
 from mmo.core.loudness_methods import DEFAULT_LOUDNESS_METHOD_ID
+from mmo.core.qa_states import (
+    MEASUREMENT_STATE_INVALID_DUE_TO_SILENCE,
+    classify_measurement_state,
+)
 from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.decoders import detect_format_from_path, read_metadata
@@ -84,6 +88,7 @@ _DEFAULT_THRESHOLDS: dict[str, float] = {
     "plugin_delta_lufs_error_abs": 4.0,
     "plugin_delta_crest_warn_abs": 3.0,
     "plugin_delta_crest_error_abs": 6.0,
+    "silent_peak_dbfs_lte": SILENT_OUTPUT_PEAK_DBFS_LTE,
 }
 
 _SEVERITY_ORDER: dict[str, int] = {
@@ -151,6 +156,76 @@ def _power_to_db(value: float) -> float | None:
     if not math.isfinite(value) or value <= 0.0:
         return None
     return round(10.0 * math.log10(float(value)), 4)
+
+
+def _metrics_indicate_audio_present(metrics: Any) -> bool:
+    if not isinstance(metrics, dict):
+        return False
+    for key in (
+        "peak_dbfs",
+        "rms_dbfs",
+        "integrated_lufs",
+        "short_term_lufs_p10",
+        "short_term_lufs_p50",
+        "short_term_lufs_p90",
+        "loudness_range_lu",
+        "crest_factor_db",
+        "true_peak_dbtp",
+        "mid_rms_dbfs",
+        "side_rms_dbfs",
+        "mono_rms_dbfs",
+    ):
+        if _coerce_float(metrics.get(key)) is not None:
+            return True
+    clip_count = _coerce_int(metrics.get("clip_sample_count"))
+    return clip_count is not None and clip_count > 0
+
+
+def _metrics_are_effectively_silent(
+    metrics: Any,
+    *,
+    silent_peak_dbfs_lte: float,
+    measurement_failed: bool = False,
+) -> bool:
+    if measurement_failed:
+        return False
+    if not isinstance(metrics, dict):
+        return False
+    peak_dbfs = _coerce_float(metrics.get("peak_dbfs"))
+    if peak_dbfs is not None:
+        return peak_dbfs <= silent_peak_dbfs_lte
+    if _metrics_indicate_audio_present(metrics):
+        return False
+    return True
+
+
+def _append_non_measurable_issue(
+    issues: list[dict[str, Any]],
+    *,
+    issue_id: str,
+    message: str,
+    job_id: str,
+    output_path: str,
+    metric: str,
+    silent_output: bool,
+    threshold: float | int | None = None,
+) -> None:
+    issues.append(
+        _issue(
+            issue_id=issue_id,
+            severity="error",
+            message=message,
+            job_id=job_id,
+            output_path=output_path,
+            metric=metric,
+            value=None,
+            threshold=threshold,
+            measurement_state=classify_measurement_state(
+                measured=False,
+                silent=silent_output,
+            ),
+        )
+    )
 
 
 def _canonical_sha256(payload: dict[str, Any]) -> str:
@@ -973,8 +1048,9 @@ def _issue(
     metric: str,
     value: float | int | None,
     threshold: float | int | None,
+    measurement_state: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "issue_id": issue_id,
         "severity": severity,
         "message": message,
@@ -984,6 +1060,9 @@ def _issue(
         "value": value,
         "threshold": threshold,
     }
+    if measurement_state:
+        payload["measurement_state"] = measurement_state
+    return payload
 
 
 def _severity_rank(value: Any) -> int:
@@ -1022,6 +1101,11 @@ def _build_qa_issues(
 
     for job in jobs:
         job_id = _coerce_str(job.get("job_id")).strip()
+        input_entry = job.get("input")
+        if not isinstance(input_entry, dict):
+            input_entry = {}
+        input_metrics = input_entry.get("metrics")
+        source_has_audio = _metrics_indicate_audio_present(input_metrics)
         outputs = job.get("outputs")
         if not isinstance(outputs, list):
             continue
@@ -1032,8 +1116,59 @@ def _build_qa_issues(
             metrics = output.get("metrics")
             if not isinstance(metrics, dict):
                 metrics = {}
+            output_channels = _coerce_int(output.get("channel_count"))
+            silent_output = _metrics_are_effectively_silent(
+                metrics,
+                silent_peak_dbfs_lte=thresholds["silent_peak_dbfs_lte"],
+            )
+            peak_dbfs = _coerce_float(metrics.get("peak_dbfs"))
+            if source_has_audio and silent_output:
+                issues.append(
+                    _issue(
+                        issue_id="ISSUE.RENDER.QA.SILENT_OUTPUT",
+                        severity="error",
+                        message="Rendered output is effectively silent.",
+                        job_id=job_id,
+                        output_path=output_path,
+                        metric="peak_dbfs",
+                        value=_round_or_none(peak_dbfs),
+                        threshold=_round_or_none(thresholds["silent_peak_dbfs_lte"]),
+                        measurement_state=MEASUREMENT_STATE_INVALID_DUE_TO_SILENCE,
+                    )
+                )
+
+            integrated_lufs = _coerce_float(metrics.get("integrated_lufs"))
+            if source_has_audio and integrated_lufs is None:
+                _append_non_measurable_issue(
+                    issues,
+                    issue_id="ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE",
+                    message=(
+                        "Rendered output loudness could not be measured from audio "
+                        "that should contain program material."
+                    ),
+                    job_id=job_id,
+                    output_path=output_path,
+                    metric="integrated_lufs",
+                    silent_output=silent_output,
+                )
+
             correlation = _coerce_float(metrics.get("correlation_lr"))
-            if output.get("polarity_risk") is True:
+            correlation_applicable = output_channels is None or output_channels >= _STEREO_CHANNELS
+            if source_has_audio and correlation_applicable and (silent_output or correlation is None):
+                _append_non_measurable_issue(
+                    issues,
+                    issue_id="ISSUE.RENDER.QA.CORRELATION_NON_MEASURABLE",
+                    message=(
+                        "Rendered output stereo correlation could not be measured "
+                        "reliably."
+                    ),
+                    job_id=job_id,
+                    output_path=output_path,
+                    metric="correlation_lr",
+                    silent_output=silent_output,
+                )
+
+            if not silent_output and output.get("polarity_risk") is True:
                 issues.append(
                     _issue(
                         issue_id="ISSUE.RENDER.QA.POLARITY_RISK",
@@ -1052,7 +1187,9 @@ def _build_qa_issues(
                     )
                 )
             elif (
-                correlation is not None
+                not silent_output
+                and correlation_applicable
+                and correlation is not None
                 and correlation <= thresholds["correlation_warn_lte"]
             ):
                 issues.append(
@@ -1089,6 +1226,19 @@ def _build_qa_issues(
                 )
 
             true_peak_dbtp = _coerce_float(metrics.get("true_peak_dbtp"))
+            if source_has_audio and true_peak_dbtp is None:
+                _append_non_measurable_issue(
+                    issues,
+                    issue_id="ISSUE.RENDER.QA.PEAK_NON_MEASURABLE",
+                    message=(
+                        "Rendered output true-peak could not be measured from audio "
+                        "that should contain program material."
+                    ),
+                    job_id=job_id,
+                    output_path=output_path,
+                    metric="true_peak_dbtp",
+                    silent_output=silent_output,
+                )
             if true_peak_dbtp is not None:
                 if true_peak_dbtp > thresholds["true_peak_error_dbtp_gt"]:
                     issues.append(
@@ -1407,13 +1557,20 @@ _SAFE_RENDER_QA_THRESHOLDS: dict[str, float] = {
 def _safe_render_qa_issues(
     *,
     output_path: str,
+    channels: int,
     metrics: dict[str, Any],
     thresholds: dict[str, float],
+    measurement_failed: bool = False,
 ) -> list[dict[str, Any]]:
     """Return QA issues for a single rendered output file."""
     issues: list[dict[str, Any]] = []
+    silent_output = _metrics_are_effectively_silent(
+        metrics,
+        silent_peak_dbfs_lte=thresholds["silent_peak_dbfs_lte"],
+        measurement_failed=measurement_failed,
+    )
     peak_dbfs = _coerce_float(metrics.get("peak_dbfs"))
-    if peak_dbfs is None or peak_dbfs <= thresholds["silent_peak_dbfs_lte"]:
+    if silent_output:
         issues.append(
             {
                 "issue_id": "ISSUE.RENDER.QA.SILENT_OUTPUT",
@@ -1423,11 +1580,46 @@ def _safe_render_qa_issues(
                 "metric": "peak_dbfs",
                 "value": _round_or_none(peak_dbfs),
                 "threshold": _round_or_none(thresholds["silent_peak_dbfs_lte"]),
+                "measurement_state": MEASUREMENT_STATE_INVALID_DUE_TO_SILENCE,
+            }
+        )
+
+    integrated_lufs = _coerce_float(metrics.get("integrated_lufs"))
+    if integrated_lufs is None:
+        issues.append(
+            {
+                "issue_id": "ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE",
+                "severity": "error",
+                "message": "Rendered output loudness could not be measured reliably.",
+                "output_path": output_path,
+                "metric": "integrated_lufs",
+                "value": None,
+                "threshold": None,
+                "measurement_state": classify_measurement_state(
+                    measured=False,
+                    silent=silent_output,
+                ),
             }
         )
 
     correlation_lr = _coerce_float(metrics.get("correlation_lr"))
-    if correlation_lr is not None:
+    if channels >= _STEREO_CHANNELS and (silent_output or correlation_lr is None):
+        issues.append(
+            {
+                "issue_id": "ISSUE.RENDER.QA.CORRELATION_NON_MEASURABLE",
+                "severity": "error",
+                "message": "Rendered output stereo correlation could not be measured.",
+                "output_path": output_path,
+                "metric": "correlation_lr",
+                "value": _round_or_none(correlation_lr),
+                "threshold": None,
+                "measurement_state": classify_measurement_state(
+                    measured=False,
+                    silent=silent_output,
+                ),
+            }
+        )
+    elif correlation_lr is not None:
         if correlation_lr <= thresholds["polarity_error_correlation_lte"]:
             issues.append(
                 {
@@ -1473,7 +1665,23 @@ def _safe_render_qa_issues(
         )
 
     true_peak_dbtp = _coerce_float(metrics.get("true_peak_dbtp"))
-    if true_peak_dbtp is not None:
+    if true_peak_dbtp is None:
+        issues.append(
+            {
+                "issue_id": "ISSUE.RENDER.QA.PEAK_NON_MEASURABLE",
+                "severity": "error",
+                "message": "Rendered output true-peak could not be measured reliably.",
+                "output_path": output_path,
+                "metric": "true_peak_dbtp",
+                "value": None,
+                "threshold": None,
+                "measurement_state": classify_measurement_state(
+                    measured=False,
+                    silent=silent_output,
+                ),
+            }
+        )
+    elif true_peak_dbtp is not None:
         if true_peak_dbtp > thresholds["true_peak_error_dbtp_gt"]:
             issues.append(
                 {
@@ -1548,6 +1756,7 @@ def build_safe_render_qa(
 
         file_metrics: dict[str, Any] = _empty_metrics()
         file_spectral: dict[str, Any] = _empty_spectral()
+        measurement_failed = False
 
         if file_path_str and channels > 0 and sample_rate_hz > 0 and np_module is not None:
             try:
@@ -1567,7 +1776,7 @@ def build_safe_render_qa(
                     np_module=np_module,
                 )
             except (ValueError, OSError, RuntimeError):
-                pass
+                measurement_failed = True
 
         output_row: dict[str, Any] = {
             "path": file_path_str,
@@ -1581,8 +1790,10 @@ def build_safe_render_qa(
 
         file_issues = _safe_render_qa_issues(
             output_path=file_path_str,
+            channels=channels,
             metrics=file_metrics,
             thresholds=thresholds,
+            measurement_failed=measurement_failed,
         )
         all_issues.extend(file_issues)
 

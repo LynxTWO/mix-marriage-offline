@@ -282,6 +282,15 @@
           "issue_id": { "type": "string", "minLength": 1 },
           "severity": { "type": "string", "enum": ["error", "warn", "info"] },
           "message": { "type": "string" },
+          "measurement_state": {
+            "type": "string",
+            "enum": [
+              "measured",
+              "not_applicable",
+              "measurement_failed",
+              "invalid_due_to_silence"
+            ]
+          },
           "output_path": { "type": "string" },
           "metric": { "type": "string" },
           "value": {},

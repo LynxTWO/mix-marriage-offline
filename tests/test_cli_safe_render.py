@@ -1709,6 +1709,19 @@ class TestBuildSafeRenderQA(unittest.TestCase):
         )
         self.assertEqual(len(qa["outputs"]), 1)
         self.assertIsInstance(qa["issues"], list)
+        issue_map = {
+            issue.get("issue_id"): issue
+            for issue in qa["issues"]
+            if isinstance(issue, dict)
+        }
+        self.assertEqual(
+            issue_map["ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE"]["measurement_state"],
+            "measurement_failed",
+        )
+        self.assertEqual(
+            issue_map["ISSUE.RENDER.QA.PEAK_NON_MEASURABLE"]["measurement_state"],
+            "measurement_failed",
+        )
 
     def test_valid_wav_file_produces_spectral_data(self) -> None:
         """When numpy is available, a WAV file produces spectral slope metrics."""
@@ -1768,6 +1781,9 @@ class TestBuildSafeRenderQA(unittest.TestCase):
                 if isinstance(issue, dict) and issue.get("severity") == "error"
             }
             self.assertIn("ISSUE.RENDER.QA.SILENT_OUTPUT", error_ids)
+            self.assertIn("ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE", error_ids)
+            self.assertIn("ISSUE.RENDER.QA.PEAK_NON_MEASURABLE", error_ids)
+            self.assertIn("ISSUE.RENDER.QA.CORRELATION_NON_MEASURABLE", error_ids)
 
     def test_output_just_below_silence_threshold_is_reported(self) -> None:
         from mmo.core.render_qa import build_safe_render_qa  # noqa: WPS433

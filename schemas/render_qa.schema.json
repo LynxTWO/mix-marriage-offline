@@ -439,7 +439,8 @@
         "plugin_delta_lufs_warn_abs",
         "plugin_delta_lufs_error_abs",
         "plugin_delta_crest_warn_abs",
-        "plugin_delta_crest_error_abs"
+        "plugin_delta_crest_error_abs",
+        "silent_peak_dbfs_lte"
       ],
       "properties": {
         "polarity_error_correlation_lte": {
@@ -473,6 +474,9 @@
           "type": "number"
         },
         "plugin_delta_crest_error_abs": {
+          "type": "number"
+        },
+        "silent_peak_dbfs_lte": {
           "type": "number"
         }
       }
@@ -541,6 +545,14 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "measurement_state": {
+          "type": "string",
+          "enum": [
+            "not_applicable",
+            "measurement_failed",
+            "invalid_due_to_silence"
           ]
         }
       }

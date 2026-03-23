@@ -652,7 +652,11 @@ added.
       fallback actions attempted. Done: safe-render now preserves renderer-side
       fallback config from session fixtures, records ordered per-step
       before/after QA metrics through safety collapse, and surfaces explicit
-      gate-failure diagnostics when collapse still does not pass.
+      gate-failure diagnostics when collapse still does not pass. Done:
+      measured render/downmix QA now records explicit measurement states
+      (`not_applicable`, `measurement_failed`, `invalid_due_to_silence`) and
+      blocks silent or non-measurable outputs from passing similarity or
+      render-quality checks.
 
 ### 4.9.7 Formats, export, and reproducibility
 

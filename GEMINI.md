@@ -123,6 +123,10 @@ Non-negotiables:
 - Keep safe-render zero-output behavior fail-safe: emit
   `ISSUE.RENDER.NO_OUTPUTS` and return non-zero by default unless
   `--allow-empty-outputs` is explicitly set.
+- Keep render/downmix QA measurement states explicit and shared: silent,
+  non-measurable, and not-applicable loudness/peak/similarity/correlation
+  cases must surface canonical state labels instead of quietly behaving like a
+  pass.
 - Keep offline plugin marketplace discovery install-safe via bundled
   `ontology/plugin_index.yaml` and deterministic CLI/GUI listing paths.
 - Keep offline plugin hub installs deterministic and install-safe by sourcing

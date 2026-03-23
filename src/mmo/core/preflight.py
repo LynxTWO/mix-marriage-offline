@@ -611,6 +611,10 @@ def _eval_downmix_similarity_measured(
         "risk_level": risk_level,
         "true_peak_dbtp": check.get("true_peak_dbtp"),
         "stereo_correlation": check.get("stereo_correlation"),
+        "loudness_state": check.get("loudness_state"),
+        "peak_state": check.get("peak_state"),
+        "correlation_state": check.get("correlation_state"),
+        "similarity_state": check.get("similarity_state"),
     }
 
     if risk_level == "high":

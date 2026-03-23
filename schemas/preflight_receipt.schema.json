@@ -189,6 +189,18 @@
         "lufs_delta_db": {
           "type": ["number", "null"]
         },
+        "loudness_state": {
+          "$ref": "#/$defs/measurement_state"
+        },
+        "peak_state": {
+          "$ref": "#/$defs/measurement_state"
+        },
+        "correlation_state": {
+          "$ref": "#/$defs/measurement_state"
+        },
+        "similarity_state": {
+          "$ref": "#/$defs/measurement_state"
+        },
         "risk_level": {
           "type": "string",
           "enum": ["low", "medium", "high"]
@@ -202,6 +214,15 @@
           "const": true
         }
       }
+    },
+    "measurement_state": {
+      "type": "string",
+      "enum": [
+        "measured",
+        "not_applicable",
+        "measurement_failed",
+        "invalid_due_to_silence"
+      ]
     }
   }
 }

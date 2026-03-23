@@ -59,7 +59,12 @@ def _write_fake_ffprobe(
     return script_path
 
 
-def _write_fake_ffmpeg(directory: Path) -> Path:
+def _write_fake_ffmpeg(
+    directory: Path,
+    *,
+    src_mode: str = "normal",
+    ref_mode: str = "normal",
+) -> Path:
     script_path = directory / "fake_ffmpeg.py"
     script_path.write_text(
         (
@@ -73,9 +78,17 @@ def _write_fake_ffmpeg(directory: Path) -> Path:
             "    name = os.path.basename(path)\n"
             "    frames = 24000\n"
             "    if name.startswith('src'):\n"
-            "        samples = [0.1, 0.1, 0.0, 0.0, 0.0, 0.0] * frames\n"
+            f"        mode = {src_mode!r}\n"
+            "        if mode == 'silent':\n"
+            "            samples = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] * frames\n"
+            "        else:\n"
+            "            samples = [0.1, 0.1, 0.0, 0.0, 0.0, 0.0] * frames\n"
             "    else:\n"
-            "        samples = [0.1, 0.1] * frames\n"
+            f"        mode = {ref_mode!r}\n"
+            "        if mode == 'silent':\n"
+            "            samples = [0.0, 0.0] * frames\n"
+            "        else:\n"
+            "            samples = [0.1, 0.1] * frames\n"
             "    payload = struct.pack(f'<{len(samples)}d', *samples)\n"
             "    sys.stdout.buffer.write(payload)\n"
             "\n"
@@ -96,7 +109,14 @@ class TestDownmixQaTruthStreaming(unittest.TestCase):
         except Exception:
             self.skipTest("numpy not available")
 
-    def _run_truth_qa(self, *, duration_s: str = "0.5") -> dict:
+    def _run_truth_qa(
+        self,
+        *,
+        duration_s: str = "0.5",
+        src_mode: str = "normal",
+        ref_mode: str = "normal",
+        max_seconds: float = 0.5,
+    ) -> dict:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             repo_root = Path(__file__).resolve().parents[1]
@@ -106,7 +126,11 @@ class TestDownmixQaTruthStreaming(unittest.TestCase):
             ref_path.write_bytes(b"")
 
             ffprobe_path = _write_fake_ffprobe(temp_path, ref_channels=2, duration_s=duration_s)
-            ffmpeg_path = _write_fake_ffmpeg(temp_path)
+            ffmpeg_path = _write_fake_ffmpeg(
+                temp_path,
+                src_mode=src_mode,
+                ref_mode=ref_mode,
+            )
 
             env = {
                 "MMO_FFMPEG_PATH": str(ffmpeg_path),
@@ -124,7 +148,7 @@ class TestDownmixQaTruthStreaming(unittest.TestCase):
                     tolerance_corr=0.15,
                     repo_root=repo_root,
                     meters="truth",
-                    max_seconds=0.25,
+                    max_seconds=max_seconds,
                 )
 
     def test_truth_streaming_path_used(self) -> None:
@@ -139,11 +163,41 @@ class TestDownmixQaTruthStreaming(unittest.TestCase):
 
     def test_truth_max_seconds_logged_with_long_metadata(self) -> None:
         self._skip_if_no_numpy()
-        payload = self._run_truth_qa(duration_s="3600.0")
+        payload = self._run_truth_qa(duration_s="3600.0", max_seconds=0.25)
         log_payload = json.loads(payload["downmix_qa"]["log"])
         self.assertEqual(log_payload.get("seconds_compared"), 0.25)
         self.assertEqual(log_payload.get("max_seconds"), 0.25)
         self.assertEqual(log_payload.get("sample_rate_hz"), 48000)
+
+    def test_truth_missing_reference_measurements_emit_similarity_issue(self) -> None:
+        self._skip_if_no_numpy()
+        payload = self._run_truth_qa(ref_mode="silent")
+        issue_ids = {
+            issue.get("issue_id")
+            for issue in payload["downmix_qa"].get("issues", [])
+            if isinstance(issue, dict)
+        }
+        self.assertIn("ISSUE.DOWNMIX.QA.SIMILARITY_NON_MEASURABLE", issue_ids)
+        log_payload = json.loads(payload["downmix_qa"]["log"])
+        self.assertEqual(
+            log_payload.get("measurement_states", {}).get("similarity"),
+            "invalid_due_to_silence",
+        )
+
+    def test_truth_silent_reference_emits_correlation_issue(self) -> None:
+        self._skip_if_no_numpy()
+        payload = self._run_truth_qa(ref_mode="silent")
+        issue_ids = {
+            issue.get("issue_id")
+            for issue in payload["downmix_qa"].get("issues", [])
+            if isinstance(issue, dict)
+        }
+        self.assertIn("ISSUE.DOWNMIX.QA.CORRELATION_NON_MEASURABLE", issue_ids)
+        log_payload = json.loads(payload["downmix_qa"]["log"])
+        self.assertEqual(
+            log_payload.get("measurement_states", {}).get("correlation"),
+            "invalid_due_to_silence",
+        )
 
 
 class TestTruthMetersStreamingMath(unittest.TestCase):

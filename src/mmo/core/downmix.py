@@ -26,8 +26,13 @@ import wave
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+from mmo.core.deliverables import SILENT_OUTPUT_PEAK_DBFS_LTE
 from mmo.core.fallback_sequencer import run_fallback_sequence
 from mmo.core.loudness_methods import DEFAULT_LOUDNESS_METHOD_ID
+from mmo.core.qa_states import (
+    MEASUREMENT_STATE_FAILED,
+    classify_measurement_state,
+)
 from mmo.dsp.downmix import (
     apply_matrix_to_audio,
     resolve_downmix_matrix,
@@ -81,6 +86,17 @@ _TARGET_STEREO_LAYOUT_ID = "LAYOUT.2_0"
 _PCM24_MIN = -8_388_608
 _PCM24_MAX = 8_388_607
 _FLOAT_MAX = math.nextafter(1.0, 0.0)
+
+
+def _sample_peak_dbfs_wav(path: Path) -> Optional[float]:
+    from mmo.dsp.meters import compute_basic_stats_from_float64, iter_wav_float64_samples
+
+    peak_linear, _, _, _, _ = compute_basic_stats_from_float64(
+        iter_wav_float64_samples(path, error_context="downmix measured similarity")
+    )
+    if not math.isfinite(peak_linear) or peak_linear <= 0.0:
+        return None
+    return round(20.0 * math.log10(peak_linear), 3)
 
 
 def _is_lfe_speaker_id(speaker_id: str) -> bool:
@@ -393,6 +409,10 @@ def measure_downmix_similarity(
     rendered_file = Path(rendered_file)
     metadata = read_wav_metadata(rendered_file)
     channels = int(metadata["channels"])
+    peak_dbfs = _sample_peak_dbfs_wav(rendered_file)
+    silent_output = (
+        peak_dbfs is None or peak_dbfs <= SILENT_OUTPUT_PEAK_DBFS_LTE
+    )
 
     notes: List[str] = []
 
@@ -417,7 +437,7 @@ def measure_downmix_similarity(
 
     # --- Cross-channel correlation (stereo only) -----------------------------
     stereo_correlation: Optional[float] = None
-    if channels == 2:
+    if channels == 2 and not silent_output:
         corr_raw = compute_stereo_correlation_wav(rendered_file)
         stereo_correlation = round(corr_raw, 6)
 
@@ -426,8 +446,43 @@ def measure_downmix_similarity(
     if reference_lufs is not None and lufs_integrated is not None:
         lufs_delta_db = round(lufs_integrated - float(reference_lufs), 3)
 
+    loudness_state = classify_measurement_state(
+        measured=lufs_integrated is not None,
+        silent=silent_output,
+    )
+    peak_state = classify_measurement_state(
+        measured=true_peak_dbtp is not None,
+        silent=silent_output,
+    )
+    correlation_state = classify_measurement_state(
+        measured=stereo_correlation is not None,
+        applicable=channels == 2,
+        silent=silent_output,
+    )
+    similarity_state = classify_measurement_state(
+        measured=lufs_delta_db is not None,
+        applicable=reference_lufs is not None,
+        silent=silent_output,
+    )
+
     # --- Risk classification -------------------------------------------------
     risk_level = "low"
+
+    if silent_output:
+        risk_level = "high"
+        notes.append("Rendered output is effectively silent; similarity is invalid.")
+    if loudness_state == MEASUREMENT_STATE_FAILED:
+        risk_level = "high"
+        notes.append("Integrated loudness could not be measured.")
+    if peak_state == MEASUREMENT_STATE_FAILED:
+        risk_level = "high"
+        notes.append("True-peak could not be measured.")
+    if correlation_state == MEASUREMENT_STATE_FAILED:
+        risk_level = "high"
+        notes.append("Stereo correlation could not be measured.")
+    if similarity_state == MEASUREMENT_STATE_FAILED:
+        risk_level = "high"
+        notes.append("Reference similarity could not be measured.")
 
     # True-peak risk
     if true_peak_dbtp is not None:
@@ -485,6 +540,10 @@ def measure_downmix_similarity(
         "true_peak_dbtp": true_peak_dbtp,
         "true_peak_delta_db": true_peak_delta_db,
         "stereo_correlation": stereo_correlation,
+        "loudness_state": loudness_state,
+        "peak_state": peak_state,
+        "correlation_state": correlation_state,
+        "similarity_state": similarity_state,
         "risk_level": risk_level,
         "notes": notes,
         "measured": True,

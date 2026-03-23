@@ -274,6 +274,7 @@ class TestMeasureDownmixSimilarityUnit(unittest.TestCase):
         result = measure_downmix_similarity(path, "LAYOUT.1_0")
         self.assertEqual(result["channels"], 1)
         self.assertIsNone(result["stereo_correlation"])
+        self.assertEqual(result["correlation_state"], "not_applicable")
 
     def test_mono_hot_signal_risk(self) -> None:
         """Hot mono signal triggers true-peak risk."""
@@ -296,13 +297,28 @@ class TestMeasureDownmixSimilarityUnit(unittest.TestCase):
         self.assertIsNone(result["lufs_integrated"])
         self.assertIsNone(result["true_peak_dbtp"])
         self.assertIsNone(result["true_peak_delta_db"])
+        self.assertEqual(result["loudness_state"], "invalid_due_to_silence")
+        self.assertEqual(result["peak_state"], "invalid_due_to_silence")
+        self.assertEqual(result["correlation_state"], "invalid_due_to_silence")
 
-    def test_silence_is_low_risk(self) -> None:
-        """Silent WAV → no thresholds crossed → low risk."""
+    def test_silence_is_invalid_high_risk(self) -> None:
+        """Silent WAV must not pass the measured-similarity gate."""
         path = self._path("silence_risk.wav")
         _write_stereo_silence_wav(path)
         result = measure_downmix_similarity(path, "LAYOUT.2_0")
-        self.assertEqual(result["risk_level"], "low")
+        self.assertEqual(result["risk_level"], "high")
+        self.assertIn("silent", " ".join(result["notes"]).lower())
+
+    def test_reference_similarity_state_is_invalid_when_silent(self) -> None:
+        path = self._path("silence_with_reference.wav")
+        _write_stereo_silence_wav(path)
+        result = measure_downmix_similarity(
+            path,
+            "LAYOUT.2_0",
+            reference_lufs=-23.0,
+        )
+        self.assertEqual(result["similarity_state"], "invalid_due_to_silence")
+        self.assertEqual(result["risk_level"], "high")
 
     # --- true_peak_delta_db ---
 
@@ -556,6 +572,16 @@ class TestPreflightMeasuredGate(unittest.TestCase):
         _write_stereo_silence_wav(path)
         receipt = evaluate_preflight({}, {}, "stereo", {}, rendered_file=path)
         _validate_receipt(receipt, self._validator)
+
+    def test_silent_rendered_file_blocks_measured_gate(self) -> None:
+        path = self._path("gate_silence.wav")
+        _write_stereo_silence_wav(path)
+        receipt = evaluate_preflight({}, {}, "stereo", {}, rendered_file=path)
+        gate = self._find_gate(receipt, "GATE.DOWNMIX_SIMILARITY_MEASURED")
+        self.assertIsNotNone(gate)
+        self.assertEqual(gate["outcome"], "block")
+        details = gate.get("details", {})
+        self.assertEqual(details.get("loudness_state"), "invalid_due_to_silence")
 
     def test_schema_valid_with_51_to_stereo_and_audio(self) -> None:
         path = self._path("schema_51_stereo.wav")

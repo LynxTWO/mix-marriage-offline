@@ -23,6 +23,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   zero-decoded outputs now stay failed, effectively silent rendered masters are
   marked invalid, and safe-render blocks success when only diagnostic artifacts
   exist.
+- Render QA, safe-render QA, measured downmix similarity, and streaming
+  downmix QA now share explicit measurement-state vocabulary
+  (`not_applicable`, `measurement_failed`, `invalid_due_to_silence`) and emit
+  hard errors when silent or non-measurable loudness, peak, similarity, or
+  correlation data would otherwise drift through as a pass.
 
 ### Fixed
 
