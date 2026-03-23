@@ -3,8 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
+
+from mmo.core.portable_refs import (
+    is_absolute_posix_path,
+    normalize_posix_ref,
+    path_from_posix_ref,
+    portable_path_ref,
+    relative_posix_ref,
+)
 
 RESOLUTION_MODE_FILE_PATH_ABSOLUTE = "file_path_absolute"
 RESOLUTION_MODE_STEMS_DIR_RELATIVE = "stems_dir_relative"
@@ -34,35 +42,25 @@ def _coerce_str(value: Any) -> str:
 
 
 def _normalize_path_text(value: Any) -> str:
-    return _coerce_str(value).strip().replace("\\", "/")
+    return normalize_posix_ref(value)
 
 
 def _looks_absolute_path(path_text: str) -> bool:
-    normalized = _normalize_path_text(path_text)
-    if not normalized:
-        return False
-    if normalized.startswith("/"):
-        return True
-    if len(normalized) >= 3 and normalized[1] == ":" and normalized[2] == "/":
-        return normalized[0].isalpha()
-    if normalized.startswith("//"):
-        return True
-    return False
+    return is_absolute_posix_path(path_text)
 
 
 def _relative_path_from_text(path_text: str) -> Path:
-    pure = PurePosixPath(_normalize_path_text(path_text))
-    return Path(*pure.parts) if pure.parts else Path()
+    return path_from_posix_ref(path_text)
 
 
 def _normalize_workspace_relative_path(value: Any) -> str | None:
     normalized = _normalize_path_text(value)
     if not normalized or _looks_absolute_path(normalized):
         return None
-    pure = PurePosixPath(normalized)
-    if not pure.parts:
+    relative_path = _relative_path_from_text(normalized)
+    if not relative_path.parts:
         return None
-    return pure.as_posix()
+    return relative_path.as_posix()
 
 
 def _session_stems_dir(session: Mapping[str, Any]) -> Path | None:
@@ -88,10 +86,7 @@ def _session_workspace_dir(
 def _relative_to_workspace(path: Path, workspace_dir: Path | None) -> str | None:
     if workspace_dir is None:
         return None
-    try:
-        return path.resolve().relative_to(workspace_dir.resolve()).as_posix()
-    except ValueError:
-        return None
+    return relative_posix_ref(anchor_dir=workspace_dir, target_path=path)
 
 
 def _finalize_success(
@@ -296,8 +291,44 @@ def stem_locator_metadata(stem: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def stem_resolution_entries(stems: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    entries = [stem_locator_metadata(stem) for stem in stems]
+def portable_stem_locator_metadata(
+    stem: Mapping[str, Any],
+    *,
+    workspace_dir: Path | None,
+) -> dict[str, Any]:
+    metadata = stem_locator_metadata(stem)
+    fallback_ref = (
+        metadata.get("workspace_relative_path")
+        or metadata.get("source_ref")
+        or metadata.get("file_path")
+    )
+    for field_name in (
+        "file_path",
+        "workspace_relative_path",
+        "source_ref",
+        "resolved_path",
+    ):
+        metadata[field_name] = portable_path_ref(
+            metadata.get(field_name),
+            anchor_dir=workspace_dir,
+            fallback=fallback_ref,
+        )
+    return metadata
+
+
+def stem_resolution_entries(
+    stems: list[Mapping[str, Any]],
+    *,
+    workspace_dir: Path | None = None,
+    portable: bool = False,
+) -> list[dict[str, Any]]:
+    if portable:
+        entries = [
+            portable_stem_locator_metadata(stem, workspace_dir=workspace_dir)
+            for stem in stems
+        ]
+    else:
+        entries = [stem_locator_metadata(stem) for stem in stems]
     entries.sort(
         key=lambda row: (
             _coerce_str(row.get("stem_id")),

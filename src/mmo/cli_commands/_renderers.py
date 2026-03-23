@@ -24,6 +24,11 @@ from mmo.core.recommendations import (
     recommendation_requires_user_approval,
     recommendation_snapshot,
 )
+from mmo.core.portable_refs import (
+    is_absolute_posix_path,
+    portable_path_ref,
+    resolve_posix_ref,
+)
 from mmo.core.routing import (
     apply_routing_plan_to_report,
     routing_layout_ids_from_run_config,
@@ -78,6 +83,19 @@ _FALLBACK_STEP_SEQUENCE = (
     "front_bias",
     "safety_collapse",
 )
+_PERSISTED_MANIFEST_PATH_FIELDS = frozenset(
+    {
+        "file_path",
+        "resolved_path",
+        "scene_source_path",
+        "scene_locks_source_path",
+        "source_path",
+        "source_ref",
+        "stereo_render_path",
+        "surround_render_path",
+    }
+)
+_PERSISTED_QA_PATH_FIELDS = frozenset({"input_path", "output_path", "path"})
 
 
 def _format_list_preview(values: list[str], *, limit: int = 4) -> str:
@@ -184,6 +202,66 @@ def _set_session_workspace_dir(report: dict[str, Any], *, workspace_dir: Path) -
     if not isinstance(session_payload, dict):
         return
     session_payload["workspace_dir"] = workspace_dir.resolve().as_posix()
+
+
+def _portable_ref_for_workspace(
+    value: Any,
+    *,
+    workspace_dir: Path | None,
+    fallback: str | None = None,
+) -> str | None:
+    return portable_path_ref(
+        value,
+        anchor_dir=workspace_dir.resolve() if workspace_dir is not None else None,
+        fallback=fallback,
+    )
+
+
+def _rewrite_nested_path_fields(
+    value: Any,
+    *,
+    workspace_dir: Path | None,
+    field_names: frozenset[str],
+) -> Any:
+    if isinstance(value, list):
+        return [
+            _rewrite_nested_path_fields(
+                item,
+                workspace_dir=workspace_dir,
+                field_names=field_names,
+            )
+            for item in value
+        ]
+    if not isinstance(value, dict):
+        return value
+
+    rewritten: dict[str, Any] = {}
+    for key, item in value.items():
+        if key in field_names and isinstance(item, str):
+            rewritten[key] = _portable_ref_for_workspace(
+                item,
+                workspace_dir=workspace_dir,
+                fallback=item,
+            )
+        else:
+            rewritten[key] = _rewrite_nested_path_fields(
+                item,
+                workspace_dir=workspace_dir,
+                field_names=field_names,
+            )
+    return rewritten
+
+
+def _portable_renderer_manifests(
+    renderer_manifests: list[dict[str, Any]],
+    *,
+    workspace_dir: Path | None,
+) -> list[dict[str, Any]]:
+    return _rewrite_nested_path_fields(
+        json.loads(json.dumps(renderer_manifests)),
+        workspace_dir=workspace_dir,
+        field_names=_PERSISTED_MANIFEST_PATH_FIELDS,
+    )
 
 
 def _deliverable_result_payload(deliverables: list[dict[str, Any]]) -> dict[str, Any]:
@@ -332,6 +410,7 @@ def _run_render_command(
     )
 
     report = _load_report(report_path)
+    workspace_dir = report_path.parent.resolve()
     _set_session_workspace_dir(report, workspace_dir=report_path.parent)
     normalized_run_config: dict[str, Any] | None = None
     if run_config is not None:
@@ -428,13 +507,17 @@ def _run_render_command(
             layout_standard=layout_standard,
             source_layout_id=source_selection.source_layout_id,
             output_formats=output_formats,
-        )
+    )
     deliverables = build_deliverables_for_renderer_manifests(manifests)
     deliverables_summary = _deliverable_result_payload(deliverables)
+    persisted_manifests = _portable_renderer_manifests(
+        manifests,
+        workspace_dir=workspace_dir,
+    )
     render_manifest = {
         "schema_version": "0.1.0",
         "report_id": report.get("report_id", ""),
-        "renderer_manifests": manifests,
+        "renderer_manifests": persisted_manifests,
         "deliverables_summary": deliverables_summary,
     }
     render_manifest["deliverables"] = deliverables
@@ -1165,6 +1248,7 @@ def _resolve_export_layout_ids(export_layouts: list[str] | None) -> list[str]:
 def _collect_output_entries_from_manifests(
     manifests: list[dict[str, Any]],
     out_dir: Path | None,
+    workspace_dir: Path | None,
 ) -> list[dict[str, Any]]:
     """Collect rendered output files info for QA analysis."""
     entries: list[dict[str, Any]] = []
@@ -1193,14 +1277,32 @@ def _collect_output_entries_from_manifests(
             )
             if not file_path_str or not sha256_val:
                 continue
-            abs_path = file_path_str
-            if out_dir is not None:
-                resolved = out_dir / file_path_str
-                if resolved.exists():
-                    abs_path = resolved.as_posix()
+            analysis_path = file_path_str
+            portable_path = file_path_str
+            if out_dir is not None and not is_absolute_posix_path(file_path_str):
+                resolved = resolve_posix_ref(file_path_str, anchor_dir=out_dir.resolve())
+                analysis_path = resolved.as_posix()
+                portable_path = (
+                    _portable_ref_for_workspace(
+                        analysis_path,
+                        workspace_dir=workspace_dir,
+                        fallback=file_path_str,
+                    )
+                    or file_path_str
+                )
+            elif is_absolute_posix_path(file_path_str):
+                portable_path = (
+                    _portable_ref_for_workspace(
+                        file_path_str,
+                        workspace_dir=workspace_dir,
+                        fallback=file_path_str,
+                    )
+                    or file_path_str
+                )
             entries.append(
                 {
-                    "path": abs_path,
+                    "analysis_path": analysis_path,
+                    "path": portable_path,
                     "sha256": sha256_val,
                     "channels": channels,
                     "sample_rate_hz": sample_rate_hz,
@@ -1224,6 +1326,7 @@ def _count_manifest_outputs(manifests: list[dict[str, Any]]) -> int:
 def _build_no_outputs_issue(
     *,
     out_dir: Path | None,
+    workspace_dir: Path | None,
 ) -> dict[str, Any]:
     issue: dict[str, Any] = {
         "issue_id": ISSUE_RENDER_NO_OUTPUTS,
@@ -1234,7 +1337,11 @@ def _build_no_outputs_issue(
         "threshold": 1,
     }
     if out_dir is not None:
-        issue["output_path"] = out_dir.resolve().as_posix()
+        issue["output_path"] = _portable_ref_for_workspace(
+            out_dir.resolve().as_posix(),
+            workspace_dir=workspace_dir,
+            fallback="render",
+        )
     return issue
 
 
@@ -1269,6 +1376,7 @@ def _collect_fallback_reporting(
     *,
     manifests: list[dict[str, Any]],
     out_dir: Path | None,
+    workspace_dir: Path | None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]]]:
     attempts: list[dict[str, Any]] = []
     applied_steps: list[str] = []
@@ -1300,7 +1408,14 @@ def _collect_fallback_reporting(
             )
             output_path = _coerce_str(output.get("file_path")).strip()
             if output_path and out_dir is not None:
-                output_path = (out_dir / output_path).resolve().as_posix()
+                output_path = (
+                    _portable_ref_for_workspace(
+                        (out_dir / output_path).resolve().as_posix(),
+                        workspace_dir=workspace_dir,
+                        fallback=output_path,
+                    )
+                    or output_path
+                )
             fallback_attempts = similarity.get("fallback_attempts")
             if isinstance(fallback_attempts, list):
                 for attempt in fallback_attempts:
@@ -2178,11 +2293,12 @@ def _run_safe_render_command(
                 return 1
 
         report = _load_report(report_path)
+        workspace_dir = report_path.parent.resolve()
         session_payload = report.get("session")
         if not isinstance(session_payload, dict):
             session_payload = {}
             report["session"] = session_payload
-        session_payload["workspace_dir"] = report_path.parent.resolve().as_posix()
+        session_payload["workspace_dir"] = workspace_dir.as_posix()
         explicit_lfe_ids = explicit_lfe_stem_ids(session_payload)
         (
             scene_payload_for_render,
@@ -2196,6 +2312,16 @@ def _run_safe_render_command(
             scene_path=scene_path,
             scene_locks_path=scene_locks_path,
             scene_strict=scene_strict,
+        )
+        scene_source_path = _portable_ref_for_workspace(
+            scene_source_path,
+            workspace_dir=workspace_dir,
+            fallback="scene.json",
+        )
+        scene_locks_source_path = _portable_ref_for_workspace(
+            scene_locks_source_path,
+            workspace_dir=workspace_dir,
+            fallback="scene_locks.yaml",
         )
         if isinstance(scene_payload_for_render, dict):
             session_payload["scene_payload"] = _json_clone(scene_payload_for_render)
@@ -2716,7 +2842,10 @@ def _run_safe_render_command(
         render_manifest = {
             "schema_version": "0.1.0",
             "report_id": _coerce_str(report.get("report_id")),
-            "renderer_manifests": manifests,
+            "renderer_manifests": _portable_renderer_manifests(
+                manifests,
+                workspace_dir=workspace_dir,
+            ),
             "deliverables_summary": deliverables_summary,
         }
         render_manifest["deliverables"] = deliverables
@@ -2734,7 +2863,10 @@ def _run_safe_render_command(
         no_outputs_issue: dict[str, Any] | None = None
         all_masters_invalid_issue: dict[str, Any] | None = None
         if output_count == 0:
-            no_outputs_issue = _build_no_outputs_issue(out_dir=out_dir)
+            no_outputs_issue = _build_no_outputs_issue(
+                out_dir=out_dir,
+                workspace_dir=workspace_dir,
+            )
             print(
                 f"safe-render: {ISSUE_RENDER_NO_OUTPUTS}"
                 f" message={_NO_OUTPUTS_WARNING_MESSAGE}",
@@ -2809,7 +2941,11 @@ def _run_safe_render_command(
         fallback_attempts: list[dict[str, Any]] = []
         fallback_final: dict[str, Any] = _default_fallback_final(final_outcome="not_run")
         if qa_out_path is not None or receipt_out_path is not None:
-            output_entries = _collect_output_entries_from_manifests(manifests, out_dir)
+            output_entries = _collect_output_entries_from_manifests(
+                manifests,
+                out_dir,
+                workspace_dir,
+            )
             if output_entries:
                 qa_payload = build_safe_render_qa(output_entries=output_entries)
                 qa_issues = qa_payload.get("issues") or []
@@ -2823,6 +2959,7 @@ def _run_safe_render_command(
         fallback_attempts, fallback_final, fallback_issues = _collect_fallback_reporting(
             manifests=manifests,
             out_dir=out_dir,
+            workspace_dir=workspace_dir,
         )
         if fallback_issues:
             qa_issues.extend(fallback_issues)
@@ -2844,6 +2981,15 @@ def _run_safe_render_command(
             qa_payload_issues = qa_payload.get("issues")
             if isinstance(qa_payload_issues, list):
                 qa_payload_issues.append(dict(all_masters_invalid_issue))
+        if qa_payload:
+            qa_payload = _rewrite_nested_path_fields(
+                qa_payload,
+                workspace_dir=workspace_dir,
+                field_names=_PERSISTED_QA_PATH_FIELDS,
+            )
+            rewritten_issues = qa_payload.get("issues")
+            if isinstance(rewritten_issues, list):
+                qa_issues = rewritten_issues
         if qa_out_path is not None:
             qa_out_path.parent.mkdir(parents=True, exist_ok=True)
             _write_json_file(qa_out_path, qa_payload)
@@ -2923,7 +3069,7 @@ def _run_safe_render_command(
             "applied_recommendations": applied_summaries,
             "deliverables": deliverables,
             "deliverables_summary": deliverables_summary,
-            "renderer_manifests": manifests,
+            "renderer_manifests": render_manifest["renderer_manifests"],
             "qa_issues": qa_issues,
             "fallback_attempts": fallback_attempts,
             "fallback_final": fallback_final,

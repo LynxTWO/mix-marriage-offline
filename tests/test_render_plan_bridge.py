@@ -118,7 +118,6 @@ class TestRenderPlanBridge(unittest.TestCase):
                     "downmix": {"policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"},
                 },
             )
-
             variants = first.get("variants")
             self.assertIsInstance(variants, list)
             if not isinstance(variants, list):
@@ -162,6 +161,53 @@ class TestRenderPlanBridge(unittest.TestCase):
                 first_overrides.get("downmix"),
                 {"policy_id": "POLICY.DOWNMIX.STANDARD_FOLDOWN_V0"},
             )
+
+    def test_relative_scene_stems_dir_resolves_from_scene_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            workspace_dir = temp_path / "workspace"
+            stems_dir = workspace_dir / "stems"
+            stems_dir.mkdir(parents=True, exist_ok=True)
+            scene_path = workspace_dir / "scene.json"
+
+            scene = {
+                "schema_version": "0.1.0",
+                "scene_id": "SCENE.BRIDGE.RELATIVE",
+                "scene_path": scene_path.resolve().as_posix(),
+                "source": {
+                    "stems_dir": "stems",
+                    "created_from": "analyze",
+                },
+                "objects": [],
+                "beds": [],
+                "metadata": {
+                    "profile_id": "PROFILE.ASSIST",
+                },
+            }
+            render_plan = {
+                "schema_version": "0.1.0",
+                "plan_id": "PLAN.SCENE.BRIDGE.RELATIVE.1234abcd",
+                "scene_path": scene_path.resolve().as_posix(),
+                "targets": ["TARGET.STEREO.2_0"],
+                "jobs": [
+                    {
+                        "job_id": "JOB.001",
+                        "target_id": "TARGET.STEREO.2_0",
+                        "target_layout_id": "LAYOUT.2_0",
+                        "output_formats": ["wav"],
+                        "contexts": ["render"],
+                        "notes": [],
+                    }
+                ],
+            }
+
+            variant_plan = render_plan_to_variant_plan(
+                render_plan,
+                scene,
+                base_out_dir=(workspace_dir / "variants").resolve().as_posix(),
+            )
+
+            self.assertEqual(variant_plan.get("stems_dir"), stems_dir.resolve().as_posix())
 
 
 if __name__ == "__main__":

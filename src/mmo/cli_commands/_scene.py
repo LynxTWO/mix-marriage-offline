@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from mmo.resources import ontology_dir, schemas_dir
+from mmo.core.portable_refs import normalize_posix_ref, portable_path_ref, resolve_posix_ref
 
 from mmo.cli_commands._helpers import (
     _BASELINE_RENDER_TARGET_ID,
@@ -106,6 +107,55 @@ def _load_gates_policy_ids() -> list[str] | None:
     except (RuntimeError, ValueError):
         pass
     return None
+
+
+def _portable_scene_payload_for_artifact(
+    scene_payload: dict[str, Any],
+    *,
+    artifact_path: Path,
+) -> dict[str, Any]:
+    portable_scene = json.loads(json.dumps(scene_payload))
+    anchor_dir = artifact_path.resolve().parent
+
+    source_payload = portable_scene.get("source")
+    if isinstance(source_payload, dict):
+        portable_stems_dir = portable_path_ref(
+            source_payload.get("stems_dir"),
+            anchor_dir=anchor_dir,
+        )
+        if portable_stems_dir:
+            source_payload["stems_dir"] = portable_stems_dir
+
+    source_refs = portable_scene.get("source_refs")
+    if isinstance(source_refs, dict):
+        for key in ("stems_map_ref", "bus_plan_ref", "roles_ref", "stems_index_ref"):
+            portable_ref = portable_path_ref(source_refs.get(key), anchor_dir=anchor_dir)
+            if portable_ref:
+                source_refs[key] = portable_ref
+
+    return portable_scene
+
+
+def _portable_workspace_ref_from_anchor(
+    value: Any,
+    *,
+    ref_anchor_dir: Path,
+    artifact_path: Path,
+    default_leaf_name: str | None = None,
+) -> str | None:
+    normalized = normalize_posix_ref(value)
+    if not normalized:
+        return None
+
+    resolved = resolve_posix_ref(normalized, anchor_dir=ref_anchor_dir.resolve())
+    if default_leaf_name and (normalized.endswith("/") or resolved.is_dir()):
+        resolved = resolved / default_leaf_name
+
+    return portable_path_ref(
+        resolved.as_posix(),
+        anchor_dir=artifact_path.resolve().parent,
+        fallback=default_leaf_name,
+    )
 
 
 def _render_scene_text(scene: dict[str, Any]) -> str:
@@ -223,7 +273,11 @@ def _run_scene_build_command(
     if isinstance(locks_path, Path):
         _validate_scene_schema(repo_root=None, scene_payload=scene_payload)
         _validate_scene_intent_rules(repo_root=None, scene_payload=scene_payload)
-    _write_json_file(out_path, scene_payload)
+    portable_scene_payload = _portable_scene_payload_for_artifact(
+        scene_payload,
+        artifact_path=out_path,
+    )
+    _write_json_file(out_path, portable_scene_payload)
     return 0
 
 
@@ -248,12 +302,55 @@ def _run_scene_build_from_bus_plan_command(
         schema_path=schemas_dir() / "bus_plan.schema.json",
         payload_name="Bus plan",
     )
+    portable_stems_map_payload = json.loads(json.dumps(stems_map_payload))
+    portable_bus_plan_payload = json.loads(json.dumps(bus_plan_payload))
+    portable_stems_map_ref = _portable_workspace_ref_from_anchor(
+        stems_map_path.resolve().as_posix(),
+        ref_anchor_dir=stems_map_path.parent,
+        artifact_path=out_path,
+    )
+    portable_bus_plan_ref = _portable_workspace_ref_from_anchor(
+        bus_plan_path.resolve().as_posix(),
+        ref_anchor_dir=bus_plan_path.parent,
+        artifact_path=out_path,
+    )
+    portable_stems_index_ref = _portable_workspace_ref_from_anchor(
+        portable_stems_map_payload.get("stems_index_ref"),
+        ref_anchor_dir=stems_map_path.parent,
+        artifact_path=out_path,
+        default_leaf_name="stems_index.json",
+    )
+    if portable_stems_index_ref:
+        portable_stems_map_payload["stems_index_ref"] = portable_stems_index_ref
+    portable_roles_ref = _portable_workspace_ref_from_anchor(
+        portable_stems_map_payload.get("roles_ref"),
+        ref_anchor_dir=stems_map_path.parent,
+        artifact_path=out_path,
+    )
+    if portable_roles_ref:
+        portable_stems_map_payload["roles_ref"] = portable_roles_ref
+    bus_plan_source = portable_bus_plan_payload.get("source")
+    if isinstance(bus_plan_source, dict):
+        portable_source_roles_ref = _portable_workspace_ref_from_anchor(
+            bus_plan_source.get("roles_ref"),
+            ref_anchor_dir=bus_plan_path.parent,
+            artifact_path=out_path,
+        )
+        if portable_source_roles_ref:
+            bus_plan_source["roles_ref"] = portable_source_roles_ref
+        portable_source_stems_map_ref = _portable_workspace_ref_from_anchor(
+            bus_plan_source.get("stems_map_ref"),
+            ref_anchor_dir=bus_plan_path.parent,
+            artifact_path=out_path,
+        )
+        if portable_source_stems_map_ref:
+            bus_plan_source["stems_map_ref"] = portable_source_stems_map_ref
     base_scene_payload = build_scene_from_bus_plan(
-        stems_map_payload,
-        bus_plan_payload,
+        portable_stems_map_payload,
+        portable_bus_plan_payload,
         profile_id=profile_id,
-        stems_map_ref=stems_map_path.resolve().as_posix(),
-        bus_plan_ref=bus_plan_path.resolve().as_posix(),
+        stems_map_ref=portable_stems_map_ref,
+        bus_plan_ref=portable_bus_plan_ref,
     )
     locks_payload = load_scene_build_locks(locks_path) if isinstance(locks_path, Path) else None
     scene_payload = base_scene_payload
@@ -269,7 +366,11 @@ def _run_scene_build_from_bus_plan_command(
         schema_path=schemas_dir() / "scene.schema.json",
         payload_name="Scene",
     )
-    _write_json_file(out_path, scene_payload)
+    portable_scene_payload = _portable_scene_payload_for_artifact(
+        scene_payload,
+        artifact_path=out_path,
+    )
+    _write_json_file(out_path, portable_scene_payload)
     return 0
 
 

@@ -85,6 +85,10 @@ class TestProjectValidateHappyPath(unittest.TestCase):
         self.assertIsInstance(result, dict)
         self.assertTrue(result["ok"])
         self.assertNotIn("render_compat", result)
+        self.assertEqual(result["scope"]["artifact_root_ref"], "project")
+        self.assertEqual(result["scope"]["kind"], "project_contract")
+        self.assertFalse(result["scope"]["workspace_root_outputs_in_scope"])
+        self.assertIn("scene.json", result["scope"]["workspace_root_output_refs"])
 
     def test_all_required_files_valid(self) -> None:
         _, stdout, _ = _run_main([
@@ -349,6 +353,7 @@ class TestProjectValidateRenderArtifacts(unittest.TestCase):
                 "plugin_delta_lufs_error_abs": 4.0,
                 "plugin_delta_crest_warn_abs": 3.0,
                 "plugin_delta_crest_error_abs": 6.0,
+                "silent_peak_dbfs_lte": -90.0,
             },
             "jobs": [
                 {

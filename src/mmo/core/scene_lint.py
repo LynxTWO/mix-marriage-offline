@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from mmo.core.portable_refs import is_absolute_posix_path, resolve_posix_ref
+
 from mmo.core.roles import list_roles
 from mmo.core.scene_locks import load_scene_locks
 
@@ -325,15 +327,22 @@ def _is_ambient_bed_candidate(bed: dict[str, Any]) -> bool:
     return False
 
 
-def _scene_stems_dir(scene_payload: dict[str, Any]) -> Path | None:
+def _scene_stems_dir(
+    scene_payload: dict[str, Any],
+    *,
+    scene_path: Path | None = None,
+) -> Path | None:
     source = scene_payload.get("source")
     if not isinstance(source, dict):
         return None
     stems_dir = _coerce_str(source.get("stems_dir")).strip()
     if not stems_dir:
         return None
-    path = Path(stems_dir)
-    return path if path.is_absolute() else None
+    if is_absolute_posix_path(stems_dir):
+        return Path(stems_dir)
+    if scene_path is None:
+        return None
+    return resolve_posix_ref(stems_dir, anchor_dir=scene_path.resolve().parent)
 
 
 def _available_scene_stem_tokens(stems_dir: Path | None) -> set[str]:
@@ -531,7 +540,7 @@ def build_scene_lint_payload(
     locks_map = _scene_locks_map()
     known_roles = _known_role_ids()
     known_bus_roots = _known_bus_roots(scene_payload)
-    scene_stems_dir = _scene_stems_dir(scene_payload)
+    scene_stems_dir = _scene_stems_dir(scene_payload, scene_path=scene_path)
     available_stem_tokens = _available_scene_stem_tokens(scene_stems_dir)
     known_source_stem_ids = _known_source_stem_ids(
         scene_payload,

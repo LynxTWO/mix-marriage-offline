@@ -87,6 +87,8 @@ class TestTauriDesktopWorkflow(unittest.TestCase):
         self.assertIn("No Node server is launched.", html)
         self.assertIn("compare_report.json", html)
         self.assertIn("scene_lint.json", html)
+        self.assertIn("Validate Project Contract", html)
+        self.assertIn("workspace/project", html)
 
     def test_typescript_wrapper_uses_sidecar_execute_and_spawn(self) -> None:
         wrapper_path = _TAURI_ROOT / "src" / "mmo-sidecar.ts"

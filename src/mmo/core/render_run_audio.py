@@ -14,6 +14,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Iterator, Sequence
 
 from mmo.core.media_tags import TagBag, empty_tag_bag, merge_tag_bags, tag_bag_from_mapping
+from mmo.core.portable_refs import is_absolute_posix_path, resolve_posix_ref
 from mmo.core.render_execute import resolve_ffmpeg_version
 from mmo.core.render_reporting import build_render_report_from_plan
 from mmo.core.tag_export import build_ffmpeg_tag_export_args, metadata_receipt_mapping
@@ -814,7 +815,10 @@ def build_render_report_with_audio(
     source_tag_bag: TagBag = empty_tag_bag()
 
     if mix_inputs is None:
-        source_path = _resolve_single_source_or_raise(scene_payload)
+        source_path = _resolve_single_source_or_raise(
+            scene_payload,
+            scene_path=scene_path,
+        )
         source_metadata = _read_source_metadata_or_raise(source_path)
         _validate_source_layout_or_raise(source_metadata)
         source_rate_hz = _coerce_int(source_metadata.get("sample_rate_hz")) or 0
@@ -2501,7 +2505,11 @@ def _stereo_jobs_or_raise(plan_payload: dict[str, Any]) -> list[dict[str, Any]]:
     return normalized_jobs
 
 
-def _resolve_single_source_or_raise(scene_payload: dict[str, Any]) -> Path:
+def _resolve_single_source_or_raise(
+    scene_payload: dict[str, Any],
+    *,
+    scene_path: Path | None = None,
+) -> Path:
     source_payload = scene_payload.get("source")
     if not isinstance(source_payload, dict):
         raise RenderRunRefusalError(
@@ -2509,13 +2517,29 @@ def _resolve_single_source_or_raise(scene_payload: dict[str, Any]) -> Path:
             message="scene.source must be an object with stems_dir.",
         )
     stems_dir_text = _coerce_str(source_payload.get("stems_dir")).strip()
-    stems_dir = Path(stems_dir_text) if stems_dir_text else None
-    if stems_dir is None or not stems_dir.is_absolute():
+    if not stems_dir_text:
         raise RenderRunRefusalError(
             issue_id=ISSUE_RENDER_RUN_SOURCE_STEMS_DIR_INVALID,
             message=(
-                "scene.source.stems_dir must be an absolute path for PR52 render-run. "
-                f"stems_dir={stems_dir_text or '(missing)'}"
+                "scene.source.stems_dir must point at a source directory for PR52 render-run. "
+                "stems_dir=(missing)"
+            ),
+        )
+    if is_absolute_posix_path(stems_dir_text):
+        stems_dir = Path(stems_dir_text)
+    elif scene_path is not None:
+        stems_dir = resolve_posix_ref(
+            stems_dir_text,
+            anchor_dir=scene_path.resolve().parent,
+        )
+    else:
+        stems_dir = None
+    if stems_dir is None:
+        raise RenderRunRefusalError(
+            issue_id=ISSUE_RENDER_RUN_SOURCE_STEMS_DIR_INVALID,
+            message=(
+                "scene.source.stems_dir is relative, but the scene path is unavailable for PR52 render-run. "
+                f"stems_dir={stems_dir_text}"
             ),
         )
     if not stems_dir.exists() or not stems_dir.is_dir():

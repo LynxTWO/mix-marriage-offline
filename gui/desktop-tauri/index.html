@@ -344,21 +344,22 @@
           <h2>Open a workspace and make the contract explicit</h2>
         </div>
         <p class="panel-copy">
-          Validate wraps <code>project init</code> plus <code>project validate</code> so the GUI starts from the
-          same deterministic project contract as the CLI.
+          Validate wraps <code>project init</code> plus <code>project validate</code> so the GUI refreshes the
+          nested <code>workspace/project</code> contract before later scene and render stages write workspace-root
+          artifacts.
         </p>
 
         <div class="workflow-grid">
           <article class="action-card widget" data-widget-id="widget.validate.actions">
             <p class="field-label">Actions</p>
             <div class="button-row">
-              <button type="button" id="workflow-validate-button" data-hit-target="true">Validate Workspace</button>
+              <button type="button" id="workflow-validate-button" data-hit-target="true">Validate Project Contract</button>
             </div>
             <label class="field">
               <span class="field-label">Import validation.json</span>
               <input id="validate-validation-file-input" class="field-input" type="file" accept=".json,application/json" />
             </label>
-            <pre class="stage-output" id="output-validate">Validate will refresh workspace/project and write validation.json.</pre>
+            <pre class="stage-output" id="output-validate">Validate will refresh workspace/project and write project/validation.json for the project-scoped contract.</pre>
           </article>
 
           <article class="signal-card widget" data-widget-id="widget.validate.summary">

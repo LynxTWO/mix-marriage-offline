@@ -17,6 +17,7 @@ from re import split as re_split
 from typing import Any
 
 from mmo.core.media_tags import source_metadata_from_value
+from mmo.core.portable_refs import is_absolute_posix_path, normalize_posix_ref, path_from_posix_ref
 from mmo.core.source_locator import resolve_session_stems, resolved_stem_path
 from mmo.core.stem_features import infer_stereo_hints
 
@@ -732,15 +733,20 @@ def _scene_intent_stems_dir(
         _coerce_str(bus_plan_source_obj.get("stems_index_ref")).strip(),
     )
     for candidate in candidates:
-        if not candidate:
+        normalized_candidate = normalize_posix_ref(candidate)
+        if not normalized_candidate:
             continue
-        path = Path(candidate)
-        if not path.is_absolute():
-            continue
-        if path.is_dir():
-            return path.resolve().as_posix()
-        if path.is_file():
-            return path.parent.resolve().as_posix()
+        path = path_from_posix_ref(normalized_candidate)
+        if is_absolute_posix_path(normalized_candidate):
+            if path.is_dir():
+                return path.resolve().as_posix()
+            if path.is_file():
+                return path.parent.resolve().as_posix()
+        elif path.suffix:
+            parent = path.parent.as_posix()
+            return parent or "."
+        else:
+            return path.as_posix() or "."
     return _SCENE_INTENT_STEMS_DIR
 
 

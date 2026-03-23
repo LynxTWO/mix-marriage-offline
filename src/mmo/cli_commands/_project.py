@@ -126,6 +126,13 @@ _PROJECT_RENDER_REQUEST_POLICY_FIELDS: frozenset[str] = frozenset(
         "gates_policy_id",
     }
 )
+_PROJECT_VALIDATE_WORKSPACE_ROOT_OUTPUTS: tuple[str, ...] = (
+    "scene.json",
+    "render_manifest.json",
+    "render_qa.json",
+    "safe_render_receipt.json",
+    "compare_report.json",
+)
 
 
 def _coerce_str(value: Any) -> str:
@@ -515,6 +522,13 @@ def _run_project_validate(
     result: dict[str, Any] = {
         "ok": ok,
         "project_dir": project_dir.resolve().as_posix(),
+        "scope": {
+            "artifact_root_ref": "project",
+            "kind": "project_contract",
+            "root_path": project_dir.resolve().as_posix(),
+            "workspace_root_output_refs": list(_PROJECT_VALIDATE_WORKSPACE_ROOT_OUTPUTS),
+            "workspace_root_outputs_in_scope": False,
+        },
         "checks": checks,
         "summary": {
             "total": len(checks),

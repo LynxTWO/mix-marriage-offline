@@ -78,6 +78,8 @@ What it does:
 - creates or refreshes the project scaffold inside the workspace
 - checks that MMO can read the stems and write project artifacts
 - writes `project/validation.json`
+- validates the nested `workspace/project` contract, not later workspace-root
+  scene/render outputs
 
 What to look for:
 

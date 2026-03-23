@@ -33,6 +33,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   explicitly, and manifests/render reports expose structured resample
   provenance (`uniform_source_sample_rate_hz`, output rate, policy reason,
   stage, method, and resampled stem count) whenever rates differ.
+- Desktop workspace artifacts now persist portable relative refs instead of
+  machine-local absolute host paths: `scene.json`, `render_manifest.json`,
+  `render_qa.json`, and `safe_render_receipt.json` now keep scene/source/QA
+  pointers relocatable across folders and machines when the workspace moves.
+- Desktop Validate now states the real contract it checks: the nested
+  `workspace/project` scaffold remains the scope of `project validate`, and the
+  validation result now declares that workspace-root scene/render outputs are
+  outside that scope instead of implying a full-workspace pass.
 
 ### Fixed
 
@@ -47,6 +55,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   processed-stem deliverables when they share the same layout/channel shape.
 - Safe-render QA now emits an explicit silent-output error and keeps zero-frame
   diagnostic artifacts without falsely promoting them to successful masters.
+- Scene build now normalizes `stems_index_ref` to an actual stems-index file
+  ref instead of persisting a directory-like pointer, and relative
+  `scene.source.stems_dir` refs now resolve correctly through scene lint,
+  render-plan bridging, and render-run audio flows.
 
 ## [1.0.0] — 2026-03-17
 

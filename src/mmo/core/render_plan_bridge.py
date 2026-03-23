@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from mmo.core.portable_refs import is_absolute_posix_path, resolve_posix_ref
 from mmo.core.run_config import RUN_CONFIG_SCHEMA_VERSION, normalize_run_config
 from mmo.dsp.transcode import LOSSLESS_OUTPUT_FORMATS
 
@@ -115,9 +116,18 @@ def _stems_dir_from_scene(scene: dict[str, Any]) -> str:
     stems_dir = _coerce_str(source.get("stems_dir")).strip()
     if not stems_dir:
         raise ValueError("scene.source.stems_dir is required.")
-    stems_path = Path(stems_dir)
-    if not stems_path.is_absolute():
-        raise ValueError("scene.source.stems_dir must be an absolute path.")
+    if is_absolute_posix_path(stems_dir):
+        stems_path = Path(stems_dir)
+    else:
+        scene_path = _pointer_path(scene.get("scene_path"))
+        if scene_path is None:
+            raise ValueError(
+                "scene.source.stems_dir is relative, but scene.scene_path is unavailable."
+            )
+        stems_path = resolve_posix_ref(
+            stems_dir,
+            anchor_dir=Path(scene_path).resolve().parent,
+        )
     return _path_to_posix(stems_path)
 
 

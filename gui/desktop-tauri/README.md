@@ -31,6 +31,10 @@ It writes the same core artifacts a release user should expect:
 - `render_qa.json`
 - `compare_report.json`
 
+`project/validation.json` is project-scoped. It validates the nested
+`workspace/project` scaffold and does not claim to validate later workspace-root
+scene or render outputs such as `scene.json` or `render_manifest.json`.
+
 ## Packaged release note
 
 The desktop app launches a bundled MMO sidecar behind the scenes. Think of that

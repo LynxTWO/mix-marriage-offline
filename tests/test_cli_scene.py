@@ -10,6 +10,7 @@ from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
 from mmo.cli import main
+from mmo.core.portable_refs import relative_posix_ref
 
 
 def _schema_validator(schema_path: Path) -> jsonschema.Draft202012Validator:
@@ -120,6 +121,7 @@ class TestCliScene(unittest.TestCase):
 
             scene_payload = json.loads(scene_path.read_text(encoding="utf-8"))
             validator.validate(scene_payload)
+            self.assertEqual(scene_payload["source"]["stems_dir"], "stems")
             self.assertEqual(
                 [item["stem_id"] for item in scene_payload["objects"]],
                 ["STEM.001", "STEM.002"],
@@ -376,11 +378,17 @@ class TestCliScene(unittest.TestCase):
                 )
             self.assertEqual(
                 payload_a.get("source_refs", {}).get("stems_map_ref"),
-                stems_map_path.resolve().as_posix(),
+                relative_posix_ref(
+                    anchor_dir=scene_path_a.parent,
+                    target_path=stems_map_path,
+                ),
             )
             self.assertEqual(
                 payload_a.get("source_refs", {}).get("bus_plan_ref"),
-                bus_plan_path.resolve().as_posix(),
+                relative_posix_ref(
+                    anchor_dir=scene_path_a.parent,
+                    target_path=bus_plan_path,
+                ),
             )
 
             build_exit_b = main(
@@ -401,6 +409,52 @@ class TestCliScene(unittest.TestCase):
             self.assertEqual(
                 scene_path_a.read_text(encoding="utf-8"),
                 scene_path_b.read_text(encoding="utf-8"),
+            )
+
+    def test_scene_cli_build_from_bus_plan_normalizes_stems_index_ref_to_file(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        fixture_root = repo_root / "tests" / "fixtures" / "scene_intent"
+        stems_map_payload = json.loads((fixture_root / "tiny_stems_map.json").read_text(encoding="utf-8"))
+        bus_plan_payload = json.loads((fixture_root / "tiny_bus_plan.json").read_text(encoding="utf-8"))
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_dir = Path(temp_dir) / "workspace"
+            stems_index_dir = workspace_dir / "project" / "stems"
+            stems_index_dir.mkdir(parents=True, exist_ok=True)
+            stems_index_path = stems_index_dir / "stems_index.json"
+            stems_index_path.write_text("{}\n", encoding="utf-8")
+
+            stems_map_payload["stems_index_ref"] = stems_index_dir.resolve().as_posix()
+            stems_map_path = workspace_dir / "stems_map.json"
+            bus_plan_path = workspace_dir / "bus_plan.json"
+            scene_path = workspace_dir / "scene.json"
+            _write_json(stems_map_path, stems_map_payload)
+            _write_json(bus_plan_path, bus_plan_payload)
+
+            build_exit = main(
+                [
+                    "scene",
+                    "build",
+                    "--map",
+                    str(stems_map_path),
+                    "--bus",
+                    str(bus_plan_path),
+                    "--profile",
+                    "PROFILE.ASSIST",
+                    "--out",
+                    str(scene_path),
+                ]
+            )
+            self.assertEqual(build_exit, 0)
+
+            scene_payload = json.loads(scene_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                scene_payload.get("source_refs", {}).get("stems_index_ref"),
+                "project/stems/stems_index.json",
+            )
+            self.assertEqual(
+                scene_payload.get("source", {}).get("stems_dir"),
+                "project/stems",
             )
 
     def test_scene_cli_build_from_stems_map_and_bus_plan_lints_cleanly(self) -> None:

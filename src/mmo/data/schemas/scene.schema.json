@@ -99,13 +99,18 @@
       "type": "string",
       "pattern": "^(?:[A-Za-z]:/|/).+"
     },
+    "posix_path": {
+      "type": "string",
+      "pattern": "^[^\\\\]+$",
+      "minLength": 1
+    },
     "source": {
       "type": "object",
       "additionalProperties": false,
       "required": ["stems_dir", "created_from"],
       "properties": {
         "report_id": { "type": "string", "minLength": 1 },
-        "stems_dir": { "$ref": "#/$defs/posix_abs_path" },
+        "stems_dir": { "$ref": "#/$defs/posix_path" },
         "lock_hash": { "type": "string", "minLength": 1 },
         "created_from": {
           "type": "string",

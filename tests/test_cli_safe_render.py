@@ -16,6 +16,7 @@ import io
 import json
 import math
 import os
+import shutil
 import struct
 import tempfile
 import unittest
@@ -134,10 +135,12 @@ def _make_report(
                         {
                             "evidence_id": "EVID.METER.CLIP_SAMPLE_COUNT",
                             "value": clip_count,
+                            "unit_id": "UNIT.COUNT",
                         },
                         {
                             "evidence_id": "EVID.METER.PEAK_DBFS",
                             "value": peak_dbfs,
+                            "unit_id": "UNIT.DBFS",
                         },
                     ],
                 }
@@ -145,7 +148,6 @@ def _make_report(
         },
         "issues": [],
         "recommendations": recommendations if recommendations is not None else [],
-        "features": {},
     }
     return report
 
@@ -357,7 +359,7 @@ class TestSafeRenderWorkspaceResolution(unittest.TestCase):
             row = stem_resolution[0]
             self.assertEqual(row.get("stem_id"), "kick")
             self.assertEqual(row.get("resolution_mode"), "workspace_relative_source_ref")
-            self.assertEqual(row.get("resolved_path"), source_path.resolve().as_posix())
+            self.assertEqual(row.get("resolved_path"), "sources/kick.wav")
             outputs = placement_manifest.get("outputs")
             self.assertIsInstance(outputs, list)
             if isinstance(outputs, list):
@@ -369,6 +371,106 @@ class TestSafeRenderWorkspaceResolution(unittest.TestCase):
                 receipt["status"], ("completed", "dry_run_only", "blocked"),
                 "status must reflect a valid safe-render outcome",
             )
+
+    def test_portable_workspace_artifacts_remain_coherent_after_move(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            workspace_dir = temp / "workspace"
+            stems_dir = workspace_dir / "stems"
+            stems_dir.mkdir(parents=True, exist_ok=True)
+            _write_16bit_wav(stems_dir / "kick.wav", channels=1, amplitude=0.45)
+
+            report = _make_report(stems_dir, "kick.wav", "kick", peak_dbfs=-6.0)
+            report_path = workspace_dir / "report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            scene_path = workspace_dir / "scene.json"
+            scene_exit = main(
+                [
+                    "scene",
+                    "build",
+                    "--report",
+                    str(report_path),
+                    "--out",
+                    str(scene_path),
+                ]
+            )
+            self.assertEqual(scene_exit, 0)
+
+            out_dir = workspace_dir / "render"
+            manifest_path = workspace_dir / "render_manifest.json"
+            receipt_path = workspace_dir / "safe_render_receipt.json"
+            qa_path = workspace_dir / "render_qa.json"
+            plugins_dir = _write_placement_only_plugins_dir(temp / "plugins")
+
+            exit_code, _stdout, stderr = _run_main(
+                [
+                    "safe-render",
+                    "--report",
+                    str(report_path),
+                    "--scene",
+                    str(scene_path),
+                    "--plugins",
+                    str(plugins_dir),
+                    "--target",
+                    "stereo",
+                    "--out-dir",
+                    str(out_dir),
+                    "--out-manifest",
+                    str(manifest_path),
+                    "--receipt-out",
+                    str(receipt_path),
+                    "--qa-out",
+                    str(qa_path),
+                    "--force",
+                ]
+            )
+            self.assertEqual(exit_code, 0, stderr)
+
+            scene_payload = json.loads(scene_path.read_text(encoding="utf-8"))
+            manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+            receipt_payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+            qa_payload = json.loads(qa_path.read_text(encoding="utf-8"))
+
+            workspace_prefix = workspace_dir.resolve().as_posix()
+            for payload in (scene_payload, manifest_payload, receipt_payload, qa_payload):
+                self.assertNotIn(
+                    workspace_prefix,
+                    json.dumps(payload, sort_keys=True),
+                )
+
+            self.assertEqual(scene_payload.get("source", {}).get("stems_dir"), "stems")
+            self.assertEqual(receipt_payload.get("scene_source_path"), "scene.json")
+
+            moved_workspace = temp / "workspace_moved"
+            shutil.copytree(workspace_dir, moved_workspace)
+
+            moved_scene = json.loads((moved_workspace / "scene.json").read_text(encoding="utf-8"))
+            moved_manifest = json.loads((moved_workspace / "render_manifest.json").read_text(encoding="utf-8"))
+            moved_receipt = json.loads((moved_workspace / "safe_render_receipt.json").read_text(encoding="utf-8"))
+            moved_qa = json.loads((moved_workspace / "render_qa.json").read_text(encoding="utf-8"))
+
+            moved_stems_dir = moved_workspace / moved_scene["source"]["stems_dir"]
+            self.assertTrue(moved_stems_dir.is_dir())
+
+            renderer_manifests = moved_manifest.get("renderer_manifests")
+            self.assertIsInstance(renderer_manifests, list)
+            if isinstance(renderer_manifests, list) and renderer_manifests:
+                stem_resolution = renderer_manifests[0].get("stem_resolution")
+                self.assertIsInstance(stem_resolution, list)
+                if isinstance(stem_resolution, list) and stem_resolution:
+                    resolved_path = stem_resolution[0].get("resolved_path")
+                    self.assertTrue((moved_workspace / str(resolved_path)).is_file())
+
+            qa_outputs = moved_qa.get("outputs")
+            self.assertIsInstance(qa_outputs, list)
+            if isinstance(qa_outputs, list) and qa_outputs:
+                self.assertTrue((moved_workspace / qa_outputs[0]["path"]).is_file())
+
+            self.assertTrue((moved_workspace / moved_receipt["scene_source_path"]).is_file())
 
     def test_dry_run_binaural_tokens_resolve_and_emit_virtualization_notes(self) -> None:
         binaural_tokens = (
@@ -1160,11 +1262,11 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
             self.assertEqual(receipt.get("scene_mode"), "explicit")
             self.assertEqual(
                 receipt.get("scene_source_path"),
-                scene_path.resolve().as_posix(),
+                "scene.json",
             )
             self.assertEqual(
                 receipt.get("scene_locks_source_path"),
-                scene_locks_path.resolve().as_posix(),
+                "scene_locks.yaml",
             )
 
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))

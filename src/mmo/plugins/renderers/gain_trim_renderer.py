@@ -437,11 +437,17 @@ class GainTrimRenderer(RendererPlugin):
         output_dir: Any = None,
     ) -> RenderManifest:
         applicable = _iter_applicable_recommendations(recommendations)
+        workspace_dir_text = _coerce_str(session.get("workspace_dir")).strip()
+        workspace_dir = Path(workspace_dir_text) if workspace_dir_text else None
         manifest: RenderManifest = {
             "renderer_id": self.plugin_id,
             "outputs": [],
             "skipped": [],
-            "stem_resolution": stem_resolution_entries(resolve_session_stems(session)),
+            "stem_resolution": stem_resolution_entries(
+                resolve_session_stems(session),
+                workspace_dir=workspace_dir,
+                portable=True,
+            ),
         }
         if not applicable:
             return manifest

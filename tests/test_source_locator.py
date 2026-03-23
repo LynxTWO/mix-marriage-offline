@@ -10,6 +10,7 @@ from typing import Any
 
 from mmo.core.session import build_session_from_stems_dir
 from mmo.core.source_locator import (
+    portable_stem_locator_metadata,
     RESOLUTION_MODE_FILE_PATH_ABSOLUTE,
     RESOLUTION_MODE_STEMS_DIR_RELATIVE,
     RESOLUTION_MODE_UNRESOLVED,
@@ -150,7 +151,7 @@ class TestSourceLocator(unittest.TestCase):
 
             session = build_session_from_stems_dir(stems_dir)
             expected = [
-                stem_locator_metadata(stem)
+                portable_stem_locator_metadata(stem, workspace_dir=None)
                 for stem in session.get("stems", [])
                 if isinstance(stem, dict)
             ]

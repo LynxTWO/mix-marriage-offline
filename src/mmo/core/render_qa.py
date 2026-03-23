@@ -1722,7 +1722,8 @@ def build_safe_render_qa(
     """Build a QA report for plugin-chain renderer outputs.
 
     Each entry in ``output_entries`` must have:
-      - ``path``: absolute or relative path to the rendered WAV file
+      - ``path``: persisted portable path to the rendered WAV file
+      - ``analysis_path``: optional runtime path used for measurement/decoding
       - ``channels``: int channel count
       - ``sample_rate_hz``: int
       - ``sha256``: str (already computed by renderer)
@@ -1739,6 +1740,7 @@ def build_safe_render_qa(
 
     for entry in output_entries:
         file_path_str = _coerce_str(entry.get("path")).strip()
+        analysis_path_str = _coerce_str(entry.get("analysis_path")).strip()
         channels_raw = entry.get("channels")
         sample_rate_raw = entry.get("sample_rate_hz")
         sha256_val = _coerce_str(entry.get("sha256")).strip()
@@ -1758,9 +1760,10 @@ def build_safe_render_qa(
         file_spectral: dict[str, Any] = _empty_spectral()
         measurement_failed = False
 
-        if file_path_str and channels > 0 and sample_rate_hz > 0 and np_module is not None:
+        runtime_path_str = analysis_path_str or file_path_str
+        if runtime_path_str and channels > 0 and sample_rate_hz > 0 and np_module is not None:
             try:
-                file_path = Path(file_path_str)
+                file_path = Path(runtime_path_str)
                 frames = _decode_frames_float64(
                     path=file_path,
                     channels=channels,

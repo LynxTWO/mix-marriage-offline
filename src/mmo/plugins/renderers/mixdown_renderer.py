@@ -630,12 +630,18 @@ class MixdownRenderer(RendererPlugin):
         recommendations: List[Recommendation],
         output_dir: Any = None,
     ) -> RenderManifest:
+        workspace_dir_text = _coerce_str(session.get("workspace_dir")).strip()
+        workspace_dir = Path(workspace_dir_text) if workspace_dir_text else None
         manifest: RenderManifest = {
             "renderer_id": self.plugin_id,
             "outputs": [],
             "skipped": [],
             "received_recommendation_ids": _received_recommendation_ids(recommendations),
-            "stem_resolution": stem_resolution_entries(resolve_session_stems(session)),
+            "stem_resolution": stem_resolution_entries(
+                resolve_session_stems(session),
+                workspace_dir=workspace_dir,
+                portable=True,
+            ),
         }
         if output_dir is None:
             manifest["notes"] = "missing_output_dir"
