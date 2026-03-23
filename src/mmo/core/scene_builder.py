@@ -17,6 +17,7 @@ from re import split as re_split
 from typing import Any
 
 from mmo.core.media_tags import source_metadata_from_value
+from mmo.core.source_locator import resolve_session_stems, resolved_stem_path
 from mmo.core.stem_features import infer_stereo_hints
 
 SCENE_SCHEMA_VERSION = "0.1.0"
@@ -125,15 +126,11 @@ def _resolve_stem_source_path(
     stem: dict[str, Any],
     stems_dir_path: Path,
 ) -> Path | None:
-    file_path = _coerce_str(stem.get("file_path")).strip()
-    if not file_path:
+    del stems_dir_path
+    candidate = resolved_stem_path(stem)
+    if candidate is None:
         return None
-    candidate = Path(file_path)
-    if not candidate.is_absolute():
-        candidate = stems_dir_path / candidate
     if candidate.suffix.lower() not in _WAV_EXTENSIONS:
-        return None
-    if not candidate.exists():
         return None
     return candidate
 
@@ -400,12 +397,7 @@ def build_scene_from_session(
         raise ValueError("validated_session.stems_dir must be an absolute path.")
     stems_dir_posix = stems_dir_path.resolve().as_posix()
 
-    raw_stems = validated_session.get("stems")
-    stems: list[dict[str, Any]] = (
-        [s for s in raw_stems if isinstance(s, dict)]
-        if isinstance(raw_stems, list)
-        else []
-    )
+    stems = resolve_session_stems(validated_session)
 
     meter_index = _index_metering(metering_report)
     user_locks_map: dict[str, list[str]] = user_locks or {}

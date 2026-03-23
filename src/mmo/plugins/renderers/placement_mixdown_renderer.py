@@ -17,6 +17,11 @@ from mmo.core.downmix import (
 from mmo.core.fallback_sequencer import run_fallback_sequence
 from mmo.core.placement_policy import build_render_intent
 from mmo.core.scene_builder import build_scene_from_bus_plan, build_scene_from_session
+from mmo.core.source_locator import (
+    resolve_session_stems,
+    resolved_stem_path,
+    stem_resolution_entries,
+)
 from mmo.core.trace_metadata import add_trace_metadata, build_trace_ixml_payload, build_trace_metadata
 from mmo.dsp.buffer import AudioBufferF64, generic_channel_order
 from mmo.dsp.decoders import (
@@ -637,21 +642,10 @@ def _clamp_sample(value: float) -> float:
     return value
 
 
-def _resolve_stems_dir(session: Dict[str, Any]) -> Path | None:
-    stems_dir = _coerce_str(session.get("stems_dir")).strip()
-    if not stems_dir:
-        return None
-    return Path(stems_dir)
-
-
 def _stem_rows(session: Dict[str, Any]) -> list[dict[str, Any]]:
-    rows = session.get("stems")
-    if not isinstance(rows, list):
-        return []
     stems: list[dict[str, Any]] = []
-    for row in rows:
-        if isinstance(row, dict):
-            stems.append(row)
+    for row in resolve_session_stems(session):
+        stems.append(row)
     stems.sort(
         key=lambda row: (
             _coerce_str(row.get("stem_id")),
@@ -663,21 +657,11 @@ def _stem_rows(session: Dict[str, Any]) -> list[dict[str, Any]]:
 
 def _resolve_stem_source_path(
     stem: Dict[str, Any],
-    stems_dir: Path | None,
 ) -> tuple[Path | None, str | None]:
-    file_path = _coerce_str(stem.get("file_path")).strip()
-    if not file_path:
-        return None, "missing_stem_file_path"
-
-    candidate = Path(file_path)
-    if not candidate.is_absolute():
-        if stems_dir is None:
-            return None, "missing_stems_dir"
-        candidate = stems_dir / candidate
-
-    if not candidate.exists():
-        return None, "missing_stem_file"
-    return candidate, None
+    source_path = resolved_stem_path(stem)
+    if source_path is not None:
+        return source_path, None
+    return None, _coerce_str(stem.get("resolve_error_code")).strip() or None
 
 
 def _layout_channel_order(layout_id: str) -> list[str]:
@@ -1239,7 +1223,6 @@ def _prepare_layout_stems(
         "min_delay_ms": round(float(bed_decorrelation_options.min_delay_ms), 6),
         "max_delay_ms": round(float(bed_decorrelation_options.max_delay_ms), 6),
     }
-    stems_dir = _resolve_stems_dir(session)
     stems = _stem_rows(session)
     speaker_idx = _speaker_index(normalized_channel_order)
     front_pair = _front_safe_pair_indices(normalized_channel_order)
@@ -1283,7 +1266,7 @@ def _prepare_layout_stems(
                         detail=f"stem.sample_rate_hz={stem.get('sample_rate_hz')!r}",
                     )
                 )
-        source_path, resolve_reason = _resolve_stem_source_path(stem, stems_dir)
+        source_path, resolve_reason = _resolve_stem_source_path(stem)
         if resolve_reason is not None or source_path is None:
             notes.append(f"{layout_id}:{stem_id}:{resolve_reason}")
             stem_meta_rows.append(
@@ -1832,7 +1815,6 @@ def _export_stem_copy_outputs(
     stem_bus_by_id: dict[str, str],
     stem_scene_refs: dict[str, dict[str, list[str]]],
 ) -> tuple[list[dict[str, Any]], list[str]]:
-    stems_dir = _resolve_stems_dir(session)
     stems = _stem_rows(session)
     outputs: list[dict[str, Any]] = []
     notes: list[str] = []
@@ -1842,7 +1824,7 @@ def _export_stem_copy_outputs(
         if not stem_id or stem_id in seen_stem_ids:
             continue
         seen_stem_ids.add(stem_id)
-        source_path, resolve_reason = _resolve_stem_source_path(stem, stems_dir)
+        source_path, resolve_reason = _resolve_stem_source_path(stem)
         if resolve_reason is not None or source_path is None:
             notes.append(f"stems:{stem_id}:{resolve_reason or 'unresolved_path'}")
             continue
@@ -2760,6 +2742,7 @@ class PlacementMixdownRenderer(RendererPlugin):
             "outputs": [],
             "skipped": [],
             "received_recommendation_ids": _received_recommendation_ids(recommendations),
+            "stem_resolution": stem_resolution_entries(resolve_session_stems(session)),
         }
         if output_dir is None:
             manifest["notes"] = "missing_output_dir"

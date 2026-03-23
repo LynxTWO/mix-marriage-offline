@@ -22,6 +22,11 @@ from mmo.dsp.export_finalize import (
 from mmo.dsp.io import sha256_file, write_wav_ixml_chunk
 from mmo.dsp.process_context import build_process_context
 from mmo.dsp.sample_rate import choose_target_rate_for_session
+from mmo.core.source_locator import (
+    resolve_session_stems,
+    resolved_stem_path,
+    stem_resolution_entries,
+)
 from mmo.core.trace_metadata import add_trace_metadata, build_trace_ixml_payload, build_trace_metadata
 from mmo.plugins.interfaces import Recommendation, RenderManifest, RendererPlugin
 
@@ -165,21 +170,10 @@ def _clamp_sample(value: float) -> float:
     return value
 
 
-def _resolve_stems_dir(session: Dict[str, Any]) -> Path | None:
-    stems_dir = _coerce_str(session.get("stems_dir")).strip()
-    if not stems_dir:
-        return None
-    return Path(stems_dir)
-
-
 def _stem_rows(session: Dict[str, Any]) -> list[dict[str, Any]]:
-    rows = session.get("stems")
-    if not isinstance(rows, list):
-        return []
     stems: list[dict[str, Any]] = []
-    for row in rows:
-        if isinstance(row, dict):
-            stems.append(row)
+    for row in resolve_session_stems(session):
+        stems.append(row)
     stems.sort(
         key=lambda row: (
             _coerce_str(row.get("stem_id")),
@@ -191,19 +185,11 @@ def _stem_rows(session: Dict[str, Any]) -> list[dict[str, Any]]:
 
 def _resolve_stem_source_path(
     stem: Dict[str, Any],
-    stems_dir: Path | None,
 ) -> tuple[Path | None, str | None]:
-    file_path = _coerce_str(stem.get("file_path")).strip()
-    if not file_path:
-        return None, "missing_stem_file_path"
-
-    candidate = Path(file_path)
-    if candidate.is_absolute():
-        return candidate, None
-
-    if stems_dir is None:
-        return None, "missing_stems_dir"
-    return stems_dir / candidate, None
+    source_path = resolved_stem_path(stem)
+    if source_path is not None:
+        return source_path, None
+    return None, _coerce_str(stem.get("resolve_error_code")).strip() or None
 
 
 def _selected_layout_ids() -> list[str]:
@@ -219,7 +205,6 @@ def _layout_channel_order(layout_id: str) -> list[str]:
 
 
 def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
-    stems_dir = _resolve_stems_dir(session)
     stems = _stem_rows(session)
     notes: list[str] = []
     left: list[float] = []
@@ -245,7 +230,7 @@ def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
                         detail=f"stem.sample_rate_hz={stem.get('sample_rate_hz')!r}",
                     )
                 )
-        source_path, resolve_reason = _resolve_stem_source_path(stem, stems_dir)
+        source_path, resolve_reason = _resolve_stem_source_path(stem)
         if resolve_reason is not None or source_path is None:
             notes.append(f"{stem_id}:{resolve_reason or 'unresolved_path'}")
             measurement_failed = True
@@ -643,6 +628,7 @@ class MixdownRenderer(RendererPlugin):
             "outputs": [],
             "skipped": [],
             "received_recommendation_ids": _received_recommendation_ids(recommendations),
+            "stem_resolution": stem_resolution_entries(resolve_session_stems(session)),
         }
         if output_dir is None:
             manifest["notes"] = "missing_output_dir"

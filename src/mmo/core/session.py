@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from mmo.core.media_tags import source_metadata_from_probe
+from mmo.core.source_locator import resolve_session_stems
 from mmo.dsp.decoders import detect_format_from_path, read_metadata
 from mmo.dsp.io import sha256_file
 
@@ -98,7 +99,9 @@ def build_session_from_stems_dir(stems_dir: Path) -> dict:
                     stem_entry["wav_channel_mask"] = channel_mask
         stem_entries.append(stem_entry)
 
-    return {
+    session = {
         "stems_dir": resolved_stems_dir.as_posix(),
         "stems": stem_entries,
     }
+    resolve_session_stems(session, mutate=True)
+    return session

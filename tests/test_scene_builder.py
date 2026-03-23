@@ -215,6 +215,35 @@ class TestSceneBuilderSchemaValid(unittest.TestCase):
                 ["Song"],
             )
 
+    def test_workspace_relative_source_ref_is_used_for_stereo_hint_resolution(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            workspace_dir = temp / "workspace"
+            source_path = workspace_dir / "sources" / "stereo.wav"
+            _write_stereo_wav(source_path)
+
+            session: dict[str, Any] = {
+                "stems_dir": (workspace_dir / "missing_stems").resolve().as_posix(),
+                "workspace_dir": workspace_dir.resolve().as_posix(),
+                "stems": [
+                    {
+                        "stem_id": "STEM.WORKSPACE",
+                        "file_path": "missing.wav",
+                        "workspace_relative_path": "sources/stereo.wav",
+                        "source_ref": "sources/stereo.wav",
+                        "channel_count": 2,
+                    }
+                ],
+            }
+
+            scene = build_scene_from_session(session)
+            self._validate(scene)
+            stereo_hints = scene.get("metadata", {}).get("stereo_hints")
+            self.assertIsInstance(stereo_hints, list)
+            if isinstance(stereo_hints, list):
+                self.assertEqual(len(stereo_hints), 1)
+                self.assertEqual(stereo_hints[0].get("stem_id"), "STEM.WORKSPACE")
+
 
 class TestSceneBuilderConfidenceGating(unittest.TestCase):
     """Without metering, confidence=0 and no hints emitted."""

@@ -17,6 +17,7 @@ from mmo.core.recommendations import (
     normalize_recommendation_contract,
     normalize_recommendation_scope,
 )
+from mmo.core.source_locator import resolve_session_stems
 from mmo.core.tag_export import build_ffmpeg_tag_export_args, metadata_receipt_mapping
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.io import sha256_file
@@ -1291,6 +1292,10 @@ def run_renderers(
             normalized_scene_locks_payload,
             None,
         )
+    session_for_plugins["stems"] = resolve_session_stems(
+        session_for_plugins,
+        mutate=False,
+    )
     routing_plan = report.get("routing_plan") if isinstance(report, dict) else None
     if isinstance(routing_plan, dict):
         session_for_plugins["routing_plan"] = routing_plan

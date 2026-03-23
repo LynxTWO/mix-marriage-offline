@@ -1202,6 +1202,9 @@ def run_variant_plan(
         if report is not None and steps["render"]:
             try:
                 render_report = _json_clone(report)
+                render_session = render_report.get("session")
+                if isinstance(render_session, dict):
+                    render_session["workspace_dir"] = variant_out_dir.resolve().as_posix()
                 apply_gates_to_report(
                     render_report,
                     policy_path=ontology_dir() / "policies" / "gates.yaml",
@@ -1265,6 +1268,9 @@ def run_variant_plan(
         if report is not None and steps["apply"]:
             try:
                 apply_report = _json_clone(report)
+                apply_session = apply_report.get("session")
+                if isinstance(apply_session, dict):
+                    apply_session["workspace_dir"] = variant_out_dir.resolve().as_posix()
                 apply_gates_to_report(
                     apply_report,
                     policy_path=ontology_dir() / "policies" / "gates.yaml",

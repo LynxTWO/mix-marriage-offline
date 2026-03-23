@@ -24,6 +24,7 @@ from mmo.core.routing import (
     routing_layout_ids_from_run_config,
 )
 from mmo.core.run_config import normalize_run_config
+from mmo.core.source_locator import resolve_session_stems
 from mmo.core.target_tokens import resolve_target_token
 
 from mmo.cli_commands._helpers import (
@@ -169,6 +170,13 @@ def _merged_render_export_options(
     return merged
 
 
+def _set_session_workspace_dir(report: dict[str, Any], *, workspace_dir: Path) -> None:
+    session_payload = report.get("session")
+    if not isinstance(session_payload, dict):
+        return
+    session_payload["workspace_dir"] = workspace_dir.resolve().as_posix()
+
+
 def _collect_stem_artifacts(
     renderer_manifests: list[dict[str, Any]],
 ) -> dict[str, dict[str, str]]:
@@ -233,6 +241,7 @@ def _build_applied_report(
             continue
         stem["file_path"] = artifact["file_path"]
         stem["sha256"] = artifact["sha256"]
+    resolve_session_stems(session, mutate=True)
     return applied_report
 
 
@@ -262,6 +271,7 @@ def _run_render_command(
     )
 
     report = _load_report(report_path)
+    _set_session_workspace_dir(report, workspace_dir=report_path.parent)
     normalized_run_config: dict[str, Any] | None = None
     if run_config is not None:
         normalized_run_config = normalize_run_config(run_config)
@@ -420,6 +430,7 @@ def _run_apply_command(
     )
 
     report = _load_report(report_path)
+    _set_session_workspace_dir(report, workspace_dir=report_path.parent)
     if run_config is not None:
         normalized_run_config = normalize_run_config(run_config)
         report["run_config"] = normalized_run_config
@@ -2088,6 +2099,7 @@ def _run_safe_render_command(
         if not isinstance(session_payload, dict):
             session_payload = {}
             report["session"] = session_payload
+        session_payload["workspace_dir"] = report_path.parent.resolve().as_posix()
         explicit_lfe_ids = explicit_lfe_stem_ids(session_payload)
         (
             scene_payload_for_render,

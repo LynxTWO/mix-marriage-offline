@@ -30,6 +30,7 @@ from mmo.core.lfe_audit import (  # noqa: E402
 )
 from mmo.core.preset_recommendations import derive_preset_recommendations  # noqa: E402
 from mmo.core.session import build_session_from_stems_dir  # noqa: E402
+from mmo.core.source_locator import resolve_stem_locator, resolved_stem_path  # noqa: E402
 from mmo.core.stems_classifier import derive_role_name_tokens  # noqa: E402
 from mmo.core.validators import validate_session  # noqa: E402
 from mmo.core.vibe_signals import derive_vibe_signals  # noqa: E402
@@ -79,6 +80,16 @@ def upsert_measurement(stem: Dict[str, Any], evidence_id: str, value: Any, unit_
         )
 
     measurements.sort(key=lambda item: item.get("evidence_id", ""))
+
+
+def _resolved_stem_path_for_scan(
+    stem: Dict[str, Any],
+    stems_dir: Path,
+) -> Path | None:
+    path = resolved_stem_path(stem)
+    if path is not None:
+        return path
+    return resolved_stem_path(resolve_stem_locator(stem, stems_dir=stems_dir))
 
 
 def _plan_correlation_pairs(
@@ -204,12 +215,9 @@ def _add_peak_metrics(session: Dict[str, Any], stems_dir: Path) -> None:
             continue
         if "sample_rate_hz" not in stem or "bits_per_sample" not in stem:
             continue
-        file_path = stem.get("file_path")
-        if not isinstance(file_path, str) or not file_path:
+        stem_path = _resolved_stem_path_for_scan(stem, stems_dir)
+        if stem_path is None:
             continue
-        stem_path = Path(file_path)
-        if not stem_path.is_absolute():
-            stem_path = stems_dir / stem_path
         if detect_format_from_path(stem_path) != "wav":
             continue
         try:
@@ -244,12 +252,9 @@ def _add_basic_meter_measurements(
     for stem in stems:
         if not isinstance(stem, dict):
             continue
-        file_path = stem.get("file_path")
-        if not isinstance(file_path, str) or not file_path:
+        stem_path = _resolved_stem_path_for_scan(stem, stems_dir)
+        if stem_path is None:
             continue
-        stem_path = Path(file_path)
-        if not stem_path.is_absolute():
-            stem_path = stems_dir / stem_path
         format_id = detect_format_from_path(stem_path)
         if format_id == "wav":
             if "sample_rate_hz" not in stem or "bits_per_sample" not in stem:
@@ -411,12 +416,9 @@ def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> b
     for stem in stems:
         if not isinstance(stem, dict):
             continue
-        file_path = stem.get("file_path")
-        if not isinstance(file_path, str) or not file_path:
+        stem_path = _resolved_stem_path_for_scan(stem, stems_dir)
+        if stem_path is None:
             continue
-        stem_path = Path(file_path)
-        if not stem_path.is_absolute():
-            stem_path = stems_dir / stem_path
         format_id = detect_format_from_path(stem_path)
         channels = stem.get("channels")
         if not isinstance(channels, int) or channels <= 0:
@@ -659,13 +661,9 @@ def _load_mix_complexity_stems(
         sample_rate_hz = stem.get("sample_rate_hz")
         if not isinstance(sample_rate_hz, (int, float)) or sample_rate_hz <= 0:
             continue
-        file_path = stem.get("file_path")
-        if not isinstance(file_path, str) or not file_path:
+        stem_path = _resolved_stem_path_for_scan(stem, stems_dir)
+        if stem_path is None:
             continue
-
-        stem_path = Path(file_path)
-        if not stem_path.is_absolute():
-            stem_path = stems_dir / stem_path
         format_id = detect_format_from_path(stem_path)
         mono_samples: List[float] = []
 
@@ -842,12 +840,9 @@ def _collect_stem_samples(
     ffmpeg_cmd: Optional[str],
 ) -> Optional[List[float]]:
     """Load all interleaved float64 samples for a stem (WAV or ffmpeg path)."""
-    file_path = stem.get("file_path")
-    if not isinstance(file_path, str) or not file_path:
+    stem_path = _resolved_stem_path_for_scan(stem, stems_dir)
+    if stem_path is None:
         return None
-    stem_path = Path(file_path)
-    if not stem_path.is_absolute():
-        stem_path = stems_dir / stem_path
     format_id = detect_format_from_path(stem_path)
     samples: List[float] = []
     if format_id == "wav":
@@ -922,10 +917,7 @@ def _add_lfe_audit_issues(
             continue
 
         # Need ffmpeg for non-WAV
-        file_path = stem.get("file_path", "")
-        stem_path = Path(file_path) if file_path else None
-        if stem_path and not stem_path.is_absolute():
-            stem_path = stems_dir / stem_path
+        stem_path = _resolved_stem_path_for_scan(stem, stems_dir)
         format_id = detect_format_from_path(stem_path) if stem_path else None
         if format_id in {"flac", "wavpack", "aiff", "ape"} and ffmpeg_cmd is None:
             ffmpeg_cmd = resolve_ffmpeg_cmd()

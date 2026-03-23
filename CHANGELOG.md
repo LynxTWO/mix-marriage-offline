@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Unified stem source resolution across analysis, scene build, `render`,
+  `apply`, `safe-render`, placement render, gain-trim render, and packaged
+  desktop workflows through one shared resolver with canonical per-stem locator
+  fields and deterministic resolution order.
+
+### Fixed
+
+- Render and analysis artifacts now record structured per-stem source
+  resolution diagnostics (`resolution_mode`, resolved path, stable error code,
+  and detail) instead of vague aggregate warnings, so unresolved stems are
+  explainable and the same project data resolves consistently across entry
+  points.
+
 ## [1.0.0] — 2026-03-17
 
 First stable public release. Graduates `1.0.0-rc.1` to stable after human

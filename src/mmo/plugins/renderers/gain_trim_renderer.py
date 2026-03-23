@@ -11,6 +11,12 @@ from mmo.core.layout_export import (
     ffmpeg_layout_string_from_channel_order,
 )
 from mmo.core.layout_negotiation import get_layout_channel_order
+from mmo.core.source_locator import (
+    preferred_stem_relative_path,
+    resolve_session_stems,
+    resolved_stem_path,
+    stem_resolution_entries,
+)
 from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.export_finalize import (
@@ -352,21 +358,9 @@ def _render_gain_trim(
     write_wav_ixml_chunk(output_path, build_trace_ixml_payload(trace_metadata))
 
 
-def _resolve_stems_dir(session: Dict[str, Any]) -> Path | None:
-    stems_dir = session.get("stems_dir")
-    if isinstance(stems_dir, str) and stems_dir:
-        return Path(stems_dir)
-    return None
-
-
 def _stem_index(session: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-    stems = session.get("stems")
-    if not isinstance(stems, list):
-        return {}
     indexed: Dict[str, Dict[str, Any]] = {}
-    for stem in stems:
-        if not isinstance(stem, dict):
-            continue
+    for stem in resolve_session_stems(session):
         stem_id = _coerce_str(stem.get("stem_id"))
         if not stem_id or stem_id in indexed:
             continue
@@ -376,25 +370,18 @@ def _stem_index(session: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
 
 def _resolve_source_and_relative_path(
     stem: Dict[str, Any],
-    stems_dir: Path | None,
 ) -> tuple[Path | None, Path | None, str | None]:
-    file_path_value = _coerce_str(stem.get("file_path"))
-    if not file_path_value:
-        return None, None, "missing_stem_file_path"
-
-    file_path = Path(file_path_value)
-    if file_path.is_absolute():
-        if stems_dir is None:
-            return file_path, Path(file_path.name), None
-        try:
-            return file_path, file_path.relative_to(stems_dir), None
-        except ValueError:
-            return file_path, Path(file_path.name), None
-
-    if stems_dir is None:
-        return None, None, "missing_stems_dir"
-
-    return stems_dir / file_path, file_path, None
+    source_path = resolved_stem_path(stem)
+    relative_path = preferred_stem_relative_path(stem)
+    if source_path is None:
+        return (
+            None,
+            relative_path,
+            _coerce_str(stem.get("resolve_error_code")).strip() or None,
+        )
+    if relative_path is None:
+        relative_path = Path(source_path.name)
+    return source_path, relative_path, None
 
 
 def _rendered_relative_path(source_relative_path: Path) -> Path:
@@ -453,6 +440,7 @@ class GainTrimRenderer(RendererPlugin):
             "renderer_id": self.plugin_id,
             "outputs": [],
             "skipped": [],
+            "stem_resolution": stem_resolution_entries(resolve_session_stems(session)),
         }
         if not applicable:
             return manifest
@@ -474,7 +462,6 @@ class GainTrimRenderer(RendererPlugin):
             )
             return manifest
 
-        stems_dir = _resolve_stems_dir(session)
         stems_by_id = _stem_index(session)
         routing_plan = _routing_plan(session)
         routing_routes = _routing_routes_by_stem(routing_plan)
@@ -505,7 +492,7 @@ class GainTrimRenderer(RendererPlugin):
                 continue
 
             source_path, source_relative_path, resolve_reason = (
-                _resolve_source_and_relative_path(stem, stems_dir)
+                _resolve_source_and_relative_path(stem)
             )
             if resolve_reason is not None or source_path is None or source_relative_path is None:
                 reason = resolve_reason or "missing_stem_file_path"

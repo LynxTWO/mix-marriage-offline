@@ -49,6 +49,39 @@
         "target_peak_dbfs": { "type": ["number", "null"] }
       }
     },
+    "stem_resolution_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stem_id",
+        "file_path",
+        "workspace_relative_path",
+        "source_ref",
+        "resolution_mode",
+        "resolved_path",
+        "resolve_error_code",
+        "resolve_error_detail"
+      ],
+      "properties": {
+        "stem_id": { "type": ["string", "null"], "minLength": 1 },
+        "file_path": { "type": ["string", "null"], "minLength": 1 },
+        "workspace_relative_path": { "type": ["string", "null"], "minLength": 1 },
+        "source_ref": { "type": ["string", "null"], "minLength": 1 },
+        "resolution_mode": {
+          "type": ["string", "null"],
+          "enum": [
+            "file_path_absolute",
+            "stems_dir_relative",
+            "workspace_relative_source_ref",
+            "unresolved",
+            null
+          ]
+        },
+        "resolved_path": { "type": ["string", "null"], "minLength": 1 },
+        "resolve_error_code": { "type": ["string", "null"], "minLength": 1 },
+        "resolve_error_detail": { "type": ["string", "null"] }
+      }
+    },
     "renderer_manifest": {
       "type": "object",
       "additionalProperties": false,
@@ -63,6 +96,10 @@
         "received_recommendation_ids": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
+        },
+        "stem_resolution": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stem_resolution_entry" }
         },
         "skipped": {
           "type": "array",

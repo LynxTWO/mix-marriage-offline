@@ -258,11 +258,92 @@ class TestSafeRenderDryRun(unittest.TestCase):
             receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
             jsonschema.Draft202012Validator(schema).validate(receipt)
             self.assertTrue(receipt["dry_run"])
+
+
+class TestSafeRenderWorkspaceResolution(unittest.TestCase):
+    def test_workspace_relative_source_ref_uses_shared_resolver(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            workspace_dir = temp / "workspace"
+            workspace_dir.mkdir(parents=True, exist_ok=True)
+            source_path = workspace_dir / "sources" / "kick.wav"
+            _write_16bit_wav(source_path)
+
+            report = {
+                "schema_version": "0.1.0",
+                "report_id": "REPORT.SAFE_RENDER.WORKSPACE.RESOLUTION",
+                "project_id": "PROJECT.TEST",
+                "generated_at": "2000-01-01T00:00:00Z",
+                "engine_version": "0.1.0",
+                "ontology_version": "0.1.0",
+                "session": {
+                    "stems_dir": (workspace_dir / "missing_stems").resolve().as_posix(),
+                    "stems": [
+                        {
+                            "stem_id": "kick",
+                            "file_path": "missing.wav",
+                            "workspace_relative_path": "sources/kick.wav",
+                            "source_ref": "sources/kick.wav",
+                            "channel_count": 1,
+                            "sample_rate_hz": 48000,
+                            "bits_per_sample": 16,
+                        }
+                    ],
+                },
+                "issues": [],
+                "recommendations": [],
+            }
+
+            report_path = workspace_dir / "report.json"
+            out_dir = workspace_dir / "render"
+            manifest_path = workspace_dir / "render_manifest.json"
+            receipt_path = workspace_dir / "receipt.json"
+            plugins_dir = _write_placement_only_plugins_dir(temp / "plugins")
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            exit_code, _stdout, stderr = _run_main(
+                [
+                    "safe-render",
+                    "--report", str(report_path),
+                    "--plugins", str(plugins_dir),
+                    "--target", "stereo",
+                    "--out-dir", str(out_dir),
+                    "--out-manifest", str(manifest_path),
+                    "--receipt-out", str(receipt_path),
+                    "--force",
+                ]
+            )
+            self.assertEqual(exit_code, 0, stderr)
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            renderer_manifests = manifest.get("renderer_manifests")
+            self.assertIsInstance(renderer_manifests, list)
+            if not isinstance(renderer_manifests, list) or not renderer_manifests:
+                return
+
+            placement_manifest = renderer_manifests[0]
+            stem_resolution = placement_manifest.get("stem_resolution")
+            self.assertIsInstance(stem_resolution, list)
+            if not isinstance(stem_resolution, list) or not stem_resolution:
+                return
+
+            row = stem_resolution[0]
+            self.assertEqual(row.get("stem_id"), "kick")
+            self.assertEqual(row.get("resolution_mode"), "workspace_relative_source_ref")
+            self.assertEqual(row.get("resolved_path"), source_path.resolve().as_posix())
+            outputs = placement_manifest.get("outputs")
+            self.assertIsInstance(outputs, list)
+            if isinstance(outputs, list):
+                self.assertGreaterEqual(len(outputs), 1)
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
             self.assertEqual(receipt["context"], "safe_render")
             self.assertEqual(receipt["target"], "stereo")
             self.assertIn(
-                receipt["status"], ("dry_run_only", "blocked"),
-                "status must be dry_run_only or blocked",
+                receipt["status"], ("completed", "dry_run_only", "blocked"),
+                "status must reflect a valid safe-render outcome",
             )
 
     def test_dry_run_binaural_tokens_resolve_and_emit_virtualization_notes(self) -> None:
