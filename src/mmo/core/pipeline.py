@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence
 
 from mmo.core.deliverables import (
-    build_deliverables_from_outputs,
+    build_deliverables_from_renderer_manifests as _build_deliverables_from_renderer_manifests,
     collect_outputs_from_renderer_manifests,
 )
 from mmo.core.layout_export import ffmpeg_layout_string_from_channel_order
@@ -1191,8 +1191,7 @@ def _apply_output_formats_to_manifest(
 def build_deliverables_for_renderer_manifests(
     renderer_manifests: Sequence[dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    outputs = collect_outputs_from_renderer_manifests(renderer_manifests)
-    return build_deliverables_from_outputs(outputs)
+    return _build_deliverables_from_renderer_manifests(renderer_manifests)
 
 
 def _issue_identity_key(issue: Mapping[str, Any]) -> tuple[Any, ...]:

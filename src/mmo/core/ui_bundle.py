@@ -35,6 +35,7 @@ _SCENE_PREVIEW_LOW_CONFIDENCE_BELOW = 0.6
 
 
 from mmo.resources import ontology_dir, presets_dir as _presets_dir, schemas_dir
+from mmo.core.deliverables import summarize_deliverables
 from mmo.core.media_tags import summarize_stem_source_tags
 
 
@@ -311,13 +312,61 @@ def _dashboard_deliverable_entry(
         "output_count": output_count,
     }
 
+    artifact_role = _coerce_str(deliverable.get("artifact_role")).strip()
+    if artifact_role:
+        mapped["artifact_role"] = artifact_role
+
     target_layout_id = _coerce_str(deliverable.get("target_layout_id")).strip()
     if target_layout_id:
         mapped["target_layout_id"] = target_layout_id
 
+    target_stem_id = _coerce_str(deliverable.get("target_stem_id")).strip()
+    if target_stem_id:
+        mapped["target_stem_id"] = target_stem_id
+
+    target_bus_id = _coerce_str(deliverable.get("target_bus_id")).strip()
+    if target_bus_id:
+        mapped["target_bus_id"] = target_bus_id
+
     channel_count = deliverable.get("channel_count")
     if isinstance(channel_count, int) and not isinstance(channel_count, bool) and channel_count >= 1:
         mapped["channel_count"] = channel_count
+
+    status = _coerce_str(deliverable.get("status")).strip()
+    if status:
+        mapped["status"] = status
+
+    if isinstance(deliverable.get("is_valid_master"), bool):
+        mapped["is_valid_master"] = bool(deliverable.get("is_valid_master"))
+
+    for key in (
+        "planned_stem_count",
+        "decoded_stem_count",
+        "prepared_stem_count",
+        "skipped_stem_count",
+        "rendered_frame_count",
+    ):
+        value = deliverable.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            mapped[key] = value
+        elif value is None:
+            mapped[key] = None
+
+    duration_seconds = _numeric_value(deliverable.get("duration_seconds"))
+    if duration_seconds is not None:
+        mapped["duration_seconds"] = round(duration_seconds, 6)
+    elif deliverable.get("duration_seconds") is None:
+        mapped["duration_seconds"] = None
+
+    failure_reason = deliverable.get("failure_reason")
+    if isinstance(failure_reason, str) and failure_reason.strip():
+        mapped["failure_reason"] = failure_reason.strip()
+    elif failure_reason is None:
+        mapped["failure_reason"] = None
+
+    warning_codes = _normalized_string_list(deliverable.get("warning_codes"))
+    if warning_codes:
+        mapped["warning_codes"] = warning_codes
 
     formats = _normalized_string_list(deliverable.get("formats"))
     if formats:
@@ -351,6 +400,19 @@ def _dashboard_deliverables(
         )
     )
     return mapped
+
+
+def _dashboard_deliverables_summary(
+    render_manifest: dict[str, Any] | None,
+    apply_manifest: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    combined = [
+        *_manifest_deliverables(render_manifest),
+        *_manifest_deliverables(apply_manifest),
+    ]
+    if not combined:
+        return None
+    return summarize_deliverables(combined)
 
 
 def _count_if_true(recommendations: list[dict[str, Any]], field: str) -> int:
@@ -1844,6 +1906,12 @@ def build_ui_bundle(
     if apply_manifest is not None:
         dashboard["apply"] = _apply_summary(report, apply_manifest)
     dashboard_deliverables = _dashboard_deliverables(render_manifest, apply_manifest)
+    dashboard_deliverables_summary = _dashboard_deliverables_summary(
+        render_manifest,
+        apply_manifest,
+    )
+    if dashboard_deliverables_summary is not None:
+        dashboard["deliverables_summary"] = dashboard_deliverables_summary
     if dashboard_deliverables:
         dashboard["deliverables"] = dashboard_deliverables
 

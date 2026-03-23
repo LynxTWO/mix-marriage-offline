@@ -22,6 +22,7 @@ from mmo.dsp.export_finalize import (
 from mmo.dsp.io import sha256_file, write_wav_ixml_chunk
 from mmo.dsp.process_context import build_process_context
 from mmo.dsp.sample_rate import choose_target_rate_for_session
+from mmo.core.deliverables import build_output_render_result, canonical_warning_codes
 from mmo.core.source_locator import (
     resolve_session_stems,
     resolved_stem_path,
@@ -680,6 +681,15 @@ class MixdownRenderer(RendererPlugin):
             )
             output_sha = sha256_file(abs_path)
             layout_slug = _layout_slug(layout_id)
+            rendered_frame_count = (
+                len(output_buffer.data) // output_buffer.channels
+                if output_buffer.channels > 0
+                else 0
+            )
+            render_warning_codes = canonical_warning_codes(
+                list(program.notes),
+                list(program.resampling.get("decoder_warnings") or []),
+            )
             output_row: dict[str, Any] = {
                 "output_id": f"OUTPUT.MIXDOWN_BASELINE.{layout_slug}.{output_sha[:12]}",
                 "file_path": rel_path.as_posix(),
@@ -702,17 +712,38 @@ class MixdownRenderer(RendererPlugin):
                     target_peak_dbfs=_TARGET_PEAK_DBFS,
                 ),
                 "metadata": {
+                    "artifact_role": "master",
                     "headroom_policy": "worst_case_sum_to_-1dBFS",
                     "trim_db": trim_db,
                     "trim_reason": trim_reason,
                     "fallback_trim_db": _FALLBACK_TRIM_DB,
                     "target_peak_dbfs": _TARGET_PEAK_DBFS,
                     "source_stem_count": program.decoded_stem_count,
+                    "prepared_stem_count": program.decoded_stem_count,
                     "measured_stem_count": program.measured_stem_count,
                     "worst_case_peak_sum": program.worst_case_peak_sum,
                     "target_layout_id": layout_id,
                     "channel_order": list(output_buffer.channel_order),
                     "resampling": program.resampling,
+                    "render_result": build_output_render_result(
+                        artifact_role="master",
+                        planned_stem_count=_coerce_int(
+                            program.resampling.get("counts", {}).get("planned_stem_count")
+                        ),
+                        decoded_stem_count=program.decoded_stem_count,
+                        prepared_stem_count=program.decoded_stem_count,
+                        skipped_stem_count=_coerce_int(
+                            program.resampling.get("counts", {}).get("skipped_stem_count")
+                        ),
+                        rendered_frame_count=rendered_frame_count,
+                        duration_seconds=(
+                            rendered_frame_count / output_buffer.sample_rate_hz
+                            if output_buffer.sample_rate_hz > 0
+                            else None
+                        ),
+                        warning_codes=render_warning_codes,
+                        target_layout_id=layout_id,
+                    ),
                     "center_policy": (
                         "0.5*(L+R)*center_reduction for SPK.C"
                         f" (center_reduction_db={_CENTER_FOLD_REDUCTION_DB:.1f})"
@@ -730,6 +761,20 @@ class MixdownRenderer(RendererPlugin):
             )
             if program.notes:
                 output_row["metadata"]["warnings"] = list(program.notes)
+            decoder_warnings = program.resampling.get("decoder_warnings")
+            if isinstance(decoder_warnings, list) and decoder_warnings:
+                existing_warnings = output_row["metadata"].get("warnings")
+                normalized_warnings = (
+                    list(existing_warnings)
+                    if isinstance(existing_warnings, list)
+                    else []
+                )
+                normalized_warnings.extend(
+                    f"decoder_warning:{_coerce_str(row.get('stem_id')).strip()}:{_coerce_str(row.get('warning')).strip()}"
+                    for row in decoder_warnings
+                    if isinstance(row, dict)
+                )
+                output_row["metadata"]["warnings"] = sorted(set(normalized_warnings))
             outputs.append(output_row)
 
         outputs.sort(key=lambda row: (_coerce_str(row.get("layout_id")), _coerce_str(row.get("file_path"))))

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Sequence
 
 from mmo.dsp.buffer import AudioBufferF64, generic_channel_order
+from mmo.core.deliverables import build_output_render_result, canonical_warning_codes
 from mmo.core.layout_export import (
     dual_lfe_wav_export_warnings,
     ffmpeg_layout_string_from_channel_order,
@@ -649,6 +650,7 @@ class GainTrimRenderer(RendererPlugin):
             except ValueError:
                 _append_skipped(skipped, contributions, "unsupported_format")
                 continue
+            output_metadata = read_wav_metadata(output_path)
             output_sha256 = sha256_file(output_path)
 
             recommendation_ids = sorted(rec["recommendation_id"] for rec in contributions)
@@ -662,6 +664,7 @@ class GainTrimRenderer(RendererPlugin):
                 notes = f"Contributing recommendation IDs: {','.join(recommendation_ids)}"
 
             metadata: Dict[str, Any] = {
+                "artifact_role": "processed_stem",
                 "applied_gain_db": applied_gain_db,
                 "contributing_recommendation_ids": recommendation_ids,
             }
@@ -697,6 +700,17 @@ class GainTrimRenderer(RendererPlugin):
                 metadata["warnings"] = dual_lfe_warnings
                 warning_note = " | ".join(dual_lfe_warnings)
                 notes = f"{notes} | {warning_note}" if notes else warning_note
+            metadata["render_result"] = build_output_render_result(
+                artifact_role="processed_stem",
+                planned_stem_count=1,
+                decoded_stem_count=1,
+                prepared_stem_count=1,
+                skipped_stem_count=0,
+                rendered_frame_count=_coerce_int(output_metadata.get("num_frames")),
+                duration_seconds=_coerce_float(output_metadata.get("duration_s")),
+                warning_codes=canonical_warning_codes(metadata.get("warnings")),
+                target_layout_id=output_layout_id or None,
+            )
 
             output_row: Dict[str, Any] = {
                 "output_id": f"OUTPUT.GAIN_TRIM.{stem_id}.{output_sha256[:12]}",

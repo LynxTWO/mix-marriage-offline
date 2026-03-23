@@ -3238,11 +3238,39 @@ function scheduleCompareAuditionRefresh(ui: AppUi): void {
   void refreshCompareAuditionSources(ui).catch(() => undefined);
 }
 
+function resolveDeliverablesSummary(
+  receipt: JsonObject | null,
+  manifest: JsonObject | null,
+  qa: JsonObject | null,
+): JsonObject | null {
+  const candidates = [
+    asObject(receipt?.deliverables_summary),
+    asObject(manifest?.deliverables_summary),
+    asObject(qa?.deliverables_summary),
+  ];
+  for (const candidate of candidates) {
+    if (candidate !== null) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 function summarizeReceipt(receipt: JsonObject | null, manifest: JsonObject | null, qa: JsonObject | null): string {
   if (receipt === null) {
     return "No receipt loaded";
   }
+  const deliverablesSummary = resolveDeliverablesSummary(receipt, manifest, qa);
   const summary = asObject(receipt.recommendations_summary);
+  if (deliverablesSummary !== null) {
+    return [
+      `${asString(deliverablesSummary.overall_status) || "unknown"} deliverables`,
+      `deliverables=${asNumber(deliverablesSummary.deliverable_count) ?? 0}`,
+      `valid_masters=${asNumber(deliverablesSummary.valid_master_count) ?? 0}`,
+      `applied=${asNumber(summary?.applied) ?? 0}`,
+      `qa_issues=${asArray(qa?.issues).length || asArray(receipt.qa_issues).length}`,
+    ].join(" · ");
+  }
   return [
     `${asString(receipt.status) || "unknown"} receipt`,
     `outputs=${flattenManifestOutputs(manifest).length}`,
@@ -3523,20 +3551,47 @@ function receiptChangeSummaryChips(
   const status = asString(receipt.status);
   const qaCount = asArray(qa?.issues).length || asArray(receipt.qa_issues).length;
   const outputCount = flattenManifestOutputs(manifest).length;
+  const deliverablesSummary = resolveDeliverablesSummary(receipt, manifest, qa);
   const chips: ChangeSummaryChip[] = [];
 
-  chips.push({
-    label: status || "receipt loaded",
-    tone: status === "blocked" ? "danger" : (status === "completed" ? "ok" : "info"),
-  });
+  if (deliverablesSummary !== null) {
+    const overallStatus = asString(deliverablesSummary.overall_status);
+    chips.push({
+      label: overallStatus || "deliverables loaded",
+      tone:
+        overallStatus === "failed" || overallStatus === "invalid_master"
+          ? "danger"
+          : (overallStatus === "partial" ? "warn" : "ok"),
+    });
+    chips.push({
+      label: `Valid masters ${asNumber(deliverablesSummary.valid_master_count) ?? 0}`,
+      tone: (asNumber(deliverablesSummary.valid_master_count) ?? 0) > 0 ? "ok" : "warn",
+    });
+  } else {
+    chips.push({
+      label: status || "receipt loaded",
+      tone: status === "blocked" ? "danger" : (status === "completed" ? "ok" : "info"),
+    });
+  }
   chips.push({
     label: `Applied ${asNumber(summary?.applied) ?? asArray(receipt.applied_recommendations).length}`,
     tone: (asNumber(summary?.applied) ?? asArray(receipt.applied_recommendations).length) > 0 ? "ok" : "info",
   });
-  chips.push({
-    label: `Blocked ${asNumber(summary?.blocked) ?? asArray(receipt.blocked_recommendations).length}`,
-    tone: (asNumber(summary?.blocked) ?? asArray(receipt.blocked_recommendations).length) > 0 ? "warn" : "info",
-  });
+  if (deliverablesSummary !== null) {
+    chips.push({
+      label: `Failed ${asNumber(deliverablesSummary.failed_count) ?? 0}`,
+      tone: (asNumber(deliverablesSummary.failed_count) ?? 0) > 0 ? "danger" : "info",
+    });
+    chips.push({
+      label: `Invalid ${asNumber(deliverablesSummary.invalid_master_count) ?? 0}`,
+      tone: (asNumber(deliverablesSummary.invalid_master_count) ?? 0) > 0 ? "danger" : "info",
+    });
+  } else {
+    chips.push({
+      label: `Blocked ${asNumber(summary?.blocked) ?? asArray(receipt.blocked_recommendations).length}`,
+      tone: (asNumber(summary?.blocked) ?? asArray(receipt.blocked_recommendations).length) > 0 ? "warn" : "info",
+    });
+  }
   chips.push({
     label: outputCount > 0 ? `Outputs ${outputCount}` : "No outputs",
     tone: outputCount > 0 ? "info" : "warn",

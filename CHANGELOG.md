@@ -14,6 +14,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `apply`, `safe-render`, placement render, gain-trim render, and packaged
   desktop workflows through one shared resolver with canonical per-stem locator
   fields and deterministic resolution order.
+- Render, apply, safe-render receipts/manifests, QA payloads, and desktop
+  dashboard summaries now share one deliverable-status contract with explicit
+  per-deliverable validity fields (`status`, `is_valid_master`, stem counts,
+  frame/duration metrics, failure reason, and warning codes) plus an honest
+  session-level mixed-outcome summary.
 
 ### Fixed
 
@@ -22,6 +27,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and detail) instead of vague aggregate warnings, so unresolved stems are
   explainable and the same project data resolves consistently across entry
   points.
+- Written audio artifacts are no longer treated as proof of a valid master:
+  deliverables now distinguish successful masters from `invalid_master`,
+  `partial`, and failed outcomes, and master renders are no longer merged with
+  processed-stem deliverables when they share the same layout/channel shape.
 
 ## [1.0.0] — 2026-03-17
 

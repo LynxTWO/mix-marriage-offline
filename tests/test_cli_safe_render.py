@@ -554,6 +554,97 @@ class TestSafeRenderFullRender(unittest.TestCase):
             self.assertIsInstance(qa["outputs"], list)
             self.assertIsInstance(qa["issues"], list)
 
+    def test_full_render_manifest_receipt_qa_and_cli_share_deliverable_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            stems_dir = temp / "stems"
+            _write_16bit_wav(stems_dir / "kick.wav", amplitude=0.45)
+
+            report = _make_report(
+                stems_dir,
+                "kick.wav",
+                "kick",
+                clip_count=0,
+                peak_dbfs=-6.0,
+                recommendations=[],
+            )
+            report_path = temp / "report.json"
+            report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+            out_dir = temp / "renders"
+            manifest_path = temp / "render_manifest.json"
+            qa_path = temp / "qa.json"
+            receipt_path = temp / "receipt.json"
+
+            exit_code, _stdout, stderr = _run_main(
+                [
+                    "safe-render",
+                    "--report",
+                    str(report_path),
+                    "--plugins",
+                    str(_PLUGINS_DIR),
+                    "--target",
+                    "stereo",
+                    "--out-dir",
+                    str(out_dir),
+                    "--out-manifest",
+                    str(manifest_path),
+                    "--qa-out",
+                    str(qa_path),
+                    "--receipt-out",
+                    str(receipt_path),
+                ]
+            )
+            self.assertEqual(exit_code, 0, msg=stderr)
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            qa = json.loads(qa_path.read_text(encoding="utf-8"))
+
+            manifest_summary = manifest.get("deliverables_summary")
+            receipt_summary = receipt.get("deliverables_summary")
+            qa_summary = qa.get("deliverables_summary")
+            self.assertIsInstance(manifest_summary, dict)
+            self.assertIsInstance(receipt_summary, dict)
+            self.assertIsInstance(qa_summary, dict)
+            if not isinstance(manifest_summary, dict):
+                return
+            if not isinstance(receipt_summary, dict):
+                return
+            if not isinstance(qa_summary, dict):
+                return
+
+            self.assertEqual(receipt_summary, manifest_summary)
+            self.assertEqual(qa_summary, manifest_summary)
+            self.assertGreater(manifest_summary.get("deliverable_count", 0), 0)
+
+            deliverables = manifest.get("deliverables")
+            self.assertIsInstance(deliverables, list)
+            if not isinstance(deliverables, list) or not deliverables:
+                return
+            for deliverable in deliverables:
+                self.assertIsInstance(deliverable, dict)
+                if not isinstance(deliverable, dict):
+                    continue
+                self.assertIn("status", deliverable)
+                self.assertIn("is_valid_master", deliverable)
+                self.assertIn("planned_stem_count", deliverable)
+                self.assertIn("decoded_stem_count", deliverable)
+                self.assertIn("prepared_stem_count", deliverable)
+                self.assertIn("skipped_stem_count", deliverable)
+                self.assertIn("rendered_frame_count", deliverable)
+                self.assertIn("duration_seconds", deliverable)
+                self.assertIn("failure_reason", deliverable)
+                self.assertIn("warning_codes", deliverable)
+
+            overall_status = str(manifest_summary.get("overall_status") or "").strip()
+            self.assertTrue(overall_status)
+            self.assertIn(f"result={overall_status}", stderr)
+            self.assertIn(
+                f"deliverables={manifest_summary.get('deliverable_count', 0)}",
+                stderr,
+            )
+
     def test_full_render_preview_headphones_writes_binaural_outputs(self) -> None:
         recs = [
             {

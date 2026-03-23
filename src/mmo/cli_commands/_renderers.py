@@ -13,6 +13,7 @@ from mmo.core.deliverables_index import (
     build_deliverables_index_single,
     build_deliverables_index_variants,
 )
+from mmo.core.deliverables import summarize_deliverables
 from mmo.core.listen_pack import build_listen_pack
 from mmo.core.recommendations import (
     normalize_recommendation_contract,
@@ -175,6 +176,10 @@ def _set_session_workspace_dir(report: dict[str, Any], *, workspace_dir: Path) -
     if not isinstance(session_payload, dict):
         return
     session_payload["workspace_dir"] = workspace_dir.resolve().as_posix()
+
+
+def _deliverable_result_payload(deliverables: list[dict[str, Any]]) -> dict[str, Any]:
+    return summarize_deliverables(deliverables)
 
 
 def _collect_stem_artifacts(
@@ -369,13 +374,14 @@ def _run_render_command(
             output_formats=output_formats,
         )
     deliverables = build_deliverables_for_renderer_manifests(manifests)
+    deliverables_summary = _deliverable_result_payload(deliverables)
     render_manifest = {
         "schema_version": "0.1.0",
         "report_id": report.get("report_id", ""),
         "renderer_manifests": manifests,
+        "deliverables_summary": deliverables_summary,
     }
-    if deliverables:
-        render_manifest["deliverables"] = deliverables
+    render_manifest["deliverables"] = deliverables
     _validate_render_manifest(
         render_manifest,
         schemas_dir() /"render_manifest.schema.json",
@@ -385,6 +391,16 @@ def _run_render_command(
     out_manifest_path.write_text(
         json.dumps(render_manifest, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
+    )
+    print(
+        "render:"
+        f" result={_coerce_str(deliverables_summary.get('overall_status')).strip() or 'none'}"
+        f" deliverables={deliverables_summary.get('deliverable_count', 0)}"
+        f" success={deliverables_summary.get('success_count', 0)}"
+        f" partial={deliverables_summary.get('partial_count', 0)}"
+        f" failed={deliverables_summary.get('failed_count', 0)}"
+        f" invalid_master={deliverables_summary.get('invalid_master_count', 0)}",
+        file=sys.stderr,
     )
     return 0
 
@@ -489,14 +505,15 @@ def _run_apply_command(
         output_formats=output_formats,
     )
     deliverables = build_deliverables_for_renderer_manifests(renderer_manifests)
+    deliverables_summary = _deliverable_result_payload(deliverables)
     apply_manifest = {
         "schema_version": "0.1.0",
         "context": "auto_apply",
         "report_id": report.get("report_id", ""),
         "renderer_manifests": renderer_manifests,
+        "deliverables_summary": deliverables_summary,
     }
-    if deliverables:
-        apply_manifest["deliverables"] = deliverables
+    apply_manifest["deliverables"] = deliverables
     _validate_apply_manifest(
         apply_manifest,
         schemas_dir() /"apply_manifest.schema.json",
@@ -506,6 +523,16 @@ def _run_apply_command(
     out_manifest_path.write_text(
         json.dumps(apply_manifest, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
+    )
+    print(
+        "apply:"
+        f" result={_coerce_str(deliverables_summary.get('overall_status')).strip() or 'none'}"
+        f" deliverables={deliverables_summary.get('deliverable_count', 0)}"
+        f" success={deliverables_summary.get('success_count', 0)}"
+        f" partial={deliverables_summary.get('partial_count', 0)}"
+        f" failed={deliverables_summary.get('failed_count', 0)}"
+        f" invalid_master={deliverables_summary.get('invalid_master_count', 0)}",
+        file=sys.stderr,
     )
 
     if out_report_path is not None:
@@ -2433,6 +2460,7 @@ def _run_safe_render_command(
 
         if dry_run:
             status = "blocked" if blocked and not eligible else "dry_run_only"
+            empty_deliverables: list[dict[str, Any]] = []
             receipt: dict[str, Any] = {
                 "schema_version": "0.1.0",
                 "receipt_id": receipt_id,
@@ -2457,6 +2485,8 @@ def _run_safe_render_command(
                 "approved_by_user": approved_by_user_summaries,
                 "blocked_recommendations": blocked_summaries,
                 "applied_recommendations": [],
+                "deliverables": empty_deliverables,
+                "deliverables_summary": _deliverable_result_payload(empty_deliverables),
                 "renderer_manifests": [],
                 "qa_issues": [],
                 "fallback_attempts": [],
@@ -2513,6 +2543,8 @@ def _run_safe_render_command(
                     "schema_version": "0.1.0",
                     "report_id": _coerce_str(report.get("report_id")),
                     "renderer_manifests": [],
+                    "deliverables": empty_deliverables,
+                    "deliverables_summary": _deliverable_result_payload(empty_deliverables),
                 }
                 _validate_render_manifest(
                     dry_manifest,
@@ -2624,13 +2656,14 @@ def _run_safe_render_command(
             preview_output_count = len(preview_outputs) if isinstance(preview_outputs, list) else 0
             preview_skipped_count = len(preview_skipped) if isinstance(preview_skipped, list) else 0
         deliverables = build_deliverables_for_renderer_manifests(manifests)
+        deliverables_summary = _deliverable_result_payload(deliverables)
         render_manifest = {
             "schema_version": "0.1.0",
             "report_id": _coerce_str(report.get("report_id")),
             "renderer_manifests": manifests,
+            "deliverables_summary": deliverables_summary,
         }
-        if deliverables:
-            render_manifest["deliverables"] = deliverables
+        render_manifest["deliverables"] = deliverables
         _validate_render_manifest(
             render_manifest,
             schemas_dir() / "render_manifest.schema.json",
@@ -2711,6 +2744,8 @@ def _run_safe_render_command(
             if isinstance(qa_payload_issues, list):
                 qa_payload_issues.extend(json.loads(json.dumps(fallback_issues)))
         if qa_payload:
+            qa_payload["deliverables"] = json.loads(json.dumps(deliverables))
+            qa_payload["deliverables_summary"] = json.loads(json.dumps(deliverables_summary))
             qa_payload["fallback_attempts"] = json.loads(json.dumps(fallback_attempts))
             qa_payload["fallback_final"] = json.loads(json.dumps(fallback_final))
         if no_outputs_issue is not None:
@@ -2764,6 +2799,10 @@ def _run_safe_render_command(
                 else []
             ),
         )
+        render_result_status = (
+            _coerce_str(deliverables_summary.get("overall_status")).strip()
+            or ("failed" if output_count == 0 else "success")
+        )
         receipt = {
             "schema_version": "0.1.0",
             "receipt_id": receipt_id,
@@ -2788,6 +2827,8 @@ def _run_safe_render_command(
             "approved_by_user": approved_by_user_summaries,
             "blocked_recommendations": blocked_summaries,
             "applied_recommendations": applied_summaries,
+            "deliverables": deliverables,
+            "deliverables_summary": deliverables_summary,
             "renderer_manifests": manifests,
             "qa_issues": qa_issues,
             "fallback_attempts": fallback_attempts,
@@ -2797,6 +2838,7 @@ def _run_safe_render_command(
                 f"profile_id={profile_id}",
                 f"renderers={','.join(renderer_ids) if renderer_ids else '<none>'}",
                 f"outputs={output_count}",
+                f"deliverable_result={render_result_status}",
                 f"allow_empty_outputs={'true' if allow_empty_outputs else 'false'}",
                 (
                     "headphone_preview="
@@ -2902,6 +2944,12 @@ def _run_safe_render_command(
 
         print(
             f"safe-render: completed"
+            f" result={render_result_status}"
+            f" deliverables={deliverables_summary.get('deliverable_count', 0)}"
+            f" success={deliverables_summary.get('success_count', 0)}"
+            f" partial={deliverables_summary.get('partial_count', 0)}"
+            f" failed={deliverables_summary.get('failed_count', 0)}"
+            f" invalid_master={deliverables_summary.get('invalid_master_count', 0)}"
             f" outputs={output_count}"
             f" qa_errors={qa_error_count}"
             f" qa_warns={len(qa_issues) - qa_error_count}",

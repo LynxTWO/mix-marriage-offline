@@ -150,6 +150,71 @@
           "items": { "type": "string", "minLength": 1 }
         }
       }
+    },
+    "deliverable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deliverable_id", "label", "output_ids"],
+      "properties": {
+        "deliverable_id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "artifact_role": { "type": "string", "minLength": 1 },
+        "target_layout_id": { "type": "string", "minLength": 1 },
+        "target_stem_id": { "type": "string", "minLength": 1 },
+        "target_bus_id": { "type": "string", "minLength": 1 },
+        "channel_count": { "type": "integer", "minimum": 1 },
+        "status": {
+          "type": "string",
+          "enum": ["success", "failed", "partial", "invalid_master"]
+        },
+        "is_valid_master": { "type": "boolean" },
+        "planned_stem_count": { "type": ["integer", "null"], "minimum": 0 },
+        "decoded_stem_count": { "type": ["integer", "null"], "minimum": 0 },
+        "prepared_stem_count": { "type": ["integer", "null"], "minimum": 0 },
+        "skipped_stem_count": { "type": ["integer", "null"], "minimum": 0 },
+        "rendered_frame_count": { "type": ["integer", "null"], "minimum": 0 },
+        "duration_seconds": { "type": ["number", "null"], "minimum": 0 },
+        "failure_reason": { "type": ["string", "null"], "minLength": 1 },
+        "warning_codes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "formats": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "output_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "deliverables_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "overall_status",
+        "deliverable_count",
+        "success_count",
+        "failed_count",
+        "partial_count",
+        "invalid_master_count",
+        "valid_master_count",
+        "mixed_outcomes"
+      ],
+      "properties": {
+        "overall_status": {
+          "type": ["string", "null"],
+          "enum": ["success", "failed", "partial", "invalid_master", null]
+        },
+        "deliverable_count": { "type": "integer", "minimum": 0 },
+        "success_count": { "type": "integer", "minimum": 0 },
+        "failed_count": { "type": "integer", "minimum": 0 },
+        "partial_count": { "type": "integer", "minimum": 0 },
+        "invalid_master_count": { "type": "integer", "minimum": 0 },
+        "valid_master_count": { "type": "integer", "minimum": 0 },
+        "mixed_outcomes": { "type": "boolean" }
+      }
     }
   },
   "properties": {
@@ -195,6 +260,13 @@
     "applied_recommendations": {
       "type": "array",
       "items": { "$ref": "#/$defs/recommendation_entry" }
+    },
+    "deliverables": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/deliverable" }
+    },
+    "deliverables_summary": {
+      "$ref": "#/$defs/deliverables_summary"
     },
     "renderer_manifests": {
       "type": "array",

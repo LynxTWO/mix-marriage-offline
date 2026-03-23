@@ -14,6 +14,13 @@ from mmo.core.downmix import (
     compare_rendered_surround_to_stereo_reference,
     similarity_gate_score,
 )
+from mmo.core.deliverables import (
+    RENDER_RESULT_DOWNMIX_QA_FAILED,
+    RENDER_RESULT_FALLBACK_APPLIED,
+    RENDER_RESULT_SAFETY_COLLAPSE_APPLIED,
+    build_output_render_result,
+    canonical_warning_codes,
+)
 from mmo.core.fallback_sequencer import run_fallback_sequence
 from mmo.core.placement_policy import build_render_intent
 from mmo.core.scene_builder import build_scene_from_bus_plan, build_scene_from_session
@@ -2121,6 +2128,30 @@ def _mix_layout_from_intent(
                         "stereo_reinterpret_allowed": stereo_reinterpret_allowed,
                         "resampling": resampling_receipt,
                         "bed_decorrelated_widening": dict(decorrelation_receipt),
+                        "render_result": build_output_render_result(
+                            artifact_role="master",
+                            planned_stem_count=_coerce_int(
+                                resampling_receipt.get("counts", {}).get("planned_stem_count")
+                                if isinstance(resampling_receipt, dict)
+                                else None
+                            ),
+                            decoded_stem_count=decoded_stems,
+                            prepared_stem_count=len(prepared_stems),
+                            skipped_stem_count=_coerce_int(
+                                resampling_receipt.get("counts", {}).get("skipped_stem_count")
+                                if isinstance(resampling_receipt, dict)
+                                else None
+                            ),
+                            rendered_frame_count=pass2_frames if pass2_frames > 0 else _DEFAULT_SILENCE_FRAMES,
+                            duration_seconds=(
+                                (pass2_frames if pass2_frames > 0 else _DEFAULT_SILENCE_FRAMES)
+                                / sample_rate_hz
+                                if sample_rate_hz > 0
+                                else None
+                            ),
+                            warning_codes=canonical_warning_codes(notes),
+                            target_layout_id=layout_id,
+                        ),
                         "what_why": (
                             "Rendered one layout-agnostic scene into layout speakers using "
                             "conservative placement sends; stereo stems keep L/R imaging in "
@@ -2572,6 +2603,32 @@ def _attach_similarity_metadata(
         tags.append("safety_collapse_applied=true")
     if tags:
         metadata["manifest_tags"] = sorted(set(tags))
+
+    warning_codes = canonical_warning_codes(metadata.get("warnings"))
+    if similarity_result.get("fallback_applied") is True:
+        warning_codes.append(RENDER_RESULT_FALLBACK_APPLIED)
+    if isinstance(fallback_final, dict) and fallback_final.get("safety_collapse_applied") is True:
+        warning_codes.append(RENDER_RESULT_SAFETY_COLLAPSE_APPLIED)
+    if similarity_result.get("passed") is not True:
+        warning_codes.append(RENDER_RESULT_DOWNMIX_QA_FAILED)
+    warning_codes = sorted(set(warning_codes))
+    if warning_codes:
+        existing_warnings = [
+            item.strip()
+            for item in list(metadata.get("warnings") or [])
+            if isinstance(item, str) and item.strip()
+        ]
+        metadata["warnings"] = sorted(
+            set(existing_warnings) | set(warning_codes)
+        )
+    render_result = metadata.get("render_result")
+    if isinstance(render_result, dict):
+        render_result["warning_codes"] = warning_codes
+        render_result["failure_reason"] = (
+            RENDER_RESULT_DOWNMIX_QA_FAILED
+            if similarity_result.get("passed") is not True
+            else render_result.get("failure_reason")
+        )
 
 
 def _run_layout_similarity_fallback_sequence(

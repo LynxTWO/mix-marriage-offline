@@ -27,6 +27,7 @@ from mmo.core.binaural_target import (
     is_binaural_layout,
 )
 from mmo.core.downmix_qa import run_downmix_qa
+from mmo.core.deliverables import summarize_deliverables
 from mmo.core.gates import apply_gates_to_report
 from mmo.core.lockfile import build_lockfile
 from mmo.core.pipeline import (
@@ -1255,9 +1256,9 @@ def run_variant_plan(
                     "schema_version": VARIANT_SCHEMA_VERSION,
                     "report_id": _coerce_str(render_report.get("report_id")),
                     "renderer_manifests": renderer_manifests,
+                    "deliverables": render_deliverables,
+                    "deliverables_summary": summarize_deliverables(render_deliverables),
                 }
-                if render_deliverables:
-                    render_manifest["deliverables"] = render_deliverables
                 render_manifest_path = variant_out_dir / "render_manifest.json"
                 _write_json(render_manifest_path, render_manifest)
                 variant_result["render_manifest_path"] = _path_to_posix(render_manifest_path)
@@ -1295,9 +1296,9 @@ def run_variant_plan(
                     "context": "auto_apply",
                     "report_id": _coerce_str(apply_report.get("report_id")),
                     "renderer_manifests": renderer_manifests,
+                    "deliverables": apply_deliverables,
+                    "deliverables_summary": summarize_deliverables(apply_deliverables),
                 }
-                if apply_deliverables:
-                    apply_manifest["deliverables"] = apply_deliverables
                 apply_manifest_path = variant_out_dir / "apply_manifest.json"
                 _write_json(apply_manifest_path, apply_manifest)
                 applied_report = _build_applied_report(

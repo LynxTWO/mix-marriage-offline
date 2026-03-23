@@ -7,7 +7,11 @@ import wave
 from pathlib import Path
 
 from mmo.cli import main
-from mmo.core.deliverables import build_deliverables_from_outputs
+from mmo.core.deliverables import (
+    build_deliverables_from_outputs,
+    build_deliverables_from_renderer_manifests,
+    summarize_deliverables,
+)
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 
 
@@ -122,25 +126,156 @@ class TestDeliverablesGrouping(unittest.TestCase):
             ["DELIV.LAYOUT.2_0.2CH", "DELIV.LAYOUT.5_1.6CH"],
         )
         self.assertEqual(
-            deliverables[0],
+            deliverables[0].get("deliverable_id"),
+            "DELIV.LAYOUT.2_0.2CH",
+        )
+        self.assertEqual(deliverables[0].get("status"), "success")
+        self.assertFalse(deliverables[0].get("is_valid_master"))
+        self.assertEqual(deliverables[0].get("formats"), ["flac", "wav"])
+        self.assertEqual(deliverables[0].get("output_ids"), ["OUT.STEREO.FLAC", "OUT.STEREO.WAV"])
+        self.assertEqual(
+            deliverables[1].get("deliverable_id"),
+            "DELIV.LAYOUT.5_1.6CH",
+        )
+        self.assertEqual(deliverables[1].get("status"), "success")
+        self.assertFalse(deliverables[1].get("is_valid_master"))
+        self.assertEqual(deliverables[1].get("formats"), ["wav"])
+        self.assertEqual(deliverables[1].get("output_ids"), ["OUT.SURROUND.WAV"])
+        self.assertEqual(
+            summarize_deliverables(deliverables),
             {
-                "deliverable_id": "DELIV.LAYOUT.2_0.2CH",
-                "label": "LAYOUT.2_0 deliverable",
-                "target_layout_id": "LAYOUT.2_0",
-                "channel_count": 2,
-                "formats": ["flac", "wav"],
-                "output_ids": ["OUT.STEREO.FLAC", "OUT.STEREO.WAV"],
+                "overall_status": "success",
+                "deliverable_count": 2,
+                "success_count": 2,
+                "failed_count": 0,
+                "partial_count": 0,
+                "invalid_master_count": 0,
+                "valid_master_count": 0,
+                "mixed_outcomes": False,
             },
         )
-        self.assertEqual(
-            deliverables[1],
+
+    def test_build_deliverables_from_outputs_separates_master_and_processed_stem_outputs(self) -> None:
+        outputs = [
             {
-                "deliverable_id": "DELIV.LAYOUT.5_1.6CH",
-                "label": "LAYOUT.5_1 deliverable",
-                "target_layout_id": "LAYOUT.5_1",
-                "channel_count": 6,
-                "formats": ["wav"],
-                "output_ids": ["OUT.SURROUND.WAV"],
+                "output_id": "OUT.MASTER.WAV",
+                "file_path": "render/master.wav",
+                "format": "wav",
+                "layout_id": "LAYOUT.2_0",
+                "channel_count": 2,
+                "metadata": {
+                    "artifact_role": "master",
+                    "target_layout_id": "LAYOUT.2_0",
+                    "render_result": {
+                        "artifact_role": "master",
+                        "planned_stem_count": 1,
+                        "decoded_stem_count": 1,
+                        "prepared_stem_count": 1,
+                        "skipped_stem_count": 0,
+                        "rendered_frame_count": 4800,
+                        "duration_seconds": 0.1,
+                        "warning_codes": [],
+                        "target_layout_id": "LAYOUT.2_0",
+                    },
+                },
+            },
+            {
+                "output_id": "OUT.STEM.WAV",
+                "file_path": "render/lead.wav",
+                "format": "wav",
+                "layout_id": "LAYOUT.2_0",
+                "target_stem_id": "lead",
+                "channel_count": 2,
+                "metadata": {
+                    "artifact_role": "processed_stem",
+                    "target_layout_id": "LAYOUT.2_0",
+                    "render_result": {
+                        "artifact_role": "processed_stem",
+                        "planned_stem_count": 1,
+                        "decoded_stem_count": 1,
+                        "prepared_stem_count": 1,
+                        "skipped_stem_count": 0,
+                        "rendered_frame_count": 4800,
+                        "duration_seconds": 0.1,
+                        "warning_codes": [],
+                        "target_layout_id": "LAYOUT.2_0",
+                    },
+                },
+            },
+        ]
+
+        deliverables = build_deliverables_from_outputs(outputs)
+
+        self.assertEqual(
+            [item.get("deliverable_id") for item in deliverables],
+            [
+                "DELIV.LAYOUT.2_0.2CH",
+                "DELIV.STEM.lead.LAYOUT.2_0.2CH",
+            ],
+        )
+        self.assertEqual(deliverables[0].get("artifact_role"), "master")
+        self.assertEqual(deliverables[0].get("output_ids"), ["OUT.MASTER.WAV"])
+        self.assertTrue(deliverables[0].get("is_valid_master"))
+        self.assertEqual(deliverables[1].get("artifact_role"), "processed_stem")
+        self.assertEqual(deliverables[1].get("target_stem_id"), "lead")
+        self.assertEqual(deliverables[1].get("output_ids"), ["OUT.STEM.WAV"])
+        self.assertFalse(deliverables[1].get("is_valid_master"))
+
+    def test_renderer_manifests_produce_mixed_success_and_failure_summary(self) -> None:
+        renderer_manifests = [
+            {
+                "renderer_id": "PLUGIN.RENDERER.SAFE",
+                "outputs": [
+                    {
+                        "output_id": "OUT.STEREO.WAV",
+                        "file_path": "render/stereo.wav",
+                        "format": "wav",
+                        "layout_id": "LAYOUT.2_0",
+                        "channel_count": 2,
+                        "metadata": {
+                            "artifact_role": "master",
+                            "render_result": {
+                                "artifact_role": "master",
+                                "planned_stem_count": 2,
+                                "decoded_stem_count": 2,
+                                "prepared_stem_count": 2,
+                                "skipped_stem_count": 0,
+                                "rendered_frame_count": 4800,
+                                "duration_seconds": 0.1,
+                                "failure_reason": None,
+                                "warning_codes": [],
+                                "target_layout_id": "LAYOUT.2_0",
+                            },
+                            "target_layout_id": "LAYOUT.2_0",
+                        },
+                    }
+                ],
+                "notes": "LAYOUT.5_1:missing_channel_order",
+                "skipped": [],
+            }
+        ]
+
+        deliverables = build_deliverables_from_renderer_manifests(renderer_manifests)
+
+        self.assertEqual(
+            [item.get("status") for item in deliverables],
+            ["success", "failed"],
+        )
+        self.assertEqual(
+            [item.get("target_layout_id") for item in deliverables],
+            ["LAYOUT.2_0", "LAYOUT.5_1"],
+        )
+        self.assertEqual(
+            summarize_deliverables(deliverables),
+            {
+                "overall_status": "partial",
+                "deliverable_count": 2,
+                "success_count": 1,
+                "failed_count": 1,
+                "partial_count": 0,
+                "invalid_master_count": 0,
+                "valid_master_count": 1,
+                "mixed_outcomes": True,
             },
         )
 
@@ -196,7 +331,7 @@ class TestDeliverablesGrouping(unittest.TestCase):
             if not isinstance(outputs, list):
                 return
 
-            expected_output_ids = [
+            gain_output_ids = [
                 output.get("output_id")
                 for output in sorted(
                     outputs,
@@ -209,6 +344,23 @@ class TestDeliverablesGrouping(unittest.TestCase):
                 and isinstance(output.get("output_id"), str)
                 and output.get("output_id")
             ]
+            renderer_manifests = render_manifest.get("renderer_manifests")
+            self.assertIsInstance(renderer_manifests, list)
+            if not isinstance(renderer_manifests, list):
+                return
+            master_output_ids = [
+                output.get("output_id")
+                for renderer_manifest in renderer_manifests
+                if isinstance(renderer_manifest, dict)
+                for output in renderer_manifest.get("outputs", [])
+                if isinstance(output, dict)
+                and output.get("layout_id") == "LAYOUT.2_0"
+                and output.get("channel_count") == 2
+                and isinstance(output.get("output_id"), str)
+                and output.get("output_id")
+                and isinstance(output.get("metadata"), dict)
+                and output["metadata"].get("artifact_role") == "master"
+            ]
 
             deliverables = render_manifest.get("deliverables")
             self.assertIsInstance(deliverables, list)
@@ -220,6 +372,7 @@ class TestDeliverablesGrouping(unittest.TestCase):
                     item
                     for item in deliverables
                     if isinstance(item, dict)
+                    and item.get("artifact_role") == "master"
                     and item.get("target_layout_id") == "LAYOUT.2_0"
                     and item.get("channel_count") == 2
                 ),
@@ -232,7 +385,32 @@ class TestDeliverablesGrouping(unittest.TestCase):
             self.assertEqual(deliverable.get("target_layout_id"), "LAYOUT.2_0")
             self.assertEqual(deliverable.get("channel_count"), 2)
             self.assertEqual(deliverable.get("formats"), ["flac", "wav"])
-            self.assertEqual(deliverable.get("output_ids"), expected_output_ids)
+            self.assertCountEqual(deliverable.get("output_ids"), master_output_ids)
+            self.assertEqual(deliverable.get("status"), "success")
+            self.assertTrue(deliverable.get("is_valid_master"))
+
+            processed_stem_deliverable = next(
+                (
+                    item
+                    for item in deliverables
+                    if isinstance(item, dict)
+                    and item.get("artifact_role") == "processed_stem"
+                    and item.get("target_stem_id") == "lead"
+                ),
+                None,
+            )
+            self.assertIsNotNone(processed_stem_deliverable)
+            if not isinstance(processed_stem_deliverable, dict):
+                return
+            self.assertCountEqual(processed_stem_deliverable.get("output_ids"), gain_output_ids)
+            self.assertFalse(processed_stem_deliverable.get("is_valid_master"))
+            self.assertEqual(processed_stem_deliverable.get("status"), "success")
+
+            deliverables_summary = render_manifest.get("deliverables_summary")
+            self.assertIsInstance(deliverables_summary, dict)
+            if isinstance(deliverables_summary, dict):
+                self.assertEqual(deliverables_summary.get("overall_status"), "partial")
+                self.assertTrue(deliverables_summary.get("mixed_outcomes"))
 
             bundle_exit_code = main(
                 [
@@ -274,8 +452,26 @@ class TestDeliverablesGrouping(unittest.TestCase):
                 dashboard_deliverable.get("deliverable_id"),
                 deliverable.get("deliverable_id"),
             )
-            self.assertEqual(dashboard_deliverable.get("output_count"), len(expected_output_ids))
+            self.assertEqual(dashboard_deliverable.get("output_count"), len(deliverable.get("output_ids", [])))
             self.assertEqual(dashboard_deliverable.get("formats"), ["flac", "wav"])
+            self.assertEqual(dashboard_deliverable.get("artifact_role"), "master")
+            self.assertEqual(dashboard_deliverable.get("status"), "success")
+            self.assertTrue(dashboard_deliverable.get("is_valid_master"))
+            dashboard_processed_stem = next(
+                (
+                    item
+                    for item in dashboard_deliverables
+                    if isinstance(item, dict)
+                    and item.get("artifact_role") == "processed_stem"
+                    and item.get("target_stem_id") == "lead"
+                ),
+                None,
+            )
+            self.assertIsNotNone(dashboard_processed_stem)
+            dashboard_summary = dashboard.get("deliverables_summary")
+            self.assertIsInstance(dashboard_summary, dict)
+            if isinstance(dashboard_summary, dict):
+                self.assertEqual(dashboard_summary, deliverables_summary)
 
 
 if __name__ == "__main__":
