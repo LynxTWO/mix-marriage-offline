@@ -8,6 +8,7 @@ import math
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
+from mmo.core.deliverables import SILENT_OUTPUT_PEAK_DBFS_LTE
 from mmo.core.loudness_methods import DEFAULT_LOUDNESS_METHOD_ID
 from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
@@ -1399,6 +1400,7 @@ _SAFE_RENDER_QA_THRESHOLDS: dict[str, float] = {
     "true_peak_warn_dbtp_gt": -2.0,
     "true_peak_error_dbtp_gt": -1.0,
     "clip_count_error_gt": 0,
+    "silent_peak_dbfs_lte": SILENT_OUTPUT_PEAK_DBFS_LTE,
 }
 
 
@@ -1410,6 +1412,20 @@ def _safe_render_qa_issues(
 ) -> list[dict[str, Any]]:
     """Return QA issues for a single rendered output file."""
     issues: list[dict[str, Any]] = []
+    peak_dbfs = _coerce_float(metrics.get("peak_dbfs"))
+    if peak_dbfs is None or peak_dbfs <= thresholds["silent_peak_dbfs_lte"]:
+        issues.append(
+            {
+                "issue_id": "ISSUE.RENDER.QA.SILENT_OUTPUT",
+                "severity": "error",
+                "message": "Rendered output is effectively silent.",
+                "output_path": output_path,
+                "metric": "peak_dbfs",
+                "value": _round_or_none(peak_dbfs),
+                "threshold": _round_or_none(thresholds["silent_peak_dbfs_lte"]),
+            }
+        )
+
     correlation_lr = _coerce_float(metrics.get("correlation_lr"))
     if correlation_lr is not None:
         if correlation_lr <= thresholds["polarity_error_correlation_lte"]:

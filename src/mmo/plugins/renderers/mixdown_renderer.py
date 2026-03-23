@@ -22,7 +22,12 @@ from mmo.dsp.export_finalize import (
 from mmo.dsp.io import sha256_file, write_wav_ixml_chunk
 from mmo.dsp.process_context import build_process_context
 from mmo.dsp.sample_rate import choose_target_rate_for_session
-from mmo.core.deliverables import build_output_render_result, canonical_warning_codes
+from mmo.core.deliverables import (
+    RENDER_RESULT_SILENT_OUTPUT,
+    build_output_render_result,
+    canonical_warning_codes,
+    is_effectively_silent_peak_linear,
+)
 from mmo.core.source_locator import (
     resolve_session_stems,
     resolved_stem_path,
@@ -40,7 +45,6 @@ _SUPPORTED_LAYOUT_IDS: tuple[str, ...] = (
     "LAYOUT.9_1_6",
 )
 _DEFAULT_SAMPLE_RATE_HZ = 48_000
-_DEFAULT_SILENCE_FRAMES = 4_800
 _TARGET_PEAK_DBFS = -1.0
 _FALLBACK_TRIM_DB = -12.0
 _CENTER_FOLD_REDUCTION_DB = -3.0
@@ -455,16 +459,20 @@ def _read_stereo_program_from_stems(session: Dict[str, Any]) -> _ProgramStereo:
 
                 frame_cursor += frame_count
 
-            decoded_stem_count += 1
-            measured_stem_count += 1
-            worst_case_peak_sum += stem_peak
+            if frame_cursor > 0:
+                decoded_stem_count += 1
+                measured_stem_count += 1
+                worst_case_peak_sum += stem_peak
+            else:
+                notes.append(f"{plan.stem_id}:decode_failed")
+                measurement_failed = True
         except Exception:
             notes.append(f"{plan.stem_id}:decode_failed")
             measurement_failed = True
 
     if not left or not right:
-        left = [0.0] * _DEFAULT_SILENCE_FRAMES
-        right = [0.0] * _DEFAULT_SILENCE_FRAMES
+        left = []
+        right = []
         notes.append("rendered_silence:no_decodable_stems")
         measurement_failed = True
 
@@ -686,10 +694,20 @@ class MixdownRenderer(RendererPlugin):
                 if output_buffer.channels > 0
                 else 0
             )
+            rendered_peak_linear = (
+                max(abs(sample) for sample in output_buffer.data)
+                if output_buffer.data
+                else 0.0
+            )
             render_warning_codes = canonical_warning_codes(
                 list(program.notes),
                 list(program.resampling.get("decoder_warnings") or []),
             )
+            if rendered_frame_count > 0 and is_effectively_silent_peak_linear(rendered_peak_linear):
+                render_warning_codes = canonical_warning_codes(
+                    render_warning_codes,
+                    [RENDER_RESULT_SILENT_OUTPUT],
+                )
             output_row: dict[str, Any] = {
                 "output_id": f"OUTPUT.MIXDOWN_BASELINE.{layout_slug}.{output_sha[:12]}",
                 "file_path": rel_path.as_posix(),

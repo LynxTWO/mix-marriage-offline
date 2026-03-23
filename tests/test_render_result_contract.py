@@ -135,20 +135,53 @@ class TestRenderResultContract(unittest.TestCase):
 
         self.assertEqual(
             [item.get("status") for item in deliverables],
-            ["invalid_master", "invalid_master"],
+            ["failed", "failed"],
         )
         self.assertEqual(
             summarize_deliverables(deliverables),
             {
-                "overall_status": "invalid_master",
+                "overall_status": "failed",
                 "deliverable_count": 2,
                 "success_count": 0,
-                "failed_count": 0,
+                "failed_count": 2,
                 "partial_count": 0,
-                "invalid_master_count": 2,
+                "invalid_master_count": 0,
                 "valid_master_count": 0,
                 "mixed_outcomes": False,
             },
+        )
+
+    def test_silent_master_written_to_disk_is_marked_invalid(self) -> None:
+        deliverables = build_deliverables_from_renderer_manifests(
+            [
+                {
+                    "renderer_id": "PLUGIN.RENDERER.SAFE",
+                    "outputs": [
+                        _master_output(
+                            output_id="OUT.STEREO",
+                            layout_id="LAYOUT.2_0",
+                            channel_count=2,
+                            planned_stem_count=2,
+                            decoded_stem_count=2,
+                            prepared_stem_count=2,
+                            skipped_stem_count=0,
+                            rendered_frame_count=4800,
+                            duration_seconds=0.1,
+                            warning_codes=["RENDER_RESULT.SILENT_OUTPUT"],
+                            failure_reason="RENDER_RESULT.SILENT_OUTPUT",
+                        )
+                    ],
+                    "skipped": [],
+                }
+            ]
+        )
+
+        self.assertEqual(len(deliverables), 1)
+        self.assertEqual(deliverables[0].get("status"), "invalid_master")
+        self.assertFalse(deliverables[0].get("is_valid_master"))
+        self.assertEqual(
+            deliverables[0].get("failure_reason"),
+            "RENDER_RESULT.SILENT_OUTPUT",
         )
 
     def test_invalid_master_written_to_disk_is_marked_invalid(self) -> None:

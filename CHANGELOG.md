@@ -19,6 +19,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   per-deliverable validity fields (`status`, `is_valid_master`, stem counts,
   frame/duration metrics, failure reason, and warning codes) plus an honest
   session-level mixed-outcome summary.
+- Non-empty renders no longer synthesize 0.1-second silent placeholder masters:
+  zero-decoded outputs now stay failed, effectively silent rendered masters are
+  marked invalid, and safe-render blocks success when only diagnostic artifacts
+  exist.
 
 ### Fixed
 
@@ -31,6 +35,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   deliverables now distinguish successful masters from `invalid_master`,
   `partial`, and failed outcomes, and master renders are no longer merged with
   processed-stem deliverables when they share the same layout/channel shape.
+- Safe-render QA now emits an explicit silent-output error and keeps zero-frame
+  diagnostic artifacts without falsely promoting them to successful masters.
 
 ## [1.0.0] — 2026-03-17
 

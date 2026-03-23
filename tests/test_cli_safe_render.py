@@ -84,6 +84,30 @@ def _write_hot_wav(
     _write_16bit_wav(path, channels=channels, rate=rate, duration_s=duration_s, amplitude=0.98)
 
 
+def _write_24bit_wav(
+    path: Path,
+    *,
+    channels: int = 1,
+    rate: int = 48000,
+    duration_s: float = 0.1,
+    amplitude: float = 0.45,
+) -> None:
+    frames = max(8, int(rate * duration_s))
+    frame_bytes = bytearray()
+    for i in range(frames):
+        value = amplitude * math.sin(2.0 * math.pi * 220.0 * i / rate)
+        sample = int(max(-1.0, min(1.0, value)) * 8388607.0)
+        packed = int(sample).to_bytes(4, byteorder="little", signed=True)[:3]
+        for _ in range(channels):
+            frame_bytes.extend(packed)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(channels)
+        handle.setsampwidth(3)
+        handle.setframerate(rate)
+        handle.writeframes(bytes(frame_bytes))
+
+
 def _make_report(
     stems_dir: Path,
     stem_path_relative: str,
@@ -644,6 +668,96 @@ class TestSafeRenderFullRender(unittest.TestCase):
                 f"deliverables={manifest_summary.get('deliverable_count', 0)}",
                 stderr,
             )
+
+    def test_full_render_zero_decoded_artifacts_are_preserved_but_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            stems_dir = temp / "stems"
+            report = _make_report(
+                stems_dir,
+                "missing.wav",
+                "kick",
+                clip_count=0,
+                peak_dbfs=-6.0,
+                recommendations=[],
+            )
+            report_path = temp / "report.json"
+            report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+            plugins_dir = _write_placement_only_plugins_dir(temp / "plugins")
+            out_dir = temp / "renders"
+            manifest_path = temp / "render_manifest.json"
+            qa_path = temp / "qa.json"
+            receipt_path = temp / "receipt.json"
+
+            exit_code, _stdout, stderr = _run_main(
+                [
+                    "safe-render",
+                    "--report",
+                    str(report_path),
+                    "--plugins",
+                    str(plugins_dir),
+                    "--target",
+                    "stereo",
+                    "--out-dir",
+                    str(out_dir),
+                    "--out-manifest",
+                    str(manifest_path),
+                    "--qa-out",
+                    str(qa_path),
+                    "--receipt-out",
+                    str(receipt_path),
+                    "--force",
+                ]
+            )
+            self.assertEqual(exit_code, 1, msg=stderr)
+
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            qa = json.loads(qa_path.read_text(encoding="utf-8"))
+
+            manifest_summary = manifest.get("deliverables_summary")
+            self.assertIsInstance(manifest_summary, dict)
+            if not isinstance(manifest_summary, dict):
+                return
+            self.assertEqual(manifest_summary.get("overall_status"), "failed")
+            self.assertEqual(manifest_summary.get("valid_master_count"), 0)
+
+            deliverables = manifest.get("deliverables")
+            self.assertIsInstance(deliverables, list)
+            if not isinstance(deliverables, list) or not deliverables:
+                return
+            master_deliverables = [
+                item
+                for item in deliverables
+                if isinstance(item, dict) and item.get("artifact_role") == "master"
+            ]
+            self.assertTrue(master_deliverables)
+            self.assertTrue(all(item.get("status") == "failed" for item in master_deliverables))
+
+            outputs = [
+                output
+                for renderer_manifest in manifest.get("renderer_manifests", [])
+                if isinstance(renderer_manifest, dict)
+                for output in renderer_manifest.get("outputs", [])
+                if isinstance(output, dict)
+            ]
+            self.assertTrue(outputs)
+            first_output_path = out_dir / str(outputs[0].get("file_path", ""))
+            self.assertTrue(first_output_path.exists())
+            with wave.open(str(first_output_path), "rb") as handle:
+                self.assertEqual(handle.getnframes(), 0)
+
+            self.assertEqual(receipt.get("status"), "blocked")
+            self.assertEqual(receipt.get("deliverables_summary"), manifest_summary)
+            error_ids = {
+                issue.get("issue_id")
+                for issue in qa.get("issues", [])
+                if isinstance(issue, dict) and issue.get("severity") == "error"
+            }
+            self.assertIn("ISSUE.RENDER.ALL_MASTERS_INVALID", error_ids)
+            self.assertIn("ISSUE.RENDER.QA.SILENT_OUTPUT", error_ids)
+            self.assertIn("all rendered masters are invalid", stderr)
 
     def test_full_render_preview_headphones_writes_binaural_outputs(self) -> None:
         recs = [
@@ -1629,6 +1743,81 @@ class TestBuildSafeRenderQA(unittest.TestCase):
             self.assertIn("tilt_db_per_oct", spectral)
             self.assertIn("section_tilt_db_per_oct", spectral)
             self.assertIn("adjacent_band_slopes_db_per_oct", spectral)
+
+    def test_all_zero_output_is_reported_as_silent_error(self) -> None:
+        from mmo.core.render_qa import build_safe_render_qa  # noqa: WPS433
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            wav_path = temp / "silent.wav"
+            _write_16bit_wav(wav_path, channels=2, rate=48000, duration_s=0.5, amplitude=0.0)
+
+            qa = build_safe_render_qa(
+                output_entries=[
+                    {
+                        "path": wav_path.as_posix(),
+                        "sha256": "silent",
+                        "channels": 2,
+                        "sample_rate_hz": 48000,
+                    }
+                ]
+            )
+            error_ids = {
+                issue.get("issue_id")
+                for issue in qa.get("issues", [])
+                if isinstance(issue, dict) and issue.get("severity") == "error"
+            }
+            self.assertIn("ISSUE.RENDER.QA.SILENT_OUTPUT", error_ids)
+
+    def test_output_just_below_silence_threshold_is_reported(self) -> None:
+        from mmo.core.render_qa import build_safe_render_qa  # noqa: WPS433
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            wav_path = temp / "below_threshold.wav"
+            _write_24bit_wav(wav_path, channels=2, rate=48000, duration_s=0.5, amplitude=5e-7)
+
+            qa = build_safe_render_qa(
+                output_entries=[
+                    {
+                        "path": wav_path.as_posix(),
+                        "sha256": "below-threshold",
+                        "channels": 2,
+                        "sample_rate_hz": 48000,
+                    }
+                ]
+            )
+            error_ids = {
+                issue.get("issue_id")
+                for issue in qa.get("issues", [])
+                if isinstance(issue, dict) and issue.get("severity") == "error"
+            }
+            self.assertIn("ISSUE.RENDER.QA.SILENT_OUTPUT", error_ids)
+
+    def test_very_quiet_but_non_silent_output_above_threshold_passes(self) -> None:
+        from mmo.core.render_qa import build_safe_render_qa  # noqa: WPS433
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            wav_path = temp / "above_threshold.wav"
+            _write_24bit_wav(wav_path, channels=2, rate=48000, duration_s=0.5, amplitude=2e-6)
+
+            qa = build_safe_render_qa(
+                output_entries=[
+                    {
+                        "path": wav_path.as_posix(),
+                        "sha256": "above-threshold",
+                        "channels": 2,
+                        "sample_rate_hz": 48000,
+                    }
+                ]
+            )
+            error_ids = {
+                issue.get("issue_id")
+                for issue in qa.get("issues", [])
+                if isinstance(issue, dict) and issue.get("severity") == "error"
+            }
+            self.assertNotIn("ISSUE.RENDER.QA.SILENT_OUTPUT", error_ids)
 
     def test_schema_in_all_exports(self) -> None:
         """build_safe_render_qa must appear in __all__ of render_qa."""

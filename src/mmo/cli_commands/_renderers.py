@@ -14,6 +14,10 @@ from mmo.core.deliverables_index import (
     build_deliverables_index_variants,
 )
 from mmo.core.deliverables import summarize_deliverables
+from mmo.core.deliverables import (
+    RENDER_RESULT_NO_DECODABLE_STEMS,
+    RENDER_RESULT_SILENT_OUTPUT,
+)
 from mmo.core.listen_pack import build_listen_pack
 from mmo.core.recommendations import (
     normalize_recommendation_contract,
@@ -59,8 +63,12 @@ __all__ = [
 ]
 
 ISSUE_RENDER_NO_OUTPUTS = "ISSUE.RENDER.NO_OUTPUTS"
+ISSUE_RENDER_ALL_MASTERS_INVALID = "ISSUE.RENDER.ALL_MASTERS_INVALID"
 _NO_OUTPUTS_WARNING_MESSAGE = (
     "No audio files were written. MMO finished the paperwork, but no renderer produced a bounce for this target."
+)
+_ALL_MASTERS_INVALID_MESSAGE = (
+    "Rendered audio artifacts were written, but every master deliverable is invalid because no stems decoded or the result is effectively silent."
 )
 _FALLBACK_STEP_SEQUENCE = (
     "reduce_surround",
@@ -180,6 +188,54 @@ def _set_session_workspace_dir(report: dict[str, Any], *, workspace_dir: Path) -
 
 def _deliverable_result_payload(deliverables: list[dict[str, Any]]) -> dict[str, Any]:
     return summarize_deliverables(deliverables)
+
+
+def _master_deliverables_invalid_for_safe_render(
+    deliverables: list[dict[str, Any]],
+) -> bool:
+    master_deliverables = [
+        deliverable
+        for deliverable in deliverables
+        if isinstance(deliverable, dict)
+        and _coerce_str(deliverable.get("artifact_role")).strip().lower() == "master"
+    ]
+    if not master_deliverables:
+        return False
+
+    for deliverable in master_deliverables:
+        status = _coerce_str(deliverable.get("status")).strip().lower()
+        if status not in {"failed", "invalid_master"}:
+            return False
+        failure_reason = _coerce_str(deliverable.get("failure_reason")).strip()
+        warning_codes = deliverable.get("warning_codes")
+        normalized_warning_codes = (
+            {
+                _coerce_str(item).strip()
+                for item in warning_codes
+                if isinstance(item, str) and _coerce_str(item).strip()
+            }
+            if isinstance(warning_codes, list)
+            else set()
+        )
+        if failure_reason not in {
+            RENDER_RESULT_NO_DECODABLE_STEMS,
+            RENDER_RESULT_SILENT_OUTPUT,
+        } and not normalized_warning_codes.intersection(
+            {RENDER_RESULT_NO_DECODABLE_STEMS, RENDER_RESULT_SILENT_OUTPUT}
+        ):
+            return False
+    return True
+
+
+def _build_all_masters_invalid_issue() -> dict[str, Any]:
+    return {
+        "issue_id": ISSUE_RENDER_ALL_MASTERS_INVALID,
+        "severity": "error",
+        "message": _ALL_MASTERS_INVALID_MESSAGE,
+        "metric": "valid_master_count",
+        "value": 0,
+        "threshold": 1,
+    }
 
 
 def _collect_stem_artifacts(
@@ -2676,6 +2732,7 @@ def _run_safe_render_command(
             )
         output_count = _count_manifest_outputs(manifests)
         no_outputs_issue: dict[str, Any] | None = None
+        all_masters_invalid_issue: dict[str, Any] | None = None
         if output_count == 0:
             no_outputs_issue = _build_no_outputs_issue(out_dir=out_dir)
             print(
@@ -2703,6 +2760,35 @@ def _run_safe_render_command(
                     "codes": ["SAFE_RENDER.NO_OUTPUTS"],
                     "ids": [ISSUE_RENDER_NO_OUTPUTS],
                     "metrics": [{"name": "output_count", "value": 0.0}],
+                },
+            )
+        elif _master_deliverables_invalid_for_safe_render(deliverables):
+            all_masters_invalid_issue = _build_all_masters_invalid_issue()
+            print(
+                f"safe-render: {ISSUE_RENDER_ALL_MASTERS_INVALID}"
+                f" message={_ALL_MASTERS_INVALID_MESSAGE}",
+                file=sys.stderr,
+            )
+            print(
+                "safe-render: render artifacts were kept for diagnostics, but no valid master was produced.",
+                file=sys.stderr,
+            )
+            progress.emit_log(
+                kind="warn",
+                scope="render",
+                what="safe-render wrote only invalid masters",
+                why="All master deliverables failed because no stems decoded or the rendered output is effectively silent.",
+                where=[out_dir.resolve().as_posix()],
+                confidence=1.0,
+                evidence={
+                    "codes": ["SAFE_RENDER.INVALID_MASTERS"],
+                    "ids": [ISSUE_RENDER_ALL_MASTERS_INVALID],
+                    "metrics": [
+                        {
+                            "name": "valid_master_count",
+                            "value": float(deliverables_summary.get("valid_master_count", 0) or 0),
+                        }
+                    ],
                 },
             )
         progress.advance(
@@ -2753,6 +2839,11 @@ def _run_safe_render_command(
             qa_payload_issues = qa_payload.get("issues")
             if isinstance(qa_payload_issues, list):
                 qa_payload_issues.append(dict(no_outputs_issue))
+        if all_masters_invalid_issue is not None:
+            qa_issues.append(dict(all_masters_invalid_issue))
+            qa_payload_issues = qa_payload.get("issues")
+            if isinstance(qa_payload_issues, list):
+                qa_payload_issues.append(dict(all_masters_invalid_issue))
         if qa_out_path is not None:
             qa_out_path.parent.mkdir(parents=True, exist_ok=True)
             _write_json_file(qa_out_path, qa_payload)
@@ -2787,7 +2878,10 @@ def _run_safe_render_command(
         # policy is introduced separately.
         render_status = (
             "blocked"
-            if (no_outputs_issue is not None and not allow_empty_outputs)
+            if (
+                (no_outputs_issue is not None and not allow_empty_outputs)
+                or all_masters_invalid_issue is not None
+            )
             else "completed"
         )
         applied_summaries = _build_applied_rec_summaries(
@@ -2895,6 +2989,10 @@ def _run_safe_render_command(
         )
         if no_outputs_issue is not None:
             receipt["notes"].append(f"{ISSUE_RENDER_NO_OUTPUTS}: {_NO_OUTPUTS_WARNING_MESSAGE}")
+        if all_masters_invalid_issue is not None:
+            receipt["notes"].append(
+                f"{ISSUE_RENDER_ALL_MASTERS_INVALID}: {_ALL_MASTERS_INVALID_MESSAGE}"
+            )
         if binaural_target_requested and binaural_source_selection is not None:
             receipt["notes"].append(
                 "binaural_source_layout="
@@ -2925,6 +3023,13 @@ def _run_safe_render_command(
             print(
                 "safe-render: failing because outputs=0."
                 " Override with --allow-empty-outputs only if a receipt-only pass is intentional.",
+                file=sys.stderr,
+            )
+            exit_code = 1
+        elif all_masters_invalid_issue is not None:
+            print(
+                "safe-render: failing because all rendered masters are invalid."
+                " MMO kept the artifacts for debugging, but they do not count as a successful render.",
                 file=sys.stderr,
             )
             exit_code = 1

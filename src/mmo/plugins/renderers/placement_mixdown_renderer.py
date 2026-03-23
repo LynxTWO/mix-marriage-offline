@@ -18,8 +18,10 @@ from mmo.core.deliverables import (
     RENDER_RESULT_DOWNMIX_QA_FAILED,
     RENDER_RESULT_FALLBACK_APPLIED,
     RENDER_RESULT_SAFETY_COLLAPSE_APPLIED,
+    RENDER_RESULT_SILENT_OUTPUT,
     build_output_render_result,
     canonical_warning_codes,
+    is_effectively_silent_peak_linear,
 )
 from mmo.core.fallback_sequencer import run_fallback_sequence
 from mmo.core.placement_policy import build_render_intent
@@ -59,7 +61,6 @@ _SUPPORTED_LAYOUT_IDS: tuple[str, ...] = (
     "LAYOUT.9_1_6",
 )
 _DEFAULT_SAMPLE_RATE_HZ = 48_000
-_DEFAULT_SILENCE_FRAMES = 4_800
 _TARGET_PEAK_DBFS = -1.0
 _RENDER_CHUNK_FRAMES = 4096
 _RENDER_PASS_COUNT = 2
@@ -206,6 +207,7 @@ class _StemPassState:
     iterator: Iterator[list[float]]
     active: bool = True
     failed: bool = False
+    produced_frames: int = 0
     bed_decorrelation_taps: dict[int, _BedDecorrelationTap] = field(default_factory=dict)
     bed_decorrelation_state: dict[int, _BedDecorrelationDelayState] = field(
         default_factory=dict
@@ -1140,6 +1142,7 @@ def _run_mix_pass(
             sample_rate_hz=sample_rate_hz,
         )
         mixed_frame_count = 0
+        states_with_audio: list[_StemPassState] = []
 
         for state in states:
             if not state.active:
@@ -1187,14 +1190,22 @@ def _run_mix_pass(
                 source_chunk=source_chunk,
                 state=state,
             )
+            states_with_audio.append(state)
 
         if mixed_frame_count > 0:
             on_chunk(mixed_chunk.slice_frames(0, mixed_frame_count))
             total_frames += mixed_frame_count
+            for state in states_with_audio:
+                if not state.failed:
+                    state.produced_frames += mixed_frame_count
 
         if not any_active:
             break
 
+    for state in states:
+        if not state.failed and state.produced_frames <= 0:
+            state.failed = True
+            notes.append(f"{layout_id}:{state.stem.stem_id}:decode_failed")
     decoded_stems = sum(1 for state in states if not state.failed)
     return decoded_stems, total_frames, notes
 
@@ -1695,14 +1706,6 @@ def _render_subbus_output(
         )
         if pass_notes:
             notes.extend(pass_notes)
-        if pass_frames <= 0:
-            silence_buffer = AudioBufferF64(
-                data=[0.0] * (_DEFAULT_SILENCE_FRAMES * channel_count),
-                channels=channel_count,
-                channel_order=tuple(channel_order),
-                sample_rate_hz=sample_rate_hz,
-            )
-            handle.writeframes(finalizer.finalize_chunk(silence_buffer.data))
     write_wav_ixml_chunk(abs_path, build_trace_ixml_payload(trace_metadata))
 
     output_sha = sha256_file(abs_path)
@@ -1992,6 +1995,13 @@ def _mix_layout_from_intent(
     else:
         trim_linear = min(1.0, target_peak_linear / pre_trim_peak)
     trim_db = _linear_to_db(trim_linear)
+    rendered_peak_linear = pre_trim_peak * trim_linear if rendered_audio else 0.0
+    render_warning_codes = canonical_warning_codes(notes)
+    if rendered_audio and is_effectively_silent_peak_linear(rendered_peak_linear):
+        render_warning_codes = canonical_warning_codes(
+            render_warning_codes,
+            [RENDER_RESULT_SILENT_OUTPUT],
+        )
 
     layout_slug = _layout_slug(layout_id)
     stereo_reinterpret_allowed = bool(
@@ -2071,14 +2081,6 @@ def _mix_layout_from_intent(
                     )
                     if pass2_notes:
                         notes.extend(pass2_notes)
-                if pass2_frames <= 0:
-                    silence_buffer = AudioBufferF64(
-                        data=[0.0] * (_DEFAULT_SILENCE_FRAMES * channel_count),
-                        channels=channel_count,
-                        channel_order=tuple(normalized_channel_order),
-                        sample_rate_hz=sample_rate_hz,
-                    )
-                    handle.writeframes(finalizer.finalize_chunk(silence_buffer.data))
             trace_context = {
                 "session": session,
                 "scene_payload": scene,
@@ -2142,14 +2144,13 @@ def _mix_layout_from_intent(
                                 if isinstance(resampling_receipt, dict)
                                 else None
                             ),
-                            rendered_frame_count=pass2_frames if pass2_frames > 0 else _DEFAULT_SILENCE_FRAMES,
+                            rendered_frame_count=pass2_frames,
                             duration_seconds=(
-                                (pass2_frames if pass2_frames > 0 else _DEFAULT_SILENCE_FRAMES)
-                                / sample_rate_hz
+                                pass2_frames / sample_rate_hz
                                 if sample_rate_hz > 0
                                 else None
                             ),
-                            warning_codes=canonical_warning_codes(notes),
+                            warning_codes=render_warning_codes,
                             target_layout_id=layout_id,
                         ),
                         "what_why": (

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, List, Sequence, Tuple
 
 from mmo.core.layout_negotiation import get_layout_channel_order
@@ -25,12 +26,21 @@ RENDER_RESULT_NO_DECODABLE_STEMS = "RENDER_RESULT.NO_DECODABLE_STEMS"
 RENDER_RESULT_NO_OUTPUT_ARTIFACT = "RENDER_RESULT.NO_OUTPUT_ARTIFACT"
 RENDER_RESULT_PLACEMENT_POLICY_UNAVAILABLE = "RENDER_RESULT.PLACEMENT_POLICY_UNAVAILABLE"
 RENDER_RESULT_SAFETY_COLLAPSE_APPLIED = "RENDER_RESULT.SAFETY_COLLAPSE_APPLIED"
+RENDER_RESULT_SILENT_OUTPUT = "RENDER_RESULT.SILENT_OUTPUT"
 RENDER_RESULT_STEM_DECODE_FAILED = "RENDER_RESULT.STEM_DECODE_FAILED"
 RENDER_RESULT_STEMS_SKIPPED = "RENDER_RESULT.STEMS_SKIPPED"
 
-_INVALIDATING_WARNING_CODES = {
+SILENT_OUTPUT_PEAK_DBFS_LTE = -120.0
+SILENT_OUTPUT_LINEAR_TOLERANCE = 10.0 ** (SILENT_OUTPUT_PEAK_DBFS_LTE / 20.0)
+
+_FAILURE_REASON_WARNING_CODES = {
     RENDER_RESULT_DOWNMIX_QA_FAILED,
     RENDER_RESULT_NO_DECODABLE_STEMS,
+    RENDER_RESULT_SILENT_OUTPUT,
+}
+_INVALID_MASTER_WARNING_CODES = {
+    RENDER_RESULT_DOWNMIX_QA_FAILED,
+    RENDER_RESULT_SILENT_OUTPUT,
 }
 _LAYOUT_FAILURE_CODES_BY_SUFFIX = {
     "downmix_similarity_gate_failed_after_fallback": RENDER_RESULT_DOWNMIX_QA_FAILED,
@@ -39,6 +49,7 @@ _LAYOUT_FAILURE_CODES_BY_SUFFIX = {
     "placement_policy_unavailable": RENDER_RESULT_PLACEMENT_POLICY_UNAVAILABLE,
     "rendered_silence:no_decodable_stems": RENDER_RESULT_NO_DECODABLE_STEMS,
     "safety_collapse_applied": RENDER_RESULT_SAFETY_COLLAPSE_APPLIED,
+    "silent_output": RENDER_RESULT_SILENT_OUTPUT,
 }
 
 
@@ -238,6 +249,8 @@ def _warning_codes_from_strings(values: Sequence[str]) -> list[str]:
             codes.add(RENDER_RESULT_PLACEMENT_POLICY_UNAVAILABLE)
         if value.endswith(":safety_collapse_applied") or value == "safety_collapse_applied":
             codes.add(RENDER_RESULT_SAFETY_COLLAPSE_APPLIED)
+        if value.endswith(":silent_output") or value == "silent_output":
+            codes.add(RENDER_RESULT_SILENT_OUTPUT)
         if value.endswith(":decode_failed") or "decode_failed" in value:
             codes.add(RENDER_RESULT_STEM_DECODE_FAILED)
     return sorted(codes)
@@ -287,7 +300,7 @@ def build_output_render_result(
     normalized_failure_reason = failure_reason.strip() if isinstance(failure_reason, str) else ""
     if not normalized_failure_reason:
         normalized_failure_reason = next(
-            (code for code in warning_code_values if code in _INVALIDATING_WARNING_CODES),
+            (code for code in warning_code_values if code in _FAILURE_REASON_WARNING_CODES),
             "",
         )
 
@@ -346,6 +359,16 @@ def _first_nonempty_string(values: Sequence[str]) -> str | None:
     return None
 
 
+def is_effectively_silent_peak_linear(peak_linear: float | None) -> bool:
+    if peak_linear is None:
+        return True
+    if not isinstance(peak_linear, (int, float)):
+        return False
+    if not math.isfinite(float(peak_linear)):
+        return False
+    return float(peak_linear) <= SILENT_OUTPUT_LINEAR_TOLERANCE
+
+
 def _deliverable_status(
     *,
     artifact_roles: set[str],
@@ -358,20 +381,34 @@ def _deliverable_status(
     warning_codes: list[str],
     failure_reason: str | None,
 ) -> str:
-    is_master_candidate = "master" in artifact_roles
     if output_count <= 0:
         return DELIVERABLE_STATUS_FAILED
 
-    invalidating_code = failure_reason or next(
-        (code for code in warning_codes if code in _INVALIDATING_WARNING_CODES),
+    zero_decoded_nonempty = (
+        planned_stem_count is not None
+        and planned_stem_count > 0
+        and decoded_stem_count is not None
+        and decoded_stem_count <= 0
+    )
+    if zero_decoded_nonempty:
+        return DELIVERABLE_STATUS_FAILED
+
+    failure_code = failure_reason or next(
+        (code for code in warning_codes if code in _FAILURE_REASON_WARNING_CODES),
         None,
     )
-    if is_master_candidate and invalidating_code:
-        return DELIVERABLE_STATUS_INVALID_MASTER
+    invalid_master_code = (
+        failure_code
+        if failure_code in _INVALID_MASTER_WARNING_CODES
+        else next((code for code in warning_codes if code in _INVALID_MASTER_WARNING_CODES), None)
+    )
 
+    is_master_candidate = "master" in artifact_roles
+    if is_master_candidate and invalid_master_code:
+        return DELIVERABLE_STATUS_INVALID_MASTER
+    if failure_code == RENDER_RESULT_NO_DECODABLE_STEMS:
+        return DELIVERABLE_STATUS_FAILED
     if is_master_candidate and planned_stem_count and decoded_stem_count is not None:
-        if decoded_stem_count <= 0:
-            return DELIVERABLE_STATUS_INVALID_MASTER
         if decoded_stem_count < planned_stem_count:
             return DELIVERABLE_STATUS_PARTIAL
 
@@ -470,7 +507,7 @@ def _deliverable_row_from_group(
     )
     if failure_reason is None:
         failure_reason = next(
-            (code for code in warning_codes if code in _INVALIDATING_WARNING_CODES),
+            (code for code in warning_codes if code in _FAILURE_REASON_WARNING_CODES),
             None,
         )
 
@@ -567,7 +604,7 @@ def _failed_deliverable_row(
 ) -> dict[str, Any]:
     channel_count = _layout_channel_count(layout_id)
     failure_reason = next(
-        (code for code in warning_codes if code in _INVALIDATING_WARNING_CODES),
+        (code for code in warning_codes if code in _FAILURE_REASON_WARNING_CODES),
         None,
     ) or _first_nonempty_string(warning_codes) or RENDER_RESULT_NO_OUTPUT_ARTIFACT
     return {
