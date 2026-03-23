@@ -56,6 +56,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   matching shared schema-defs file for new enum usage, while CLI and desktop
   labels map from those backend semantics instead of inventing per-surface
   synonyms.
+- Stem role inference now handles compact suffixes and sample-style names more
+  gracefully: `KickSample`, `SnareSample`, `LeadVoxDT`, and `ElecGtr1DT` now
+  classify through targeted suffix derivation and narrow vocal-`DT` lexicon
+  coverage without turning unknown-role cases into hard failures.
 
 ### Fixed
 

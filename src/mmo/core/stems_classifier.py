@@ -27,6 +27,13 @@ _TOKEN_SPLIT_RE = re.compile(r"[\s_.\-\[\]\(\)\{\}]+")
 _TRACK_PREFIX_RE = re.compile(r"^\s*\d+\s*[-_.\s]+\s*")
 _TRAILING_DIGIT_TOKEN_RE = re.compile(r"^([a-z][a-z0-9]*?)(\d+)$")
 _PURE_DIGIT_TOKEN_RE = re.compile(r"^\d+$")
+_COMPACT_SUFFIXES: tuple[tuple[str, int], ...] = (
+    ("sample", 3),
+    ("double", 3),
+    ("stack", 3),
+    ("dbl", 3),
+    ("dt", 4),
+)
 
 _LEFT_LONG_TOKENS = frozenset({"left", "lf", "lt", "lft", "lhs", "lch"})
 _RIGHT_LONG_TOKENS = frozenset({"right", "rf", "rt", "rgt", "rhs", "rch"})
@@ -129,6 +136,17 @@ def _is_pure_digit_token(token: str) -> bool:
     return bool(_PURE_DIGIT_TOKEN_RE.fullmatch(token))
 
 
+def _split_compact_suffix(token: str) -> tuple[str, str] | None:
+    for suffix, min_base_length in _COMPACT_SUFFIXES:
+        if not token.endswith(suffix):
+            continue
+        base = token[: -len(suffix)]
+        if len(base) < min_base_length or _is_pure_digit_token(base):
+            continue
+        return base, suffix
+    return None
+
+
 def _derive_scoring_tokens(token: str) -> list[_ScoringToken]:
     normalized = token.lower()
     if not normalized or _is_pure_digit_token(normalized):
@@ -148,31 +166,45 @@ def _derive_scoring_tokens(token: str) -> list[_ScoringToken]:
 
     _append(normalized)
     split_candidates = [normalized]
-    match = _TRAILING_DIGIT_TOKEN_RE.fullmatch(normalized)
-    if match is not None:
-        base = match.group(1)
-        if base:
-            _append(base, f"token_norm:{normalized}->{base}")
-            split_candidates.append(base)
+    seen_split_candidates = {normalized}
+    index = 0
+    while index < len(split_candidates):
+        split_source = split_candidates[index]
+        index += 1
 
-    for split_source in split_candidates:
+        match = _TRAILING_DIGIT_TOKEN_RE.fullmatch(split_source)
+        if match is not None:
+            base = match.group(1)
+            if base:
+                _append(base, f"token_norm:{split_source}->{base}")
+                if base not in seen_split_candidates:
+                    seen_split_candidates.add(base)
+                    split_candidates.append(base)
+
+        suffix_split = _split_compact_suffix(split_source)
+        if suffix_split is not None:
+            base, suffix = suffix_split
+            split_reason = f"token_suffix:{split_source}->{base}+{suffix}"
+            _append(base, split_reason)
+            _append(suffix, split_reason)
+            if base not in seen_split_candidates:
+                seen_split_candidates.add(base)
+                split_candidates.append(base)
+
         split_target = _COMPOUND_TOKEN_SPLITS.get(split_source)
-        if split_target is None:
-            continue
-        left, right = split_target
-        split_reason = f"token_split:{split_source}->{left}+{right}"
-        _append(left, split_reason)
-        _append(right, split_reason)
-
-    for split_source in split_candidates:
         role_parts = _COMPOUND_ROLE_SPLITS.get(split_source)
-        if role_parts is None:
-            continue
-        split_reason = (
-            f"token_split_compound:{split_source}->{','.join(role_parts)}"
-        )
-        for part in role_parts:
-            _append(part, split_reason)
+        if split_target is not None:
+            left, right = split_target
+            split_reason = f"token_split:{split_source}->{left}+{right}"
+            _append(left, split_reason)
+            _append(right, split_reason)
+
+        if role_parts is not None:
+            split_reason = (
+                f"token_split_compound:{split_source}->{','.join(role_parts)}"
+            )
+            for part in role_parts:
+                _append(part, split_reason)
 
     return derived
 

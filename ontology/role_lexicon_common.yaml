@@ -28,6 +28,15 @@ role_lexicon:
     - backingvox
     - bgv
     - bvs
+  ROLE.VOCAL.DOUBLE:
+    keywords:
+    - leadvox dbl
+    - leadvox double
+    - leadvox stack
+    - leadvoxdt
+    - leadvox dt
+    - vocal dt
+    - vox dt
   ROLE.VOCAL.LEAD:
     keywords:
     - leadvocal

@@ -271,6 +271,40 @@ class TestCliStemsClassify(unittest.TestCase):
                 return
             self.assertEqual(disabled_assignments[0].get("role_id"), "ROLE.OTHER.UNKNOWN")
 
+    def test_unknown_role_names_remain_advisory(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            root = temp_path / "stems_root"
+            out_path = temp_path / "stems_map.json"
+            _write_tiny_wav(root / "stems" / "MysterySample.wav")
+
+            exit_code, stdout, stderr = self._run_main(
+                [
+                    "stems",
+                    "classify",
+                    "--root",
+                    str(root),
+                    "--out",
+                    str(out_path),
+                    "--format",
+                    "json",
+                ]
+            )
+
+            self.assertEqual(exit_code, 0, msg=stderr)
+            payload = json.loads(stdout)
+            summary = payload.get("summary")
+            self.assertIsInstance(summary, dict)
+            if not isinstance(summary, dict):
+                return
+            self.assertEqual(summary.get("unknown_files"), 1)
+
+            assignments = payload.get("assignments")
+            self.assertIsInstance(assignments, list)
+            if not isinstance(assignments, list) or not assignments:
+                return
+            self.assertEqual(assignments[0].get("role_id"), "ROLE.OTHER.UNKNOWN")
+
 
 if __name__ == "__main__":
     unittest.main()

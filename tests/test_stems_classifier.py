@@ -709,6 +709,72 @@ class TestStemsClassifier(unittest.TestCase):
             "token_split_compound:drumsroom->drums,room", dr["reasons"]
         )
 
+    def test_compact_suffix_and_sample_names_classify_without_regressing_current_cases(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        roles_payload = load_roles(repo_root / "ontology" / "roles.yaml")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "stems_root"
+            for name in (
+                "KickSample.wav",
+                "SnareSample.wav",
+                "LeadVoxDT.wav",
+                "LeadVoxDbl.wav",
+                "LeadVoxDouble.wav",
+                "LeadVoxStack.wav",
+                "ElecGtr1DT.wav",
+                "backingvox1.wav",
+                "elecgtr2.wav",
+            ):
+                _write_tiny_wav(root / "stems" / name)
+
+            stems_index = build_stems_index(root, root_dir="demo_stems")
+            stems_map = classify_stems(stems_index, roles_payload)
+            assignments = stems_map.get("assignments")
+            self.assertIsInstance(assignments, list)
+            if not isinstance(assignments, list):
+                return
+
+            by_rel_path = {
+                item.get("rel_path"): item
+                for item in assignments
+                if isinstance(item, dict) and isinstance(item.get("rel_path"), str)
+            }
+
+            self.assertEqual(by_rel_path["stems/KickSample.wav"]["role_id"], "ROLE.DRUM.KICK")
+            self.assertEqual(by_rel_path["stems/SnareSample.wav"]["role_id"], "ROLE.DRUM.SNARE")
+            self.assertEqual(by_rel_path["stems/LeadVoxDT.wav"]["role_id"], "ROLE.VOCAL.DOUBLE")
+            self.assertEqual(by_rel_path["stems/LeadVoxDbl.wav"]["role_id"], "ROLE.VOCAL.DOUBLE")
+            self.assertEqual(
+                by_rel_path["stems/LeadVoxDouble.wav"]["role_id"], "ROLE.VOCAL.DOUBLE"
+            )
+            self.assertEqual(by_rel_path["stems/LeadVoxStack.wav"]["role_id"], "ROLE.VOCAL.DOUBLE")
+            self.assertEqual(by_rel_path["stems/ElecGtr1DT.wav"]["role_id"], "ROLE.GTR.ELECTRIC")
+
+            self.assertEqual(by_rel_path["stems/backingvox1.wav"]["role_id"], "ROLE.VOCAL.HARMONY")
+            self.assertEqual(by_rel_path["stems/elecgtr2.wav"]["role_id"], "ROLE.GTR.ELECTRIC")
+
+            self.assertIn(
+                "token_suffix:kicksample->kick+sample",
+                by_rel_path["stems/KickSample.wav"]["reasons"],
+            )
+            self.assertIn(
+                "token_suffix:leadvoxdt->leadvox+dt",
+                by_rel_path["stems/LeadVoxDT.wav"]["reasons"],
+            )
+            self.assertIn(
+                "keyword=leadvox dt(+6)",
+                by_rel_path["stems/LeadVoxDT.wav"]["reasons"],
+            )
+            self.assertIn(
+                "token_norm:elecgtr1->elecgtr",
+                by_rel_path["stems/ElecGtr1DT.wav"]["reasons"],
+            )
+            self.assertNotEqual(
+                by_rel_path["stems/LeadVoxDT.wav"]["role_id"],
+                "ROLE.OTHER.UNKNOWN",
+            )
+
     def test_numeric_only_tokens_are_ignored_for_scoring(self) -> None:
         roles_payload = {
             "roles": {
