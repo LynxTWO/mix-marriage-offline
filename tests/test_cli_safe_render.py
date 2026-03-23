@@ -821,6 +821,33 @@ class TestSafeRenderFullRender(unittest.TestCase):
             self.assertGreater(manifest_summary.get("deliverable_count", 0), 0)
             self.assertEqual(manifest_summary.get("result_bucket"), "valid_master")
             self.assertIsNone(manifest_summary.get("top_failure_reason"))
+            self.assertEqual(receipt.get("result_summary"), manifest.get("result_summary"))
+
+            result_summary = manifest.get("result_summary")
+            self.assertIsInstance(result_summary, dict)
+            if isinstance(result_summary, dict):
+                self.assertEqual(result_summary.get("title"), "Valid master render")
+                self.assertIn("Primary file:", str(result_summary.get("message")))
+                self.assertIn("valid master deliverable", str(result_summary.get("remedy")))
+
+            summary_rows = manifest.get("deliverable_summary_rows")
+            self.assertIsInstance(summary_rows, list)
+            if isinstance(summary_rows, list):
+                self.assertEqual(receipt.get("deliverable_summary_rows"), summary_rows)
+                self.assertGreater(len(summary_rows), 0)
+                first_row = summary_rows[0]
+                self.assertIsInstance(first_row, dict)
+                if isinstance(first_row, dict):
+                    self.assertIn("layout", first_row)
+                    self.assertIn("file_path", first_row)
+                    self.assertIn("channel_count", first_row)
+                    self.assertIn("sample_rate_hz", first_row)
+                    self.assertIn("rendered_frame_count", first_row)
+                    self.assertIn("duration_seconds", first_row)
+                    self.assertIn("status", first_row)
+                    self.assertIn("validity", first_row)
+                    self.assertIn("failure_reason", first_row)
+                    self.assertEqual(first_row.get("duration_seconds"), 0.1)
 
             deliverables = manifest.get("deliverables")
             self.assertIsInstance(deliverables, list)
@@ -901,6 +928,8 @@ class TestSafeRenderFullRender(unittest.TestCase):
         self.assertEqual(manifest_summary.get("overall_status"), "success")
         self.assertEqual(manifest_summary.get("result_bucket"), "valid_master")
         self.assertIsNone(manifest_summary.get("top_failure_reason"))
+        self.assertEqual(receipt.get("result_summary"), manifest.get("result_summary"))
+        self.assertEqual(receipt.get("result_summary", {}).get("title"), "Valid master render")
         self.assertIn("result=valid_master", stderr)
 
     def test_cli_exit_code_zero_for_partial_success_summary(self) -> None:
@@ -957,6 +986,12 @@ class TestSafeRenderFullRender(unittest.TestCase):
         self.assertEqual(
             manifest_summary.get("top_failure_reason"),
             "RENDER_RESULT.NO_DECODABLE_STEMS",
+        )
+        self.assertEqual(receipt.get("result_summary"), manifest.get("result_summary"))
+        self.assertEqual(receipt.get("result_summary", {}).get("title"), "Partial success")
+        self.assertIn(
+            "decoded into audio",
+            str(receipt.get("result_summary", {}).get("message")),
         )
         self.assertIn("result=partial_success", stderr)
         self.assertIn("top_failure_reason=RENDER_RESULT.NO_DECODABLE_STEMS", stderr)
@@ -1017,6 +1052,15 @@ class TestSafeRenderFullRender(unittest.TestCase):
             "RENDER_RESULT.NO_DECODABLE_STEMS",
         )
         self.assertEqual(receipt.get("status"), "blocked")
+        result_summary = receipt.get("result_summary")
+        self.assertIsInstance(result_summary, dict)
+        if isinstance(result_summary, dict):
+            self.assertEqual(
+                result_summary.get("title"),
+                "Render failed: no decodable stems",
+            )
+            self.assertIn("decoded into audio", str(result_summary.get("message")))
+            self.assertIn("rerun Render", str(result_summary.get("remedy")))
         self.assertIn("result=full_failure", stderr)
         self.assertIn("top_failure_reason=RENDER_RESULT.NO_DECODABLE_STEMS", stderr)
 
@@ -1078,6 +1122,15 @@ class TestSafeRenderFullRender(unittest.TestCase):
                 "RENDER_RESULT.NO_DECODABLE_STEMS",
             )
             self.assertEqual(manifest_summary.get("valid_master_count"), 0)
+            result_summary = receipt.get("result_summary")
+            self.assertIsInstance(result_summary, dict)
+            if isinstance(result_summary, dict):
+                self.assertEqual(
+                    result_summary.get("title"),
+                    "Render failed: no decodable stems",
+                )
+                self.assertIn("diagnostic only", str(result_summary.get("message")))
+                self.assertIn("stem diagnostics", str(result_summary.get("remedy")))
 
             deliverables = manifest.get("deliverables")
             self.assertIsInstance(deliverables, list)
@@ -1103,6 +1156,18 @@ class TestSafeRenderFullRender(unittest.TestCase):
             self.assertTrue(first_output_path.exists())
             with wave.open(str(first_output_path), "rb") as handle:
                 self.assertEqual(handle.getnframes(), 0)
+            summary_rows = receipt.get("deliverable_summary_rows")
+            self.assertIsInstance(summary_rows, list)
+            if isinstance(summary_rows, list) and summary_rows:
+                first_row = summary_rows[0]
+                self.assertIsInstance(first_row, dict)
+                if isinstance(first_row, dict):
+                    self.assertEqual(first_row.get("status"), "failed")
+                    self.assertEqual(first_row.get("validity"), "full_failure")
+                    self.assertEqual(
+                        first_row.get("failure_reason"),
+                        "RENDER_RESULT.NO_DECODABLE_STEMS",
+                    )
 
             self.assertEqual(receipt.get("status"), "blocked")
             self.assertEqual(receipt.get("deliverables_summary"), manifest_summary)
@@ -1113,6 +1178,13 @@ class TestSafeRenderFullRender(unittest.TestCase):
             }
             self.assertIn("ISSUE.RENDER.ALL_MASTERS_INVALID", error_ids)
             self.assertIn("ISSUE.RENDER.QA.SILENT_OUTPUT", error_ids)
+            qa_issue_map = {
+                issue.get("issue_id"): issue
+                for issue in qa.get("issues", [])
+                if isinstance(issue, dict)
+            }
+            self.assertIn("title", qa_issue_map["ISSUE.RENDER.ALL_MASTERS_INVALID"])
+            self.assertIn("remedy", qa_issue_map["ISSUE.RENDER.ALL_MASTERS_INVALID"])
             self.assertIn("all rendered masters are invalid", stderr)
             self.assertIn("result=full_failure", stderr)
 

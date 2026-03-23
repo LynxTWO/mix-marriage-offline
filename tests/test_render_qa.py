@@ -103,6 +103,26 @@ class TestRenderQABuilder(unittest.TestCase):
         self.assertIn("ISSUE.RENDER.QA.PEAK_NON_MEASURABLE", issue_map)
         self.assertIn("ISSUE.RENDER.QA.CORRELATION_NON_MEASURABLE", issue_map)
         self.assertEqual(
+            issue_map["ISSUE.RENDER.QA.SILENT_OUTPUT"]["title"],
+            "Rendered master is silent",
+        )
+        self.assertIn(
+            "does not count as a valid master",
+            issue_map["ISSUE.RENDER.QA.SILENT_OUTPUT"]["message"],
+        )
+        self.assertIn(
+            "rerun Render",
+            issue_map["ISSUE.RENDER.QA.SILENT_OUTPUT"]["remedy"],
+        )
+        self.assertEqual(
+            issue_map["ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE"]["title"],
+            "Rendered loudness could not be measured",
+        )
+        self.assertIn(
+            "rerun Render",
+            issue_map["ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE"]["remedy"],
+        )
+        self.assertEqual(
             issue_map["ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE"]["measurement_state"],
             "invalid_due_to_silence",
         )

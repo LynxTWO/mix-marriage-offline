@@ -10,6 +10,7 @@ from mmo.dsp.channel_layout import (
     parse_ffmpeg_layout_to_positions,
 )
 from mmo.dsp.backends.ffprobe_meta import find_ffprobe
+from mmo.core.render_clarity import enrich_issue_list_for_user
 
 
 def _mode_with_max_tiebreak(values: List[int]) -> Optional[int]:
@@ -468,4 +469,4 @@ def validate_session(
                     }
                 )
 
-    return issues
+    return enrich_issue_list_for_user(issues)

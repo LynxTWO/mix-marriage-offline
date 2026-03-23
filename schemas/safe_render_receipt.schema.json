@@ -163,10 +163,7 @@
         "target_stem_id": { "type": "string", "minLength": 1 },
         "target_bus_id": { "type": "string", "minLength": 1 },
         "channel_count": { "type": "integer", "minimum": 1 },
-        "status": {
-          "type": "string",
-          "enum": ["success", "failed", "partial", "invalid_master"]
-        },
+        "status": { "$ref": "statuses.schema.json#/$defs/deliverable_status" },
         "is_valid_master": { "type": "boolean" },
         "planned_stem_count": { "type": ["integer", "null"], "minimum": 0 },
         "decoded_stem_count": { "type": ["integer", "null"], "minimum": 0 },
@@ -206,10 +203,7 @@
         "top_failure_status"
       ],
       "properties": {
-        "overall_status": {
-          "type": ["string", "null"],
-          "enum": ["success", "failed", "partial", "invalid_master", null]
-        },
+        "overall_status": { "$ref": "statuses.schema.json#/$defs/deliverable_status_or_null" },
         "deliverable_count": { "type": "integer", "minimum": 0 },
         "success_count": { "type": "integer", "minimum": 0 },
         "failed_count": { "type": "integer", "minimum": 0 },
@@ -217,15 +211,67 @@
         "invalid_master_count": { "type": "integer", "minimum": 0 },
         "valid_master_count": { "type": "integer", "minimum": 0 },
         "mixed_outcomes": { "type": "boolean" },
-        "result_bucket": {
-          "type": ["string", "null"],
-          "enum": ["valid_master", "success_no_master", "partial_success", "diagnostics_only", "full_failure", null]
-        },
+        "result_bucket": { "$ref": "statuses.schema.json#/$defs/deliverable_result_bucket_or_null" },
         "top_failure_reason": { "type": ["string", "null"] },
-        "top_failure_status": {
-          "type": ["string", "null"],
-          "enum": ["failed", "partial", "invalid_master", null]
-        }
+        "top_failure_status": { "$ref": "statuses.schema.json#/$defs/deliverable_status_or_null" }
+      }
+    },
+    "deliverable_summary_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deliverable_id",
+        "output_id",
+        "layout",
+        "file_path",
+        "channel_count",
+        "sample_rate_hz",
+        "rendered_frame_count",
+        "duration_seconds",
+        "status",
+        "validity",
+        "failure_reason"
+      ],
+      "properties": {
+        "deliverable_id": { "type": "string", "minLength": 1 },
+        "output_id": { "type": ["string", "null"], "minLength": 1 },
+        "layout": { "type": ["string", "null"], "minLength": 1 },
+        "file_path": { "type": ["string", "null"], "minLength": 1 },
+        "channel_count": { "type": ["integer", "null"], "minimum": 1 },
+        "sample_rate_hz": { "type": ["integer", "null"], "minimum": 1 },
+        "rendered_frame_count": { "type": ["integer", "null"], "minimum": 0 },
+        "duration_seconds": { "type": ["number", "null"], "minimum": 0 },
+        "status": { "$ref": "statuses.schema.json#/$defs/deliverable_status_or_null" },
+        "validity": { "$ref": "statuses.schema.json#/$defs/deliverable_result_bucket" },
+        "failure_reason": { "type": ["string", "null"], "minLength": 1 },
+        "format": { "type": "string", "minLength": 1 },
+        "artifact_role": { "type": "string", "minLength": 1 }
+      }
+    },
+    "result_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "message",
+        "remedy",
+        "result_bucket",
+        "overall_status",
+        "top_failure_reason",
+        "deliverable_count",
+        "valid_master_count",
+        "primary_output_path"
+      ],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 },
+        "remedy": { "type": "string", "minLength": 1 },
+        "result_bucket": { "$ref": "statuses.schema.json#/$defs/deliverable_result_bucket_or_null" },
+        "overall_status": { "$ref": "statuses.schema.json#/$defs/deliverable_status_or_null" },
+        "top_failure_reason": { "type": ["string", "null"] },
+        "deliverable_count": { "type": "integer", "minimum": 0 },
+        "valid_master_count": { "type": "integer", "minimum": 0 },
+        "primary_output_path": { "type": ["string", "null"], "minLength": 1 }
       }
     }
   },
@@ -233,7 +279,7 @@
     "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
     "receipt_id": { "type": "string", "minLength": 1 },
     "context": { "type": "string", "const": "safe_render" },
-    "status": { "type": "string", "enum": ["dry_run_only", "completed", "blocked"] },
+    "status": { "$ref": "statuses.schema.json#/$defs/lifecycle_status_safe_render" },
     "dry_run": { "type": "boolean" },
     "target": { "type": "string" },
     "profile_id": { "type": "string", "minLength": 1 },
@@ -280,6 +326,13 @@
     "deliverables_summary": {
       "$ref": "#/$defs/deliverables_summary"
     },
+    "deliverable_summary_rows": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/deliverable_summary_row" }
+    },
+    "result_summary": {
+      "$ref": "#/$defs/result_summary"
+    },
     "renderer_manifests": {
       "type": "array",
       "items": { "type": "object", "additionalProperties": true }
@@ -293,16 +346,10 @@
         "properties": {
           "issue_id": { "type": "string", "minLength": 1 },
           "severity": { "type": "string", "enum": ["error", "warn", "info"] },
+          "title": { "type": "string", "minLength": 1 },
           "message": { "type": "string" },
-          "measurement_state": {
-            "type": "string",
-            "enum": [
-              "measured",
-              "not_applicable",
-              "measurement_failed",
-              "invalid_due_to_silence"
-            ]
-          },
+          "remedy": { "type": "string", "minLength": 1 },
+          "measurement_state": { "$ref": "statuses.schema.json#/$defs/measurement_state" },
           "output_path": { "type": "string" },
           "metric": { "type": "string" },
           "value": {},

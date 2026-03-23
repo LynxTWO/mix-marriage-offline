@@ -12,6 +12,12 @@ import {
   type ScreenKey,
 } from "./design-system";
 import {
+  humanizeFailureReason,
+  renderOutcomeLabel,
+  renderOutcomeTone,
+  type DeliverableResultBucket,
+} from "./status-display";
+import {
   browseDirectory,
   browseFile,
   loadRecentPaths,
@@ -131,18 +137,12 @@ type ChangeSummaryChip = {
   tone: "danger" | "info" | "ok" | "warn";
 };
 
-type DeliverableResultBucket =
-  | "diagnostics_only"
-  | "full_failure"
-  | "partial_success"
-  | "success_no_master"
-  | "unknown"
-  | "valid_master";
-
 type RenderOutcomeSummary = {
   bucket: DeliverableResultBucket;
   deliverablesSummary: JsonObject;
   label: string;
+  message: string | null;
+  remedy: string | null;
   topFailureReason: string | null;
   topFailureReasonLabel: string | null;
   tone: "danger" | "info" | "ok" | "warn";
@@ -2633,19 +2633,6 @@ function flattenManifestOutputs(manifest: JsonObject | null): JsonObject[] {
   return outputs;
 }
 
-const DELIVERABLE_FAILURE_REASON_LABELS: Record<string, string> = {
-  "RENDER_RESULT.DOWNMIX_QA_FAILED": "Downmix similarity QA failed",
-  "RENDER_RESULT.FALLBACK_APPLIED": "Fallback processing was required",
-  "RENDER_RESULT.MISSING_CHANNEL_ORDER": "Missing channel order metadata",
-  "RENDER_RESULT.NO_DECODABLE_STEMS": "No decodable stems",
-  "RENDER_RESULT.NO_OUTPUT_ARTIFACT": "No output artifacts were written",
-  "RENDER_RESULT.PLACEMENT_POLICY_UNAVAILABLE": "Placement policy unavailable",
-  "RENDER_RESULT.SAFETY_COLLAPSE_APPLIED": "Safety collapse was applied",
-  "RENDER_RESULT.SILENT_OUTPUT": "Rendered output is effectively silent",
-  "RENDER_RESULT.STEM_DECODE_FAILED": "Stem decode failed",
-  "RENDER_RESULT.STEMS_SKIPPED": "Some stems were skipped",
-};
-
 function resolveDeliverables(
   receipt: JsonObject | null,
   manifest: JsonObject | null,
@@ -2679,27 +2666,6 @@ function deliverableFailureReason(deliverable: JsonObject): string | null {
   return warningCodes[0] ?? null;
 }
 
-function humanizeFailureReason(reason: string): string {
-  const normalized = reason.trim();
-  if (!normalized) {
-    return "Unknown failure";
-  }
-  const mapped = DELIVERABLE_FAILURE_REASON_LABELS[normalized];
-  if (mapped) {
-    return mapped;
-  }
-  const segments = normalized.split(".");
-  const suffix = normalized.includes(".")
-    ? (segments[segments.length - 1] || normalized)
-    : normalized;
-  return suffix
-    .toLowerCase()
-    .split("_")
-    .filter(Boolean)
-    .map((token) => token[0].toUpperCase() + token.slice(1))
-    .join(" ");
-}
-
 function deriveDeliverableResultBucket(summary: JsonObject): DeliverableResultBucket {
   const explicitBucket = asString(summary.result_bucket).trim();
   if (
@@ -2729,39 +2695,6 @@ function deriveDeliverableResultBucket(summary: JsonObject): DeliverableResultBu
   return "unknown";
 }
 
-function renderOutcomeLabel(bucket: DeliverableResultBucket): string {
-  switch (bucket) {
-    case "valid_master":
-      return "Valid master render";
-    case "success_no_master":
-      return "Successful artifacts (no master)";
-    case "partial_success":
-      return "Partial success";
-    case "diagnostics_only":
-      return "Invalid render with diagnostics";
-    case "full_failure":
-      return "Full failure";
-    default:
-      return "Unknown render result";
-  }
-}
-
-function renderOutcomeTone(bucket: DeliverableResultBucket): "danger" | "info" | "ok" | "warn" {
-  switch (bucket) {
-    case "valid_master":
-      return "ok";
-    case "partial_success":
-      return "warn";
-    case "diagnostics_only":
-    case "full_failure":
-      return "danger";
-    case "success_no_master":
-    case "unknown":
-    default:
-      return "info";
-  }
-}
-
 function resolveRenderOutcomeSummary(
   receipt: JsonObject | null,
   manifest: JsonObject | null,
@@ -2772,9 +2705,12 @@ function resolveRenderOutcomeSummary(
     return null;
   }
 
+  const resultSummary = resolveResultSummary(receipt, manifest);
   const deliverables = resolveDeliverables(receipt, manifest, qa);
   const bucket = deriveDeliverableResultBucket(deliverablesSummary);
-  let topFailureReason = asString(deliverablesSummary.top_failure_reason).trim() || null;
+  let topFailureReason = asString(resultSummary?.top_failure_reason).trim()
+    || asString(deliverablesSummary.top_failure_reason).trim()
+    || null;
   if (topFailureReason === null) {
     const rankedFailures = deliverables
       .map((deliverable) => {
@@ -2797,10 +2733,13 @@ function resolveRenderOutcomeSummary(
     topFailureReason = rankedFailures[0]?.reason ?? null;
   }
 
+  const label = asString(resultSummary?.title).trim() || renderOutcomeLabel(bucket);
   return {
     bucket,
     deliverablesSummary,
-    label: renderOutcomeLabel(bucket),
+    label,
+    message: asString(resultSummary?.message).trim() || null,
+    remedy: asString(resultSummary?.remedy).trim() || null,
     topFailureReason,
     topFailureReasonLabel: topFailureReason ? humanizeFailureReason(topFailureReason) : null,
     tone: renderOutcomeTone(bucket),
@@ -2827,16 +2766,18 @@ function summarizeManifestArtifact(
   if (renderOutcome === null) {
     return `${outputCount} output artifact(s) in manifest`;
   }
-  const summary = renderOutcome.deliverablesSummary;
   return [
     renderOutcome.label,
-    renderOutcome.topFailureReasonLabel ? `reason=${renderOutcome.topFailureReasonLabel}` : "",
+    renderOutcome.message ?? "",
     `outputs=${outputCount}`,
-    `valid_masters=${asNumber(summary.valid_master_count) ?? 0}`,
   ].filter(Boolean).join(" · ");
 }
 
-function summarizeOutputArtifact(output: JsonObject, deliverable: JsonObject | null): string {
+function summarizeOutputArtifact(
+  output: JsonObject,
+  deliverable: JsonObject | null,
+  summaryRow: JsonObject | null = null,
+): string {
   const parts: string[] = [];
   if (deliverable !== null) {
     const artifactRole = asString(deliverable.artifact_role).trim();
@@ -2863,18 +2804,47 @@ function summarizeOutputArtifact(output: JsonObject, deliverable: JsonObject | n
     if (failureReason !== null && status !== "success") {
       parts.push(humanizeFailureReason(failureReason));
     }
+  } else if (summaryRow !== null) {
+    const validity = asString(summaryRow.validity).trim();
+    if (validity === "valid_master") {
+      parts.push("Valid master");
+    } else if (validity === "diagnostics_only") {
+      parts.push("Diagnostic master");
+    } else if (validity === "full_failure") {
+      parts.push("Failed render");
+    } else if (validity === "partial_success") {
+      parts.push("Partial render");
+    } else if (validity === "success_no_master") {
+      parts.push("Rendered artifact");
+    }
+    const failureReason = asString(summaryRow.failure_reason).trim();
+    if (failureReason && validity !== "valid_master") {
+      parts.push(humanizeFailureReason(failureReason));
+    }
   }
   parts.push(asString(output.format) || "audio");
   parts.push(asString(output.renderer_id) || "renderer");
   return parts.filter(Boolean).join(" · ");
 }
 
-function artifactPreviewForOutput(output: JsonObject, deliverable: JsonObject | null = null): string {
+function artifactPreviewForOutput(
+  output: JsonObject,
+  deliverable: JsonObject | null = null,
+  summaryRow: JsonObject | null = null,
+): string {
+  const channelCount = asNumber(summaryRow?.channel_count) ?? asNumber(output.channel_count);
+  const sampleRateHz = asNumber(summaryRow?.sample_rate_hz) ?? asNumber(output.sample_rate_hz);
+  const renderedFrameCount = asNumber(summaryRow?.rendered_frame_count);
+  const durationSeconds = asNumber(summaryRow?.duration_seconds);
   const lines = [
     `renderer_id=${asString(output.renderer_id) || "-"}`,
     `output_id=${asString(output.output_id) || "-"}`,
     `file_path=${asString(output.file_path) || "-"}`,
     `layout_id=${asString(output.layout_id) || "-"}`,
+    `channel_count=${channelCount ?? "-"}`,
+    `sample_rate_hz=${sampleRateHz ?? "-"}`,
+    `rendered_frame_count=${renderedFrameCount ?? "-"}`,
+    `duration_seconds=${durationSeconds ?? "-"}`,
     `format=${asString(output.format) || "-"}`,
     `recommendation_id=${asString(output.recommendation_id) || "-"}`,
   ];
@@ -2882,6 +2852,11 @@ function artifactPreviewForOutput(output: JsonObject, deliverable: JsonObject | 
     lines.push(`deliverable_status=${asString(deliverable.status) || "-"}`);
     lines.push(`is_valid_master=${String(deliverable.is_valid_master === true)}`);
     lines.push(`failure_reason=${deliverableFailureReason(deliverable) || "-"}`);
+  }
+  if (summaryRow !== null) {
+    lines.push(`validity=${asString(summaryRow.validity) || "-"}`);
+    lines.push(`summary_status=${asString(summaryRow.status) || "-"}`);
+    lines.push(`summary_failure_reason=${asString(summaryRow.failure_reason) || "-"}`);
   }
   return lines.join("\n");
 }
@@ -2892,6 +2867,10 @@ function buildArtifactEntries(paths: WorkflowPaths | null): ArtifactEntry[] {
     state.artifacts.receipt,
     state.artifacts.manifest,
     state.artifacts.qa,
+  );
+  const deliverableSummaryRows = resolveDeliverableSummaryRows(
+    state.artifacts.receipt,
+    state.artifacts.manifest,
   );
 
   const pushJsonEntry = (
@@ -2961,12 +2940,13 @@ function buildArtifactEntries(paths: WorkflowPaths | null): ArtifactEntry[] {
     const rawPath = asString(output.file_path);
     const resolvedPath = resolveArtifactPath(rawPath, paths);
     const deliverable = resolveOutputDeliverable(output, deliverables);
+    const summaryRow = resolveOutputSummaryRow(output, deliverableSummaryRows);
     entries.push({
       id: `audio:${outputId}`,
       path: resolvedPath || rawPath,
-      previewText: artifactPreviewForOutput(output, deliverable),
+      previewText: artifactPreviewForOutput(output, deliverable, summaryRow),
       resolvedPath,
-      summary: summarizeOutputArtifact(output, deliverable),
+      summary: summarizeOutputArtifact(output, deliverable, summaryRow),
       tag: "AUDIO",
       title: rawPath || outputId,
     });
@@ -3524,23 +3504,69 @@ function resolveDeliverablesSummary(
   return null;
 }
 
+function resolveResultSummary(
+  receipt: JsonObject | null,
+  manifest: JsonObject | null,
+): JsonObject | null {
+  const candidates = [
+    asObject(receipt?.result_summary),
+    asObject(manifest?.result_summary),
+  ];
+  for (const candidate of candidates) {
+    if (candidate !== null) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function resolveDeliverableSummaryRows(
+  receipt: JsonObject | null,
+  manifest: JsonObject | null,
+): JsonObject[] {
+  const candidates = [
+    asArray(receipt?.deliverable_summary_rows),
+    asArray(manifest?.deliverable_summary_rows),
+  ];
+  for (const candidate of candidates) {
+    const rows = candidate
+      .map(asObject)
+      .filter((row): row is JsonObject => row !== null);
+    if (rows.length > 0) {
+      return rows;
+    }
+  }
+  return [];
+}
+
+function resolveOutputSummaryRow(output: JsonObject, summaryRows: JsonObject[]): JsonObject | null {
+  const outputId = asString(output.output_id).trim();
+  if (outputId) {
+    const byId = summaryRows.find((row) => asString(row.output_id).trim() === outputId) ?? null;
+    if (byId !== null) {
+      return byId;
+    }
+  }
+  const filePath = asString(output.file_path).trim();
+  if (filePath) {
+    return summaryRows.find((row) => asString(row.file_path).trim() === filePath) ?? null;
+  }
+  return null;
+}
+
 function summarizeReceipt(receipt: JsonObject | null, manifest: JsonObject | null, qa: JsonObject | null): string {
   if (receipt === null) {
     return "No receipt loaded";
   }
   const renderOutcome = resolveRenderOutcomeSummary(receipt, manifest, qa);
-  const summary = asObject(receipt.recommendations_summary);
   if (renderOutcome !== null) {
-    const deliverablesSummary = renderOutcome.deliverablesSummary;
     return [
       renderOutcome.label,
-      renderOutcome.topFailureReasonLabel ? `reason=${renderOutcome.topFailureReasonLabel}` : "",
-      `deliverables=${asNumber(deliverablesSummary.deliverable_count) ?? 0}`,
-      `valid_masters=${asNumber(deliverablesSummary.valid_master_count) ?? 0}`,
-      `applied=${asNumber(summary?.applied) ?? 0}`,
-      `qa_issues=${asArray(qa?.issues).length || asArray(receipt.qa_issues).length}`,
+      renderOutcome.message ?? "",
+      renderOutcome.remedy ? `next=${renderOutcome.remedy}` : "",
     ].filter(Boolean).join(" · ");
   }
+  const summary = asObject(receipt.recommendations_summary);
   return [
     `${asString(receipt.status) || "unknown"} receipt`,
     `outputs=${flattenManifestOutputs(manifest).length}`,

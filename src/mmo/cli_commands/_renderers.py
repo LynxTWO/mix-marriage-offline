@@ -20,6 +20,17 @@ from mmo.core.deliverables import (
     RENDER_RESULT_SILENT_OUTPUT,
 )
 from mmo.core.listen_pack import build_listen_pack
+from mmo.core.render_clarity import (
+    build_deliverable_summary_rows,
+    build_result_summary,
+    enrich_issue_for_user,
+    enrich_issue_list_for_user,
+)
+from mmo.core.statuses import (
+    LIFECYCLE_STATUS_BLOCKED,
+    LIFECYCLE_STATUS_COMPLETED,
+    LIFECYCLE_STATUS_DRY_RUN_ONLY,
+)
 from mmo.core.recommendations import (
     normalize_recommendation_contract,
     recommendation_requires_user_approval,
@@ -288,6 +299,23 @@ def _deliverable_top_failure_reason(summary: dict[str, Any]) -> str:
     return _coerce_str(summary.get("top_failure_reason")).strip()
 
 
+def _artifact_result_details(
+    *,
+    renderer_manifests: list[dict[str, Any]],
+    deliverables: list[dict[str, Any]],
+    deliverables_summary: dict[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    summary_rows = build_deliverable_summary_rows(
+        renderer_manifests=renderer_manifests,
+        deliverables=deliverables,
+    )
+    result_summary = build_result_summary(
+        deliverables_summary=deliverables_summary,
+        deliverable_summary_rows=summary_rows,
+    )
+    return summary_rows, result_summary
+
+
 def _master_deliverables_invalid_for_safe_render(
     deliverables: list[dict[str, Any]],
 ) -> bool:
@@ -325,8 +353,11 @@ def _master_deliverables_invalid_for_safe_render(
     return True
 
 
-def _build_all_masters_invalid_issue() -> dict[str, Any]:
-    return {
+def _build_all_masters_invalid_issue(
+    *,
+    failure_reason: str | None = None,
+) -> dict[str, Any]:
+    issue = {
         "issue_id": ISSUE_RENDER_ALL_MASTERS_INVALID,
         "severity": "error",
         "message": _ALL_MASTERS_INVALID_MESSAGE,
@@ -334,6 +365,10 @@ def _build_all_masters_invalid_issue() -> dict[str, Any]:
         "value": 0,
         "threshold": 1,
     }
+    normalized_failure_reason = _coerce_str(failure_reason).strip()
+    if normalized_failure_reason:
+        issue["failure_reason"] = normalized_failure_reason
+    return enrich_issue_for_user(issue)
 
 
 def _collect_stem_artifacts(
@@ -534,11 +569,18 @@ def _run_render_command(
         manifests,
         workspace_dir=workspace_dir,
     )
+    deliverable_summary_rows, result_summary = _artifact_result_details(
+        renderer_manifests=persisted_manifests,
+        deliverables=deliverables,
+        deliverables_summary=deliverables_summary,
+    )
     render_manifest = {
         "schema_version": "0.1.0",
         "report_id": report.get("report_id", ""),
         "renderer_manifests": persisted_manifests,
         "deliverables_summary": deliverables_summary,
+        "deliverable_summary_rows": deliverable_summary_rows,
+        "result_summary": result_summary,
     }
     render_manifest["deliverables"] = deliverables
     _validate_render_manifest(
@@ -671,12 +713,19 @@ def _run_apply_command(
     )
     deliverables = build_deliverables_for_renderer_manifests(renderer_manifests)
     deliverables_summary = _deliverable_result_payload(deliverables)
+    deliverable_summary_rows, result_summary = _artifact_result_details(
+        renderer_manifests=renderer_manifests,
+        deliverables=deliverables,
+        deliverables_summary=deliverables_summary,
+    )
     apply_manifest = {
         "schema_version": "0.1.0",
         "context": "auto_apply",
         "report_id": report.get("report_id", ""),
         "renderer_manifests": renderer_manifests,
         "deliverables_summary": deliverables_summary,
+        "deliverable_summary_rows": deliverable_summary_rows,
+        "result_summary": result_summary,
     }
     apply_manifest["deliverables"] = deliverables
     _validate_apply_manifest(
@@ -1367,6 +1416,7 @@ def _build_no_outputs_issue(
         "metric": "output_count",
         "value": 0,
         "threshold": 1,
+        "failure_reason": RENDER_RESULT_NO_OUTPUT_ARTIFACT,
     }
     if out_dir is not None:
         issue["output_path"] = _portable_ref_for_workspace(
@@ -1374,7 +1424,7 @@ def _build_no_outputs_issue(
             workspace_dir=workspace_dir,
             fallback="render",
         )
-    return issue
+    return enrich_issue_for_user(issue)
 
 
 def _default_fallback_final(*, final_outcome: str) -> dict[str, Any]:
@@ -2461,7 +2511,7 @@ def _run_safe_render_command(
                     "schema_version": "0.1.0",
                     "receipt_id": block_receipt_id,
                     "context": "safe_render",
-                    "status": "blocked",
+                    "status": LIFECYCLE_STATUS_BLOCKED,
                     "dry_run": False,
                     "target": target,
                     "profile_id": profile_id,
@@ -2673,8 +2723,18 @@ def _run_safe_render_command(
         )
 
         if dry_run:
-            status = "blocked" if blocked and not eligible else "dry_run_only"
+            status = (
+                LIFECYCLE_STATUS_BLOCKED
+                if blocked and not eligible
+                else LIFECYCLE_STATUS_DRY_RUN_ONLY
+            )
             empty_deliverables: list[dict[str, Any]] = []
+            empty_deliverables_summary = _deliverable_result_payload(empty_deliverables)
+            empty_deliverable_summary_rows, empty_result_summary = _artifact_result_details(
+                renderer_manifests=[],
+                deliverables=empty_deliverables,
+                deliverables_summary=empty_deliverables_summary,
+            )
             receipt: dict[str, Any] = {
                 "schema_version": "0.1.0",
                 "receipt_id": receipt_id,
@@ -2700,7 +2760,9 @@ def _run_safe_render_command(
                 "blocked_recommendations": blocked_summaries,
                 "applied_recommendations": [],
                 "deliverables": empty_deliverables,
-                "deliverables_summary": _deliverable_result_payload(empty_deliverables),
+                "deliverables_summary": empty_deliverables_summary,
+                "deliverable_summary_rows": empty_deliverable_summary_rows,
+                "result_summary": empty_result_summary,
                 "renderer_manifests": [],
                 "qa_issues": [],
                 "fallback_attempts": [],
@@ -2758,7 +2820,9 @@ def _run_safe_render_command(
                     "report_id": _coerce_str(report.get("report_id")),
                     "renderer_manifests": [],
                     "deliverables": empty_deliverables,
-                    "deliverables_summary": _deliverable_result_payload(empty_deliverables),
+                    "deliverables_summary": empty_deliverables_summary,
+                    "deliverable_summary_rows": empty_deliverable_summary_rows,
+                    "result_summary": empty_result_summary,
                 }
                 _validate_render_manifest(
                     dry_manifest,
@@ -2878,26 +2942,24 @@ def _run_safe_render_command(
                 RENDER_RESULT_NO_OUTPUT_ARTIFACT if output_count == 0 else None
             ),
         )
+        persisted_manifests = _portable_renderer_manifests(
+            manifests,
+            workspace_dir=workspace_dir,
+        )
+        deliverable_summary_rows, result_summary = _artifact_result_details(
+            renderer_manifests=persisted_manifests,
+            deliverables=deliverables,
+            deliverables_summary=deliverables_summary,
+        )
         render_manifest = {
             "schema_version": "0.1.0",
             "report_id": _coerce_str(report.get("report_id")),
-            "renderer_manifests": _portable_renderer_manifests(
-                manifests,
-                workspace_dir=workspace_dir,
-            ),
+            "renderer_manifests": persisted_manifests,
             "deliverables_summary": deliverables_summary,
+            "deliverable_summary_rows": deliverable_summary_rows,
+            "result_summary": result_summary,
         }
         render_manifest["deliverables"] = deliverables
-        _validate_render_manifest(
-            render_manifest,
-            schemas_dir() / "render_manifest.schema.json",
-        )
-        if out_manifest_path is not None:
-            out_manifest_path.parent.mkdir(parents=True, exist_ok=True)
-            out_manifest_path.write_text(
-                json.dumps(render_manifest, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
         no_outputs_issue: dict[str, Any] | None = None
         all_masters_invalid_issue: dict[str, Any] | None = None
         if output_count == 0:
@@ -2933,7 +2995,9 @@ def _run_safe_render_command(
                 },
             )
         elif _master_deliverables_invalid_for_safe_render(deliverables):
-            all_masters_invalid_issue = _build_all_masters_invalid_issue()
+            all_masters_invalid_issue = _build_all_masters_invalid_issue(
+                failure_reason=_deliverable_top_failure_reason(deliverables_summary) or None,
+            )
             print(
                 f"safe-render: {ISSUE_RENDER_ALL_MASTERS_INVALID}"
                 f" message={_ALL_MASTERS_INVALID_MESSAGE}",
@@ -2960,6 +3024,16 @@ def _run_safe_render_command(
                         }
                     ],
                 },
+            )
+        _validate_render_manifest(
+            render_manifest,
+            schemas_dir() / "render_manifest.schema.json",
+        )
+        if out_manifest_path is not None:
+            out_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            out_manifest_path.write_text(
+                json.dumps(render_manifest, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
             )
         progress.advance(
             phase="render",
@@ -3019,6 +3093,9 @@ def _run_safe_render_command(
             qa_payload_issues = qa_payload.get("issues")
             if isinstance(qa_payload_issues, list):
                 qa_payload_issues.append(dict(all_masters_invalid_issue))
+        qa_issues = enrich_issue_list_for_user(qa_issues)
+        if qa_payload:
+            qa_payload["issues"] = json.loads(json.dumps(qa_issues))
         if qa_payload:
             qa_payload = _rewrite_nested_path_fields(
                 qa_payload,
@@ -3061,12 +3138,12 @@ def _run_safe_render_command(
         # the existing "no outputs" contract unless another explicit strict
         # policy is introduced separately.
         render_status = (
-            "blocked"
+            LIFECYCLE_STATUS_BLOCKED
             if (
                 (no_outputs_issue is not None and not allow_empty_outputs)
                 or all_masters_invalid_issue is not None
             )
-            else "completed"
+            else LIFECYCLE_STATUS_COMPLETED
         )
         applied_summaries = _build_applied_rec_summaries(
             recs,
@@ -3109,6 +3186,8 @@ def _run_safe_render_command(
             "applied_recommendations": applied_summaries,
             "deliverables": deliverables,
             "deliverables_summary": deliverables_summary,
+            "deliverable_summary_rows": deliverable_summary_rows,
+            "result_summary": result_summary,
             "renderer_manifests": render_manifest["renderer_manifests"],
             "qa_issues": qa_issues,
             "fallback_attempts": fallback_attempts,

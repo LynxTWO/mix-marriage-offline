@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mix-marriage-offline.dev/schemas/statuses.schema.json",
+  "title": "MMO Shared Status Enums",
+  "$defs": {
+    "lifecycle_status_safe_render": {
+      "type": "string",
+      "enum": ["dry_run_only", "completed", "blocked"]
+    },
+    "deliverable_status": {
+      "type": "string",
+      "enum": ["success", "failed", "partial", "invalid_master"]
+    },
+    "deliverable_status_or_null": {
+      "type": ["string", "null"],
+      "enum": ["success", "failed", "partial", "invalid_master", null]
+    },
+    "deliverable_result_bucket": {
+      "type": "string",
+      "enum": ["valid_master", "success_no_master", "partial_success", "diagnostics_only", "full_failure"]
+    },
+    "deliverable_result_bucket_or_null": {
+      "type": ["string", "null"],
+      "enum": ["valid_master", "success_no_master", "partial_success", "diagnostics_only", "full_failure", null]
+    },
+    "qa_gate_status": {
+      "type": "string",
+      "enum": ["pass", "warn", "fail", "not_run"]
+    },
+    "measurement_state": {
+      "type": "string",
+      "enum": ["measured", "not_applicable", "measurement_failed", "invalid_due_to_silence"]
+    }
+  }
+}

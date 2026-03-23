@@ -511,6 +511,14 @@
           "type": "string",
           "minLength": 1
         },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "remedy": {
+          "type": "string",
+          "minLength": 1
+        },
         "job_id": {
           "$ref": "#/$defs/job_id"
         },
@@ -547,14 +555,7 @@
             }
           ]
         },
-        "measurement_state": {
-          "type": "string",
-          "enum": [
-            "not_applicable",
-            "measurement_failed",
-            "invalid_due_to_silence"
-          ]
-        }
+        "measurement_state": { "$ref": "statuses.schema.json#/$defs/measurement_state" }
       }
     }
   }

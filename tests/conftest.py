@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import sys
@@ -29,6 +30,57 @@ def _schema_store_from_registry(registry: object) -> dict[str, dict]:
     return store
 
 
+def _local_schema_store() -> dict[str, dict]:
+    repo_root = Path(__file__).resolve().parents[1]
+    schemas_dir = repo_root / "schemas"
+    store: dict[str, dict] = {}
+    if not schemas_dir.is_dir():
+        return store
+
+    for schema_path in schemas_dir.glob("*.json"):
+        try:
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            continue
+        if not isinstance(schema, dict):
+            continue
+
+        store[schema_path.name] = schema
+        schema_id = schema.get("$id")
+        if isinstance(schema_id, str) and schema_id:
+            store[schema_id] = schema
+    return store
+
+
+def _local_schema_registry() -> object | None:
+    try:
+        from referencing import Registry, Resource
+        from referencing.jsonschema import DRAFT202012
+    except ImportError:
+        return None
+
+    repo_root = Path(__file__).resolve().parents[1]
+    schemas_dir = repo_root / "schemas"
+    if not schemas_dir.is_dir():
+        return None
+
+    registry = Registry()
+    for schema_path in schemas_dir.glob("*.json"):
+        try:
+            schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            continue
+        if not isinstance(schema, dict):
+            continue
+        resource = Resource.from_contents(schema, default_specification=DRAFT202012)
+        registry = registry.with_resource(schema_path.resolve().as_uri(), resource)
+        registry = registry.with_resource(schema_path.name, resource)
+        schema_id = schema.get("$id")
+        if isinstance(schema_id, str) and schema_id:
+            registry = registry.with_resource(schema_id, resource)
+    return registry
+
+
 def _patch_jsonschema_registry_kwarg_compat() -> None:
     try:
         import jsonschema
@@ -42,13 +94,14 @@ def _patch_jsonschema_registry_kwarg_compat() -> None:
         validator_cls({})
     except Exception:
         return
+    supports_registry_kwarg = False
     try:
         validator_cls({}, registry=None)
-        return
+        supports_registry_kwarg = True
     except TypeError:
         pass
     except Exception:
-        return
+        pass
 
     resolver_cls = getattr(jsonschema, "RefResolver", None)
     if resolver_cls is None:
@@ -56,12 +109,27 @@ def _patch_jsonschema_registry_kwarg_compat() -> None:
 
     class _CompatDraft202012Validator(validator_cls):  # type: ignore[misc, valid-type]
         def __init__(self, *args, **kwargs):
-            registry = kwargs.pop("registry", None)
             schema = args[0] if args else kwargs.get("schema")
-            if registry is not None and isinstance(schema, dict) and "resolver" not in kwargs:
-                store = _schema_store_from_registry(registry)
-                if store:
-                    kwargs["resolver"] = resolver_cls.from_schema(schema, store=store)
+            registry = kwargs.get("registry")
+            if isinstance(schema, dict) and "resolver" not in kwargs and registry is None:
+                if supports_registry_kwarg:
+                    local_registry = _local_schema_registry()
+                    if local_registry is not None:
+                        kwargs["registry"] = local_registry
+                else:
+                    store: dict[str, dict] = {}
+                    store.update(_local_schema_store())
+                    if store:
+                        kwargs["resolver"] = resolver_cls.from_schema(schema, store=store)
+            elif isinstance(schema, dict) and "resolver" not in kwargs and registry is not None:
+                if not supports_registry_kwarg:
+                    registry = kwargs.pop("registry", None)
+                    store = {}
+                    if registry is not None:
+                        store.update(_schema_store_from_registry(registry))
+                    store.update(_local_schema_store())
+                    if store:
+                        kwargs["resolver"] = resolver_cls.from_schema(schema, store=store)
             super().__init__(*args, **kwargs)
 
     _CompatDraft202012Validator.__name__ = validator_cls.__name__

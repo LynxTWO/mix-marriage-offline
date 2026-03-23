@@ -686,11 +686,41 @@ test.describe("desktop workflow design system", () => {
         warning_codes: [],
       },
     ];
+    const deliverableSummaryRows = [
+      {
+        deliverable_id: "DELIV.LAYOUT.2_0.2CH",
+        output_id: "OUT.001",
+        layout: "LAYOUT.2_0",
+        file_path: "render/2_0/mix.wav",
+        channel_count: 2,
+        sample_rate_hz: 48000,
+        rendered_frame_count: 4800,
+        duration_seconds: 0.1,
+        status: "success",
+        validity: "valid_master",
+        failure_reason: null,
+        format: "wav",
+        artifact_role: "master",
+      },
+    ];
+    const resultSummary = {
+      title: "Valid master render",
+      message: "MMO rendered 1 valid master output. Primary file: render/2_0/mix.wav.",
+      remedy: "Review any remaining warnings, then use the valid master deliverable.",
+      result_bucket: "valid_master",
+      overall_status: "success",
+      top_failure_reason: null,
+      deliverable_count: 1,
+      valid_master_count: 1,
+      primary_output_path: "render/2_0/mix.wav",
+    };
 
     await page.locator("#results-receipt-file-input").setInputFiles(jsonFile("safe_render_receipt.json", {
       status: "completed",
       deliverables_summary: deliverablesSummary,
+      deliverable_summary_rows: deliverableSummaryRows,
       deliverables,
+      result_summary: resultSummary,
       recommendations_summary: {
         total: 2,
         eligible: 2,
@@ -766,7 +796,9 @@ test.describe("desktop workflow design system", () => {
     }));
     await page.locator("#results-manifest-file-input").setInputFiles(jsonFile("render_manifest.json", {
       deliverables_summary: deliverablesSummary,
+      deliverable_summary_rows: deliverableSummaryRows,
       deliverables,
+      result_summary: resultSummary,
       renderer_manifests: [
         {
           renderer_id: "PLUGIN.RENDERER.SAFE",
@@ -834,6 +866,7 @@ test.describe("desktop workflow design system", () => {
     }));
 
     await expect(page.locator("#results-readout-primary")).toContainText("Valid master render");
+    await expect(page.locator("#results-readout-primary")).toContainText("Primary file: render/2_0/mix.wav.");
     await expect(page.locator("#results-change-summary")).toContainText("Applied 1");
     await expect(page.locator("#results-change-summary")).toContainText("Valid master render");
     await expect(page.locator("#results-what-changed-text")).toContainText("render/2_0/mix.wav");
@@ -849,7 +882,7 @@ test.describe("desktop workflow design system", () => {
     await expect(page.locator("#results-summary-actions")).toContainText("Open receipt");
     await expect(page.locator("#results-qa-actions")).toContainText("Open QA");
 
-    await page.getByRole("option", { name: /render\/2_0\/mix\.wav/i }).click();
+    await page.locator('[data-artifact-entry-id^="audio:"]', { hasText: "render/2_0/mix.wav" }).click();
     await expect(page.locator("#artifact-preview-actions")).toContainText("Copy path");
     await expect(page.locator("#artifact-preview-actions")).toContainText("Reveal");
     await expect(page.locator("#artifact-preview-actions")).toContainText("Compare");
@@ -899,11 +932,41 @@ test.describe("desktop workflow design system", () => {
         warning_codes: ["RENDER_RESULT.NO_DECODABLE_STEMS"],
       },
     ];
+    const deliverableSummaryRows = [
+      {
+        deliverable_id: "DELIV.LAYOUT.2_0.2CH",
+        output_id: "OUT.FAIL.001",
+        layout: "LAYOUT.2_0",
+        file_path: "render/failed/master.wav",
+        channel_count: 2,
+        sample_rate_hz: 48000,
+        rendered_frame_count: 0,
+        duration_seconds: 0,
+        status: "failed",
+        validity: "full_failure",
+        failure_reason: "RENDER_RESULT.NO_DECODABLE_STEMS",
+        format: "wav",
+        artifact_role: "master",
+      },
+    ];
+    const resultSummary = {
+      title: "Render failed: no decodable stems",
+      message: "MMO planned the render, but none of the selected stems decoded into audio. Any written artifact is diagnostic only.",
+      remedy: "Open the stem diagnostics, repair or replace the failing source files, then rerun Render.",
+      result_bucket: "full_failure",
+      overall_status: "failed",
+      top_failure_reason: "RENDER_RESULT.NO_DECODABLE_STEMS",
+      deliverable_count: 1,
+      valid_master_count: 0,
+      primary_output_path: "render/failed/master.wav",
+    };
 
     await page.locator("#results-receipt-file-input").setInputFiles(jsonFile("safe_render_receipt.json", {
       status: "blocked",
       deliverables_summary: deliverablesSummary,
+      deliverable_summary_rows: deliverableSummaryRows,
       deliverables,
+      result_summary: resultSummary,
       recommendations_summary: {
         total: 0,
         eligible: 0,
@@ -923,7 +986,9 @@ test.describe("desktop workflow design system", () => {
     }));
     await page.locator("#results-manifest-file-input").setInputFiles(jsonFile("render_manifest.json", {
       deliverables_summary: deliverablesSummary,
+      deliverable_summary_rows: deliverableSummaryRows,
       deliverables,
+      result_summary: resultSummary,
       renderer_manifests: [
         {
           renderer_id: "PLUGIN.RENDERER.SAFE",
@@ -954,8 +1019,8 @@ test.describe("desktop workflow design system", () => {
       thresholds: {},
     }));
 
-    await expect(page.locator("#results-readout-primary")).toContainText("Full failure");
-    await expect(page.locator("#results-readout-primary")).toContainText("No decodable stems");
+    await expect(page.locator("#results-readout-primary")).toContainText("Render failed: no decodable stems");
+    await expect(page.locator("#results-readout-primary")).toContainText("diagnostic only");
     await expect(page.locator("#results-change-summary")).toContainText("Reason No decodable stems");
     await expect(page.locator("#artifact-browser-list")).toContainText("Failed master");
     await expect(page.locator("#artifact-browser-list")).not.toContainText("Valid master");
@@ -1014,11 +1079,55 @@ test.describe("desktop workflow design system", () => {
         warning_codes: ["RENDER_RESULT.NO_DECODABLE_STEMS"],
       },
     ];
+    const deliverableSummaryRows = [
+      {
+        deliverable_id: "DELIV.LAYOUT.2_0.2CH",
+        output_id: "OUT.OK.001",
+        layout: "LAYOUT.2_0",
+        file_path: "render/2_0/master.wav",
+        channel_count: 2,
+        sample_rate_hz: 48000,
+        rendered_frame_count: 4800,
+        duration_seconds: 0.1,
+        status: "success",
+        validity: "valid_master",
+        failure_reason: null,
+        format: "wav",
+        artifact_role: "master",
+      },
+      {
+        deliverable_id: "DELIV.LAYOUT.5_1.6CH",
+        output_id: null,
+        layout: "LAYOUT.5_1",
+        file_path: null,
+        channel_count: 6,
+        sample_rate_hz: null,
+        rendered_frame_count: null,
+        duration_seconds: null,
+        status: "failed",
+        validity: "full_failure",
+        failure_reason: "RENDER_RESULT.NO_DECODABLE_STEMS",
+        artifact_role: "master",
+      },
+    ];
+    const resultSummary = {
+      title: "Partial success",
+      message: "MMO rendered 1 valid master output, but 1 deliverable still needs attention. MMO planned the render, but none of the selected stems decoded into audio. Any written artifact is diagnostic only.",
+      remedy: "Open the stem diagnostics, repair or replace the failing source files, then rerun Render.",
+      result_bucket: "partial_success",
+      overall_status: "partial",
+      top_failure_reason: "RENDER_RESULT.NO_DECODABLE_STEMS",
+      deliverable_count: 2,
+      valid_master_count: 1,
+      primary_output_path: "render/2_0/master.wav",
+    };
 
     await page.locator("#results-receipt-file-input").setInputFiles(jsonFile("safe_render_receipt.json", {
       status: "completed",
       deliverables_summary: deliverablesSummary,
+      deliverable_summary_rows: deliverableSummaryRows,
       deliverables,
+      result_summary: resultSummary,
       recommendations_summary: {
         total: 1,
         eligible: 1,
@@ -1048,7 +1157,9 @@ test.describe("desktop workflow design system", () => {
     }));
     await page.locator("#results-manifest-file-input").setInputFiles(jsonFile("render_manifest.json", {
       deliverables_summary: deliverablesSummary,
+      deliverable_summary_rows: deliverableSummaryRows,
       deliverables,
+      result_summary: resultSummary,
       renderer_manifests: [
         {
           renderer_id: "PLUGIN.RENDERER.SAFE",
@@ -1073,7 +1184,7 @@ test.describe("desktop workflow design system", () => {
     }));
 
     await expect(page.locator("#results-readout-primary")).toContainText("Partial success");
-    await expect(page.locator("#results-readout-primary")).toContainText("No decodable stems");
+    await expect(page.locator("#results-readout-primary")).toContainText("deliverable still needs attention");
     await expect(page.locator("#results-change-summary")).toContainText("Valid masters 1");
     await expect(page.locator("#results-change-summary")).toContainText("Failed 1");
     await expect(page.locator("#results-change-summary")).toContainText("Reason No decodable stems");

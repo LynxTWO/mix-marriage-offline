@@ -70,6 +70,15 @@ Before implementing or validating a change, confirm:
 - Prefer one shared resolver or contract implementation per concept; do not add parallel desktop-only, CLI-only, or render-only logic unless the divergence is intentional and documented.
 - Verify the reported gap before implementing a fix. If the behavior already exists, improve visibility or coverage instead of duplicating enforcement.
 
+## Status And Issue Authority
+
+- Backend status meanings live in `src/mmo/core/statuses.py`; keep lifecycle, deliverable validity, QA gate, and measurement vocabularies separate.
+- New schema enum definitions for those status families belong in `schemas/statuses.schema.json`, with packaged copies kept aligned under `src/mmo/data/schemas/`.
+- Backend and CLI display labels map from shared semantics in `src/mmo/core/status_display.py`.
+- Desktop UI display labels map from backend semantics in `gui/desktop-tauri/src/status-display.ts`.
+- UI/CLI must not invent new status meanings or ad hoc synonyms inline; they should map from backend-owned values.
+- New `ISSUE.*` IDs must be registered in `ontology/issues.yaml` before they appear in source, tests, or UI fixtures.
+
 ## Pull Request Notes
 
 - Keep changes small and focused; avoid sweeping refactors.

@@ -47,6 +47,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   diagnostics-only renders, full failure, and success-without-master cases,
   while `top_failure_reason` / `top_failure_status` surface the leading failure
   cause without inferring success from “artifact exists”.
+- Render manifests and safe-render receipts now include readable
+  `deliverable_summary_rows` plus top-level `result_summary` copy so users and
+  the desktop Results screen can see layout, path, channels, sample rate,
+  frame-derived duration, validity, failure reason, and next action without
+  reconstructing the outcome across multiple JSON artifacts.
+- Backend status vocabularies are now frozen in one shared module with a
+  matching shared schema-defs file for new enum usage, while CLI and desktop
+  labels map from those backend semantics instead of inventing per-surface
+  synonyms.
 
 ### Fixed
 
@@ -70,6 +79,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   partial, diagnostics-only WAVs are labeled as failed/diagnostic masters, and
   the top failure reason is visible in both the CLI summary line and the
   desktop Results view.
+- High-severity validation and render issues now carry plain-English `title`,
+  `message`, and `remedy` fields in persisted report/QA/receipt artifacts, and
+  rendered durations in summary rows now derive from actual rendered frame
+  counts instead of placeholder assumptions.
+- The repo now blocks new undeclared `ISSUE.*` IDs with an enforcement test,
+  using a temporary baseline allowlist for the pre-existing backlog so drift
+  stops immediately without forcing a midstream ontology cleanup.
 
 ## [1.0.0] — 2026-03-17
 

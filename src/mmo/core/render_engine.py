@@ -56,6 +56,12 @@ from mmo.core.render_reporting import (
     sort_stage_entries,
     with_render_report_fallback_defaults,
 )
+from mmo.core.statuses import (
+    QA_GATE_STATUS_FAIL,
+    QA_GATE_STATUS_NOT_RUN,
+    QA_GATE_STATUS_PASS,
+    QA_GATE_STATUS_WARN,
+)
 from mmo.dsp.export_finalize import build_export_finalization_receipt
 
 RENDER_ENGINE_VERSION = "0.1.0"
@@ -163,14 +169,14 @@ def _build_contract_index(
 def _aggregate_qa_status(statuses: list[str]) -> str:
     """Collapse a list of per-job QA statuses to a single overall status."""
     if not statuses:
-        return "not_run"
-    if "fail" in statuses:
-        return "fail"
-    if "warn" in statuses:
-        return "warn"
-    if all(s == "pass" for s in statuses):
-        return "pass"
-    return "not_run"
+        return QA_GATE_STATUS_NOT_RUN
+    if QA_GATE_STATUS_FAIL in statuses:
+        return QA_GATE_STATUS_FAIL
+    if QA_GATE_STATUS_WARN in statuses:
+        return QA_GATE_STATUS_WARN
+    if all(s == QA_GATE_STATUS_PASS for s in statuses):
+        return QA_GATE_STATUS_PASS
+    return QA_GATE_STATUS_NOT_RUN
 
 
 def _job_stage_where(
@@ -234,7 +240,7 @@ def _build_job_qa(
     )
     qa_notes: list[str] = []
     gates: list[dict[str, Any]] = []
-    overall_status = "not_run"
+    overall_status = QA_GATE_STATUS_NOT_RUN
 
     clean_source = str(source_layout_id).strip() if source_layout_id else ""
     if clean_source and target_layout_id and clean_source != target_layout_id:
@@ -248,14 +254,14 @@ def _build_job_qa(
             risk_level = str(fold_result.get("risk_level") or "low")
 
             if risk_level == "high":
-                gate_outcome = "fail"
-                overall_status = "fail"
+                gate_outcome = QA_GATE_STATUS_FAIL
+                overall_status = QA_GATE_STATUS_FAIL
             elif risk_level == "medium":
-                gate_outcome = "warn"
-                overall_status = "warn"
+                gate_outcome = QA_GATE_STATUS_WARN
+                overall_status = QA_GATE_STATUS_WARN
             else:
-                gate_outcome = "pass"
-                overall_status = "pass"
+                gate_outcome = QA_GATE_STATUS_PASS
+                overall_status = QA_GATE_STATUS_PASS
 
             gate: dict[str, Any] = {
                 "gate_id": "GATE.DOWNMIX.FOLD_SIMILARITY",
@@ -278,7 +284,7 @@ def _build_job_qa(
             qa_notes.extend(fold_notes)
 
         except (ValueError, KeyError, FileNotFoundError, TypeError) as exc:
-            overall_status = "not_run"
+            overall_status = QA_GATE_STATUS_NOT_RUN
             qa_notes.append(f"QA skipped ({clean_source} \u2192 {target_layout_id}): {exc}")
 
     return {
@@ -717,7 +723,7 @@ def _build_render_report(
     qa_statuses: list[str] = []
     for result in job_results:
         job_qa = result.get("_qa") or {}
-        qa_statuses.append(str(job_qa.get("qa_status") or "not_run"))
+        qa_statuses.append(str(job_qa.get("qa_status") or QA_GATE_STATUS_NOT_RUN))
         all_gates.extend(job_qa.get("gates") or [])
 
     overall_qa_status = _aggregate_qa_status(qa_statuses)
@@ -808,7 +814,7 @@ def _build_render_report(
         stage_evidence.extend(list(result.get("_stage_evidence") or []))
 
         job_qa = result.get("_qa") or {}
-        qa_status = _coerce_str(job_qa.get("qa_status")).strip() or "not_run"
+        qa_status = _coerce_str(job_qa.get("qa_status")).strip() or QA_GATE_STATUS_NOT_RUN
         qa_gate_rows = list(job_qa.get("gates") or [])
         qa_metrics = [{"name": "gate_count", "value": float(len(qa_gate_rows))}]
         qa_notes = [f"qa_status={qa_status}"]

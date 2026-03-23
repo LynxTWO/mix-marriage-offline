@@ -14,6 +14,7 @@ from mmo.core.qa_states import (
     MEASUREMENT_STATE_INVALID_DUE_TO_SILENCE,
     classify_measurement_state,
 )
+from mmo.core.render_clarity import enrich_issue_list_for_user
 from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.decoders import detect_format_from_path, read_metadata
@@ -1419,7 +1420,7 @@ def _build_qa_issues(
                         )
 
     issues.sort(key=_issue_sort_key)
-    return issues
+    return enrich_issue_list_for_user(issues)
 
 
 def _qa_job_from_row(
@@ -1524,7 +1525,7 @@ def build_render_qa_payload(
         "plugin_chain_used": bool(plugin_chain_used),
         "thresholds": thresholds,
         "jobs": jobs,
-        "issues": issues,
+        "issues": enrich_issue_list_for_user(issues),
     }
 
 
@@ -1803,6 +1804,6 @@ def build_safe_render_qa(
     return {
         "schema_version": "0.1.0",
         "outputs": outputs,
-        "issues": all_issues,
+        "issues": enrich_issue_list_for_user(all_issues),
         "thresholds": thresholds,
     }

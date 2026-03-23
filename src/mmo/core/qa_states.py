@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-MEASUREMENT_STATE_MEASURED = "measured"
-MEASUREMENT_STATE_NOT_APPLICABLE = "not_applicable"
-MEASUREMENT_STATE_FAILED = "measurement_failed"
-MEASUREMENT_STATE_INVALID_DUE_TO_SILENCE = "invalid_due_to_silence"
+from mmo.core.statuses import (
+    MEASUREMENT_STATE_FAILED,
+    MEASUREMENT_STATE_INVALID_DUE_TO_SILENCE,
+    MEASUREMENT_STATE_MEASURED,
+    MEASUREMENT_STATE_NOT_APPLICABLE,
+)
 
 __all__ = [
     "MEASUREMENT_STATE_FAILED",
