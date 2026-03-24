@@ -1,22 +1,15 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from mmo.core.media_tags import source_metadata_from_probe
+from mmo.core.stem_identity import (
+    canonical_stem_ids_for_rel_paths,
+    source_file_id_from_rel_path,
+)
 from mmo.core.source_locator import resolve_session_stems
 from mmo.dsp.decoders import detect_format_from_path, read_metadata
 from mmo.dsp.io import sha256_file
-
-_STEM_ID_RE = re.compile(r"[^a-z0-9_]+")
-
-
-def _stem_id_from_filename(path: Path) -> str:
-    stem = path.stem.lower()
-    stem = stem.replace(" ", "_")
-    stem = _STEM_ID_RE.sub("_", stem)
-    stem = re.sub(r"_+", "_", stem).strip("_")
-    return stem or "stem"
 
 
 def discover_stem_files(stems_dir: Path) -> list[Path]:
@@ -47,18 +40,24 @@ def discover_stem_files(stems_dir: Path) -> list[Path]:
 def build_session_from_stems_dir(stems_dir: Path) -> dict:
     resolved_stems_dir = stems_dir.resolve()
     stems = discover_stem_files(resolved_stems_dir)
-    stem_entries = []
-
+    rel_paths_by_source: list[tuple[Path, str]] = []
     for path in stems:
         try:
-            rel_path = path.relative_to(resolved_stems_dir)
-            file_path = rel_path.as_posix()
+            rel_path = path.relative_to(resolved_stems_dir).as_posix()
         except ValueError:
-            file_path = path.resolve().as_posix()
+            rel_path = path.resolve().as_posix()
+        rel_paths_by_source.append((path, rel_path))
 
+    stem_ids_by_rel_path = canonical_stem_ids_for_rel_paths(
+        rel_path for _, rel_path in rel_paths_by_source
+    )
+    stem_entries = []
+
+    for path, file_path in rel_paths_by_source:
         stem_entry = {
-            "stem_id": _stem_id_from_filename(path),
+            "stem_id": stem_ids_by_rel_path.get(file_path, "stem"),
             "file_path": file_path,
+            "source_file_id": source_file_id_from_rel_path(file_path),
             "sha256": sha256_file(path),
         }
         format_id = detect_format_from_path(path)

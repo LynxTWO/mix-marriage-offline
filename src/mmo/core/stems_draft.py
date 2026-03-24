@@ -8,20 +8,20 @@ from typing import Any
 
 
 def _sorted_assignments(stems_map: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return assignments sorted by (rel_path, file_id) for deterministic output."""
+    """Return assignments sorted by (rel_path, stem_id) for deterministic output."""
     assignments = stems_map.get("assignments")
     if not isinstance(assignments, list):
         raise ValueError("stems_map has no 'assignments' list")
     return sorted(
         assignments,
-        key=lambda a: (a.get("rel_path", ""), a.get("file_id", "")),
+        key=lambda a: (a.get("rel_path", ""), a.get("stem_id", "")),
     )
 
 
 def _scene_id_hash(assignments: list[dict[str, Any]]) -> str:
-    """Deterministic SHA-1 hash of sorted file_ids for the scene_id suffix."""
-    file_ids = sorted(a.get("file_id", "") for a in assignments)
-    combined = "|".join(file_ids)
+    """Deterministic SHA-1 hash of sorted stem_ids for the scene_id suffix."""
+    stem_ids = sorted(a.get("stem_id", "") for a in assignments)
+    combined = "|".join(stem_ids)
     return hashlib.sha1(combined.encode("utf-8")).hexdigest()[:10]
 
 
@@ -61,7 +61,7 @@ def build_draft_scene(
 
         objects.append({
             "object_id": f"OBJ.{idx + 1:03d}",
-            "stem_id": assignment.get("file_id", ""),
+            "stem_id": assignment.get("stem_id", ""),
             "label": label,
             "channel_count": 1,
             "intent": {
@@ -122,7 +122,7 @@ def build_draft_routing_plan(
     routes: list[dict[str, Any]] = []
     for assignment in assignments:
         routes.append({
-            "stem_id": assignment.get("file_id", ""),
+            "stem_id": assignment.get("stem_id", ""),
             "stem_channels": 1,
             "target_channels": 2,
             "mapping": [

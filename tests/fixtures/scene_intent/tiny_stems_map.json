@@ -3,7 +3,8 @@
     {
       "bus_group": "DRUMS",
       "confidence": 0.99,
-      "file_id": "STEMFILE.1111111111",
+      "source_file_id": "SOURCEFILE.3b64a48c46",
+      "stem_id": "kick",
       "link_group_id": null,
       "reasons": [
         "filename token kick"
@@ -14,7 +15,8 @@
     {
       "bus_group": "VOX",
       "confidence": 0.95,
-      "file_id": "STEMFILE.2222222222",
+      "source_file_id": "SOURCEFILE.1bea2d69c5",
+      "stem_id": "leadvox",
       "link_group_id": null,
       "reasons": [
         "filename token leadvox"
@@ -25,7 +27,8 @@
     {
       "bus_group": "FX",
       "confidence": 0.8,
-      "file_id": "STEMFILE.3333333333",
+      "source_file_id": "SOURCEFILE.b042eee283",
+      "stem_id": "hallverbreturn",
       "link_group_id": null,
       "reasons": [
         "filename token reverb"
@@ -36,7 +39,8 @@
     {
       "bus_group": "MUSIC",
       "confidence": 0.74,
-      "file_id": "STEMFILE.4444444444",
+      "source_file_id": "SOURCEFILE.78247efa9b",
+      "stem_id": "padwide",
       "link_group_id": null,
       "reasons": [
         "filename token pad"
@@ -47,7 +51,8 @@
     {
       "bus_group": "OTHER",
       "confidence": 0.2,
-      "file_id": "STEMFILE.5555555555",
+      "source_file_id": "SOURCEFILE.b34b29f181",
+      "stem_id": "mystery",
       "link_group_id": null,
       "reasons": [
         "no strong match"

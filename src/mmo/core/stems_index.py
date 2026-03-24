@@ -7,11 +7,14 @@ from typing import Any
 
 from mmo.core.media_tags import source_metadata_from_probe
 from mmo.core.session import discover_stem_files
+from mmo.core.stem_identity import (
+    canonical_stem_ids_for_rel_paths,
+    source_file_id_from_rel_path,
+)
 from mmo.dsp.decoders import read_metadata
 
 STEMS_INDEX_VERSION = "0.1.0"
 _SET_ID_PREFIX = "STEMSET."
-_FILE_ID_PREFIX = "STEMFILE."
 _TRACK_PREFIX_RE = re.compile(r"^\s*\d+\s*[-_.\s]+\s*")
 _TOKEN_SPLIT_RE = re.compile(r"[\s_.\-\[\]\(\)\{\}]+")
 _SET_HINT_TOKENS = frozenset({"stems", "multitrack", "tracks", "audio", "wav", "split"})
@@ -204,6 +207,12 @@ def build_stems_index(root: Path, *, root_dir: str | None = None) -> dict[str, A
     ]
 
     files: list[dict[str, Any]] = []
+    rel_paths = [
+        _relative_posix(file_path, root=resolved_root)
+        for stem_set in stem_sets
+        for file_path in stem_set["_files"]
+    ]
+    stem_ids_by_rel_path = canonical_stem_ids_for_rel_paths(rel_paths)
     for stem_set in stem_sets:
         set_id = stem_set["set_id"]
         folder_tokens = list(stem_set["_folder_tokens"])
@@ -212,7 +221,8 @@ def build_stems_index(root: Path, *, root_dir: str | None = None) -> dict[str, A
             basename = file_path.stem
             files.append(
                 {
-                    "file_id": f"{_FILE_ID_PREFIX}{_sha1_token(rel_path)}",
+                    "stem_id": stem_ids_by_rel_path.get(rel_path, "stem"),
+                    "source_file_id": source_file_id_from_rel_path(rel_path),
                     "set_id": set_id,
                     "rel_path": rel_path,
                     "basename": basename,
@@ -226,6 +236,7 @@ def build_stems_index(root: Path, *, root_dir: str | None = None) -> dict[str, A
         key=lambda item: (
             item["set_id"],
             item["rel_path"],
+            item["stem_id"],
         )
     )
 

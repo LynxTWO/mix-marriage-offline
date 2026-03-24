@@ -6,7 +6,7 @@
       "confidence": 0.8,
       "file_path": "stems/HallVerbReturn.wav",
       "role_id": "ROLE.FX.REVERB",
-      "stem_id": "STEMFILE.3333333333"
+      "stem_id": "hallverbreturn"
     },
     {
       "bus_id": "BUS.DRUMS.KICK",
@@ -14,7 +14,7 @@
       "confidence": 0.99,
       "file_path": "stems/Kick.wav",
       "role_id": "ROLE.DRUM.KICK",
-      "stem_id": "STEMFILE.1111111111"
+      "stem_id": "kick"
     },
     {
       "bus_id": "BUS.VOX.LEAD",
@@ -22,7 +22,7 @@
       "confidence": 0.95,
       "file_path": "stems/LeadVox.wav",
       "role_id": "ROLE.VOCAL.LEAD",
-      "stem_id": "STEMFILE.2222222222"
+      "stem_id": "leadvox"
     },
     {
       "bus_id": "BUS.OTHER.UNKNOWN",
@@ -30,7 +30,7 @@
       "confidence": 0.2,
       "file_path": "stems/Mystery.wav",
       "role_id": "ROLE.OTHER.UNKNOWN",
-      "stem_id": "STEMFILE.5555555555"
+      "stem_id": "mystery"
     },
     {
       "bus_id": "BUS.MUSIC.SYNTH",
@@ -38,7 +38,7 @@
       "confidence": 0.74,
       "file_path": "stems/PadWide.wav",
       "role_id": "ROLE.SYNTH.PAD",
-      "stem_id": "STEMFILE.4444444444"
+      "stem_id": "padwide"
     }
   ],
   "buses": [
@@ -54,11 +54,11 @@
       "label": "Master",
       "parent_id": null,
       "stem_ids": [
-        "STEMFILE.3333333333",
-        "STEMFILE.1111111111",
-        "STEMFILE.2222222222",
-        "STEMFILE.5555555555",
-        "STEMFILE.4444444444"
+        "hallverbreturn",
+        "kick",
+        "leadvox",
+        "mystery",
+        "padwide"
       ]
     },
     {
@@ -69,7 +69,7 @@
       "label": "Drums",
       "parent_id": "BUS.MASTER",
       "stem_ids": [
-        "STEMFILE.1111111111"
+        "kick"
       ]
     },
     {
@@ -78,7 +78,7 @@
       "label": "Drums Kick",
       "parent_id": "BUS.DRUMS",
       "stem_ids": [
-        "STEMFILE.1111111111"
+        "kick"
       ]
     },
     {
@@ -89,7 +89,7 @@
       "label": "Music",
       "parent_id": "BUS.MASTER",
       "stem_ids": [
-        "STEMFILE.4444444444"
+        "padwide"
       ]
     },
     {
@@ -98,7 +98,7 @@
       "label": "Music Synth",
       "parent_id": "BUS.MUSIC",
       "stem_ids": [
-        "STEMFILE.4444444444"
+        "padwide"
       ]
     },
     {
@@ -109,7 +109,7 @@
       "label": "Vox",
       "parent_id": "BUS.MASTER",
       "stem_ids": [
-        "STEMFILE.2222222222"
+        "leadvox"
       ]
     },
     {
@@ -118,7 +118,7 @@
       "label": "Vox Lead",
       "parent_id": "BUS.VOX",
       "stem_ids": [
-        "STEMFILE.2222222222"
+        "leadvox"
       ]
     },
     {
@@ -129,7 +129,7 @@
       "label": "Fx",
       "parent_id": "BUS.MASTER",
       "stem_ids": [
-        "STEMFILE.3333333333"
+        "hallverbreturn"
       ]
     },
     {
@@ -138,7 +138,7 @@
       "label": "Fx Reverb",
       "parent_id": "BUS.FX",
       "stem_ids": [
-        "STEMFILE.3333333333"
+        "hallverbreturn"
       ]
     },
     {
@@ -149,7 +149,7 @@
       "label": "Other",
       "parent_id": "BUS.MASTER",
       "stem_ids": [
-        "STEMFILE.5555555555"
+        "mystery"
       ]
     },
     {
@@ -158,7 +158,7 @@
       "label": "Other Unknown",
       "parent_id": "BUS.OTHER",
       "stem_ids": [
-        "STEMFILE.5555555555"
+        "mystery"
       ]
     }
   ],

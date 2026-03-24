@@ -781,9 +781,9 @@ def build_scene_from_bus_plan(
     for item in map_assignments_raw:
         if not isinstance(item, dict):
             continue
-        file_id = _coerce_str(item.get("file_id")).strip()
-        if file_id:
-            map_assignments[file_id] = item
+        stem_id = _coerce_str(item.get("stem_id")).strip()
+        if stem_id:
+            map_assignments[stem_id] = item
 
     merged_rows: list[dict[str, str | float]] = []
     seen_stem_ids: set[str] = set()
@@ -823,10 +823,10 @@ def build_scene_from_bus_plan(
         [entry for entry in map_assignments_raw if isinstance(entry, dict)],
         key=lambda entry: (
             _coerce_str(entry.get("rel_path")).strip(),
-            _coerce_str(entry.get("file_id")).strip(),
+            _coerce_str(entry.get("stem_id")).strip(),
         ),
     ):
-        stem_id = _coerce_str(item.get("file_id")).strip()
+        stem_id = _coerce_str(item.get("stem_id")).strip()
         if not stem_id or stem_id in seen_stem_ids:
             continue
         merged_rows.append(

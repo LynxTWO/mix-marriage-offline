@@ -314,7 +314,7 @@ def _build_report_from_stems_map(*, fixture_root: Path, stems_map_path: Path, re
         (item for item in assignments if isinstance(item, dict)),
         key=lambda item: _coerce_str(item.get("rel_path")),
     ):
-        stem_id = _coerce_str(row.get("file_id")).strip()
+        stem_id = _coerce_str(row.get("stem_id")).strip()
         rel_path = _coerce_str(row.get("rel_path")).strip()
         if not stem_id or not rel_path:
             continue

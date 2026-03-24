@@ -33,7 +33,7 @@ _SAMPLE_STEMS_MAP: dict = {
     "roles_ref": "ontology/roles.yaml",
     "assignments": [
         {
-            "file_id": "STEMFILE.bbbbbbbbbb",
+            "stem_id": "snare",
             "rel_path": "stems/snare.wav",
             "role_id": "ROLE.DRUMS.SNARE",
             "confidence": 0.85,
@@ -42,7 +42,7 @@ _SAMPLE_STEMS_MAP: dict = {
             "link_group_id": None,
         },
         {
-            "file_id": "STEMFILE.aaaaaaaaaa",
+            "stem_id": "kick",
             "rel_path": "stems/kick.wav",
             "role_id": "ROLE.DRUMS.KICK",
             "confidence": 0.90,
@@ -51,7 +51,7 @@ _SAMPLE_STEMS_MAP: dict = {
             "link_group_id": None,
         },
         {
-            "file_id": "STEMFILE.cccccccccc",
+            "stem_id": "vocal_lead",
             "rel_path": "stems/vocal_lead.wav",
             "role_id": "ROLE.VOCAL.LEAD",
             "confidence": 0.70,
@@ -93,7 +93,7 @@ class TestBuildDraftScene(unittest.TestCase):
     def test_build_draft_scene_stable_sorting(self) -> None:
         scene = build_draft_scene(_SAMPLE_STEMS_MAP)
         objects = scene["objects"]
-        # Assignments sorted by (rel_path, file_id):
+        # Assignments sorted by (rel_path, stem_id):
         #   stems/kick.wav < stems/snare.wav < stems/vocal_lead.wav
         self.assertEqual(objects[0]["label"], "kick")
         self.assertEqual(objects[1]["label"], "snare")
@@ -148,11 +148,11 @@ class TestBuildDraftRoutingPlan(unittest.TestCase):
     def test_build_draft_routing_plan_stable_sorting(self) -> None:
         plan = build_draft_routing_plan(_SAMPLE_STEMS_MAP)
         routes = plan["routes"]
-        # Same sort order as scene: by (rel_path, file_id)
+        # Same sort order as scene: by (rel_path, stem_id)
         stem_ids = [r["stem_id"] for r in routes]
         self.assertEqual(
             stem_ids,
-            ["STEMFILE.aaaaaaaaaa", "STEMFILE.bbbbbbbbbb", "STEMFILE.cccccccccc"],
+            ["kick", "snare", "vocal_lead"],
         )
 
     def test_draft_routing_plan_bus_group_in_notes(self) -> None:

@@ -1533,7 +1533,7 @@ class TestSafeRenderBaselineMixdown(unittest.TestCase):
 
 
 class TestSafeRenderExplicitScene(unittest.TestCase):
-    def test_explicit_scene_inputs_bridge_stemfile_ids_from_stems_map(self) -> None:
+    def test_explicit_scene_inputs_preserve_canonical_stem_ids(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)
             report = _make_baseline_fixture_report()
@@ -1547,54 +1547,10 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
             source = scene_payload.get("source")
             if isinstance(source, dict):
                 source["stems_dir"] = _BASELINE_STEMS_DIR.resolve().as_posix()
-            scene_payload["source_refs"] = {"stems_map_ref": "stems_map.json"}
-
-            stem_aliases = {
-                "kick_mono": "STEMFILE.KICK_MONO",
-                "vox_mono": "STEMFILE.VOX_MONO",
-                "music_stereo": "STEMFILE.MUSIC_STEREO",
-            }
-            for row in scene_payload.get("objects", []):
-                if not isinstance(row, dict):
-                    continue
-                stem_id = row.get("stem_id")
-                if not isinstance(stem_id, str) or stem_id not in stem_aliases:
-                    continue
-                row["stem_id"] = stem_aliases[stem_id]
-                row["object_id"] = f"OBJ.{stem_aliases[stem_id]}"
-            for row in scene_payload.get("beds", []):
-                if not isinstance(row, dict):
-                    continue
-                stem_ids = row.get("stem_ids")
-                if not isinstance(stem_ids, list):
-                    continue
-                row["stem_ids"] = [
-                    stem_aliases.get(stem_id, stem_id)
-                    for stem_id in stem_ids
-                    if isinstance(stem_id, str)
-                ]
 
             scene_path = temp / "scene.json"
             scene_path.write_text(
                 json.dumps(scene_payload, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
-
-            stems_map_path = temp / "stems_map.json"
-            stems_map_path.write_text(
-                json.dumps(
-                    {
-                        "schema_version": "0.1.0",
-                        "assignments": [
-                            {"file_id": "STEMFILE.KICK_MONO", "rel_path": "kick_mono.wav"},
-                            {"file_id": "STEMFILE.VOX_MONO", "rel_path": "vox_mono.wav"},
-                            {"file_id": "STEMFILE.MUSIC_STEREO", "rel_path": "music_stereo.wav"},
-                        ],
-                    },
-                    indent=2,
-                    sort_keys=True,
-                )
-                + "\n",
                 encoding="utf-8",
             )
 
@@ -1604,7 +1560,7 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
                     [
                         'version: "0.1.0"',
                         "overrides:",
-                        '  STEMFILE.VOX_MONO:',
+                        '  vox_mono:',
                         '    role_id: "ROLE.VOCAL.LEAD"',
                         '    bus_id: "BUS.VOX.LEAD"',
                         "    placement:",

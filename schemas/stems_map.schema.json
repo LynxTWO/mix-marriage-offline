@@ -53,7 +53,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "file_id",
+        "stem_id",
         "rel_path",
         "role_id",
         "confidence",
@@ -62,9 +62,13 @@
         "link_group_id"
       ],
       "properties": {
-        "file_id": {
+        "stem_id": {
           "type": "string",
-          "pattern": "^STEMFILE\\.[0-9a-f]{10}$"
+          "minLength": 1
+        },
+        "source_file_id": {
+          "type": "string",
+          "pattern": "^SOURCEFILE\\.[0-9a-f]{10}$"
         },
         "rel_path": {
           "type": "string",

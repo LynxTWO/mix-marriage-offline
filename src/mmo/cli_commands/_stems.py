@@ -164,7 +164,7 @@ def _build_stem_explain_payload(
                 if isinstance(payload, dict) and payload.get("rel_path") == selector
             ),
             key=lambda item: (
-                item.get("file_id") if isinstance(item.get("file_id"), str) else "",
+                item.get("stem_id") if isinstance(item.get("stem_id"), str) else "",
                 item.get("rel_path") if isinstance(item.get("rel_path"), str) else "",
             ),
         )
@@ -177,18 +177,23 @@ def _build_stem_explain_payload(
                 value
                 for payload in explanations.values()
                 if isinstance(payload, dict)
-                for value in (payload.get("file_id"), payload.get("rel_path"))
+                for value in (payload.get("stem_id"), payload.get("rel_path"))
                 if isinstance(value, str) and value
             }
         )
         if known:
             raise ValueError(
-                f"Unknown stem file selector: {selector}. "
+                f"Unknown stem selector: {selector}. "
                 f"Known selectors: {', '.join(known)}"
             )
-        raise ValueError(f"Unknown stem file selector: {selector}. No stems are available.")
+        raise ValueError(f"Unknown stem selector: {selector}. No stems are available.")
 
-    file_id = explanation.get("file_id") if isinstance(explanation.get("file_id"), str) else ""
+    stem_id = explanation.get("stem_id") if isinstance(explanation.get("stem_id"), str) else ""
+    source_file_id = (
+        explanation.get("source_file_id")
+        if isinstance(explanation.get("source_file_id"), str)
+        else ""
+    )
     rel_path = (
         explanation.get("rel_path")
         if isinstance(explanation.get("rel_path"), str)
@@ -201,9 +206,9 @@ def _build_stem_explain_payload(
         for item in assignments:
             if not isinstance(item, dict):
                 continue
-            assignment_file_id = item.get("file_id")
+            assignment_stem_id = item.get("stem_id")
             assignment_rel_path = item.get("rel_path")
-            if assignment_file_id == file_id or assignment_rel_path == rel_path:
+            if assignment_stem_id == stem_id or assignment_rel_path == rel_path:
                 selected_assignment = item
                 break
 
@@ -229,7 +234,8 @@ def _build_stem_explain_payload(
                 derived_evidence.append(reason)
 
     return {
-        "file_id": file_id,
+        "stem_id": stem_id,
+        "source_file_id": source_file_id or None,
         "rel_path": rel_path,
         "tokens": (
             explanation.get("tokens")
@@ -287,7 +293,8 @@ def _render_stem_explain_text(payload: dict[str, Any]) -> str:
     )
 
     lines = [
-        f"file_id: {payload.get('file_id', '')}",
+        f"stem_id: {payload.get('stem_id', '')}",
+        f"source_file_id: {payload.get('source_file_id', '') or '-'}",
         f"rel_path: {payload.get('rel_path', '')}",
         f"role_id: {payload.get('role_id', '')}",
         f"confidence: {float(confidence):.3f}",

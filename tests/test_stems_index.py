@@ -15,6 +15,10 @@ from mmo.core.stems_index import (
     pick_best_stem_set,
     resolve_stem_sets,
 )
+from mmo.core.stem_identity import (
+    canonical_stem_id_from_rel_path,
+    source_file_id_from_rel_path,
+)
 
 
 def _write_tiny_wav(path: Path) -> None:
@@ -97,8 +101,14 @@ class TestStemsIndex(unittest.TestCase):
             self.assertIsInstance(kick_entry, dict)
             if not isinstance(kick_entry, dict):
                 return
-            expected_file_id = "STEMFILE." + hashlib.sha1(kick_rel.encode("utf-8")).hexdigest()[:10]
-            self.assertEqual(kick_entry.get("file_id"), expected_file_id)
+            self.assertEqual(
+                kick_entry.get("stem_id"),
+                canonical_stem_id_from_rel_path(kick_rel),
+            )
+            self.assertEqual(
+                kick_entry.get("source_file_id"),
+                source_file_id_from_rel_path(kick_rel),
+            )
             source_metadata = kick_entry.get("source_metadata")
             self.assertIsInstance(source_metadata, dict)
             if not isinstance(source_metadata, dict):

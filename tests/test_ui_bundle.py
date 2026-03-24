@@ -459,7 +459,7 @@ def _sample_stems_map_payload() -> dict:
         counts_by_bus_group[bus_group] = counts_by_bus_group.get(bus_group, 0) + 1
         assignments.append(
             {
-                "file_id": f"STEMFILE.{idx:010x}",
+                "stem_id": f"track_{idx:02d}",
                 "rel_path": f"stems/{rel_idx:02d}_track.wav",
                 "role_id": role_id,
                 "confidence": round(0.5 + (idx * 0.01), 3),

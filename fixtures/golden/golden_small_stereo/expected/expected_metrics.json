@@ -9,8 +9,8 @@
         "SPK.R"
       ],
       "downmix_policy_version": "0.1.0",
-      "normalized_receipt_sha256": "2d743fb852b6a19899ed7ba13db4c2fbbf777c2dbaaceec1ff9d72a7bbb0513d",
-      "normalized_render_manifest_sha256": "d64073456343a578aca648279d045058afb36cda40f04d05bcc32215f92cd6c2",
+      "normalized_receipt_sha256": "cded8571dbcf058efdbf93590a7f8fc55ac2e52d211b256ab9ab5dbf77c6ead2",
+      "normalized_render_manifest_sha256": "fce4fd4beb3085fc2b82123ed4966560e8a20e37b123359b8f0267042ab9b9d7",
       "per_channel_metrics": [
         {
           "integrated_lufs": null,
@@ -26,7 +26,7 @@
         }
       ],
       "render_contract_version": "0.1.0",
-      "scene_sha256": "8cb8179e045948de7feac246b813ee3e8aa085ff4a57e7b6a6c7cad56230a201"
+      "scene_sha256": "2c4b2332a061fb3e3bdb86dfc9ec7c4cdb82742c3e2bc2c95ab23ece426c472a"
     }
   },
   "tolerances": {

@@ -1,5 +1,4 @@
 {
-  "schema_version": "0.1.0",
   "sessions": {
     "immersive_7_1_4_catalog": {
       "beds": [
@@ -19,7 +18,7 @@
             "content_hint: ambience"
           ],
           "stem_ids": [
-            "STEMFILE.71137a5646"
+            "04_drumsroom"
           ],
           "width_hint": 1.0
         },
@@ -39,7 +38,7 @@
             "content_hint: fx_bed"
           ],
           "stem_ids": [
-            "STEMFILE.76fefb19cf"
+            "30_sfx3"
           ],
           "width_hint": 0.75
         }
@@ -75,40 +74,9 @@
             "group_bus: BUS.DRUMS",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.9611db9952",
+          "object_id": "OBJ.01_kickin",
           "role_id": "ROLE.DRUM.KICK",
-          "stem_id": "STEMFILE.9611db9952",
-          "width_hint": 0.2
-        },
-        {
-          "azimuth_hint": 0.0,
-          "channel_count": 1,
-          "confidence": 0.8,
-          "depth_hint": 0.25,
-          "group_bus": "BUS.DRUMS",
-          "intent": {
-            "confidence": 0.8,
-            "depth": 0.25,
-            "locks": [],
-            "position": {
-              "azimuth_deg": 0.0
-            },
-            "width": 0.2
-          },
-          "label": "03_Snare",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.DRUM.SNARE",
-            "group_bus: BUS.DRUMS",
-            "classification: close_miked_anchor_object"
-          ],
-          "object_id": "OBJ.STEMFILE.e88dc2674b",
-          "role_id": "ROLE.DRUM.SNARE",
-          "stem_id": "STEMFILE.e88dc2674b",
+          "stem_id": "01_kickin",
           "width_hint": 0.2
         },
         {
@@ -137,56 +105,41 @@
             "group_bus: BUS.DRUMS",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.f2f00ff00e",
+          "object_id": "OBJ.02_kickout",
           "role_id": "ROLE.DRUM.KICK",
-          "stem_id": "STEMFILE.f2f00ff00e",
+          "stem_id": "02_kickout",
           "width_hint": 0.2
         },
         {
+          "azimuth_hint": 0.0,
           "channel_count": 1,
-          "confidence": 0.333,
-          "group_bus": "BUS.MUSIC",
+          "confidence": 0.8,
+          "depth_hint": 0.25,
+          "group_bus": "BUS.DRUMS",
           "intent": {
-            "confidence": 0.333,
-            "locks": []
+            "confidence": 0.8,
+            "depth": 0.25,
+            "locks": [],
+            "position": {
+              "azimuth_deg": 0.0
+            },
+            "width": 0.2
           },
-          "label": "22_Synth2_PitchModulated",
+          "label": "03_Snare",
           "locks": {
             "azimuth_hint": false,
             "depth_hint": false,
             "width_hint": false
           },
           "notes": [
-            "role_id: ROLE.SYNTH.OTHER",
-            "group_bus: BUS.MUSIC",
-            "classification: object_low_confidence_no_hint"
+            "role_id: ROLE.DRUM.SNARE",
+            "group_bus: BUS.DRUMS",
+            "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.23a3d8a363",
-          "role_id": "ROLE.SYNTH.OTHER",
-          "stem_id": "STEMFILE.23a3d8a363"
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.333,
-          "group_bus": "BUS.MUSIC",
-          "intent": {
-            "confidence": 0.333,
-            "locks": []
-          },
-          "label": "21_Synth1_Unmodulated",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.SYNTH.OTHER",
-            "group_bus: BUS.MUSIC",
-            "classification: object_low_confidence_no_hint"
-          ],
-          "object_id": "OBJ.STEMFILE.35a9c26907",
-          "role_id": "ROLE.SYNTH.OTHER",
-          "stem_id": "STEMFILE.35a9c26907"
+          "object_id": "OBJ.03_snare",
+          "role_id": "ROLE.DRUM.SNARE",
+          "stem_id": "03_snare",
+          "width_hint": 0.2
         },
         {
           "channel_count": 1,
@@ -210,102 +163,56 @@
             "group_bus: BUS.MUSIC",
             "classification: close_instrument_object"
           ],
-          "object_id": "OBJ.STEMFILE.43dd9da4f8",
+          "object_id": "OBJ.10_elecgtr5",
           "role_id": "ROLE.GTR.ELECTRIC",
-          "stem_id": "STEMFILE.43dd9da4f8",
+          "stem_id": "10_elecgtr5",
           "width_hint": 0.3
         },
         {
           "channel_count": 1,
-          "confidence": 0.2,
-          "group_bus": "BUS.OTHER",
+          "confidence": 0.333,
+          "group_bus": "BUS.MUSIC",
           "intent": {
-            "confidence": 0.2,
+            "confidence": 0.333,
             "locks": []
           },
-          "label": "12_AcousticGtr",
+          "label": "21_Synth1_Unmodulated",
           "locks": {
             "azimuth_hint": false,
             "depth_hint": false,
             "width_hint": false
           },
           "notes": [
-            "role_id: ROLE.OTHER.UNKNOWN",
-            "group_bus: BUS.OTHER",
+            "role_id: ROLE.SYNTH.OTHER",
+            "group_bus: BUS.MUSIC",
             "classification: object_low_confidence_no_hint"
           ],
-          "object_id": "OBJ.STEMFILE.29c8cd551b",
-          "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.29c8cd551b"
+          "object_id": "OBJ.21_synth1_unmodulated",
+          "role_id": "ROLE.SYNTH.OTHER",
+          "stem_id": "21_synth1_unmodulated"
         },
         {
           "channel_count": 1,
-          "confidence": 0.2,
-          "group_bus": "BUS.OTHER",
+          "confidence": 0.333,
+          "group_bus": "BUS.MUSIC",
           "intent": {
-            "confidence": 0.2,
+            "confidence": 0.333,
             "locks": []
           },
-          "label": "23_SynthSFX2",
+          "label": "22_Synth2_PitchModulated",
           "locks": {
             "azimuth_hint": false,
             "depth_hint": false,
             "width_hint": false
           },
           "notes": [
-            "role_id: ROLE.OTHER.UNKNOWN",
-            "group_bus: BUS.OTHER",
+            "role_id: ROLE.SYNTH.OTHER",
+            "group_bus: BUS.MUSIC",
             "classification: object_low_confidence_no_hint"
           ],
-          "object_id": "OBJ.STEMFILE.4076b72368",
-          "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.4076b72368"
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.2,
-          "group_bus": "BUS.OTHER",
-          "intent": {
-            "confidence": 0.2,
-            "locks": []
-          },
-          "label": "20_BassSynth",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.OTHER.UNKNOWN",
-            "group_bus: BUS.OTHER",
-            "classification: object_low_confidence_no_hint"
-          ],
-          "object_id": "OBJ.STEMFILE.dba2b8b81b",
-          "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.dba2b8b81b"
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.2,
-          "group_bus": "BUS.OTHER",
-          "intent": {
-            "confidence": 0.2,
-            "locks": []
-          },
-          "label": "24_ArpSeq1",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.OTHER.UNKNOWN",
-            "group_bus: BUS.OTHER",
-            "classification: object_low_confidence_no_hint"
-          ],
-          "object_id": "OBJ.STEMFILE.e7daecc2bc",
-          "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.e7daecc2bc"
+          "object_id": "OBJ.22_synth2_pitchmodulated",
+          "role_id": "ROLE.SYNTH.OTHER",
+          "stem_id": "22_synth2_pitchmodulated"
         },
         {
           "channel_count": 1,
@@ -326,9 +233,101 @@
             "group_bus: BUS.OTHER",
             "classification: object_low_confidence_no_hint"
           ],
-          "object_id": "OBJ.STEMFILE.ec7c54c44a",
+          "object_id": "OBJ.11_elecgtr6di",
           "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.ec7c54c44a"
+          "stem_id": "11_elecgtr6di"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.2,
+          "group_bus": "BUS.OTHER",
+          "intent": {
+            "confidence": 0.2,
+            "locks": []
+          },
+          "label": "12_AcousticGtr",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.OTHER.UNKNOWN",
+            "group_bus: BUS.OTHER",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.12_acousticgtr",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "12_acousticgtr"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.2,
+          "group_bus": "BUS.OTHER",
+          "intent": {
+            "confidence": 0.2,
+            "locks": []
+          },
+          "label": "20_BassSynth",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.OTHER.UNKNOWN",
+            "group_bus: BUS.OTHER",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.20_basssynth",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "20_basssynth"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.2,
+          "group_bus": "BUS.OTHER",
+          "intent": {
+            "confidence": 0.2,
+            "locks": []
+          },
+          "label": "23_SynthSFX2",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.OTHER.UNKNOWN",
+            "group_bus: BUS.OTHER",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.23_synthsfx2",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "23_synthsfx2"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.2,
+          "group_bus": "BUS.OTHER",
+          "intent": {
+            "confidence": 0.2,
+            "locks": []
+          },
+          "label": "24_ArpSeq1",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.OTHER.UNKNOWN",
+            "group_bus: BUS.OTHER",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.24_arpseq1",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "24_arpseq1"
         },
         {
           "channel_count": 1,
@@ -349,9 +348,9 @@
             "group_bus: BUS.VOX",
             "classification: object_low_confidence_no_hint"
           ],
-          "object_id": "OBJ.STEMFILE.82a81025dc",
+          "object_id": "OBJ.31_backingvox5",
           "role_id": "ROLE.VOCAL.HARMONY",
-          "stem_id": "STEMFILE.82a81025dc"
+          "stem_id": "31_backingvox5"
         },
         {
           "azimuth_hint": 0.0,
@@ -379,9 +378,9 @@
             "group_bus: BUS.VOX",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.e29d76096f",
+          "object_id": "OBJ.32_leadvox",
           "role_id": "ROLE.VOCAL.LEAD",
-          "stem_id": "STEMFILE.e29d76096f",
+          "stem_id": "32_leadvox",
           "width_hint": 0.2
         }
       ],
@@ -396,11 +395,11 @@
           "mode": "manual_only"
         }
       },
-      "scene_id": "SCENE.BUS.17D83BB1AECB",
+      "scene_id": "SCENE.BUS.7E5071524CE4",
       "schema_version": "0.1.0",
       "source": {
         "created_from": "draft",
-        "stems_dir": "/SCENE/INTENT"
+        "stems_dir": "fixtures/stems_small/immersive_7_1_4_catalog"
       },
       "source_refs": {
         "bus_plan_ref": "fixtures/stems_small/immersive_7_1_4_catalog/bus_plan.json",
@@ -427,7 +426,7 @@
             "content_hint: ambience"
           ],
           "stem_ids": [
-            "STEMFILE.92e165dec4"
+            "06_drumsroom"
           ],
           "width_hint": 1.0
         },
@@ -447,7 +446,7 @@
             "content_hint: fx_bed"
           ],
           "stem_ids": [
-            "STEMFILE.646b83cbdf"
+            "43_sfx4"
           ],
           "width_hint": 0.75
         }
@@ -483,9 +482,9 @@
             "group_bus: BUS.BASS",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.0cac6ea4d2",
+          "object_id": "OBJ.20_bassdi",
           "role_id": "ROLE.BASS.DI",
-          "stem_id": "STEMFILE.0cac6ea4d2",
+          "stem_id": "20_bassdi",
           "width_hint": 0.2
         },
         {
@@ -514,9 +513,40 @@
             "group_bus: BUS.BASS",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.d723e2dd48",
+          "object_id": "OBJ.21_bassamp",
           "role_id": "ROLE.BASS.AMP",
-          "stem_id": "STEMFILE.d723e2dd48",
+          "stem_id": "21_bassamp",
+          "width_hint": 0.2
+        },
+        {
+          "azimuth_hint": 0.0,
+          "channel_count": 1,
+          "confidence": 0.8,
+          "depth_hint": 0.25,
+          "group_bus": "BUS.DRUMS",
+          "intent": {
+            "confidence": 0.8,
+            "depth": 0.25,
+            "locks": [],
+            "position": {
+              "azimuth_deg": 0.0
+            },
+            "width": 0.2
+          },
+          "label": "01_Kick",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.DRUM.KICK",
+            "group_bus: BUS.DRUMS",
+            "classification: close_miked_anchor_object"
+          ],
+          "object_id": "OBJ.01_kick",
+          "role_id": "ROLE.DRUM.KICK",
+          "stem_id": "01_kick",
           "width_hint": 0.2
         },
         {
@@ -545,67 +575,9 @@
             "group_bus: BUS.DRUMS",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.0360a1d0de",
+          "object_id": "OBJ.02_snareup",
           "role_id": "ROLE.DRUM.SNARE",
-          "stem_id": "STEMFILE.0360a1d0de",
-          "width_hint": 0.2
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.75,
-          "depth_hint": 0.3,
-          "group_bus": "BUS.DRUMS",
-          "intent": {
-            "confidence": 0.75,
-            "depth": 0.3,
-            "locks": [],
-            "width": 0.3
-          },
-          "label": "05_Overheads",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.DRUM.OVERHEADS",
-            "group_bus: BUS.DRUMS",
-            "classification: close_miked_drum_object"
-          ],
-          "object_id": "OBJ.STEMFILE.088e7caa1e",
-          "role_id": "ROLE.DRUM.OVERHEADS",
-          "stem_id": "STEMFILE.088e7caa1e",
-          "width_hint": 0.3
-        },
-        {
-          "azimuth_hint": 0.0,
-          "channel_count": 1,
-          "confidence": 0.8,
-          "depth_hint": 0.25,
-          "group_bus": "BUS.DRUMS",
-          "intent": {
-            "confidence": 0.8,
-            "depth": 0.25,
-            "locks": [],
-            "position": {
-              "azimuth_deg": 0.0
-            },
-            "width": 0.2
-          },
-          "label": "01_Kick",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.DRUM.KICK",
-            "group_bus: BUS.DRUMS",
-            "classification: close_miked_anchor_object"
-          ],
-          "object_id": "OBJ.STEMFILE.380625e2c1",
-          "role_id": "ROLE.DRUM.KICK",
-          "stem_id": "STEMFILE.380625e2c1",
+          "stem_id": "02_snareup",
           "width_hint": 0.2
         },
         {
@@ -634,9 +606,9 @@
             "group_bus: BUS.DRUMS",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.51662a0f7c",
+          "object_id": "OBJ.03_snaredown",
           "role_id": "ROLE.DRUM.SNARE",
-          "stem_id": "STEMFILE.51662a0f7c",
+          "stem_id": "03_snaredown",
           "width_hint": 0.2
         },
         {
@@ -661,9 +633,36 @@
             "group_bus: BUS.DRUMS",
             "classification: close_miked_drum_object"
           ],
-          "object_id": "OBJ.STEMFILE.6baa4e1bec",
+          "object_id": "OBJ.04_tom3",
           "role_id": "ROLE.DRUM.TOMS",
-          "stem_id": "STEMFILE.6baa4e1bec",
+          "stem_id": "04_tom3",
+          "width_hint": 0.3
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.75,
+          "depth_hint": 0.3,
+          "group_bus": "BUS.DRUMS",
+          "intent": {
+            "confidence": 0.75,
+            "depth": 0.3,
+            "locks": [],
+            "width": 0.3
+          },
+          "label": "05_Overheads",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.DRUM.OVERHEADS",
+            "group_bus: BUS.DRUMS",
+            "classification: close_miked_drum_object"
+          ],
+          "object_id": "OBJ.05_overheads",
+          "role_id": "ROLE.DRUM.OVERHEADS",
+          "stem_id": "05_overheads",
           "width_hint": 0.3
         },
         {
@@ -688,171 +687,10 @@
             "group_bus: BUS.MUSIC",
             "classification: close_instrument_object"
           ],
-          "object_id": "OBJ.STEMFILE.cba1d647d0",
+          "object_id": "OBJ.10_elecgtr7",
           "role_id": "ROLE.GTR.ELECTRIC",
-          "stem_id": "STEMFILE.cba1d647d0",
+          "stem_id": "10_elecgtr7",
           "width_hint": 0.3
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.2,
-          "group_bus": "BUS.OTHER",
-          "intent": {
-            "confidence": 0.2,
-            "locks": []
-          },
-          "label": "22_BassSynth",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.OTHER.UNKNOWN",
-            "group_bus: BUS.OTHER",
-            "classification: object_low_confidence_no_hint"
-          ],
-          "object_id": "OBJ.STEMFILE.23a21861cb",
-          "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.23a21861cb"
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.2,
-          "group_bus": "BUS.OTHER",
-          "intent": {
-            "confidence": 0.2,
-            "locks": []
-          },
-          "label": "32_SynthLead2",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.OTHER.UNKNOWN",
-            "group_bus: BUS.OTHER",
-            "classification: object_low_confidence_no_hint"
-          ],
-          "object_id": "OBJ.STEMFILE.57137145cf",
-          "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.57137145cf"
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.2,
-          "group_bus": "BUS.OTHER",
-          "intent": {
-            "confidence": 0.2,
-            "locks": []
-          },
-          "label": "30_SynthBells",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.OTHER.UNKNOWN",
-            "group_bus: BUS.OTHER",
-            "classification: object_low_confidence_no_hint"
-          ],
-          "object_id": "OBJ.STEMFILE.68dce3a805",
-          "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.68dce3a805"
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.2,
-          "group_bus": "BUS.OTHER",
-          "intent": {
-            "confidence": 0.2,
-            "locks": []
-          },
-          "label": "40_VocalSFX2",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.OTHER.UNKNOWN",
-            "group_bus: BUS.OTHER",
-            "classification: object_low_confidence_no_hint"
-          ],
-          "object_id": "OBJ.STEMFILE.6f245fdc9b",
-          "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.6f245fdc9b"
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.2,
-          "group_bus": "BUS.OTHER",
-          "intent": {
-            "confidence": 0.2,
-            "locks": []
-          },
-          "label": "12_ElecGtr8DTDI",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.OTHER.UNKNOWN",
-            "group_bus: BUS.OTHER",
-            "classification: object_low_confidence_no_hint"
-          ],
-          "object_id": "OBJ.STEMFILE.797e9aa85e",
-          "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.797e9aa85e"
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.2,
-          "group_bus": "BUS.OTHER",
-          "intent": {
-            "confidence": 0.2,
-            "locks": []
-          },
-          "label": "31_SynthFX3",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.OTHER.UNKNOWN",
-            "group_bus: BUS.OTHER",
-            "classification: object_low_confidence_no_hint"
-          ],
-          "object_id": "OBJ.STEMFILE.7f20da6cdf",
-          "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.7f20da6cdf"
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.2,
-          "group_bus": "BUS.OTHER",
-          "intent": {
-            "confidence": 0.2,
-            "locks": []
-          },
-          "label": "44_PianoSFX",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.OTHER.UNKNOWN",
-            "group_bus: BUS.OTHER",
-            "classification: object_low_confidence_no_hint"
-          ],
-          "object_id": "OBJ.STEMFILE.9d46229243",
-          "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.9d46229243"
         },
         {
           "channel_count": 1,
@@ -873,9 +711,193 @@
             "group_bus: BUS.OTHER",
             "classification: object_low_confidence_no_hint"
           ],
-          "object_id": "OBJ.STEMFILE.ed3837a954",
+          "object_id": "OBJ.11_elecgtr8di",
           "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.ed3837a954"
+          "stem_id": "11_elecgtr8di"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.2,
+          "group_bus": "BUS.OTHER",
+          "intent": {
+            "confidence": 0.2,
+            "locks": []
+          },
+          "label": "12_ElecGtr8DTDI",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.OTHER.UNKNOWN",
+            "group_bus: BUS.OTHER",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.12_elecgtr8dtdi",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "12_elecgtr8dtdi"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.2,
+          "group_bus": "BUS.OTHER",
+          "intent": {
+            "confidence": 0.2,
+            "locks": []
+          },
+          "label": "22_BassSynth",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.OTHER.UNKNOWN",
+            "group_bus: BUS.OTHER",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.22_basssynth",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "22_basssynth"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.2,
+          "group_bus": "BUS.OTHER",
+          "intent": {
+            "confidence": 0.2,
+            "locks": []
+          },
+          "label": "30_SynthBells",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.OTHER.UNKNOWN",
+            "group_bus: BUS.OTHER",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.30_synthbells",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "30_synthbells"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.2,
+          "group_bus": "BUS.OTHER",
+          "intent": {
+            "confidence": 0.2,
+            "locks": []
+          },
+          "label": "31_SynthFX3",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.OTHER.UNKNOWN",
+            "group_bus: BUS.OTHER",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.31_synthfx3",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "31_synthfx3"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.2,
+          "group_bus": "BUS.OTHER",
+          "intent": {
+            "confidence": 0.2,
+            "locks": []
+          },
+          "label": "32_SynthLead2",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.OTHER.UNKNOWN",
+            "group_bus: BUS.OTHER",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.32_synthlead2",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "32_synthlead2"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.2,
+          "group_bus": "BUS.OTHER",
+          "intent": {
+            "confidence": 0.2,
+            "locks": []
+          },
+          "label": "40_VocalSFX2",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.OTHER.UNKNOWN",
+            "group_bus: BUS.OTHER",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.40_vocalsfx2",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "40_vocalsfx2"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.2,
+          "group_bus": "BUS.OTHER",
+          "intent": {
+            "confidence": 0.2,
+            "locks": []
+          },
+          "label": "44_PianoSFX",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.OTHER.UNKNOWN",
+            "group_bus: BUS.OTHER",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.44_pianosfx",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "44_pianosfx"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.35,
+          "group_bus": "BUS.VOX",
+          "intent": {
+            "confidence": 0.35,
+            "locks": []
+          },
+          "label": "41_BackingVox6",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.VOCAL.HARMONY",
+            "group_bus: BUS.VOX",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.41_backingvox6",
+          "role_id": "ROLE.VOCAL.HARMONY",
+          "stem_id": "41_backingvox6"
         },
         {
           "azimuth_hint": 0.0,
@@ -903,33 +925,10 @@
             "group_bus: BUS.VOX",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.6f5833e0d6",
+          "object_id": "OBJ.42_leadvox",
           "role_id": "ROLE.VOCAL.LEAD",
-          "stem_id": "STEMFILE.6f5833e0d6",
+          "stem_id": "42_leadvox",
           "width_hint": 0.2
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.35,
-          "group_bus": "BUS.VOX",
-          "intent": {
-            "confidence": 0.35,
-            "locks": []
-          },
-          "label": "41_BackingVox6",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.VOCAL.HARMONY",
-            "group_bus: BUS.VOX",
-            "classification: object_low_confidence_no_hint"
-          ],
-          "object_id": "OBJ.STEMFILE.b656c9b4af",
-          "role_id": "ROLE.VOCAL.HARMONY",
-          "stem_id": "STEMFILE.b656c9b4af"
         }
       ],
       "rules": {
@@ -943,11 +942,11 @@
           "mode": "manual_only"
         }
       },
-      "scene_id": "SCENE.BUS.D5FE5EA04806",
+      "scene_id": "SCENE.BUS.950C736A69FA",
       "schema_version": "0.1.0",
       "source": {
         "created_from": "draft",
-        "stems_dir": "/SCENE/INTENT"
+        "stems_dir": "fixtures/stems_small/immersive_9_1_6_catalog"
       },
       "source_refs": {
         "bus_plan_ref": "fixtures/stems_small/immersive_9_1_6_catalog/bus_plan.json",
@@ -974,7 +973,7 @@
             "content_hint: fx_bed"
           ],
           "stem_ids": [
-            "STEMFILE.963582a009"
+            "41_sfx1"
           ],
           "width_hint": 0.75
         }
@@ -1010,40 +1009,9 @@
             "group_bus: BUS.BASS",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.3d3356e050",
+          "object_id": "OBJ.03_bassdi",
           "role_id": "ROLE.BASS.DI",
-          "stem_id": "STEMFILE.3d3356e050",
-          "width_hint": 0.2
-        },
-        {
-          "azimuth_hint": 0.0,
-          "channel_count": 1,
-          "confidence": 0.8,
-          "depth_hint": 0.25,
-          "group_bus": "BUS.DRUMS",
-          "intent": {
-            "confidence": 0.8,
-            "depth": 0.25,
-            "locks": [],
-            "position": {
-              "azimuth_deg": 0.0
-            },
-            "width": 0.2
-          },
-          "label": "02_SnareUp",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.DRUM.SNARE",
-            "group_bus: BUS.DRUMS",
-            "classification: close_miked_anchor_object"
-          ],
-          "object_id": "OBJ.STEMFILE.0360a1d0de",
-          "role_id": "ROLE.DRUM.SNARE",
-          "stem_id": "STEMFILE.0360a1d0de",
+          "stem_id": "03_bassdi",
           "width_hint": 0.2
         },
         {
@@ -1072,33 +1040,41 @@
             "group_bus: BUS.DRUMS",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.9611db9952",
+          "object_id": "OBJ.01_kickin",
           "role_id": "ROLE.DRUM.KICK",
-          "stem_id": "STEMFILE.9611db9952",
+          "stem_id": "01_kickin",
           "width_hint": 0.2
         },
         {
+          "azimuth_hint": 0.0,
           "channel_count": 1,
-          "confidence": 0.333,
-          "group_bus": "BUS.MUSIC",
+          "confidence": 0.8,
+          "depth_hint": 0.25,
+          "group_bus": "BUS.DRUMS",
           "intent": {
-            "confidence": 0.333,
-            "locks": []
+            "confidence": 0.8,
+            "depth": 0.25,
+            "locks": [],
+            "position": {
+              "azimuth_deg": 0.0
+            },
+            "width": 0.2
           },
-          "label": "30_Synth1",
+          "label": "02_SnareUp",
           "locks": {
             "azimuth_hint": false,
             "depth_hint": false,
             "width_hint": false
           },
           "notes": [
-            "role_id: ROLE.SYNTH.OTHER",
-            "group_bus: BUS.MUSIC",
-            "classification: object_low_confidence_no_hint"
+            "role_id: ROLE.DRUM.SNARE",
+            "group_bus: BUS.DRUMS",
+            "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.c22ffb12a1",
-          "role_id": "ROLE.SYNTH.OTHER",
-          "stem_id": "STEMFILE.c22ffb12a1"
+          "object_id": "OBJ.02_snareup",
+          "role_id": "ROLE.DRUM.SNARE",
+          "stem_id": "02_snareup",
+          "width_hint": 0.2
         },
         {
           "channel_count": 1,
@@ -1122,33 +1098,33 @@
             "group_bus: BUS.MUSIC",
             "classification: close_instrument_object"
           ],
-          "object_id": "OBJ.STEMFILE.df1cb4ee21",
+          "object_id": "OBJ.10_elecgtr1",
           "role_id": "ROLE.GTR.ELECTRIC",
-          "stem_id": "STEMFILE.df1cb4ee21",
+          "stem_id": "10_elecgtr1",
           "width_hint": 0.3
         },
         {
           "channel_count": 1,
-          "confidence": 0.2,
-          "group_bus": "BUS.OTHER",
+          "confidence": 0.333,
+          "group_bus": "BUS.MUSIC",
           "intent": {
-            "confidence": 0.2,
+            "confidence": 0.333,
             "locks": []
           },
-          "label": "31_SynthSFX1",
+          "label": "30_Synth1",
           "locks": {
             "azimuth_hint": false,
             "depth_hint": false,
             "width_hint": false
           },
           "notes": [
-            "role_id: ROLE.OTHER.UNKNOWN",
-            "group_bus: BUS.OTHER",
+            "role_id: ROLE.SYNTH.OTHER",
+            "group_bus: BUS.MUSIC",
             "classification: object_low_confidence_no_hint"
           ],
-          "object_id": "OBJ.STEMFILE.9c140a0dee",
-          "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.9c140a0dee"
+          "object_id": "OBJ.30_synth1",
+          "role_id": "ROLE.SYNTH.OTHER",
+          "stem_id": "30_synth1"
         },
         {
           "channel_count": 1,
@@ -1169,9 +1145,78 @@
             "group_bus: BUS.OTHER",
             "classification: object_low_confidence_no_hint"
           ],
-          "object_id": "OBJ.STEMFILE.bf572c7d3c",
+          "object_id": "OBJ.11_elecgtr2di",
           "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.bf572c7d3c"
+          "stem_id": "11_elecgtr2di"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.2,
+          "group_bus": "BUS.OTHER",
+          "intent": {
+            "confidence": 0.2,
+            "locks": []
+          },
+          "label": "31_SynthSFX1",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.OTHER.UNKNOWN",
+            "group_bus: BUS.OTHER",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.31_synthsfx1",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "31_synthsfx1"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.35,
+          "group_bus": "BUS.VOX",
+          "intent": {
+            "confidence": 0.35,
+            "locks": []
+          },
+          "label": "20_BackingVox1",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.VOCAL.HARMONY",
+            "group_bus: BUS.VOX",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.20_backingvox1",
+          "role_id": "ROLE.VOCAL.HARMONY",
+          "stem_id": "20_backingvox1"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.35,
+          "group_bus": "BUS.VOX",
+          "intent": {
+            "confidence": 0.35,
+            "locks": []
+          },
+          "label": "21_BackingVox2",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.VOCAL.HARMONY",
+            "group_bus: BUS.VOX",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.21_backingvox2",
+          "role_id": "ROLE.VOCAL.HARMONY",
+          "stem_id": "21_backingvox2"
         },
         {
           "azimuth_hint": 0.0,
@@ -1199,56 +1244,10 @@
             "group_bus: BUS.VOX",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.40d300689f",
+          "object_id": "OBJ.40_leadvox",
           "role_id": "ROLE.VOCAL.LEAD",
-          "stem_id": "STEMFILE.40d300689f",
+          "stem_id": "40_leadvox",
           "width_hint": 0.2
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.35,
-          "group_bus": "BUS.VOX",
-          "intent": {
-            "confidence": 0.35,
-            "locks": []
-          },
-          "label": "20_BackingVox1",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.VOCAL.HARMONY",
-            "group_bus: BUS.VOX",
-            "classification: object_low_confidence_no_hint"
-          ],
-          "object_id": "OBJ.STEMFILE.696255c043",
-          "role_id": "ROLE.VOCAL.HARMONY",
-          "stem_id": "STEMFILE.696255c043"
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.35,
-          "group_bus": "BUS.VOX",
-          "intent": {
-            "confidence": 0.35,
-            "locks": []
-          },
-          "label": "21_BackingVox2",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.VOCAL.HARMONY",
-            "group_bus: BUS.VOX",
-            "classification: object_low_confidence_no_hint"
-          ],
-          "object_id": "OBJ.STEMFILE.f47f058031",
-          "role_id": "ROLE.VOCAL.HARMONY",
-          "stem_id": "STEMFILE.f47f058031"
         }
       ],
       "rules": {
@@ -1262,11 +1261,11 @@
           "mode": "manual_only"
         }
       },
-      "scene_id": "SCENE.BUS.7E124B110DA1",
+      "scene_id": "SCENE.BUS.93A921B16681",
       "schema_version": "0.1.0",
       "source": {
         "created_from": "draft",
-        "stems_dir": "/SCENE/INTENT"
+        "stems_dir": "fixtures/stems_small/stereo_catalog"
       },
       "source_refs": {
         "bus_plan_ref": "fixtures/stems_small/stereo_catalog/bus_plan.json",
@@ -1293,7 +1292,7 @@
             "content_hint: ambience"
           ],
           "stem_ids": [
-            "STEMFILE.bbc8967097"
+            "10_drumsroom"
           ],
           "width_hint": 1.0
         },
@@ -1313,7 +1312,7 @@
             "content_hint: fx_bed"
           ],
           "stem_ids": [
-            "STEMFILE.5442acfcbb"
+            "31_sfx2"
           ],
           "width_hint": 0.75
         }
@@ -1349,67 +1348,9 @@
             "group_bus: BUS.BASS",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.bb76654ab4",
+          "object_id": "OBJ.11_bassamp",
           "role_id": "ROLE.BASS.AMP",
-          "stem_id": "STEMFILE.bb76654ab4",
-          "width_hint": 0.2
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.75,
-          "depth_hint": 0.3,
-          "group_bus": "BUS.DRUMS",
-          "intent": {
-            "confidence": 0.75,
-            "depth": 0.3,
-            "locks": [],
-            "width": 0.3
-          },
-          "label": "05_Overheads",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.DRUM.OVERHEADS",
-            "group_bus: BUS.DRUMS",
-            "classification: close_miked_drum_object"
-          ],
-          "object_id": "OBJ.STEMFILE.088e7caa1e",
-          "role_id": "ROLE.DRUM.OVERHEADS",
-          "stem_id": "STEMFILE.088e7caa1e",
-          "width_hint": 0.3
-        },
-        {
-          "azimuth_hint": 0.0,
-          "channel_count": 1,
-          "confidence": 0.8,
-          "depth_hint": 0.25,
-          "group_bus": "BUS.DRUMS",
-          "intent": {
-            "confidence": 0.8,
-            "depth": 0.25,
-            "locks": [],
-            "position": {
-              "azimuth_deg": 0.0
-            },
-            "width": 0.2
-          },
-          "label": "02_SnareDown",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.DRUM.SNARE",
-            "group_bus: BUS.DRUMS",
-            "classification: close_miked_anchor_object"
-          ],
-          "object_id": "OBJ.STEMFILE.2208c1167a",
-          "role_id": "ROLE.DRUM.SNARE",
-          "stem_id": "STEMFILE.2208c1167a",
+          "stem_id": "11_bassamp",
           "width_hint": 0.2
         },
         {
@@ -1438,37 +1379,41 @@
             "group_bus: BUS.DRUMS",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.42d0725602",
+          "object_id": "OBJ.01_kickout",
           "role_id": "ROLE.DRUM.KICK",
-          "stem_id": "STEMFILE.42d0725602",
+          "stem_id": "01_kickout",
           "width_hint": 0.2
         },
         {
+          "azimuth_hint": 0.0,
           "channel_count": 1,
-          "confidence": 0.75,
-          "depth_hint": 0.3,
+          "confidence": 0.8,
+          "depth_hint": 0.25,
           "group_bus": "BUS.DRUMS",
           "intent": {
-            "confidence": 0.75,
-            "depth": 0.3,
+            "confidence": 0.8,
+            "depth": 0.25,
             "locks": [],
-            "width": 0.3
+            "position": {
+              "azimuth_deg": 0.0
+            },
+            "width": 0.2
           },
-          "label": "04_Tom1",
+          "label": "02_SnareDown",
           "locks": {
             "azimuth_hint": false,
             "depth_hint": false,
             "width_hint": false
           },
           "notes": [
-            "role_id: ROLE.DRUM.TOMS",
+            "role_id: ROLE.DRUM.SNARE",
             "group_bus: BUS.DRUMS",
-            "classification: close_miked_drum_object"
+            "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.6cf91537c1",
-          "role_id": "ROLE.DRUM.TOMS",
-          "stem_id": "STEMFILE.6cf91537c1",
-          "width_hint": 0.3
+          "object_id": "OBJ.02_snaredown",
+          "role_id": "ROLE.DRUM.SNARE",
+          "stem_id": "02_snaredown",
+          "width_hint": 0.2
         },
         {
           "channel_count": 1,
@@ -1492,56 +1437,64 @@
             "group_bus: BUS.DRUMS",
             "classification: close_miked_drum_object"
           ],
-          "object_id": "OBJ.STEMFILE.ed50c20cc9",
+          "object_id": "OBJ.03_hihat",
           "role_id": "ROLE.DRUM.HIHAT",
-          "stem_id": "STEMFILE.ed50c20cc9",
+          "stem_id": "03_hihat",
           "width_hint": 0.3
         },
         {
           "channel_count": 1,
-          "confidence": 0.2,
-          "group_bus": "BUS.OTHER",
+          "confidence": 0.75,
+          "depth_hint": 0.3,
+          "group_bus": "BUS.DRUMS",
           "intent": {
-            "confidence": 0.2,
-            "locks": []
+            "confidence": 0.75,
+            "depth": 0.3,
+            "locks": [],
+            "width": 0.3
           },
-          "label": "30_SynthPad1",
+          "label": "04_Tom1",
           "locks": {
             "azimuth_hint": false,
             "depth_hint": false,
             "width_hint": false
           },
           "notes": [
-            "role_id: ROLE.OTHER.UNKNOWN",
-            "group_bus: BUS.OTHER",
-            "classification: object_low_confidence_no_hint"
+            "role_id: ROLE.DRUM.TOMS",
+            "group_bus: BUS.DRUMS",
+            "classification: close_miked_drum_object"
           ],
-          "object_id": "OBJ.STEMFILE.60f193a189",
-          "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.60f193a189"
+          "object_id": "OBJ.04_tom1",
+          "role_id": "ROLE.DRUM.TOMS",
+          "stem_id": "04_tom1",
+          "width_hint": 0.3
         },
         {
           "channel_count": 1,
-          "confidence": 0.2,
-          "group_bus": "BUS.OTHER",
+          "confidence": 0.75,
+          "depth_hint": 0.3,
+          "group_bus": "BUS.DRUMS",
           "intent": {
-            "confidence": 0.2,
-            "locks": []
+            "confidence": 0.75,
+            "depth": 0.3,
+            "locks": [],
+            "width": 0.3
           },
-          "label": "21_AcousticGtr2",
+          "label": "05_Overheads",
           "locks": {
             "azimuth_hint": false,
             "depth_hint": false,
             "width_hint": false
           },
           "notes": [
-            "role_id: ROLE.OTHER.UNKNOWN",
-            "group_bus: BUS.OTHER",
-            "classification: object_low_confidence_no_hint"
+            "role_id: ROLE.DRUM.OVERHEADS",
+            "group_bus: BUS.DRUMS",
+            "classification: close_miked_drum_object"
           ],
-          "object_id": "OBJ.STEMFILE.7defb06d63",
-          "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.7defb06d63"
+          "object_id": "OBJ.05_overheads",
+          "role_id": "ROLE.DRUM.OVERHEADS",
+          "stem_id": "05_overheads",
+          "width_hint": 0.3
         },
         {
           "channel_count": 1,
@@ -1562,9 +1515,78 @@
             "group_bus: BUS.OTHER",
             "classification: object_low_confidence_no_hint"
           ],
-          "object_id": "OBJ.STEMFILE.b4a1c6f6af",
+          "object_id": "OBJ.20_acousticgtr1",
           "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.b4a1c6f6af"
+          "stem_id": "20_acousticgtr1"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.2,
+          "group_bus": "BUS.OTHER",
+          "intent": {
+            "confidence": 0.2,
+            "locks": []
+          },
+          "label": "21_AcousticGtr2",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.OTHER.UNKNOWN",
+            "group_bus: BUS.OTHER",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.21_acousticgtr2",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "21_acousticgtr2"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.2,
+          "group_bus": "BUS.OTHER",
+          "intent": {
+            "confidence": 0.2,
+            "locks": []
+          },
+          "label": "30_SynthPad1",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.OTHER.UNKNOWN",
+            "group_bus: BUS.OTHER",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.30_synthpad1",
+          "role_id": "ROLE.OTHER.UNKNOWN",
+          "stem_id": "30_synthpad1"
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.35,
+          "group_bus": "BUS.VOX",
+          "intent": {
+            "confidence": 0.35,
+            "locks": []
+          },
+          "label": "40_BackingVox3",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.VOCAL.HARMONY",
+            "group_bus: BUS.VOX",
+            "classification: object_low_confidence_no_hint"
+          ],
+          "object_id": "OBJ.40_backingvox3",
+          "role_id": "ROLE.VOCAL.HARMONY",
+          "stem_id": "40_backingvox3"
         },
         {
           "azimuth_hint": 0.0,
@@ -1592,33 +1614,10 @@
             "group_bus: BUS.VOX",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.78156fe85f",
+          "object_id": "OBJ.41_leadvox",
           "role_id": "ROLE.VOCAL.LEAD",
-          "stem_id": "STEMFILE.78156fe85f",
+          "stem_id": "41_leadvox",
           "width_hint": 0.2
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.35,
-          "group_bus": "BUS.VOX",
-          "intent": {
-            "confidence": 0.35,
-            "locks": []
-          },
-          "label": "40_BackingVox3",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.VOCAL.HARMONY",
-            "group_bus: BUS.VOX",
-            "classification: object_low_confidence_no_hint"
-          ],
-          "object_id": "OBJ.STEMFILE.ec464973a9",
-          "role_id": "ROLE.VOCAL.HARMONY",
-          "stem_id": "STEMFILE.ec464973a9"
         }
       ],
       "rules": {
@@ -1632,11 +1631,11 @@
           "mode": "manual_only"
         }
       },
-      "scene_id": "SCENE.BUS.1424B3D3441F",
+      "scene_id": "SCENE.BUS.50C26E2775E5",
       "schema_version": "0.1.0",
       "source": {
         "created_from": "draft",
-        "stems_dir": "/SCENE/INTENT"
+        "stems_dir": "fixtures/stems_small/surround_5_1_catalog"
       },
       "source_refs": {
         "bus_plan_ref": "fixtures/stems_small/surround_5_1_catalog/bus_plan.json",
@@ -1678,37 +1677,10 @@
             "group_bus: BUS.BASS",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.f609b288e8",
+          "object_id": "OBJ.12_bassdi",
           "role_id": "ROLE.BASS.DI",
-          "stem_id": "STEMFILE.f609b288e8",
+          "stem_id": "12_bassdi",
           "width_hint": 0.2
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.75,
-          "depth_hint": 0.3,
-          "group_bus": "BUS.DRUMS",
-          "intent": {
-            "confidence": 0.75,
-            "depth": 0.3,
-            "locks": [],
-            "width": 0.3
-          },
-          "label": "03_Tom2",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.DRUM.TOMS",
-            "group_bus: BUS.DRUMS",
-            "classification: close_miked_drum_object"
-          ],
-          "object_id": "OBJ.STEMFILE.14402d74af",
-          "role_id": "ROLE.DRUM.TOMS",
-          "stem_id": "STEMFILE.14402d74af",
-          "width_hint": 0.3
         },
         {
           "azimuth_hint": 0.0,
@@ -1736,37 +1708,10 @@
             "group_bus: BUS.DRUMS",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.380625e2c1",
+          "object_id": "OBJ.01_kick",
           "role_id": "ROLE.DRUM.KICK",
-          "stem_id": "STEMFILE.380625e2c1",
+          "stem_id": "01_kick",
           "width_hint": 0.2
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.75,
-          "depth_hint": 0.3,
-          "group_bus": "BUS.DRUMS",
-          "intent": {
-            "confidence": 0.75,
-            "depth": 0.3,
-            "locks": [],
-            "width": 0.3
-          },
-          "label": "04_Percussion",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.DRUM.PERCUSSION",
-            "group_bus: BUS.DRUMS",
-            "classification: close_miked_drum_object"
-          ],
-          "object_id": "OBJ.STEMFILE.72062322a3",
-          "role_id": "ROLE.DRUM.PERCUSSION",
-          "stem_id": "STEMFILE.72062322a3",
-          "width_hint": 0.3
         },
         {
           "azimuth_hint": 0.0,
@@ -1794,10 +1739,64 @@
             "group_bus: BUS.DRUMS",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.9805cae54b",
+          "object_id": "OBJ.02_snaretop",
           "role_id": "ROLE.DRUM.SNARE",
-          "stem_id": "STEMFILE.9805cae54b",
+          "stem_id": "02_snaretop",
           "width_hint": 0.2
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.75,
+          "depth_hint": 0.3,
+          "group_bus": "BUS.DRUMS",
+          "intent": {
+            "confidence": 0.75,
+            "depth": 0.3,
+            "locks": [],
+            "width": 0.3
+          },
+          "label": "03_Tom2",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.DRUM.TOMS",
+            "group_bus: BUS.DRUMS",
+            "classification: close_miked_drum_object"
+          ],
+          "object_id": "OBJ.03_tom2",
+          "role_id": "ROLE.DRUM.TOMS",
+          "stem_id": "03_tom2",
+          "width_hint": 0.3
+        },
+        {
+          "channel_count": 1,
+          "confidence": 0.75,
+          "depth_hint": 0.3,
+          "group_bus": "BUS.DRUMS",
+          "intent": {
+            "confidence": 0.75,
+            "depth": 0.3,
+            "locks": [],
+            "width": 0.3
+          },
+          "label": "04_Percussion",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.DRUM.PERCUSSION",
+            "group_bus: BUS.DRUMS",
+            "classification: close_miked_drum_object"
+          ],
+          "object_id": "OBJ.04_percussion",
+          "role_id": "ROLE.DRUM.PERCUSSION",
+          "stem_id": "04_percussion",
+          "width_hint": 0.3
         },
         {
           "channel_count": 1,
@@ -1821,9 +1820,36 @@
             "group_bus: BUS.MUSIC",
             "classification: close_instrument_object"
           ],
-          "object_id": "OBJ.STEMFILE.5dd66e1fe4",
+          "object_id": "OBJ.10_elecgtr3",
           "role_id": "ROLE.GTR.ELECTRIC",
-          "stem_id": "STEMFILE.5dd66e1fe4",
+          "stem_id": "10_elecgtr3",
+          "width_hint": 0.3
+        },
+        {
+          "channel_count": 1,
+          "confidence": 1.0,
+          "depth_hint": 0.35,
+          "group_bus": "BUS.MUSIC",
+          "intent": {
+            "confidence": 1.0,
+            "depth": 0.35,
+            "locks": [],
+            "width": 0.3
+          },
+          "label": "11_ElecGtr4DT",
+          "locks": {
+            "azimuth_hint": false,
+            "depth_hint": false,
+            "width_hint": false
+          },
+          "notes": [
+            "role_id: ROLE.GTR.ELECTRIC",
+            "group_bus: BUS.MUSIC",
+            "classification: close_instrument_object"
+          ],
+          "object_id": "OBJ.11_elecgtr4dt",
+          "role_id": "ROLE.GTR.ELECTRIC",
+          "stem_id": "11_elecgtr4dt",
           "width_hint": 0.3
         },
         {
@@ -1848,9 +1874,9 @@
             "group_bus: BUS.MUSIC",
             "classification: close_instrument_object"
           ],
-          "object_id": "OBJ.STEMFILE.90145cb964",
+          "object_id": "OBJ.33_piano",
           "role_id": "ROLE.KEYS.PIANO",
-          "stem_id": "STEMFILE.90145cb964",
+          "stem_id": "33_piano",
           "width_hint": 0.3
         },
         {
@@ -1872,32 +1898,9 @@
             "group_bus: BUS.OTHER",
             "classification: object_low_confidence_no_hint"
           ],
-          "object_id": "OBJ.STEMFILE.0a6c1fae7c",
+          "object_id": "OBJ.20_syntharp1",
           "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.0a6c1fae7c"
-        },
-        {
-          "channel_count": 1,
-          "confidence": 0.2,
-          "group_bus": "BUS.OTHER",
-          "intent": {
-            "confidence": 0.2,
-            "locks": []
-          },
-          "label": "30_VocalSFX1",
-          "locks": {
-            "azimuth_hint": false,
-            "depth_hint": false,
-            "width_hint": false
-          },
-          "notes": [
-            "role_id: ROLE.OTHER.UNKNOWN",
-            "group_bus: BUS.OTHER",
-            "classification: object_low_confidence_no_hint"
-          ],
-          "object_id": "OBJ.STEMFILE.65f5dbd24f",
-          "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.65f5dbd24f"
+          "stem_id": "20_syntharp1"
         },
         {
           "channel_count": 1,
@@ -1918,9 +1921,9 @@
             "group_bus: BUS.OTHER",
             "classification: object_low_confidence_no_hint"
           ],
-          "object_id": "OBJ.STEMFILE.9331dc5309",
+          "object_id": "OBJ.21_synthlead1",
           "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.9331dc5309"
+          "stem_id": "21_synthlead1"
         },
         {
           "channel_count": 1,
@@ -1941,9 +1944,9 @@
             "group_bus: BUS.OTHER",
             "classification: object_low_confidence_no_hint"
           ],
-          "object_id": "OBJ.STEMFILE.c6241a8ea3",
+          "object_id": "OBJ.22_synthfx1",
           "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.c6241a8ea3"
+          "stem_id": "22_synthfx1"
         },
         {
           "channel_count": 1,
@@ -1953,7 +1956,7 @@
             "confidence": 0.2,
             "locks": []
           },
-          "label": "11_ElecGtr4DT",
+          "label": "30_VocalSFX1",
           "locks": {
             "azimuth_hint": false,
             "depth_hint": false,
@@ -1964,9 +1967,9 @@
             "group_bus: BUS.OTHER",
             "classification: object_low_confidence_no_hint"
           ],
-          "object_id": "OBJ.STEMFILE.eb9b14308b",
+          "object_id": "OBJ.30_vocalsfx1",
           "role_id": "ROLE.OTHER.UNKNOWN",
-          "stem_id": "STEMFILE.eb9b14308b"
+          "stem_id": "30_vocalsfx1"
         },
         {
           "channel_count": 1,
@@ -1987,9 +1990,9 @@
             "group_bus: BUS.VOX",
             "classification: object_low_confidence_no_hint"
           ],
-          "object_id": "OBJ.STEMFILE.14cd524813",
+          "object_id": "OBJ.31_backingvox4",
           "role_id": "ROLE.VOCAL.HARMONY",
-          "stem_id": "STEMFILE.14cd524813"
+          "stem_id": "31_backingvox4"
         },
         {
           "azimuth_hint": 0.0,
@@ -2017,9 +2020,9 @@
             "group_bus: BUS.VOX",
             "classification: close_miked_anchor_object"
           ],
-          "object_id": "OBJ.STEMFILE.e29d76096f",
+          "object_id": "OBJ.32_leadvox",
           "role_id": "ROLE.VOCAL.LEAD",
-          "stem_id": "STEMFILE.e29d76096f",
+          "stem_id": "32_leadvox",
           "width_hint": 0.2
         }
       ],
@@ -2034,11 +2037,11 @@
           "mode": "manual_only"
         }
       },
-      "scene_id": "SCENE.BUS.241016305FBD",
+      "scene_id": "SCENE.BUS.EF48B6EBF205",
       "schema_version": "0.1.0",
       "source": {
         "created_from": "draft",
-        "stems_dir": "/SCENE/INTENT"
+        "stems_dir": "fixtures/stems_small/surround_7_1_catalog"
       },
       "source_refs": {
         "bus_plan_ref": "fixtures/stems_small/surround_7_1_catalog/bus_plan.json",

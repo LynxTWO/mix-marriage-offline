@@ -225,7 +225,7 @@ def _known_source_stem_ids(
     for row in assignments:
         if not isinstance(row, dict):
             continue
-        stem_id = _coerce_str(row.get("file_id")).strip()
+        stem_id = _coerce_str(row.get("stem_id")).strip()
         if stem_id:
             known_ids.add(stem_id)
     return known_ids

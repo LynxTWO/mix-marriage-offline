@@ -517,8 +517,8 @@ def _group_counts(values: list[str]) -> dict[str, int]:
 def _detect_link_group_ids(files: list[dict[str, Any]]) -> dict[str, str]:
     buckets: dict[tuple[str, tuple[str, ...]], dict[str, list[str]]] = {}
     for file_entry in files:
-        file_id = file_entry.get("file_id")
-        if not isinstance(file_id, str):
+        stem_id = file_entry.get("stem_id")
+        if not isinstance(stem_id, str):
             continue
 
         set_id = file_entry.get("set_id") if isinstance(file_entry.get("set_id"), str) else ""
@@ -544,7 +544,7 @@ def _detect_link_group_ids(files: list[dict[str, Any]]) -> dict[str, str]:
         key = (set_id, base_tokens)
         if key not in buckets:
             buckets[key] = {"L": [], "R": []}
-        buckets[key][side].append(file_id)
+        buckets[key][side].append(stem_id)
 
     link_ids: dict[str, str] = {}
     for key in sorted(buckets.keys()):
@@ -556,8 +556,8 @@ def _detect_link_group_ids(files: list[dict[str, Any]]) -> dict[str, str]:
 
         digest = _sha1_token(f"{key[0]}|{'/'.join(key[1])}")
         link_group_id = f"LINK.{digest}"
-        for file_id in left_ids + right_ids:
-            link_ids[file_id] = link_group_id
+        for stem_id in left_ids + right_ids:
+            link_ids[stem_id] = link_group_id
     return link_ids
 
 
@@ -584,7 +584,7 @@ def classify_stems_with_evidence(
         file_rows,
         key=lambda item: (
             item.get("rel_path") if isinstance(item.get("rel_path"), str) else "",
-            item.get("file_id") if isinstance(item.get("file_id"), str) else "",
+            item.get("stem_id") if isinstance(item.get("stem_id"), str) else "",
         ),
     )
 
@@ -594,7 +594,13 @@ def classify_stems_with_evidence(
 
     for file_entry in file_rows:
         rel_path = file_entry.get("rel_path") if isinstance(file_entry.get("rel_path"), str) else ""
-        file_id = file_entry.get("file_id") if isinstance(file_entry.get("file_id"), str) else ""
+        stem_id = file_entry.get("stem_id") if isinstance(file_entry.get("stem_id"), str) else ""
+        explanation_key = stem_id or rel_path
+        source_file_id = (
+            file_entry.get("source_file_id")
+            if isinstance(file_entry.get("source_file_id"), str)
+            else None
+        )
 
         evidences = [
             _score_role(file_entry, rule=rule)
@@ -622,18 +628,20 @@ def classify_stems_with_evidence(
 
         assignments.append(
             {
-                "file_id": file_id,
+                "stem_id": stem_id,
+                "source_file_id": source_file_id,
                 "rel_path": rel_path,
                 "role_id": winner_role_id,
                 "confidence": confidence,
                 "bus_group": winner_bus_group,
                 "reasons": winner_reasons,
-                "link_group_id": link_group_ids.get(file_id),
+                "link_group_id": link_group_ids.get(stem_id),
             }
         )
 
-        explanations[file_id] = {
-            "file_id": file_id,
+        explanations[explanation_key] = {
+            "stem_id": stem_id,
+            "source_file_id": source_file_id,
             "rel_path": rel_path,
             "tokens": [
                 token
@@ -663,7 +671,7 @@ def classify_stems_with_evidence(
     assignments.sort(
         key=lambda item: (
             item["rel_path"],
-            item["file_id"],
+            item["stem_id"],
         )
     )
 

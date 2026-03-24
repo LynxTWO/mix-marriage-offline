@@ -7,6 +7,7 @@ import wave
 from pathlib import Path
 
 from mmo.cli import main
+from mmo.core.stem_identity import canonical_stem_id_from_rel_path
 
 
 def _write_wav(path: Path, *, channels: int = 1, rate: int = 44100,
@@ -46,15 +47,12 @@ def _make_stems_map(assignments: list[dict]) -> dict:
 
 
 def _make_assignment(rel_path: str, role_id: str, bus_group: str | None,
-                     file_id: str | None = None) -> dict:
+                     stem_id: str | None = None) -> dict:
     """Build a single assignment entry."""
-    if file_id is None:
-        import hashlib
-        file_id = "STEMFILE." + hashlib.sha1(
-            rel_path.encode("utf-8")
-        ).hexdigest()[:10]
+    if stem_id is None:
+        stem_id = canonical_stem_id_from_rel_path(rel_path)
     return {
-        "file_id": file_id,
+        "stem_id": stem_id,
         "rel_path": rel_path,
         "role_id": role_id,
         "confidence": 0.9,

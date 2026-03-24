@@ -21,7 +21,7 @@
         "content_hint: ambience"
       ],
       "stem_ids": [
-        "STEMFILE.45f7719569"
+        "ambience_stereo"
       ],
       "width_hint": 1.0
     },
@@ -41,7 +41,7 @@
         "content_hint: fx_bed"
       ],
       "stem_ids": [
-        "STEMFILE.601a3f1e69"
+        "sfx_stereo"
       ],
       "width_hint": 0.75
     },
@@ -61,7 +61,7 @@
         "content_hint: pad_texture"
       ],
       "stem_ids": [
-        "STEMFILE.fa768f1376"
+        "pad_stereo_wide"
       ],
       "width_hint": 0.85
     }
@@ -102,9 +102,9 @@
         "group_bus: BUS.BASS",
         "classification: close_miked_anchor_object"
       ],
-      "object_id": "OBJ.STEMFILE.6fca3c2371",
+      "object_id": "OBJ.bass_di",
       "role_id": "ROLE.BASS.DI",
-      "stem_id": "STEMFILE.6fca3c2371",
+      "stem_id": "bass_di",
       "width_hint": 0.2
     },
     {
@@ -133,9 +133,9 @@
         "group_bus: BUS.DRUMS",
         "classification: close_miked_anchor_object"
       ],
-      "object_id": "OBJ.STEMFILE.ed11e0d56b",
+      "object_id": "OBJ.kick",
       "role_id": "ROLE.DRUM.KICK",
-      "stem_id": "STEMFILE.ed11e0d56b",
+      "stem_id": "kick",
       "width_hint": 0.2
     }
   ],
@@ -150,16 +150,16 @@
       "mode": "manual_only"
     }
   },
-  "scene_id": "SCENE.BUS.B2D7A26AA7A6",
+  "scene_id": "SCENE.BUS.A6065820AFE9",
   "schema_version": "0.1.0",
   "source": {
     "created_from": "draft",
-    "stems_dir": "<FIXTURE_ROOT>"
+    "stems_dir": "../../../../fixtures/golden/golden_small_immersive"
   },
   "source_refs": {
     "bus_plan_ref": "bus_plan.json",
     "roles_ref": "ontology/roles.yaml",
-    "stems_index_ref": "<FIXTURE_ROOT>",
+    "stems_index_ref": "../../../../fixtures/golden/golden_small_immersive/stems_index.json",
     "stems_map_ref": "stems_map.json"
   }
 }

@@ -111,7 +111,7 @@
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^STEMFILE\\.[0-9a-f]{10}$"
+            "minLength": 1
           }
         }
       }
@@ -130,7 +130,7 @@
       "properties": {
         "stem_id": {
           "type": "string",
-          "pattern": "^STEMFILE\\.[0-9a-f]{10}$"
+          "minLength": 1
         },
         "file_path": {
           "type": "string",

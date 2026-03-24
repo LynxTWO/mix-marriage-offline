@@ -161,12 +161,12 @@ def _assignment_sort_key(item: dict[str, Any]) -> tuple[int, int, str, str]:
     track_index = item.get("track_index")
     has_track = isinstance(track_index, (int, float)) and not isinstance(track_index, bool)
     rel_path = item.get("rel_path") if isinstance(item.get("rel_path"), str) else ""
-    file_id = item.get("file_id") if isinstance(item.get("file_id"), str) else ""
+    stem_id = item.get("stem_id") if isinstance(item.get("stem_id"), str) else ""
     return (
         0 if has_track else 1,
         int(track_index) if has_track else 0,
         rel_path,
-        file_id,
+        stem_id,
     )
 
 
@@ -218,7 +218,7 @@ def build_bus_plan(stems_map: dict[str, Any], roles: dict[str, Any]) -> dict[str
     bus_ids_for_counts: list[str] = []
 
     for assignment in sorted_assignments:
-        stem_id = assignment.get("file_id") if isinstance(assignment.get("file_id"), str) else ""
+        stem_id = assignment.get("stem_id") if isinstance(assignment.get("stem_id"), str) else ""
         file_path = assignment.get("rel_path") if isinstance(assignment.get("rel_path"), str) else ""
         role_id = assignment.get("role_id") if isinstance(assignment.get("role_id"), str) else "ROLE.OTHER.UNKNOWN"
         confidence_raw = assignment.get("confidence")

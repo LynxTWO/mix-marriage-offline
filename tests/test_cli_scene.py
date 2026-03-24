@@ -343,9 +343,9 @@ class TestCliScene(unittest.TestCase):
             self.assertEqual(
                 [row.get("stem_id") for row in payload_a.get("objects", []) if isinstance(row, dict)],
                 [
-                    "STEMFILE.1111111111",
-                    "STEMFILE.5555555555",
-                    "STEMFILE.2222222222",
+                    "kick",
+                    "mystery",
+                    "leadvox",
                 ],
             )
             objects_by_stem = {
@@ -353,7 +353,7 @@ class TestCliScene(unittest.TestCase):
                 for row in payload_a.get("objects", [])
                 if isinstance(row, dict) and isinstance(row.get("stem_id"), str)
             }
-            uncertain = objects_by_stem.get("STEMFILE.5555555555")
+            uncertain = objects_by_stem.get("mystery")
             self.assertIsInstance(uncertain, dict)
             if isinstance(uncertain, dict):
                 self.assertNotIn("azimuth_hint", uncertain)
@@ -370,11 +370,11 @@ class TestCliScene(unittest.TestCase):
                 }
                 self.assertEqual(
                     by_bus_id["BUS.FX.REVERB"].get("stem_ids"),
-                    ["STEMFILE.3333333333"],
+                    ["hallverbreturn"],
                 )
                 self.assertEqual(
                     by_bus_id["BUS.MUSIC.SYNTH"].get("stem_ids"),
-                    ["STEMFILE.4444444444"],
+                    ["padwide"],
                 )
             self.assertEqual(
                 payload_a.get("source_refs", {}).get("stems_map_ref"),
@@ -457,7 +457,7 @@ class TestCliScene(unittest.TestCase):
                 "project/stems",
             )
 
-    def test_scene_cli_build_from_bus_plan_bridges_to_report_stem_ids(self) -> None:
+    def test_scene_cli_build_from_bus_plan_matches_report_session_stem_ids(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         fixture_root = repo_root / "tests" / "fixtures" / "scene_intent"
         stems_map_path = fixture_root / "tiny_stems_map.json"
@@ -473,8 +473,8 @@ class TestCliScene(unittest.TestCase):
                 report_path,
                 {
                     "schema_version": "0.1.0",
-                    "report_id": "REPORT.SCENE.BRIDGE.TEST",
-                    "project_id": "PROJECT.SCENE.BRIDGE.TEST",
+                    "report_id": "REPORT.SCENE.IDENTITY.TEST",
+                    "project_id": "PROJECT.SCENE.IDENTITY.TEST",
                     "generated_at": "2000-01-01T00:00:00Z",
                     "engine_version": "0.1.0",
                     "ontology_version": "0.1.0",
@@ -535,6 +535,26 @@ class TestCliScene(unittest.TestCase):
                     by_bus_id["BUS.MUSIC.SYNTH"].get("stem_ids"),
                     ["padwide"],
                 )
+
+            scene_stem_ids = {
+                row.get("stem_id")
+                for row in scene_payload.get("objects", [])
+                if isinstance(row, dict) and isinstance(row.get("stem_id"), str)
+            }
+            if isinstance(beds, list):
+                for row in beds:
+                    if isinstance(row, dict):
+                        for stem_id in row.get("stem_ids", []):
+                            if isinstance(stem_id, str):
+                                scene_stem_ids.add(stem_id)
+            report_stem_ids = {
+                row.get("stem_id")
+                for row in (
+                    report_path and json.loads(report_path.read_text(encoding="utf-8")).get("session", {}).get("stems", [])
+                )
+                if isinstance(row, dict) and isinstance(row.get("stem_id"), str)
+            }
+            self.assertTrue(scene_stem_ids.issubset(report_stem_ids))
 
     def test_scene_cli_build_from_stems_map_and_bus_plan_lints_cleanly(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -597,7 +617,7 @@ class TestCliScene(unittest.TestCase):
                     [
                         'version: "0.1.0"',
                         "overrides:",
-                        "  STEMFILE.5555555555:",
+                        "  mystery:",
                         '    role_id: "ROLE.DRUM.KICK"',
                         '    bus_id: "BUS.DRUMS.KICK"',
                         "    placement:",
@@ -644,7 +664,7 @@ class TestCliScene(unittest.TestCase):
                 for row in objects
                 if isinstance(row, dict) and isinstance(row.get("stem_id"), str)
             }
-            locked = by_stem["STEMFILE.5555555555"]
+            locked = by_stem["mystery"]
             self.assertEqual(locked.get("role_id"), "ROLE.DRUM.KICK")
             self.assertEqual(locked.get("bus_id"), "BUS.DRUMS.KICK")
             self.assertEqual(locked.get("group_bus"), "BUS.DRUMS")
@@ -677,7 +697,7 @@ class TestCliScene(unittest.TestCase):
             row = next(
                 item
                 for item in receipt_rows
-                if isinstance(item, dict) and item.get("stem_id") == "STEMFILE.5555555555"
+                if isinstance(item, dict) and item.get("stem_id") == "mystery"
             )
             self.assertEqual(row.get("role_source"), "locked")
             self.assertEqual(row.get("bus_source"), "locked")

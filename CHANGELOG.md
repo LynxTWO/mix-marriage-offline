@@ -66,6 +66,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   non-silent master above a meaningful duration floor, preserve uniform-rate
   44.1 kHz output in the smoke fixture, and keep manifest/receipt/QA summaries
   in agreement.
+- Stem discovery, classification, bus-plan generation, scene build, and
+  analysis session discovery now share one canonical stem-identity module:
+  `stem_id` is derived once from normalized relative source paths, duplicate
+  basenames get deterministic human-readable disambiguation, and hashed
+  `source_file_id` values remain metadata-only traceability fields instead of
+  the primary render join key.
 
 ### Fixed
 
@@ -100,11 +106,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   zero-decoded failure, silent-invalid failure, partial multi-layout success,
   and uniform-rate preservation so the installed-build render audit cannot
   regress back to “artifact exists” semantics unnoticed.
-- Bus-plan desktop scenes now bridge `STEMFILE.*` scene IDs back to analyzed
-  report/session stem IDs by shared relative-path evidence, so packaged scene
-  build, explicit `safe-render`, and smoke workflows no longer fail with
-  `RENDER_RESULT.NO_DECODABLE_STEMS` when the scene and report describe the
-  same files under different stem ID schemes.
+- Scene build, bus-plan fixtures, golden snapshots, and the desktop/safe-render
+  explicit scene path now use those canonical stem IDs directly, eliminating
+  `STEMFILE.*` as the primary scene/render join key for new artifacts.
 
 ## [1.0.0] — 2026-03-17
 

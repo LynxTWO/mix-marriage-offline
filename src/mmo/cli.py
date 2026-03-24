@@ -419,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
     stems_explain_parser.add_argument(
         "--file",
         required=True,
-        help="Stem rel_path or file_id to explain.",
+        help="Stem rel_path or stem_id to explain.",
     )
     stems_explain_parser.add_argument(
         "--role-lexicon",

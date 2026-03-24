@@ -103,7 +103,8 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "file_id",
+        "stem_id",
+        "source_file_id",
         "set_id",
         "rel_path",
         "basename",
@@ -112,9 +113,13 @@
         "folder_tokens"
       ],
       "properties": {
-        "file_id": {
+        "stem_id": {
           "type": "string",
-          "pattern": "^STEMFILE\\.[0-9a-f]{10}$"
+          "minLength": 1
+        },
+        "source_file_id": {
+          "type": "string",
+          "pattern": "^SOURCEFILE\\.[0-9a-f]{10}$"
         },
         "set_id": {
           "type": "string",

@@ -1601,11 +1601,12 @@ def _stems_summary_assignments_preview(
 
     rows: list[dict[str, Any]] = []
     for item in _iter_dict_list(stems_map_payload.get("assignments")):
-        file_id = _coerce_str(item.get("file_id")).strip()
+        stem_id = _coerce_str(item.get("stem_id")).strip()
+        source_file_id = _coerce_str(item.get("source_file_id")).strip()
         rel_path = _coerce_str(item.get("rel_path")).strip()
         role_id = _coerce_str(item.get("role_id")).strip()
         confidence = _numeric_value(item.get("confidence"))
-        if not file_id or not rel_path or not role_id or confidence is None:
+        if not stem_id or not rel_path or not role_id or confidence is None:
             continue
 
         reasons = [
@@ -1628,22 +1629,23 @@ def _stems_summary_assignments_preview(
             if isinstance(bus_group_value, str) and bus_group_value
             else None
         )
-        rows.append(
-            {
-                "file_id": file_id,
-                "rel_path": rel_path,
-                "role_id": role_id,
-                "confidence": confidence,
-                "bus_group": bus_group,
-                "reasons": reasons,
-                "link_group_id": link_group_id,
-            }
-        )
+        row = {
+            "stem_id": stem_id,
+            "rel_path": rel_path,
+            "role_id": role_id,
+            "confidence": confidence,
+            "bus_group": bus_group,
+            "reasons": reasons,
+            "link_group_id": link_group_id,
+        }
+        if source_file_id:
+            row["source_file_id"] = source_file_id
+        rows.append(row)
 
     rows.sort(
         key=lambda item: (
             _coerce_str(item.get("rel_path")).strip(),
-            _coerce_str(item.get("file_id")).strip(),
+            _coerce_str(item.get("stem_id")).strip(),
         )
     )
     return rows[: max(limit, 0)]

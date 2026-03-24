@@ -3,7 +3,12 @@
   "targets": {
     "LAYOUT.2_0": {
       "downmix_similarity": null,
-      "qa_issues": []
+      "qa_issues": [
+        {
+          "issue_id": "ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE",
+          "severity": "error"
+        }
+      ]
     }
   }
 }

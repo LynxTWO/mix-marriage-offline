@@ -6,7 +6,7 @@
       "confidence": 0.5,
       "file_path": "stems/bass_di.wav",
       "role_id": "ROLE.BASS.DI",
-      "stem_id": "STEMFILE.6fca3c2371"
+      "stem_id": "bass_di"
     },
     {
       "bus_id": "BUS.DRUMS.KICK",
@@ -14,7 +14,7 @@
       "confidence": 0.75,
       "file_path": "stems/kick.wav",
       "role_id": "ROLE.DRUM.KICK",
-      "stem_id": "STEMFILE.ed11e0d56b"
+      "stem_id": "kick"
     },
     {
       "bus_id": "BUS.MUSIC.SYNTH",
@@ -22,7 +22,7 @@
       "confidence": 0.333,
       "file_path": "stems/pad_stereo_wide.wav",
       "role_id": "ROLE.SYNTH.PAD",
-      "stem_id": "STEMFILE.fa768f1376"
+      "stem_id": "pad_stereo_wide"
     },
     {
       "bus_id": "BUS.DRUMS.ROOM",
@@ -30,7 +30,7 @@
       "confidence": 0.333,
       "file_path": "stems/room_stereo.wav",
       "role_id": "ROLE.DRUM.ROOM",
-      "stem_id": "STEMFILE.b91cd41477"
+      "stem_id": "room_stereo"
     },
     {
       "bus_id": "BUS.FX.SFX",
@@ -38,7 +38,7 @@
       "confidence": 0.333,
       "file_path": "stems/sfx_stereo.wav",
       "role_id": "ROLE.SFX.HARD",
-      "stem_id": "STEMFILE.601a3f1e69"
+      "stem_id": "sfx_stereo"
     }
   ],
   "buses": [
@@ -48,7 +48,7 @@
       "label": "Bass",
       "parent_id": "BUS.MASTER",
       "stem_ids": [
-        "STEMFILE.6fca3c2371"
+        "bass_di"
       ]
     },
     {
@@ -60,8 +60,8 @@
       "label": "Drums",
       "parent_id": "BUS.MASTER",
       "stem_ids": [
-        "STEMFILE.ed11e0d56b",
-        "STEMFILE.b91cd41477"
+        "kick",
+        "room_stereo"
       ]
     },
     {
@@ -70,7 +70,7 @@
       "label": "Drums Kick",
       "parent_id": "BUS.DRUMS",
       "stem_ids": [
-        "STEMFILE.ed11e0d56b"
+        "kick"
       ]
     },
     {
@@ -79,7 +79,7 @@
       "label": "Drums Room",
       "parent_id": "BUS.DRUMS",
       "stem_ids": [
-        "STEMFILE.b91cd41477"
+        "room_stereo"
       ]
     },
     {
@@ -90,7 +90,7 @@
       "label": "Fx",
       "parent_id": "BUS.MASTER",
       "stem_ids": [
-        "STEMFILE.601a3f1e69"
+        "sfx_stereo"
       ]
     },
     {
@@ -99,7 +99,7 @@
       "label": "Fx Sfx",
       "parent_id": "BUS.FX",
       "stem_ids": [
-        "STEMFILE.601a3f1e69"
+        "sfx_stereo"
       ]
     },
     {
@@ -113,11 +113,11 @@
       "label": "Master",
       "parent_id": null,
       "stem_ids": [
-        "STEMFILE.6fca3c2371",
-        "STEMFILE.ed11e0d56b",
-        "STEMFILE.fa768f1376",
-        "STEMFILE.b91cd41477",
-        "STEMFILE.601a3f1e69"
+        "bass_di",
+        "kick",
+        "pad_stereo_wide",
+        "room_stereo",
+        "sfx_stereo"
       ]
     },
     {
@@ -128,7 +128,7 @@
       "label": "Music",
       "parent_id": "BUS.MASTER",
       "stem_ids": [
-        "STEMFILE.fa768f1376"
+        "pad_stereo_wide"
       ]
     },
     {
@@ -137,7 +137,7 @@
       "label": "Music Synth",
       "parent_id": "BUS.MUSIC",
       "stem_ids": [
-        "STEMFILE.fa768f1376"
+        "pad_stereo_wide"
       ]
     }
   ],

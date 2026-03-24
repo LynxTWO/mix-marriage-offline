@@ -168,7 +168,7 @@ def render_audition_pack(
     for gid in sorted_group_ids:
         groups[gid] = sorted(
             groups[gid],
-            key=lambda a: (a.get("rel_path", ""), a.get("file_id", "")),
+            key=lambda a: (a.get("rel_path", ""), a.get("stem_id", "")),
         )
 
     manifest_groups: list[dict[str, Any]] = []

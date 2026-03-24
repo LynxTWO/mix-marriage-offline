@@ -47,11 +47,6 @@ from mmo.core.routing import (
 )
 from mmo.core.run_config import normalize_run_config
 from mmo.core.source_locator import resolve_session_stems
-from mmo.core.stem_id_bridge import (
-    rewrite_scene_build_locks_stem_ids,
-    rewrite_scene_stem_ids,
-    scene_stem_id_aliases_from_stems_map,
-)
 from mmo.core.target_tokens import resolve_target_token
 
 from mmo.cli_commands._helpers import (
@@ -2047,65 +2042,6 @@ def _scene_referenced_role_ids(scene: dict[str, Any]) -> set[str]:
     }
 
 
-def _resolve_scene_stems_map_path(
-    *,
-    scene_payload: dict[str, Any],
-    scene_path: Path,
-) -> Path | None:
-    source_refs = scene_payload.get("source_refs")
-    if not isinstance(source_refs, dict):
-        return None
-    stems_map_ref = _coerce_str(source_refs.get("stems_map_ref")).strip()
-    if not stems_map_ref:
-        return None
-    resolved_path = resolve_posix_ref(
-        stems_map_ref,
-        anchor_dir=scene_path.resolve().parent,
-    )
-    if not resolved_path.is_file():
-        return None
-    return resolved_path
-
-
-def _reconcile_scene_stem_ids_with_report(
-    *,
-    report: dict[str, Any],
-    scene_payload: dict[str, Any] | None,
-    scene_path: Path | None,
-    locks_payload: dict[str, Any] | None,
-) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    if scene_path is None or not isinstance(scene_payload, dict):
-        return scene_payload, locks_payload
-
-    stems_map_path = _resolve_scene_stems_map_path(
-        scene_payload=scene_payload,
-        scene_path=scene_path,
-    )
-    if stems_map_path is None:
-        return scene_payload, locks_payload
-
-    try:
-        stems_map_payload = _load_json_object(stems_map_path, label="Stems map")
-    except ValueError:
-        return scene_payload, locks_payload
-
-    stem_id_aliases = scene_stem_id_aliases_from_stems_map(
-        stems_map=stems_map_payload,
-        report=report,
-    )
-    if not stem_id_aliases:
-        return scene_payload, locks_payload
-
-    rewritten_scene = rewrite_scene_stem_ids(scene_payload, stem_id_aliases)
-    rewritten_locks = locks_payload
-    if isinstance(locks_payload, dict):
-        rewritten_locks = rewrite_scene_build_locks_stem_ids(
-            locks_payload,
-            stem_id_aliases,
-        )
-    return rewritten_scene, rewritten_locks
-
-
 def _augment_preflight_scene(
     *,
     scene_payload: dict[str, Any],
@@ -2189,13 +2125,6 @@ def _prepare_safe_render_scene_inputs(
     if scene_locks_path is not None:
         locks_payload = load_scene_build_locks(scene_locks_path)
         scene_locks_source_path = scene_locks_path.resolve().as_posix()
-
-    scene_payload, locks_payload = _reconcile_scene_stem_ids_with_report(
-        report=report,
-        scene_payload=scene_payload,
-        scene_path=scene_path,
-        locks_payload=locks_payload,
-    )
 
     if scene_path is not None and scene_payload is not None:
         lint_payload = build_scene_lint_payload(

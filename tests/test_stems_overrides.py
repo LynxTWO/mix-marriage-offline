@@ -16,7 +16,7 @@ def _sample_stems_map() -> dict:
         "roles_ref": "ontology/roles.yaml",
         "assignments": [
             {
-                "file_id": "STEMFILE.aaaaaaaaaa",
+                "stem_id": "vox_lead",
                 "rel_path": "stems/vox_lead.wav",
                 "role_id": "ROLE.OTHER.UNKNOWN",
                 "confidence": 0.1,
@@ -29,7 +29,7 @@ def _sample_stems_map() -> dict:
                 "link_group_id": None,
             },
             {
-                "file_id": "STEMFILE.bbbbbbbbbb",
+                "stem_id": "kick",
                 "rel_path": "stems/kick.wav",
                 "role_id": "ROLE.DRUM.KICK",
                 "confidence": 0.9,

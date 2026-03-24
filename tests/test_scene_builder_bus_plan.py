@@ -73,27 +73,27 @@ class TestSceneBuilderFromBusPlan(unittest.TestCase):
         self.assertEqual(
             [row.get("stem_id") for row in objects if isinstance(row, dict)],
             [
-                "STEMFILE.1111111111",
-                "STEMFILE.5555555555",
-                "STEMFILE.2222222222",
+                "kick",
+                "mystery",
+                "leadvox",
             ],
         )
         by_stem = {row["stem_id"]: row for row in objects if isinstance(row, dict)}
 
-        self.assertIn("STEMFILE.1111111111", by_stem)
-        self.assertIn("STEMFILE.2222222222", by_stem)
-        self.assertIn("STEMFILE.5555555555", by_stem)
-        self.assertNotIn("STEMFILE.3333333333", by_stem)
-        self.assertNotIn("STEMFILE.4444444444", by_stem)
+        self.assertIn("kick", by_stem)
+        self.assertIn("leadvox", by_stem)
+        self.assertIn("mystery", by_stem)
+        self.assertNotIn("hallverbreturn", by_stem)
+        self.assertNotIn("padwide", by_stem)
 
-        uncertain = by_stem["STEMFILE.5555555555"]
+        uncertain = by_stem["mystery"]
         self.assertLessEqual(uncertain["confidence"], 0.35)
         self.assertNotIn("azimuth_hint", uncertain)
         self.assertNotIn("width_hint", uncertain)
         self.assertNotIn("depth_hint", uncertain)
 
-        self.assertEqual(by_stem["STEMFILE.1111111111"].get("azimuth_hint"), 0.0)
-        self.assertEqual(by_stem["STEMFILE.2222222222"].get("azimuth_hint"), 0.0)
+        self.assertEqual(by_stem["kick"].get("azimuth_hint"), 0.0)
+        self.assertEqual(by_stem["leadvox"].get("azimuth_hint"), 0.0)
 
         beds = scene.get("beds")
         self.assertIsInstance(beds, list)
@@ -113,11 +113,11 @@ class TestSceneBuilderFromBusPlan(unittest.TestCase):
         self.assertIn("BUS.MUSIC.SYNTH", bed_bus_ids)
         self.assertEqual(
             by_bus_id["BUS.FX.REVERB"].get("stem_ids"),
-            ["STEMFILE.3333333333"],
+            ["hallverbreturn"],
         )
         self.assertEqual(
             by_bus_id["BUS.MUSIC.SYNTH"].get("stem_ids"),
-            ["STEMFILE.4444444444"],
+            ["padwide"],
         )
 
         rules = scene.get("rules")

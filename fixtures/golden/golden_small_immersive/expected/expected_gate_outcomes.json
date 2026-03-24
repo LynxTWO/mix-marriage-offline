@@ -36,6 +36,26 @@
       },
       "qa_issues": [
         {
+          "issue_id": "ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE",
+          "severity": "error"
+        },
+        {
+          "issue_id": "ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE",
+          "severity": "error"
+        },
+        {
+          "issue_id": "ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE",
+          "severity": "error"
+        },
+        {
+          "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
+          "severity": "error"
+        },
+        {
+          "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
+          "severity": "error"
+        },
+        {
           "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
           "severity": "error"
         },
@@ -79,6 +99,26 @@
         "safety_collapse_applied": false
       },
       "qa_issues": [
+        {
+          "issue_id": "ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE",
+          "severity": "error"
+        },
+        {
+          "issue_id": "ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE",
+          "severity": "error"
+        },
+        {
+          "issue_id": "ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE",
+          "severity": "error"
+        },
+        {
+          "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
+          "severity": "error"
+        },
+        {
+          "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
+          "severity": "error"
+        },
         {
           "issue_id": "ISSUE.DOWNMIX.QA.SIMILARITY_GATE_FAILED",
           "severity": "error"
