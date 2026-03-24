@@ -27,6 +27,7 @@ from unittest import mock
 import jsonschema
 
 from mmo.cli import main
+from mmo.cli_commands._renderers import _prepare_safe_render_scene_inputs
 from mmo.dsp.meters import iter_wav_float64_samples
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -1532,6 +1533,137 @@ class TestSafeRenderBaselineMixdown(unittest.TestCase):
 
 
 class TestSafeRenderExplicitScene(unittest.TestCase):
+    def test_explicit_scene_inputs_bridge_stemfile_ids_from_stems_map(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            report = _make_baseline_fixture_report()
+            report_path = temp / "report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            scene_payload = json.loads(_SAFE_RENDER_EXPLICIT_SCENE_FIXTURE.read_text(encoding="utf-8"))
+            source = scene_payload.get("source")
+            if isinstance(source, dict):
+                source["stems_dir"] = _BASELINE_STEMS_DIR.resolve().as_posix()
+            scene_payload["source_refs"] = {"stems_map_ref": "stems_map.json"}
+
+            stem_aliases = {
+                "kick_mono": "STEMFILE.KICK_MONO",
+                "vox_mono": "STEMFILE.VOX_MONO",
+                "music_stereo": "STEMFILE.MUSIC_STEREO",
+            }
+            for row in scene_payload.get("objects", []):
+                if not isinstance(row, dict):
+                    continue
+                stem_id = row.get("stem_id")
+                if not isinstance(stem_id, str) or stem_id not in stem_aliases:
+                    continue
+                row["stem_id"] = stem_aliases[stem_id]
+                row["object_id"] = f"OBJ.{stem_aliases[stem_id]}"
+            for row in scene_payload.get("beds", []):
+                if not isinstance(row, dict):
+                    continue
+                stem_ids = row.get("stem_ids")
+                if not isinstance(stem_ids, list):
+                    continue
+                row["stem_ids"] = [
+                    stem_aliases.get(stem_id, stem_id)
+                    for stem_id in stem_ids
+                    if isinstance(stem_id, str)
+                ]
+
+            scene_path = temp / "scene.json"
+            scene_path.write_text(
+                json.dumps(scene_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            stems_map_path = temp / "stems_map.json"
+            stems_map_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "0.1.0",
+                        "assignments": [
+                            {"file_id": "STEMFILE.KICK_MONO", "rel_path": "kick_mono.wav"},
+                            {"file_id": "STEMFILE.VOX_MONO", "rel_path": "vox_mono.wav"},
+                            {"file_id": "STEMFILE.MUSIC_STEREO", "rel_path": "music_stereo.wav"},
+                        ],
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            scene_locks_path = temp / "scene_locks.yaml"
+            scene_locks_path.write_text(
+                "\n".join(
+                    [
+                        'version: "0.1.0"',
+                        "overrides:",
+                        '  STEMFILE.VOX_MONO:',
+                        '    role_id: "ROLE.VOCAL.LEAD"',
+                        '    bus_id: "BUS.VOX.LEAD"',
+                        "    placement:",
+                        "      azimuth_deg: 0.0",
+                        "      width: 0.1",
+                        "      depth: 0.2",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            (
+                prepared_scene,
+                prepared_locks,
+                scene_mode,
+                scene_source_path,
+                scene_locks_source_path,
+            ) = _prepare_safe_render_scene_inputs(
+                report=report,
+                session_payload=report["session"],
+                scene_path=scene_path,
+                scene_locks_path=scene_locks_path,
+                scene_strict=True,
+            )
+
+            self.assertEqual(scene_mode, "explicit")
+            self.assertEqual(scene_source_path, scene_path.resolve().as_posix())
+            self.assertEqual(scene_locks_source_path, scene_locks_path.resolve().as_posix())
+            self.assertIsInstance(prepared_scene, dict)
+            self.assertIsInstance(prepared_locks, dict)
+            if not isinstance(prepared_scene, dict) or not isinstance(prepared_locks, dict):
+                return
+
+            self.assertEqual(
+                [row.get("stem_id") for row in prepared_scene.get("objects", []) if isinstance(row, dict)],
+                ["kick_mono", "vox_mono"],
+            )
+            beds = prepared_scene.get("beds")
+            self.assertIsInstance(beds, list)
+            if isinstance(beds, list):
+                by_bus_id = {
+                    row.get("bus_id"): row
+                    for row in beds
+                    if isinstance(row, dict) and isinstance(row.get("bus_id"), str)
+                }
+                self.assertEqual(
+                    by_bus_id["BUS.MUSIC"].get("stem_ids"),
+                    ["music_stereo"],
+                )
+            self.assertEqual(
+                sorted(prepared_locks.get("overrides", {}).keys()),
+                ["vox_mono"],
+            )
+            self.assertEqual(
+                prepared_locks.get("overrides", {}).get("vox_mono", {}).get("bus_id"),
+                "BUS.VOX.LEAD",
+            )
+
     def test_full_render_from_explicit_scene_records_sources_and_writes_outputs(self) -> None:
         schema = json.loads(
             (_SCHEMAS_DIR / "safe_render_receipt.schema.json").read_text(encoding="utf-8")

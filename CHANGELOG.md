@@ -100,6 +100,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   zero-decoded failure, silent-invalid failure, partial multi-layout success,
   and uniform-rate preservation so the installed-build render audit cannot
   regress back to “artifact exists” semantics unnoticed.
+- Bus-plan desktop scenes now bridge `STEMFILE.*` scene IDs back to analyzed
+  report/session stem IDs by shared relative-path evidence, so packaged scene
+  build, explicit `safe-render`, and smoke workflows no longer fail with
+  `RENDER_RESULT.NO_DECODABLE_STEMS` when the scene and report describe the
+  same files under different stem ID schemes.
 
 ## [1.0.0] — 2026-03-17
 

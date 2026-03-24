@@ -46,6 +46,11 @@ from mmo.core.scene_templates import (
     preview_scene_templates,
 )
 from mmo.core.scene_builder import build_scene_from_bus_plan
+from mmo.core.stem_id_bridge import (
+    rewrite_scene_build_locks_stem_ids,
+    rewrite_scene_stem_ids,
+    scene_stem_id_aliases_from_stems_map,
+)
 from mmo.core.variants import run_variant_plan
 
 __all__ = [
@@ -185,6 +190,52 @@ def _render_scene_text(scene: dict[str, Any]) -> str:
     lines.append(f"objects: {object_count}")
     lines.append(f"beds: {bed_count}")
     return "\n".join(lines)
+
+
+def _scene_build_report_bridge_path(
+    *,
+    stems_map_path: Path,
+    bus_plan_path: Path,
+    out_path: Path,
+) -> Path | None:
+    candidates = (
+        out_path.resolve().parent / "report.json",
+        stems_map_path.resolve().parent / "report.json",
+        bus_plan_path.resolve().parent / "report.json",
+    )
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if resolved.is_file():
+            return resolved
+    return None
+
+
+def _scene_build_report_bridge_aliases(
+    *,
+    stems_map_payload: dict[str, Any],
+    stems_map_path: Path,
+    bus_plan_path: Path,
+    out_path: Path,
+) -> dict[str, str]:
+    report_bridge_path = _scene_build_report_bridge_path(
+        stems_map_path=stems_map_path,
+        bus_plan_path=bus_plan_path,
+        out_path=out_path,
+    )
+    if report_bridge_path is None:
+        return {}
+    try:
+        report_payload = _load_json_object(report_bridge_path, label="Report")
+    except ValueError:
+        return {}
+    return scene_stem_id_aliases_from_stems_map(
+        stems_map=stems_map_payload,
+        report=report_payload,
+    )
 
 
 def _render_render_plan_text(render_plan: dict[str, Any]) -> str:
@@ -352,7 +403,23 @@ def _run_scene_build_from_bus_plan_command(
         stems_map_ref=portable_stems_map_ref,
         bus_plan_ref=portable_bus_plan_ref,
     )
+    stem_id_aliases = _scene_build_report_bridge_aliases(
+        stems_map_payload=portable_stems_map_payload,
+        stems_map_path=stems_map_path,
+        bus_plan_path=bus_plan_path,
+        out_path=out_path,
+    )
+    if stem_id_aliases:
+        base_scene_payload = rewrite_scene_stem_ids(
+            base_scene_payload,
+            stem_id_aliases,
+        )
     locks_payload = load_scene_build_locks(locks_path) if isinstance(locks_path, Path) else None
+    if isinstance(locks_payload, dict) and stem_id_aliases:
+        locks_payload = rewrite_scene_build_locks_stem_ids(
+            locks_payload,
+            stem_id_aliases,
+        )
     scene_payload = base_scene_payload
     if isinstance(locks_payload, dict):
         scene_payload = apply_precedence(

@@ -457,6 +457,85 @@ class TestCliScene(unittest.TestCase):
                 "project/stems",
             )
 
+    def test_scene_cli_build_from_bus_plan_bridges_to_report_stem_ids(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        fixture_root = repo_root / "tests" / "fixtures" / "scene_intent"
+        stems_map_path = fixture_root / "tiny_stems_map.json"
+        bus_plan_path = fixture_root / "tiny_bus_plan.json"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace_dir = Path(temp_dir) / "workspace"
+            workspace_dir.mkdir(parents=True, exist_ok=True)
+            report_path = workspace_dir / "report.json"
+            scene_path = workspace_dir / "scene.json"
+
+            _write_json(
+                report_path,
+                {
+                    "schema_version": "0.1.0",
+                    "report_id": "REPORT.SCENE.BRIDGE.TEST",
+                    "project_id": "PROJECT.SCENE.BRIDGE.TEST",
+                    "generated_at": "2000-01-01T00:00:00Z",
+                    "engine_version": "0.1.0",
+                    "ontology_version": "0.1.0",
+                    "session": {
+                        "stems_dir": (workspace_dir / "stems").resolve().as_posix(),
+                        "stems": [
+                            {"stem_id": "kick", "file_path": "stems/Kick.wav"},
+                            {"stem_id": "leadvox", "file_path": "stems/LeadVox.wav"},
+                            {"stem_id": "hallverbreturn", "file_path": "stems/HallVerbReturn.wav"},
+                            {"stem_id": "mystery", "file_path": "stems/Mystery.wav"},
+                            {"stem_id": "padwide", "file_path": "stems/PadWide.wav"},
+                        ],
+                    },
+                    "issues": [],
+                    "recommendations": [],
+                },
+            )
+
+            build_exit = main(
+                [
+                    "scene",
+                    "build",
+                    "--map",
+                    str(stems_map_path),
+                    "--bus",
+                    str(bus_plan_path),
+                    "--profile",
+                    "PROFILE.ASSIST",
+                    "--out",
+                    str(scene_path),
+                ]
+            )
+            self.assertEqual(build_exit, 0)
+
+            scene_payload = json.loads(scene_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                [row.get("stem_id") for row in scene_payload.get("objects", []) if isinstance(row, dict)],
+                ["kick", "mystery", "leadvox"],
+            )
+            self.assertEqual(
+                [row.get("object_id") for row in scene_payload.get("objects", []) if isinstance(row, dict)],
+                ["OBJ.kick", "OBJ.mystery", "OBJ.leadvox"],
+            )
+
+            beds = scene_payload.get("beds")
+            self.assertIsInstance(beds, list)
+            if isinstance(beds, list):
+                by_bus_id = {
+                    row.get("bus_id"): row
+                    for row in beds
+                    if isinstance(row, dict) and isinstance(row.get("bus_id"), str)
+                }
+                self.assertEqual(
+                    by_bus_id["BUS.FX.REVERB"].get("stem_ids"),
+                    ["hallverbreturn"],
+                )
+                self.assertEqual(
+                    by_bus_id["BUS.MUSIC.SYNTH"].get("stem_ids"),
+                    ["padwide"],
+                )
+
     def test_scene_cli_build_from_stems_map_and_bus_plan_lints_cleanly(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         stems_map_path = repo_root / "tests" / "fixtures" / "scene_intent" / "tiny_stems_map.json"
