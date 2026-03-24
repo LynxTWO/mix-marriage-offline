@@ -1,0 +1,22 @@
+{
+  "deliverables_summary": {
+    "deliverable_count": 2,
+    "failed_count": 1,
+    "invalid_master_count": 0,
+    "mixed_outcomes": true,
+    "overall_status": "partial",
+    "partial_count": 0,
+    "result_bucket": "partial_success",
+    "success_count": 1,
+    "top_failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+    "top_failure_status": "failed",
+    "valid_master_count": 1
+  },
+  "issues": [
+    {
+      "issue_id": "ISSUE.RENDER.QA.SILENT_OUTPUT",
+      "severity": "error",
+      "title": "Rendered master is silent"
+    }
+  ]
+}

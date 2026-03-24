@@ -129,12 +129,30 @@ class TestTauriDesktopWorkflow(unittest.TestCase):
         self.assertIn('invoke<DesktopSmokeConfig | null>("desktop_smoke_config")', frontend_source)
         self.assertIn("writeDesktopSmokeSummary(config.summaryPath, summary)", frontend_source)
         self.assertIn("runDesktopSmoke(ui, controller, desktopSmokeConfig)", frontend_source)
+        self.assertIn("workflowStagesCompleted", frontend_source)
+        self.assertIn("resultsInspection", frontend_source)
 
         backend_path = _TAURI_ROOT / "src-tauri" / "src" / "lib.rs"
         backend_source = backend_path.read_text(encoding="utf-8")
         self.assertIn('MMO_DESKTOP_SMOKE_SUMMARY_PATH', backend_source)
         self.assertIn('fn desktop_smoke_config()', backend_source)
         self.assertIn('tauri::generate_handler![desktop_smoke_config]', backend_source)
+
+    def test_packaged_smoke_runs_validate_analyze_scene_render_in_order(self) -> None:
+        frontend_path = _TAURI_ROOT / "src" / "main.ts"
+        source = frontend_path.read_text(encoding="utf-8")
+
+        validate_pos = source.index('await runWithBusyStrict(ui, "validate"')
+        analyze_pos = source.index('await runWithBusyStrict(ui, "analyze"')
+        scene_pos = source.index('await runWithBusyStrict(ui, "scene"')
+        render_pos = source.index('await runWithBusyStrict(ui, "render"')
+
+        self.assertLess(validate_pos, analyze_pos)
+        self.assertLess(analyze_pos, scene_pos)
+        self.assertLess(scene_pos, render_pos)
+        self.assertIn('workflowStagesCompleted.push("render")', source)
+        self.assertIn('deliverableSummaryRowsLoaded', source)
+        self.assertIn('resultSummaryLoaded', source)
 
 
 if __name__ == "__main__":

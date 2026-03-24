@@ -1,0 +1,27 @@
+{
+  "deliverables_summary": {
+    "deliverable_count": 1,
+    "failed_count": 0,
+    "invalid_master_count": 1,
+    "mixed_outcomes": false,
+    "overall_status": "invalid_master",
+    "partial_count": 0,
+    "result_bucket": "diagnostics_only",
+    "success_count": 0,
+    "top_failure_reason": "RENDER_RESULT.SILENT_OUTPUT",
+    "top_failure_status": "invalid_master",
+    "valid_master_count": 0
+  },
+  "issues": [
+    {
+      "issue_id": "ISSUE.RENDER.ALL_MASTERS_INVALID",
+      "severity": "error",
+      "title": "No valid master was produced"
+    },
+    {
+      "issue_id": "ISSUE.RENDER.QA.SILENT_OUTPUT",
+      "severity": "error",
+      "title": "Rendered master is silent"
+    }
+  ]
+}

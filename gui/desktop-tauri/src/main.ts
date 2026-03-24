@@ -102,7 +102,16 @@ type DesktopSmokeSummary = {
   error: string;
   ok: boolean;
   renderTarget: string;
+  resultsInspection: {
+    deliverableSummaryRowsLoaded: boolean;
+    deliverablesSummaryLoaded: boolean;
+    manifestLoaded: boolean;
+    qaLoaded: boolean;
+    receiptLoaded: boolean;
+    resultSummaryLoaded: boolean;
+  };
   timelineTail: string[];
+  workflowStagesCompleted: string[];
   workspaceDir: string;
 };
 
@@ -5420,10 +5429,21 @@ function buildDesktopSmokeSummary(
   paths: WorkflowPaths,
   doctorResult: DoctorRunResult | null,
   error: string,
+  workflowStagesCompleted: string[],
 ): DesktopSmokeSummary {
   const envDoctorPayload = doctorResult?.envDoctorPayload;
   const checks = asObject(envDoctorPayload?.checks);
   const pathPayload = asObject(envDoctorPayload?.paths);
+  const deliverablesSummary = resolveDeliverablesSummary(
+    state.artifacts.receipt,
+    state.artifacts.manifest,
+    state.artifacts.qa,
+  );
+  const resultSummary = resolveResultSummary(state.artifacts.receipt, state.artifacts.manifest);
+  const deliverableSummaryRows = resolveDeliverableSummaryRows(
+    state.artifacts.receipt,
+    state.artifacts.manifest,
+  );
 
   return {
     appLaunchVerified: true,
@@ -5452,7 +5472,16 @@ function buildDesktopSmokeSummary(
     error,
     ok: error.length === 0,
     renderTarget: config.renderTarget,
+    resultsInspection: {
+      deliverableSummaryRowsLoaded: deliverableSummaryRows.length > 0,
+      deliverablesSummaryLoaded: deliverablesSummary !== null,
+      manifestLoaded: state.artifacts.manifest !== null,
+      qaLoaded: state.artifacts.qa !== null,
+      receiptLoaded: state.artifacts.receipt !== null,
+      resultSummaryLoaded: resultSummary !== null,
+    },
     timelineTail: collectTimelineTail(ui, 24),
+    workflowStagesCompleted: [...workflowStagesCompleted],
     workspaceDir: config.workspaceDir,
   };
 }
@@ -5474,6 +5503,7 @@ async function runDesktopSmoke(
 ): Promise<void> {
   const paths = buildWorkflowPaths(config.workspaceDir);
   let doctorResult: DoctorRunResult | null = null;
+  const workflowStagesCompleted: string[] = [];
   let error = "";
   const resolvedRenderTarget = resolveSelectValue(
     ui.inputs.renderTarget,
@@ -5510,15 +5540,27 @@ async function runDesktopSmoke(
     if (!doctorResult.ok) {
       throw new Error("Desktop smoke doctor failed.");
     }
+    workflowStagesCompleted.push("doctor");
     await runWithBusyStrict(ui, "validate", async () => runValidate(ui, controller), true);
+    workflowStagesCompleted.push("validate");
     await runWithBusyStrict(ui, "analyze", async () => runAnalyze(ui, controller), true);
+    workflowStagesCompleted.push("analyze");
     await runWithBusyStrict(ui, "scene", async () => runScene(ui, controller), true);
+    workflowStagesCompleted.push("scene");
     await runWithBusyStrict(ui, "render", async () => runRender(ui, controller), true);
+    workflowStagesCompleted.push("render");
   } catch (caught) {
     error = caught instanceof Error ? caught.message : String(caught);
   }
 
-  const summary = buildDesktopSmokeSummary(ui, config, paths, doctorResult, error);
+  const summary = buildDesktopSmokeSummary(
+    ui,
+    config,
+    paths,
+    doctorResult,
+    error,
+    workflowStagesCompleted,
+  );
   await writeDesktopSmokeSummary(config.summaryPath, summary);
 
   try {

@@ -1,0 +1,16 @@
+{
+  "deliverables_summary": {
+    "deliverable_count": 1,
+    "failed_count": 0,
+    "invalid_master_count": 0,
+    "mixed_outcomes": false,
+    "overall_status": "success",
+    "partial_count": 0,
+    "result_bucket": "valid_master",
+    "success_count": 1,
+    "top_failure_reason": null,
+    "top_failure_status": null,
+    "valid_master_count": 1
+  },
+  "issues": []
+}

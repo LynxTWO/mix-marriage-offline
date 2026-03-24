@@ -60,6 +60,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   gracefully: `KickSample`, `SnareSample`, `LeadVoxDT`, and `ElecGtr1DT` now
   classify through targeted suffix derivation and narrow vocal-`DT` lexicon
   coverage without turning unknown-role cases into hard failures.
+- Packaged desktop smoke now verifies real rendered audio on Windows, macOS,
+  and Linux instead of stopping at artifact presence: the shipped app must
+  complete the real validate/analyze/scene/render path, produce a decoded
+  non-silent master above a meaningful duration floor, preserve uniform-rate
+  44.1 kHz output in the smoke fixture, and keep manifest/receipt/QA summaries
+  in agreement.
 
 ### Fixed
 
@@ -90,6 +96,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The repo now blocks new undeclared `ISSUE.*` IDs with an enforcement test,
   using a temporary baseline allowlist for the pre-existing backlog so drift
   stops immediately without forcing a midstream ontology cleanup.
+- Added packaged-smoke golden artifact fixtures for full success,
+  zero-decoded failure, silent-invalid failure, partial multi-layout success,
+  and uniform-rate preservation so the installed-build render audit cannot
+  regress back to “artifact exists” semantics unnoticed.
 
 ## [1.0.0] — 2026-03-17
 

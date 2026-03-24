@@ -48,6 +48,116 @@ class TestPackagedDesktopSmoke(unittest.TestCase):
 
         workspace_dir = root / "workspace"
         workspace_dir.mkdir()
+        render_dir = workspace_dir / "render" / "LAYOUT.2_0"
+        render_dir.mkdir(parents=True, exist_ok=True)
+        master_path = render_dir / "master.wav"
+        self.module._write_wave(master_path, channels=2, frequency_hz=220.0, sample_rate_hz=44_100)
+
+        deliverables_summary = {
+            "overall_status": "success",
+            "deliverable_count": 1,
+            "success_count": 1,
+            "failed_count": 0,
+            "partial_count": 0,
+            "invalid_master_count": 0,
+            "valid_master_count": 1,
+            "mixed_outcomes": False,
+            "result_bucket": "valid_master",
+            "top_failure_reason": None,
+            "top_failure_status": None,
+        }
+        result_summary = {
+            "title": "Valid master render",
+            "message": "MMO rendered 1 valid master output. Primary file: LAYOUT.2_0/master.wav.",
+            "remedy": "Review any remaining warnings, then use the valid master deliverable.",
+            "result_bucket": "valid_master",
+            "overall_status": "success",
+            "top_failure_reason": None,
+            "deliverable_count": 1,
+            "valid_master_count": 1,
+            "primary_output_path": "LAYOUT.2_0/master.wav",
+        }
+        deliverable_summary_rows = [
+            {
+                "deliverable_id": "DELIV.LAYOUT.2_0.SMOKE",
+                "output_id": "OUT.STEREO.SMOKE",
+                "layout": "LAYOUT.2_0",
+                "file_path": "LAYOUT.2_0/master.wav",
+                "channel_count": 2,
+                "sample_rate_hz": 44_100,
+                "rendered_frame_count": 6615,
+                "duration_seconds": 0.15,
+                "status": "success",
+                "validity": "valid_master",
+                "failure_reason": None,
+            }
+        ]
+        render_manifest = {
+            "deliverables": [
+                {
+                    "deliverable_id": "DELIV.LAYOUT.2_0.SMOKE",
+                    "artifact_role": "master",
+                    "target_layout_id": "LAYOUT.2_0",
+                    "status": "success",
+                    "is_valid_master": True,
+                    "decoded_stem_count": 3,
+                    "rendered_frame_count": 6615,
+                    "duration_seconds": 0.15,
+                    "output_ids": ["OUT.STEREO.SMOKE"],
+                    "warning_codes": [],
+                }
+            ],
+            "deliverables_summary": deliverables_summary,
+            "deliverable_summary_rows": deliverable_summary_rows,
+            "result_summary": result_summary,
+            "renderer_manifests": [
+                {
+                    "renderer_id": "PLUGIN.RENDERER.SAFE",
+                    "outputs": [
+                        {
+                            "output_id": "OUT.STEREO.SMOKE",
+                            "file_path": "LAYOUT.2_0/master.wav",
+                            "format": "wav",
+                            "layout_id": "LAYOUT.2_0",
+                            "channel_count": 2,
+                            "sample_rate_hz": 44_100,
+                            "metadata": {
+                                "resampling": {
+                                    "uniform_source_sample_rate_hz": 44_100,
+                                    "output_sample_rate_hz": 44_100,
+                                    "sample_rate_policy": "uniform_source_rate_preserve",
+                                    "sample_rate_policy_reason": "all_decodable_stems_share_one_rate",
+                                    "resample_applied": False,
+                                    "resample_stage": "not_applied",
+                                    "resample_method_id": "linear_interpolation_v1",
+                                    "resampled_stem_count": 0,
+                                }
+                            },
+                        }
+                    ],
+                    "skipped": [],
+                }
+            ],
+        }
+        render_receipt = {
+            "status": "completed",
+            "deliverables_summary": deliverables_summary,
+            "deliverable_summary_rows": deliverable_summary_rows,
+            "result_summary": result_summary,
+        }
+        render_qa = {
+            "deliverables_summary": deliverables_summary,
+            "issues": [],
+        }
+        render_manifest_path = root / "renderManifestPath.json"
+        render_receipt_path = root / "renderReceiptPath.json"
+        render_qa_path = root / "renderQaPath.json"
+        render_manifest_path.write_text(json.dumps(render_manifest), encoding="utf-8")
+        render_receipt_path.write_text(json.dumps(render_receipt), encoding="utf-8")
+        render_qa_path.write_text(json.dumps(render_qa), encoding="utf-8")
+        artifact_paths["renderManifestPath"] = render_manifest_path.as_posix()
+        artifact_paths["renderReceiptPath"] = render_receipt_path.as_posix()
+        artifact_paths["renderQaPath"] = render_qa_path.as_posix()
         artifact_paths["workspaceDir"] = workspace_dir.as_posix()
 
         return {
@@ -70,6 +180,15 @@ class TestPackagedDesktopSmoke(unittest.TestCase):
                 "versionExitCode": 0,
             },
             "ok": True,
+            "resultsInspection": {
+                "deliverableSummaryRowsLoaded": True,
+                "deliverablesSummaryLoaded": True,
+                "manifestLoaded": True,
+                "qaLoaded": True,
+                "receiptLoaded": True,
+                "resultSummaryLoaded": True,
+            },
+            "workflowStagesCompleted": ["doctor", "validate", "analyze", "scene", "render"],
         }
 
     def test_sidecar_name_detection_matches_staged_and_bundled_names(self) -> None:
@@ -100,6 +219,8 @@ class TestPackagedDesktopSmoke(unittest.TestCase):
             self.assertTrue((stems_dir / "kick.wav").is_file())
             self.assertTrue((stems_dir / "snare.wav").is_file())
             self.assertTrue((stems_dir / "pad_stereo.wav").is_file())
+            with self.module.wave.open(str(stems_dir / "kick.wav"), "rb") as handle:
+                self.assertEqual(handle.getframerate(), 44_100)
 
     def test_main_app_score_prefers_product_name_over_sidecar(self) -> None:
         product_name = "MMO Desktop"
@@ -383,6 +504,46 @@ class TestPackagedDesktopSmoke(unittest.TestCase):
             summary["doctor"]["versionExitCode"] = 2
 
             with self.assertRaisesRegex(self.module.SmokeError, "--version"):
+                self.module._validate_summary(
+                    summary=summary,
+                    repo_root=repo_root,
+                    allow_repo_data_root=False,
+                )
+
+    def test_validate_summary_requires_results_inspection_and_render_truth(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir) / "repo"
+            repo_root.mkdir()
+            summary_root = Path(temp_dir) / "summary"
+            summary_root.mkdir()
+            summary = self._valid_summary(summary_root)
+
+            truth = self.module._validate_summary(
+                summary=summary,
+                repo_root=repo_root,
+                allow_repo_data_root=False,
+            )
+
+            self.assertTrue(truth.get("has_valid_master_audio_output"))
+            self.assertTrue(truth.get("has_uniform_rate_preservation_output"))
+
+    def test_validate_summary_rejects_missing_results_inspection(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir) / "repo"
+            repo_root.mkdir()
+            summary_root = Path(temp_dir) / "summary"
+            summary_root.mkdir()
+            summary = self._valid_summary(summary_root)
+            summary["resultsInspection"] = {
+                "deliverableSummaryRowsLoaded": False,
+                "deliverablesSummaryLoaded": True,
+                "manifestLoaded": True,
+                "qaLoaded": True,
+                "receiptLoaded": True,
+                "resultSummaryLoaded": True,
+            }
+
+            with self.assertRaisesRegex(self.module.SmokeError, "Results view"):
                 self.module._validate_summary(
                     summary=summary,
                     repo_root=repo_root,

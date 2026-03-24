@@ -1,0 +1,42 @@
+{
+  "deliverable_summary_rows": [
+    {
+      "channel_count": 2,
+      "deliverable_id": "DELIV.LAYOUT.2_0.44100",
+      "duration_seconds": 0.15,
+      "failure_reason": null,
+      "file_path": "LAYOUT.2_0/master.wav",
+      "layout": "LAYOUT.2_0",
+      "output_id": "OUT.STEREO.44100",
+      "rendered_frame_count": 6615,
+      "sample_rate_hz": 44100,
+      "status": "success",
+      "validity": "valid_master"
+    }
+  ],
+  "deliverables_summary": {
+    "deliverable_count": 1,
+    "failed_count": 0,
+    "invalid_master_count": 0,
+    "mixed_outcomes": false,
+    "overall_status": "success",
+    "partial_count": 0,
+    "result_bucket": "valid_master",
+    "success_count": 1,
+    "top_failure_reason": null,
+    "top_failure_status": null,
+    "valid_master_count": 1
+  },
+  "result_summary": {
+    "deliverable_count": 1,
+    "message": "MMO rendered 1 valid master output. Primary file: LAYOUT.2_0/master.wav.",
+    "overall_status": "success",
+    "primary_output_path": "LAYOUT.2_0/master.wav",
+    "remedy": "Review any remaining warnings, then use the valid master deliverable.",
+    "result_bucket": "valid_master",
+    "title": "Valid master render",
+    "top_failure_reason": null,
+    "valid_master_count": 1
+  },
+  "status": "completed"
+}

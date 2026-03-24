@@ -1,0 +1,83 @@
+{
+  "deliverable_summary_rows": [
+    {
+      "channel_count": 2,
+      "deliverable_id": "DELIV.LAYOUT.2_0.FAIL",
+      "duration_seconds": 0.0,
+      "failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+      "file_path": "LAYOUT.2_0/master.wav",
+      "layout": "LAYOUT.2_0",
+      "output_id": "OUT.FAIL.001",
+      "rendered_frame_count": 0,
+      "sample_rate_hz": 48000,
+      "status": "failed",
+      "validity": "full_failure"
+    }
+  ],
+  "deliverables": [
+    {
+      "artifact_role": "master",
+      "channel_count": 2,
+      "decoded_stem_count": 0,
+      "deliverable_id": "DELIV.LAYOUT.2_0.FAIL",
+      "duration_seconds": 0.0,
+      "failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+      "is_valid_master": false,
+      "output_ids": [
+        "OUT.FAIL.001"
+      ],
+      "planned_stem_count": 3,
+      "prepared_stem_count": 0,
+      "rendered_frame_count": 0,
+      "skipped_stem_count": 3,
+      "status": "failed",
+      "target_layout_id": "LAYOUT.2_0",
+      "warning_codes": [
+        "RENDER_RESULT.NO_DECODABLE_STEMS"
+      ]
+    }
+  ],
+  "deliverables_summary": {
+    "deliverable_count": 1,
+    "failed_count": 1,
+    "invalid_master_count": 0,
+    "mixed_outcomes": false,
+    "overall_status": "failed",
+    "partial_count": 0,
+    "result_bucket": "full_failure",
+    "success_count": 0,
+    "top_failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+    "top_failure_status": "failed",
+    "valid_master_count": 0
+  },
+  "renderer_manifests": [
+    {
+      "outputs": [
+        {
+          "channel_count": 2,
+          "file_path": "LAYOUT.2_0/master.wav",
+          "format": "wav",
+          "layout_id": "LAYOUT.2_0",
+          "metadata": {
+            "resampling": {}
+          },
+          "output_id": "OUT.FAIL.001",
+          "sample_rate_hz": 48000
+        }
+      ],
+      "renderer_id": "PLUGIN.RENDERER.SAFE",
+      "skipped": []
+    }
+  ],
+  "result_summary": {
+    "deliverable_count": 1,
+    "message": "MMO planned the render, but none of the selected stems decoded into audio. Any written artifact is diagnostic only.",
+    "overall_status": "failed",
+    "primary_output_path": "LAYOUT.2_0/master.wav",
+    "remedy": "Open the stem diagnostics, repair or replace the failing source files, then rerun Render.",
+    "result_bucket": "full_failure",
+    "title": "Render failed: no decodable stems",
+    "top_failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+    "valid_master_count": 0
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "deliverable_summary_rows": [
+    {
+      "channel_count": 2,
+      "deliverable_id": "DELIV.LAYOUT.2_0.SILENT",
+      "duration_seconds": 0.15,
+      "failure_reason": "RENDER_RESULT.SILENT_OUTPUT",
+      "file_path": "LAYOUT.2_0/master.wav",
+      "layout": "LAYOUT.2_0",
+      "output_id": "OUT.SILENT.001",
+      "rendered_frame_count": 7200,
+      "sample_rate_hz": 48000,
+      "status": "invalid_master",
+      "validity": "diagnostics_only"
+    }
+  ],
+  "deliverables_summary": {
+    "deliverable_count": 1,
+    "failed_count": 0,
+    "invalid_master_count": 1,
+    "mixed_outcomes": false,
+    "overall_status": "invalid_master",
+    "partial_count": 0,
+    "result_bucket": "diagnostics_only",
+    "success_count": 0,
+    "top_failure_reason": "RENDER_RESULT.SILENT_OUTPUT",
+    "top_failure_status": "invalid_master",
+    "valid_master_count": 0
+  },
+  "result_summary": {
+    "deliverable_count": 1,
+    "message": "MMO wrote the output file, but the rendered master is effectively silent and does not count as a valid master.",
+    "overall_status": "invalid_master",
+    "primary_output_path": "LAYOUT.2_0/master.wav",
+    "remedy": "Check routing, muted stems, source audio, and decode counts, then rerun Render after confirming audible signal reaches the target layout.",
+    "result_bucket": "diagnostics_only",
+    "title": "Render invalid: silent master",
+    "top_failure_reason": "RENDER_RESULT.SILENT_OUTPUT",
+    "valid_master_count": 0
+  },
+  "status": "blocked"
+}

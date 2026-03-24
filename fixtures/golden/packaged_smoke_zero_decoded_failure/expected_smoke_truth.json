@@ -1,0 +1,77 @@
+{
+  "agreement": {
+    "deliverables_summary": true,
+    "receipt_lifecycle_status": true,
+    "result_summary": true
+  },
+  "deliverables_summary": {
+    "deliverable_count": 1,
+    "failed_count": 1,
+    "invalid_master_count": 0,
+    "mixed_outcomes": false,
+    "overall_status": "failed",
+    "partial_count": 0,
+    "result_bucket": "full_failure",
+    "success_count": 0,
+    "top_failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+    "top_failure_status": "failed",
+    "valid_master_count": 0
+  },
+  "expected_receipt_status": "blocked",
+  "has_decoded_audio_output": false,
+  "has_meaningful_duration_output": false,
+  "has_non_silent_output": false,
+  "has_uniform_rate_preservation_output": false,
+  "has_valid_master_audio_output": false,
+  "master_outputs": [
+    {
+      "audio_all_zero": true,
+      "audio_channels": 2,
+      "audio_duration_seconds": 0.0,
+      "audio_error": null,
+      "audio_exists": true,
+      "audio_frame_count": 0,
+      "audio_peak_abs": 0.0,
+      "audio_sample_rate_hz": 48000,
+      "channel_count": 2,
+      "decoded_stem_count": 0,
+      "deliverable_id": "DELIV.LAYOUT.2_0.FAIL",
+      "duration_seconds": 0.0,
+      "failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+      "file_path": "LAYOUT.2_0/master.wav",
+      "is_valid_master": false,
+      "layout": "LAYOUT.2_0",
+      "output_id": "OUT.FAIL.001",
+      "output_sample_rate_hz": null,
+      "rendered_frame_count": 0,
+      "resample_applied": null,
+      "resolved_output_path": "/home/daniel-boyd/Documents/GitHub/mix-marriage-offline/fixtures/golden/packaged_smoke_zero_decoded_failure/render/LAYOUT.2_0/master.wav",
+      "sample_rate_hz": 48000,
+      "sample_rate_policy": null,
+      "sample_rate_policy_reason": null,
+      "status": "failed",
+      "uniform_source_sample_rate_hz": null,
+      "warning_codes": [
+        "RENDER_RESULT.NO_DECODABLE_STEMS"
+      ]
+    }
+  ],
+  "minimum_meaningful_duration_seconds": 0.11,
+  "qa_error_ids": [
+    "ISSUE.RENDER.ALL_MASTERS_INVALID",
+    "ISSUE.RENDER.QA.SILENT_OUTPUT"
+  ],
+  "receipt_status": "blocked",
+  "result_summary": {
+    "deliverable_count": 1,
+    "message": "MMO planned the render, but none of the selected stems decoded into audio. Any written artifact is diagnostic only.",
+    "overall_status": "failed",
+    "primary_output_path": "LAYOUT.2_0/master.wav",
+    "remedy": "Open the stem diagnostics, repair or replace the failing source files, then rerun Render.",
+    "result_bucket": "full_failure",
+    "title": "Render failed: no decodable stems",
+    "top_failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+    "valid_master_count": 0
+  },
+  "valid_master_outputs": []
+}

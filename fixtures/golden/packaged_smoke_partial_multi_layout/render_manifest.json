@@ -1,0 +1,135 @@
+{
+  "deliverable_summary_rows": [
+    {
+      "channel_count": 2,
+      "deliverable_id": "DELIV.LAYOUT.2_0.OK",
+      "duration_seconds": 0.15,
+      "failure_reason": null,
+      "file_path": "LAYOUT.2_0/master.wav",
+      "layout": "LAYOUT.2_0",
+      "output_id": "OUT.STEREO.OK",
+      "rendered_frame_count": 7200,
+      "sample_rate_hz": 48000,
+      "status": "success",
+      "validity": "valid_master"
+    },
+    {
+      "channel_count": 6,
+      "deliverable_id": "DELIV.LAYOUT.5_1.FAIL",
+      "duration_seconds": 0.0,
+      "failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+      "file_path": "LAYOUT.5_1/master.wav",
+      "layout": "LAYOUT.5_1",
+      "output_id": "OUT.SURROUND.FAIL",
+      "rendered_frame_count": 0,
+      "sample_rate_hz": 48000,
+      "status": "failed",
+      "validity": "full_failure"
+    }
+  ],
+  "deliverables": [
+    {
+      "artifact_role": "master",
+      "channel_count": 2,
+      "decoded_stem_count": 3,
+      "deliverable_id": "DELIV.LAYOUT.2_0.OK",
+      "duration_seconds": 0.15,
+      "failure_reason": null,
+      "is_valid_master": true,
+      "output_ids": [
+        "OUT.STEREO.OK"
+      ],
+      "planned_stem_count": 3,
+      "prepared_stem_count": 3,
+      "rendered_frame_count": 7200,
+      "skipped_stem_count": 0,
+      "status": "success",
+      "target_layout_id": "LAYOUT.2_0",
+      "warning_codes": []
+    },
+    {
+      "artifact_role": "master",
+      "channel_count": 6,
+      "decoded_stem_count": 0,
+      "deliverable_id": "DELIV.LAYOUT.5_1.FAIL",
+      "duration_seconds": 0.0,
+      "failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+      "is_valid_master": false,
+      "output_ids": [
+        "OUT.SURROUND.FAIL"
+      ],
+      "planned_stem_count": 3,
+      "prepared_stem_count": 0,
+      "rendered_frame_count": 0,
+      "skipped_stem_count": 3,
+      "status": "failed",
+      "target_layout_id": "LAYOUT.5_1",
+      "warning_codes": [
+        "RENDER_RESULT.NO_DECODABLE_STEMS"
+      ]
+    }
+  ],
+  "deliverables_summary": {
+    "deliverable_count": 2,
+    "failed_count": 1,
+    "invalid_master_count": 0,
+    "mixed_outcomes": true,
+    "overall_status": "partial",
+    "partial_count": 0,
+    "result_bucket": "partial_success",
+    "success_count": 1,
+    "top_failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+    "top_failure_status": "failed",
+    "valid_master_count": 1
+  },
+  "renderer_manifests": [
+    {
+      "outputs": [
+        {
+          "channel_count": 2,
+          "file_path": "LAYOUT.2_0/master.wav",
+          "format": "wav",
+          "layout_id": "LAYOUT.2_0",
+          "metadata": {
+            "resampling": {
+              "output_sample_rate_hz": 48000,
+              "resample_applied": false,
+              "resample_method_id": "linear_interpolation_v1",
+              "resample_stage": "not_applied",
+              "resampled_stem_count": 0,
+              "sample_rate_policy": "uniform_source_rate_preserve",
+              "sample_rate_policy_reason": "all_decodable_stems_share_one_rate",
+              "uniform_source_sample_rate_hz": 48000
+            }
+          },
+          "output_id": "OUT.STEREO.OK",
+          "sample_rate_hz": 48000
+        },
+        {
+          "channel_count": 6,
+          "file_path": "LAYOUT.5_1/master.wav",
+          "format": "wav",
+          "layout_id": "LAYOUT.5_1",
+          "metadata": {
+            "resampling": {}
+          },
+          "output_id": "OUT.SURROUND.FAIL",
+          "sample_rate_hz": 48000
+        }
+      ],
+      "renderer_id": "PLUGIN.RENDERER.SAFE",
+      "skipped": []
+    }
+  ],
+  "result_summary": {
+    "deliverable_count": 2,
+    "message": "MMO rendered 1 valid master output, but 1 deliverable still needs attention. MMO planned the render, but none of the selected stems decoded into audio. Any written artifact is diagnostic only.",
+    "overall_status": "partial",
+    "primary_output_path": "LAYOUT.2_0/master.wav",
+    "remedy": "Open the stem diagnostics, repair or replace the failing source files, then rerun Render.",
+    "result_bucket": "partial_success",
+    "title": "Partial success",
+    "top_failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+    "valid_master_count": 1
+  }
+}

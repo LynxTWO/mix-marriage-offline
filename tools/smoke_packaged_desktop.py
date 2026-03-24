@@ -22,6 +22,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BUNDLE_ROOT = REPO_ROOT / "gui" / "desktop-tauri" / "src-tauri" / "target" / "release" / "bundle"
 DEFAULT_TARGET = "TARGET.STEREO.2_0"
 DEFAULT_LAYOUT_STANDARD = "SMPTE"
+MIN_MEANINGFUL_DURATION_SECONDS = 0.11
+SILENT_OUTPUT_LINEAR_TOLERANCE = 10.0 ** (-120.0 / 20.0)
+_EXPECTED_SMOKE_WORKFLOW_STAGES = ("doctor", "validate", "analyze", "scene", "render")
+_VALID_MASTER_RESULT_BUCKETS = frozenset({"partial_success", "valid_master"})
 
 
 class SmokeError(RuntimeError):
@@ -79,6 +83,47 @@ def _path_is_under(candidate: str, root: Path) -> bool:
     root_text = _normalize_path_text(root)
     candidate_text = _normalize_path_text(candidate)
     return candidate_text == root_text or candidate_text.startswith(f"{root_text}/")
+
+
+def _coerce_str(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    return ""
+
+
+def _coerce_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _coerce_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        candidate = float(value)
+        if math.isfinite(candidate):
+            return candidate
+        return None
+    if isinstance(value, str) and value.strip():
+        try:
+            candidate = float(value)
+        except ValueError:
+            return None
+        if math.isfinite(candidate):
+            return candidate
+    return None
+
+
+def _canonical_payload(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
 def _read_product_name(repo_root: Path) -> str:
@@ -1166,9 +1211,27 @@ def _write_wave(
 
 def _create_tiny_fixture(root: Path) -> Path:
     stems_dir = root / "stems"
-    _write_wave(stems_dir / "kick.wav", channels=1, frequency_hz=55.0)
-    _write_wave(stems_dir / "snare.wav", channels=1, frequency_hz=190.0, phase_offset=0.4)
-    _write_wave(stems_dir / "pad_stereo.wav", channels=2, frequency_hz=330.0, phase_offset=0.8)
+    fixture_rate_hz = 44_100
+    _write_wave(
+        stems_dir / "kick.wav",
+        channels=1,
+        frequency_hz=55.0,
+        sample_rate_hz=fixture_rate_hz,
+    )
+    _write_wave(
+        stems_dir / "snare.wav",
+        channels=1,
+        frequency_hz=190.0,
+        phase_offset=0.4,
+        sample_rate_hz=fixture_rate_hz,
+    )
+    _write_wave(
+        stems_dir / "pad_stereo.wav",
+        channels=2,
+        frequency_hz=330.0,
+        phase_offset=0.8,
+        sample_rate_hz=fixture_rate_hz,
+    )
     return stems_dir
 
 
@@ -1252,12 +1315,492 @@ def _launch_smoke_app(
         return process.returncode, stdout, stderr
 
 
+def _load_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SmokeError(f"{label} was not valid JSON: {path}") from exc
+    if not isinstance(payload, dict):
+        raise SmokeError(f"{label} was not a JSON object: {path}")
+    return payload
+
+
+def _iter_outputs(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    outputs: list[dict[str, Any]] = []
+    for renderer_manifest in manifest.get("renderer_manifests", []):
+        if not isinstance(renderer_manifest, dict):
+            continue
+        for output in renderer_manifest.get("outputs", []):
+            if isinstance(output, dict):
+                outputs.append(output)
+    return outputs
+
+
+def _output_index(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    indexed: dict[str, dict[str, Any]] = {}
+    for output in _iter_outputs(manifest):
+        output_id = _coerce_str(output.get("output_id")).strip()
+        if output_id and output_id not in indexed:
+            indexed[output_id] = output
+    return indexed
+
+
+def _deliverable_summary_rows(
+    receipt: dict[str, Any],
+    manifest: dict[str, Any],
+) -> list[dict[str, Any]]:
+    for candidate in (
+        receipt.get("deliverable_summary_rows"),
+        manifest.get("deliverable_summary_rows"),
+    ):
+        if isinstance(candidate, list):
+            rows = [item for item in candidate if isinstance(item, dict)]
+            if rows:
+                return rows
+    return []
+
+
+def _find_summary_row(
+    *,
+    deliverable: dict[str, Any],
+    output: dict[str, Any],
+    summary_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    deliverable_id = _coerce_str(deliverable.get("deliverable_id")).strip()
+    output_id = _coerce_str(output.get("output_id")).strip()
+    output_file_path = _coerce_str(output.get("file_path")).strip()
+    for row in summary_rows:
+        if _coerce_str(row.get("output_id")).strip() == output_id and output_id:
+            return row
+    for row in summary_rows:
+        if _coerce_str(row.get("deliverable_id")).strip() == deliverable_id and deliverable_id:
+            return row
+    for row in summary_rows:
+        if _coerce_str(row.get("file_path")).strip() == output_file_path and output_file_path:
+            return row
+    return {}
+
+
+def _resolve_render_output_path(
+    *,
+    file_path: str,
+    artifact_paths: dict[str, Any],
+) -> Path | None:
+    normalized_file_path = file_path.strip()
+    if not normalized_file_path:
+        return None
+    candidate = Path(normalized_file_path)
+    if candidate.is_absolute():
+        return candidate
+
+    workspace_dir = Path(str(artifact_paths.get("workspaceDir", ""))).resolve()
+    render_manifest_path = Path(str(artifact_paths.get("renderManifestPath", ""))).resolve()
+    render_dir = workspace_dir / "render"
+    candidates = (
+        render_dir / normalized_file_path,
+        workspace_dir / normalized_file_path,
+        render_manifest_path.parent / normalized_file_path,
+    )
+    for resolved in candidates:
+        if resolved.is_file():
+            return resolved
+    return candidates[0]
+
+
+def _decode_pcm_peak_abs(data: bytes, *, sample_width: int) -> float:
+    peak = 0.0
+    if sample_width == 1:
+        for raw in data:
+            sample = abs((int(raw) - 128) / 128.0)
+            if sample > peak:
+                peak = sample
+        return peak
+
+    if sample_width == 2:
+        sample_count = len(data) // 2
+        if sample_count <= 0:
+            return 0.0
+        for sample in struct.unpack(f"<{sample_count}h", data[: sample_count * 2]):
+            normalized = abs(float(sample) / 32768.0)
+            if normalized > peak:
+                peak = normalized
+        return peak
+
+    if sample_width == 3:
+        sample_count = len(data) // 3
+        for index in range(sample_count):
+            offset = index * 3
+            word = data[offset: offset + 3]
+            signed = int.from_bytes(
+                word + (b"\xff" if word[2] & 0x80 else b"\x00"),
+                byteorder="little",
+                signed=True,
+            )
+            normalized = abs(float(signed) / 8388608.0)
+            if normalized > peak:
+                peak = normalized
+        return peak
+
+    if sample_width == 4:
+        sample_count = len(data) // 4
+        if sample_count <= 0:
+            return 0.0
+        for sample in struct.unpack(f"<{sample_count}i", data[: sample_count * 4]):
+            normalized = abs(float(sample) / 2147483648.0)
+            if normalized > peak:
+                peak = normalized
+        return peak
+
+    raise SmokeError(f"Unsupported WAV sample width for packaged smoke audio check: {sample_width}")
+
+
+def _read_wave_audio_summary(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {
+            "audio_exists": False,
+            "audio_error": "missing_output_path",
+            "audio_channels": None,
+            "audio_frame_count": None,
+            "audio_sample_rate_hz": None,
+            "audio_duration_seconds": None,
+            "audio_peak_abs": None,
+            "audio_all_zero": None,
+        }
+    if not path.is_file():
+        return {
+            "audio_exists": False,
+            "audio_error": "missing_output_file",
+            "audio_channels": None,
+            "audio_frame_count": None,
+            "audio_sample_rate_hz": None,
+            "audio_duration_seconds": None,
+            "audio_peak_abs": None,
+            "audio_all_zero": None,
+        }
+    try:
+        with wave.open(str(path), "rb") as handle:
+            channels = int(handle.getnchannels())
+            sample_width = int(handle.getsampwidth())
+            sample_rate_hz = int(handle.getframerate())
+            frame_count = int(handle.getnframes())
+            peak_abs = 0.0
+            while True:
+                chunk = handle.readframes(4096)
+                if not chunk:
+                    break
+                chunk_peak = _decode_pcm_peak_abs(chunk, sample_width=sample_width)
+                if chunk_peak > peak_abs:
+                    peak_abs = chunk_peak
+    except (OSError, EOFError, wave.Error) as exc:
+        return {
+            "audio_exists": False,
+            "audio_error": f"wave_read_failed:{exc}",
+            "audio_channels": None,
+            "audio_frame_count": None,
+            "audio_sample_rate_hz": None,
+            "audio_duration_seconds": None,
+            "audio_peak_abs": None,
+            "audio_all_zero": None,
+        }
+
+    duration_seconds = (
+        round(frame_count / sample_rate_hz, 6)
+        if frame_count >= 0 and sample_rate_hz > 0
+        else None
+    )
+    return {
+        "audio_exists": True,
+        "audio_error": None,
+        "audio_channels": channels,
+        "audio_frame_count": frame_count,
+        "audio_sample_rate_hz": sample_rate_hz,
+        "audio_duration_seconds": duration_seconds,
+        "audio_peak_abs": round(peak_abs, 8),
+        "audio_all_zero": peak_abs <= SILENT_OUTPUT_LINEAR_TOLERANCE,
+    }
+
+
+def _expected_receipt_lifecycle_status(result_bucket: str) -> str | None:
+    if result_bucket in {"diagnostics_only", "full_failure"}:
+        return "blocked"
+    if result_bucket in {"partial_success", "success_no_master", "valid_master"}:
+        return "completed"
+    return None
+
+
+def _normalize_summary_for_report(summary: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(summary, dict):
+        return None
+    return json.loads(_canonical_payload(summary))
+
+
+def summarize_workspace_render_truth(*, artifact_paths: dict[str, Any]) -> dict[str, Any]:
+    render_manifest_path = Path(str(artifact_paths.get("renderManifestPath", ""))).resolve()
+    render_receipt_path = Path(str(artifact_paths.get("renderReceiptPath", ""))).resolve()
+    render_qa_path = Path(str(artifact_paths.get("renderQaPath", ""))).resolve()
+
+    manifest = _load_json_object(render_manifest_path, label="render manifest")
+    receipt = _load_json_object(render_receipt_path, label="safe-render receipt")
+    qa = _load_json_object(render_qa_path, label="render QA")
+
+    manifest_deliverables_summary = _normalize_summary_for_report(
+        manifest.get("deliverables_summary")
+    )
+    receipt_deliverables_summary = _normalize_summary_for_report(
+        receipt.get("deliverables_summary")
+    )
+    qa_deliverables_summary = _normalize_summary_for_report(qa.get("deliverables_summary"))
+    manifest_result_summary = _normalize_summary_for_report(manifest.get("result_summary"))
+    receipt_result_summary = _normalize_summary_for_report(receipt.get("result_summary"))
+
+    outputs_by_id = _output_index(manifest)
+    summary_rows = _deliverable_summary_rows(receipt, manifest)
+    master_outputs: list[dict[str, Any]] = []
+    for deliverable in manifest.get("deliverables", []):
+        if not isinstance(deliverable, dict):
+            continue
+        if _coerce_str(deliverable.get("artifact_role")).strip().lower() != "master":
+            continue
+        output_ids = [
+            item.strip()
+            for item in deliverable.get("output_ids", [])
+            if isinstance(item, str) and item.strip()
+        ] or [""]
+        for output_id in output_ids:
+            output = outputs_by_id.get(output_id, {})
+            summary_row = _find_summary_row(
+                deliverable=deliverable,
+                output=output,
+                summary_rows=summary_rows,
+            )
+            output_file_path = (
+                _coerce_str(summary_row.get("file_path")).strip()
+                or _coerce_str(output.get("file_path")).strip()
+            )
+            resolved_output_path = _resolve_render_output_path(
+                file_path=output_file_path,
+                artifact_paths=artifact_paths,
+            )
+            audio_summary = _read_wave_audio_summary(resolved_output_path)
+            metadata = output.get("metadata")
+            metadata_dict = metadata if isinstance(metadata, dict) else {}
+            resampling = metadata_dict.get("resampling")
+            resampling_dict = resampling if isinstance(resampling, dict) else {}
+            sample_rate_hz = (
+                _coerce_int(summary_row.get("sample_rate_hz"))
+                or _coerce_int(output.get("sample_rate_hz"))
+                or _coerce_int(audio_summary.get("audio_sample_rate_hz"))
+            )
+            rendered_frame_count = (
+                _coerce_int(summary_row.get("rendered_frame_count"))
+                or _coerce_int(deliverable.get("rendered_frame_count"))
+                or _coerce_int(audio_summary.get("audio_frame_count"))
+            )
+            duration_seconds = (
+                _coerce_float(summary_row.get("duration_seconds"))
+                or _coerce_float(deliverable.get("duration_seconds"))
+                or _coerce_float(audio_summary.get("audio_duration_seconds"))
+            )
+            master_outputs.append(
+                {
+                    "deliverable_id": _coerce_str(deliverable.get("deliverable_id")).strip() or None,
+                    "output_id": output_id or None,
+                    "layout": (
+                        _coerce_str(summary_row.get("layout")).strip()
+                        or _coerce_str(deliverable.get("target_layout_id")).strip()
+                        or _coerce_str(output.get("layout_id")).strip()
+                        or None
+                    ),
+                    "file_path": output_file_path or None,
+                    "resolved_output_path": (
+                        resolved_output_path.as_posix() if resolved_output_path is not None else None
+                    ),
+                    "status": _coerce_str(deliverable.get("status")).strip() or None,
+                    "is_valid_master": bool(deliverable.get("is_valid_master")),
+                    "decoded_stem_count": _coerce_int(deliverable.get("decoded_stem_count")),
+                    "rendered_frame_count": rendered_frame_count,
+                    "duration_seconds": round(duration_seconds, 6) if duration_seconds is not None else None,
+                    "channel_count": (
+                        _coerce_int(summary_row.get("channel_count"))
+                        or _coerce_int(output.get("channel_count"))
+                        or _coerce_int(audio_summary.get("audio_channels"))
+                    ),
+                    "sample_rate_hz": sample_rate_hz,
+                    "failure_reason": _coerce_str(deliverable.get("failure_reason")).strip() or None,
+                    "warning_codes": sorted(
+                        {
+                            code.strip()
+                            for code in deliverable.get("warning_codes", [])
+                            if isinstance(code, str) and code.strip()
+                        }
+                    ),
+                    "uniform_source_sample_rate_hz": _coerce_int(
+                        resampling_dict.get("uniform_source_sample_rate_hz")
+                    ),
+                    "output_sample_rate_hz": _coerce_int(
+                        resampling_dict.get("output_sample_rate_hz")
+                    ),
+                    "sample_rate_policy": _coerce_str(
+                        resampling_dict.get("sample_rate_policy")
+                    ).strip() or None,
+                    "sample_rate_policy_reason": _coerce_str(
+                        resampling_dict.get("sample_rate_policy_reason")
+                    ).strip() or None,
+                    "resample_applied": (
+                        bool(resampling_dict.get("resample_applied"))
+                        if isinstance(resampling_dict.get("resample_applied"), bool)
+                        else None
+                    ),
+                    **audio_summary,
+                }
+            )
+
+    master_outputs.sort(
+        key=lambda row: (
+            _coerce_str(row.get("layout")).strip(),
+            _coerce_str(row.get("file_path")).strip(),
+            _coerce_str(row.get("deliverable_id")).strip(),
+        )
+    )
+    valid_master_outputs = [
+        row
+        for row in master_outputs
+        if row.get("is_valid_master") is True
+    ]
+    qa_error_ids = sorted(
+        {
+            _coerce_str(issue.get("issue_id")).strip()
+            for issue in qa.get("issues", [])
+            if isinstance(issue, dict) and _coerce_str(issue.get("severity")).strip() == "error"
+        }
+    )
+    result_bucket = _coerce_str(
+        (manifest_deliverables_summary or {}).get("result_bucket")
+    ).strip()
+    receipt_status = _coerce_str(receipt.get("status")).strip()
+    expected_receipt_status = _expected_receipt_lifecycle_status(result_bucket)
+    return {
+        "agreement": {
+            "deliverables_summary": (
+                manifest_deliverables_summary is not None
+                and manifest_deliverables_summary == receipt_deliverables_summary
+                and manifest_deliverables_summary == qa_deliverables_summary
+            ),
+            "result_summary": (
+                manifest_result_summary is not None
+                and manifest_result_summary == receipt_result_summary
+            ),
+            "receipt_lifecycle_status": (
+                expected_receipt_status is not None and receipt_status == expected_receipt_status
+            ),
+        },
+        "deliverables_summary": manifest_deliverables_summary,
+        "result_summary": manifest_result_summary,
+        "receipt_status": receipt_status or None,
+        "expected_receipt_status": expected_receipt_status,
+        "master_outputs": master_outputs,
+        "valid_master_outputs": valid_master_outputs,
+        "has_decoded_audio_output": any(
+            isinstance(row.get("decoded_stem_count"), int) and row["decoded_stem_count"] > 0
+            for row in master_outputs
+        ),
+        "has_meaningful_duration_output": any(
+            isinstance(row.get("duration_seconds"), (int, float))
+            and float(row["duration_seconds"]) > MIN_MEANINGFUL_DURATION_SECONDS
+            for row in valid_master_outputs
+        ),
+        "has_non_silent_output": any(
+            row.get("audio_all_zero") is False
+            for row in valid_master_outputs
+        ),
+        "has_valid_master_audio_output": any(
+            (
+                row.get("audio_exists") is True
+                and row.get("audio_all_zero") is False
+                and isinstance(row.get("decoded_stem_count"), int)
+                and row["decoded_stem_count"] > 0
+                and isinstance(row.get("duration_seconds"), (int, float))
+                and float(row["duration_seconds"]) > MIN_MEANINGFUL_DURATION_SECONDS
+            )
+            for row in valid_master_outputs
+        ),
+        "has_uniform_rate_preservation_output": any(
+            (
+                isinstance(row.get("uniform_source_sample_rate_hz"), int)
+                and row["uniform_source_sample_rate_hz"] > 0
+                and row.get("sample_rate_hz") == row.get("uniform_source_sample_rate_hz")
+                and row.get("output_sample_rate_hz") == row.get("uniform_source_sample_rate_hz")
+                and row.get("sample_rate_policy") == "uniform_source_rate_preserve"
+            )
+            for row in valid_master_outputs
+        ),
+        "qa_error_ids": qa_error_ids,
+        "minimum_meaningful_duration_seconds": MIN_MEANINGFUL_DURATION_SECONDS,
+    }
+
+
+def _validate_workspace_render_truth(*, artifact_paths: dict[str, Any]) -> dict[str, Any]:
+    truth = summarize_workspace_render_truth(artifact_paths=artifact_paths)
+    agreement = truth.get("agreement")
+    if not isinstance(agreement, dict):
+        raise SmokeError("Packaged smoke render truth summary was malformed.")
+    if agreement.get("deliverables_summary") is not True:
+        raise SmokeError(
+            "Packaged smoke render artifacts disagreed about deliverable status.\n"
+            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+        )
+    if agreement.get("result_summary") is not True:
+        raise SmokeError(
+            "Packaged smoke manifest and receipt disagreed about the top-level render result summary.\n"
+            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+        )
+    if agreement.get("receipt_lifecycle_status") is not True:
+        raise SmokeError(
+            "Packaged smoke receipt lifecycle status did not match the deliverable result bucket.\n"
+            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+        )
+    if truth.get("has_decoded_audio_output") is not True:
+        raise SmokeError(
+            "Packaged smoke did not produce any deliverable with decoded_stem_count > 0.\n"
+            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+        )
+    if truth.get("has_meaningful_duration_output") is not True:
+        raise SmokeError(
+            "Packaged smoke did not produce any valid master longer than the minimum meaningful duration.\n"
+            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+        )
+    if truth.get("has_non_silent_output") is not True:
+        raise SmokeError(
+            "Packaged smoke only produced all-zero valid-master outputs.\n"
+            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+        )
+    if truth.get("has_valid_master_audio_output") is not True:
+        raise SmokeError(
+            "Packaged smoke did not produce a valid master with decoded audio, meaningful duration, and non-silent signal.\n"
+            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+        )
+    if truth.get("has_uniform_rate_preservation_output") is not True:
+        raise SmokeError(
+            "Packaged smoke did not preserve the uniform source sample rate in the rendered valid master.\n"
+            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+        )
+    result_bucket = _coerce_str(
+        ((truth.get("deliverables_summary") or {}) if isinstance(truth.get("deliverables_summary"), dict) else {}).get("result_bucket")
+    ).strip()
+    if result_bucket not in _VALID_MASTER_RESULT_BUCKETS:
+        raise SmokeError(
+            "Packaged smoke ended without a valid-master result bucket.\n"
+            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+        )
+    return truth
+
+
 def _validate_summary(
     *,
     summary: dict[str, Any],
     repo_root: Path,
     allow_repo_data_root: bool,
-) -> None:
+) -> dict[str, Any]:
     if not bool(summary.get("appLaunchVerified")):
         raise SmokeError("Packaged desktop smoke summary did not confirm the app launch.")
     if not bool(summary.get("ok")):
@@ -1338,6 +1881,40 @@ def _validate_summary(
     render_dir = artifact_paths.get("workspaceDir")
     if not isinstance(render_dir, str) or not Path(render_dir).is_dir():
         raise SmokeError("Smoke summary workspaceDir is missing or not a directory.")
+
+    workflow_stages_completed = summary.get("workflowStagesCompleted")
+    if not isinstance(workflow_stages_completed, list):
+        raise SmokeError("Smoke summary did not include workflowStagesCompleted.")
+    normalized_stages = [
+        stage.strip()
+        for stage in workflow_stages_completed
+        if isinstance(stage, str) and stage.strip()
+    ]
+    if normalized_stages != list(_EXPECTED_SMOKE_WORKFLOW_STAGES):
+        raise SmokeError(
+            "Packaged smoke did not complete the expected desktop workflow sequence.\n"
+            f"expected={list(_EXPECTED_SMOKE_WORKFLOW_STAGES)}\n"
+            f"actual={normalized_stages}"
+        )
+
+    results_inspection = summary.get("resultsInspection")
+    if not isinstance(results_inspection, dict):
+        raise SmokeError("Smoke summary did not include resultsInspection.")
+    for key in (
+        "manifestLoaded",
+        "receiptLoaded",
+        "qaLoaded",
+        "deliverablesSummaryLoaded",
+        "resultSummaryLoaded",
+        "deliverableSummaryRowsLoaded",
+    ):
+        if results_inspection.get(key) is not True:
+            raise SmokeError(
+                "Packaged smoke did not finish inspecting the packaged render outputs in the Results view.\n"
+                f"missing={key}"
+            )
+
+    return _validate_workspace_render_truth(artifact_paths=artifact_paths)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -1568,7 +2145,7 @@ def main() -> int:
         if not isinstance(summary, dict):
             raise SmokeError("Packaged desktop smoke summary was not a JSON object.")
 
-        _validate_summary(
+        render_truth = _validate_summary(
             summary=summary,
             repo_root=repo_root,
             allow_repo_data_root=bool(args.allow_repo_data_root),
@@ -1581,6 +2158,7 @@ def main() -> int:
             "return_code": return_code,
             "stderr_lines": [line for line in stderr.splitlines() if line.strip()],
             "stdout_lines": [line for line in stdout.splitlines() if line.strip()],
+            "render_truth": render_truth,
             "summary_path": summary_path.as_posix(),
             "workspace_dir": workspace_dir.as_posix(),
         }

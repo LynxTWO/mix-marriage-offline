@@ -1,0 +1,90 @@
+{
+  "deliverable_summary_rows": [
+    {
+      "channel_count": 2,
+      "deliverable_id": "DELIV.LAYOUT.2_0.44100",
+      "duration_seconds": 0.15,
+      "failure_reason": null,
+      "file_path": "LAYOUT.2_0/master.wav",
+      "layout": "LAYOUT.2_0",
+      "output_id": "OUT.STEREO.44100",
+      "rendered_frame_count": 6615,
+      "sample_rate_hz": 44100,
+      "status": "success",
+      "validity": "valid_master"
+    }
+  ],
+  "deliverables": [
+    {
+      "artifact_role": "master",
+      "channel_count": 2,
+      "decoded_stem_count": 3,
+      "deliverable_id": "DELIV.LAYOUT.2_0.44100",
+      "duration_seconds": 0.15,
+      "failure_reason": null,
+      "is_valid_master": true,
+      "output_ids": [
+        "OUT.STEREO.44100"
+      ],
+      "planned_stem_count": 3,
+      "prepared_stem_count": 3,
+      "rendered_frame_count": 6615,
+      "skipped_stem_count": 0,
+      "status": "success",
+      "target_layout_id": "LAYOUT.2_0",
+      "warning_codes": []
+    }
+  ],
+  "deliverables_summary": {
+    "deliverable_count": 1,
+    "failed_count": 0,
+    "invalid_master_count": 0,
+    "mixed_outcomes": false,
+    "overall_status": "success",
+    "partial_count": 0,
+    "result_bucket": "valid_master",
+    "success_count": 1,
+    "top_failure_reason": null,
+    "top_failure_status": null,
+    "valid_master_count": 1
+  },
+  "renderer_manifests": [
+    {
+      "outputs": [
+        {
+          "channel_count": 2,
+          "file_path": "LAYOUT.2_0/master.wav",
+          "format": "wav",
+          "layout_id": "LAYOUT.2_0",
+          "metadata": {
+            "resampling": {
+              "output_sample_rate_hz": 44100,
+              "resample_applied": false,
+              "resample_method_id": "linear_interpolation_v1",
+              "resample_stage": "not_applied",
+              "resampled_stem_count": 0,
+              "sample_rate_policy": "uniform_source_rate_preserve",
+              "sample_rate_policy_reason": "all_decodable_stems_share_one_rate",
+              "uniform_source_sample_rate_hz": 44100
+            }
+          },
+          "output_id": "OUT.STEREO.44100",
+          "sample_rate_hz": 44100
+        }
+      ],
+      "renderer_id": "PLUGIN.RENDERER.SAFE",
+      "skipped": []
+    }
+  ],
+  "result_summary": {
+    "deliverable_count": 1,
+    "message": "MMO rendered 1 valid master output. Primary file: LAYOUT.2_0/master.wav.",
+    "overall_status": "success",
+    "primary_output_path": "LAYOUT.2_0/master.wav",
+    "remedy": "Review any remaining warnings, then use the valid master deliverable.",
+    "result_bucket": "valid_master",
+    "title": "Valid master render",
+    "top_failure_reason": null,
+    "valid_master_count": 1
+  }
+}
