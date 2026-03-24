@@ -19,21 +19,21 @@
       "type": "string",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
     },
-    "source": { "$ref": "#/$defs/source" },
-    "source_refs": { "$ref": "#/$defs/source_refs" },
-    "intent": { "$ref": "#/$defs/object_intent" },
+    "source": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/source" },
+    "source_refs": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/source_refs" },
+    "intent": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/object_intent" },
     "timeline": { "$ref": "timeline.schema.json" },
     "objects": {
       "type": "array",
-      "items": { "$ref": "#/$defs/object_entry" }
+      "items": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/object_entry" }
     },
     "beds": {
       "type": "array",
-      "items": { "$ref": "#/$defs/bed_entry" }
+      "items": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/bed_entry" }
     },
-    "rules": { "$ref": "#/$defs/scene_rules" },
-    "routing_intent": { "$ref": "#/$defs/routing_intent" },
-    "metadata": { "$ref": "#/$defs/metadata" }
+    "rules": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/scene_rules" },
+    "routing_intent": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/routing_intent" },
+    "metadata": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/metadata" }
   },
   "$defs": {
     "raw_tag": {
@@ -56,7 +56,7 @@
       "properties": {
         "raw": {
           "type": "array",
-          "items": { "$ref": "#/$defs/raw_tag" }
+          "items": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/raw_tag" }
         },
         "normalized": {
           "type": "object",
@@ -92,7 +92,7 @@
             ]
           }
         },
-        "tags": { "$ref": "#/$defs/tag_bag" }
+        "tags": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/tag_bag" }
       }
     },
     "posix_abs_path": {
@@ -110,7 +110,7 @@
       "required": ["stems_dir", "created_from"],
       "properties": {
         "report_id": { "type": "string", "minLength": 1 },
-        "stems_dir": { "$ref": "#/$defs/posix_path" },
+        "stems_dir": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/posix_path" },
         "lock_hash": { "type": "string", "minLength": 1 },
         "created_from": {
           "type": "string",
@@ -171,11 +171,11 @@
       "additionalProperties": false,
       "required": ["confidence", "locks"],
       "properties": {
-        "position": { "$ref": "#/$defs/position_intent" },
+        "position": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/position_intent" },
         "width": { "type": "number", "minimum": 0, "maximum": 1 },
         "depth": { "type": "number", "minimum": 0, "maximum": 1 },
-        "surround_send_caps": { "$ref": "#/$defs/surround_send_caps" },
-        "height_send_caps": { "$ref": "#/$defs/height_send_caps" },
+        "surround_send_caps": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/surround_send_caps" },
+        "height_send_caps": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/height_send_caps" },
         "perspective": {
           "type": "string",
           "enum": ["audience", "on_stage", "in_band", "in_orchestra"]
@@ -227,9 +227,9 @@
         "width_hint": { "type": "number", "minimum": 0, "maximum": 1 },
         "depth_hint": { "type": "number", "minimum": 0, "maximum": 1 },
         "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
-        "locks": { "$ref": "#/$defs/scene_hint_locks" },
-        "source_metadata": { "$ref": "#/$defs/source_metadata" },
-        "intent": { "$ref": "#/$defs/object_intent" },
+        "locks": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/scene_hint_locks" },
+        "source_metadata": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/source_metadata" },
+        "intent": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/object_intent" },
         "notes": {
           "type": "array",
           "items": { "type": "string" }
@@ -242,7 +242,7 @@
       "required": ["confidence", "locks"],
       "properties": {
         "diffuse": { "type": "number", "minimum": 0, "maximum": 1 },
-        "height_send_caps": { "$ref": "#/$defs/height_send_caps" },
+        "height_send_caps": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/height_send_caps" },
         "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
         "locks": {
           "type": "array",
@@ -272,7 +272,7 @@
           "type": "string",
           "enum": ["field", "bed"]
         },
-        "intent": { "$ref": "#/$defs/bed_intent" },
+        "intent": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/bed_intent" },
         "notes": {
           "type": "array",
           "items": { "type": "string" }
@@ -328,18 +328,18 @@
         "role_id": { "type": "string", "pattern": "^ROLE\\.[A-Z0-9_.]+$" },
         "bus_id": { "type": "string", "pattern": "^BUS\\.[A-Z0-9_]+(?:\\.[A-Z0-9_]+)?$" },
         "group_bus": { "type": "string", "pattern": "^BUS\\.[A-Z0-9_]+$" },
-        "role_source": { "$ref": "#/$defs/locks_receipt_source" },
-        "bus_source": { "$ref": "#/$defs/locks_receipt_source" },
-        "azimuth_source": { "$ref": "#/$defs/locks_receipt_source" },
-        "width_source": { "$ref": "#/$defs/locks_receipt_source" },
-        "surround_send_caps_source": { "$ref": "#/$defs/locks_receipt_source" },
-        "depth_source": { "$ref": "#/$defs/locks_receipt_source" },
-        "height_send_caps_source": { "$ref": "#/$defs/locks_receipt_source" },
+        "role_source": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/locks_receipt_source" },
+        "bus_source": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/locks_receipt_source" },
+        "azimuth_source": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/locks_receipt_source" },
+        "width_source": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/locks_receipt_source" },
+        "surround_send_caps_source": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/locks_receipt_source" },
+        "depth_source": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/locks_receipt_source" },
+        "height_send_caps_source": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/locks_receipt_source" },
         "azimuth_deg": { "type": ["number", "null"] },
         "width": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
         "depth": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
-        "surround_send_caps": { "$ref": "#/$defs/surround_send_caps" },
-        "height_send_caps": { "$ref": "#/$defs/height_send_caps" }
+        "surround_send_caps": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/surround_send_caps" },
+        "height_send_caps": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/height_send_caps" }
       }
     },
     "locks_receipt": {
@@ -351,7 +351,7 @@
         "locks_path": { "type": "string", "pattern": "^[^\\\\]+$", "minLength": 1 },
         "objects": {
           "type": "array",
-          "items": { "$ref": "#/$defs/locks_receipt_row" }
+          "items": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/locks_receipt_row" }
         },
         "unmatched_stem_ids": {
           "type": "array",
@@ -369,15 +369,15 @@
       "additionalProperties": false,
       "required": ["scope", "field", "source", "original_value", "applied_value"],
       "properties": {
-        "scope": { "$ref": "#/$defs/precedence_scope" },
+        "scope": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/precedence_scope" },
         "scene_id": { "type": "string", "minLength": 1 },
         "object_id": { "type": "string", "minLength": 1 },
         "stem_id": { "type": "string", "minLength": 1 },
         "bed_id": { "type": "string", "minLength": 1 },
         "field": { "type": "string", "minLength": 1 },
-        "source": { "$ref": "#/$defs/locks_receipt_source" },
-        "original_value": { "$ref": "#/$defs/precedence_value" },
-        "applied_value": { "$ref": "#/$defs/precedence_value" },
+        "source": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/locks_receipt_source" },
+        "original_value": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/precedence_value" },
+        "applied_value": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/precedence_value" },
         "lock_id": { "type": "string", "minLength": 1 }
       }
     },
@@ -390,7 +390,7 @@
         "locks_path": { "type": "string", "pattern": "^[^\\\\]+$", "minLength": 1 },
         "entries": {
           "type": "array",
-          "items": { "$ref": "#/$defs/precedence_entry" }
+          "items": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/precedence_entry" }
         },
         "unmatched_stem_ids": {
           "type": "array",
@@ -428,7 +428,7 @@
         "applied": { "type": "boolean" },
         "metrics": {
           "type": "array",
-          "items": { "$ref": "#/$defs/stereo_hint_metric" }
+          "items": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/stereo_hint_metric" }
         }
       }
     },
@@ -438,13 +438,13 @@
       "properties": {
         "profile_id": { "type": "string", "minLength": 1 },
         "preset_id": { "type": "string", "minLength": 1 },
-        "vibe": { "$ref": "#/$defs/vibe_snapshot" },
-        "metering": { "$ref": "#/$defs/scene_metering" },
-        "locks_receipt": { "$ref": "#/$defs/locks_receipt" },
-        "precedence_receipt": { "$ref": "#/$defs/precedence_receipt" },
+        "vibe": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/vibe_snapshot" },
+        "metering": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/scene_metering" },
+        "locks_receipt": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/locks_receipt" },
+        "precedence_receipt": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/precedence_receipt" },
         "stereo_hints": {
           "type": "array",
-          "items": { "$ref": "#/$defs/stereo_hint_evidence_row" }
+          "items": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/stereo_hint_evidence_row" }
         }
       }
     },
@@ -485,8 +485,8 @@
       "additionalProperties": false,
       "required": ["layout_safety_defaults", "lfe_policy_defaults"],
       "properties": {
-        "layout_safety_defaults": { "$ref": "#/$defs/layout_safety_defaults" },
-        "lfe_policy_defaults": { "$ref": "#/$defs/lfe_policy_defaults" }
+        "layout_safety_defaults": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/layout_safety_defaults" },
+        "lfe_policy_defaults": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/lfe_policy_defaults" }
       }
     },
     "scene_object_meter": {
@@ -521,9 +521,9 @@
         "mode": { "type": "string", "enum": ["truth", "basic", "none"] },
         "objects": {
           "type": "array",
-          "items": { "$ref": "#/$defs/scene_object_meter" }
+          "items": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/scene_object_meter" }
         },
-        "session": { "$ref": "#/$defs/scene_session_meter" }
+        "session": { "$ref": "https://mix-marriage-offline.dev/schemas/scene.schema.json#/$defs/scene_session_meter" }
       }
     },
     "routing_intent": {
