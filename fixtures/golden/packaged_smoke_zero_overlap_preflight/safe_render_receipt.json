@@ -1,0 +1,98 @@
+{
+  "deliverable_summary_rows": [],
+  "deliverables_summary": {
+    "deliverable_count": 0,
+    "failed_count": 1,
+    "invalid_master_count": 0,
+    "mixed_outcomes": false,
+    "overall_status": "failed",
+    "partial_count": 0,
+    "result_bucket": "full_failure",
+    "success_count": 0,
+    "top_failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+    "top_failure_status": "failed",
+    "valid_master_count": 0
+  },
+  "preflight_summary": {
+    "blocked_gates": [
+      "GATE.SCENE_STEM_BINDING_OVERLAP"
+    ],
+    "final_decision": "block",
+    "issues": [
+      {
+        "issue_id": "ISSUE.RENDER.SCENE_STEM_BINDING_EMPTY",
+        "message": "Scene references do not match analyzed stems. Matched 0 of 3 scene refs after binding.",
+        "severity": "error"
+      }
+    ],
+    "primary_issue_id": "ISSUE.RENDER.SCENE_STEM_BINDING_EMPTY",
+    "primary_message": "Scene references do not match analyzed stems. Matched 0 of 3 scene refs after binding.",
+    "scene_stem_overlap_summary": {
+      "duplicate_bound_ref_count": 0,
+      "duplicated_stem_ids": [],
+      "failure_reason": "Scene references do not match analyzed stems.",
+      "issue_ids": [
+        "ISSUE.RENDER.SCENE_STEM_BINDING_EMPTY"
+      ],
+      "matched_count": 0,
+      "minimum_ratio": 0.75,
+      "overlap_ratio": 0.0,
+      "reference_count": 3,
+      "scene_mode": "explicit",
+      "status": "failed",
+      "unique_matched_stem_count": 0,
+      "unresolved_count": 3,
+      "unresolved_refs": [
+        {
+          "field": "stem_id",
+          "stem_ref": "ghost_kick",
+          "target_id": "OBJ.001",
+          "target_type": "object"
+        },
+        {
+          "field": "stem_id",
+          "stem_ref": "ghost_snare",
+          "target_id": "OBJ.002",
+          "target_type": "object"
+        },
+        {
+          "field": "stem_ids[0]",
+          "stem_ref": "ghost_pad",
+          "target_id": "BED.001",
+          "target_type": "bed"
+        }
+      ]
+    }
+  },
+  "result_summary": {
+    "deliverable_count": 0,
+    "message": "Scene references do not match analyzed stems.",
+    "overall_status": "failed",
+    "primary_output_path": null,
+    "remedy": "Rebuild the scene from the same stems you analyzed, then render again.",
+    "result_bucket": "full_failure",
+    "title": "Render blocked: scene/report mismatch",
+    "top_failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+    "valid_master_count": 0
+  },
+  "scene_binding_summary": {
+    "binding_warnings": [
+      {
+        "detail": "Scene stem reference did not match any analyzed session stem.",
+        "field": "stem_id",
+        "stem_ref": "ghost_kick",
+        "target_id": "OBJ.001",
+        "target_type": "object",
+        "warning_code": "SCENE_BINDING.UNBOUND_STEM_REF"
+      }
+    ],
+    "bound_count": 0,
+    "failure_reason": "No scene stem references matched the analyzed session stems.",
+    "reference_count": 3,
+    "rewritten_count": 0,
+    "rewritten_refs": [],
+    "status": "failed",
+    "unbound_count": 3
+  },
+  "status": "blocked"
+}

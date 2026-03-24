@@ -17,6 +17,7 @@ _PASSING_FIXTURES = (
     "packaged_smoke_uniform_rate_44100",
 )
 _FAILING_FIXTURES = (
+    "packaged_smoke_zero_overlap_preflight",
     "packaged_smoke_zero_decoded_failure",
     "packaged_smoke_silent_invalid",
 )

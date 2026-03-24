@@ -1534,6 +1534,135 @@ def _normalize_summary_for_report(summary: dict[str, Any] | None) -> dict[str, A
     return json.loads(_canonical_payload(summary))
 
 
+def _default_scene_binding_summary() -> dict[str, Any]:
+    return {
+        "status": "not_applicable",
+        "reference_count": 0,
+        "bound_count": 0,
+        "unbound_count": 0,
+        "rewritten_count": 0,
+        "rewritten_refs": [],
+        "binding_warnings": [],
+        "failure_reason": None,
+    }
+
+
+def _normalize_scene_binding_summary(summary: dict[str, Any] | None) -> dict[str, Any]:
+    normalized = _default_scene_binding_summary()
+    if isinstance(summary, dict):
+        normalized.update(json.loads(_canonical_payload(summary)))
+    return normalized
+
+
+def _default_scene_stem_overlap_summary() -> dict[str, Any]:
+    return {
+        "status": "not_applicable",
+        "scene_mode": None,
+        "reference_count": 0,
+        "matched_count": 0,
+        "unique_matched_stem_count": 0,
+        "unresolved_count": 0,
+        "duplicate_bound_ref_count": 0,
+        "overlap_ratio": None,
+        "minimum_ratio": None,
+        "duplicated_stem_ids": [],
+        "unresolved_refs": [],
+        "issue_ids": [],
+        "failure_reason": None,
+    }
+
+
+def _default_preflight_summary() -> dict[str, Any]:
+    return {
+        "final_decision": "not_run",
+        "blocked_gates": [],
+        "issues": [],
+        "primary_issue_id": None,
+        "primary_message": None,
+        "scene_stem_overlap_summary": _default_scene_stem_overlap_summary(),
+    }
+
+
+def _normalize_preflight_summary(summary: dict[str, Any] | None) -> dict[str, Any]:
+    normalized = _default_preflight_summary()
+    if isinstance(summary, dict):
+        normalized.update(json.loads(_canonical_payload(summary)))
+    scene_overlap_summary = normalized.get("scene_stem_overlap_summary")
+    normalized["scene_stem_overlap_summary"] = _default_scene_stem_overlap_summary()
+    if isinstance(scene_overlap_summary, dict):
+        normalized["scene_stem_overlap_summary"].update(
+            json.loads(_canonical_payload(scene_overlap_summary))
+        )
+    return normalized
+
+
+def _derive_root_cause(
+    *,
+    preflight_summary: dict[str, Any],
+    deliverables_summary: dict[str, Any] | None,
+    result_summary: dict[str, Any] | None,
+    master_outputs: list[dict[str, Any]],
+    has_decoded_audio_output: bool,
+    has_valid_master_audio_output: bool,
+) -> dict[str, Any]:
+    primary_issue_id = _coerce_str(preflight_summary.get("primary_issue_id")).strip() or None
+    primary_message = _coerce_str(preflight_summary.get("primary_message")).strip() or None
+    scene_overlap_summary = preflight_summary.get("scene_stem_overlap_summary")
+    if not isinstance(scene_overlap_summary, dict):
+        scene_overlap_summary = _default_scene_stem_overlap_summary()
+
+    overlap_status = _coerce_str(scene_overlap_summary.get("status")).strip() or None
+    result_bucket = _coerce_str((deliverables_summary or {}).get("result_bucket")).strip() or None
+    top_failure_reason = (
+        _coerce_str((result_summary or {}).get("top_failure_reason")).strip()
+        or _coerce_str((deliverables_summary or {}).get("top_failure_reason")).strip()
+        or None
+    )
+
+    category: str | None = None
+    message: str | None = None
+    if primary_issue_id == "ISSUE.RENDER.SCENE_STEM_BINDING_EMPTY":
+        category = "scene_overlap_empty"
+        message = primary_message or "Scene references do not match analyzed stems."
+    elif primary_issue_id == "ISSUE.RENDER.SCENE_STEM_BINDING_PARTIAL":
+        category = "scene_overlap_partial"
+        message = primary_message or "Scene references only partially match analyzed stems."
+    elif primary_issue_id == "ISSUE.RENDER.SCENE_STEM_BINDING_AMBIGUOUS":
+        category = "scene_overlap_ambiguous"
+        message = primary_message or "Multiple scene references collapse onto the same analyzed stem."
+    elif top_failure_reason == "RENDER_RESULT.NO_DECODABLE_STEMS" or not has_decoded_audio_output:
+        category = "no_decodable_stems"
+        message = (
+            _coerce_str((result_summary or {}).get("message")).strip()
+            or "No decodable stems reached any master deliverable."
+        )
+    elif (
+        result_bucket not in _VALID_MASTER_RESULT_BUCKETS
+        and master_outputs
+        and not has_valid_master_audio_output
+    ):
+        category = "all_masters_invalid"
+        message = (
+            _coerce_str((result_summary or {}).get("message")).strip()
+            or "All rendered masters were invalid or diagnostic-only outputs."
+        )
+        if top_failure_reason == "RENDER_RESULT.SILENT_OUTPUT":
+            category = "silent_invalid_master"
+            message = (
+                _coerce_str((result_summary or {}).get("message")).strip()
+                or "Rendered master outputs were effectively silent and invalid."
+            )
+
+    return {
+        "category": category,
+        "issue_id": primary_issue_id,
+        "message": message,
+        "overlap_status": overlap_status,
+        "result_bucket": result_bucket,
+        "top_failure_reason": top_failure_reason,
+    }
+
+
 def summarize_workspace_render_truth(*, artifact_paths: dict[str, Any]) -> dict[str, Any]:
     render_manifest_path = Path(str(artifact_paths.get("renderManifestPath", ""))).resolve()
     render_receipt_path = Path(str(artifact_paths.get("renderReceiptPath", ""))).resolve()
@@ -1552,6 +1681,18 @@ def summarize_workspace_render_truth(*, artifact_paths: dict[str, Any]) -> dict[
     qa_deliverables_summary = _normalize_summary_for_report(qa.get("deliverables_summary"))
     manifest_result_summary = _normalize_summary_for_report(manifest.get("result_summary"))
     receipt_result_summary = _normalize_summary_for_report(receipt.get("result_summary"))
+    manifest_scene_binding_summary = _normalize_scene_binding_summary(
+        manifest.get("scene_binding_summary")
+    )
+    receipt_scene_binding_summary = _normalize_scene_binding_summary(
+        receipt.get("scene_binding_summary")
+    )
+    manifest_preflight_summary = _normalize_preflight_summary(
+        manifest.get("preflight_summary")
+    )
+    receipt_preflight_summary = _normalize_preflight_summary(
+        receipt.get("preflight_summary")
+    )
 
     outputs_by_id = _output_index(manifest)
     summary_rows = _deliverable_summary_rows(receipt, manifest)
@@ -1679,12 +1820,46 @@ def summarize_workspace_render_truth(*, artifact_paths: dict[str, Any]) -> dict[
     ).strip()
     receipt_status = _coerce_str(receipt.get("status")).strip()
     expected_receipt_status = _expected_receipt_lifecycle_status(result_bucket)
+    scene_overlap_summary = manifest_preflight_summary.get("scene_stem_overlap_summary")
+    if not isinstance(scene_overlap_summary, dict):
+        scene_overlap_summary = _default_scene_stem_overlap_summary()
+    has_non_zero_scene_report_overlap = (
+        _coerce_str(scene_overlap_summary.get("status")).strip() in {"clean", "partial"}
+        and (_coerce_int(scene_overlap_summary.get("matched_count")) or 0) > 0
+    )
+    root_cause = _derive_root_cause(
+        preflight_summary=manifest_preflight_summary,
+        deliverables_summary=manifest_deliverables_summary,
+        result_summary=manifest_result_summary,
+        master_outputs=master_outputs,
+        has_decoded_audio_output=any(
+            isinstance(row.get("decoded_stem_count"), int) and row["decoded_stem_count"] > 0
+            for row in master_outputs
+        ),
+        has_valid_master_audio_output=any(
+            (
+                row.get("audio_exists") is True
+                and row.get("audio_all_zero") is False
+                and isinstance(row.get("decoded_stem_count"), int)
+                and row["decoded_stem_count"] > 0
+                and isinstance(row.get("duration_seconds"), (int, float))
+                and float(row["duration_seconds"]) > MIN_MEANINGFUL_DURATION_SECONDS
+            )
+            for row in valid_master_outputs
+        ),
+    )
     return {
         "agreement": {
             "deliverables_summary": (
                 manifest_deliverables_summary is not None
                 and manifest_deliverables_summary == receipt_deliverables_summary
                 and manifest_deliverables_summary == qa_deliverables_summary
+            ),
+            "scene_binding_summary": (
+                manifest_scene_binding_summary == receipt_scene_binding_summary
+            ),
+            "preflight_summary": (
+                manifest_preflight_summary == receipt_preflight_summary
             ),
             "result_summary": (
                 manifest_result_summary is not None
@@ -1695,6 +1870,8 @@ def summarize_workspace_render_truth(*, artifact_paths: dict[str, Any]) -> dict[
             ),
         },
         "deliverables_summary": manifest_deliverables_summary,
+        "scene_binding_summary": manifest_scene_binding_summary,
+        "preflight_summary": manifest_preflight_summary,
         "result_summary": manifest_result_summary,
         "receipt_status": receipt_status or None,
         "expected_receipt_status": expected_receipt_status,
@@ -1734,6 +1911,8 @@ def summarize_workspace_render_truth(*, artifact_paths: dict[str, Any]) -> dict[
             )
             for row in valid_master_outputs
         ),
+        "has_non_zero_scene_report_overlap": has_non_zero_scene_report_overlap,
+        "root_cause": root_cause,
         "qa_error_ids": qa_error_ids,
         "minimum_meaningful_duration_seconds": MIN_MEANINGFUL_DURATION_SECONDS,
     }
@@ -1749,6 +1928,16 @@ def _validate_workspace_render_truth(*, artifact_paths: dict[str, Any]) -> dict[
             "Packaged smoke render artifacts disagreed about deliverable status.\n"
             f"{json.dumps(truth, indent=2, sort_keys=True)}"
         )
+    if agreement.get("scene_binding_summary") is not True:
+        raise SmokeError(
+            "Packaged smoke manifest and receipt disagreed about scene binding normalization.\n"
+            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+        )
+    if agreement.get("preflight_summary") is not True:
+        raise SmokeError(
+            "Packaged smoke manifest and receipt disagreed about preflight overlap diagnostics.\n"
+            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+        )
     if agreement.get("result_summary") is not True:
         raise SmokeError(
             "Packaged smoke manifest and receipt disagreed about the top-level render result summary.\n"
@@ -1759,9 +1948,46 @@ def _validate_workspace_render_truth(*, artifact_paths: dict[str, Any]) -> dict[
             "Packaged smoke receipt lifecycle status did not match the deliverable result bucket.\n"
             f"{json.dumps(truth, indent=2, sort_keys=True)}"
         )
+    root_cause = truth.get("root_cause")
+    if not isinstance(root_cause, dict):
+        root_cause = {}
+    root_cause_category = _coerce_str(root_cause.get("category")).strip()
+    root_cause_message = _coerce_str(root_cause.get("message")).strip()
+    if root_cause_category == "scene_overlap_empty":
+        raise SmokeError(
+            "Packaged smoke failed before render because scene references do not match analyzed stems.\n"
+            f"root_cause={root_cause_message or 'scene/report overlap was zero'}\n"
+            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+        )
+    if truth.get("has_non_zero_scene_report_overlap") is not True:
+        preflight_summary = truth.get("preflight_summary")
+        if isinstance(preflight_summary, dict):
+            scene_overlap_summary = preflight_summary.get("scene_stem_overlap_summary")
+            if isinstance(scene_overlap_summary, dict) and _coerce_str(
+                scene_overlap_summary.get("status")
+            ).strip() in {"clean", "partial", "failed"}:
+                raise SmokeError(
+                    "Packaged smoke did not verify any non-zero overlap between the scene and analyzed session stems.\n"
+                    f"{json.dumps(truth, indent=2, sort_keys=True)}"
+                )
     if truth.get("has_decoded_audio_output") is not True:
+        if root_cause_category == "no_decodable_stems":
+            raise SmokeError(
+                "Packaged smoke failed because no decodable stems reached any master deliverable.\n"
+                f"root_cause={root_cause_message or 'none of the planned stems decoded'}\n"
+                f"{json.dumps(truth, indent=2, sort_keys=True)}"
+            )
         raise SmokeError(
             "Packaged smoke did not produce any deliverable with decoded_stem_count > 0.\n"
+            f"{json.dumps(truth, indent=2, sort_keys=True)}"
+        )
+    if truth.get("has_valid_master_audio_output") is not True and root_cause_category in {
+        "all_masters_invalid",
+        "silent_invalid_master",
+    }:
+        raise SmokeError(
+            "Packaged smoke only produced invalid masters; no deliverable qualified as a valid master.\n"
+            f"root_cause={root_cause_message or 'all master outputs were invalid'}\n"
             f"{json.dumps(truth, indent=2, sort_keys=True)}"
         )
     if truth.get("has_meaningful_duration_output") is not True:

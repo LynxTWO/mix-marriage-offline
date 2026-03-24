@@ -1,8 +1,10 @@
 {
   "agreement": {
     "deliverables_summary": true,
+    "preflight_summary": true,
     "receipt_lifecycle_status": true,
-    "result_summary": true
+    "result_summary": true,
+    "scene_binding_summary": true
   },
   "deliverables_summary": {
     "deliverable_count": 1,
@@ -21,6 +23,7 @@
   "has_decoded_audio_output": false,
   "has_meaningful_duration_output": false,
   "has_non_silent_output": false,
+  "has_non_zero_scene_report_overlap": false,
   "has_uniform_rate_preservation_output": false,
   "has_valid_master_audio_output": false,
   "master_outputs": [
@@ -57,6 +60,28 @@
     }
   ],
   "minimum_meaningful_duration_seconds": 0.11,
+  "preflight_summary": {
+    "blocked_gates": [],
+    "final_decision": "not_run",
+    "issues": [],
+    "primary_issue_id": null,
+    "primary_message": null,
+    "scene_stem_overlap_summary": {
+      "duplicate_bound_ref_count": 0,
+      "duplicated_stem_ids": [],
+      "failure_reason": null,
+      "issue_ids": [],
+      "matched_count": 0,
+      "minimum_ratio": null,
+      "overlap_ratio": null,
+      "reference_count": 0,
+      "scene_mode": null,
+      "status": "not_applicable",
+      "unique_matched_stem_count": 0,
+      "unresolved_count": 0,
+      "unresolved_refs": []
+    }
+  },
   "qa_error_ids": [
     "ISSUE.RENDER.ALL_MASTERS_INVALID",
     "ISSUE.RENDER.QA.SILENT_OUTPUT"
@@ -72,6 +97,24 @@
     "title": "Render failed: no decodable stems",
     "top_failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
     "valid_master_count": 0
+  },
+  "root_cause": {
+    "category": "no_decodable_stems",
+    "issue_id": null,
+    "message": "MMO planned the render, but none of the selected stems decoded into audio. Any written artifact is diagnostic only.",
+    "overlap_status": "not_applicable",
+    "result_bucket": "full_failure",
+    "top_failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS"
+  },
+  "scene_binding_summary": {
+    "binding_warnings": [],
+    "bound_count": 0,
+    "failure_reason": null,
+    "reference_count": 0,
+    "rewritten_count": 0,
+    "rewritten_refs": [],
+    "status": "not_applicable",
+    "unbound_count": 0
   },
   "valid_master_outputs": []
 }

@@ -77,6 +77,38 @@ class TestPackagedDesktopSmoke(unittest.TestCase):
             "valid_master_count": 1,
             "primary_output_path": "LAYOUT.2_0/master.wav",
         }
+        scene_binding_summary = {
+            "status": "clean",
+            "reference_count": 3,
+            "bound_count": 3,
+            "unbound_count": 0,
+            "rewritten_count": 0,
+            "rewritten_refs": [],
+            "binding_warnings": [],
+            "failure_reason": None,
+        }
+        preflight_summary = {
+            "final_decision": "pass",
+            "blocked_gates": [],
+            "issues": [],
+            "primary_issue_id": None,
+            "primary_message": None,
+            "scene_stem_overlap_summary": {
+                "status": "clean",
+                "scene_mode": "explicit",
+                "reference_count": 3,
+                "matched_count": 3,
+                "unique_matched_stem_count": 3,
+                "unresolved_count": 0,
+                "duplicate_bound_ref_count": 0,
+                "overlap_ratio": 1.0,
+                "minimum_ratio": 0.75,
+                "duplicated_stem_ids": [],
+                "unresolved_refs": [],
+                "issue_ids": [],
+                "failure_reason": None,
+            },
+        }
         deliverable_summary_rows = [
             {
                 "deliverable_id": "DELIV.LAYOUT.2_0.SMOKE",
@@ -93,6 +125,8 @@ class TestPackagedDesktopSmoke(unittest.TestCase):
             }
         ]
         render_manifest = {
+            "scene_binding_summary": scene_binding_summary,
+            "preflight_summary": preflight_summary,
             "deliverables": [
                 {
                     "deliverable_id": "DELIV.LAYOUT.2_0.SMOKE",
@@ -141,6 +175,8 @@ class TestPackagedDesktopSmoke(unittest.TestCase):
         }
         render_receipt = {
             "status": "completed",
+            "scene_binding_summary": scene_binding_summary,
+            "preflight_summary": preflight_summary,
             "deliverables_summary": deliverables_summary,
             "deliverable_summary_rows": deliverable_summary_rows,
             "result_summary": result_summary,
@@ -190,6 +226,28 @@ class TestPackagedDesktopSmoke(unittest.TestCase):
             },
             "workflowStagesCompleted": ["doctor", "validate", "analyze", "scene", "render"],
         }
+
+    def _artifact_paths(self, summary: dict[str, object]) -> dict[str, str]:
+        artifact_paths = summary.get("artifactPaths")
+        self.assertIsInstance(artifact_paths, dict)
+        if not isinstance(artifact_paths, dict):
+            raise AssertionError("artifactPaths missing")
+        return artifact_paths
+
+    def _read_artifact_json(self, summary: dict[str, object], key: str) -> dict[str, object]:
+        artifact_paths = self._artifact_paths(summary)
+        path = Path(str(artifact_paths[key]))
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def _write_artifact_json(
+        self,
+        summary: dict[str, object],
+        key: str,
+        payload: dict[str, object],
+    ) -> None:
+        artifact_paths = self._artifact_paths(summary)
+        path = Path(str(artifact_paths[key]))
+        path.write_text(json.dumps(payload), encoding="utf-8")
 
     def test_sidecar_name_detection_matches_staged_and_bundled_names(self) -> None:
         self.assertTrue(
@@ -526,6 +584,7 @@ class TestPackagedDesktopSmoke(unittest.TestCase):
 
             self.assertTrue(truth.get("has_valid_master_audio_output"))
             self.assertTrue(truth.get("has_uniform_rate_preservation_output"))
+            self.assertTrue(truth.get("has_non_zero_scene_report_overlap"))
 
     def test_validate_summary_rejects_missing_results_inspection(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -548,6 +607,266 @@ class TestPackagedDesktopSmoke(unittest.TestCase):
                     summary=summary,
                     repo_root=repo_root,
                     allow_repo_data_root=False,
+                )
+
+    def test_validate_workspace_render_truth_names_zero_overlap_root_cause(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            summary_root = Path(temp_dir) / "summary"
+            summary_root.mkdir()
+            summary = self._valid_summary(summary_root)
+
+            render_manifest = self._read_artifact_json(summary, "renderManifestPath")
+            render_receipt = self._read_artifact_json(summary, "renderReceiptPath")
+            render_qa = self._read_artifact_json(summary, "renderQaPath")
+
+            failure_deliverables_summary = {
+                "overall_status": "failed",
+                "deliverable_count": 0,
+                "success_count": 0,
+                "failed_count": 1,
+                "partial_count": 0,
+                "invalid_master_count": 0,
+                "valid_master_count": 0,
+                "mixed_outcomes": False,
+                "result_bucket": "full_failure",
+                "top_failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+                "top_failure_status": "failed",
+            }
+            failure_result_summary = {
+                "title": "Render blocked: scene/report mismatch",
+                "message": "Scene references do not match analyzed stems.",
+                "remedy": "Rebuild the scene from the same stems you analyzed, then render again.",
+                "result_bucket": "full_failure",
+                "overall_status": "failed",
+                "top_failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+                "deliverable_count": 0,
+                "valid_master_count": 0,
+                "primary_output_path": None,
+            }
+            failed_preflight_summary = {
+                "final_decision": "block",
+                "blocked_gates": ["GATE.SCENE_STEM_BINDING_OVERLAP"],
+                "issues": [
+                    {
+                        "issue_id": "ISSUE.RENDER.SCENE_STEM_BINDING_EMPTY",
+                        "severity": "error",
+                        "message": "Scene references do not match analyzed stems. Matched 0 of 3 scene refs after binding.",
+                    }
+                ],
+                "primary_issue_id": "ISSUE.RENDER.SCENE_STEM_BINDING_EMPTY",
+                "primary_message": "Scene references do not match analyzed stems. Matched 0 of 3 scene refs after binding.",
+                "scene_stem_overlap_summary": {
+                    "status": "failed",
+                    "scene_mode": "explicit",
+                    "reference_count": 3,
+                    "matched_count": 0,
+                    "unique_matched_stem_count": 0,
+                    "unresolved_count": 3,
+                    "duplicate_bound_ref_count": 0,
+                    "overlap_ratio": 0.0,
+                    "minimum_ratio": 0.75,
+                    "duplicated_stem_ids": [],
+                    "unresolved_refs": [
+                        {
+                            "target_type": "object",
+                            "target_id": "OBJ.001",
+                            "field": "stem_id",
+                            "stem_ref": "ghost_kick",
+                        }
+                    ],
+                    "issue_ids": ["ISSUE.RENDER.SCENE_STEM_BINDING_EMPTY"],
+                    "failure_reason": "Scene references do not match analyzed stems.",
+                },
+            }
+
+            render_manifest["deliverables"] = []
+            render_manifest["renderer_manifests"] = []
+            render_manifest["deliverables_summary"] = failure_deliverables_summary
+            render_manifest["deliverable_summary_rows"] = []
+            render_manifest["result_summary"] = failure_result_summary
+            render_manifest["preflight_summary"] = failed_preflight_summary
+            render_receipt["status"] = "blocked"
+            render_receipt["deliverables_summary"] = failure_deliverables_summary
+            render_receipt["deliverable_summary_rows"] = []
+            render_receipt["result_summary"] = failure_result_summary
+            render_receipt["preflight_summary"] = failed_preflight_summary
+            render_qa["deliverables_summary"] = failure_deliverables_summary
+
+            self._write_artifact_json(summary, "renderManifestPath", render_manifest)
+            self._write_artifact_json(summary, "renderReceiptPath", render_receipt)
+            self._write_artifact_json(summary, "renderQaPath", render_qa)
+
+            truth = self.module.summarize_workspace_render_truth(
+                artifact_paths=self._artifact_paths(summary)
+            )
+            self.assertEqual(truth.get("root_cause", {}).get("category"), "scene_overlap_empty")
+
+            with self.assertRaisesRegex(
+                self.module.SmokeError,
+                "scene references do not match analyzed stems",
+            ):
+                self.module._validate_workspace_render_truth(
+                    artifact_paths=self._artifact_paths(summary)
+                )
+
+    def test_validate_workspace_render_truth_names_no_decodable_root_cause(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            summary_root = Path(temp_dir) / "summary"
+            summary_root.mkdir()
+            summary = self._valid_summary(summary_root)
+
+            truth = self.module.summarize_workspace_render_truth(
+                artifact_paths=self._artifact_paths(summary)
+            )
+            self.assertIsInstance(truth.get("root_cause"), dict)
+            self.assertIsNone(truth.get("root_cause", {}).get("category"))
+
+            render_manifest = self._read_artifact_json(summary, "renderManifestPath")
+            render_receipt = self._read_artifact_json(summary, "renderReceiptPath")
+            render_qa = self._read_artifact_json(summary, "renderQaPath")
+
+            failed_deliverable = render_manifest["deliverables"][0]
+            failed_deliverable["status"] = "failed"
+            failed_deliverable["is_valid_master"] = False
+            failed_deliverable["decoded_stem_count"] = 0
+            failed_deliverable["failure_reason"] = "RENDER_RESULT.NO_DECODABLE_STEMS"
+            failed_deliverable["warning_codes"] = ["RENDER_RESULT.NO_DECODABLE_STEMS"]
+
+            failed_summary = {
+                "overall_status": "failed",
+                "deliverable_count": 1,
+                "success_count": 0,
+                "failed_count": 1,
+                "partial_count": 0,
+                "invalid_master_count": 0,
+                "valid_master_count": 0,
+                "mixed_outcomes": False,
+                "result_bucket": "full_failure",
+                "top_failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+                "top_failure_status": "failed",
+            }
+            failed_result = {
+                "title": "Render failed: no decodable stems",
+                "message": "MMO planned the render, but none of the selected stems decoded into audio. Any written artifact is diagnostic only.",
+                "remedy": "Open the stem diagnostics, repair or replace the failing source files, then rerun Render.",
+                "result_bucket": "full_failure",
+                "overall_status": "failed",
+                "top_failure_reason": "RENDER_RESULT.NO_DECODABLE_STEMS",
+                "deliverable_count": 1,
+                "valid_master_count": 0,
+                "primary_output_path": "LAYOUT.2_0/master.wav",
+            }
+            failed_row = render_manifest["deliverable_summary_rows"][0]
+            failed_row["status"] = "failed"
+            failed_row["validity"] = "invalid_master"
+            failed_row["failure_reason"] = "RENDER_RESULT.NO_DECODABLE_STEMS"
+
+            render_manifest["deliverables_summary"] = failed_summary
+            render_manifest["result_summary"] = failed_result
+            render_receipt["status"] = "blocked"
+            render_receipt["deliverables_summary"] = failed_summary
+            render_receipt["deliverable_summary_rows"] = [failed_row]
+            render_receipt["result_summary"] = failed_result
+            render_qa["deliverables_summary"] = failed_summary
+
+            self._write_artifact_json(summary, "renderManifestPath", render_manifest)
+            self._write_artifact_json(summary, "renderReceiptPath", render_receipt)
+            self._write_artifact_json(summary, "renderQaPath", render_qa)
+
+            truth = self.module.summarize_workspace_render_truth(
+                artifact_paths=self._artifact_paths(summary)
+            )
+            self.assertEqual(truth.get("root_cause", {}).get("category"), "no_decodable_stems")
+
+            with self.assertRaisesRegex(
+                self.module.SmokeError,
+                "no decodable stems",
+            ):
+                self.module._validate_workspace_render_truth(
+                    artifact_paths=self._artifact_paths(summary)
+                )
+
+    def test_validate_workspace_render_truth_names_invalid_master_root_cause(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            summary_root = Path(temp_dir) / "summary"
+            summary_root.mkdir()
+            summary = self._valid_summary(summary_root)
+
+            render_manifest = self._read_artifact_json(summary, "renderManifestPath")
+            render_receipt = self._read_artifact_json(summary, "renderReceiptPath")
+            render_qa = self._read_artifact_json(summary, "renderQaPath")
+
+            master_path = Path(str(self._artifact_paths(summary)["workspaceDir"])) / "render" / "LAYOUT.2_0" / "master.wav"
+            self.module._write_wave(master_path, channels=2, frequency_hz=0.0, sample_rate_hz=44_100)
+
+            invalid_deliverable = render_manifest["deliverables"][0]
+            invalid_deliverable["status"] = "invalid_master"
+            invalid_deliverable["is_valid_master"] = False
+            invalid_deliverable["decoded_stem_count"] = 3
+            invalid_deliverable["failure_reason"] = "RENDER_RESULT.SILENT_OUTPUT"
+            invalid_deliverable["warning_codes"] = ["RENDER_RESULT.SILENT_OUTPUT"]
+
+            invalid_summary = {
+                "overall_status": "invalid_master",
+                "deliverable_count": 1,
+                "success_count": 0,
+                "failed_count": 0,
+                "partial_count": 0,
+                "invalid_master_count": 1,
+                "valid_master_count": 0,
+                "mixed_outcomes": False,
+                "result_bucket": "diagnostics_only",
+                "top_failure_reason": "RENDER_RESULT.SILENT_OUTPUT",
+                "top_failure_status": "invalid_master",
+            }
+            invalid_result = {
+                "title": "Render invalid: silent master",
+                "message": "MMO wrote the output file, but the rendered master is effectively silent and does not count as a valid master.",
+                "remedy": "Check routing, muted stems, source audio, and decode counts, then rerun Render after confirming audible signal reaches the target layout.",
+                "result_bucket": "diagnostics_only",
+                "overall_status": "invalid_master",
+                "top_failure_reason": "RENDER_RESULT.SILENT_OUTPUT",
+                "deliverable_count": 1,
+                "valid_master_count": 0,
+                "primary_output_path": "LAYOUT.2_0/master.wav",
+            }
+            invalid_row = render_manifest["deliverable_summary_rows"][0]
+            invalid_row["status"] = "invalid_master"
+            invalid_row["validity"] = "invalid_master"
+            invalid_row["failure_reason"] = "RENDER_RESULT.SILENT_OUTPUT"
+
+            render_manifest["deliverables_summary"] = invalid_summary
+            render_manifest["result_summary"] = invalid_result
+            render_receipt["status"] = "blocked"
+            render_receipt["deliverables_summary"] = invalid_summary
+            render_receipt["deliverable_summary_rows"] = [invalid_row]
+            render_receipt["result_summary"] = invalid_result
+            render_qa["deliverables_summary"] = invalid_summary
+            render_qa["issues"] = [
+                {
+                    "issue_id": "ISSUE.RENDER.QA.SILENT_OUTPUT",
+                    "severity": "error",
+                }
+            ]
+
+            self._write_artifact_json(summary, "renderManifestPath", render_manifest)
+            self._write_artifact_json(summary, "renderReceiptPath", render_receipt)
+            self._write_artifact_json(summary, "renderQaPath", render_qa)
+
+            truth = self.module.summarize_workspace_render_truth(
+                artifact_paths=self._artifact_paths(summary)
+            )
+            self.assertEqual(
+                truth.get("root_cause", {}).get("category"),
+                "silent_invalid_master",
+            )
+
+            with self.assertRaisesRegex(
+                self.module.SmokeError,
+                "invalid masters",
+            ):
+                self.module._validate_workspace_render_truth(
+                    artifact_paths=self._artifact_paths(summary)
                 )
 
 
