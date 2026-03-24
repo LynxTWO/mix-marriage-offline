@@ -15,6 +15,7 @@
     "scene_mode",
     "scene_source_path",
     "scene_locks_source_path",
+    "scene_binding_summary",
     "recommendations_summary",
     "eligible_recommendations",
     "approved_by_user",
@@ -149,6 +150,69 @@
           "type": "array",
           "items": { "type": "string", "minLength": 1 }
         }
+      }
+    },
+    "scene_binding_rewritten_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_type", "target_id", "field", "from_ref", "to_stem_id", "binding_mode"],
+      "properties": {
+        "target_type": { "type": "string", "minLength": 1 },
+        "target_id": { "type": "string", "minLength": 1 },
+        "field": { "type": "string", "minLength": 1 },
+        "from_ref": { "type": "string", "minLength": 1 },
+        "to_stem_id": { "type": "string", "minLength": 1 },
+        "binding_mode": {
+          "type": "string",
+          "enum": ["stem_id", "source_ref", "workspace_relative_path", "file_path", "basename"]
+        }
+      }
+    },
+    "scene_binding_warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_type", "target_id", "field", "stem_ref", "warning_code", "detail"],
+      "properties": {
+        "target_type": { "type": "string", "minLength": 1 },
+        "target_id": { "type": "string", "minLength": 1 },
+        "field": { "type": "string", "minLength": 1 },
+        "stem_ref": { "type": "string", "minLength": 1 },
+        "warning_code": { "type": "string", "minLength": 1 },
+        "detail": { "type": "string", "minLength": 1 },
+        "candidates": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "scene_binding_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "reference_count",
+        "bound_count",
+        "unbound_count",
+        "rewritten_count",
+        "rewritten_refs",
+        "binding_warnings",
+        "failure_reason"
+      ],
+      "properties": {
+        "status": { "$ref": "statuses.schema.json#/$defs/scene_binding_status" },
+        "reference_count": { "type": "integer", "minimum": 0 },
+        "bound_count": { "type": "integer", "minimum": 0 },
+        "unbound_count": { "type": "integer", "minimum": 0 },
+        "rewritten_count": { "type": "integer", "minimum": 0 },
+        "rewritten_refs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/scene_binding_rewritten_ref" }
+        },
+        "binding_warnings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/scene_binding_warning" }
+        },
+        "failure_reason": { "type": ["string", "null"] }
       }
     },
     "deliverable": {
@@ -286,6 +350,7 @@
     "scene_mode": { "type": "string", "enum": ["explicit", "auto_built"] },
     "scene_source_path": { "type": ["string", "null"] },
     "scene_locks_source_path": { "type": ["string", "null"] },
+    "scene_binding_summary": { "$ref": "#/$defs/scene_binding_summary" },
     "approved_by": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 }

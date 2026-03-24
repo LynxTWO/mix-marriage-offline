@@ -10,6 +10,7 @@ from mmo.core.status_display import (
     label_for_lifecycle_status,
     label_for_measurement_state,
     label_for_qa_gate_status,
+    label_for_scene_binding_status,
 )
 from mmo.core.statuses import (
     DELIVERABLE_RESULT_BUCKET_VALID_MASTER,
@@ -17,6 +18,7 @@ from mmo.core.statuses import (
     LIFECYCLE_STATUS_BLOCKED,
     MEASUREMENT_STATE_NOT_APPLICABLE,
     QA_GATE_STATUS_WARN,
+    SCENE_BINDING_STATUS_REWRITTEN,
 )
 
 
@@ -34,6 +36,10 @@ class TestStatusGuardrails(unittest.TestCase):
         self.assertEqual(
             label_for_measurement_state(MEASUREMENT_STATE_NOT_APPLICABLE),
             "Not applicable",
+        )
+        self.assertEqual(
+            label_for_scene_binding_status(SCENE_BINDING_STATUS_REWRITTEN),
+            "Rewritten to canonical stems",
         )
 
     def test_existing_backend_modules_use_shared_status_constants(self) -> None:
@@ -83,6 +89,14 @@ class TestStatusGuardrails(unittest.TestCase):
             "statuses.schema.json#/$defs/lifecycle_status_safe_render",
         )
         self.assertEqual(
+            safe_render_receipt["properties"]["scene_binding_summary"]["$ref"],
+            "#/$defs/scene_binding_summary",
+        )
+        self.assertEqual(
+            safe_render_receipt["$defs"]["scene_binding_summary"]["properties"]["status"]["$ref"],
+            "statuses.schema.json#/$defs/scene_binding_status",
+        )
+        self.assertEqual(
             render_qa["$defs"]["issue"]["properties"]["measurement_state"]["$ref"],
             "statuses.schema.json#/$defs/measurement_state",
         )
@@ -91,6 +105,14 @@ class TestStatusGuardrails(unittest.TestCase):
             ["pass", "warn", "fail", "not_run"],
         )
         self.assertEqual(
+            packaged_statuses["$defs"]["scene_binding_status"]["enum"],
+            ["not_applicable", "clean", "rewritten", "partial", "failed"],
+        )
+        self.assertEqual(
             packaged_render_manifest["$defs"]["result_summary"]["properties"]["result_bucket"]["$ref"],
             "statuses.schema.json#/$defs/deliverable_result_bucket_or_null",
+        )
+        self.assertEqual(
+            packaged_render_manifest["properties"]["scene_binding_summary"]["$ref"],
+            "#/$defs/scene_binding_summary",
         )

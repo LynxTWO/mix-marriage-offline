@@ -109,6 +109,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Scene build, bus-plan fixtures, golden snapshots, and the desktop/safe-render
   explicit scene path now use those canonical stem IDs directly, eliminating
   `STEMFILE.*` as the primary scene/render join key for new artifacts.
+- Safe-render now runs an explicit scene-binding pass before lint, preflight,
+  planning, and rendering: explicit scene refs and scene-lock override keys can
+  be rebound deterministically to analyzed session stems by canonical stem ID,
+  source ref, workspace-relative path, normalized file path, or unique
+  basename fallback, and manifests/receipts now persist a structured
+  `scene_binding_summary` instead of hiding drift recovery in stderr.
 
 ## [1.0.0] — 2026-03-17
 

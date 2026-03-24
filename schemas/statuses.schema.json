@@ -30,6 +30,10 @@
     "measurement_state": {
       "type": "string",
       "enum": ["measured", "not_applicable", "measurement_failed", "invalid_due_to_silence"]
+    },
+    "scene_binding_status": {
+      "type": "string",
+      "enum": ["not_applicable", "clean", "rewritten", "partial", "failed"]
     }
   }
 }

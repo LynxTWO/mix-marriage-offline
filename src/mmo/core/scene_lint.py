@@ -531,6 +531,7 @@ def build_scene_lint_payload(
     scene_path: Path,
     locks_payload: dict[str, Any] | None = None,
     locks_path: Path | None = None,
+    extra_source_stem_ids: set[str] | None = None,
     critical_anchor_confidence_warn_below: float = _CRITICAL_ANCHOR_CONFIDENCE_WARN_BELOW,
 ) -> dict[str, Any]:
     if not isinstance(scene_payload, dict):
@@ -546,6 +547,14 @@ def build_scene_lint_payload(
         scene_payload,
         scene_path=scene_path,
     )
+    if isinstance(extra_source_stem_ids, set):
+        known_source_stem_ids.update(
+            {
+                item.strip()
+                for item in extra_source_stem_ids
+                if isinstance(item, str) and item.strip()
+            }
+        )
 
     objects = scene_payload.get("objects")
     object_rows = (

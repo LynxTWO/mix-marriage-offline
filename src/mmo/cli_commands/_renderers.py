@@ -264,6 +264,62 @@ def _rewrite_nested_path_fields(
     return rewritten
 
 
+def _default_scene_binding_summary() -> dict[str, Any]:
+    from mmo.core.scene_binding import default_scene_binding_summary  # noqa: WPS433
+
+    return json.loads(json.dumps(default_scene_binding_summary()))
+
+
+def _portable_scene_binding_summary(
+    scene_binding_summary: dict[str, Any] | None,
+    *,
+    workspace_dir: Path | None,
+) -> dict[str, Any]:
+    summary = (
+        json.loads(json.dumps(scene_binding_summary))
+        if isinstance(scene_binding_summary, dict)
+        else _default_scene_binding_summary()
+    )
+    rewritten_refs = summary.get("rewritten_refs")
+    if isinstance(rewritten_refs, list):
+        for row in rewritten_refs:
+            if not isinstance(row, dict):
+                continue
+            for key in ("from_ref",):
+                value = row.get(key)
+                if isinstance(value, str):
+                    row[key] = _portable_ref_for_workspace(
+                        value,
+                        workspace_dir=workspace_dir,
+                        fallback=value,
+                    )
+    binding_warnings = summary.get("binding_warnings")
+    if isinstance(binding_warnings, list):
+        for row in binding_warnings:
+            if not isinstance(row, dict):
+                continue
+            stem_ref = row.get("stem_ref")
+            if isinstance(stem_ref, str):
+                row["stem_ref"] = _portable_ref_for_workspace(
+                    stem_ref,
+                    workspace_dir=workspace_dir,
+                    fallback=stem_ref,
+                )
+            candidates = row.get("candidates")
+            if isinstance(candidates, list):
+                row["candidates"] = [
+                    _portable_ref_for_workspace(
+                        candidate,
+                        workspace_dir=workspace_dir,
+                        fallback=_coerce_str(candidate).strip() or None,
+                    )
+                    or _coerce_str(candidate).strip()
+                    for candidate in candidates
+                    if _coerce_str(candidate).strip()
+                ]
+    return summary
+
+
 def _portable_renderer_manifests(
     renderer_manifests: list[dict[str, Any]],
     *,
@@ -562,7 +618,7 @@ def _run_render_command(
             layout_standard=layout_standard,
             source_layout_id=source_selection.source_layout_id,
             output_formats=output_formats,
-    )
+        )
     deliverables = build_deliverables_for_renderer_manifests(manifests)
     deliverables_summary = _deliverable_result_payload(deliverables)
     persisted_manifests = _portable_renderer_manifests(
@@ -578,6 +634,7 @@ def _run_render_command(
         "schema_version": "0.1.0",
         "report_id": report.get("report_id", ""),
         "renderer_manifests": persisted_manifests,
+        "scene_binding_summary": _default_scene_binding_summary(),
         "deliverables_summary": deliverables_summary,
         "deliverable_summary_rows": deliverable_summary_rows,
         "result_summary": result_summary,
@@ -2093,12 +2150,20 @@ def _prepare_safe_render_scene_inputs(
     scene_path: Path | None,
     scene_locks_path: Path | None,
     scene_strict: bool,
-) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str, str | None, str | None]:
+) -> tuple[
+    dict[str, Any] | None,
+    dict[str, Any] | None,
+    str,
+    str | None,
+    str | None,
+    dict[str, Any],
+]:
     from mmo.core.locks import (  # noqa: WPS433
         load_scene_build_locks,
     )
     from mmo.core.precedence import apply_precedence  # noqa: WPS433
     from mmo.core.roles import list_roles  # noqa: WPS433
+    from mmo.core.scene_binding import bind_scene_inputs_to_session  # noqa: WPS433
     from mmo.core.scene_lint import (  # noqa: WPS433
         build_scene_lint_payload,
         render_scene_lint_text,
@@ -2111,6 +2176,7 @@ def _prepare_safe_render_scene_inputs(
     scene_mode = "auto_built"
     scene_source_path: str | None = None
     scene_locks_source_path: str | None = None
+    scene_binding_summary = _default_scene_binding_summary()
 
     if scene_path is not None:
         scene_payload = _load_json_object(scene_path, label="Scene")
@@ -2126,12 +2192,49 @@ def _prepare_safe_render_scene_inputs(
         locks_payload = load_scene_build_locks(scene_locks_path)
         scene_locks_source_path = scene_locks_path.resolve().as_posix()
 
+    if scene_payload is not None and (scene_path is not None or scene_locks_path is not None):
+        scene_payload, locks_payload, scene_binding_summary = bind_scene_inputs_to_session(
+            scene_payload=scene_payload,
+            session_payload=session_payload,
+            locks_payload=locks_payload,
+        )
+        binding_status = _coerce_str(scene_binding_summary.get("status")).strip() or "unknown"
+        bound_count = int(scene_binding_summary.get("bound_count", 0) or 0)
+        unbound_count = int(scene_binding_summary.get("unbound_count", 0) or 0)
+        rewritten_count = int(scene_binding_summary.get("rewritten_count", 0) or 0)
+        failure_reason = _coerce_str(scene_binding_summary.get("failure_reason")).strip()
+        print(
+            "safe-render: scene-binding "
+            f"status={binding_status} bound={bound_count} "
+            f"unbound={unbound_count} rewritten={rewritten_count}",
+            file=sys.stderr,
+        )
+        if failure_reason:
+            print(
+                f"safe-render: scene-binding reason={failure_reason}",
+                file=sys.stderr,
+            )
+        if binding_status == "failed":
+            raise ValueError(
+                "safe-render: scene binding stopped the render. "
+                f"Why: {failure_reason or 'No scene references could be matched.'} "
+                "Next: rebuild the scene from this report or replace the drifted references "
+                "with current analyzed stem IDs or source refs."
+            )
+        if binding_status == "partial":
+            print(
+                "safe-render: continuing with a partially bound scene. "
+                "Unbound refs remain visible in the receipt and may still fail strict validation.",
+                file=sys.stderr,
+            )
+
     if scene_path is not None and scene_payload is not None:
         lint_payload = build_scene_lint_payload(
             scene_payload=scene_payload,
             scene_path=scene_path,
             locks_payload=locks_payload,
             locks_path=scene_locks_path,
+            extra_source_stem_ids=_report_session_stem_ids(report),
         )
         summary = lint_payload.get("summary")
         error_count = (
@@ -2226,6 +2329,7 @@ def _prepare_safe_render_scene_inputs(
         scene_mode,
         scene_source_path,
         scene_locks_source_path,
+        scene_binding_summary,
     )
 
 
@@ -2388,6 +2492,7 @@ def _run_safe_render_command(
             scene_mode,
             scene_source_path,
             scene_locks_source_path,
+            scene_binding_summary,
         ) = _prepare_safe_render_scene_inputs(
             report=report,
             session_payload=session_payload,
@@ -2405,10 +2510,15 @@ def _run_safe_render_command(
             workspace_dir=workspace_dir,
             fallback="scene_locks.yaml",
         )
+        scene_binding_summary = _portable_scene_binding_summary(
+            scene_binding_summary,
+            workspace_dir=workspace_dir,
+        )
         if isinstance(scene_payload_for_render, dict):
             session_payload["scene_payload"] = _json_clone(scene_payload_for_render)
         if isinstance(scene_locks_payload, dict):
             session_payload["scene_locks_payload"] = _json_clone(scene_locks_payload)
+        session_payload["scene_binding_summary"] = _json_clone(scene_binding_summary)
         session_payload["render_export_options"] = _merged_render_export_options(
             session_payload=session_payload,
             export_stems=export_stems,
@@ -2518,6 +2628,7 @@ def _run_safe_render_command(
                     "scene_mode": scene_mode,
                     "scene_source_path": scene_source_path,
                     "scene_locks_source_path": scene_locks_source_path,
+                    "scene_binding_summary": scene_binding_summary,
                     "approved_by": [],
                     "recommendations_summary": {
                         "total": 0,
@@ -2746,6 +2857,7 @@ def _run_safe_render_command(
                 "scene_mode": scene_mode,
                 "scene_source_path": scene_source_path,
                 "scene_locks_source_path": scene_locks_source_path,
+                "scene_binding_summary": scene_binding_summary,
                 "approved_by": approve_list,
                 "recommendations_summary": {
                     "total": len(recs),
@@ -2819,6 +2931,7 @@ def _run_safe_render_command(
                     "schema_version": "0.1.0",
                     "report_id": _coerce_str(report.get("report_id")),
                     "renderer_manifests": [],
+                    "scene_binding_summary": scene_binding_summary,
                     "deliverables": empty_deliverables,
                     "deliverables_summary": empty_deliverables_summary,
                     "deliverable_summary_rows": empty_deliverable_summary_rows,
@@ -2955,6 +3068,7 @@ def _run_safe_render_command(
             "schema_version": "0.1.0",
             "report_id": _coerce_str(report.get("report_id")),
             "renderer_manifests": persisted_manifests,
+            "scene_binding_summary": scene_binding_summary,
             "deliverables_summary": deliverables_summary,
             "deliverable_summary_rows": deliverable_summary_rows,
             "result_summary": result_summary,
@@ -3171,6 +3285,7 @@ def _run_safe_render_command(
             "scene_mode": scene_mode,
             "scene_source_path": scene_source_path,
             "scene_locks_source_path": scene_locks_source_path,
+            "scene_binding_summary": scene_binding_summary,
             "approved_by": approve_list,
             "recommendations_summary": {
                 "total": len(recs),
@@ -3199,6 +3314,18 @@ def _run_safe_render_command(
                 f"outputs={output_count}",
                 f"deliverable_result={render_result_status}",
                 f"deliverable_overall_status={render_overall_status}",
+                (
+                    "scene_binding_status="
+                    f"{_coerce_str(scene_binding_summary.get('status')).strip() or 'not_applicable'}"
+                ),
+                (
+                    "scene_binding_bound="
+                    f"{int(scene_binding_summary.get('bound_count', 0) or 0)}"
+                ),
+                (
+                    "scene_binding_unbound="
+                    f"{int(scene_binding_summary.get('unbound_count', 0) or 0)}"
+                ),
                 f"allow_empty_outputs={'true' if allow_empty_outputs else 'false'}",
                 (
                     "headphone_preview="

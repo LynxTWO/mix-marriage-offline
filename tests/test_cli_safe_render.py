@@ -1579,6 +1579,7 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
                 scene_mode,
                 scene_source_path,
                 scene_locks_source_path,
+                scene_binding_summary,
             ) = _prepare_safe_render_scene_inputs(
                 report=report,
                 session_payload=report["session"],
@@ -1619,6 +1620,91 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
                 prepared_locks.get("overrides", {}).get("vox_mono", {}).get("bus_id"),
                 "BUS.VOX.LEAD",
             )
+            self.assertEqual(scene_binding_summary.get("status"), "clean")
+            self.assertEqual(scene_binding_summary.get("bound_count"), 4)
+            self.assertEqual(scene_binding_summary.get("unbound_count"), 0)
+            self.assertEqual(scene_binding_summary.get("rewritten_count"), 0)
+
+    def test_explicit_scene_old_refs_rewrite_to_canonical_ids_before_strict_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            report = _make_baseline_fixture_report()
+            report_path = temp / "report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            scene_payload = json.loads(_SAFE_RENDER_EXPLICIT_SCENE_FIXTURE.read_text(encoding="utf-8"))
+            source = scene_payload.get("source")
+            if isinstance(source, dict):
+                source["stems_dir"] = _BASELINE_STEMS_DIR.resolve().as_posix()
+            objects = scene_payload.get("objects")
+            if isinstance(objects, list) and len(objects) >= 2:
+                if isinstance(objects[0], dict):
+                    objects[0]["stem_id"] = "kick_mono.wav"
+                if isinstance(objects[1], dict):
+                    objects[1]["stem_id"] = "vox_mono.wav"
+            beds = scene_payload.get("beds")
+            if isinstance(beds, list) and len(beds) >= 2 and isinstance(beds[1], dict):
+                beds[1]["stem_ids"] = ["music_stereo.wav"]
+
+            scene_path = temp / "scene_path_refs.json"
+            scene_path.write_text(
+                json.dumps(scene_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            scene_locks_path = temp / "scene_locks.yaml"
+            scene_locks_path.write_text(
+                "\n".join(
+                    [
+                        'version: "0.1.0"',
+                        "overrides:",
+                        '  vox_mono.wav:',
+                        '    role_id: "ROLE.VOCAL.LEAD"',
+                        '    bus_id: "BUS.VOX.LEAD"',
+                        "    placement:",
+                        "      azimuth_deg: 0.0",
+                        "      width: 0.1",
+                        "      depth: 0.2",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            (
+                prepared_scene,
+                prepared_locks,
+                _scene_mode,
+                _scene_source_path,
+                _scene_locks_source_path,
+                scene_binding_summary,
+            ) = _prepare_safe_render_scene_inputs(
+                report=report,
+                session_payload=report["session"],
+                scene_path=scene_path,
+                scene_locks_path=scene_locks_path,
+                scene_strict=True,
+            )
+
+            self.assertEqual(
+                [row.get("stem_id") for row in prepared_scene.get("objects", []) if isinstance(row, dict)],
+                ["kick_mono", "vox_mono"],
+            )
+            self.assertEqual(
+                prepared_scene.get("beds", [])[1].get("stem_ids"),
+                ["music_stereo"],
+            )
+            self.assertEqual(
+                sorted(prepared_locks.get("overrides", {}).keys()),
+                ["vox_mono"],
+            )
+            self.assertEqual(scene_binding_summary.get("status"), "rewritten")
+            self.assertEqual(scene_binding_summary.get("bound_count"), 4)
+            self.assertEqual(scene_binding_summary.get("unbound_count"), 0)
+            self.assertEqual(scene_binding_summary.get("rewritten_count"), 4)
 
     def test_full_render_from_explicit_scene_records_sources_and_writes_outputs(self) -> None:
         schema = json.loads(
@@ -1683,8 +1769,11 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
                 receipt.get("scene_locks_source_path"),
                 "scene_locks.yaml",
             )
+            self.assertEqual(receipt.get("scene_binding_summary", {}).get("status"), "clean")
+            self.assertEqual(receipt.get("scene_binding_summary", {}).get("unbound_count"), 0)
 
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest.get("scene_binding_summary", {}).get("status"), "clean")
             placement_manifest = next(
                 (
                     item
@@ -2051,6 +2140,52 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
             self.assertIn("safe-render: scene validation stopped the render.", stderr)
             self.assertIn("--scene-strict found 1 error(s), 0 warning(s)", stderr)
             self.assertIn("ISSUE.SCENE_LINT.OUT_OF_RANGE_WIDTH", stderr)
+
+    def test_zero_overlap_explicit_scene_stops_in_scene_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            report = _make_baseline_fixture_report()
+            report_path = temp / "report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            scene_payload = json.loads(
+                _SAFE_RENDER_EXPLICIT_SCENE_FIXTURE.read_text(encoding="utf-8")
+            )
+            source = scene_payload.get("source")
+            if isinstance(source, dict):
+                source["stems_dir"] = _BASELINE_STEMS_DIR.resolve().as_posix()
+            objects = scene_payload.get("objects")
+            if isinstance(objects, list):
+                for index, obj in enumerate(objects):
+                    if isinstance(obj, dict):
+                        obj["stem_id"] = f"ghost_{index}.wav"
+            beds = scene_payload.get("beds")
+            if isinstance(beds, list) and len(beds) >= 2 and isinstance(beds[1], dict):
+                beds[1]["stem_ids"] = ["ghost_music.wav"]
+            scene_path = temp / "scene_zero_overlap.json"
+            scene_path.write_text(
+                json.dumps(scene_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            exit_code, _stdout, stderr = _run_main(
+                [
+                    "safe-render",
+                    "--report",
+                    str(report_path),
+                    "--plugins",
+                    str(_PLUGINS_DIR),
+                    "--scene",
+                    str(scene_path),
+                    "--dry-run",
+                ]
+            )
+            self.assertEqual(exit_code, 1, msg=stderr)
+            self.assertIn("scene binding stopped the render", stderr)
+            self.assertIn("No scene stem references matched the analyzed session stems", stderr)
 
 
 class TestSafeRenderApprove(unittest.TestCase):

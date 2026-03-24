@@ -10,6 +10,7 @@ import jsonschema
 
 from mmo.core.gates import apply_gates_to_report
 from mmo.core.pipeline import PluginEntry, load_plugins, run_renderers
+from mmo.core.scene_binding import default_scene_binding_summary
 from mmo.plugins.interfaces import PluginCapabilities
 
 
@@ -305,6 +306,7 @@ class TestRendererRunner(unittest.TestCase):
                 "schema_version": "0.1.0",
                 "report_id": report["report_id"],
                 "renderer_manifests": manifests,
+                "scene_binding_summary": default_scene_binding_summary(),
             }
         )
 

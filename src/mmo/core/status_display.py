@@ -19,6 +19,11 @@ from mmo.core.statuses import (
     QA_GATE_STATUS_NOT_RUN,
     QA_GATE_STATUS_PASS,
     QA_GATE_STATUS_WARN,
+    SCENE_BINDING_STATUS_CLEAN,
+    SCENE_BINDING_STATUS_FAILED,
+    SCENE_BINDING_STATUS_NOT_APPLICABLE,
+    SCENE_BINDING_STATUS_PARTIAL,
+    SCENE_BINDING_STATUS_REWRITTEN,
 )
 
 _DELIVERABLE_RESULT_BUCKET_LABELS = {
@@ -49,6 +54,14 @@ _MEASUREMENT_STATE_LABELS = {
     MEASUREMENT_STATE_INVALID_DUE_TO_SILENCE: "Invalid due to silence",
 }
 
+_SCENE_BINDING_STATUS_LABELS = {
+    SCENE_BINDING_STATUS_NOT_APPLICABLE: "Not applicable",
+    SCENE_BINDING_STATUS_CLEAN: "Already canonical",
+    SCENE_BINDING_STATUS_REWRITTEN: "Rewritten to canonical stems",
+    SCENE_BINDING_STATUS_PARTIAL: "Partially bound",
+    SCENE_BINDING_STATUS_FAILED: "Binding failed",
+}
+
 
 def label_for_deliverable_result_bucket(value: str) -> str:
     return _DELIVERABLE_RESULT_BUCKET_LABELS.get(value, "Unknown render result")
@@ -66,9 +79,14 @@ def label_for_measurement_state(value: str) -> str:
     return _MEASUREMENT_STATE_LABELS.get(value, "Unknown measurement state")
 
 
+def label_for_scene_binding_status(value: str) -> str:
+    return _SCENE_BINDING_STATUS_LABELS.get(value, "Unknown scene binding state")
+
+
 __all__ = [
     "label_for_deliverable_result_bucket",
     "label_for_lifecycle_status",
     "label_for_measurement_state",
     "label_for_qa_gate_status",
+    "label_for_scene_binding_status",
 ]
