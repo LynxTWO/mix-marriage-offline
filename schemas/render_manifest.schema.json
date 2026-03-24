@@ -15,6 +15,9 @@
     "scene_binding_summary": {
       "$ref": "#/$defs/scene_binding_summary"
     },
+    "preflight_summary": {
+      "$ref": "#/$defs/preflight_summary"
+    },
     "deliverables": {
       "type": "array",
       "items": { "$ref": "#/$defs/deliverable" }
@@ -259,6 +262,45 @@
           "items": { "$ref": "#/$defs/scene_binding_warning" }
         },
         "failure_reason": { "type": ["string", "null"] }
+      }
+    },
+    "preflight_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "final_decision",
+        "blocked_gates",
+        "issues",
+        "primary_issue_id",
+        "primary_message",
+        "scene_stem_overlap_summary"
+      ],
+      "properties": {
+        "final_decision": {
+          "type": "string",
+          "enum": ["not_run", "pass", "warn", "block"]
+        },
+        "blocked_gates": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^GATE\\.[A-Z0-9_.]+$"
+          }
+        },
+        "issues": {
+          "type": "array",
+          "items": { "$ref": "preflight_receipt.schema.json#/$defs/preflight_issue" }
+        },
+        "primary_issue_id": {
+          "type": ["string", "null"],
+          "pattern": "^ISSUE\\.[A-Z0-9_.]+$"
+        },
+        "primary_message": {
+          "type": ["string", "null"]
+        },
+        "scene_stem_overlap_summary": {
+          "$ref": "preflight_receipt.schema.json#/$defs/scene_stem_overlap_summary"
+        }
       }
     },
     "deliverable": {

@@ -270,6 +270,23 @@ def _default_scene_binding_summary() -> dict[str, Any]:
     return json.loads(json.dumps(default_scene_binding_summary()))
 
 
+def _default_scene_stem_overlap_summary() -> dict[str, Any]:
+    from mmo.core.preflight import default_scene_stem_overlap_summary  # noqa: WPS433
+
+    return json.loads(json.dumps(default_scene_stem_overlap_summary()))
+
+
+def _default_preflight_summary() -> dict[str, Any]:
+    return {
+        "final_decision": "not_run",
+        "blocked_gates": [],
+        "issues": [],
+        "primary_issue_id": None,
+        "primary_message": None,
+        "scene_stem_overlap_summary": _default_scene_stem_overlap_summary(),
+    }
+
+
 def _portable_scene_binding_summary(
     scene_binding_summary: dict[str, Any] | None,
     *,
@@ -318,6 +335,64 @@ def _portable_scene_binding_summary(
                     if _coerce_str(candidate).strip()
                 ]
     return summary
+
+
+def _preflight_summary_from_receipt(receipt: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(receipt, dict):
+        return _default_preflight_summary()
+
+    issues = enrich_issue_list_for_user(
+        [
+            issue
+            for issue in receipt.get("issues", [])
+            if isinstance(issue, dict)
+        ]
+    )
+    blocked_gates = sorted(
+        {
+            _coerce_str(gate.get("gate_id")).strip()
+            for gate in receipt.get("gates_evaluated", [])
+            if isinstance(gate, dict)
+            and _coerce_str(gate.get("outcome")).strip() == "block"
+            and _coerce_str(gate.get("gate_id")).strip()
+        }
+    )
+    primary_issue = next(
+        (
+            issue
+            for issue in issues
+            if _coerce_str(issue.get("severity")).strip() == "error"
+        ),
+        issues[0] if issues else None,
+    )
+    scene_stem_overlap_summary = receipt.get("scene_stem_overlap_summary")
+    if not isinstance(scene_stem_overlap_summary, dict):
+        scene_stem_overlap_summary = _default_scene_stem_overlap_summary()
+
+    return {
+        "final_decision": _coerce_str(receipt.get("final_decision")).strip() or "not_run",
+        "blocked_gates": blocked_gates,
+        "issues": json.loads(json.dumps(issues)),
+        "primary_issue_id": (
+            _coerce_str(primary_issue.get("issue_id")).strip()
+            if isinstance(primary_issue, dict)
+            else None
+        ) or None,
+        "primary_message": (
+            _coerce_str(primary_issue.get("message")).strip()
+            if isinstance(primary_issue, dict)
+            else None
+        ) or None,
+        "scene_stem_overlap_summary": json.loads(json.dumps(scene_stem_overlap_summary)),
+    }
+
+
+def _preflight_should_hard_stop_dry_run(preflight_summary: dict[str, Any]) -> bool:
+    scene_overlap_summary = preflight_summary.get("scene_stem_overlap_summary")
+    if not isinstance(scene_overlap_summary, dict):
+        return False
+    status = _coerce_str(scene_overlap_summary.get("status")).strip()
+    return status in {"partial", "failed"}
 
 
 def _portable_renderer_manifests(
@@ -2215,16 +2290,15 @@ def _prepare_safe_render_scene_inputs(
                 file=sys.stderr,
             )
         if binding_status == "failed":
-            raise ValueError(
-                "safe-render: scene binding stopped the render. "
-                f"Why: {failure_reason or 'No scene references could be matched.'} "
-                "Next: rebuild the scene from this report or replace the drifted references "
-                "with current analyzed stem IDs or source refs."
+            print(
+                "safe-render: scene-binding found zero overlap after normalization. "
+                "Preflight will stop this render before audio is written.",
+                file=sys.stderr,
             )
-        if binding_status == "partial":
+        elif binding_status == "partial":
             print(
                 "safe-render: continuing with a partially bound scene. "
-                "Unbound refs remain visible in the receipt and may still fail strict validation.",
+                "Unbound refs remain visible in the receipt and preflight may still stop the render.",
                 file=sys.stderr,
             )
 
@@ -2533,7 +2607,11 @@ def _run_safe_render_command(
             if routing_layout_ids_from_run_config(normalized_run_config) is not None:
                 apply_routing_plan_to_report(report, normalized_run_config)
 
-        session_for_preflight: dict[str, Any] = {"profile_id": profile_id}
+        session_for_preflight: dict[str, Any] = {
+            "profile_id": profile_id,
+            "scene_mode": scene_mode,
+            "session_stem_ids": sorted(_report_session_stem_ids(report)),
+        }
         if isinstance(session_payload, dict):
             src_layout = session_payload.get("source_layout_id")
             if not src_layout:
@@ -2578,6 +2656,7 @@ def _run_safe_render_command(
             options={},
             user_profile=user_profile,
         )
+        preflight_summary = _preflight_summary_from_receipt(preflight_receipt)
         _preflight_decision = preflight_receipt.get("final_decision", "pass")
         print(
             f"safe-render: preflight={_preflight_decision}"
@@ -2585,6 +2664,14 @@ def _run_safe_render_command(
             f" resolved_layout={resolved_target.layout_id}",
             file=sys.stderr,
         )
+        primary_preflight_message = _coerce_str(
+            preflight_summary.get("primary_message")
+        ).strip()
+        if primary_preflight_message:
+            print(
+                f"safe-render: preflight reason={primary_preflight_message}",
+                file=sys.stderr,
+            )
         progress.advance(
             phase="preflight",
             what="preflight evaluated",
@@ -2594,7 +2681,15 @@ def _run_safe_render_command(
             evidence={"codes": ["SAFE_RENDER.PREFLIGHT.EVALUATED"]},
         )
 
-        if not dry_run and preflight_receipt_blocks(preflight_receipt):
+        preflight_blocks_render = preflight_receipt_blocks(preflight_receipt)
+        preflight_requires_hard_stop = (
+            preflight_blocks_render
+            and (
+                not dry_run
+                or _preflight_should_hard_stop_dry_run(preflight_summary)
+            )
+        )
+        if preflight_requires_hard_stop:
             blocked_gates = [
                 g["gate_id"]
                 for g in preflight_receipt.get("gates_evaluated", [])
@@ -2608,8 +2703,22 @@ def _run_safe_render_command(
                 "safe-render: render stopped before audio was written.",
                 file=sys.stderr,
             )
+            if primary_preflight_message:
+                print(
+                    (
+                        "safe-render: root-cause="
+                        f"{primary_preflight_message}"
+                    ),
+                    file=sys.stderr,
+                )
             print(
-                "safe-render: next=review the receipt JSON or rerun with --dry-run to see what MMO was protecting.",
+                (
+                    "safe-render: next=review the receipt JSON to inspect the blocked "
+                    "preflight decision."
+                    if dry_run
+                    else "safe-render: next=review the receipt JSON or rerun with --dry-run "
+                    "to see what MMO was protecting."
+                ),
                 file=sys.stderr,
             )
             if receipt_out_path is not None:
@@ -2622,13 +2731,14 @@ def _run_safe_render_command(
                     "receipt_id": block_receipt_id,
                     "context": "safe_render",
                     "status": LIFECYCLE_STATUS_BLOCKED,
-                    "dry_run": False,
+                    "dry_run": dry_run,
                     "target": target,
                     "profile_id": profile_id,
                     "scene_mode": scene_mode,
                     "scene_source_path": scene_source_path,
                     "scene_locks_source_path": scene_locks_source_path,
                     "scene_binding_summary": scene_binding_summary,
+                    "preflight_summary": preflight_summary,
                     "approved_by": [],
                     "recommendations_summary": {
                         "total": 0,
@@ -2649,11 +2759,22 @@ def _run_safe_render_command(
                     "notes": [
                         (
                             "MMO stopped before rendering because preflight safety gates blocked "
-                            "this target. Review this receipt or rerun with --dry-run to inspect "
-                            "the blocked recommendations."
+                            "this target. Review this receipt to inspect the blocked decision."
+                            if dry_run
+                            else "MMO stopped before rendering because preflight safety gates "
+                            "blocked this target. Review this receipt or rerun with --dry-run "
+                            "to inspect the blocked recommendations."
                         ),
                         "preflight_blocked=true",
                         f"blocked_gates={', '.join(blocked_gates)}",
+                        (
+                            "preflight_primary_issue_id="
+                            f"{_coerce_str(preflight_summary.get('primary_issue_id')).strip() or '<none>'}"
+                        ),
+                        (
+                            "preflight_primary_message="
+                            f"{primary_preflight_message or '<none>'}"
+                        ),
                         f"target={target}",
                         f"profile_id={profile_id}",
                         (
@@ -2858,6 +2979,7 @@ def _run_safe_render_command(
                 "scene_source_path": scene_source_path,
                 "scene_locks_source_path": scene_locks_source_path,
                 "scene_binding_summary": scene_binding_summary,
+                "preflight_summary": preflight_summary,
                 "approved_by": approve_list,
                 "recommendations_summary": {
                     "total": len(recs),
@@ -2889,9 +3011,17 @@ def _run_safe_render_command(
                         else "binaural_virtualization=false"
                     ),
                     (
-                        "headphone_preview_requested=true"
+                    "headphone_preview_requested=true"
                         if preview_headphones
                         else "headphone_preview_requested=false"
+                    ),
+                    (
+                        "preflight_primary_issue_id="
+                        f"{_coerce_str(preflight_summary.get('primary_issue_id')).strip() or '<none>'}"
+                    ),
+                    (
+                        "preflight_primary_message="
+                        f"{_coerce_str(preflight_summary.get('primary_message')).strip() or '<none>'}"
                     ),
                     (
                         "layout_standard="
@@ -2932,6 +3062,7 @@ def _run_safe_render_command(
                     "report_id": _coerce_str(report.get("report_id")),
                     "renderer_manifests": [],
                     "scene_binding_summary": scene_binding_summary,
+                    "preflight_summary": preflight_summary,
                     "deliverables": empty_deliverables,
                     "deliverables_summary": empty_deliverables_summary,
                     "deliverable_summary_rows": empty_deliverable_summary_rows,
@@ -3069,6 +3200,7 @@ def _run_safe_render_command(
             "report_id": _coerce_str(report.get("report_id")),
             "renderer_manifests": persisted_manifests,
             "scene_binding_summary": scene_binding_summary,
+            "preflight_summary": preflight_summary,
             "deliverables_summary": deliverables_summary,
             "deliverable_summary_rows": deliverable_summary_rows,
             "result_summary": result_summary,
@@ -3286,6 +3418,7 @@ def _run_safe_render_command(
             "scene_source_path": scene_source_path,
             "scene_locks_source_path": scene_locks_source_path,
             "scene_binding_summary": scene_binding_summary,
+            "preflight_summary": preflight_summary,
             "approved_by": approve_list,
             "recommendations_summary": {
                 "total": len(recs),
@@ -3325,6 +3458,14 @@ def _run_safe_render_command(
                 (
                     "scene_binding_unbound="
                     f"{int(scene_binding_summary.get('unbound_count', 0) or 0)}"
+                ),
+                (
+                    "preflight_primary_issue_id="
+                    f"{_coerce_str(preflight_summary.get('primary_issue_id')).strip() or '<none>'}"
+                ),
+                (
+                    "preflight_primary_message="
+                    f"{_coerce_str(preflight_summary.get('primary_message')).strip() or '<none>'}"
                 ),
                 f"allow_empty_outputs={'true' if allow_empty_outputs else 'false'}",
                 (

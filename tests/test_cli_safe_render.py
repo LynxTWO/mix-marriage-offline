@@ -1771,9 +1771,23 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
             )
             self.assertEqual(receipt.get("scene_binding_summary", {}).get("status"), "clean")
             self.assertEqual(receipt.get("scene_binding_summary", {}).get("unbound_count"), 0)
+            self.assertEqual(receipt.get("preflight_summary", {}).get("final_decision"), "pass")
+            self.assertEqual(
+                receipt.get("preflight_summary", {})
+                .get("scene_stem_overlap_summary", {})
+                .get("status"),
+                "clean",
+            )
 
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(manifest.get("scene_binding_summary", {}).get("status"), "clean")
+            self.assertEqual(manifest.get("preflight_summary", {}).get("final_decision"), "pass")
+            self.assertEqual(
+                manifest.get("preflight_summary", {})
+                .get("scene_stem_overlap_summary", {})
+                .get("status"),
+                "clean",
+            )
             placement_manifest = next(
                 (
                     item
@@ -2142,6 +2156,9 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
             self.assertIn("ISSUE.SCENE_LINT.OUT_OF_RANGE_WIDTH", stderr)
 
     def test_zero_overlap_explicit_scene_stops_in_scene_binding(self) -> None:
+        schema = json.loads(
+            (_SCHEMAS_DIR / "safe_render_receipt.schema.json").read_text(encoding="utf-8")
+        )
         with tempfile.TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)
             report = _make_baseline_fixture_report()
@@ -2170,6 +2187,7 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
                 json.dumps(scene_payload, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
+            receipt_path = temp / "receipt.json"
 
             exit_code, _stdout, stderr = _run_main(
                 [
@@ -2181,11 +2199,95 @@ class TestSafeRenderExplicitScene(unittest.TestCase):
                     "--scene",
                     str(scene_path),
                     "--dry-run",
+                    "--receipt-out",
+                    str(receipt_path),
                 ]
             )
             self.assertEqual(exit_code, 1, msg=stderr)
-            self.assertIn("scene binding stopped the render", stderr)
-            self.assertIn("No scene stem references matched the analyzed session stems", stderr)
+            self.assertIn("preflight BLOCKED by gates: GATE.SCENE_STEM_BINDING_OVERLAP", stderr)
+            self.assertIn("scene references do not match analyzed stems", stderr.lower())
+
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator(schema).validate(receipt)
+            self.assertTrue(receipt.get("dry_run"))
+            self.assertEqual(receipt.get("status"), "blocked")
+            self.assertEqual(
+                receipt.get("preflight_summary", {}).get("primary_issue_id"),
+                "ISSUE.RENDER.SCENE_STEM_BINDING_EMPTY",
+            )
+            self.assertIn(
+                "scene references do not match analyzed stems",
+                (
+                    receipt.get("preflight_summary", {}).get("primary_message") or ""
+                ).lower(),
+            )
+            self.assertEqual(
+                receipt.get("preflight_summary", {})
+                .get("scene_stem_overlap_summary", {})
+                .get("status"),
+                "failed",
+            )
+
+    def test_partial_overlap_explicit_scene_warns_but_keeps_root_cause_visible(self) -> None:
+        schema = json.loads(
+            (_SCHEMAS_DIR / "safe_render_receipt.schema.json").read_text(encoding="utf-8")
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            report = _make_baseline_fixture_report()
+            report_path = temp / "report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            scene_payload = json.loads(
+                _SAFE_RENDER_EXPLICIT_SCENE_FIXTURE.read_text(encoding="utf-8")
+            )
+            source = scene_payload.get("source")
+            if isinstance(source, dict):
+                source["stems_dir"] = _BASELINE_STEMS_DIR.resolve().as_posix()
+            beds = scene_payload.get("beds")
+            if isinstance(beds, list) and len(beds) >= 2 and isinstance(beds[1], dict):
+                beds[1]["stem_ids"] = ["music_stereo", "ghost_fx"]
+            scene_path = temp / "scene_partial_overlap.json"
+            scene_path.write_text(
+                json.dumps(scene_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            receipt_path = temp / "receipt.json"
+
+            exit_code, _stdout, stderr = _run_main(
+                [
+                    "safe-render",
+                    "--report",
+                    str(report_path),
+                    "--plugins",
+                    str(_PLUGINS_DIR),
+                    "--scene",
+                    str(scene_path),
+                    "--dry-run",
+                    "--receipt-out",
+                    str(receipt_path),
+                ]
+            )
+            self.assertEqual(exit_code, 0, msg=stderr)
+            self.assertIn("scene references only partially match analyzed stems", stderr.lower())
+
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            jsonschema.Draft202012Validator(schema).validate(receipt)
+            self.assertEqual(receipt.get("status"), "dry_run_only")
+            self.assertEqual(receipt.get("preflight_summary", {}).get("final_decision"), "warn")
+            self.assertEqual(
+                receipt.get("preflight_summary", {}).get("primary_issue_id"),
+                "ISSUE.RENDER.SCENE_STEM_BINDING_PARTIAL",
+            )
+            self.assertEqual(
+                receipt.get("preflight_summary", {})
+                .get("scene_stem_overlap_summary", {})
+                .get("status"),
+                "partial",
+            )
 
 
 class TestSafeRenderApprove(unittest.TestCase):

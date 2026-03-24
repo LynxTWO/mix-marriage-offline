@@ -72,6 +72,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   basenames get deterministic human-readable disambiguation, and hashed
   `source_file_id` values remain metadata-only traceability fields instead of
   the primary render join key.
+- Explicit scenes now undergo a dedicated preflight overlap gate before render:
+  safe-render compares bound scene refs against analyzed session stems,
+  distinguishes zero-overlap, partial-overlap, and duplicate-collapse cases
+  with registered `ISSUE.RENDER.SCENE_STEM_BINDING_*` IDs, and persists the
+  same root-cause summary across preflight receipts, safe-render receipts, and
+  render manifests.
 
 ### Fixed
 

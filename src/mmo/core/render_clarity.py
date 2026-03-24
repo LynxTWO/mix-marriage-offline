@@ -96,6 +96,41 @@ _ISSUE_COPY_OVERRIDES: dict[str, dict[str, str]] = {
             "rerun Render."
         ),
     },
+    "ISSUE.RENDER.SCENE_STEM_BINDING_EMPTY": {
+        "title": "Scene references do not match analyzed stems",
+        "message": (
+            "Scene references do not match analyzed stems. MMO could not match "
+            "any of the explicit scene references to the stems owned by the "
+            "analyzed report, so rendering was stopped before audio was written."
+        ),
+        "remedy": (
+            "Rebuild the scene from this report or replace the drifted scene "
+            "references with the current analyzed stem IDs, then rerun Render."
+        ),
+    },
+    "ISSUE.RENDER.SCENE_STEM_BINDING_PARTIAL": {
+        "title": "Scene only partially matches analyzed stems",
+        "message": (
+            "Scene references only partially match analyzed stems. Some explicit "
+            "scene references still match the analyzed report, but others do not, "
+            "so MMO cannot trust the scene completely."
+        ),
+        "remedy": (
+            "Fix the unresolved scene references or rebuild the scene from the "
+            "current report before rerunning Render."
+        ),
+    },
+    "ISSUE.RENDER.SCENE_STEM_BINDING_AMBIGUOUS": {
+        "title": "Scene references collapse onto the same analyzed stem",
+        "message": (
+            "Multiple scene refs resolved to the same analyzed stem, so the "
+            "scene may be double-addressing one source."
+        ),
+        "remedy": (
+            "Review the explicit scene bindings, remove duplicate references, and "
+            "rerun Render."
+        ),
+    },
 }
 
 _FAILURE_REASON_COPY: dict[str, dict[str, str]] = {

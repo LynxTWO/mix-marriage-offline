@@ -927,32 +927,6 @@ issues:
       - "EVID.DOWNMIX.QA.CORR_REF"
       - "EVID.DOWNMIX.QA.CORR_DELTA"
 
-  ISSUE.DOWNMIX.QA.SIMILARITY_NON_MEASURABLE:
-    label: "Downmix similarity non-measurable"
-    description: "Folded downmix similarity measurements are unavailable or invalid, so the compare cannot pass."
-    issue_type: "downmix_qa"
-    default_scope: "session"
-    default_severity_label: "error"
-    typical_evidence_ids:
-      - "EVID.FILE.PATH"
-      - "EVID.DOWNMIX.QA.REF_PATH"
-      - "EVID.DOWNMIX.QA.SRC_PATH"
-      - "EVID.DOWNMIX.POLICY_ID"
-      - "EVID.DOWNMIX.MATRIX_ID"
-
-  ISSUE.DOWNMIX.QA.CORRELATION_NON_MEASURABLE:
-    label: "Downmix correlation non-measurable"
-    description: "Folded downmix correlation could not be measured reliably, so mono-compatibility compare is invalid."
-    issue_type: "downmix_qa"
-    default_scope: "session"
-    default_severity_label: "error"
-    typical_evidence_ids:
-      - "EVID.FILE.PATH"
-      - "EVID.DOWNMIX.QA.REF_PATH"
-      - "EVID.DOWNMIX.QA.SRC_PATH"
-      - "EVID.DOWNMIX.POLICY_ID"
-      - "EVID.DOWNMIX.MATRIX_ID"
-
   ISSUE.DOWNMIX.QA.SAMPLE_RATE_MISMATCH:
     label: "Sample rate mismatch"
     description: "Source and reference sample rates do not match; QA compare is invalid."
@@ -1002,6 +976,47 @@ issues:
     notes:
       - "Safe-render treats this as a failed run by default unless --allow-empty-outputs is set."
       - "Install or enable PLUGIN.RENDERER.MIXDOWN_BASELINE for baseline output coverage."
+
+  ISSUE.RENDER.SCENE_STEM_BINDING_EMPTY:
+    label: "Scene references do not match analyzed stems"
+    description: "After explicit-scene binding, none of the scene stem references match the analyzed session stems for this render."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "error"
+    typical_evidence_ids:
+      - "EVID.TRACK.NAME"
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+    notes:
+      - "Safe-render must stop before audio rendering when overlap is zero."
+      - "Users should rebuild the scene from the current report or replace drifted refs with canonical stem IDs."
+
+  ISSUE.RENDER.SCENE_STEM_BINDING_PARTIAL:
+    label: "Scene only partially matches analyzed stems"
+    description: "Only part of the explicit scene matches the analyzed session stems, leaving unresolved refs after binding."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.TRACK.NAME"
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+    notes:
+      - "Severity can escalate to error when overlap falls below the minimum safe threshold."
+      - "Receipts should report bound and unresolved counts so users can repair the scene deterministically."
+
+  ISSUE.RENDER.SCENE_STEM_BINDING_AMBIGUOUS:
+    label: "Scene refs collapse onto the same analyzed stem"
+    description: "Multiple explicit scene refs resolve to one analyzed session stem, making the scene binding ambiguous."
+    issue_type: "validation"
+    default_scope: "session"
+    default_severity_label: "warn"
+    typical_evidence_ids:
+      - "EVID.TRACK.NAME"
+      - "EVID.FILE.PATH"
+    suggested_actions: []
+    notes:
+      - "This usually means a hand-edited or stale scene is addressing one source more than once."
 
   # -------------------------
   # LFE audit (per-channel content analysis)

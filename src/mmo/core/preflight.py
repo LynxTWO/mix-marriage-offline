@@ -6,15 +6,16 @@ metadata *before* any audio is decoded or written.  It produces a deterministic
 ``schemas/preflight_receipt.schema.json``.
 
 Gates evaluated (in order):
-  1. ``GATE.LAYOUT_NEGOTIATION`` — downmix path exists?
-  2. ``GATE.DOWNMIX_SIMILARITY``  — matrix-based LFE / loudness risk
-  3. ``GATE.DOWNMIX_SIMILARITY_MEASURED`` — measured similarity from rendered audio
-  4. ``GATE.LRA_BOUNDS``          — loudness range (if objective meters provided)
-  5. ``GATE.TRUE_PEAK_PER_CHANNEL`` — per-channel true peak (if objective meters provided)
-  6. ``GATE.TRANSLATION_CURVES``  — translation-curve deltas (if objective meters provided)
-  7. ``GATE.CORRELATION_RISK``    — scene correlation metadata
-  8. ``GATE.PHASE_RISK``          — polarity / phase-inversion flags
-  9. ``GATE.CONFIDENCE_LOW``      — scene inference confidence
+  1. ``GATE.SCENE_STEM_BINDING_OVERLAP`` — explicit-scene refs match analyzed stems?
+  2. ``GATE.LAYOUT_NEGOTIATION`` — downmix path exists?
+  3. ``GATE.DOWNMIX_SIMILARITY``  — matrix-based LFE / loudness risk
+  4. ``GATE.DOWNMIX_SIMILARITY_MEASURED`` — measured similarity from rendered audio
+  5. ``GATE.LRA_BOUNDS``          — loudness range (if objective meters provided)
+  6. ``GATE.TRUE_PEAK_PER_CHANNEL`` — per-channel true peak (if objective meters provided)
+  7. ``GATE.TRANSLATION_CURVES``  — translation-curve deltas (if objective meters provided)
+  8. ``GATE.CORRELATION_RISK``    — scene correlation metadata
+  9. ``GATE.PHASE_RISK``          — polarity / phase-inversion flags
+  10. ``GATE.CONFIDENCE_LOW``      — scene inference confidence
 
 Public API
 ----------
@@ -25,6 +26,7 @@ Public API
 
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -38,6 +40,26 @@ from mmo.core.meters import assess_translation_curves
 from mmo.core.target_tokens import resolve_target_token
 
 PREFLIGHT_RECEIPT_SCHEMA_VERSION = "0.1.0"
+SCENE_STEM_BINDING_GATE_ID = "GATE.SCENE_STEM_BINDING_OVERLAP"
+ISSUE_RENDER_SCENE_STEM_BINDING_EMPTY = "ISSUE.RENDER.SCENE_STEM_BINDING_EMPTY"
+ISSUE_RENDER_SCENE_STEM_BINDING_PARTIAL = "ISSUE.RENDER.SCENE_STEM_BINDING_PARTIAL"
+ISSUE_RENDER_SCENE_STEM_BINDING_AMBIGUOUS = "ISSUE.RENDER.SCENE_STEM_BINDING_AMBIGUOUS"
+SCENE_STEM_OVERLAP_STATUS_NOT_APPLICABLE = "not_applicable"
+SCENE_STEM_OVERLAP_STATUS_CLEAN = "clean"
+SCENE_STEM_OVERLAP_STATUS_PARTIAL = "partial"
+SCENE_STEM_OVERLAP_STATUS_FAILED = "failed"
+
+
+def _coerce_str(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    return ""
+
+
+def _round_ratio(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return round(value, 6)
 
 
 # ---------------------------------------------------------------------------
@@ -246,6 +268,372 @@ def _extract_objective_meters(scene: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(objective, dict):
             return dict(objective)
     return {}
+
+
+# ---------------------------------------------------------------------------
+# Scene / report overlap extraction
+# ---------------------------------------------------------------------------
+
+def default_scene_stem_overlap_summary() -> Dict[str, Any]:
+    return {
+        "status": SCENE_STEM_OVERLAP_STATUS_NOT_APPLICABLE,
+        "scene_mode": None,
+        "reference_count": 0,
+        "matched_count": 0,
+        "unique_matched_stem_count": 0,
+        "unresolved_count": 0,
+        "duplicate_bound_ref_count": 0,
+        "overlap_ratio": None,
+        "minimum_ratio": None,
+        "duplicated_stem_ids": [],
+        "unresolved_refs": [],
+        "issue_ids": [],
+        "failure_reason": None,
+    }
+
+
+def _session_stem_id_set(session: Dict[str, Any]) -> set[str]:
+    session_stem_ids = session.get("session_stem_ids")
+    if isinstance(session_stem_ids, list):
+        return {
+            stem_id
+            for item in session_stem_ids
+            for stem_id in [_coerce_str(item).strip()]
+            if stem_id
+        }
+
+    stems = session.get("stems")
+    if not isinstance(stems, list):
+        return set()
+    return {
+        stem_id
+        for stem in stems
+        if isinstance(stem, dict)
+        for stem_id in [_coerce_str(stem.get("stem_id")).strip()]
+        if stem_id
+    }
+
+
+def _iter_scene_stem_reference_rows(scene: Dict[str, Any]) -> list[Dict[str, Any]]:
+    rows: list[Dict[str, Any]] = []
+
+    objects = scene.get("objects")
+    if isinstance(objects, list):
+        for index, obj in enumerate(objects):
+            if not isinstance(obj, dict):
+                continue
+            stem_id = _coerce_str(obj.get("stem_id")).strip()
+            if not stem_id:
+                continue
+            rows.append(
+                {
+                    "target_type": "object",
+                    "target_id": _coerce_str(obj.get("object_id")).strip() or f"objects[{index}]",
+                    "field": "stem_id",
+                    "stem_id": stem_id,
+                }
+            )
+
+    beds = scene.get("beds")
+    if isinstance(beds, list):
+        for bed_index, bed in enumerate(beds):
+            if not isinstance(bed, dict):
+                continue
+            bed_stem_ids = bed.get("stem_ids")
+            if not isinstance(bed_stem_ids, list):
+                continue
+            target_id = _coerce_str(bed.get("bed_id")).strip() or f"beds[{bed_index}]"
+            for stem_index, stem_value in enumerate(bed_stem_ids):
+                stem_id = _coerce_str(stem_value).strip()
+                if not stem_id:
+                    continue
+                rows.append(
+                    {
+                        "target_type": "bed",
+                        "target_id": target_id,
+                        "field": f"stem_ids[{stem_index}]",
+                        "stem_id": stem_id,
+                    }
+                )
+
+    rows.sort(
+        key=lambda row: (
+            _coerce_str(row.get("target_type")).strip(),
+            _coerce_str(row.get("target_id")).strip(),
+            _coerce_str(row.get("field")).strip(),
+            _coerce_str(row.get("stem_id")).strip(),
+        )
+    )
+    return rows
+
+
+def _preflight_issue(
+    *,
+    issue_id: str,
+    severity: str,
+    message: str,
+    details: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "issue_id": issue_id,
+        "severity": severity,
+        "message": message,
+    }
+    if details:
+        payload["details"] = details
+    return payload
+
+
+def _scene_mode(session: Dict[str, Any], scene: Dict[str, Any]) -> str:
+    scene_mode = _coerce_str(session.get("scene_mode")).strip()
+    if scene_mode:
+        return scene_mode
+    metadata = scene.get("metadata")
+    if isinstance(metadata, dict):
+        scene_mode = _coerce_str(metadata.get("scene_mode")).strip()
+        if scene_mode:
+            return scene_mode
+    return "auto_built"
+
+
+def _eval_scene_stem_binding_overlap(
+    session: Dict[str, Any],
+    scene: Dict[str, Any],
+    options: Dict[str, Any],
+) -> tuple[Dict[str, Any], Dict[str, Any], List[Dict[str, Any]]]:
+    gate_id = SCENE_STEM_BINDING_GATE_ID
+    summary = default_scene_stem_overlap_summary()
+    scene_mode = _scene_mode(session, scene)
+    minimum_ratio = float(options.get("scene_binding_overlap_min_ratio", 0.75))
+    summary["scene_mode"] = scene_mode
+    summary["minimum_ratio"] = _round_ratio(minimum_ratio)
+
+    if scene_mode != "explicit":
+        gate = _gate_result(
+            gate_id,
+            "skipped",
+            "info",
+            "Scene/report overlap check skipped because this render is not using an explicit scene.",
+            {
+                "scene_mode": scene_mode,
+                "reason": "scene_mode_not_explicit",
+            },
+        )
+        return gate, summary, []
+
+    reference_rows = _iter_scene_stem_reference_rows(scene)
+    summary["reference_count"] = len(reference_rows)
+    if not reference_rows:
+        gate = _gate_result(
+            gate_id,
+            "skipped",
+            "info",
+            "Explicit scene has no stem references to compare against analyzed session stems.",
+            {
+                "scene_mode": scene_mode,
+                "reason": "scene_references_unavailable",
+            },
+        )
+        return gate, summary, []
+
+    session_stem_ids = _session_stem_id_set(session)
+    if not session_stem_ids:
+        gate = _gate_result(
+            gate_id,
+            "skipped",
+            "info",
+            "Analyzed session stems unavailable; scene/report overlap check skipped.",
+            {
+                "scene_mode": scene_mode,
+                "reason": "session_stems_unavailable",
+            },
+        )
+        return gate, summary, []
+
+    matched_rows = [
+        row
+        for row in reference_rows
+        if _coerce_str(row.get("stem_id")).strip() in session_stem_ids
+    ]
+    unresolved_rows = [
+        {
+            "target_type": _coerce_str(row.get("target_type")).strip(),
+            "target_id": _coerce_str(row.get("target_id")).strip(),
+            "field": _coerce_str(row.get("field")).strip(),
+            "stem_ref": _coerce_str(row.get("stem_id")).strip(),
+        }
+        for row in reference_rows
+        if _coerce_str(row.get("stem_id")).strip() not in session_stem_ids
+    ]
+
+    matched_counter = Counter(
+        _coerce_str(row.get("stem_id")).strip()
+        for row in matched_rows
+    )
+    duplicated_stem_ids = sorted(
+        stem_id
+        for stem_id, count in matched_counter.items()
+        if stem_id and count > 1
+    )
+    duplicate_bound_ref_count = sum(
+        count - 1
+        for count in matched_counter.values()
+        if count > 1
+    )
+    matched_count = len(matched_rows)
+    unresolved_count = len(unresolved_rows)
+    overlap_ratio = matched_count / len(reference_rows) if reference_rows else None
+
+    summary.update(
+        {
+            "matched_count": matched_count,
+            "unique_matched_stem_count": len(
+                {
+                    _coerce_str(row.get("stem_id")).strip()
+                    for row in matched_rows
+                    if _coerce_str(row.get("stem_id")).strip()
+                }
+            ),
+            "unresolved_count": unresolved_count,
+            "duplicate_bound_ref_count": duplicate_bound_ref_count,
+            "overlap_ratio": _round_ratio(overlap_ratio),
+            "duplicated_stem_ids": duplicated_stem_ids,
+            "unresolved_refs": unresolved_rows,
+        }
+    )
+
+    issues: list[Dict[str, Any]] = []
+    detail_summary: Dict[str, Any] = {
+        "scene_mode": scene_mode,
+        "reference_count": len(reference_rows),
+        "matched_count": matched_count,
+        "unique_matched_stem_count": summary["unique_matched_stem_count"],
+        "unresolved_count": unresolved_count,
+        "duplicate_bound_ref_count": duplicate_bound_ref_count,
+        "overlap_ratio": summary["overlap_ratio"],
+        "minimum_ratio": summary["minimum_ratio"],
+        "duplicated_stem_ids": duplicated_stem_ids,
+        "unresolved_refs": unresolved_rows,
+    }
+
+    if matched_count == 0:
+        summary["status"] = SCENE_STEM_OVERLAP_STATUS_FAILED
+        summary["failure_reason"] = "Scene references do not match analyzed stems."
+        issue = _preflight_issue(
+            issue_id=ISSUE_RENDER_SCENE_STEM_BINDING_EMPTY,
+            severity="error",
+            message=(
+                "Scene references do not match analyzed stems. "
+                f"Matched 0 of {len(reference_rows)} scene refs after binding."
+            ),
+            details=detail_summary,
+        )
+        issues.append(issue)
+        summary["issue_ids"] = [issue["issue_id"]]
+        gate = _gate_result(
+            gate_id,
+            "block",
+            "error",
+            issue["message"],
+            {
+                **detail_summary,
+                "issue_ids": summary["issue_ids"],
+                "failure_reason": summary["failure_reason"],
+            },
+        )
+        return gate, summary, issues
+
+    if unresolved_count > 0:
+        summary["status"] = SCENE_STEM_OVERLAP_STATUS_PARTIAL
+        summary["failure_reason"] = (
+            "Scene references only partially match analyzed stems."
+        )
+        partial_message = (
+            "Scene references only partially match analyzed stems. "
+            f"Matched {matched_count} of {len(reference_rows)} refs after binding."
+        )
+        partial_severity = "error" if overlap_ratio is not None and overlap_ratio < minimum_ratio else "warn"
+        issues.append(
+            _preflight_issue(
+                issue_id=ISSUE_RENDER_SCENE_STEM_BINDING_PARTIAL,
+                severity=partial_severity,
+                message=partial_message,
+                details=detail_summary,
+            )
+        )
+
+    if duplicate_bound_ref_count > 0:
+        if summary["status"] == SCENE_STEM_OVERLAP_STATUS_NOT_APPLICABLE:
+            summary["status"] = SCENE_STEM_OVERLAP_STATUS_PARTIAL
+        if summary["failure_reason"] is None:
+            summary["failure_reason"] = (
+                "Multiple scene references collapse onto the same analyzed stem."
+            )
+        issues.append(
+            _preflight_issue(
+                issue_id=ISSUE_RENDER_SCENE_STEM_BINDING_AMBIGUOUS,
+                severity="warn",
+                message=(
+                    "Multiple scene references collapse onto the same analyzed stem. "
+                    f"Duplicate bindings affect {duplicate_bound_ref_count} ref(s)."
+                ),
+                details=detail_summary,
+            )
+        )
+
+    if not issues:
+        summary["status"] = SCENE_STEM_OVERLAP_STATUS_CLEAN
+        gate = _gate_result(
+            gate_id,
+            "pass",
+            "info",
+            (
+                "Scene references match analyzed stems. "
+                f"Matched {matched_count} of {len(reference_rows)} refs."
+            ),
+            detail_summary,
+        )
+        return gate, summary, []
+
+    summary["issue_ids"] = [
+        _coerce_str(issue.get("issue_id")).strip()
+        for issue in issues
+        if _coerce_str(issue.get("issue_id")).strip()
+    ]
+    blocking_issue = next(
+        (issue for issue in issues if _coerce_str(issue.get("severity")).strip() == "error"),
+        None,
+    )
+    if blocking_issue is not None:
+        gate = _gate_result(
+            gate_id,
+            "block",
+            "error",
+            _coerce_str(blocking_issue.get("message")).strip() or (
+                "Scene references do not match analyzed stems."
+            ),
+            {
+                **detail_summary,
+                "issue_ids": summary["issue_ids"],
+                "failure_reason": summary["failure_reason"],
+            },
+        )
+        return gate, summary, issues
+
+    gate = _gate_result(
+        gate_id,
+        "warn",
+        "warn",
+        _coerce_str(issues[0].get("message")).strip() or (
+            "Scene references partially match analyzed stems."
+        ),
+        {
+            **detail_summary,
+            "issue_ids": summary["issue_ids"],
+            "failure_reason": summary["failure_reason"],
+        },
+    )
+    return gate, summary, issues
 
 
 # ---------------------------------------------------------------------------
@@ -924,6 +1312,10 @@ def evaluate_preflight(
 
         - ``source_layout_id`` (str): canonical layout ID of the source material.
         - ``profile_id`` (str): authority profile in use (informational only).
+        - ``scene_mode`` (str): ``"explicit"`` when safe-render is evaluating a user-supplied
+          scene that must bind back to analyzed stems.
+        - ``session_stem_ids`` (list[str]): canonical analyzed stem IDs used for explicit-scene
+          overlap checks.
 
     scene:
         Scene or analysis-report dict.  The function extracts what it needs
@@ -999,12 +1391,22 @@ def evaluate_preflight(
     gates_evaluated: List[Dict[str, Any]] = []
     downmix_checks: List[Dict[str, Any]] = []
     measured_similarity_checks: List[Dict[str, Any]] = []
+    issues: List[Dict[str, Any]] = []
 
-    # 1. Layout negotiation
+    # 1. Explicit scene/report overlap
+    overlap_gate, scene_stem_overlap_summary, overlap_issues = _eval_scene_stem_binding_overlap(
+        session,
+        scene,
+        options,
+    )
+    gates_evaluated.append(overlap_gate)
+    issues.extend(overlap_issues)
+
+    # 2. Layout negotiation
     layout_gate = _eval_layout_negotiation(source_layout_id, target_layout_id, options)
     gates_evaluated.append(layout_gate)
 
-    # 2. Downmix similarity (matrix-coefficient prediction)
+    # 3. Downmix similarity (matrix-coefficient prediction)
     similarity_gate, downmix_check = _eval_downmix_similarity(
         source_layout_id, target_layout_id, options
     )
@@ -1012,7 +1414,7 @@ def evaluate_preflight(
     if downmix_check is not None:
         downmix_checks.append(downmix_check)
 
-    # 3. Measured similarity (real audio, only when rendered_file is provided)
+    # 4. Measured similarity (real audio, only when rendered_file is provided)
     if rendered_file is not None:
         measured_gate, measured_check = _eval_downmix_similarity_measured(
             Path(rendered_file), target_layout_id, options
@@ -1021,27 +1423,27 @@ def evaluate_preflight(
         if measured_check is not None:
             measured_similarity_checks.append(measured_check)
 
-    # 4. LRA objective gate
+    # 5. LRA objective gate
     lra_gate = _eval_lra_bounds(objective_meters, options)
     gates_evaluated.append(lra_gate)
 
-    # 5. Per-channel true-peak objective gate
+    # 6. Per-channel true-peak objective gate
     true_peak_gate = _eval_true_peak_per_channel(objective_meters, options)
     gates_evaluated.append(true_peak_gate)
 
-    # 6. Translation-curve objective gate
+    # 7. Translation-curve objective gate
     translation_gate = _eval_translation_curves(objective_meters, options)
     gates_evaluated.append(translation_gate)
 
-    # 7. Correlation risk
+    # 8. Correlation risk
     corr_gate = _eval_correlation_risk(phase_report, options)
     gates_evaluated.append(corr_gate)
 
-    # 8. Phase risk
+    # 9. Phase risk
     phase_gate = _eval_phase_risk(phase_report, options)
     gates_evaluated.append(phase_gate)
 
-    # 9. Confidence
+    # 10. Confidence
     conf_gate = _eval_confidence_low(confidence_summary, options)
     gates_evaluated.append(conf_gate)
 
@@ -1059,8 +1461,10 @@ def evaluate_preflight(
         "target_layout_id": target_layout_id,
         "source_layout_id": source_layout_id,
         "gates_evaluated": gates_evaluated,
+        "issues": issues,
         "downmix_checks": downmix_checks,
         "measured_similarity_checks": measured_similarity_checks,
+        "scene_stem_overlap_summary": scene_stem_overlap_summary,
         "phase_report": phase_report,
         "confidence_summary": confidence_summary,
         "final_decision": final_decision,

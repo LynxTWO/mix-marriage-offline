@@ -93,6 +93,17 @@ def _make_scene_with_recs(confidences: list[float]) -> Dict[str, Any]:
     return {"recommendations": recs}
 
 
+def _make_explicit_scene(*stem_refs: str) -> Dict[str, Any]:
+    objects = [
+        {
+            "object_id": f"OBJ.{index:03d}",
+            "stem_id": stem_ref,
+        }
+        for index, stem_ref in enumerate(stem_refs)
+    ]
+    return {"objects": objects}
+
+
 # ---------------------------------------------------------------------------
 # Fixtures for regression (5.1 → stereo)
 # ---------------------------------------------------------------------------
@@ -201,6 +212,108 @@ class TestPreflightSchemaValidity(unittest.TestCase):
     def test_schema_version_in_receipt(self) -> None:
         receipt = self._assert_valid({}, {}, "stereo", {})
         self.assertEqual(receipt["schema_version"], "0.1.0")
+
+
+# ---------------------------------------------------------------------------
+# Tests: explicit scene/report overlap gate
+# ---------------------------------------------------------------------------
+
+class TestSceneStemBindingOverlap(unittest.TestCase):
+    def _session(self) -> Dict[str, Any]:
+        return {
+            "scene_mode": "explicit",
+            "session_stem_ids": ["kick", "snare", "pad"],
+        }
+
+    def _find_gate(self, receipt: Dict[str, Any], gate_id: str) -> Dict[str, Any]:
+        for gate in receipt["gates_evaluated"]:
+            if gate["gate_id"] == gate_id:
+                return gate
+        self.fail(f"Gate {gate_id!r} not found in receipt")
+        return {}
+
+    def test_zero_overlap_blocks_with_plain_reason(self) -> None:
+        receipt = evaluate_preflight(
+            self._session(),
+            _make_explicit_scene("ghost_kick", "ghost_snare"),
+            "stereo",
+            {},
+        )
+
+        gate = self._find_gate(receipt, "GATE.SCENE_STEM_BINDING_OVERLAP")
+        self.assertEqual(gate["outcome"], "block")
+        self.assertEqual(receipt["final_decision"], "block")
+        self.assertIn("scene references do not match analyzed stems", gate["message"].lower())
+        self.assertEqual(receipt["scene_stem_overlap_summary"]["status"], "failed")
+        self.assertEqual(receipt["scene_stem_overlap_summary"]["matched_count"], 0)
+        self.assertEqual(receipt["scene_stem_overlap_summary"]["unresolved_count"], 2)
+        self.assertEqual(
+            [issue["issue_id"] for issue in receipt["issues"]],
+            ["ISSUE.RENDER.SCENE_STEM_BINDING_EMPTY"],
+        )
+
+    def test_partial_overlap_below_threshold_blocks(self) -> None:
+        receipt = evaluate_preflight(
+            self._session(),
+            _make_explicit_scene("kick", "ghost_snare"),
+            "stereo",
+            {},
+        )
+
+        gate = self._find_gate(receipt, "GATE.SCENE_STEM_BINDING_OVERLAP")
+        self.assertEqual(gate["outcome"], "block")
+        self.assertEqual(receipt["scene_stem_overlap_summary"]["status"], "partial")
+        self.assertEqual(receipt["scene_stem_overlap_summary"]["matched_count"], 1)
+        self.assertEqual(receipt["scene_stem_overlap_summary"]["unresolved_count"], 1)
+        self.assertEqual(
+            receipt["issues"][0]["issue_id"],
+            "ISSUE.RENDER.SCENE_STEM_BINDING_PARTIAL",
+        )
+
+    def test_partial_overlap_at_threshold_warns(self) -> None:
+        receipt = evaluate_preflight(
+            self._session(),
+            _make_explicit_scene("kick", "snare", "pad", "ghost_fx"),
+            "stereo",
+            {},
+        )
+
+        gate = self._find_gate(receipt, "GATE.SCENE_STEM_BINDING_OVERLAP")
+        self.assertEqual(gate["outcome"], "warn")
+        self.assertEqual(receipt["final_decision"], "warn")
+        self.assertEqual(receipt["scene_stem_overlap_summary"]["matched_count"], 3)
+        self.assertEqual(receipt["scene_stem_overlap_summary"]["unresolved_count"], 1)
+        self.assertEqual(receipt["scene_stem_overlap_summary"]["overlap_ratio"], 0.75)
+
+    def test_duplicate_refs_warn_with_ambiguous_issue(self) -> None:
+        receipt = evaluate_preflight(
+            self._session(),
+            _make_explicit_scene("kick", "kick"),
+            "stereo",
+            {},
+        )
+
+        gate = self._find_gate(receipt, "GATE.SCENE_STEM_BINDING_OVERLAP")
+        self.assertEqual(gate["outcome"], "warn")
+        self.assertEqual(receipt["scene_stem_overlap_summary"]["duplicate_bound_ref_count"], 1)
+        self.assertIn("kick", receipt["scene_stem_overlap_summary"]["duplicated_stem_ids"])
+        self.assertEqual(
+            receipt["issues"][0]["issue_id"],
+            "ISSUE.RENDER.SCENE_STEM_BINDING_AMBIGUOUS",
+        )
+
+    def test_overlap_check_skips_for_auto_built_scene(self) -> None:
+        receipt = evaluate_preflight(
+            {"session_stem_ids": ["kick"]},
+            _make_explicit_scene("kick"),
+            "stereo",
+            {},
+        )
+
+        gate = self._find_gate(receipt, "GATE.SCENE_STEM_BINDING_OVERLAP")
+        self.assertEqual(gate["outcome"], "skipped")
+        self.assertEqual(receipt["scene_stem_overlap_summary"]["status"], "not_applicable")
+        self.assertEqual(receipt["issues"], [])
 
 
 # ---------------------------------------------------------------------------
@@ -628,8 +741,9 @@ class TestRegressionFixtures(unittest.TestCase):
         ids1 = [g["gate_id"] for g in receipt1["gates_evaluated"]]
         ids2 = [g["gate_id"] for g in receipt2["gates_evaluated"]]
         self.assertEqual(ids1, ids2)
-        # Must include all five gate IDs
+        # Must include the full deterministic gate set
         expected = {
+            "GATE.SCENE_STEM_BINDING_OVERLAP",
             "GATE.LAYOUT_NEGOTIATION",
             "GATE.DOWNMIX_SIMILARITY",
             "GATE.LRA_BOUNDS",
