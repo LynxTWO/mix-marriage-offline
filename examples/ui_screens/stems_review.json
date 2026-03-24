@@ -77,7 +77,8 @@
       ],
       "assignments_preview": [
         {
-          "file_id": "STEMFILE.0000000001",
+          "stem_id": "01_kick",
+          "source_file_id": "SOURCEFILE.0000000001",
           "rel_path": "album/stems/01_kick.wav",
           "role_id": "ROLE.DRUM.KICK",
           "confidence": 0.917,
@@ -89,7 +90,8 @@
           "link_group_id": null
         },
         {
-          "file_id": "STEMFILE.0000000002",
+          "stem_id": "02_snare",
+          "source_file_id": "SOURCEFILE.0000000002",
           "rel_path": "album/stems/02_snare.wav",
           "role_id": "ROLE.DRUM.SNARE",
           "confidence": 0.833,
@@ -101,7 +103,8 @@
           "link_group_id": null
         },
         {
-          "file_id": "STEMFILE.0000000003",
+          "stem_id": "07_texture",
+          "source_file_id": "SOURCEFILE.0000000003",
           "rel_path": "album/stems/07_texture.wav",
           "role_id": "ROLE.OTHER.UNKNOWN",
           "confidence": 0.0,
