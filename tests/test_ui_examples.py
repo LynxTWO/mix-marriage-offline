@@ -140,6 +140,42 @@ class TestUiExamples(unittest.TestCase):
         self.assertIn("mode: default", result.stdout)
         self.assertIn("title:", result.stdout)
 
+    def test_stems_review_example_uses_canonical_stem_identity_fields(self) -> None:
+        example = load_ui_screen_example(
+            self._repo_root() / "examples" / "ui_screens" / "stems_review.json"
+        )
+
+        self.assertIsInstance(example, dict)
+        if not isinstance(example, dict):
+            return
+
+        bundle = example.get("bundle")
+        self.assertIsInstance(bundle, dict)
+        if not isinstance(bundle, dict):
+            return
+
+        stems_summary = bundle.get("stems_summary")
+        self.assertIsInstance(stems_summary, dict)
+        if not isinstance(stems_summary, dict):
+            return
+
+        assignments_preview = stems_summary.get("assignments_preview")
+        self.assertIsInstance(assignments_preview, list)
+        if not isinstance(assignments_preview, list):
+            return
+
+        for row in assignments_preview:
+            self.assertIsInstance(row, dict)
+            if not isinstance(row, dict):
+                continue
+            self.assertNotIn("file_id", row)
+            self.assertIsInstance(row.get("stem_id"), str)
+            self.assertTrue(str(row.get("stem_id", "")).strip())
+            source_file_id = row.get("source_file_id")
+            if source_file_id is not None:
+                self.assertIsInstance(source_file_id, str)
+                self.assertRegex(str(source_file_id), r"^SOURCEFILE\.[0-9a-f]{10}$")
+
 
 if __name__ == "__main__":
     unittest.main()

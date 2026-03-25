@@ -43,13 +43,18 @@ This produces:
 
 ### Scene (`scene.draft.json`)
 
-- **scene_id**: `SCENE.DRAFT.<hash>` — deterministic from sorted file IDs
+- **scene_id**: `SCENE.DRAFT.<hash>` — deterministic from sorted canonical
+  `stem_id` values
 - **source.created_from**: `"draft"`
-- **objects**: One per stem assignment, sorted by `(rel_path, file_id)`
+- **objects**: One per stem assignment, sorted by `(rel_path, stem_id)`
   - `channel_count`: 1 (conservative; real counts require file inspection)
   - `intent`: neutral position, zero width/depth, confidence from classifier
   - `notes`: includes `bus_group` and `role_id` for human review
 - **beds**: Single master bed `BED.001` (diffuse=0.5, confidence=0.5)
+
+`stem_id` is the canonical identity carried across classify, bus-plan, scene,
+analyze, and render. `source_file_id` may still appear as metadata in some
+artifacts, but it is not the cross-pipeline join key.
 
 ### Routing plan (`routing_plan.draft.json`)
 

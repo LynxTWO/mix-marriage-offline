@@ -25,9 +25,13 @@
     },
     "title": { "type": "string", "minLength": 1 },
     "description": { "type": "string" },
-    "ui_state": { "$ref": "#/$defs/ui_state" },
+    "ui_state": {
+      "$ref": "https://mix-marriage-offline.dev/schemas/ui_screen_example.schema.json#/$defs/ui_state"
+    },
     "bundle": { "$ref": "ui_bundle.schema.json" },
-    "design_hints": { "$ref": "#/$defs/design_hints" }
+    "design_hints": {
+      "$ref": "https://mix-marriage-offline.dev/schemas/ui_screen_example.schema.json#/$defs/design_hints"
+    }
   },
   "$defs": {
     "ui_state": {
