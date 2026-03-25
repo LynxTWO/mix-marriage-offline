@@ -14,6 +14,7 @@ from referencing.jsonschema import DRAFT202012
 from mmo.cli import main
 from mmo.core import variants as variants_module
 from mmo.core.variants import build_variant_plan
+from mmo.resources import presets_dir
 
 
 def _write_wav_16bit(path: Path, *, sample_rate_hz: int = 48000, duration_s: float = 0.1) -> None:
@@ -45,7 +46,6 @@ def _schema_validator(schema_path: Path) -> jsonschema.Draft202012Validator:
 
 class TestVariantsRunner(unittest.TestCase):
     def test_build_variant_plan_resolves_slug_collisions_deterministically(self) -> None:
-        repo_root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             stems_dir = temp_path / "stems"
@@ -59,7 +59,7 @@ class TestVariantsRunner(unittest.TestCase):
                 config_paths=None,
                 cli_run_config_overrides={},
                 steps={"analyze": True, "bundle": True},
-                presets_dir=repo_root / "presets",
+                presets_dir=presets_dir(),
             )
 
             variants = plan.get("variants")

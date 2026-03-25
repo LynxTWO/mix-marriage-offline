@@ -2,10 +2,11 @@ import unittest
 from pathlib import Path
 
 from mmo.core.preset_recommendations import derive_preset_recommendations
+from mmo.resources import presets_dir
 
 
 def _presets_dir() -> Path:
-    return Path(__file__).resolve().parents[1] / "presets"
+    return presets_dir()
 
 
 class TestPresetRecommendations(unittest.TestCase):

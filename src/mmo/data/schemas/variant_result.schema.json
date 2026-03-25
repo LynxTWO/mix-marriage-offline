@@ -10,7 +10,9 @@
     "plan": { "$ref": "variant_plan.schema.json" },
     "results": {
       "type": "array",
-      "items": { "$ref": "#/$defs/variant_result_entry" }
+      "items": {
+        "$ref": "https://mix-marriage-offline.dev/schemas/variant_result.schema.json#/$defs/variant_result_entry"
+      }
     }
   },
   "$defs": {
@@ -28,11 +30,21 @@
       "required": ["variant_id", "out_dir", "report_path", "ok", "errors"],
       "properties": {
         "variant_id": { "type": "string", "pattern": "^VARIANT\\.[0-9]{3}$" },
-        "out_dir": { "$ref": "#/$defs/posix_abs_path" },
-        "report_path": { "$ref": "#/$defs/posix_path" },
-        "apply_manifest_path": { "$ref": "#/$defs/posix_path" },
-        "applied_report_path": { "$ref": "#/$defs/posix_path" },
-        "render_manifest_path": { "$ref": "#/$defs/posix_path" },
+        "out_dir": {
+          "$ref": "https://mix-marriage-offline.dev/schemas/variant_result.schema.json#/$defs/posix_abs_path"
+        },
+        "report_path": {
+          "$ref": "https://mix-marriage-offline.dev/schemas/variant_result.schema.json#/$defs/posix_path"
+        },
+        "apply_manifest_path": {
+          "$ref": "https://mix-marriage-offline.dev/schemas/variant_result.schema.json#/$defs/posix_path"
+        },
+        "applied_report_path": {
+          "$ref": "https://mix-marriage-offline.dev/schemas/variant_result.schema.json#/$defs/posix_path"
+        },
+        "render_manifest_path": {
+          "$ref": "https://mix-marriage-offline.dev/schemas/variant_result.schema.json#/$defs/posix_path"
+        },
         "render_output_formats": {
           "type": "array",
           "minItems": 1,
@@ -51,9 +63,15 @@
             "enum": ["wav", "flac", "wv", "aiff", "alac"]
           }
         },
-        "bundle_path": { "$ref": "#/$defs/posix_path" },
-        "pdf_path": { "$ref": "#/$defs/posix_path" },
-        "csv_path": { "$ref": "#/$defs/posix_path" },
+        "bundle_path": {
+          "$ref": "https://mix-marriage-offline.dev/schemas/variant_result.schema.json#/$defs/posix_path"
+        },
+        "pdf_path": {
+          "$ref": "https://mix-marriage-offline.dev/schemas/variant_result.schema.json#/$defs/posix_path"
+        },
+        "csv_path": {
+          "$ref": "https://mix-marriage-offline.dev/schemas/variant_result.schema.json#/$defs/posix_path"
+        },
         "ok": { "type": "boolean" },
         "errors": {
           "type": "array",

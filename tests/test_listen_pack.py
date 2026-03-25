@@ -10,6 +10,7 @@ from referencing.jsonschema import DRAFT202012
 
 from mmo.cli import main
 from mmo.core.listen_pack import build_listen_pack
+from mmo.resources import presets_dir
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -164,8 +165,8 @@ class TestListenPack(unittest.TestCase):
             temp_path = Path(temp_dir)
             variant_result = _build_fake_variant_result(temp_path, first_risk="low")
 
-            first = build_listen_pack(variant_result, repo_root / "presets")
-            second = build_listen_pack(variant_result, repo_root / "presets")
+            first = build_listen_pack(variant_result, presets_dir())
+            second = build_listen_pack(variant_result, presets_dir())
 
             validator.validate(first)
             self.assertEqual(first, second)

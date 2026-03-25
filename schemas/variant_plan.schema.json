@@ -7,12 +7,18 @@
   "required": ["schema_version", "stems_dir", "base_run_config", "variants"],
   "properties": {
     "schema_version": { "const": "0.1.0" },
-    "stems_dir": { "$ref": "#/$defs/posix_abs_path" },
+    "stems_dir": {
+      "$ref": "https://mix-marriage-offline.dev/schemas/variant_plan.schema.json#/$defs/posix_abs_path"
+    },
     "base_run_config": { "$ref": "run_config.schema.json" },
-    "metadata": { "$ref": "#/$defs/metadata" },
+    "metadata": {
+      "$ref": "https://mix-marriage-offline.dev/schemas/variant_plan.schema.json#/$defs/metadata"
+    },
     "variants": {
       "type": "array",
-      "items": { "$ref": "#/$defs/variant" }
+      "items": {
+        "$ref": "https://mix-marriage-offline.dev/schemas/variant_plan.schema.json#/$defs/variant"
+      }
     }
   },
   "$defs": {
@@ -28,8 +34,12 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "scene_path": { "$ref": "#/$defs/posix_path" },
-        "render_plan_path": { "$ref": "#/$defs/posix_path" }
+        "scene_path": {
+          "$ref": "https://mix-marriage-offline.dev/schemas/variant_plan.schema.json#/$defs/posix_path"
+        },
+        "render_plan_path": {
+          "$ref": "https://mix-marriage-offline.dev/schemas/variant_plan.schema.json#/$defs/posix_path"
+        }
       }
     },
     "run_config_patch": {
@@ -55,7 +65,9 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "out_dir": { "$ref": "#/$defs/posix_abs_path" },
+            "out_dir": {
+              "$ref": "https://mix-marriage-offline.dev/schemas/variant_plan.schema.json#/$defs/posix_abs_path"
+            },
             "output_formats": {
               "type": "array",
               "minItems": 1,
@@ -135,17 +147,25 @@
         "variant_slug": { "type": "string", "pattern": "^[a-z0-9_]+(?:__[a-z0-9_]+)*$" },
         "label": { "type": "string", "minLength": 1 },
         "preset_id": { "type": "string", "minLength": 1 },
-        "config_path": { "$ref": "#/$defs/posix_path" },
+        "config_path": {
+          "$ref": "https://mix-marriage-offline.dev/schemas/variant_plan.schema.json#/$defs/posix_path"
+        },
         "source_layout_id": { "type": "string", "minLength": 1 },
         "target_layout_id": { "type": "string", "minLength": 1 },
-        "qa_ref_path": { "$ref": "#/$defs/posix_path" },
+        "qa_ref_path": {
+          "$ref": "https://mix-marriage-offline.dev/schemas/variant_plan.schema.json#/$defs/posix_path"
+        },
         "qa_meters": {
           "type": "string",
           "enum": ["basic", "truth"]
         },
         "qa_max_seconds": { "type": "number", "minimum": 0 },
-        "run_config_overrides": { "$ref": "#/$defs/run_config_patch" },
-        "steps": { "$ref": "#/$defs/variant_steps" }
+        "run_config_overrides": {
+          "$ref": "https://mix-marriage-offline.dev/schemas/variant_plan.schema.json#/$defs/run_config_patch"
+        },
+        "steps": {
+          "$ref": "https://mix-marriage-offline.dev/schemas/variant_plan.schema.json#/$defs/variant_steps"
+        }
       }
     }
   }

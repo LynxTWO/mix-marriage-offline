@@ -262,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
     analyze_parser.add_argument(
         "--preset",
         default=None,
-        help="Optional preset ID from presets/index.json.",
+        help="Optional preset ID from ontology/presets/index.json.",
     )
     analyze_parser.add_argument(
         "--meters",
@@ -639,7 +639,7 @@ def main(argv: list[str] | None = None) -> int:
         "--preset",
         action="append",
         default=[],
-        help="Optional preset ID from presets/index.json. May be provided multiple times.",
+        help="Optional preset ID from ontology/presets/index.json. May be provided multiple times.",
     )
     run_parser.add_argument(
         "--config",
@@ -1019,7 +1019,7 @@ def main(argv: list[str] | None = None) -> int:
     render_parser.add_argument(
         "--preset",
         default=None,
-        help="Optional preset ID from presets/index.json.",
+        help="Optional preset ID from ontology/presets/index.json.",
     )
     render_parser.add_argument(
         "--plugins",
@@ -1209,7 +1209,7 @@ def main(argv: list[str] | None = None) -> int:
     safe_render_parser.add_argument(
         "--preset",
         default=None,
-        help="Optional preset ID from presets/index.json.",
+        help="Optional preset ID from ontology/presets/index.json.",
     )
     safe_render_parser.add_argument(
         "--force",
@@ -1347,7 +1347,7 @@ def main(argv: list[str] | None = None) -> int:
     apply_parser.add_argument(
         "--preset",
         default=None,
-        help="Optional preset ID from presets/index.json.",
+        help="Optional preset ID from ontology/presets/index.json.",
     )
     apply_parser.add_argument(
         "--plugins",
@@ -2677,7 +2677,7 @@ def main(argv: list[str] | None = None) -> int:
         "--preset",
         action="append",
         default=[],
-        help="Optional preset ID from presets/index.json. May be provided multiple times.",
+        help="Optional preset ID from ontology/presets/index.json. May be provided multiple times.",
     )
     project_run_parser.add_argument(
         "--config",
@@ -3430,7 +3430,7 @@ def main(argv: list[str] | None = None) -> int:
     downmix_qa_parser.add_argument(
         "--preset",
         default=None,
-        help="Optional preset ID from presets/index.json.",
+        help="Optional preset ID from ontology/presets/index.json.",
     )
     downmix_list_parser = downmix_subparsers.add_parser(
         "list", help="List available downmix layouts, policies, and conversions."
@@ -3472,7 +3472,7 @@ def main(argv: list[str] | None = None) -> int:
     downmix_render_parser.add_argument(
         "--preset",
         default=None,
-        help="Optional preset ID from presets/index.json.",
+        help="Optional preset ID from ontology/presets/index.json.",
     )
     downmix_render_parser.add_argument(
         "--plugins",

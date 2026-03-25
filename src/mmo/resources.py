@@ -31,7 +31,7 @@ from typing import Any, Optional
 
 # -- internal helpers --------------------------------------------------------
 
-_REQUIRED_SUBDIRS = ("schemas", "ontology", "presets")
+_REQUIRED_SUBDIRS = ("schemas", "ontology")
 _TEMP_DIR_ERROR_MESSAGE = "MMO temporary directory is unavailable."
 
 
@@ -44,7 +44,9 @@ class TempDirSelection:
 
 
 def _has_required_subdirs(root: Path) -> bool:
-    return all((root / d).is_dir() for d in _REQUIRED_SUBDIRS)
+    if not all((root / d).is_dir() for d in _REQUIRED_SUBDIRS):
+        return False
+    return (root / "ontology" / "presets" / "index.json").is_file()
 
 
 def _packaged_data_path() -> Optional[Path]:
@@ -66,8 +68,10 @@ def _repo_checkout_root() -> Optional[Path]:
     here = Path(__file__).resolve().parent  # src/mmo
     # Expected layout: <repo>/src/mmo/resources.py  ->  parents[2] == repo
     repo_candidate = here.parents[1]
-    markers = ("pyproject.toml", "schemas", "ontology", "presets")
-    if all((repo_candidate / m).exists() for m in markers):
+    markers = ("pyproject.toml",)
+    if all((repo_candidate / marker).exists() for marker in markers) and _has_required_subdirs(
+        repo_candidate
+    ):
         return repo_candidate
     return None
 
@@ -76,7 +80,7 @@ def _repo_checkout_root() -> Optional[Path]:
 
 
 def data_root() -> Path:
-    """Return the directory containing schemas/, ontology/, presets/.
+    """Return the directory containing schemas/ and ontology/ resources.
 
     Raises ``RuntimeError`` if no valid data root can be found.
     """
@@ -88,7 +92,7 @@ def data_root() -> Path:
             return p
         raise RuntimeError(
             f"MMO_DATA_ROOT={env!r} does not contain the required "
-            f"subdirectories: {', '.join(_REQUIRED_SUBDIRS)}"
+            "resource layout: schemas/, ontology/, and ontology/presets/index.json"
         )
 
     # 2. Packaged data.
@@ -117,17 +121,11 @@ def ontology_dir() -> Path:
 
 
 def presets_dir() -> Path:
-    """Return the directory containing preset JSON files.
-
-    Prefers ``ontology/presets`` when present so presets can be shipped inside
-    the ontology package tree, while preserving backward compatibility with the
-    legacy top-level ``presets`` directory.
-    """
-    root = data_root()
-    ontology_presets = root / "ontology" / "presets"
-    if (ontology_presets / "index.json").is_file():
-        return ontology_presets
-    return root / "presets"
+    """Return the canonical directory containing built-in preset JSON files."""
+    preset_root = data_root() / "ontology" / "presets"
+    if not (preset_root / "index.json").is_file():
+        raise RuntimeError(f"MMO preset index is missing from {preset_root}.")
+    return preset_root
 
 
 def plugins_dir() -> Path | None:

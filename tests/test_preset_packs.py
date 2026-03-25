@@ -7,6 +7,8 @@ from pathlib import Path
 
 import jsonschema
 
+from mmo.resources import presets_dir
+
 
 class TestPresetPacks(unittest.TestCase):
     def _repo_root(self) -> Path:
@@ -28,7 +30,7 @@ class TestPresetPacks(unittest.TestCase):
 
     def test_index_schema_accepts_packs(self) -> None:
         repo_root = self._repo_root()
-        index = json.loads((repo_root / "presets" / "index.json").read_text(encoding="utf-8"))
+        index = json.loads((presets_dir() / "index.json").read_text(encoding="utf-8"))
         schema = json.loads(
             (repo_root / "schemas" / "presets_index.schema.json").read_text(encoding="utf-8")
         )
@@ -39,8 +41,7 @@ class TestPresetPacks(unittest.TestCase):
         self.assertTrue(packs)
 
     def test_pack_preset_ids_exist(self) -> None:
-        repo_root = self._repo_root()
-        index = json.loads((repo_root / "presets" / "index.json").read_text(encoding="utf-8"))
+        index = json.loads((presets_dir() / "index.json").read_text(encoding="utf-8"))
 
         preset_ids = {
             item.get("preset_id")

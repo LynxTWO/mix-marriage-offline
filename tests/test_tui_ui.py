@@ -6,6 +6,7 @@ from typing import Callable
 from unittest import mock
 
 from mmo.cli import _run_ui_workflow
+from mmo.resources import presets_dir as canonical_presets_dir
 
 
 def _input_provider(values: list[str]) -> Callable[[str], str]:
@@ -24,7 +25,7 @@ class TestTuiUi(unittest.TestCase):
     def test_ui_single_mode_uses_selected_preset_and_writes_outputs(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         tools_dir = repo_root / "tools"
-        presets_dir = repo_root / "presets"
+        presets_dir = canonical_presets_dir()
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -115,7 +116,7 @@ class TestTuiUi(unittest.TestCase):
     def test_ui_variants_mode_toggles_listen_pack_and_deliverables(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         tools_dir = repo_root / "tools"
-        presets_dir = repo_root / "presets"
+        presets_dir = canonical_presets_dir()
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

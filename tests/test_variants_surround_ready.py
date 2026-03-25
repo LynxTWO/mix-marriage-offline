@@ -11,6 +11,7 @@ from referencing.jsonschema import DRAFT202012
 
 from mmo.cli import main
 from mmo.core.listen_pack import build_listen_pack
+from mmo.resources import presets_dir
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -130,7 +131,7 @@ class TestVariantsSurroundReady(unittest.TestCase):
                 ],
             }
 
-            listen_pack = build_listen_pack(variant_result, repo_root / "presets")
+            listen_pack = build_listen_pack(variant_result, presets_dir())
             entries = listen_pack.get("entries")
             self.assertIsInstance(entries, list)
             if not isinstance(entries, list) or not entries:

@@ -48,7 +48,6 @@ class MirrorPair:
 MIRROR_PAIRS: tuple[MirrorPair, ...] = (
     MirrorPair("schemas", "src/mmo/data/schemas"),
     MirrorPair("ontology", "src/mmo/data/ontology"),
-    MirrorPair("presets", "src/mmo/data/presets"),
     MirrorPair(
         "plugins",
         "src/mmo/data/plugins",

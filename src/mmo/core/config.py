@@ -7,7 +7,7 @@ from typing import Any
 
 from mmo.core.presets import load_preset_run_config
 from mmo.core.run_config import load_run_config, merge_run_config, normalize_run_config
-from mmo.resources import ontology_dir, presets_dir as _presets_dir, schemas_dir
+from mmo.resources import presets_dir as _presets_dir, schemas_dir
 
 try:
     import jsonschema
@@ -36,9 +36,6 @@ _WINDOWS_ABS_PATH_RE = re.compile(r"^[A-Za-z]:/")
 
 def resolved_presets_dir() -> Path:
     """Resolve the canonical presets directory for config loading."""
-    ontology_presets_dir = ontology_dir() / "presets"
-    if (ontology_presets_dir / "index.json").is_file():
-        return ontology_presets_dir
     return _presets_dir()
 
 

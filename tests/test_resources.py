@@ -30,11 +30,12 @@ class TestDataRoot(unittest.TestCase):
 
         root = data_root()
         self.assertIsInstance(root, Path)
-        for subdir in ("schemas", "ontology", "presets"):
+        for subdir in ("schemas", "ontology"):
             self.assertTrue(
                 (root / subdir).is_dir(),
                 f"Expected {root / subdir} to be a directory",
             )
+        self.assertTrue((root / "ontology" / "presets" / "index.json").is_file())
 
     def test_schemas_dir_contains_anchor(self) -> None:
         from mmo.resources import schemas_dir
@@ -61,6 +62,7 @@ class TestDataRoot(unittest.TestCase):
 
         d = presets_dir()
         self.assertTrue(d.is_dir())
+        self.assertEqual(d.parent.name, "ontology")
         self.assertTrue(
             (d / "index.json").is_file(),
             "Expected index.json in presets_dir",
@@ -72,8 +74,9 @@ class TestDataRootEnvOverride(unittest.TestCase):
         from mmo.resources import data_root
 
         with _manual_temp_dir() as tmp:
-            for subdir in ("schemas", "ontology", "presets"):
-                (tmp / subdir).mkdir()
+            (tmp / "schemas").mkdir()
+            (tmp / "ontology" / "presets").mkdir(parents=True)
+            (tmp / "ontology" / "presets" / "index.json").write_text("{}\n", encoding="utf-8")
             with mock.patch.dict(os.environ, {"MMO_DATA_ROOT": os.fspath(tmp)}):
                 root = data_root()
             self.assertEqual(root, tmp.resolve())

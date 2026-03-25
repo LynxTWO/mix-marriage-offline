@@ -156,7 +156,6 @@ TARGETS_REGISTRY_LOADER: tuple[str, str, str] = (
 PKG_MIRROR_EXPECTED_PAIRS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("schemas", "src/mmo/data/schemas", ()),
     ("ontology", "src/mmo/data/ontology", ()),
-    ("presets", "src/mmo/data/presets", ()),
     (
         "plugins",
         "src/mmo/data/plugins",

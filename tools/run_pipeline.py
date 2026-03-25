@@ -87,7 +87,7 @@ def main() -> int:
         report["vibe_signals"] = derive_vibe_signals(report)
         report["preset_recommendations"] = derive_preset_recommendations(
             report,
-            repo_root / "presets",
+            repo_root / "ontology" / "presets",
         )
     apply_routing_plan_to_report(report, report.get("run_config"))
 

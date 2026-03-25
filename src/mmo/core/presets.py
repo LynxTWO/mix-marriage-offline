@@ -182,7 +182,9 @@ def _validate_preset_index_basic(index: dict[str, Any], *, index_path: Path) -> 
         if file_path.is_absolute():
             raise ValueError(f"Preset file path must be relative: {normalized_file}")
         if ".." in file_path.parts:
-            raise ValueError(f"Preset file path must not escape presets/: {normalized_file}")
+            raise ValueError(
+                f"Preset file path must not escape the canonical preset directory: {normalized_file}"
+            )
 
         if normalized_id in seen_ids:
             raise ValueError(f"Duplicate preset_id in preset index: {normalized_id}")
