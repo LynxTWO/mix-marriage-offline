@@ -67,7 +67,8 @@ Fields you should set deliberately:
   - `per_channel`, `linked_group`, or `true_multichannel`
 - `capabilities.max_channels`
   - maximum session width the plugin may participate in safely
-  - for built-ins and examples this is `32`; topology limits belong elsewhere
+  - for built-ins and examples this is often `32`; topology and invocation
+    limits still belong in the other capability fields
 - `capabilities.supported_group_sizes`
   - lawful group sizes for one invocation
 - `capabilities.supported_link_groups`
@@ -85,8 +86,10 @@ Fields you should set deliberately:
 - `declares`
   - semantic purpose metadata such as emitted issues, consumed issues,
     suggested actions, related features, and target scopes
+  - keep ontology purpose here instead of overloading `capabilities`
 - `behavior_contract`
   - audible bounds for plugins that render or auto-apply audio changes
+  - keep loudness and peak promises here instead of overloading `declares`
 - `capabilities.dsp_traits`
   - the measurable DSP truth contract; keep it distinct from audible bounds
 
@@ -119,6 +122,9 @@ In every mode:
 - `max_channels: 32` means session compatibility, not permission to process all
   32 channels as one block unless `channel_mode` and `supported_group_sizes`
   say that is lawful
+- the host still consults `supported_link_groups`, `scene_scope`, and
+  `layout_safety` before deciding whether an invocation is allowed, restricted,
+  or bypassed
 
 ## 5. Determinism do and don't
 

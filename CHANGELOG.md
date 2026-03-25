@@ -56,6 +56,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   repeated-looking fields are request echoes, planner resolution rows,
   execution fields, machine summaries, or user-facing summaries, and the dead
   schema-only `spectral_summary` receipt placeholder has been removed.
+- README, status, roadmap, GUI, and plugin docs now distinguish the shipped
+  `1.0.0` tag from ongoing workflow stabilization work, add a
+  `docs/semantic_contracts.md` ownership map for canonical IDs and intentional
+  render-surface mirroring, and tighten the split between plugin
+  `capabilities`, `declares`, and `behavior_contract`.
 - Backend status vocabularies are now frozen in one shared module with a
   matching shared schema-defs file for new enum usage, while CLI and desktop
   labels map from those backend semantics instead of inventing per-surface

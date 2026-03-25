@@ -2,37 +2,42 @@
 
 This roadmap is split into two tracks:
 
-- `NOW`: work required to reach `PROJECT_WHEN_COMPLETE.md`.
-- `LATER`: post-complete enhancements that do not block the completion gate.
+- `NOW`: current stabilization work that keeps the shipped surface truthful,
+  explainable, and aligned with `PROJECT_WHEN_COMPLETE.md`.
+- `LATER`: post-stabilization enhancements that do not block the completion
+  gate.
 
 ## NOW
 
-No v1 completion blockers remain. `1.0.0` is tagged as the first stable public
-release after human fresh-install signoff on Windows, macOS, and Linux packaged
-artifacts. Optional GUI maturity and preset polish items live in
-`PROJECT_WHEN_COMPLETE.md` section 9 and in `LATER` below.
+The `1.0.0` tag exists and the packaged public surface is shipped. Current
+`NOW` work is conservative stabilization: docs truthfulness, semantic-contract
+clarity, workflow polish, and other changes that keep the release surface
+honest without redesigning it. No stop-ship public blockers are open at the
+moment.
 
-### Release Surface
+### Release Surface And Truthfulness
 
-- Goal: make the shipped surface truthful and verifiable before calling v1 done.
+- Goal: keep the shipped surface truthful and verifiable after the tag, not
+  just truthful enough to reach the tag.
 - Completion gate: source-tree pytest is not enough; Windows/macOS/Linux
   packaged desktop artifacts must launch and pass bundled-sidecar smoke in CI
   and release builds before v1 can be considered complete.
-- Open blockers: none — all gates passed
+- Open blockers: no stop-ship blockers currently; follow-on work is contract
+  clarity and stabilization, not a reopened release gate
 
 ### Tauri Workflow Parity
 
 - Goal: keep the shipped Tauri desktop app aligned with the artifact-backed
   workflow contract, not just a buildable shell.
 - Canonical checklist: [gui_parity.md](gui_parity.md)
-- Open blockers:
-- none currently
+- Open blockers: no required parity blockers currently; continue workflow and
+  wording polish without creating desktop-only semantics
 
 ### DSP And Plugin Contract Closure
 
 - Goal: close the remaining public-contract gaps in the DSP and plugin boundary.
-- Open blockers:
-- none currently
+- Open blockers: no stop-ship blockers currently; keep tightening semantic
+  clarity as plugin and render contracts evolve
 
 ## LATER
 

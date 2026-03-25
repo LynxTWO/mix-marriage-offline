@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-03-18
+Last updated: 2026-03-25
 
 This is the single-page milestone checklist for current delivery phases.
 
@@ -17,8 +17,8 @@ PRs must keep status tracking current: update `docs/STATUS.md` and
 
 ## Roadmap Pointer
 
-- Near-term completion work lives in `docs/06-roadmap.md#now`.
-- Post-complete track lives in `docs/06-roadmap.md#later`.
+- Near-term stabilization work lives in `docs/06-roadmap.md#now`.
+- Longer-horizon follow-on work lives in `docs/06-roadmap.md#later`.
 
 ## MVP-CLI
 
@@ -74,7 +74,7 @@ Definition of done:
 
 ## Release Surface
 
-State: `done` — version `1.0.0` released as first stable public release
+State: `done` — version `1.0.0` is the current tagged public release surface
 
 Definition of done:
 
@@ -87,6 +87,11 @@ Definition of done:
 - [x] All shipped metadata surfaces agree on `1.0.0`.
 - [x] Human fresh-install signoff on release-candidate packaged artifacts is
       complete across Windows, macOS, and Linux.
+
+This milestone tracks whether the shipped surface is truthful and verifiable.
+It does not mean every workflow detail is frozen; documentation and
+desktop/render contract-clarity passes may still land without reopening the
+release-tag question.
 
 ## Status System
 
@@ -113,5 +118,8 @@ Definition of done:
   doctor plus validate/analyze/scene/render against a tiny fixture.
 - Release hardening included a docs reality pass, clearer musician-facing
   failure guidance, automated MSI version consistency checks, and plugin
-  semantics drift guards. `1.0.0` is the first stable public release after
-  human fresh-install signoff on Windows, macOS, and Linux packaged artifacts.
+  semantics drift guards. The `1.0.0` tag is the current public release line
+  after human fresh-install signoff on Windows, macOS, and Linux packaged
+  artifacts, but contributors should still treat desktop/render workflow
+  semantics as an actively stabilized contract rather than a frozen marketing
+  surface.

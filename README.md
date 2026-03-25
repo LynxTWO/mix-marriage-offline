@@ -118,10 +118,13 @@ If FFmpeg tools are not on `PATH`, set:
 
 ## Release Status
 
-The current public release is `1.0.0` — the first stable release of the
-Tauri-based desktop app. Older GitHub tags (`1.0.0-rc.1` and the retired
-CustomTkinter-era `1.0.0`–`1.1.3` internal builds) are superseded by this
-release.
+The current public release tag is `1.0.0`. It is the shipped Tauri desktop
+release line and supersedes `1.0.0-rc.1` plus the retired CustomTkinter-era
+`1.0.0`–`1.1.3` internal builds.
+
+Contributors should still expect ongoing desktop/render workflow stabilization
+and contract-clarity work around that release surface. The tag exists; the
+surrounding docs and semantics are still being tightened conservatively.
 
 ## Known Limits
 
@@ -143,6 +146,7 @@ Recommended user docs:
 - [docs/manual/10-gui-walkthrough.md](docs/manual/10-gui-walkthrough.md)
 - [docs/manual/13-troubleshooting.md](docs/manual/13-troubleshooting.md)
 - [docs/00-quickstart.md](docs/00-quickstart.md)
+- [docs/semantic_contracts.md](docs/semantic_contracts.md)
 - [docs/15-target-selection.md](docs/15-target-selection.md)
 - [docs/18-channel-standards.md](docs/18-channel-standards.md)
 - [docs/STATUS.md](docs/STATUS.md)

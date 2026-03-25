@@ -2,9 +2,10 @@
 
 This folder is the canonical documentation set for Mix Marriage Offline (MMO).
 
-The numbered docs are the primary source of truth for product behavior,
-workflows, and architecture. Non-numbered one-offs are kept only as supporting
-reference when still useful.
+The numbered docs are the primary human-facing reference set for product
+behavior, workflows, and architecture. Runtime authority still lives in the
+backend, schemas, and ontology where those sources are named explicitly.
+Non-numbered one-offs are kept only as supporting reference when still useful.
 
 ## Current Shipped Capabilities
 
@@ -27,7 +28,7 @@ reference when still useful.
 - MMO does not replace proprietary Atmos renderers or licensed Dolby
   workflows.
 - Automated packaged smoke is part of CI, but final human fresh-install
-  signoff still happens at release-candidate time before a v1 tag.
+  signoff still happens when promoting a release candidate or public tag.
 
 ## Start Here
 
@@ -39,12 +40,15 @@ reference when still useful.
 - [02-architecture.md](02-architecture.md) Architecture as shipped today:
   deterministic artifacts, scene/render flow, compare, delivery, and desktop
   paths.
+- [semantic_contracts.md](semantic_contracts.md) One-page ownership map for
+  canonical IDs, backend authority, plugin manifest semantics, and intentional
+  render-surface mirroring.
 - [15-target-selection.md](15-target-selection.md) Canonical target tokens,
   shorthands, and binaural target behavior.
 - [18-channel-standards.md](18-channel-standards.md) Canonical channel-ordering
   standards contract.
 - [11-gui-vision.md](11-gui-vision.md) Current GUI direction, shipped surfaces,
-  and legacy compatibility notes.
+  and desktop workflow stabilization notes.
 - [STATUS.md](STATUS.md) Live milestone checklist and current completion
   boundaries.
 - [milestones.yaml](milestones.yaml) Machine-readable milestone IDs, states, and
@@ -55,6 +59,8 @@ reference when still useful.
 - Core product framing: [00-proposal.md](00-proposal.md),
   [01-philosophy.md](01-philosophy.md),
   [09-product-vision.md](09-product-vision.md)
+- Semantic ownership: [semantic_contracts.md](semantic_contracts.md),
+  [03-ontology.md](03-ontology.md)
 - Scene/render contracts: [02-architecture.md](02-architecture.md),
   [13-gui-handshake.md](13-gui-handshake.md),
   [15-target-selection.md](15-target-selection.md),
@@ -93,15 +99,16 @@ reference when still useful.
 1. [00-proposal.md](00-proposal.md)
 2. [01-philosophy.md](01-philosophy.md)
 3. [02-architecture.md](02-architecture.md)
-4. [03-ontology.md](03-ontology.md)
-5. [04-plugin-api.md](04-plugin-api.md)
-6. [05-fixtures-and-ci.md](05-fixtures-and-ci.md)
-7. [07-export-guides.md](07-export-guides.md)
-8. [09-product-vision.md](09-product-vision.md)
-9. [11-gui-vision.md](11-gui-vision.md)
-10. [13-plugin-authoring.md](13-plugin-authoring.md)
-11. [15-target-selection.md](15-target-selection.md)
-12. [18-channel-standards.md](18-channel-standards.md)
+4. [semantic_contracts.md](semantic_contracts.md)
+5. [03-ontology.md](03-ontology.md)
+6. [04-plugin-api.md](04-plugin-api.md)
+7. [05-fixtures-and-ci.md](05-fixtures-and-ci.md)
+8. [07-export-guides.md](07-export-guides.md)
+9. [09-product-vision.md](09-product-vision.md)
+10. [11-gui-vision.md](11-gui-vision.md)
+11. [13-plugin-authoring.md](13-plugin-authoring.md)
+12. [15-target-selection.md](15-target-selection.md)
+13. [18-channel-standards.md](18-channel-standards.md)
 
 ## Legacy Reference Notes
 

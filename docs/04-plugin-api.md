@@ -219,6 +219,10 @@ The manifest now separates three different concerns:
 - `behavior_contract`
   - bounded audible-change promises for plugins that alter or influence audio
 
+Do not overload one section with another section's job: runtime safety stays in
+`capabilities`, ontology relationships live in `declares`, and audible bounds
+live in `behavior_contract`.
+
 Top-level package metadata still belongs in the manifest as well, especially:
 
 - `author`
@@ -311,6 +315,9 @@ That means "legal in a 32-channel session," not "safe to run as one blind
 `layout_safety` to decide whether a plugin is safe to run as-is, whether it can
 be restricted to a lawful subset, or whether it must be bypassed with
 explainable skipped rows in the render manifest/receipt.
+
+Built-in and example manifests use this same rule: `max_channels` declares
+session compatibility, while topology and scope fields decide lawful execution.
 
 Resolvers and renderers that can auto-apply or render audio should also make
 their audible bounds explicit:

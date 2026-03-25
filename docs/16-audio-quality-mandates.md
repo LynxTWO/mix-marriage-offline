@@ -16,6 +16,18 @@ and compatible with objective gates.
 A plugin truth contract is the measurable promise the plugin makes about what it
 changes and what it does not change.
 
+Manifest sections keep different responsibilities:
+
+- `capabilities`
+  - runtime and host execution contract
+- `declares`
+  - semantic purpose and ontology relationships
+- `behavior_contract`
+  - bounded audible-change promise
+
+Do not overload `capabilities` with semantic purpose or `declares` with
+loudness/peak bounds.
+
 For renderer plugins, the contract is declared in:
 
 - `capabilities.deterministic_seed_policy`
@@ -83,6 +95,10 @@ receipt-bearing export boundary.
   - what kind of DSP the plugin performs and what measurable claims it makes
 - `behavior_contract`
   - how tightly the plugin promises to preserve loudness, peak, phase, or image
+
+`max_channels: 32` in the examples below means session compatibility. The host
+still uses topology fields such as `channel_mode`, `supported_group_sizes`, and
+`supported_link_groups` to decide what invocation shape is lawful.
 
 Corrective `auto_apply` or render-capable plugins default to conservative
 `0.1 LUFS` / `0.1 dBTP` bounds unless they declare looser values explicitly

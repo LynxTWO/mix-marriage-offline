@@ -14,11 +14,13 @@ artifact contracts:
 Current delivery note:
 
 - Tauri is the shipped desktop app path.
-- The packaged Tauri app already covers
+- The packaged Tauri app ships
   `Validate -> Analyze -> Scene -> Render -> Results -> Compare`.
 - The retired CustomTkinter desktop path has been removed from source,
   packaging, CI, and release workflows.
 - The Tauri workflow now includes deterministic scene-lock editing.
+- Desktop workflow wording and summary semantics are still being tightened as
+  the render/results surface continues to stabilize.
 - The enforceable rollout checklist lives in [gui_parity.md](gui_parity.md).
 
 ## Scene-first / render-many note
@@ -190,8 +192,9 @@ A robust approach is a split system:
 
 Keep contracts strict:
 
-- UI should treat JSON schemas as source of truth.
-- UI should not invent meaning not present in the report.
+- Backend-owned semantics and their schemas are the source of truth.
+- UI maps from backend semantics; it does not define them.
+- UI should not invent meaning not present in the persisted artifacts.
 
 ## 9) Shipped today
 
@@ -202,10 +205,11 @@ Keep contracts strict:
 
 ## 10) Remaining GUI parity work
 
-- None currently. Tauri satisfies the required
+- No required parity blockers are currently open. Tauri satisfies the required
   `Validate -> Analyze -> Scene -> Render -> Results -> Compare` workflow,
-  including deterministic scene-lock editing. Additional polish is post-v1
-  work.
+  including deterministic scene-lock editing. Ongoing work is workflow polish
+  and contract/readability stabilization, not a search for a replacement
+  desktop path.
 
 ## 11) Non-goals (GUI)
 
