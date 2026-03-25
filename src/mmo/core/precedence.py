@@ -5,6 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from mmo.core.recommendations import normalize_recommendation_scope
 from mmo.core.scene_locks import load_scene_locks
 
 PRECEDENCE_RECEIPT_VERSION = "0.1.0"
@@ -1073,20 +1074,19 @@ def _beds_by_bed_id(scene: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def _recommendation_target_scope(recommendation: dict[str, Any]) -> dict[str, str]:
-    target = recommendation.get("target")
-    if not isinstance(target, dict):
-        return {}
-    scope = _normalize_string(target.get("scope"))
-    if scope is None:
-        return {}
-    normalized: dict[str, str] = {"scope": scope}
-    stem_id = _normalize_string(target.get("stem_id"))
+    scope = normalize_recommendation_scope(recommendation)
+    stem_id = _normalize_string(scope.get("stem_id"))
     if stem_id is not None:
-        normalized["stem_id"] = stem_id
-    bed_id = _normalize_string(target.get("bed_id"))
+        return {"scope": "stem", "stem_id": stem_id}
+    bed_id = _normalize_string(scope.get("bed_id"))
     if bed_id is not None:
-        normalized["bed_id"] = bed_id
-    return normalized
+        return {"scope": "bed", "bed_id": bed_id}
+    bus_id = _normalize_string(scope.get("bus_id"))
+    if bus_id is not None:
+        return {"scope": "bed", "bed_id": bus_id}
+    if scope.get("global") is True:
+        return {"scope": "scene"}
+    return {}
 
 
 def _lock_conflicts_for_recommendation(

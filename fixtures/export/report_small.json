@@ -46,7 +46,7 @@
       "action_id": "ACTION.B",
       "risk": "medium",
       "requires_approval": false,
-      "target": {"scope": "stem", "stem_id": "drums"},
+      "scope": {"stem_id": "drums"},
       "params": [{"param_id": "PARAM.X", "value": 1}],
       "notes": "Second"
     },
@@ -56,7 +56,7 @@
       "action_id": "ACTION.A",
       "risk": "low",
       "requires_approval": true,
-      "target": {"scope": "stem", "stem_id": "drums"},
+      "scope": {"stem_id": "drums"},
       "params": [{"param_id": "PARAM.Y", "value": 2}],
       "notes": "First"
     }

@@ -31,7 +31,10 @@
           "params": [],
           "eligible_auto_apply": true,
           "eligible_render": true,
-          "extreme": false
+          "extreme": false,
+          "scope": {
+            "global": true
+          }
         },
         {
           "recommendation_id": "REC.UI.EXAMPLE.SAFE.002",
@@ -41,7 +44,10 @@
           "params": [],
           "eligible_auto_apply": true,
           "eligible_render": true,
-          "extreme": false
+          "extreme": false,
+          "scope": {
+            "global": true
+          }
         }
       ],
       "run_config": {

@@ -339,12 +339,14 @@
       "properties": {
         "stem_id": { "type": "string", "minLength": 1 },
         "bus_id": { "type": "string", "minLength": 1 },
+        "bed_id": { "type": "string", "minLength": 1 },
         "layout_id": { "type": "string", "minLength": 1 },
         "global": { "type": "boolean", "const": true }
       },
       "oneOf": [
         { "required": ["stem_id"] },
         { "required": ["bus_id"] },
+        { "required": ["bed_id"] },
         { "required": ["layout_id"] },
         { "required": ["global"] }
       ]
@@ -374,7 +376,7 @@
     "recommendation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["recommendation_id", "action_id", "risk", "requires_approval", "params"],
+      "required": ["recommendation_id", "action_id", "risk", "requires_approval", "scope", "params"],
       "properties": {
         "recommendation_id": { "type": "string", "minLength": 1 },
         "issue_id": { "type": "string", "pattern": "^ISSUE\\." },
@@ -383,7 +385,6 @@
         "risk": { "type": "string", "enum": ["low", "medium", "high"] },
         "requires_approval": { "type": "boolean" },
         "scope": { "$ref": "#/$defs/recommendation_scope" },
-        "target": { "$ref": "#/$defs/target" },
         "params": {
           "type": "array",
           "items": { "$ref": "#/$defs/param" }

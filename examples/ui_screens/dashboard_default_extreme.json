@@ -44,7 +44,10 @@
           "params": [],
           "eligible_auto_apply": false,
           "eligible_render": true,
-          "extreme": true
+          "extreme": true,
+          "scope": {
+            "global": true
+          }
         },
         {
           "recommendation_id": "REC.UI.EXAMPLE.EXTREME.002",
@@ -54,7 +57,10 @@
           "params": [],
           "eligible_auto_apply": false,
           "eligible_render": true,
-          "extreme": true
+          "extreme": true,
+          "scope": {
+            "global": true
+          }
         }
       ],
       "run_config": {

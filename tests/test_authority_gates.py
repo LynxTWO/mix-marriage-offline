@@ -68,7 +68,7 @@ def _report_with_medium_rec(stems_dir: Path) -> dict:
                 "impact": "medium",
                 "risk": "medium",
                 "requires_approval": False,
-                "target": {"scope": "stem", "stem_id": "kick"},
+                "scope": {"stem_id": "kick"},
                 "params": [
                     {
                         "param_id": "PARAM.GAIN.DB",

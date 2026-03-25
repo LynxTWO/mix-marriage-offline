@@ -325,6 +325,7 @@ A resolver must implement:
 Rules:
 
 - may return multiple recommendations per issue
+- recommendation targeting must be expressed through `scope` only
 - must include explicit action parameters and risk level
 - should include multiple strategy options when meaningful
 

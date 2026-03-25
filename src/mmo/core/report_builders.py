@@ -237,7 +237,7 @@ def enrich_blocked_downmix_render_diagnostics(report: dict) -> dict:
                 "action_id": action_id,
                 "risk": "low",
                 "requires_approval": False,
-                "target": {"scope": "session"},
+                "scope": {"global": True},
                 "params": [],
                 "notes": notes,
             }
@@ -338,7 +338,7 @@ def build_minimal_report_for_downmix_qa(
                     "action_id": "ACTION.DIAGNOSTIC.CHECK_DOWNMIX_QA",
                     "risk": "low",
                     "requires_approval": False,
-                    "target": {"scope": "session"},
+                    "scope": {"global": True},
                     "params": list(delta_params),
                     "notes": (
                         "Downmix QA deltas exceeded thresholds; review matrix/policy/export."
@@ -379,7 +379,7 @@ def build_minimal_report_for_downmix_qa(
                     "action_id": "ACTION.DOWNMIX.RENDER",
                     "risk": "low",
                     "requires_approval": False,
-                    "target": {"scope": "session"},
+                    "scope": {"global": True},
                     "params": render_params,
                 }
             )

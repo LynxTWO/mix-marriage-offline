@@ -50,14 +50,6 @@ def _extract_correlation(evidence: Any) -> Optional[float]:
             return value
     return None
 
-
-def _stem_target(stem_id: Any) -> Dict[str, Any]:
-    target: Dict[str, Any] = {"scope": "stem"}
-    if isinstance(stem_id, str) and stem_id:
-        target["stem_id"] = stem_id
-    return target
-
-
 def _find_stem_channels(session: Dict[str, Any], stem_id: Any) -> Optional[int]:
     if not isinstance(stem_id, str) or not stem_id:
         return None
@@ -119,7 +111,6 @@ class PolarityInvertResolver(ResolverPlugin):
                     "impact": "medium",
                     "risk": "medium",
                     "requires_approval": True,
-                    "target": _stem_target(stem_id),
                     "scope": {"stem_id": stem_id} if isinstance(stem_id, str) and stem_id else {"global": True},
                     "params": [
                         {

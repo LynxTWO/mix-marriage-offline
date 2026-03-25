@@ -32,7 +32,10 @@
           "params": [],
           "eligible_auto_apply": true,
           "eligible_render": true,
-          "extreme": false
+          "extreme": false,
+          "scope": {
+            "global": true
+          }
         }
       ],
       "run_config": {

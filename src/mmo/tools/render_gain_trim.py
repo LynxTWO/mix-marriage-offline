@@ -16,6 +16,7 @@ from mmo.dsp.export_finalize import (
 )
 from mmo.dsp.io import read_wav_metadata
 from mmo.dsp.meters import iter_wav_float64_samples
+from mmo.core.recommendations import normalize_recommendation_scope
 
 
 _ALLOWED_ACTIONS = {
@@ -80,12 +81,7 @@ def _iter_safe_recommendations(report: dict) -> Iterable[tuple[str, float]]:
             continue
         if rec.get("requires_approval") is not False:
             continue
-        target = rec.get("target", {})
-        if not isinstance(target, dict):
-            continue
-        if target.get("scope") != "stem":
-            continue
-        stem_id = target.get("stem_id")
+        stem_id = normalize_recommendation_scope(rec).get("stem_id")
         if not stem_id:
             continue
         gain_db = _extract_gain_db(rec)

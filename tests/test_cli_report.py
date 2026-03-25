@@ -57,6 +57,7 @@ _MINIMAL_REPORT = {
             "action_id": "ACTION.UTILITY.GAIN",
             "risk": "low",
             "requires_approval": False,
+            "scope": {"global": True},
             "params": [{"param_id": "PARAM.GAIN_DB", "value": -1.0, "unit_id": "UNIT.DB"}],
         }
     ],

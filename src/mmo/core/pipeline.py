@@ -458,12 +458,8 @@ def _required_channels_for_recommendations(
 
     required_channels = 0
     for rec in recommendations:
-        target = rec.get("target")
-        if not isinstance(target, dict):
-            continue
-        if target.get("scope") != "stem":
-            continue
-        stem_id = _coerce_str(target.get("stem_id"))
+        scope = normalize_recommendation_scope(rec)
+        stem_id = _coerce_str(scope.get("stem_id"))
         if not stem_id:
             continue
         stem_channels = channels_by_stem_id.get(stem_id)

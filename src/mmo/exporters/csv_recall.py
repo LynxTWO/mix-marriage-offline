@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
+from mmo.core.recommendations import normalize_recommendation_scope
+
 
 def _sorted_recommendations(recommendations: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return sorted(
@@ -74,7 +76,7 @@ def export_recall_csv(
             "action_id",
             "risk",
             "requires_approval",
-            "target",
+            "scope",
             "params",
             "notes",
             "extreme",
@@ -100,7 +102,7 @@ def export_recall_csv(
                 rec.get("action_id", ""),
                 rec.get("risk", ""),
                 rec.get("requires_approval", ""),
-                json.dumps(rec.get("target"), sort_keys=True),
+                json.dumps(normalize_recommendation_scope(rec), sort_keys=True),
                 json.dumps(rec.get("params"), sort_keys=True),
                 rec.get("notes", ""),
                 rec.get("extreme", False),

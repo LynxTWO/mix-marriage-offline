@@ -11,6 +11,7 @@ from mmo.core.downmix import (
     compare_rendered_surround_to_stereo_reference,
 )
 from mmo.core.lfe_audit import detect_lfe_channel_indices
+from mmo.core.recommendations import normalize_recommendation_scope
 from mmo.dsp.downmix import _Biquad, _design_biquad
 from mmo.dsp.export_finalize import (
     StreamingExportFinalizer,
@@ -173,19 +174,9 @@ def recommendation_targets_explicit_lfe(
     if not explicit_ids:
         return False
 
-    scope = rec.get("scope")
-    if isinstance(scope, Mapping):
-        stem_id = _coerce_str(scope.get("stem_id")).strip()
-        if stem_id and stem_id in explicit_ids:
-            return True
-
-    target = rec.get("target")
-    if isinstance(target, Mapping):
-        stem_id = _coerce_str(target.get("stem_id")).strip()
-        if stem_id and stem_id in explicit_ids:
-            return True
-
-    return False
+    scope = normalize_recommendation_scope(rec)
+    stem_id = _coerce_str(scope.get("stem_id")).strip()
+    return bool(stem_id and stem_id in explicit_ids)
 
 
 def corrective_filter_spec_from_recommendation(

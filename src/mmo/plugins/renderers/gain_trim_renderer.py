@@ -12,6 +12,7 @@ from mmo.core.layout_export import (
     ffmpeg_layout_string_from_channel_order,
 )
 from mmo.core.layout_negotiation import get_layout_channel_order
+from mmo.core.recommendations import normalize_recommendation_scope
 from mmo.core.source_locator import (
     preferred_stem_relative_path,
     resolve_session_stems,
@@ -100,12 +101,7 @@ def _iter_applicable_recommendations(
             continue
         if rec.get("requires_approval") is not False:
             continue
-        target = rec.get("target")
-        if not isinstance(target, dict):
-            continue
-        if target.get("scope") != "stem":
-            continue
-        stem_id = _coerce_str(target.get("stem_id"))
+        stem_id = _coerce_str(normalize_recommendation_scope(rec).get("stem_id"))
         if not stem_id:
             continue
         recommendation_id = _coerce_str(rec.get("recommendation_id"))

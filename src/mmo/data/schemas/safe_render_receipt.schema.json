@@ -34,12 +34,14 @@
       "properties": {
         "stem_id": { "type": "string", "minLength": 1 },
         "bus_id": { "type": "string", "minLength": 1 },
+        "bed_id": { "type": "string", "minLength": 1 },
         "layout_id": { "type": "string", "minLength": 1 },
         "global": { "type": "boolean", "const": true }
       },
       "oneOf": [
         { "required": ["stem_id"] },
         { "required": ["bus_id"] },
+        { "required": ["bed_id"] },
         { "required": ["layout_id"] },
         { "required": ["global"] }
       ]

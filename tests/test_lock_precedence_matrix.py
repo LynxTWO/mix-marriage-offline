@@ -500,14 +500,14 @@ class TestLockPrecedenceMatrix(unittest.TestCase):
                 {
                     "recommendation_id": "REC.BED.WIDEN",
                     "action_id": "ACTION.STEREO.WIDEN",
-                    "target": {"scope": "bed", "bed_id": "BED.AMB"},
+                    "scope": {"bed_id": "BED.AMB"},
                     "eligible_auto_apply": True,
                     "eligible_render": True,
                 },
                 {
                     "recommendation_id": "REC.BED.PAN",
                     "action_id": "ACTION.UTILITY.PAN",
-                    "target": {"scope": "bed", "bed_id": "BED.AMB"},
+                    "scope": {"bed_id": "BED.AMB"},
                     "eligible_auto_apply": True,
                     "eligible_render": True,
                 },

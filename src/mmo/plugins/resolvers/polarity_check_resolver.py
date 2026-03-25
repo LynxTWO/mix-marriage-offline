@@ -22,17 +22,6 @@ NOTES = (
     "routing rather than inverting entire stem polarity."
 )
 
-
-def _copy_target(target: Any) -> Dict[str, Any]:
-    if isinstance(target, dict):
-        copied = dict(target)
-    else:
-        copied = {}
-    if "scope" not in copied:
-        copied["scope"] = "stem"
-    return copied
-
-
 class PolarityCheckGuidanceResolver(ResolverPlugin):
     plugin_id = "PLUGIN.RESOLVER.POLARITY_CHECK_GUIDANCE"
 
@@ -70,7 +59,6 @@ class PolarityCheckGuidanceResolver(ResolverPlugin):
                     "impact": "low",
                     "risk": "low",
                     "requires_approval": False,
-                    "target": _copy_target(target),
                     "scope": {"stem_id": stem_id} if isinstance(stem_id, str) and stem_id else {"global": True},
                     "params": [],
                     "evidence": evidence_out,

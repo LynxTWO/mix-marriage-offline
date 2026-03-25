@@ -37,6 +37,7 @@ _SCENE_PREVIEW_LOW_CONFIDENCE_BELOW = 0.6
 from mmo.resources import ontology_dir, presets_dir as _presets_dir, schemas_dir
 from mmo.core.deliverables import summarize_deliverables
 from mmo.core.media_tags import summarize_stem_source_tags
+from mmo.core.recommendations import normalize_recommendation_scope
 
 
 def _numeric_value(value: Any) -> float | None:
@@ -871,12 +872,7 @@ def _recommendation_target_stem_id(recommendation: dict[str, Any]) -> str:
     if direct_stem_id:
         return direct_stem_id
 
-    target = recommendation.get("target")
-    if isinstance(target, dict):
-        target_stem_id = _coerce_str(target.get("stem_id")).strip()
-        if target_stem_id:
-            return target_stem_id
-    return ""
+    return _coerce_str(normalize_recommendation_scope(recommendation).get("stem_id")).strip()
 
 
 def _scene_meta_payload(

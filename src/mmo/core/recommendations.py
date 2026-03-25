@@ -7,7 +7,7 @@ from typing import Any, Mapping
 IMPACT_LEVELS: tuple[str, ...] = ("low", "medium", "high")
 _IMPACT_SET = set(IMPACT_LEVELS)
 _APPROVAL_IMPACTS = {"medium", "high"}
-_SCOPE_KEYS = ("stem_id", "bus_id", "layout_id", "global")
+_SCOPE_KEYS = ("stem_id", "bus_id", "bed_id", "layout_id", "global")
 _SYNTHETIC_ACTION_DELTAS: dict[str, tuple[dict[str, Any], ...]] = {
     "ACTION.UTILITY.POLARITY_INVERT": (
         {
@@ -75,7 +75,7 @@ def recommendation_requires_user_approval(rec: Mapping[str, Any]) -> bool:
 def _normalize_scope(raw_scope: Any) -> dict[str, Any] | None:
     if not isinstance(raw_scope, Mapping):
         return None
-    for key in ("stem_id", "bus_id", "layout_id"):
+    for key in ("stem_id", "bus_id", "bed_id", "layout_id"):
         value = _coerce_str(raw_scope.get(key)).strip()
         if value:
             return {key: value}
@@ -91,7 +91,7 @@ def normalize_recommendation_scope(rec: Mapping[str, Any]) -> dict[str, Any]:
 
     target = rec.get("target")
     if isinstance(target, Mapping):
-        for key in ("stem_id", "bus_id", "layout_id"):
+        for key in ("stem_id", "bus_id", "bed_id", "layout_id"):
             value = _coerce_str(target.get(key)).strip()
             if value:
                 return {key: value}
@@ -100,22 +100,6 @@ def normalize_recommendation_scope(rec: Mapping[str, Any]) -> dict[str, Any]:
             return {"global": True}
 
     return {"global": True}
-
-
-def legacy_target_from_scope(scope: Mapping[str, Any]) -> dict[str, Any]:
-    stem_id = _coerce_str(scope.get("stem_id")).strip()
-    if stem_id:
-        return {"scope": "stem", "stem_id": stem_id}
-
-    bus_id = _coerce_str(scope.get("bus_id")).strip()
-    if bus_id:
-        return {"scope": "bus", "bus_id": bus_id}
-
-    layout_id = _coerce_str(scope.get("layout_id")).strip()
-    if layout_id:
-        return {"scope": "layout", "layout_id": layout_id}
-
-    return {"scope": "session"}
 
 
 def _default_evidence_ref(rec: Mapping[str, Any]) -> str | None:
@@ -271,7 +255,7 @@ def normalize_recommendation_deltas(rec: Mapping[str, Any]) -> list[dict[str, An
 
 
 def _scope_label(scope: Mapping[str, Any]) -> str:
-    for key in ("stem_id", "bus_id", "layout_id"):
+    for key in ("stem_id", "bus_id", "bed_id", "layout_id"):
         value = _coerce_str(scope.get(key)).strip()
         if value:
             return f"{key}={value}"
@@ -343,10 +327,7 @@ def normalize_recommendation_contract(rec: dict[str, Any]) -> dict[str, Any]:
     rec["requires_approval"] = recommendation_requires_user_approval(rec)
     rec["scope"] = scope
     rec["deltas"] = deltas
-
-    target = rec.get("target")
-    if not isinstance(target, Mapping):
-        rec["target"] = legacy_target_from_scope(scope)
+    rec.pop("target", None)
 
     rollback: list[dict[str, str]] = []
     raw_rollback = rec.get("rollback")
@@ -442,7 +423,6 @@ def recommendation_snapshot(rec: Mapping[str, Any]) -> dict[str, Any]:
 
 __all__ = [
     "IMPACT_LEVELS",
-    "legacy_target_from_scope",
     "normalize_recommendation_contract",
     "normalize_recommendation_deltas",
     "normalize_recommendation_scope",

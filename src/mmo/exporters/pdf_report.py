@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from mmo.core.gates import load_gates_policy
 from mmo.core.media_tags import summarize_stem_source_tags
+from mmo.core.recommendations import normalize_recommendation_scope
 from mmo.core.speaker_layout import get_preset
 from mmo.exporters.pdf_utils import render_maybe_json, truncate_value
 
@@ -342,7 +343,7 @@ def _recommendations_table(
                     _safe_str(rec.get("eligible_render")),
                 ]
             )
-        target = _compact_json(rec.get("target"))
+        target = _compact_json(normalize_recommendation_scope(rec))
         notes = _safe_str(rec.get("notes"))
         row.extend(
             [

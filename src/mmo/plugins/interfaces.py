@@ -109,7 +109,6 @@ class Recommendation(TypedDict, total=False):
     impact: str
     risk: str
     requires_approval: bool
-    target: Dict[str, Any]
     scope: Dict[str, Any]
     params: List[Dict[str, Any]]
     deltas: List[Dict[str, Any]]

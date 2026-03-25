@@ -6,6 +6,7 @@ from pathlib import Path
 import jsonschema
 
 from mmo.cli import main
+from mmo.core.scene_binding import default_scene_binding_summary
 from mmo.core.project_file import new_project, update_project_last_run, write_project
 from mmo.core.ui_bundle import build_ui_bundle
 
@@ -87,6 +88,7 @@ def _sample_report() -> dict:
                 "action_id": "ACTION.UTILITY.GAIN",
                 "risk": "low",
                 "requires_approval": False,
+                "scope": {"global": True},
                 "params": [],
                 "eligible_auto_apply": True,
                 "eligible_render": True,
@@ -97,6 +99,7 @@ def _sample_report() -> dict:
                 "action_id": "ACTION.UTILITY.GAIN",
                 "risk": "low",
                 "requires_approval": False,
+                "scope": {"global": True},
                 "params": [],
                 "eligible_auto_apply": False,
                 "eligible_render": True,
@@ -107,6 +110,7 @@ def _sample_report() -> dict:
                 "action_id": "ACTION.DOWNMIX.RENDER",
                 "risk": "low",
                 "requires_approval": False,
+                "scope": {"global": True},
                 "params": [],
                 "eligible_auto_apply": True,
                 "eligible_render": False,
@@ -117,6 +121,7 @@ def _sample_report() -> dict:
                 "action_id": "ACTION.DIAGNOSTIC.CHECK_PHASE_CORRELATION",
                 "risk": "low",
                 "requires_approval": False,
+                "scope": {"global": True},
                 "params": [],
             },
         ],
@@ -237,6 +242,7 @@ def _sample_render_manifest(report_id: str) -> dict:
     return {
         "schema_version": "0.1.0",
         "report_id": report_id,
+        "scene_binding_summary": default_scene_binding_summary(),
         "renderer_manifests": [],
     }
 
@@ -398,7 +404,7 @@ def _sample_report_for_scene_overlay_tests(
             "action_id": bass_action_id,
             "risk": "low",
             "requires_approval": False,
-            "target": {"scope": "stem", "stem_id": "bass"},
+            "scope": {"stem_id": "bass"},
             "params": [],
             "eligible_auto_apply": True,
             "eligible_render": True,
@@ -409,7 +415,7 @@ def _sample_report_for_scene_overlay_tests(
             "action_id": vox_action_id,
             "risk": "low",
             "requires_approval": False,
-            "target": {"scope": "stem", "stem_id": "vox"},
+            "scope": {"stem_id": "vox"},
             "params": [],
             "eligible_auto_apply": True,
             "eligible_render": True,
@@ -1266,7 +1272,7 @@ class TestUiBundle(unittest.TestCase):
                 "action_id": "ACTION.UTILITY.GAIN",
                 "risk": "low",
                 "requires_approval": False,
-                "target": {"scope": "stem", "stem_id": "bass"},
+                "scope": {"stem_id": "bass"},
                 "params": [],
                 "eligible_auto_apply": True,
                 "eligible_render": True,
@@ -1277,7 +1283,7 @@ class TestUiBundle(unittest.TestCase):
                 "action_id": "ACTION.STEREO.WIDEN.CLASSIC",
                 "risk": "low",
                 "requires_approval": False,
-                "target": {"scope": "stem", "stem_id": "bass"},
+                "scope": {"stem_id": "bass"},
                 "params": [],
                 "eligible_auto_apply": True,
                 "eligible_render": True,
@@ -1343,7 +1349,7 @@ class TestUiBundle(unittest.TestCase):
                 "action_id": "ACTION.STEREO.WIDEN",
                 "risk": "low",
                 "requires_approval": False,
-                "target": {"scope": "stem", "stem_id": "bass"},
+                "scope": {"stem_id": "bass"},
                 "params": [],
                 "eligible_auto_apply": True,
                 "eligible_render": True,
@@ -1354,7 +1360,7 @@ class TestUiBundle(unittest.TestCase):
                 "action_id": "ACTION.UTILITY.GAIN",
                 "risk": "low",
                 "requires_approval": False,
-                "target": {"scope": "stem", "stem_id": "bass"},
+                "scope": {"stem_id": "bass"},
                 "params": [],
                 "eligible_auto_apply": True,
                 "eligible_render": True,

@@ -59,7 +59,7 @@ def _build_report(
                 "action_id": "ACTION.UTILITY.GAIN",
                 "risk": "low",
                 "requires_approval": False,
-                "target": {"scope": "stem", "stem_id": "kick"},
+                "scope": {"stem_id": "kick"},
                 "params": [
                     {
                         "param_id": "PARAM.GAIN.DB",

@@ -35,14 +35,6 @@ def _extract_peak_dbfs(evidence: Any) -> Optional[float]:
                 return value
     return None
 
-
-def _stem_target(stem_id: Any) -> Dict[str, Any]:
-    target: Dict[str, Any] = {"scope": "stem"}
-    if isinstance(stem_id, str) and stem_id:
-        target["stem_id"] = stem_id
-    return target
-
-
 class HeadroomGainResolver(ResolverPlugin):
     plugin_id = "PLUGIN.RESOLVER.HEADROOM_GAIN"
 
@@ -81,7 +73,6 @@ class HeadroomGainResolver(ResolverPlugin):
                     "impact": "low",
                     "risk": "low",
                     "requires_approval": False,
-                    "target": _stem_target(stem_id),
                     "scope": {"stem_id": stem_id} if isinstance(stem_id, str) and stem_id else {"global": True},
                     "params": [
                         {

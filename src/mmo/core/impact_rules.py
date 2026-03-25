@@ -59,13 +59,7 @@ def _coerce_bool(value: Any) -> bool | None:
 
 def _target_stem_id(rec: Mapping[str, Any]) -> str:
     scope = normalize_recommendation_scope(rec)
-    stem_id = _coerce_str(scope.get("stem_id")).strip()
-    if stem_id:
-        return stem_id
-    target = rec.get("target")
-    if isinstance(target, Mapping):
-        return _coerce_str(target.get("stem_id")).strip()
-    return ""
+    return _coerce_str(scope.get("stem_id")).strip()
 
 
 def _string_values(value: Any) -> set[str]:

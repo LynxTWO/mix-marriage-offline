@@ -22,13 +22,6 @@ def _coerce_str(value: Any) -> str:
     return ""
 
 
-def _target_copy(target: Any) -> dict[str, Any]:
-    copied = dict(target) if isinstance(target, Mapping) else {}
-    copied.setdefault("scope", "stem")
-    copied.setdefault("speaker_id", "SPK.LFE")
-    return copied
-
-
 def _scope_for_target(target: Mapping[str, Any]) -> dict[str, Any]:
     stem_id = _coerce_str(target.get("stem_id")).strip()
     if stem_id:
@@ -108,7 +101,8 @@ class LfeCorrectiveResolver(ResolverPlugin):
             if filter_payload is None:
                 continue
 
-            target = _target_copy(issue.get("target"))
+            issue_target = issue.get("target")
+            target = dict(issue_target) if isinstance(issue_target, Mapping) else {}
             scope = _scope_for_target(target)
             notes = _BASE_NOTES
             stem_id = _coerce_str(scope.get("stem_id")).strip()
@@ -149,7 +143,6 @@ class LfeCorrectiveResolver(ResolverPlugin):
                     "impact": "high",
                     "risk": "high",
                     "requires_approval": True,
-                    "target": target,
                     "scope": scope,
                     "params": params,
                     "deltas": deltas,

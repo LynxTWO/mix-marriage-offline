@@ -82,6 +82,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `mmo project show <project_dir>`, and the CLI entry module no longer carries
   explicit private helper re-exports for tests that should import from the
   owning `cli_commands` modules instead.
+- Recommendation artifacts now use `scope` as the only targeting contract:
+  report/receipt/export payloads stop backfilling legacy `target` mirrors,
+  recommendation schemas require canonical `scope`, and the shipped UI
+  examples/docs now describe recommendation targeting in terms of `scope`
+  only.
 
 ### Fixed
 

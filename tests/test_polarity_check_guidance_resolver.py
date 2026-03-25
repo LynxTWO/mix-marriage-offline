@@ -44,6 +44,8 @@ class TestPolarityCheckGuidanceResolver(unittest.TestCase):
         self.assertEqual(len(recommendations), 1)
         rec = recommendations[0]
         self.assertEqual(rec["action_id"], "ACTION.DIAGNOSTIC.CHECK_POLARITY")
+        self.assertEqual(rec.get("scope"), {"stem_id": "stem-surround"})
+        self.assertNotIn("target", rec)
         self.assertEqual(rec["params"], [])
         self.assertIn("routing", rec.get("notes", ""))
         self.assertIn("mono", rec.get("notes", ""))
