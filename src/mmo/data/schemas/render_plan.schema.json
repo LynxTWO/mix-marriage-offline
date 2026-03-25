@@ -17,17 +17,29 @@
     "plan_id": { "type": "string", "pattern": "^PLAN\\.[A-Za-z0-9_.-]+\\.[0-9a-f]{8}$" },
     "scene_path": { "$ref": "#/$defs/posix_path" },
     "targets": {
+      "description": "Convenience list of selected job target identities. Jobs remain the execution contract.",
       "type": "array",
       "items": { "$ref": "#/$defs/target_id" }
     },
-    "policies": { "$ref": "#/$defs/policies" },
+    "policies": {
+      "description": "Plan-wide policy/profile selections derived from the request and registry defaults.",
+      "$ref": "#/$defs/policies"
+    },
     "jobs": {
+      "description": "Per-job execution contract rows. Each job names the selected target identity, the concrete layout to render, and the deterministic inputs/outputs.",
       "type": "array",
       "items": { "$ref": "#/$defs/job" }
     },
-    "request": { "$ref": "#/$defs/request_echo" },
-    "resolved": { "$ref": "#/$defs/resolved" },
+    "request": {
+      "description": "Request echo of the validated render_request inputs used to build this plan. Kept for request/plan/report compatibility checks and downstream reporting.",
+      "$ref": "#/$defs/request_echo"
+    },
+    "resolved": {
+      "description": "Single-layout compatibility view for older consumers. In multi-target plans this mirrors the first row from resolved_layouts.",
+      "$ref": "#/$defs/resolved"
+    },
     "resolved_layouts": {
+      "description": "Canonical planner resolution rows, one per target_layout_id. Multi-target consumers should prefer this over inferring resolution from jobs.",
       "type": "array",
       "minItems": 1,
       "items": { "$ref": "#/$defs/resolved" }
@@ -230,6 +242,7 @@
       }
     },
     "request_echo": {
+      "description": "Validated request subset preserved on the plan so downstream artifacts can prove which request inputs the planner actually used.",
       "type": "object",
       "additionalProperties": false,
       "required": ["scene_path"],
@@ -323,6 +336,7 @@
       }
     },
     "resolved": {
+      "description": "Planner-owned resolution output for a concrete target layout, including channel metadata and effective policy/profile selections.",
       "type": "object",
       "additionalProperties": false,
       "required": ["target_layout_id", "channel_order"],
@@ -410,6 +424,7 @@
       }
     },
     "job": {
+      "description": "Deterministic execution row for one requested/selected target.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -422,9 +437,18 @@
       ],
       "properties": {
         "job_id": { "type": "string", "pattern": "^JOB\\.[0-9]{3}$" },
-        "target_id": { "$ref": "#/$defs/target_id" },
-        "resolved_target_id": { "$ref": "#/$defs/target_id" },
-        "target_layout_id": { "$ref": "#/$defs/layout_id" },
+        "target_id": {
+          "description": "Requested or selected target identity for this job. This is the job label consumers should use when correlating outputs.",
+          "$ref": "#/$defs/target_id"
+        },
+        "resolved_target_id": {
+          "description": "Canonical registry-resolved target identity used for compatibility and planning checks. It may match target_id, but it is a separate contract surface on purpose.",
+          "$ref": "#/$defs/target_id"
+        },
+        "target_layout_id": {
+          "description": "Concrete layout executed by this job, independent of which target identity selected it.",
+          "$ref": "#/$defs/layout_id"
+        },
         "routing_plan_path": { "$ref": "#/$defs/posix_path" },
         "downmix_routes": {
           "type": "array",

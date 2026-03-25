@@ -48,7 +48,7 @@
       "output_sample_rate_hz": null,
       "rendered_frame_count": 0,
       "resample_applied": null,
-      "resolved_output_path": "/home/daniel-boyd/Documents/GitHub/mix-marriage-offline/fixtures/golden/packaged_smoke_zero_decoded_failure/render/LAYOUT.2_0/master.wav",
+      "resolved_output_path": "<FIXTURE_ROOT>/render/LAYOUT.2_0/master.wav",
       "sample_rate_hz": 48000,
       "sample_rate_policy": null,
       "sample_rate_policy_reason": null,

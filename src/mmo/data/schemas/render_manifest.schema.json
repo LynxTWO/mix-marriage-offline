@@ -9,27 +9,34 @@
     "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
     "report_id": { "type": "string", "minLength": 1 },
     "renderer_manifests": {
+      "description": "Renderer-specific execution receipts and output pointers.",
       "type": "array",
       "items": { "$ref": "#/$defs/renderer_manifest" }
     },
     "scene_binding_summary": {
+      "description": "Scene-to-session binding outcome carried on the manifest so render outputs can be interpreted without reopening the receipt.",
       "$ref": "#/$defs/scene_binding_summary"
     },
     "preflight_summary": {
+      "description": "Deterministic pre-render gate decision echoed onto the manifest for packaged-smoke, diagnostics, and UI parity.",
       "$ref": "#/$defs/preflight_summary"
     },
     "deliverables": {
+      "description": "Canonical deliverable records for the render run.",
       "type": "array",
       "items": { "$ref": "#/$defs/deliverable" }
     },
     "deliverables_summary": {
+      "description": "Machine-oriented aggregate counts and result bucket for QA, smoke, and dashboard consumers.",
       "$ref": "#/$defs/deliverables_summary"
     },
     "deliverable_summary_rows": {
+      "description": "Row-wise per-deliverable summary for CLI/UI/reporting tables. This keeps the render outcome readable without rejoining deliverables and renderer manifests.",
       "type": "array",
       "items": { "$ref": "#/$defs/deliverable_summary_row" }
     },
     "result_summary": {
+      "description": "Concise user-facing summary derived from deliverables_summary and deliverable_summary_rows.",
       "$ref": "#/$defs/result_summary"
     }
   },
@@ -235,6 +242,7 @@
       }
     },
     "scene_binding_summary": {
+      "description": "Scene-to-session binding outcome after canonical stem resolution and any deterministic ref rewrites.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -265,6 +273,7 @@
       }
     },
     "preflight_summary": {
+      "description": "Pre-render gate decision summary kept on the manifest so consumers can explain why rendering proceeded, warned, or stopped.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -343,6 +352,7 @@
       }
     },
     "deliverables_summary": {
+      "description": "Machine summary of deliverable counts, mixed-outcome state, and the overall result bucket.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -373,6 +383,7 @@
       }
     },
     "deliverable_summary_row": {
+      "description": "Row-shaped deliverable/output summary for presentation layers and concise reporting.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -405,6 +416,7 @@
       }
     },
     "result_summary": {
+      "description": "Short user-facing render outcome summary with next-action guidance.",
       "type": "object",
       "additionalProperties": false,
       "required": [

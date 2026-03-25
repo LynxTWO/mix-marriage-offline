@@ -366,6 +366,7 @@ def build_deliverable_summary_rows(
     renderer_manifests: Sequence[dict[str, Any]] | None,
     deliverables: Sequence[dict[str, Any]] | None,
 ) -> list[dict[str, Any]]:
+    """Build row-wise summary data for CLI/UI/reporting consumers."""
     outputs_by_id = _output_index(renderer_manifests)
     rows: list[dict[str, Any]] = []
 
@@ -452,6 +453,7 @@ def build_result_summary(
     deliverables_summary: dict[str, Any],
     deliverable_summary_rows: Sequence[dict[str, Any]] | None,
 ) -> dict[str, Any]:
+    """Build a concise user-facing summary from machine-oriented result rows."""
     rows = [
         row
         for row in deliverable_summary_rows or []

@@ -52,6 +52,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the desktop Results screen can see layout, path, channels, sample rate,
   frame-derived duration, validity, failure reason, and next action without
   reconstructing the outcome across multiple JSON artifacts.
+- Render-plan, manifest, and safe-render receipt schemas now spell out which
+  repeated-looking fields are request echoes, planner resolution rows,
+  execution fields, machine summaries, or user-facing summaries, and the dead
+  schema-only `spectral_summary` receipt placeholder has been removed.
 - Backend status vocabularies are now frozen in one shared module with a
   matching shared schema-defs file for new enum usage, while CLI and desktop
   labels map from those backend semantics instead of inventing per-surface

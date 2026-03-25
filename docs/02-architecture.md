@@ -199,12 +199,19 @@ survive across render targets and channel-order variants.
 ### 7.2 Render plan
 
 `render_plan.json` expands one scene into concrete jobs for selected targets and
-contexts. This is where mix-once/render-many becomes explicit.
+contexts. This is where mix-once/render-many becomes explicit. The plan keeps
+the validated `request` echo, planner-owned `resolved` / `resolved_layouts`,
+and per-job `target_id` / `resolved_target_id` / `target_layout_id` distinct on
+purpose: they serve request parity, canonical resolution, and execution.
 
 ### 7.3 Render execution
 
 `safe-render`, `render-run`, and related project workflows execute against the
 same plan/contract concepts and write explainable artifacts for what happened.
+`render_manifest.json` and `safe_render_receipt.json` intentionally repeat
+`scene_binding_summary`, `preflight_summary`, `deliverables_summary`,
+`deliverable_summary_rows`, and `result_summary` so CLI, desktop, smoke, and
+diagnostic consumers can open either artifact independently.
 
 ### 7.4 Ordering standards
 

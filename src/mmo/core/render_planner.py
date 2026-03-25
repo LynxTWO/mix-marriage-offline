@@ -1,8 +1,13 @@
 """Build a deterministic render plan from a render_request + scene.
 
-This module produces render_plan payloads that conform to the extended
-render_plan.schema.json with request echo, resolved layout metadata,
-and jobs with status/inputs/outputs fields.
+This module owns the planner-facing render contract:
+
+- ``request`` is the validated request echo kept for request/plan/report parity.
+- ``resolved`` is the single-layout compatibility view older consumers expect.
+- ``resolved_layouts`` is the canonical per-layout planner output for
+  multi-target plans.
+- each job carries a selected ``target_id``, an optional canonical
+  ``resolved_target_id``, and the concrete ``target_layout_id`` to execute.
 
 No audio rendering is performed here.
 """
@@ -256,6 +261,7 @@ def _resolve_layout(
 
 
 def _build_request_echo(request: dict[str, Any]) -> dict[str, Any]:
+    """Return the validated request subset downstream artifacts compare against."""
     echo: dict[str, Any] = {}
 
     # Multi-target: echo target_layout_ids; single: echo target_layout_id.
@@ -859,6 +865,9 @@ def _build_single_target_plan(
     downmix_registry: Any | None,
 ) -> dict[str, Any]:
     """Build plan for a single target_layout_id (original behavior, byte-identical)."""
+    # `target_id` is the selected job identity. `resolved_target_id` is only
+    # present when that identity came from the registry and should survive
+    # request/plan/report compatibility checks.
     resolved_target_id = _resolve_target_for_layout(
         layout_id=layout_id,
         render_targets_registry=render_targets_registry,
@@ -930,7 +939,8 @@ def _build_single_target_plan(
         policies["loudness_profile_id"] = loudness_profile_id
     policies["lfe_derivation_profile_id"] = lfe_derivation_profile_id
 
-    # Assemble the plan (without plan_id first for hashing).
+    # Keep the validated request echo rather than recomputing from jobs so
+    # render-compat and reporting can confirm the exact request inputs.
     request_echo = _build_request_echo(request)
     plan_without_id: dict[str, Any] = {
         "schema_version": RENDER_PLAN_SCHEMA_VERSION,
@@ -1042,6 +1052,9 @@ def _build_multi_target_plan(
             if isinstance(render_intent, dict):
                 render_intent_by_layout[layout_id] = render_intent
 
+        # `target_id` is the selected/requested job identity for execution.
+        # `resolved_target_id` stays separate so compatibility checks can tell
+        # which canonical registry target this job resolved through.
         job: dict[str, Any] = {
             "job_id": f"JOB.{idx + 1:03d}",
             "target_id": target_id,
@@ -1094,10 +1107,13 @@ def _build_multi_target_plan(
         for layout_id in sorted(resolved_layouts_by_id.keys())
     ]
 
-    # Use first layout's resolved for backward-compat `resolved` field.
+    # Keep both `resolved` and `resolved_layouts`: `resolved` preserves older
+    # single-layout consumers, while `resolved_layouts` is the canonical
+    # planner resolution output for multi-target plans.
     first_resolved = resolved_layouts[0]
 
-    # Assemble the plan (without plan_id first for hashing).
+    # Keep the validated request echo rather than recomputing from jobs so
+    # render-compat and reporting can confirm the exact request inputs.
     request_echo = _build_request_echo(request)
     plan_without_id: dict[str, Any] = {
         "schema_version": RENDER_PLAN_SCHEMA_VERSION,

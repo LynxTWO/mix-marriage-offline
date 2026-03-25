@@ -188,6 +188,7 @@
       }
     },
     "scene_binding_summary": {
+      "description": "Scene-to-session binding outcome after canonical stem resolution and any deterministic ref rewrites.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -218,6 +219,7 @@
       }
     },
     "preflight_summary": {
+      "description": "Pre-render gate decision summary kept on the receipt so operators can see why safe-render proceeded, warned, or stopped.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -292,6 +294,7 @@
       }
     },
     "deliverables_summary": {
+      "description": "Machine summary of deliverable counts, mixed-outcome state, and the overall result bucket.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -322,6 +325,7 @@
       }
     },
     "deliverable_summary_row": {
+      "description": "Row-shaped deliverable/output summary for presentation layers and concise reporting.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -354,6 +358,7 @@
       }
     },
     "result_summary": {
+      "description": "Short user-facing render outcome summary with next-action guidance.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -391,9 +396,16 @@
     "scene_mode": { "type": "string", "enum": ["explicit", "auto_built"] },
     "scene_source_path": { "type": ["string", "null"] },
     "scene_locks_source_path": { "type": ["string", "null"] },
-    "scene_binding_summary": { "$ref": "#/$defs/scene_binding_summary" },
-    "preflight_summary": { "$ref": "#/$defs/preflight_summary" },
+    "scene_binding_summary": {
+      "description": "Scene-to-session binding outcome carried on the receipt so render safety can be understood without reopening the manifest.",
+      "$ref": "#/$defs/scene_binding_summary"
+    },
+    "preflight_summary": {
+      "description": "Deterministic pre-render gate decision echoed onto the receipt for operator, smoke, and diagnostics parity.",
+      "$ref": "#/$defs/preflight_summary"
+    },
     "approved_by": {
+      "description": "Legacy echo of raw approval arguments such as `--approve all`. Kept distinct from the structured approved_by_user recommendation entries.",
       "type": "array",
       "items": { "type": "string", "minLength": 1 }
     },
@@ -415,6 +427,7 @@
       "items": { "$ref": "#/$defs/recommendation_entry" }
     },
     "approved_by_user": {
+      "description": "Structured recommendation entries that were explicitly approved by the user.",
       "type": "array",
       "items": { "$ref": "#/$defs/recommendation_entry" }
     },
@@ -431,13 +444,16 @@
       "items": { "$ref": "#/$defs/deliverable" }
     },
     "deliverables_summary": {
+      "description": "Machine-oriented aggregate counts and result bucket for QA, smoke, and dashboard consumers.",
       "$ref": "#/$defs/deliverables_summary"
     },
     "deliverable_summary_rows": {
+      "description": "Row-wise per-deliverable summary for CLI/UI/reporting tables. This keeps the render outcome readable without rejoining deliverables and renderer manifests.",
       "type": "array",
       "items": { "$ref": "#/$defs/deliverable_summary_row" }
     },
     "result_summary": {
+      "description": "Concise user-facing summary derived from deliverables_summary and deliverable_summary_rows.",
       "$ref": "#/$defs/result_summary"
     },
     "renderer_manifests": {
@@ -469,10 +485,6 @@
       "items": { "$ref": "#/$defs/fallback_attempt" }
     },
     "fallback_final": { "$ref": "#/$defs/fallback_final" },
-    "spectral_summary": {
-      "type": "object",
-      "additionalProperties": true
-    },
     "notes": {
       "type": "array",
       "items": { "type": "string" }

@@ -188,6 +188,8 @@ def _report_job_resolved_target_id(job: dict[str, Any]) -> str:
 
 def _extract_plan_target_layout_ids(plan: dict[str, Any]) -> list[str]:
     plan_request = plan.get("request")
+    # Prefer the explicit request echo; jobs are only a fallback for older or
+    # partially-normalized plans.
     from_request = _extract_target_layout_ids(plan_request)
     if from_request:
         return from_request

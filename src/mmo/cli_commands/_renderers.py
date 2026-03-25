@@ -436,6 +436,9 @@ def _artifact_result_details(
     deliverables: list[dict[str, Any]],
     deliverables_summary: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    # Keep both row-wise and concise summaries so manifests, receipts, smoke,
+    # CLI, and desktop consumers can each load the surface they need without
+    # reconstructing it from raw deliverables.
     summary_rows = build_deliverable_summary_rows(
         renderer_manifests=renderer_manifests,
         deliverables=deliverables,
@@ -3057,6 +3060,8 @@ def _run_safe_render_command(
                 receipt_out_path.parent.mkdir(parents=True, exist_ok=True)
                 _write_json_file(receipt_out_path, receipt)
             if out_manifest_path is not None:
+                # Manifest and receipt intentionally carry the same top-level
+                # summaries so either artifact can stand alone in UI/smoke flows.
                 dry_manifest = {
                     "schema_version": "0.1.0",
                     "report_id": _coerce_str(report.get("report_id")),
@@ -3195,6 +3200,8 @@ def _run_safe_render_command(
             deliverables=deliverables,
             deliverables_summary=deliverables_summary,
         )
+        # Manifest intentionally mirrors summary surfaces also present on the
+        # receipt so UI, smoke, and diagnostics can open either artifact alone.
         render_manifest = {
             "schema_version": "0.1.0",
             "report_id": _coerce_str(report.get("report_id")),
@@ -3406,6 +3413,8 @@ def _run_safe_render_command(
             or ("failed" if output_count == 0 else "success")
         )
         top_failure_reason = _deliverable_top_failure_reason(deliverables_summary)
+        # Receipt keeps the same summary surfaces as the manifest, plus the
+        # execution/approval context unique to safe-render.
         receipt = {
             "schema_version": "0.1.0",
             "receipt_id": receipt_id,

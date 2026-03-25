@@ -262,6 +262,7 @@ def build_wall_clock_report(
 
 
 def _resolved_layout_rows(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return canonical layout rows, preferring `resolved_layouts` over `resolved`."""
     rows: list[dict[str, Any]] = []
     raw_rows = plan.get("resolved_layouts")
     if isinstance(raw_rows, list):
@@ -826,6 +827,8 @@ def build_render_report_from_plan(
     must be passed in explicitly and tested.
     """
     # ── request summary ──────────────────────────────────────────
+    # Reports keep the planner request echo so request/plan/report parity can
+    # be checked without reopening the original render_request artifact.
     request_echo = plan.get("request")
     scene_path = plan.get("scene_path", "")
 
@@ -858,6 +861,8 @@ def build_render_report_from_plan(
     if not isinstance(plan_jobs, list):
         plan_jobs = []
 
+    # Reporting resolves channel metadata from planner-owned resolution rows
+    # rather than inferring it back out of job notes.
     resolved_by_layout = _resolved_layout_index(plan)
     requested_sample_rate_hz = _requested_sample_rate_hz(plan)
     report_jobs: list[dict[str, Any]] = []

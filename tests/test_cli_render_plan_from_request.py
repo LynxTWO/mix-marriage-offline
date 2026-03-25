@@ -242,6 +242,7 @@ class TestRenderPlanFromRequestCli(unittest.TestCase):
             self.assertIsInstance(jobs, list)
             self.assertEqual(len(jobs), 1)
             self.assertEqual(jobs[0]["job_id"], "JOB.001")
+            self.assertEqual(jobs[0]["target_id"], "TARGET.STEREO.2_0")
             self.assertEqual(jobs[0]["status"], "planned")
             self.assertIsInstance(jobs[0]["inputs"], list)
             self.assertIsInstance(jobs[0]["outputs"], list)
@@ -761,16 +762,23 @@ class TestRenderPlanFromRequestMultiTarget(unittest.TestCase):
             self.assertEqual(
                 payload["resolved_layouts"][1]["target_layout_id"], "LAYOUT.5_1",
             )
+            self.assertEqual(payload["resolved"], payload["resolved_layouts"][0])
 
             # Verify jobs: 2 jobs, sorted by layout_id.
             jobs = payload["jobs"]
             self.assertEqual(len(jobs), 2)
             self.assertEqual(jobs[0]["job_id"], "JOB.001")
+            self.assertEqual(jobs[0]["target_id"], "TARGET.STEREO.2_0")
             self.assertEqual(jobs[0]["target_layout_id"], "LAYOUT.2_0")
             self.assertEqual(jobs[0]["resolved_target_id"], "TARGET.STEREO.2_0")
             self.assertEqual(jobs[1]["job_id"], "JOB.002")
+            self.assertEqual(jobs[1]["target_id"], "TARGET.SURROUND.5_1")
             self.assertEqual(jobs[1]["target_layout_id"], "LAYOUT.5_1")
             self.assertEqual(jobs[1]["resolved_target_id"], "TARGET.SURROUND.5_1")
+            self.assertEqual(
+                payload["targets"],
+                [jobs[0]["target_id"], jobs[1]["target_id"]],
+            )
 
     def test_multi_target_determinism(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -861,8 +869,10 @@ class TestRenderPlanFromRequestMultiTarget(unittest.TestCase):
 
             payload = json.loads(out_path.read_text(encoding="utf-8"))
             jobs = payload["jobs"]
+            self.assertEqual(jobs[0]["target_id"], "TARGET.STEREO.2_0")
             self.assertEqual(jobs[0]["target_layout_id"], "LAYOUT.2_0")
             self.assertEqual(jobs[0]["resolved_target_id"], "TARGET.STEREO.2_0")
+            self.assertEqual(jobs[1]["target_id"], "TARGET.SURROUND.7_1")
             self.assertEqual(jobs[1]["target_layout_id"], "LAYOUT.7_1")
             self.assertEqual(jobs[1]["resolved_target_id"], "TARGET.SURROUND.7_1")
 
@@ -891,10 +901,16 @@ class TestRenderPlanFromRequestMultiTarget(unittest.TestCase):
             payload = json.loads(out_path.read_text(encoding="utf-8"))
             jobs = payload["jobs"]
             self.assertEqual(len(jobs), 2)
+            self.assertEqual(jobs[0]["target_id"], "TARGET.STEREO.2_0")
+            self.assertEqual(jobs[1]["target_id"], "TARGET.STEREO.2_0_ALT")
             self.assertEqual(jobs[0]["target_layout_id"], "LAYOUT.2_0")
             self.assertEqual(jobs[1]["target_layout_id"], "LAYOUT.2_0")
             self.assertEqual(jobs[0]["resolved_target_id"], "TARGET.STEREO.2_0")
             self.assertEqual(jobs[1]["resolved_target_id"], "TARGET.STEREO.2_0_ALT")
+            self.assertEqual(
+                payload["targets"],
+                [jobs[0]["target_id"], jobs[1]["target_id"]],
+            )
 
             output_paths = [
                 jobs[0]["outputs"][0]["path"],
