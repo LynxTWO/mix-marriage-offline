@@ -189,7 +189,7 @@ class TestSchemaValidation(unittest.TestCase):
             capabilities={
                 "max_channels": 8,
                 "channel_mode": "linked_group",
-                "link_groups": ["front", "surrounds"],
+                "supported_link_groups": ["front", "surrounds"],
             }
         )
         errors = validate_manifest(manifest, schema_path=_SCHEMA_PATH)
@@ -261,7 +261,7 @@ class TestSemanticsValidation(unittest.TestCase):
             capabilities={
                 "max_channels": 8,
                 "channel_mode": "linked_group",
-                "link_groups": ["front", "not_a_group"],
+                "supported_link_groups": ["front", "not_a_group"],
             }
         )
         errors = validate_manifest(manifest, schema_path=_SCHEMA_PATH, semantics=self.semantics)
@@ -269,22 +269,22 @@ class TestSemanticsValidation(unittest.TestCase):
         self.assertTrue(
             _errors_contain(errors, ISSUE_SEMANTICS_LINK_GROUPS_INVALID)
             or _errors_contain(errors, "[schema]"),
-            msg=f"Expected link_groups error; got: {errors}",
+            msg=f"Expected supported_link_groups error; got: {errors}",
         )
 
-    def test_link_groups_without_linked_mode_rejected(self) -> None:
+    def test_supported_link_groups_without_compatible_mode_rejected(self) -> None:
         manifest = _renderer_manifest(
             capabilities={
                 "max_channels": 8,
                 "channel_mode": "per_channel",
-                "link_groups": ["front"],
+                "supported_link_groups": ["front"],
             }
         )
         errors = validate_manifest(manifest, schema_path=_SCHEMA_PATH, semantics=self.semantics)
         self.assertTrue(len(errors) > 0)
         self.assertTrue(
             _errors_contain(errors, ISSUE_SEMANTICS_LINK_GROUPS_REQUIRES_LINKED_MODE),
-            msg=f"Expected link_groups mode mismatch error; got: {errors}",
+            msg=f"Expected supported_link_groups mode mismatch error; got: {errors}",
         )
 
     def test_invalid_latency_type_rejected(self) -> None:
@@ -571,7 +571,7 @@ class TestDeterminism(unittest.TestCase):
         manifest = _renderer_manifest(
             capabilities={
                 "channel_mode": "bad",
-                "link_groups": ["nope"],
+                "supported_link_groups": ["nope"],
                 "latency": {"type": "bad"},
                 "deterministic_seed_policy": "also_bad",
                 "bed_only": True,

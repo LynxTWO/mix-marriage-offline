@@ -28,7 +28,7 @@ SEMANTICS_PATH = REPO_ROOT / "ontology" / "plugin_semantics.yaml"
 # Each entry maps: (YAML top-level key, Python frozenset)
 _SEMANTICS_PAIRS: list[tuple[str, str, frozenset[str]]] = [
     ("channel_mode", "_VALID_CHANNEL_MODES", _VALID_CHANNEL_MODES),
-    ("link_groups", "_VALID_LINK_GROUPS", _VALID_LINK_GROUPS),
+    ("supported_link_groups", "_VALID_LINK_GROUPS", _VALID_LINK_GROUPS),
     ("latency", "_VALID_LATENCY_TYPES", _VALID_LATENCY_TYPES),
     ("deterministic_seed_policy", "_VALID_SEED_POLICIES", _VALID_SEED_POLICIES),
     ("scene_scope", "_VALID_SCENE_SCOPES", _VALID_SCENE_SCOPES),

@@ -9,6 +9,23 @@ ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.renderers.safe_renderer:SafeRenderer"
 capabilities:
   max_channels: 32
+  channel_mode: "true_multichannel"
+  supported_group_sizes:
+    - 1
+    - 2
+    - 6
+    - 8
+    - 10
+    - 12
+    - 16
+    - 32
+  supported_link_groups:
+    - "front"
+    - "surrounds"
+    - "heights"
+    - "all"
+    - "custom"
+  requires_speaker_positions: true
   scene_scope: "object_capable"
   layout_safety: "layout_specific"
   deterministic_seed_policy: "none"
@@ -46,3 +63,19 @@ capabilities:
       - "TARGET.SURROUND.5_1"
   notes:
     - "Deterministic gain/trim rendering; no boosts."
+declares:
+  problem_domains:
+    - "rendering"
+    - "safety"
+  target_scopes:
+    - "stem"
+    - "bus"
+    - "scene"
+behavior_contract:
+  loudness_behavior: "preserve"
+  max_integrated_lufs_delta: 0.1
+  peak_behavior: "bounded"
+  max_true_peak_delta_db: 0.1
+  phase_behavior: "translation_safe"
+  stereo_image_behavior: "preserve"
+  gain_compensation: "required"

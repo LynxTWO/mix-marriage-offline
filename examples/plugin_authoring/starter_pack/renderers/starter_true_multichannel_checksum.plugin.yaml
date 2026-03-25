@@ -7,6 +7,10 @@ entrypoint: "starter_true_multichannel_checksum:StarterTrueMultichannelChecksum"
 capabilities:
   max_channels: 32
   channel_mode: "true_multichannel"
+  supported_group_sizes:
+    - 6
+    - 12
+  requires_speaker_positions: true
   scene_scope: "object_capable"
   layout_safety: "layout_specific"
   supported_layout_ids:
@@ -47,3 +51,19 @@ capabilities:
         note: "Uses process_ctx.seed to write a deterministic checksum tone."
   notes:
     - "Starter example that the host may bypass on unsupported layouts."
+declares:
+  problem_domains:
+    - "rendering"
+    - "translation"
+  target_scopes:
+    - "scene"
+    - "target_layout"
+behavior_contract:
+  loudness_behavior: "bounded"
+  max_integrated_lufs_delta: 2.0
+  peak_behavior: "bounded"
+  max_true_peak_delta_db: 1.5
+  phase_behavior: "translation_safe"
+  stereo_image_behavior: "bounded"
+  gain_compensation: "not_required"
+  rationale: "This starter example writes a deterministic checksum tone across a lawful multichannel field."

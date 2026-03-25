@@ -9,6 +9,22 @@ ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.renderers.gain_trim_renderer:GainTrimRenderer"
 capabilities:
   max_channels: 32
+  channel_mode: "true_multichannel"
+  supported_group_sizes:
+    - 1
+    - 2
+    - 6
+    - 8
+    - 10
+    - 12
+    - 16
+    - 32
+  supported_link_groups:
+    - "front"
+    - "surrounds"
+    - "heights"
+    - "all"
+    - "custom"
   scene_scope: "object_capable"
   layout_safety: "layout_agnostic"
   deterministic_seed_policy: "none"
@@ -38,3 +54,19 @@ capabilities:
         note: "Limits loudness movement to declared trim intent."
   notes:
     - "Deterministic gain/trim rendering; no boosts."
+declares:
+  problem_domains:
+    - "correction"
+    - "rendering"
+  target_scopes:
+    - "stem"
+    - "bus"
+behavior_contract:
+  loudness_behavior: "bounded"
+  max_integrated_lufs_delta: 1.0
+  peak_behavior: "bounded"
+  max_true_peak_delta_db: 0.2
+  phase_behavior: "preserve"
+  stereo_image_behavior: "preserve"
+  gain_compensation: "not_required"
+  rationale: "Applies approved gain trims, so loudness movement intentionally follows the requested correction."

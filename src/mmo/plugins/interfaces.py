@@ -52,9 +52,71 @@ class PluginPurityContract:
 
 
 @dataclass(frozen=True)
+class PluginDeclares:
+    problem_domains: tuple[str, ...] | None = None
+    emits_issue_ids: tuple[str, ...] | None = None
+    consumes_issue_ids: tuple[str, ...] | None = None
+    suggests_action_ids: tuple[str, ...] | None = None
+    related_feature_ids: tuple[str, ...] | None = None
+    target_scopes: tuple[str, ...] | None = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {}
+        if self.problem_domains is not None:
+            payload["problem_domains"] = list(self.problem_domains)
+        if self.emits_issue_ids is not None:
+            payload["emits_issue_ids"] = list(self.emits_issue_ids)
+        if self.consumes_issue_ids is not None:
+            payload["consumes_issue_ids"] = list(self.consumes_issue_ids)
+        if self.suggests_action_ids is not None:
+            payload["suggests_action_ids"] = list(self.suggests_action_ids)
+        if self.related_feature_ids is not None:
+            payload["related_feature_ids"] = list(self.related_feature_ids)
+        if self.target_scopes is not None:
+            payload["target_scopes"] = list(self.target_scopes)
+        return payload
+
+
+@dataclass(frozen=True)
+class PluginBehaviorContract:
+    loudness_behavior: str | None = None
+    max_integrated_lufs_delta: float | None = None
+    peak_behavior: str | None = None
+    max_true_peak_delta_db: float | None = None
+    phase_behavior: str | None = None
+    stereo_image_behavior: str | None = None
+    gain_compensation: str | None = None
+    rationale: str | None = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {}
+        if isinstance(self.loudness_behavior, str) and self.loudness_behavior:
+            payload["loudness_behavior"] = self.loudness_behavior
+        if isinstance(self.max_integrated_lufs_delta, (int, float)):
+            payload["max_integrated_lufs_delta"] = float(self.max_integrated_lufs_delta)
+        if isinstance(self.peak_behavior, str) and self.peak_behavior:
+            payload["peak_behavior"] = self.peak_behavior
+        if isinstance(self.max_true_peak_delta_db, (int, float)):
+            payload["max_true_peak_delta_db"] = float(self.max_true_peak_delta_db)
+        if isinstance(self.phase_behavior, str) and self.phase_behavior:
+            payload["phase_behavior"] = self.phase_behavior
+        if isinstance(self.stereo_image_behavior, str) and self.stereo_image_behavior:
+            payload["stereo_image_behavior"] = self.stereo_image_behavior
+        if isinstance(self.gain_compensation, str) and self.gain_compensation:
+            payload["gain_compensation"] = self.gain_compensation
+        if isinstance(self.rationale, str) and self.rationale:
+            payload["rationale"] = self.rationale
+        return payload
+
+
+@dataclass(frozen=True)
 class PluginCapabilities:
     max_channels: int | None = None
+    channel_mode: str | None = None
+    supported_group_sizes: tuple[int, ...] | None = None
+    supported_link_groups: tuple[str, ...] | None = None
     bed_only: bool | None = None
+    requires_speaker_positions: bool | None = None
     scene_scope: str | None = None
     layout_safety: str | None = None
     deterministic_seed_policy: str | None = None
@@ -68,8 +130,16 @@ class PluginCapabilities:
         payload: Dict[str, Any] = {}
         if isinstance(self.max_channels, int):
             payload["max_channels"] = self.max_channels
+        if isinstance(self.channel_mode, str) and self.channel_mode:
+            payload["channel_mode"] = self.channel_mode
+        if self.supported_group_sizes is not None:
+            payload["supported_group_sizes"] = list(self.supported_group_sizes)
+        if self.supported_link_groups is not None:
+            payload["supported_link_groups"] = list(self.supported_link_groups)
         if isinstance(self.bed_only, bool):
             payload["bed_only"] = self.bed_only
+        if isinstance(self.requires_speaker_positions, bool):
+            payload["requires_speaker_positions"] = self.requires_speaker_positions
         if isinstance(self.scene_scope, str) and self.scene_scope:
             payload["scene_scope"] = self.scene_scope
         if isinstance(self.layout_safety, str) and self.layout_safety:

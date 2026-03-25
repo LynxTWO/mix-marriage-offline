@@ -47,11 +47,16 @@
       "pattern": "^[A-Za-z0-9_\\.]+:[A-Za-z0-9_\\.]+$"
     },
     "capabilities": {
-      "description": "Optional plugin capability metadata.",
-      "oneOf": [
-        { "$ref": "#/$defs/legacy_capability_ids" },
-        { "$ref": "#/$defs/plugin_capabilities" }
-      ]
+      "$ref": "#/$defs/plugin_capabilities",
+      "description": "Optional host/runtime execution contract metadata."
+    },
+    "declares": {
+      "$ref": "#/$defs/plugin_declares",
+      "description": "Optional semantic-purpose declaration block using ontology IDs."
+    },
+    "behavior_contract": {
+      "$ref": "#/$defs/plugin_behavior_contract",
+      "description": "Optional audible-behavior bounds for plugins that influence rendered output."
     },
     "numeric_precision": {
       "type": "string",
@@ -76,15 +81,6 @@
     }
   },
   "$defs": {
-    "legacy_capability_ids": {
-      "type": "array",
-      "description": "Legacy ontology IDs the plugin may emit or act upon.",
-      "items": {
-        "type": "string",
-        "pattern": "^(ISSUE\\.|ACTION\\.|FEATURE\\.).+"
-      },
-      "uniqueItems": true
-    },
     "plugin_capabilities": {
       "type": "object",
       "additionalProperties": false,
@@ -98,14 +94,23 @@
           "enum": ["per_channel", "linked_group", "true_multichannel"],
           "description": "How the plugin processes audio channels (per ontology/plugin_semantics.yaml)."
         },
-        "link_groups": {
+        "supported_group_sizes": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "uniqueItems": true,
+          "description": "Legal channel-group sizes for one plugin invocation."
+        },
+        "supported_link_groups": {
           "type": "array",
           "items": {
             "type": "string",
             "enum": ["front", "surrounds", "heights", "all", "custom"]
           },
           "uniqueItems": true,
-          "description": "Channel groups active when channel_mode is linked_group."
+          "description": "Declared linked groups when channel_mode is linked_group."
         },
         "latency": {
           "$ref": "#/$defs/plugin_latency",
@@ -127,6 +132,10 @@
         "bed_only": {
           "type": "boolean",
           "description": "If true, plugin operates only on bed audio; cannot be applied to objects."
+        },
+        "requires_speaker_positions": {
+          "type": "boolean",
+          "description": "Whether the host must supply layout speaker positions before invoking the plugin."
         },
         "scene_scope": {
           "type": "string",
@@ -172,6 +181,93 @@
           "type": "array",
           "items": { "type": "string" },
           "uniqueItems": true
+        }
+      }
+    },
+    "plugin_declares": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "problem_domains": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "emits_issue_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^ISSUE\\..+$"
+          },
+          "uniqueItems": true
+        },
+        "consumes_issue_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^ISSUE\\..+$"
+          },
+          "uniqueItems": true
+        },
+        "suggests_action_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^ACTION\\..+$"
+          },
+          "uniqueItems": true
+        },
+        "related_feature_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^FEATURE\\..+$"
+          },
+          "uniqueItems": true
+        },
+        "target_scopes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "plugin_behavior_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "loudness_behavior": {
+          "type": "string",
+          "enum": ["preserve", "bounded", "may_change"]
+        },
+        "max_integrated_lufs_delta": {
+          "type": "number",
+          "minimum": 0
+        },
+        "peak_behavior": {
+          "type": "string",
+          "enum": ["preserve", "bounded", "may_change"]
+        },
+        "max_true_peak_delta_db": {
+          "type": "number",
+          "minimum": 0
+        },
+        "phase_behavior": {
+          "type": "string",
+          "enum": ["preserve", "translation_safe", "altered", "unknown"]
+        },
+        "stereo_image_behavior": {
+          "type": "string",
+          "enum": ["preserve", "bounded", "altered", "not_applicable"]
+        },
+        "gain_compensation": {
+          "type": "string",
+          "enum": ["required", "recommended", "not_required", "not_applicable"]
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },

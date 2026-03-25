@@ -9,7 +9,14 @@ ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.renderers.safe_renderer:SafeRenderer"
 numeric_precision: "float64"
 capabilities:
-  max_channels: 2
+  max_channels: 32
+  channel_mode: "linked_group"
+  supported_group_sizes:
+    - 1
+    - 2
+  supported_link_groups:
+    - "front"
+    - "custom"
   scene_scope: "object_capable"
   layout_safety: "layout_agnostic"
   deterministic_seed_policy: "none"
@@ -40,6 +47,22 @@ capabilities:
         note: "Band balance remains bounded while controlling peaks."
   notes:
     - "Deterministic slope-driven multiband compression; stereo only."
+declares:
+  problem_domains:
+    - "dynamics"
+    - "compression"
+  target_scopes:
+    - "stem"
+    - "bus"
+behavior_contract:
+  loudness_behavior: "bounded"
+  max_integrated_lufs_delta: 3.0
+  peak_behavior: "bounded"
+  max_true_peak_delta_db: 1.5
+  phase_behavior: "altered"
+  stereo_image_behavior: "bounded"
+  gain_compensation: "recommended"
+  rationale: "This stereo-oriented compressor changes envelope shape intentionally, so louder bounds are declared explicitly."
 ui_layout: "ui/layout.json"
 config_schema:
   $schema: "https://json-schema.org/draft/2020-12/schema"

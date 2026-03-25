@@ -33,6 +33,7 @@ try:
 except ImportError:  # pragma: no cover
     _yaml = None
 
+from mmo.core.plugin_behavior import validate_behavior_contract_definition
 from mmo.resources import ontology_dir, schemas_dir
 
 # ---------------------------------------------------------------------------
@@ -195,6 +196,13 @@ def validate_manifest(
     if isinstance(capabilities, dict):
         _validate_semantics(manifest, capabilities, semantics, errors)
 
+    for message in validate_behavior_contract_definition(
+        plugin_type=str(manifest.get("plugin_type", "")),
+        capabilities=capabilities,
+        behavior_contract=manifest.get("behavior_contract"),
+    ):
+        errors.append(f"[semantics] {message}")
+
     return errors
 
 
@@ -216,24 +224,42 @@ def _validate_semantics(
                 f"Allowed: {sorted(semantics.valid_channel_modes)}"
             )
 
-    # --- link_groups ---
-    link_groups = capabilities.get("link_groups")
-    if link_groups is not None:
-        if isinstance(link_groups, list):
-            for grp in link_groups:
+    # --- supported_link_groups ---
+    supported_link_groups = capabilities.get("supported_link_groups")
+    if supported_link_groups is not None:
+        if isinstance(supported_link_groups, list):
+            for grp in supported_link_groups:
                 if not isinstance(grp, str) or grp not in semantics.valid_link_groups:
                     errors.append(
                         f"[semantics] {ISSUE_SEMANTICS_LINK_GROUPS_INVALID}: "
-                        f"capabilities.link_groups contains invalid group {grp!r}. "
+                        "capabilities.supported_link_groups contains invalid group "
+                        f"{grp!r}. "
                         f"Allowed: {sorted(semantics.valid_link_groups)}"
                     )
-            # link_groups only makes sense with channel_mode=linked_group
-            if channel_mode is not None and channel_mode != "linked_group":
+            # supported_link_groups is meaningful for linked_group and
+            # true_multichannel host planning.
+            if channel_mode is not None and channel_mode not in {
+                "linked_group",
+                "true_multichannel",
+            }:
                 errors.append(
                     f"[semantics] {ISSUE_SEMANTICS_LINK_GROUPS_REQUIRES_LINKED_MODE}: "
-                    "capabilities.link_groups is declared but channel_mode is not "
-                    f"'linked_group' (got {channel_mode!r})."
+                    "capabilities.supported_link_groups is declared but channel_mode "
+                    "is neither 'linked_group' nor 'true_multichannel' "
+                    f"(got {channel_mode!r})."
                 )
+
+    supported_group_sizes = capabilities.get("supported_group_sizes")
+    if (
+        channel_mode == "per_channel"
+        and isinstance(supported_group_sizes, list)
+        and supported_group_sizes
+        and 1 not in supported_group_sizes
+    ):
+        errors.append(
+            "[semantics] capabilities.supported_group_sizes must include 1 when "
+            "channel_mode='per_channel'."
+        )
 
     # --- latency ---
     latency = capabilities.get("latency")
@@ -354,6 +380,19 @@ def _validate_semantics(
             errors.append(
                 f"[semantics] {ISSUE_SEMANTICS_SPEAKER_POSITIONS_NO_LAYOUT}: "
                 "capabilities.scene.requires_speaker_positions=true requires either "
+                "capabilities.supported_layout_ids or "
+                "capabilities.scene.supported_target_ids to be non-empty."
+            )
+
+    requires_speaker_positions = capabilities.get("requires_speaker_positions")
+    if requires_speaker_positions is True:
+        has_layout_ids = bool(capabilities.get("supported_layout_ids"))
+        target_ids = scene.get("supported_target_ids") if isinstance(scene, dict) else None
+        has_target_ids = isinstance(target_ids, list) and len(target_ids) > 0
+        if not has_layout_ids and not has_target_ids:
+            errors.append(
+                f"[semantics] {ISSUE_SEMANTICS_SPEAKER_POSITIONS_NO_LAYOUT}: "
+                "capabilities.requires_speaker_positions=true requires either "
                 "capabilities.supported_layout_ids or "
                 "capabilities.scene.supported_target_ids to be non-empty."
             )

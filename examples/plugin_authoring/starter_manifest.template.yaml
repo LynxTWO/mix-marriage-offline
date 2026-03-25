@@ -10,13 +10,16 @@ entrypoint: "starter_per_channel_gain:StarterPerChannelGain"
 capabilities:
   # Pick one: per_channel | linked_group | true_multichannel
   channel_mode: "per_channel"
-  # Keep this at or above the biggest layout you intend to process.
+  # Keep this at 32 so the plugin can participate in wide sessions even when it
+  # only processes smaller lawful subgroups.
   max_channels: 32
+  supported_group_sizes:
+    - 1
   # Declare host-facing safety explicitly so restrict/bypass receipts are clear.
   scene_scope: "object_capable"
   layout_safety: "layout_agnostic"
-  # Declare link_groups only when channel_mode is linked_group.
-  # link_groups:
+  # Declare supported_link_groups only when channel_mode is linked_group.
+  # supported_link_groups:
   #   - "front"
   #   - "surrounds"
   #   - "heights"
@@ -54,3 +57,18 @@ capabilities:
         note: "Starter example stays bounded and deterministic."
   notes:
     - "Replace plugin_id, entrypoint, and measurable claims before shipping."
+declares:
+  problem_domains:
+    - "utility"
+  target_scopes:
+    - "stem"
+behavior_contract:
+  loudness_behavior: "preserve"
+  max_integrated_lufs_delta: 0.1
+  peak_behavior: "bounded"
+  max_true_peak_delta_db: 0.1
+  phase_behavior: "preserve"
+  stereo_image_behavior: "preserve"
+  gain_compensation: "required"
+  # If you need looser bounds than 0.1/0.1, document why explicitly.
+  # rationale: "This plugin intentionally changes program loudness within declared limits."

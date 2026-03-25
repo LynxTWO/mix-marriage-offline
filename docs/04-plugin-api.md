@@ -210,22 +210,44 @@ last as a fallback so installed wheels work without a repo checkout.
 
 Each plugin should include a manifest for metadata and compatibility.
 
-Example:
+The manifest now separates three different concerns:
+
+- `capabilities`
+  - execution contract the host uses for safe planning and invocation
+- `declares`
+  - semantic purpose metadata and ontology IDs
+- `behavior_contract`
+  - bounded audible-change promises for plugins that alter or influence audio
+
+Top-level package metadata still belongs in the manifest as well, especially:
+
+- `author`
+- `license`
+- `description`
+
+Example detector:
 
 ```yaml
-plugin_id: "PLUGIN.DETECTOR.RESONANCE"
+plugin_id: "PLUGIN.DETECTOR.MUD"
 plugin_type: "detector"
-name: "Resonance Detector"
+name: "Mud Detector"
 version: "0.1.0"
 author: "Your Name"
 license: "Apache-2.0"
-description:
-  "Detects persistent narrow-band resonances and flags safe notch suggestions."
-mmo_min_version: "0.1.0"
-ontology_min_version: "0.1.0"
-entrypoint: "mmo.plugins.detectors.resonance_detector:ResonanceDetector"
+description: "Detects low-mid mud and emits explainable ISSUE IDs."
+entrypoint: "mmo.plugins.detectors.mud_detector:MudDetector"
 capabilities:
-  - "ISSUE.SPECTRAL.RESONANCE"
+  max_channels: 32
+  channel_mode: "linked_group"
+  supported_group_sizes: [1, 2]
+  supported_link_groups: ["front", "custom"]
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts: ["suggest"]
+declares:
+  problem_domains: ["spectral", "masking"]
+  emits_issue_ids: ["ISSUE.SPECTRAL.MUD"]
+  target_scopes: ["stem", "bus"]
 ```
 
 Practical renderer examples that declare modern safety and determinism
@@ -241,6 +263,10 @@ contract explicitly:
 ```yaml
 capabilities:
   max_channels: 32
+  channel_mode: "true_multichannel"
+  supported_group_sizes: [1, 2, 6, 8, 10, 12, 16, 32]
+  supported_link_groups: ["front", "surrounds", "heights", "all", "custom"]
+  requires_speaker_positions: true
   scene_scope: "object_capable"
   layout_safety: "layout_agnostic"
   deterministic_seed_policy: "none"
@@ -255,6 +281,10 @@ Layout-specific renderers must also declare supported layouts or target IDs:
 
 ```yaml
 capabilities:
+  max_channels: 32
+  channel_mode: "true_multichannel"
+  supported_group_sizes: [6, 12, 32]
+  requires_speaker_positions: true
   scene_scope: "object_capable"
   layout_safety: "layout_specific"
   supported_layout_ids:
@@ -262,10 +292,43 @@ capabilities:
     - "LAYOUT.7_1_4"
 ```
 
-The host uses `scene_scope` and `layout_safety` to decide whether a renderer is
-safe to run as-is, whether it can be restricted to a safe bed/object subset, or
-whether it must be bypassed with explainable skipped rows in the render
-manifest/receipt.
+Stereo-oriented plugins still declare `max_channels: 32` when they can
+participate in a 32-channel session, but they must stay honest about topology:
+
+```yaml
+capabilities:
+  max_channels: 32
+  channel_mode: "linked_group"
+  supported_group_sizes: [1, 2]
+  supported_link_groups: ["front", "custom"]
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+```
+
+That means "legal in a 32-channel session," not "safe to run as one blind
+32-channel processing block." The host uses `channel_mode`,
+`supported_group_sizes`, `supported_link_groups`, `scene_scope`, and
+`layout_safety` to decide whether a plugin is safe to run as-is, whether it can
+be restricted to a lawful subset, or whether it must be bypassed with
+explainable skipped rows in the render manifest/receipt.
+
+Resolvers and renderers that can auto-apply or render audio should also make
+their audible bounds explicit:
+
+```yaml
+declares:
+  consumes_issue_ids: ["ISSUE.SPECTRAL.MUD"]
+  suggests_action_ids: ["ACTION.EQ.BROAD_CUT", "ACTION.EQ.NOTCH"]
+behavior_contract:
+  loudness_behavior: "preserve"
+  max_integrated_lufs_delta: 0.1
+  peak_behavior: "bounded"
+  max_true_peak_delta_db: 0.1
+  gain_compensation: "required"
+```
+
+Conservative `auto_apply` plugins default to `0.1 LUFS` / `0.1 dBTP` bounds.
+Any looser bound must be declared explicitly and justified in the manifest.
 
 MMO records plugin metadata (including version and file hash) in output
 manifests.
@@ -412,7 +475,7 @@ If an ontology ID is deprecated:
 1. Copy the closest starter example from `examples/plugin_authoring/starter_pack/`.
 2. Rename the module, class, and `plugin_id`.
 3. Edit the manifest using `examples/plugin_authoring/starter_manifest.template.yaml`.
-4. Keep `scene_scope`, `layout_safety`, and determinism fields explicit.
+4. Keep `capabilities`, `declares`, and `behavior_contract` explicit and separate.
 5. Add a tiny regression test or fixture before expanding the DSP logic.
 6. Run the validation commands in [13-plugin-authoring.md](13-plugin-authoring.md).
 
@@ -447,8 +510,8 @@ Defined in `ontology/plugin_semantics.yaml` (section
 - **`per_channel` plugins** that never reference speaker position: no
   declaration needed. The host treats them as standard-agnostic.
 - **`linked_group` or `true_multichannel` plugins**: must declare
-  `supported_standards`. Use `link_groups` (`front`, `surrounds`, `heights`,
-  `all`) instead of hard-coded indices.
+  `supported_standards`. Use `supported_link_groups` (`front`, `surrounds`,
+  `heights`, `all`, `custom`) instead of hard-coded indices.
 - **Never assume a fixed channel index.** Use the channel IDs from
   `ProcessContext.channel_order` (a list of `SPK.*` IDs in active-standard
   order) to locate channels dynamically.

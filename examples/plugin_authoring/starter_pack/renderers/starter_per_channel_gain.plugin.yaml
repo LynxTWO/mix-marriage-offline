@@ -7,6 +7,8 @@ entrypoint: "starter_per_channel_gain:StarterPerChannelGain"
 capabilities:
   max_channels: 32
   channel_mode: "per_channel"
+  supported_group_sizes:
+    - 1
   scene_scope: "object_capable"
   layout_safety: "layout_agnostic"
   latency:
@@ -33,3 +35,19 @@ capabilities:
         note: "Applies a deterministic +1 dB gain only to named semantic speakers."
   notes:
     - "Starter example for object-capable, layout-agnostic per-channel processing."
+declares:
+  problem_domains:
+    - "utility"
+    - "gain"
+  target_scopes:
+    - "stem"
+    - "bus"
+behavior_contract:
+  loudness_behavior: "bounded"
+  max_integrated_lufs_delta: 1.5
+  peak_behavior: "bounded"
+  max_true_peak_delta_db: 1.5
+  phase_behavior: "preserve"
+  stereo_image_behavior: "preserve"
+  gain_compensation: "not_required"
+  rationale: "This starter example deliberately adds +1 dB to selected channels so authors can observe typed-buffer behavior."

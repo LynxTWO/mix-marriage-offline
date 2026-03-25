@@ -8,4 +8,20 @@ mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.detectors.dc_offset_detector:DcOffsetDetector"
 capabilities:
-  - "ISSUE.SAFETY.DC_OFFSET"
+  max_channels: 32
+  channel_mode: "per_channel"
+  supported_group_sizes:
+    - 1
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+declares:
+  problem_domains:
+    - "safety"
+    - "signal_integrity"
+  emits_issue_ids:
+    - "ISSUE.SAFETY.DC_OFFSET"
+  target_scopes:
+    - "stem"
+    - "bus"

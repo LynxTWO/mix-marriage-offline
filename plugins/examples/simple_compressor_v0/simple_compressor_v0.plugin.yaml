@@ -10,6 +10,13 @@ entrypoint: "mmo.plugins.renderers.safe_renderer:SafeRenderer"
 numeric_precision: "float64"
 capabilities:
   max_channels: 32
+  channel_mode: "linked_group"
+  supported_group_sizes:
+    - 1
+    - 2
+  supported_link_groups:
+    - "front"
+    - "custom"
   scene_scope: "object_capable"
   layout_safety: "layout_agnostic"
   deterministic_seed_policy: "none"
@@ -39,6 +46,22 @@ capabilities:
         note: "Nonlinear stage must stay within peak safety budgets."
   notes:
     - "Deterministic feed-forward compression with envelope follower."
+declares:
+  problem_domains:
+    - "dynamics"
+    - "compression"
+  target_scopes:
+    - "stem"
+    - "bus"
+behavior_contract:
+  loudness_behavior: "bounded"
+  max_integrated_lufs_delta: 3.0
+  peak_behavior: "bounded"
+  max_true_peak_delta_db: 1.5
+  phase_behavior: "altered"
+  stereo_image_behavior: "bounded"
+  gain_compensation: "recommended"
+  rationale: "This example compressor is stereo-oriented and intentionally changes envelope and loudness within declared bounds."
 ui_layout: "ui/layout.json"
 config_schema:
   $schema: "https://json-schema.org/draft/2020-12/schema"

@@ -77,12 +77,25 @@ creative or corrective algorithm, but that is separate from export finalization.
 No plugin may silently dither or quantize the final delivery outside the core
 receipt-bearing export boundary.
 
+`capabilities.dsp_traits` and `behavior_contract` serve different purposes:
+
+- `dsp_traits`
+  - what kind of DSP the plugin performs and what measurable claims it makes
+- `behavior_contract`
+  - how tightly the plugin promises to preserve loudness, peak, phase, or image
+
+Corrective `auto_apply` or render-capable plugins default to conservative
+`0.1 LUFS` / `0.1 dBTP` bounds unless they declare looser values explicitly
+with rationale.
+
 ## Examples
 
 Linear, information-preserving renderer:
 
 ```yaml
 capabilities:
+  max_channels: 32
+  channel_mode: "true_multichannel"
   deterministic_seed_policy: "none"
   dsp_traits:
     tier: "information_preserving"
@@ -95,12 +108,20 @@ capabilities:
       - metric_id: "METER.TRUE_PEAK_DBTP"
         expected_direction: "within"
         threshold: 0.2
+behavior_contract:
+  loudness_behavior: "preserve"
+  max_integrated_lufs_delta: 0.1
+  peak_behavior: "bounded"
+  max_true_peak_delta_db: 0.1
+  gain_compensation: "required"
 ```
 
 Controlled nonlinear renderer:
 
 ```yaml
 capabilities:
+  max_channels: 32
+  channel_mode: "linked_group"
   deterministic_seed_policy: "none"
   dsp_traits:
     tier: "controlled_nonlinear"
@@ -116,4 +137,10 @@ capabilities:
       - metric_id: "METER.TRUE_PEAK_DBTP"
         expected_direction: "within"
         threshold: 1.0
+behavior_contract:
+  loudness_behavior: "bounded"
+  max_integrated_lufs_delta: 0.5
+  peak_behavior: "bounded"
+  max_true_peak_delta_db: 0.5
+  rationale: "This nonlinear renderer is intentionally looser than the default corrective bounds."
 ```

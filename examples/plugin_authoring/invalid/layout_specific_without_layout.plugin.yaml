@@ -7,6 +7,9 @@ entrypoint: "starter_true_multichannel_checksum:StarterTrueMultichannelChecksum"
 capabilities:
   max_channels: 32
   channel_mode: "true_multichannel"
+  supported_group_sizes:
+    - 6
+    - 12
   scene_scope: "object_capable"
   layout_safety: "layout_specific"
   latency:
@@ -31,3 +34,18 @@ capabilities:
         expected_direction: "within"
         threshold: 0.5
         note: "This file is supposed to fail validation."
+declares:
+  problem_domains:
+    - "rendering"
+    - "translation"
+  target_scopes:
+    - "scene"
+    - "target_layout"
+behavior_contract:
+  loudness_behavior: "bounded"
+  max_integrated_lufs_delta: 2.0
+  peak_behavior: "bounded"
+  max_true_peak_delta_db: 0.5
+  phase_behavior: "translation_safe"
+  gain_compensation: "not_required"
+  rationale: "Intentional invalid example for layout support only; the behavior contract itself is explicit."

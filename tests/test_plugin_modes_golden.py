@@ -99,9 +99,10 @@ class TestPluginModesGolden(unittest.TestCase):
         self.assertEqual(linked_group["layout_safety"], "layout_agnostic")
         self.assertEqual(linked_group["latency"], {"type": "fixed", "samples": 64})
         self.assertEqual(
-            linked_group["link_groups"],
+            linked_group["supported_link_groups"],
             ["front", "surrounds", "heights"],
         )
+        self.assertEqual(linked_group["supported_group_sizes"], [3, 4])
         self.assertEqual(linked_group["deterministic_seed_policy"], "none")
         self.assertEqual(
             linked_group["purity"],
@@ -116,6 +117,8 @@ class TestPluginModesGolden(unittest.TestCase):
         true_multichannel = entries[_TRUE_MULTICHANNEL_PLUGIN_ID].manifest["capabilities"]
         self.assertGreaterEqual(true_multichannel["max_channels"], 32)
         self.assertEqual(true_multichannel["channel_mode"], "true_multichannel")
+        self.assertEqual(true_multichannel["supported_group_sizes"], [6, 12])
+        self.assertTrue(true_multichannel["requires_speaker_positions"])
         self.assertEqual(true_multichannel["scene_scope"], "object_capable")
         self.assertEqual(true_multichannel["layout_safety"], "layout_specific")
         self.assertEqual(

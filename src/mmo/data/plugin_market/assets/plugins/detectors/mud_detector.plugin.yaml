@@ -8,4 +8,24 @@ mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.detectors.mud_detector:MudDetector"
 capabilities:
-  - "ISSUE.SPECTRAL.MUD"
+  max_channels: 32
+  channel_mode: "linked_group"
+  supported_group_sizes:
+    - 1
+    - 2
+  supported_link_groups:
+    - "front"
+    - "custom"
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+declares:
+  problem_domains:
+    - "spectral"
+    - "masking"
+  emits_issue_ids:
+    - "ISSUE.SPECTRAL.MUD"
+  target_scopes:
+    - "stem"
+    - "bus"

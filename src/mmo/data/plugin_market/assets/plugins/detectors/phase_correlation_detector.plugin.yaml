@@ -8,5 +8,25 @@ mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.detectors.phase_correlation_detector:PhaseCorrelationDetector"
 capabilities:
-  - "ISSUE.IMAGING.NEGATIVE_CORRELATION"
-  - "ISSUE.IMAGING.NEGATIVE_CORRELATION_PAIR"
+  max_channels: 32
+  channel_mode: "linked_group"
+  supported_group_sizes:
+    - 2
+  supported_link_groups:
+    - "front"
+    - "surrounds"
+    - "custom"
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+declares:
+  problem_domains:
+    - "imaging"
+    - "phase"
+  emits_issue_ids:
+    - "ISSUE.IMAGING.NEGATIVE_CORRELATION"
+    - "ISSUE.IMAGING.NEGATIVE_CORRELATION_PAIR"
+  target_scopes:
+    - "stem"
+    - "bus"

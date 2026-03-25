@@ -8,6 +8,22 @@ mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.detectors.lfe_corrective_detector:LfeCorrectiveDetector"
 capabilities:
-  - "ISSUE.LFE.OUT_OF_BAND_HIGH"
-  - "ISSUE.LFE.INFRASONIC_RUMBLE"
-  - "ISSUE.LFE.MAINS_RATIO_EXCESS"
+  max_channels: 32
+  channel_mode: "per_channel"
+  supported_group_sizes:
+    - 1
+  scene_scope: "bed_only"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+declares:
+  problem_domains:
+    - "lfe"
+    - "safety"
+  emits_issue_ids:
+    - "ISSUE.LFE.OUT_OF_BAND_HIGH"
+    - "ISSUE.LFE.INFRASONIC_RUMBLE"
+    - "ISSUE.LFE.MAINS_RATIO_EXCESS"
+  target_scopes:
+    - "stem"
+    - "bus"

@@ -8,4 +8,24 @@ mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.resolvers.lfe_corrective_resolver:LfeCorrectiveResolver"
 capabilities:
-  - "ACTION.LFE.CORRECTIVE_FILTER"
+  max_channels: 32
+  channel_mode: "per_channel"
+  supported_group_sizes:
+    - 1
+  scene_scope: "bed_only"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+declares:
+  problem_domains:
+    - "lfe"
+    - "correction"
+  consumes_issue_ids:
+    - "ISSUE.LFE.OUT_OF_BAND_HIGH"
+    - "ISSUE.LFE.INFRASONIC_RUMBLE"
+    - "ISSUE.LFE.MAINS_RATIO_EXCESS"
+  suggests_action_ids:
+    - "ACTION.LFE.CORRECTIVE_FILTER"
+  target_scopes:
+    - "stem"
+    - "bus"

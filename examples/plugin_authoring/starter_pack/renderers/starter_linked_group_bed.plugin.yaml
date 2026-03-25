@@ -7,7 +7,10 @@ entrypoint: "starter_linked_group_bed:StarterLinkedGroupBed"
 capabilities:
   max_channels: 32
   channel_mode: "linked_group"
-  link_groups:
+  supported_group_sizes:
+    - 3
+    - 4
+  supported_link_groups:
     - "front"
     - "surrounds"
     - "heights"
@@ -47,3 +50,19 @@ capabilities:
         note: "Applies one deterministic trim to a semantic channel group."
   notes:
     - "Starter example that the host may restrict to bed recommendations."
+declares:
+  problem_domains:
+    - "utility"
+    - "translation"
+  target_scopes:
+    - "stem"
+    - "bus"
+behavior_contract:
+  loudness_behavior: "bounded"
+  max_integrated_lufs_delta: 1.5
+  peak_behavior: "bounded"
+  max_true_peak_delta_db: 1.5
+  phase_behavior: "preserve"
+  stereo_image_behavior: "preserve"
+  gain_compensation: "not_required"
+  rationale: "This starter example intentionally applies a fixed linked-group trim for demonstration."

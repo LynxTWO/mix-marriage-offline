@@ -9,6 +9,22 @@ ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.renderers.safe_renderer:SafeRenderer"
 capabilities:
   max_channels: 32
+  channel_mode: "true_multichannel"
+  supported_group_sizes:
+    - 1
+    - 2
+    - 6
+    - 8
+    - 10
+    - 12
+    - 16
+    - 32
+  supported_link_groups:
+    - "front"
+    - "surrounds"
+    - "heights"
+    - "all"
+    - "custom"
   scene_scope: "object_capable"
   layout_safety: "layout_agnostic"
   deterministic_seed_policy: "none"
@@ -38,6 +54,22 @@ capabilities:
         note: "Gain macro is bounded and measurable."
   notes:
     - "Starter plugin pack for GUI-first smoke coverage."
+declares:
+  problem_domains:
+    - "gain"
+    - "utility"
+  target_scopes:
+    - "stem"
+    - "bus"
+behavior_contract:
+  loudness_behavior: "may_change"
+  max_integrated_lufs_delta: 24.0
+  peak_behavior: "may_change"
+  max_true_peak_delta_db: 24.0
+  phase_behavior: "preserve"
+  stereo_image_behavior: "preserve"
+  gain_compensation: "not_applicable"
+  rationale: "This example intentionally allows wide level moves bounded by the +/-24 dB gain control."
 ui_layout: "ui/layout.json"
 config_schema:
   $schema: "https://json-schema.org/draft/2020-12/schema"

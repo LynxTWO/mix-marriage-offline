@@ -29,7 +29,9 @@ from mmo.dsp.transcode import (
 )
 from mmo.plugins.interfaces import (
     PLUGIN_SUPPORTED_CONTEXTS,
+    PluginBehaviorContract,
     PluginCapabilities,
+    PluginDeclares,
     PluginPurityContract,
     PluginSceneCapabilities,
 )
@@ -74,6 +76,8 @@ class PluginEntry:
     instance: Any
     manifest_path: Path
     manifest: Dict[str, Any]
+    declares: PluginDeclares | None = None
+    behavior_contract: PluginBehaviorContract | None = None
 
 def _load_yaml(path: Path) -> Dict[str, Any]:
     if yaml is None:
@@ -123,6 +127,15 @@ def _coerce_plugin_capabilities(value: Any) -> PluginCapabilities | None:
         if not isinstance(raw_value, list):
             return None
         return tuple(item for item in raw_value if isinstance(item, str))
+
+    def _coerce_int_tuple(raw_value: Any) -> tuple[int, ...] | None:
+        if not isinstance(raw_value, list):
+            return None
+        return tuple(
+            item
+            for item in raw_value
+            if isinstance(item, int) and not isinstance(item, bool) and item >= 1
+        )
 
     def _coerce_bool(raw_value: Any) -> bool | None:
         if isinstance(raw_value, bool):
@@ -198,7 +211,11 @@ def _coerce_plugin_capabilities(value: Any) -> PluginCapabilities | None:
     notes = _coerce_string_tuple(value.get("notes"))
     return PluginCapabilities(
         max_channels=max_channels,
+        channel_mode=_coerce_string(value.get("channel_mode")),
+        supported_group_sizes=_coerce_int_tuple(value.get("supported_group_sizes")),
+        supported_link_groups=_coerce_string_tuple(value.get("supported_link_groups")),
         bed_only=_coerce_bool(value.get("bed_only")),
+        requires_speaker_positions=_coerce_bool(value.get("requires_speaker_positions")),
         scene_scope=_coerce_string(value.get("scene_scope")),
         layout_safety=_coerce_string(value.get("layout_safety")),
         deterministic_seed_policy=deterministic_seed_policy,
@@ -207,6 +224,51 @@ def _coerce_plugin_capabilities(value: Any) -> PluginCapabilities | None:
         supported_contexts=supported_contexts,
         scene=scene,
         notes=notes,
+    )
+
+
+def _coerce_plugin_declares(value: Any) -> PluginDeclares | None:
+    if not isinstance(value, dict):
+        return None
+
+    def _coerce_string_tuple(raw_value: Any) -> tuple[str, ...] | None:
+        if not isinstance(raw_value, list):
+            return None
+        return tuple(item for item in raw_value if isinstance(item, str) and item.strip())
+
+    return PluginDeclares(
+        problem_domains=_coerce_string_tuple(value.get("problem_domains")),
+        emits_issue_ids=_coerce_string_tuple(value.get("emits_issue_ids")),
+        consumes_issue_ids=_coerce_string_tuple(value.get("consumes_issue_ids")),
+        suggests_action_ids=_coerce_string_tuple(value.get("suggests_action_ids")),
+        related_feature_ids=_coerce_string_tuple(value.get("related_feature_ids")),
+        target_scopes=_coerce_string_tuple(value.get("target_scopes")),
+    )
+
+
+def _coerce_plugin_behavior_contract(value: Any) -> PluginBehaviorContract | None:
+    if not isinstance(value, dict):
+        return None
+
+    def _coerce_string(raw_value: Any) -> str | None:
+        if isinstance(raw_value, str) and raw_value.strip():
+            return raw_value.strip()
+        return None
+
+    def _coerce_float(raw_value: Any) -> float | None:
+        if isinstance(raw_value, (int, float)) and not isinstance(raw_value, bool):
+            return float(raw_value)
+        return None
+
+    return PluginBehaviorContract(
+        loudness_behavior=_coerce_string(value.get("loudness_behavior")),
+        max_integrated_lufs_delta=_coerce_float(value.get("max_integrated_lufs_delta")),
+        peak_behavior=_coerce_string(value.get("peak_behavior")),
+        max_true_peak_delta_db=_coerce_float(value.get("max_true_peak_delta_db")),
+        phase_behavior=_coerce_string(value.get("phase_behavior")),
+        stereo_image_behavior=_coerce_string(value.get("stereo_image_behavior")),
+        gain_compensation=_coerce_string(value.get("gain_compensation")),
+        rationale=_coerce_string(value.get("rationale")),
     )
 
 
@@ -222,10 +284,22 @@ def _load_plugins_from_dir(plugins_dir: Path) -> List[PluginEntry]:
         if not isinstance(entrypoint, str):
             raise ValueError(f"Manifest missing entrypoint: {manifest_path}")
         capabilities = _coerce_plugin_capabilities(data.get("capabilities"))
+        declares = _coerce_plugin_declares(data.get("declares"))
+        behavior_contract = _coerce_plugin_behavior_contract(data.get("behavior_contract"))
         instance = _load_entrypoint(entrypoint)
         if capabilities is not None:
             try:
                 setattr(instance, "plugin_capabilities", capabilities)
+            except Exception:
+                pass
+        if declares is not None:
+            try:
+                setattr(instance, "plugin_declares", declares)
+            except Exception:
+                pass
+        if behavior_contract is not None:
+            try:
+                setattr(instance, "plugin_behavior_contract", behavior_contract)
             except Exception:
                 pass
         entries.append(
@@ -237,6 +311,8 @@ def _load_plugins_from_dir(plugins_dir: Path) -> List[PluginEntry]:
                 instance=instance,
                 manifest_path=manifest_path,
                 manifest=data,
+                declares=declares,
+                behavior_contract=behavior_contract,
             )
         )
     entries.sort(key=lambda entry: entry.plugin_id)
@@ -608,6 +684,21 @@ def _supported_layout_ids_for_plugin(capabilities: PluginCapabilities | None) ->
         if layout_id:
             layout_ids.add(layout_id)
     return tuple(sorted(layout_ids))
+
+
+def _single_instance_topology_allowed(
+    capabilities: PluginCapabilities | None,
+    *,
+    required_channels: int,
+) -> bool:
+    if capabilities is None or required_channels < 1:
+        return True
+
+    channel_mode = _coerce_str(capabilities.channel_mode).strip().lower()
+    supported_group_sizes = tuple(capabilities.supported_group_sizes or ())
+    if channel_mode in {"linked_group", "true_multichannel"} and supported_group_sizes:
+        return required_channels in supported_group_sizes
+    return True
 
 
 def _recommendation_scope_stem_id(rec: Mapping[str, Any]) -> str:
@@ -1391,6 +1482,49 @@ def run_renderers(
                         blocked_skipped,
                         plugin_safety_skipped,
                         channel_limit_skipped,
+                    ),
+                }
+            )
+            continue
+
+        if not _single_instance_topology_allowed(
+            plugin.capabilities,
+            required_channels=plugin_required_channels,
+        ):
+            supported_group_sizes = (
+                list(plugin.capabilities.supported_group_sizes)
+                if plugin.capabilities is not None
+                and plugin.capabilities.supported_group_sizes is not None
+                else []
+            )
+            topology_skipped = [
+                {
+                    "recommendation_id": _coerce_str(rec.get("recommendation_id")),
+                    "action_id": _coerce_str(rec.get("action_id")),
+                    "reason": "plugin_topology_unsupported",
+                    "gate_summary": "",
+                    "details": {
+                        "plugin_id": plugin.plugin_id,
+                        "required_channels": plugin_required_channels,
+                        "channel_mode": (
+                            plugin.capabilities.channel_mode
+                            if plugin.capabilities is not None
+                            else None
+                        ),
+                        "supported_group_sizes": supported_group_sizes,
+                    },
+                }
+                for rec in eligible_for_plugin
+            ]
+            manifests.append(
+                {
+                    "renderer_id": plugin.plugin_id,
+                    "outputs": [],
+                    "notes": _merge_manifest_notes(*plugin_safety_notes),
+                    "skipped": _merge_skipped_entries(
+                        blocked_skipped,
+                        plugin_safety_skipped,
+                        topology_skipped,
                     ),
                 }
             )

@@ -8,4 +8,24 @@ mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.detectors.over_compression_detector:OverCompressionDetector"
 capabilities:
-  - "ISSUE.DYNAMICS.OVER_COMPRESSION"
+  max_channels: 32
+  channel_mode: "linked_group"
+  supported_group_sizes:
+    - 1
+    - 2
+  supported_link_groups:
+    - "front"
+    - "custom"
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+declares:
+  problem_domains:
+    - "dynamics"
+    - "loudness"
+  emits_issue_ids:
+    - "ISSUE.DYNAMICS.OVER_COMPRESSION"
+  target_scopes:
+    - "stem"
+    - "bus"

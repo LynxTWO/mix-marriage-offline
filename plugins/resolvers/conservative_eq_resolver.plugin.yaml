@@ -8,5 +8,28 @@ mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.resolvers.conservative_eq_resolver:ConservativeEqResolver"
 capabilities:
-  - "ACTION.EQ.BELL_CUT"
-  - "ACTION.EQ.NOTCH_CUT"
+  max_channels: 32
+  channel_mode: "linked_group"
+  supported_group_sizes:
+    - 1
+    - 2
+  supported_link_groups:
+    - "front"
+    - "custom"
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+declares:
+  problem_domains:
+    - "spectral"
+    - "masking"
+  consumes_issue_ids:
+    - "ISSUE.SPECTRAL.MUD"
+    - "ISSUE.SPECTRAL.RESONANCE"
+  suggests_action_ids:
+    - "ACTION.EQ.BELL_CUT"
+    - "ACTION.EQ.NOTCH_CUT"
+  target_scopes:
+    - "stem"
+    - "bus"

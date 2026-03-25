@@ -8,4 +8,27 @@ mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.resolvers.polarity_check_resolver:PolarityCheckGuidanceResolver"
 capabilities:
-  - "ACTION.DIAGNOSTIC.CHECK_POLARITY"
+  max_channels: 32
+  channel_mode: "linked_group"
+  supported_group_sizes:
+    - 2
+  supported_link_groups:
+    - "front"
+    - "surrounds"
+    - "custom"
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+declares:
+  problem_domains:
+    - "imaging"
+    - "diagnostic"
+  consumes_issue_ids:
+    - "ISSUE.IMAGING.NEGATIVE_CORRELATION"
+    - "ISSUE.IMAGING.NEGATIVE_CORRELATION_PAIR"
+  suggests_action_ids:
+    - "ACTION.DIAGNOSTIC.CHECK_POLARITY"
+  target_scopes:
+    - "stem"
+    - "bus"

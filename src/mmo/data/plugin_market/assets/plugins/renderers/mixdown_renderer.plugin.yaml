@@ -8,8 +8,23 @@ mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.renderers.mixdown_renderer:MixdownRenderer"
 capabilities:
-  max_channels: 16
+  max_channels: 32
   channel_mode: "true_multichannel"
+  supported_group_sizes:
+    - 1
+    - 2
+    - 6
+    - 8
+    - 10
+    - 12
+    - 16
+    - 32
+  supported_link_groups:
+    - "front"
+    - "surrounds"
+    - "heights"
+    - "all"
+    - "custom"
   bed_only: true
   scene_scope: "bed_only"
   layout_safety: "layout_specific"
@@ -51,3 +66,19 @@ capabilities:
         note: "Conservative baseline fold keeps program loudness movement bounded."
   notes:
     - "Always writes a baseline master for supported target layouts."
+declares:
+  problem_domains:
+    - "rendering"
+    - "translation"
+  target_scopes:
+    - "scene"
+    - "target_layout"
+behavior_contract:
+  loudness_behavior: "bounded"
+  max_integrated_lufs_delta: 3.0
+  peak_behavior: "bounded"
+  max_true_peak_delta_db: 0.5
+  phase_behavior: "translation_safe"
+  stereo_image_behavior: "bounded"
+  gain_compensation: "not_required"
+  rationale: "Baseline fold-down and layout translation can move loudness more than corrective trim while still staying deterministic and bounded."

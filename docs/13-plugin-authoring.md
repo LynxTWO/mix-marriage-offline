@@ -66,8 +66,11 @@ Fields you should set deliberately:
 - `capabilities.channel_mode`
   - `per_channel`, `linked_group`, or `true_multichannel`
 - `capabilities.max_channels`
-  - maximum channel count the plugin can process safely
-- `capabilities.link_groups`
+  - maximum session width the plugin may participate in safely
+  - for built-ins and examples this is `32`; topology limits belong elsewhere
+- `capabilities.supported_group_sizes`
+  - lawful group sizes for one invocation
+- `capabilities.supported_link_groups`
   - only for `linked_group`
 - `capabilities.latency`
   - `zero`, `fixed`, or `dynamic`
@@ -79,8 +82,13 @@ Fields you should set deliberately:
   - `layout_agnostic` or `layout_specific`
 - `capabilities.supported_layout_ids` or `capabilities.scene.supported_target_ids`
   - required when `layout_safety` is `layout_specific`
+- `declares`
+  - semantic purpose metadata such as emitted issues, consumed issues,
+    suggested actions, related features, and target scopes
+- `behavior_contract`
+  - audible bounds for plugins that render or auto-apply audio changes
 - `capabilities.dsp_traits`
-  - the measurable truth contract for renderer behavior
+  - the measurable DSP truth contract; keep it distinct from audible bounds
 
 Common safety mistake:
 
@@ -108,6 +116,9 @@ In every mode:
 - output must be `AudioBufferF64`
 - routing should use `process_ctx.channel_order` and `SPK.*` IDs, never fixed
   slot numbers
+- `max_channels: 32` means session compatibility, not permission to process all
+  32 channels as one block unless `channel_mode` and `supported_group_sizes`
+  say that is lawful
 
 ## 5. Determinism do and don't
 
@@ -146,6 +157,9 @@ The starter pack examples intentionally demonstrate both:
   restricted with an explainable skipped row
 - the true-multichannel example is `layout_specific`, so unsupported layouts
   are bypassed with an explainable skipped row
+- the per-channel and linked-group examples still declare `max_channels: 32`
+  because they can participate in wider sessions without pretending to be
+  full-field multichannel processors
 
 ## 7. Quick test workflow
 

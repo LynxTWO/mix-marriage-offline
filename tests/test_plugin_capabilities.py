@@ -2,7 +2,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import yaml
+
 from mmo.core.pipeline import load_plugins
+from mmo.core.plugin_registry import validate_manifest
 from tools.validate_plugins import (
     ISSUE_PLUGIN_CAPABILITIES_INVALID,
     ISSUE_PLUGIN_DSP_TRAITS_INVALID,
@@ -70,16 +73,22 @@ class TestPluginCapabilities(unittest.TestCase):
             if capabilities is None:
                 return
 
-            expected_max_channels = 16 if plugin_id == "PLUGIN.RENDERER.MIXDOWN_BASELINE" else 32
-            self.assertEqual(capabilities.max_channels, expected_max_channels)
+            self.assertEqual(capabilities.max_channels, 32)
             if plugin_id == "PLUGIN.RENDERER.MIXDOWN_BASELINE":
+                self.assertEqual(capabilities.channel_mode, "true_multichannel")
+                self.assertEqual(
+                    capabilities.supported_group_sizes,
+                    (1, 2, 6, 8, 10, 12, 16, 32),
+                )
                 self.assertEqual(capabilities.scene_scope, "bed_only")
                 self.assertEqual(capabilities.layout_safety, "layout_specific")
                 self.assertTrue(capabilities.bed_only)
             elif plugin_id == "PLUGIN.RENDERER.GAIN_TRIM":
+                self.assertEqual(capabilities.channel_mode, "true_multichannel")
                 self.assertEqual(capabilities.scene_scope, "object_capable")
                 self.assertEqual(capabilities.layout_safety, "layout_agnostic")
             else:
+                self.assertEqual(capabilities.channel_mode, "true_multichannel")
                 self.assertEqual(capabilities.scene_scope, "object_capable")
                 self.assertEqual(capabilities.layout_safety, "layout_specific")
             self.assertEqual(capabilities.deterministic_seed_policy, "none")
@@ -172,6 +181,7 @@ class TestPluginCapabilities(unittest.TestCase):
         self.assertEqual(
             instance_capabilities.to_dict(),
             {
+                "channel_mode": "true_multichannel",
                 "deterministic_seed_policy": "none",
                 "layout_safety": "layout_specific",
                 "max_channels": 32,
@@ -182,6 +192,7 @@ class TestPluginCapabilities(unittest.TestCase):
                     "thread_scheduling": "forbidden",
                     "wall_clock": "forbidden",
                 },
+                "requires_speaker_positions": True,
                 "scene_scope": "object_capable",
                 "scene": {
                     "requires_speaker_positions": True,
@@ -193,9 +204,97 @@ class TestPluginCapabilities(unittest.TestCase):
                     "supports_locks": True,
                     "supports_objects": True,
                 },
+                "supported_group_sizes": [1, 2, 6, 8, 10, 12, 16, 32],
+                "supported_link_groups": [
+                    "front",
+                    "surrounds",
+                    "heights",
+                    "all",
+                    "custom",
+                ],
                 "supported_contexts": ["render", "auto_apply"],
             },
         )
+
+    def test_loader_attaches_declares_and_behavior_contract_to_plugin_instance(self) -> None:
+        plugins = load_plugins(Path("plugins"))
+        mud_detector = next(
+            plugin for plugin in plugins if plugin.plugin_id == "PLUGIN.DETECTOR.MUD"
+        )
+        safe_renderer = next(
+            plugin for plugin in plugins if plugin.plugin_id == "PLUGIN.RENDERER.SAFE"
+        )
+
+        detector_declares = getattr(mud_detector.instance, "plugin_declares", None)
+        self.assertIsNotNone(detector_declares)
+        self.assertIs(detector_declares, mud_detector.declares)
+        self.assertEqual(
+            detector_declares.to_dict(),
+            {
+                "problem_domains": ["spectral", "masking"],
+                "emits_issue_ids": ["ISSUE.SPECTRAL.MUD"],
+                "target_scopes": ["stem", "bus"],
+            },
+        )
+
+        renderer_behavior_contract = getattr(
+            safe_renderer.instance,
+            "plugin_behavior_contract",
+            None,
+        )
+        self.assertIsNotNone(renderer_behavior_contract)
+        self.assertIs(renderer_behavior_contract, safe_renderer.behavior_contract)
+        self.assertEqual(
+            renderer_behavior_contract.to_dict(),
+            {
+                "loudness_behavior": "preserve",
+                "max_integrated_lufs_delta": 0.1,
+                "peak_behavior": "bounded",
+                "max_true_peak_delta_db": 0.1,
+                "phase_behavior": "translation_safe",
+                "stereo_image_behavior": "preserve",
+                "gain_compensation": "required",
+            },
+        )
+
+    def test_schema_rejects_legacy_capabilities_array(self) -> None:
+        manifest = {
+            "plugin_id": "PLUGIN.DETECTOR.LEGACY_ARRAY",
+            "plugin_type": "detector",
+            "name": "Legacy Detector",
+            "version": "0.1.0",
+            "entrypoint": "mmo.plugins.detectors.resonance_detector:ResonanceDetector",
+            "capabilities": ["ISSUE.SPECTRAL.RESONANCE"],
+        }
+
+        errors = validate_manifest(
+            manifest,
+            schema_path=Path("schemas/plugin.schema.json"),
+        )
+
+        self.assertTrue(
+            any(error.startswith("[schema] capabilities:") for error in errors),
+            msg=errors,
+        )
+
+    def test_built_in_and_example_manifests_declare_32_channel_session_compatibility(self) -> None:
+        manifest_roots = (
+            Path("plugins"),
+            Path("examples/plugin_authoring/starter_pack/renderers"),
+        )
+
+        for root in manifest_roots:
+            for manifest_path in sorted(root.rglob("*.plugin.yaml")):
+                with self.subTest(manifest_path=manifest_path.as_posix()):
+                    payload = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+                    self.assertIsInstance(payload, dict)
+                    if not isinstance(payload, dict):
+                        continue
+                    capabilities = payload.get("capabilities")
+                    self.assertIsInstance(capabilities, dict)
+                    if not isinstance(capabilities, dict):
+                        continue
+                    self.assertEqual(capabilities.get("max_channels"), 32)
 
     def test_validate_plugins_accepts_scene_capabilities(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

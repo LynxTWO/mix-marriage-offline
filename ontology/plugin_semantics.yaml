@@ -20,7 +20,7 @@ channel_mode:
       description: >
         Plugin processes a declared group of channels as a unit (e.g., front L/R
         stereo pair, surround pair). The active group must be declared in
-        link_groups.
+        supported_link_groups.
     true_multichannel:
       id: "true_multichannel"
       description: >
@@ -28,7 +28,13 @@ channel_mode:
         cross-channel processing. Host must route the full channel set to the
         plugin or bypass it entirely.
 
-link_groups:
+supported_group_sizes:
+  description: >
+    Legal channel counts for a single plugin invocation. This keeps session
+    compatibility separate from processing topology: a plugin may participate in
+    a 32-channel session while only accepting mono/stereo subgroup instances.
+
+supported_link_groups:
   description: >
     Named channel groups for linked_group channel_mode. A plugin may declare
     one or more groups it supports. The host selects the group that matches the
@@ -188,4 +194,4 @@ requires_speaker_positions:
     capabilities.scene.supported_target_ids so the host can verify the metadata
     is available before invoking the plugin.
   type: boolean
-  cross_reference: "capabilities.scene.requires_speaker_positions"
+  cross_reference: "capabilities.requires_speaker_positions"

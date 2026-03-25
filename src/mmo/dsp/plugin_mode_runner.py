@@ -47,6 +47,16 @@ def _coerce_str_list(value: Any) -> list[str]:
     ]
 
 
+def _coerce_int_list(value: Any) -> list[int]:
+    if not isinstance(value, list):
+        return []
+    return [
+        item
+        for item in value
+        if isinstance(item, int) and not isinstance(item, bool) and item >= 1
+    ]
+
+
 def _manifest_capabilities(plugin_entry: Any) -> dict[str, Any]:
     manifest = getattr(plugin_entry, "manifest", None)
     if not isinstance(manifest, dict):
@@ -85,6 +95,29 @@ def _group_indices(process_ctx: ProcessContext, group_name: str) -> list[int]:
     raise PluginModeRunError(f"Unsupported link group: {group_name!r}")
 
 
+def _custom_group_indices(process_ctx: ProcessContext, channel_ids: list[str]) -> list[int]:
+    if not channel_ids:
+        raise PluginModeRunError(
+            "linked_group custom execution requires params.channel_ids.",
+        )
+
+    indices: list[int] = []
+    seen: set[int] = set()
+    for channel_id in channel_ids:
+        index = process_ctx.index_of(channel_id)
+        if index is None:
+            raise PluginModeRunError(
+                f"Custom linked-group channel {channel_id!r} is not in ProcessContext.",
+            )
+        if index in seen:
+            continue
+        seen.add(index)
+        indices.append(index)
+    if not indices:
+        raise PluginModeRunError("Custom linked-group execution resolved no channels.")
+    return indices
+
+
 def _base_evidence(plugin_entry: Any, process_ctx: ProcessContext, channel_mode: str) -> dict[str, Any]:
     return {
         "plugin_id": _coerce_str(getattr(plugin_entry, "plugin_id", "")),
@@ -96,7 +129,10 @@ def _base_evidence(plugin_entry: Any, process_ctx: ProcessContext, channel_mode:
     }
 
 
-def _validate_capabilities(capabilities: Mapping[str, Any], process_ctx: ProcessContext) -> None:
+def _validate_session_capabilities(
+    capabilities: Mapping[str, Any],
+    process_ctx: ProcessContext,
+) -> None:
     max_channels = capabilities.get("max_channels")
     if isinstance(max_channels, int) and process_ctx.num_channels > max_channels:
         raise PluginModeRunError(
@@ -106,6 +142,24 @@ def _validate_capabilities(capabilities: Mapping[str, Any], process_ctx: Process
     seed_policy = _coerce_str(capabilities.get("deterministic_seed_policy"))
     if seed_policy == "seed_required" and not isinstance(process_ctx.seed, int):
         raise PluginModeRunError("Plugin requires deterministic seed in ProcessContext.")
+
+
+def validate_plugin_session_compatibility(plugin_entry: Any, process_ctx: ProcessContext) -> None:
+    _validate_session_capabilities(_manifest_capabilities(plugin_entry), process_ctx)
+
+
+def _validate_group_size(
+    *,
+    capabilities: Mapping[str, Any],
+    actual_group_size: int,
+    context_label: str,
+) -> None:
+    supported_group_sizes = _coerce_int_list(capabilities.get("supported_group_sizes"))
+    if supported_group_sizes and actual_group_size not in supported_group_sizes:
+        raise PluginModeRunError(
+            f"{context_label} group size {actual_group_size} is not declared in "
+            f"capabilities.supported_group_sizes={supported_group_sizes}.",
+        )
 
 
 def _runtime_purity_contract(
@@ -177,7 +231,7 @@ def run_plugin_mode(
     working = _require_matrix_shape(buf, process_ctx)
     purity_contract = _runtime_purity_contract(plugin_entry, capabilities)
 
-    _validate_capabilities(capabilities, process_ctx)
+    _validate_session_capabilities(capabilities, process_ctx)
 
     if channel_mode == "per_channel":
         return _run_per_channel(
@@ -222,6 +276,12 @@ def _run_per_channel(
     processor = getattr(plugin_entry.instance, "process_channel", None)
     if not callable(processor):
         raise PluginModeRunError("per_channel plugin fixture must implement process_channel().")
+
+    _validate_group_size(
+        capabilities=_manifest_capabilities(plugin_entry),
+        actual_group_size=1,
+        context_label="per_channel",
+    )
 
     call_rows: list[dict[str, Any]] = []
     touched_channel_ids: list[str] = []
@@ -296,13 +356,24 @@ def _run_linked_group(
     group_name = _coerce_str(params.get("group_name")).lower()
     if not group_name:
         raise PluginModeRunError("linked_group plugin requires params.group_name.")
-    supported_groups = _coerce_str_list(capabilities.get("link_groups"))
+    supported_groups = _coerce_str_list(capabilities.get("supported_link_groups"))
     if supported_groups and group_name not in supported_groups:
         raise PluginModeRunError(
-            f"group_name {group_name!r} is not declared in manifest link_groups.",
+            f"group_name {group_name!r} is not declared in manifest supported_link_groups.",
         )
 
-    indices = _group_indices(process_ctx, group_name)
+    if group_name == "custom":
+        indices = _custom_group_indices(
+            process_ctx,
+            _coerce_str_list(params.get("channel_ids")),
+        )
+    else:
+        indices = _group_indices(process_ctx, group_name)
+    _validate_group_size(
+        capabilities=capabilities,
+        actual_group_size=len(indices),
+        context_label=f"linked_group {group_name!r}",
+    )
     channel_ids = [process_ctx.channel_order[index] for index in indices]
     plugin_id = _coerce_str(getattr(plugin_entry, "plugin_id", ""))
     group_buffer = _typed_audio_buffer(
@@ -361,6 +432,12 @@ def _run_true_multichannel(
         raise PluginModeRunError(
             "true_multichannel plugin fixture must implement process_true_multichannel().",
         )
+
+    _validate_group_size(
+        capabilities=_manifest_capabilities(plugin_entry),
+        actual_group_size=process_ctx.num_channels,
+        context_label="true_multichannel",
+    )
 
     plugin_id = _coerce_str(getattr(plugin_entry, "plugin_id", ""))
     typed_input = _typed_audio_buffer(

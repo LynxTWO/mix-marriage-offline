@@ -20,6 +20,8 @@ try:
 except ImportError:  # pragma: no cover - environment issue
     jsonschema = None
 
+from mmo.core.plugin_behavior import validate_behavior_contract_definition
+
 
 ISSUE_PLUGIN_PARSE_ERROR = "ISSUE.VALIDATION.PLUGIN_PARSE_ERROR"
 ISSUE_PLUGIN_SCHEMA_INVALID = "ISSUE.VALIDATION.PLUGIN_SCHEMA_INVALID"
@@ -305,11 +307,13 @@ def _validate_capabilities(
     allowed_capability_fields = {
         "max_channels",
         "channel_mode",
-        "link_groups",
+        "supported_group_sizes",
+        "supported_link_groups",
         "latency",
         "deterministic_seed_policy",
         "purity",
         "bed_only",
+        "requires_speaker_positions",
         "scene_scope",
         "layout_safety",
         "supported_standards",
@@ -350,6 +354,53 @@ def _validate_capabilities(
             },
         )
 
+    supported_group_sizes = capabilities.get("supported_group_sizes")
+    if supported_group_sizes is not None:
+        if not isinstance(supported_group_sizes, list):
+            _add_issue(
+                issues,
+                ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                "error",
+                "capabilities.supported_group_sizes must be a list of integers >= 1.",
+                {"file_path": str(manifest_path)},
+            )
+        else:
+            for group_size in supported_group_sizes:
+                if (
+                    not isinstance(group_size, int)
+                    or isinstance(group_size, bool)
+                    or group_size < 1
+                ):
+                    _add_issue(
+                        issues,
+                        ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                        "error",
+                        "capabilities.supported_group_sizes must contain only integers >= 1.",
+                        {"file_path": str(manifest_path), "group_size": group_size},
+                    )
+
+    supported_link_groups = capabilities.get("supported_link_groups")
+    if supported_link_groups is not None:
+        allowed_link_groups = {"front", "surrounds", "heights", "all", "custom"}
+        if not isinstance(supported_link_groups, list):
+            _add_issue(
+                issues,
+                ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                "error",
+                "capabilities.supported_link_groups must be a list of link-group IDs.",
+                {"file_path": str(manifest_path)},
+            )
+        else:
+            for group_name in supported_link_groups:
+                if not isinstance(group_name, str) or group_name not in allowed_link_groups:
+                    _add_issue(
+                        issues,
+                        ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                        "error",
+                        "capabilities.supported_link_groups contains an invalid group.",
+                        {"file_path": str(manifest_path), "group_name": group_name},
+                    )
+
     scene_scope = capabilities.get("scene_scope")
     valid_scene_scopes = {"bed_only", "object_capable"}
     if scene_scope not in valid_scene_scopes:
@@ -376,6 +427,19 @@ def _validate_capabilities(
                 "'layout_agnostic' or 'layout_specific'."
             ),
             {"file_path": str(manifest_path), "value": layout_safety},
+        )
+
+    requires_speaker_positions_value = capabilities.get("requires_speaker_positions")
+    if requires_speaker_positions_value is not None and not isinstance(
+        requires_speaker_positions_value,
+        bool,
+    ):
+        _add_issue(
+            issues,
+            ISSUE_PLUGIN_CAPABILITIES_INVALID,
+            "error",
+            "capabilities.requires_speaker_positions must be a boolean.",
+            {"file_path": str(manifest_path), "value": requires_speaker_positions_value},
         )
 
     seed_policy = capabilities.get("deterministic_seed_policy")
@@ -534,7 +598,7 @@ def _validate_capabilities(
 
     scene = capabilities.get("scene")
     target_ids: list[str] = []
-    requires_speaker_positions = False
+    scene_requires_speaker_positions = False
     if scene is not None:
         if not isinstance(scene, dict):
             _add_issue(
@@ -582,7 +646,9 @@ def _validate_capabilities(
                         },
                     )
 
-            requires_speaker_positions = scene.get("requires_speaker_positions") is True
+            scene_requires_speaker_positions = (
+                scene.get("requires_speaker_positions") is True
+            )
             supported_target_ids = scene.get("supported_target_ids")
             if supported_target_ids is not None:
                 if not isinstance(supported_target_ids, list):
@@ -667,7 +733,32 @@ def _validate_capabilities(
                 {"file_path": str(manifest_path)},
             )
 
-    if requires_speaker_positions:
+    if requires_speaker_positions_value is True:
+        has_layout_support = bool(layout_values)
+        has_target_layout_support = False
+        if target_ids:
+            if target_layouts is None:
+                has_target_layout_support = True
+            else:
+                for target_id in target_ids:
+                    target_layout = target_layouts.get(target_id)
+                    if isinstance(target_layout, str) and target_layout:
+                        has_target_layout_support = True
+                        break
+        if not has_layout_support and not has_target_layout_support:
+            _add_issue(
+                issues,
+                ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                "error",
+                (
+                    "capabilities.requires_speaker_positions=true requires either "
+                    "capabilities.supported_layout_ids or layout-backed "
+                    "capabilities.scene.supported_target_ids."
+                ),
+                {"file_path": str(manifest_path)},
+            )
+
+    if scene_requires_speaker_positions:
         has_layout_support = bool(layout_values)
         has_target_layout_support = False
         if target_ids:
@@ -916,6 +1007,19 @@ def validate_plugins(plugins_dir: Path, schema_path: Path) -> Dict[str, Any]:
                     manifest_path=manifest_path,
                     issues=issues,
                 )
+            if isinstance(plugin_type, str):
+                for message in validate_behavior_contract_definition(
+                    plugin_type=plugin_type,
+                    capabilities=capabilities,
+                    behavior_contract=data.get("behavior_contract"),
+                ):
+                    _add_issue(
+                        issues,
+                        ISSUE_PLUGIN_CAPABILITIES_INVALID,
+                        "error",
+                        message,
+                        {"file_path": str(manifest_path)},
+                    )
 
     for plugin_id, paths in sorted(plugin_id_index.items()):
         if len(paths) > 1:

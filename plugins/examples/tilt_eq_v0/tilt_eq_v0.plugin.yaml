@@ -9,6 +9,13 @@ ontology_min_version: "0.1.0"
 entrypoint: "mmo.plugins.renderers.safe_renderer:SafeRenderer"
 capabilities:
   max_channels: 32
+  channel_mode: "linked_group"
+  supported_group_sizes:
+    - 1
+    - 2
+  supported_link_groups:
+    - "front"
+    - "custom"
   scene_scope: "object_capable"
   layout_safety: "layout_agnostic"
   deterministic_seed_policy: "none"
@@ -38,6 +45,22 @@ capabilities:
         note: "Tone shaping remains below conservative peak drift limits."
   notes:
     - "Starter plugin pack for tonal-shape GUI smoke coverage."
+declares:
+  problem_domains:
+    - "spectral"
+    - "tone"
+  target_scopes:
+    - "stem"
+    - "bus"
+behavior_contract:
+  loudness_behavior: "bounded"
+  max_integrated_lufs_delta: 1.5
+  peak_behavior: "bounded"
+  max_true_peak_delta_db: 0.5
+  phase_behavior: "translation_safe"
+  stereo_image_behavior: "preserve"
+  gain_compensation: "recommended"
+  rationale: "Tilt EQ intentionally reshapes spectrum and can move loudness modestly, so the looser bounds are documented explicitly."
 ui_layout: "ui/layout.json"
 config_schema:
   $schema: "https://json-schema.org/draft/2020-12/schema"

@@ -27,10 +27,10 @@ The scene is the source of truth when stems plus intent are available.
 
 - Detectors (suggestions), resolvers (optional), renderers (deliverables)
 - Must not bypass Objective Core contracts or gate outcomes
-- Must declare capabilities:
-  - `max_channels`
-  - supported layouts
-  - supported contexts (`suggest`, `auto_apply`, `render`)
+- Must declare runtime `capabilities`
+- Must declare semantic purpose in `declares` when ontology IDs matter
+- Must declare `behavior_contract` when they can auto-apply or render audible
+  changes
 
 ## C) Determinism requirements (minimum: up to 32 channels)
 
@@ -68,8 +68,8 @@ The scene is the source of truth when stems plus intent are available.
 Every plugin must declare and honor:
 
 - `channel_mode`: explicit mono/stereo/multichannel behavior and assumptions
-- `link_groups`: how linked multi-stem processing is declared (for example, drum
-  bus)
+- `supported_group_sizes`: the lawful invocation sizes for that topology
+- `supported_link_groups`: how linked subgroup processing is declared
 - Latency reporting: plugin must report added latency (samples or ms), even if
   currently unused by host flow
 - `determinism_seed` behavior: where the seed comes from and how it is applied
