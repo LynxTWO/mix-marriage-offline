@@ -320,9 +320,6 @@ def summarize_stem_source_tags(stems: Any) -> dict[str, Any]:
         source_metadata = row.get("source_metadata")
         if isinstance(source_metadata, Mapping):
             tag_bags.append(tag_bag_from_mapping(source_metadata.get("tags")))
-            continue
-        # Backward-compat: allow direct per-stem tags payload if present.
-        tag_bags.append(tag_bag_from_mapping(row.get("tags")))
 
     merged = merge_tag_bags(tag_bags)
     return {

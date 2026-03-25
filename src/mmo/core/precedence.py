@@ -623,50 +623,6 @@ def has_precedence_receipt(scene_payload: dict[str, Any]) -> bool:
     return isinstance(receipt, dict)
 
 
-def _legacy_object_row(
-    *,
-    object_id: str,
-    stem_id: str,
-    role_result: dict[str, Any],
-    bus_result: dict[str, Any],
-    azimuth_result: dict[str, Any],
-    width_result: dict[str, Any],
-    depth_result: dict[str, Any],
-    surround_result: dict[str, Any],
-    height_result: dict[str, Any],
-    resolved_group_bus: str | None,
-) -> dict[str, Any]:
-    row: dict[str, Any] = {
-        "object_id": object_id,
-        "stem_id": stem_id,
-        "role_source": role_result["source"],
-        "bus_source": bus_result["source"],
-        "azimuth_source": azimuth_result["source"],
-        "width_source": width_result["source"],
-        "depth_source": depth_result["source"],
-        "surround_send_caps_source": surround_result["source"],
-        "height_send_caps_source": height_result["source"],
-        "azimuth_deg": azimuth_result["applied_value"],
-        "width": width_result["applied_value"],
-        "depth": depth_result["applied_value"],
-    }
-    role_id = role_result["applied_value"]
-    if role_id is not None:
-        row["role_id"] = role_id
-    bus_id = bus_result["applied_value"]
-    if bus_id is not None:
-        row["bus_id"] = bus_id
-    if resolved_group_bus is not None:
-        row["group_bus"] = resolved_group_bus
-    surround_caps = surround_result["applied_value"]
-    if surround_caps is not None:
-        row["surround_send_caps"] = surround_caps
-    height_caps = height_result["applied_value"]
-    if height_caps is not None:
-        row["height_send_caps"] = height_caps
-    return row
-
-
 def apply_precedence(
     scene: dict[str, Any],
     locks: dict[str, Any] | None,
@@ -700,7 +656,6 @@ def apply_precedence(
     overrides = overrides if isinstance(overrides, dict) else {}
 
     precedence_entries: list[dict[str, Any]] = []
-    legacy_object_rows: list[dict[str, Any]] = []
     matched_stem_ids: set[str] = set()
 
     scene_perspective = _resolve_precedence(
@@ -909,21 +864,6 @@ def apply_precedence(
             )
             _set_object_height_caps(obj, height_result["applied_value"])
 
-            legacy_object_rows.append(
-                _legacy_object_row(
-                    object_id=object_id or f"OBJ.{stem_id}",
-                    stem_id=stem_id,
-                    role_result=role_result,
-                    bus_result=bus_result,
-                    azimuth_result=azimuth_result,
-                    width_result=width_result,
-                    depth_result=depth_result,
-                    surround_result=surround_result,
-                    height_result=height_result,
-                    resolved_group_bus=resolved_group_bus,
-                )
-            )
-
             for field_id, result in (
                 ("role_id", role_result),
                 ("bus_id", bus_result),
@@ -1030,22 +970,6 @@ def apply_precedence(
     if isinstance(locks_path, Path):
         precedence_receipt["locks_path"] = locks_path.resolve().as_posix()
     metadata_payload["precedence_receipt"] = precedence_receipt
-
-    if overrides:
-        legacy_object_rows.sort(
-            key=lambda row: (
-                _coerce_str(row.get("stem_id")).strip(),
-                _coerce_str(row.get("object_id")).strip(),
-            )
-        )
-        locks_receipt: dict[str, Any] = {
-            "version": PRECEDENCE_RECEIPT_VERSION,
-            "objects": legacy_object_rows,
-            "unmatched_stem_ids": unmatched_stem_ids,
-        }
-        if isinstance(locks_path, Path):
-            locks_receipt["locks_path"] = locks_path.resolve().as_posix()
-        metadata_payload["locks_receipt"] = locks_receipt
 
     merged_scene["metadata"] = metadata_payload
     return merged_scene

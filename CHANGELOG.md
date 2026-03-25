@@ -87,6 +87,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   recommendation schemas require canonical `scope`, and the shipped UI
   examples/docs now describe recommendation targeting in terms of `scope`
   only.
+- Scene precedence metadata, LFE audit measurements, and stem tag summaries
+  now emit only their current canonical shapes: scenes keep
+  `precedence_receipt` without the legacy `locks_receipt` mirror, scan-session
+  stores structured `EVID.LFE.CHANNEL_ROWS` instead of duplicated scalar LFE
+  mirrors, and tag summaries read `source_metadata.tags` only.
 
 ### Fixed
 

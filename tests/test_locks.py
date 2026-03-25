@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 
 import jsonschema
 from referencing import Registry, Resource
@@ -91,6 +92,23 @@ def _scene_fixture() -> dict:
             }
         ],
         "metadata": {},
+    }
+
+
+def _precedence_entry_index(scene: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
+    metadata = scene.get("metadata")
+    if not isinstance(metadata, dict):
+        return {}
+    receipt = metadata.get("precedence_receipt")
+    if not isinstance(receipt, dict):
+        return {}
+    entries = receipt.get("entries")
+    if not isinstance(entries, list):
+        return {}
+    return {
+        (str(row.get("stem_id", "")).strip(), str(row.get("field", "")).strip()): row
+        for row in entries
+        if isinstance(row, dict) and str(row.get("scope", "")).strip() == "object"
     }
 
 
@@ -288,33 +306,38 @@ class TestSceneBuildLocks(unittest.TestCase):
         self.assertTrue(stem_b["locks"]["width_hint"])
         self.assertTrue(stem_b["locks"]["depth_hint"])
 
-        receipt = patched.get("metadata", {}).get("locks_receipt")
-        self.assertIsInstance(receipt, dict)
-        if not isinstance(receipt, dict):
+        metadata = patched.get("metadata", {})
+        self.assertIsInstance(metadata, dict)
+        if not isinstance(metadata, dict):
             return
-        rows = receipt.get("objects")
-        self.assertIsInstance(rows, list)
-        if not isinstance(rows, list):
-            return
-        by_stem = {
-            row.get("stem_id"): row
-            for row in rows
-            if isinstance(row, dict) and isinstance(row.get("stem_id"), str)
-        }
-        self.assertEqual(by_stem["STEM.A"].get("width_source"), "explicit")
-        self.assertEqual(by_stem["STEM.A"].get("azimuth_source"), "explicit")
-        self.assertEqual(by_stem["STEM.A"].get("depth_source"), "explicit")
-        self.assertEqual(by_stem["STEM.A"].get("height_send_caps_source"), "inferred")
-        self.assertEqual(by_stem["STEM.B"].get("role_source"), "locked")
-        self.assertEqual(by_stem["STEM.B"].get("bus_source"), "locked")
-        self.assertEqual(by_stem["STEM.B"].get("bus_id"), "BUS.DRUMS.KICK")
-        self.assertEqual(by_stem["STEM.B"].get("width_source"), "locked")
-        self.assertEqual(by_stem["STEM.B"].get("azimuth_source"), "locked")
-        self.assertEqual(by_stem["STEM.B"].get("depth_source"), "locked")
-        self.assertEqual(by_stem["STEM.B"].get("surround_send_caps_source"), "locked")
-        self.assertEqual(by_stem["STEM.B"].get("height_send_caps_source"), "locked")
-        self.assertEqual(by_stem["STEM.B"].get("depth"), 0.22)
-        self.assertEqual(by_stem["STEM.B"].get("height_send_caps"), {"top_max_gain": 0.0})
+        self.assertNotIn("locks_receipt", metadata)
+        by_entry = _precedence_entry_index(patched)
+        self.assertEqual(by_entry[("STEM.A", "width")].get("source"), "explicit")
+        self.assertEqual(by_entry[("STEM.A", "azimuth_deg")].get("source"), "explicit")
+        self.assertEqual(by_entry[("STEM.A", "depth")].get("source"), "explicit")
+        self.assertEqual(by_entry[("STEM.A", "height_send_caps")].get("source"), "inferred")
+        self.assertEqual(by_entry[("STEM.B", "role_id")].get("source"), "locked")
+        self.assertEqual(by_entry[("STEM.B", "bus_id")].get("source"), "locked")
+        self.assertEqual(
+            by_entry[("STEM.B", "bus_id")].get("applied_value"),
+            "BUS.DRUMS.KICK",
+        )
+        self.assertEqual(by_entry[("STEM.B", "width")].get("source"), "locked")
+        self.assertEqual(by_entry[("STEM.B", "azimuth_deg")].get("source"), "locked")
+        self.assertEqual(by_entry[("STEM.B", "depth")].get("source"), "locked")
+        self.assertEqual(
+            by_entry[("STEM.B", "surround_send_caps")].get("source"),
+            "locked",
+        )
+        self.assertEqual(
+            by_entry[("STEM.B", "height_send_caps")].get("source"),
+            "locked",
+        )
+        self.assertEqual(by_entry[("STEM.B", "depth")].get("applied_value"), 0.22)
+        self.assertEqual(
+            by_entry[("STEM.B", "height_send_caps")].get("applied_value"),
+            {"top_max_gain": 0.0},
+        )
 
 
 if __name__ == "__main__":

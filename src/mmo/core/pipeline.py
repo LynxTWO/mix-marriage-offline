@@ -1275,12 +1275,8 @@ def run_renderers(
         payload = session_for_plugins.get(scene_key)
         if not isinstance(payload, dict):
             continue
-        metadata = payload.get("metadata")
-        has_legacy_locks_receipt = (
-            isinstance(metadata, dict) and isinstance(metadata.get("locks_receipt"), dict)
-        )
         should_reapply = normalized_scene_locks_payload is not None
-        if not should_reapply and (has_precedence_receipt(payload) or has_legacy_locks_receipt):
+        if not should_reapply and has_precedence_receipt(payload):
             continue
         session_for_plugins[scene_key] = apply_precedence(
             payload,

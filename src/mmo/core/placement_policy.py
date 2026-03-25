@@ -211,7 +211,7 @@ def _bed_lock_ids(bed: dict[str, Any]) -> set[str]:
     }
 
 
-def _scene_locks_receipt_index(scene: dict[str, Any]) -> dict[str, dict[str, str]]:
+def _scene_precedence_note_index(scene: dict[str, Any]) -> dict[str, dict[str, str]]:
     metadata = scene.get("metadata")
     if not isinstance(metadata, dict):
         return {}
@@ -243,39 +243,6 @@ def _scene_locks_receipt_index(scene: dict[str, Any]) -> dict[str, dict[str, str
                 if not stem_id or not note_key or not source:
                     continue
                 index.setdefault(stem_id, {})[note_key] = source
-            if index:
-                return index
-    locks_receipt = metadata.get("locks_receipt")
-    if not isinstance(locks_receipt, dict):
-        return {}
-    objects = locks_receipt.get("objects")
-    if not isinstance(objects, list):
-        return {}
-
-    index: dict[str, dict[str, str]] = {}
-    for row in objects:
-        if not isinstance(row, dict):
-            continue
-        stem_id = _coerce_str(row.get("stem_id")).strip()
-        if not stem_id:
-            continue
-        index[stem_id] = {
-            key: (
-                "explicit"
-                if _coerce_str(row.get(key)).strip() == "explicit_metadata"
-                else _coerce_str(row.get(key)).strip()
-            )
-            for key in (
-                "role_source",
-                "bus_source",
-                "azimuth_source",
-                "width_source",
-                "surround_send_caps_source",
-                "depth_source",
-                "height_send_caps_source",
-            )
-            if _coerce_str(row.get(key)).strip()
-        }
     return index
 
 
@@ -1306,12 +1273,7 @@ def build_render_intent(
     if not isinstance(scene, dict):
         raise ValueError("scene must be an object.")
     if not has_precedence_receipt(scene):
-        metadata = scene.get("metadata")
-        has_legacy_locks_receipt = (
-            isinstance(metadata, dict) and isinstance(metadata.get("locks_receipt"), dict)
-        )
-        if not has_legacy_locks_receipt:
-            scene = apply_precedence(scene, None, None)
+        scene = apply_precedence(scene, None, None)
 
     normalized_layout_id = _coerce_str(target_layout_id).strip().upper()
     if normalized_layout_id not in _SUPPORTED_LAYOUT_IDS:
@@ -1327,7 +1289,7 @@ def build_render_intent(
         return None
 
     scene_locks = _scene_lock_ids(scene)
-    source_receipt_index = _scene_locks_receipt_index(scene)
+    source_receipt_index = _scene_precedence_note_index(scene)
     immersive_perspective_marker = _scene_immersive_perspective(scene)
     immersive_perspective = (
         immersive_perspective_marker[0]

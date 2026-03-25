@@ -60,6 +60,32 @@ def _base_gain_render_recommendations() -> list[dict]:
     ]
 
 
+def _lfe_channel_rows_measurements() -> list[dict]:
+    return [
+        {
+            "evidence_id": "EVID.LFE.CHANNEL_ROWS",
+            "value": [
+                {
+                    "channel_index": 0,
+                    "inband_energy_db": -12.0,
+                    "out_of_band_energy_db": -6.0,
+                    "infrasonic_energy_db": -90.0,
+                    "crest_factor_db": 8.0,
+                    "peak_dbfs": -9.0,
+                    "true_peak_dbtp": -8.8,
+                    "mains_inband_energy_db": -14.0,
+                    "lfe_to_mains_ratio_db": 2.0,
+                    "out_of_band_high": True,
+                    "infrasonic_rumble": False,
+                    "headroom_low": False,
+                    "band_level_low": False,
+                    "band_level_high": False,
+                }
+            ],
+        }
+    ]
+
+
 def _report_payload(
     *,
     fixture_dir: Path,
@@ -215,12 +241,7 @@ def _tone_magnitude(samples: list[float], *, sample_rate_hz: int, freq_hz: float
 class TestLfeCorrectiveApproval(unittest.TestCase):
     def test_lfe_corrective_filter_blocked_without_approval(self) -> None:
         fixture_dir = _FIXTURES_DIR / "lfe_out_of_band"
-        lfe_measurements = [
-            {"evidence_id": "EVID.LFE.OUT_OF_BAND_DB", "value": -6.0},
-            {"evidence_id": "EVID.LFE.INFRASONIC_DB", "value": -90.0},
-            {"evidence_id": "EVID.LFE.MAINS_RATIO_DB", "value": 2.0},
-            {"evidence_id": "EVID.LFE.CHANNEL_ROWS", "value": [{"channel_index": 0}]},
-        ]
+        lfe_measurements = _lfe_channel_rows_measurements()
         with tempfile.TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)
             plugins_dir = _write_lfe_plugins_dir(temp / "plugins")
@@ -269,12 +290,7 @@ class TestLfeCorrectiveApproval(unittest.TestCase):
 
     def test_lfe_corrective_filter_with_approval_applies_and_reruns_qa(self) -> None:
         fixture_dir = _FIXTURES_DIR / "lfe_out_of_band"
-        lfe_measurements = [
-            {"evidence_id": "EVID.LFE.OUT_OF_BAND_DB", "value": -6.0},
-            {"evidence_id": "EVID.LFE.INFRASONIC_DB", "value": -90.0},
-            {"evidence_id": "EVID.LFE.MAINS_RATIO_DB", "value": 2.0},
-            {"evidence_id": "EVID.LFE.CHANNEL_ROWS", "value": [{"channel_index": 0}]},
-        ]
+        lfe_measurements = _lfe_channel_rows_measurements()
         with tempfile.TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)
             plugins_dir = _write_lfe_plugins_dir(temp / "plugins")

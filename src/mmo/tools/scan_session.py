@@ -960,8 +960,6 @@ def _add_lfe_audit_issues(
                 audit_result = row.get("audit_result")
                 if not isinstance(lfe_idx, int) or not isinstance(audit_result, dict):
                     continue
-                # Keep legacy scalar evidence for compatibility.
-                _upsert_lfe_measurements(stem, lfe_idx, audit_result)
                 stem_issues = build_lfe_audit_issues(
                     stem_id, lfe_idx, audit_result, strict=strict
                 )
@@ -970,48 +968,13 @@ def _add_lfe_audit_issues(
     return missing_ffmpeg
 
 
-def _upsert_lfe_measurements(
-    stem: Dict[str, Any], channel_index: int, audit_result: Dict[str, Any]
-) -> None:
-    """Store LFE audit metrics as stem measurements."""
-    import math  # noqa: WPS433
-
-    def _safe(v: Optional[float]) -> Optional[float]:
-        if v is None:
-            return None
-        return round(v, 3) if math.isfinite(v) else None
-
-    pairs = [
-        ("EVID.LFE.BAND_ENERGY_DB", audit_result.get("inband_energy_db"), "UNIT.DB"),
-        ("EVID.LFE.OUT_OF_BAND_DB", audit_result.get("out_of_band_energy_db"), "UNIT.DB"),
-        ("EVID.LFE.INFRASONIC_DB", audit_result.get("infrasonic_energy_db"), "UNIT.DB"),
-        ("EVID.LFE.CREST_FACTOR_DB", audit_result.get("crest_factor_db"), "UNIT.DB"),
-        ("EVID.LFE.PEAK_DBFS", audit_result.get("peak_dbfs"), "UNIT.DBFS"),
-        ("EVID.LFE.TRUEPEAK_DBTP", audit_result.get("true_peak_dbtp"), "UNIT.DBTP"),
-    ]
-    for evidence_id, value, unit_id in pairs:
-        safe_val = _safe(value)
-        if safe_val is not None:
-            upsert_measurement(stem, evidence_id=evidence_id, value=safe_val, unit_id=unit_id)
-
-    ratio = audit_result.get("lfe_to_mains_ratio_db")
-    if ratio is not None:
-        safe_ratio = _safe(ratio)
-        if safe_ratio is not None:
-            upsert_measurement(
-                stem,
-                evidence_id="EVID.LFE.MAINS_RATIO_DB",
-                value=safe_ratio,
-                unit_id="UNIT.DB",
-            )
-
-
 def _upsert_lfe_channel_rows(
     stem: Dict[str, Any],
     rows: List[Dict[str, Any]],
     summary: Dict[str, Any],
 ) -> None:
-    """Store per-LFE channel rows and summed LFE energy as deterministic receipts."""
+    """Store per-LFE channel receipts as structured measurements."""
+    del summary
     rendered_rows: List[Dict[str, Any]] = []
     for row in sorted(rows, key=lambda item: int(item.get("channel_index", 0))):
         if not isinstance(row, dict):
@@ -1024,8 +987,35 @@ def _upsert_lfe_channel_rows(
                 "channel_index": channel_index,
                 "inband_energy_db": row.get("inband_energy_db"),
                 "out_of_band_energy_db": row.get("out_of_band_energy_db"),
+                "infrasonic_energy_db": row.get("audit_result", {}).get("infrasonic_energy_db")
+                if isinstance(row.get("audit_result"), dict)
+                else None,
+                "peak_dbfs": row.get("audit_result", {}).get("peak_dbfs")
+                if isinstance(row.get("audit_result"), dict)
+                else None,
                 "true_peak_dbtp": row.get("true_peak_dbtp"),
+                "crest_factor_db": row.get("audit_result", {}).get("crest_factor_db")
+                if isinstance(row.get("audit_result"), dict)
+                else None,
+                "mains_inband_energy_db": row.get("audit_result", {}).get("mains_inband_energy_db")
+                if isinstance(row.get("audit_result"), dict)
+                else None,
+                "lfe_to_mains_ratio_db": row.get("audit_result", {}).get("lfe_to_mains_ratio_db")
+                if isinstance(row.get("audit_result"), dict)
+                else None,
                 "out_of_band_high": bool(row.get("out_of_band_high")),
+                "infrasonic_rumble": bool(row.get("audit_result", {}).get("infrasonic_rumble"))
+                if isinstance(row.get("audit_result"), dict)
+                else False,
+                "headroom_low": bool(row.get("audit_result", {}).get("headroom_low"))
+                if isinstance(row.get("audit_result"), dict)
+                else False,
+                "band_level_low": bool(row.get("audit_result", {}).get("band_level_low"))
+                if isinstance(row.get("audit_result"), dict)
+                else False,
+                "band_level_high": bool(row.get("audit_result", {}).get("band_level_high"))
+                if isinstance(row.get("audit_result"), dict)
+                else False,
             }
         )
     if rendered_rows:
@@ -1034,15 +1024,6 @@ def _upsert_lfe_channel_rows(
             evidence_id="EVID.LFE.CHANNEL_ROWS",
             value=json.dumps(rendered_rows, sort_keys=True, separators=(",", ":")),
             unit_id="UNIT.NONE",
-        )
-
-    summed_inband = summary.get("summed_lfe_inband_energy_db")
-    if isinstance(summed_inband, (int, float)) and math.isfinite(float(summed_inband)):
-        upsert_measurement(
-            stem,
-            evidence_id="EVID.LFE.SUM_BAND_ENERGY_DB",
-            value=round(float(summed_inband), 3),
-            unit_id="UNIT.DB",
         )
 
 

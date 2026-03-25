@@ -382,13 +382,31 @@ class TestScanSessionLfeIntegration(unittest.TestCase):
             self.assertEqual(rc, 0)
             report = json.loads(stdout)
             stems = report.get("session", {}).get("stems", [])
-            lfe_ev_ids: set[str] = set()
+            lfe_measurements: dict[str, object] = {}
             for stem in stems:
                 for m in stem.get("measurements", []):
                     if isinstance(m, dict) and m.get("evidence_id", "").startswith("EVID.LFE."):
-                        lfe_ev_ids.add(m["evidence_id"])
-            self.assertIn("EVID.LFE.BAND_ENERGY_DB", lfe_ev_ids)
-            self.assertIn("EVID.LFE.OUT_OF_BAND_DB", lfe_ev_ids)
+                        lfe_measurements[str(m["evidence_id"])] = m.get("value")
+            self.assertIn("EVID.LFE.CHANNEL_ROWS", lfe_measurements)
+            for legacy_evidence_id in (
+                "EVID.LFE.BAND_ENERGY_DB",
+                "EVID.LFE.OUT_OF_BAND_DB",
+                "EVID.LFE.INFRASONIC_DB",
+                "EVID.LFE.CREST_FACTOR_DB",
+                "EVID.LFE.PEAK_DBFS",
+                "EVID.LFE.TRUEPEAK_DBTP",
+                "EVID.LFE.MAINS_RATIO_DB",
+                "EVID.LFE.SUM_BAND_ENERGY_DB",
+            ):
+                self.assertNotIn(legacy_evidence_id, lfe_measurements)
+            rows = json.loads(str(lfe_measurements["EVID.LFE.CHANNEL_ROWS"]))
+            self.assertIsInstance(rows, list)
+            self.assertTrue(rows)
+            first = rows[0]
+            self.assertIn("inband_energy_db", first)
+            self.assertIn("out_of_band_energy_db", first)
+            self.assertIn("infrasonic_energy_db", first)
+            self.assertIn("lfe_to_mains_ratio_db", first)
 
     def test_scan_stereo_wav_no_lfe_issues(self) -> None:
         """Stereo stems should not produce any ISSUE.LFE.* issues."""

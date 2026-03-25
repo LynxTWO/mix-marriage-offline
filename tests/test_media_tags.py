@@ -123,6 +123,42 @@ class TestMediaTags(unittest.TestCase):
         self.assertEqual(summary["preserved_tag_count"], 4)
         self.assertEqual(summary["warnings"], ["unknown chunk a", "unknown chunk b"])
 
+    def test_summarize_stem_source_tags_ignores_deprecated_direct_tags(self) -> None:
+        stem_tags = canonicalize_tag_bag(
+            [
+                RawTag(
+                    source="format",
+                    container="wav",
+                    scope="info",
+                    key="INAM",
+                    value="Should Not Leak",
+                    index=0,
+                )
+            ]
+        )
+
+        summary = summarize_stem_source_tags(
+            [
+                {
+                    "stem_id": "STEM.A",
+                    "file_path": "a.wav",
+                    "tags": tag_bag_to_mapping(stem_tags),
+                }
+            ]
+        )
+
+        self.assertEqual(
+            summary["normalized"],
+            {
+                "title": None,
+                "artist": None,
+                "album": None,
+                "date": None,
+            },
+        )
+        self.assertEqual(summary["preserved_tag_count"], 0)
+        self.assertEqual(summary["warnings"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

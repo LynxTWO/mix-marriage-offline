@@ -686,27 +686,34 @@ class TestCliScene(unittest.TestCase):
             self.assertTrue(locked["locks"]["width_hint"])
             self.assertTrue(locked["locks"]["depth_hint"])
 
-            receipt = payload.get("metadata", {}).get("locks_receipt")
+            metadata = payload.get("metadata", {})
+            self.assertIsInstance(metadata, dict)
+            if not isinstance(metadata, dict):
+                return
+            self.assertNotIn("locks_receipt", metadata)
+            receipt = metadata.get("precedence_receipt")
             self.assertIsInstance(receipt, dict)
             if not isinstance(receipt, dict):
                 return
-            receipt_rows = receipt.get("objects")
+            receipt_rows = receipt.get("entries")
             self.assertIsInstance(receipt_rows, list)
             if not isinstance(receipt_rows, list):
                 return
-            row = next(
-                item
+            by_field = {
+                str(item.get("field")): item
                 for item in receipt_rows
-                if isinstance(item, dict) and item.get("stem_id") == "mystery"
-            )
-            self.assertEqual(row.get("role_source"), "locked")
-            self.assertEqual(row.get("bus_source"), "locked")
-            self.assertEqual(row.get("bus_id"), "BUS.DRUMS.KICK")
-            self.assertEqual(row.get("azimuth_source"), "locked")
-            self.assertEqual(row.get("width_source"), "locked")
-            self.assertEqual(row.get("depth_source"), "locked")
-            self.assertEqual(row.get("surround_send_caps_source"), "locked")
-            self.assertEqual(row.get("height_send_caps_source"), "locked")
+                if isinstance(item, dict)
+                and item.get("scope") == "object"
+                and item.get("stem_id") == "mystery"
+            }
+            self.assertEqual(by_field["role_id"].get("source"), "locked")
+            self.assertEqual(by_field["bus_id"].get("source"), "locked")
+            self.assertEqual(by_field["bus_id"].get("applied_value"), "BUS.DRUMS.KICK")
+            self.assertEqual(by_field["azimuth_deg"].get("source"), "locked")
+            self.assertEqual(by_field["width"].get("source"), "locked")
+            self.assertEqual(by_field["depth"].get("source"), "locked")
+            self.assertEqual(by_field["surround_send_caps"].get("source"), "locked")
+            self.assertEqual(by_field["height_send_caps"].get("source"), "locked")
 
     def test_scene_cli_lint_reports_deterministic_errors_and_warnings(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

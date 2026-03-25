@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Mapping
 
 from mmo.core.lfe_corrective import stem_has_explicit_lfe
@@ -42,6 +43,31 @@ def _measurement_index(stem: Mapping[str, Any]) -> dict[str, Any]:
             continue
         indexed[evidence_id] = measurement.get("value")
     return indexed
+
+
+def _channel_rows(measurements: Mapping[str, Any]) -> list[dict[str, Any]]:
+    raw_rows = measurements.get("EVID.LFE.CHANNEL_ROWS")
+    if isinstance(raw_rows, str) and raw_rows.strip():
+        try:
+            raw_rows = json.loads(raw_rows)
+        except ValueError:
+            return []
+    if not isinstance(raw_rows, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for row in raw_rows:
+        if isinstance(row, Mapping):
+            rows.append(dict(row))
+    rows.sort(key=lambda row: int(_coerce_float(row.get("channel_index")) or 0))
+    return rows
+
+
+def _row_max_metric(rows: list[dict[str, Any]], field: str) -> float | None:
+    values = [_coerce_float(row.get(field)) for row in rows]
+    finite = [value for value in values if value is not None]
+    if not finite:
+        return None
+    return max(finite)
 
 
 def _target(stem_id: str) -> dict[str, Any]:
@@ -95,6 +121,7 @@ class LfeCorrectiveDetector(DetectorPlugin):
             if not stem_id:
                 continue
             measurements = _measurement_index(stem)
+            channel_rows = _channel_rows(measurements)
             if (
                 not stem_has_explicit_lfe(stem)
                 and not any(key.startswith("EVID.LFE.") for key in measurements)
@@ -103,7 +130,7 @@ class LfeCorrectiveDetector(DetectorPlugin):
 
             base_evidence = _base_evidence(stem=stem, measurements=measurements)
 
-            out_of_band_db = _coerce_float(measurements.get("EVID.LFE.OUT_OF_BAND_DB"))
+            out_of_band_db = _row_max_metric(channel_rows, "out_of_band_energy_db")
             if out_of_band_db is not None and out_of_band_db > _OUT_OF_BAND_THRESHOLD_DB:
                 issues.append(
                     {
@@ -126,7 +153,7 @@ class LfeCorrectiveDetector(DetectorPlugin):
                     }
                 )
 
-            infrasonic_db = _coerce_float(measurements.get("EVID.LFE.INFRASONIC_DB"))
+            infrasonic_db = _row_max_metric(channel_rows, "infrasonic_energy_db")
             if infrasonic_db is not None and infrasonic_db > _INFRASONIC_THRESHOLD_DB:
                 issues.append(
                     {
@@ -149,7 +176,7 @@ class LfeCorrectiveDetector(DetectorPlugin):
                     }
                 )
 
-            mains_ratio_db = _coerce_float(measurements.get("EVID.LFE.MAINS_RATIO_DB"))
+            mains_ratio_db = _row_max_metric(channel_rows, "lfe_to_mains_ratio_db")
             if mains_ratio_db is not None and mains_ratio_db > _MAINS_RATIO_EXCESS_DB:
                 issues.append(
                     {

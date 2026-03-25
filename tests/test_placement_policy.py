@@ -594,18 +594,64 @@ class TestPlacementPolicy(unittest.TestCase):
     def test_source_receipt_notes_propagate_to_object_sends(self) -> None:
         scene = _load_fixture_scene()
         scene["metadata"] = {
-            "locks_receipt": {
+            "precedence_receipt": {
                 "version": "0.1.0",
-                "objects": [
+                "entries": [
                     {
+                        "scope": "object",
+                        "field": "role_id",
+                        "source": "locked",
+                        "original_value": "ROLE.DRUM.KICK",
+                        "applied_value": "ROLE.DRUM.KICK",
                         "stem_id": "STEM.KICK",
-                        "role_source": "locked",
-                        "bus_source": "explicit",
-                        "azimuth_source": "inferred",
-                        "width_source": "locked",
-                        "surround_send_caps_source": "locked",
-                        "depth_source": "locked",
-                        "height_send_caps_source": "locked",
+                    },
+                    {
+                        "scope": "object",
+                        "field": "bus_id",
+                        "source": "explicit",
+                        "original_value": "BUS.DRUMS.KICK",
+                        "applied_value": "BUS.DRUMS.KICK",
+                        "stem_id": "STEM.KICK",
+                    },
+                    {
+                        "scope": "object",
+                        "field": "azimuth_deg",
+                        "source": "inferred",
+                        "original_value": 0.0,
+                        "applied_value": 0.0,
+                        "stem_id": "STEM.KICK",
+                    },
+                    {
+                        "scope": "object",
+                        "field": "width",
+                        "source": "locked",
+                        "original_value": 0.0,
+                        "applied_value": 0.0,
+                        "stem_id": "STEM.KICK",
+                    },
+                    {
+                        "scope": "object",
+                        "field": "surround_send_caps",
+                        "source": "locked",
+                        "original_value": None,
+                        "applied_value": None,
+                        "stem_id": "STEM.KICK",
+                    },
+                    {
+                        "scope": "object",
+                        "field": "depth",
+                        "source": "locked",
+                        "original_value": 0.2,
+                        "applied_value": 0.2,
+                        "stem_id": "STEM.KICK",
+                    },
+                    {
+                        "scope": "object",
+                        "field": "height_send_caps",
+                        "source": "locked",
+                        "original_value": None,
+                        "applied_value": None,
+                        "stem_id": "STEM.KICK",
                     }
                 ],
                 "unmatched_stem_ids": [],
