@@ -9,7 +9,8 @@ from unittest import mock
 
 import jsonschema
 
-from mmo.cli import _parse_output_formats_csv, main
+from mmo.cli import main
+from mmo.cli_commands._helpers import _parse_output_formats_csv
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
 from mmo.dsp.io import sha256_file
 

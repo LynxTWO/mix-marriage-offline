@@ -78,6 +78,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   with registered `ISSUE.RENDER.SCENE_STEM_BINDING_*` IDs, and persists the
   same root-cause summary across preflight receipts, safe-render receipts, and
   render manifests.
+- `mmo project show` now documents and accepts one canonical invocation shape,
+  `mmo project show <project_dir>`, and the CLI entry module no longer carries
+  explicit private helper re-exports for tests that should import from the
+  owning `cli_commands` modules instead.
 
 ### Fixed
 

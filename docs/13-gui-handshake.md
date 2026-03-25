@@ -39,7 +39,7 @@ Load the project payload and show:
 CLI helper:
 
 ```bash
-mmo project show --project path/to/song.mmo_project.json --format json
+mmo project show path/to/project_dir --format json
 ```
 
 Notes:

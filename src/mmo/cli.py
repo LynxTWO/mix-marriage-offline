@@ -2648,11 +2648,6 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to the project directory.",
     )
     project_show_parser.add_argument(
-        "--project",
-        default=None,
-        help=argparse.SUPPRESS,
-    )
-    project_show_parser.add_argument(
         "--format",
         choices=["json", "text"],
         default="json",
@@ -4989,36 +4984,11 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.project_command == "show":
-            legacy_project_path = getattr(args, "project", None)
             project_dir_arg = getattr(args, "project_dir", None)
-            has_legacy_project = (
-                isinstance(legacy_project_path, str)
-                and bool(legacy_project_path.strip())
-            )
             has_project_dir = (
                 isinstance(project_dir_arg, str)
                 and bool(project_dir_arg.strip())
             )
-
-            if has_legacy_project and has_project_dir:
-                print(
-                    "Specify either <project_dir> or --project, not both.",
-                    file=sys.stderr,
-                )
-                return 1
-
-            if has_legacy_project:
-                try:
-                    project_payload = load_project(Path(legacy_project_path))
-                except (RuntimeError, ValueError) as exc:
-                    print(str(exc), file=sys.stderr)
-                    return 1
-                if args.format == "json":
-                    print(json.dumps(project_payload, indent=2, sort_keys=True))
-                else:
-                    print(_render_project_text(project_payload))
-                return 0
-
             if not has_project_dir:
                 print(
                     (
@@ -5028,7 +4998,6 @@ def main(argv: list[str] | None = None) -> int:
                     file=sys.stderr,
                 )
                 return 1
-
             return _run_project_show(
                 project_dir=Path(project_dir_arg),
                 output_format=args.format,
@@ -8631,9 +8600,3 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     return 0
-
-
-# Backward-compatible re-exports for tests that import private symbols directly.
-if _MMO_IMPORT_ERROR is None:  # pragma: no branch - only skip if import guard fired
-    from mmo.cli_commands._helpers import _parse_output_formats_csv  # noqa: F811,F401
-    from mmo.cli_commands._workflows import _run_ui_workflow  # noqa: F811,F401

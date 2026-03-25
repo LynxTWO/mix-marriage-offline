@@ -7,7 +7,7 @@ commands still complete successfully with identical behavior:
   - stems audition (with --overwrite)
   - bundle (pointer check)
 
-Also verifies backward-compatible re-exports from mmo.cli.
+Also verifies the extracted helper modules remain directly importable.
 """
 import contextlib
 import io
@@ -17,6 +17,8 @@ import wave
 from pathlib import Path
 
 from mmo.cli import main
+from mmo.cli_commands._helpers import _parse_output_formats_csv
+from mmo.cli_commands._workflows import _run_ui_workflow
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SANDBOX = _REPO_ROOT / "sandbox_tmp" / "test_cli_refactor_smoke"
@@ -59,16 +61,14 @@ def tearDownModule() -> None:
 class TestCliRefactorSmoke(unittest.TestCase):
     """Regression smoke tests for the cli_commands refactor."""
 
-    def test_reexport_parse_output_formats_csv(self) -> None:
-        """_parse_output_formats_csv must remain importable from mmo.cli."""
-        from mmo.cli import _parse_output_formats_csv  # noqa: F811
+    def test_helpers_module_parse_output_formats_csv(self) -> None:
+        """_parse_output_formats_csv should be imported from its owning helper module."""
         result = _parse_output_formats_csv("wav,flac")
         self.assertIn("wav", result)
         self.assertIn("flac", result)
 
-    def test_reexport_run_ui_workflow_importable(self) -> None:
-        """_run_ui_workflow must remain importable from mmo.cli."""
-        from mmo.cli import _run_ui_workflow  # noqa: F811
+    def test_workflows_module_run_ui_workflow_importable(self) -> None:
+        """_run_ui_workflow should be imported from its owning workflows module."""
         self.assertTrue(callable(_run_ui_workflow))
 
     def test_project_init(self) -> None:

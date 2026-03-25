@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Callable
 from unittest import mock
 
-from mmo.cli import _run_ui_workflow
+from mmo.cli_commands._workflows import _run_ui_workflow
 from mmo.resources import presets_dir as canonical_presets_dir
 
 
