@@ -13,7 +13,7 @@
         "SPK.RS"
       ],
       "downmix_policy_version": "0.1.0",
-      "normalized_receipt_sha256": "8339ba40b32b3f00580e47a4e6c1f9eac2c79ae292200bba51c8db3de7438392",
+      "normalized_receipt_sha256": "787e60a9534856cc0782d30101afb719afcc8f1c065e584a8d0c1dc2fe430e69",
       "normalized_render_manifest_sha256": "78337dfc913d41f4188431a7f4b871958e5b0cd9e41ac4dbf04813d61b9e0664",
       "per_channel_metrics": [
         {
@@ -69,7 +69,7 @@
         "SPK.RRS"
       ],
       "downmix_policy_version": "0.1.0",
-      "normalized_receipt_sha256": "1206784397564da373bd264dd6c771c24f997ac38abad336d6977fcbef496927",
+      "normalized_receipt_sha256": "eb44c474f59301b35291326f38e7aa50653606040b0b23f95979a3de51caf2fe",
       "normalized_render_manifest_sha256": "be2029b25d5e9ee4a830d46f7f37b5e08c617385fa1a21d55b863d5c88495728",
       "per_channel_metrics": [
         {

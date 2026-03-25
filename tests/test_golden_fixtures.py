@@ -253,6 +253,114 @@ def _manifest_invariants(
     )
 
 
+def _dict_list(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [
+        item.strip()
+        for item in value
+        if isinstance(item, str) and item.strip()
+    ]
+
+
+def _reduced_deliverables_summary(summary: Any) -> dict[str, Any]:
+    if not isinstance(summary, dict):
+        return {}
+    summary_dict = summary
+    return {
+        "overall_status": summary_dict.get("overall_status"),
+        "deliverable_count": summary_dict.get("deliverable_count"),
+        "success_count": summary_dict.get("success_count"),
+        "failed_count": summary_dict.get("failed_count"),
+        "partial_count": summary_dict.get("partial_count"),
+        "invalid_master_count": summary_dict.get("invalid_master_count"),
+        "valid_master_count": summary_dict.get("valid_master_count"),
+        "mixed_outcomes": summary_dict.get("mixed_outcomes"),
+        "result_bucket": summary_dict.get("result_bucket"),
+        "top_failure_reason": summary_dict.get("top_failure_reason"),
+        "top_failure_status": summary_dict.get("top_failure_status"),
+    }
+
+
+def _reduced_scene_binding_summary(summary: Any) -> dict[str, Any]:
+    if not isinstance(summary, dict):
+        return {}
+    summary_dict = summary
+    rewritten_refs = sorted(
+        [
+            {
+                "from_stem_id": row.get("from_stem_id", row.get("from_ref")),
+                "to_stem_id": row.get("to_stem_id"),
+            }
+            for row in _dict_list(summary_dict.get("rewritten_refs"))
+        ],
+        key=lambda row: (
+            _coerce_str(row.get("from_stem_id")).strip(),
+            _coerce_str(row.get("to_stem_id")).strip(),
+        ),
+    )
+    binding_warning_codes = sorted(
+        [
+            code
+            for row in _dict_list(summary_dict.get("binding_warnings"))
+            for code in [
+                _coerce_str(row.get("code")).strip()
+                or _coerce_str(row.get("warning_code")).strip()
+            ]
+            if code
+        ]
+    )
+    return {
+        "status": summary_dict.get("status"),
+        "reference_count": summary_dict.get("reference_count"),
+        "bound_count": summary_dict.get("bound_count"),
+        "unbound_count": summary_dict.get("unbound_count"),
+        "rewritten_count": summary_dict.get("rewritten_count"),
+        "failure_reason": summary_dict.get("failure_reason"),
+        "rewritten_refs": rewritten_refs,
+        "binding_warning_codes": binding_warning_codes,
+    }
+
+
+def _reduced_scene_stem_overlap_summary(summary: Any) -> dict[str, Any]:
+    if not isinstance(summary, dict):
+        return {}
+    summary_dict = summary
+    unmatched_count = summary_dict.get("unmatched_count")
+    if unmatched_count is None:
+        unmatched_count = summary_dict.get("unresolved_count")
+    match_ratio = summary_dict.get("match_ratio")
+    if match_ratio is None:
+        match_ratio = summary_dict.get("overlap_ratio")
+    return {
+        "status": summary_dict.get("status"),
+        "reference_count": summary_dict.get("reference_count"),
+        "matched_count": summary_dict.get("matched_count"),
+        "unmatched_count": unmatched_count,
+        "match_ratio": match_ratio,
+    }
+
+
+def _reduced_preflight_summary(summary: Any) -> dict[str, Any]:
+    if not isinstance(summary, dict):
+        return {}
+    summary_dict = summary
+    return {
+        "final_decision": summary_dict.get("final_decision"),
+        "blocked_gates": _string_list(summary_dict.get("blocked_gates")),
+        "primary_issue_id": summary_dict.get("primary_issue_id"),
+        "scene_stem_overlap_summary": _reduced_scene_stem_overlap_summary(
+            summary_dict.get("scene_stem_overlap_summary")
+        ),
+    }
+
+
 def _receipt_invariants(
     receipt: dict[str, Any],
     *,
@@ -277,6 +385,7 @@ def _receipt_invariants(
                 {
                     "issue_id": issue.get("issue_id"),
                     "severity": issue.get("severity"),
+                    "measurement_state": issue.get("measurement_state"),
                 }
                 for issue in receipt.get("qa_issues", [])
                 if isinstance(issue, dict)
@@ -294,10 +403,18 @@ def _receipt_invariants(
                 "applied_steps": fallback_dict.get("applied_steps"),
                 "final_outcome": fallback_dict.get("final_outcome"),
                 "safety_collapse_applied": fallback_dict.get("safety_collapse_applied"),
-                "passed_layout_ids": fallback_dict.get("passed_layout_ids"),
-                "failed_layout_ids": fallback_dict.get("failed_layout_ids"),
+                "passed_layout_ids": sorted(_string_list(fallback_dict.get("passed_layout_ids"))),
+                "failed_layout_ids": sorted(_string_list(fallback_dict.get("failed_layout_ids"))),
             },
-            "notes": receipt.get("notes"),
+            "deliverables_summary": _reduced_deliverables_summary(
+                receipt.get("deliverables_summary")
+            ),
+            "scene_binding_summary": _reduced_scene_binding_summary(
+                receipt.get("scene_binding_summary")
+            ),
+            "preflight_summary": _reduced_preflight_summary(
+                receipt.get("preflight_summary")
+            ),
         },
         replacements=replacements,
     )

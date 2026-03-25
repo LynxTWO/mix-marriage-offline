@@ -9,7 +9,7 @@
         "SPK.R"
       ],
       "downmix_policy_version": "0.1.0",
-      "normalized_receipt_sha256": "cded8571dbcf058efdbf93590a7f8fc55ac2e52d211b256ab9ab5dbf77c6ead2",
+      "normalized_receipt_sha256": "dd5e26bd962175b75c52018101edfb7b49d8944a4b02534a2754ccc298127648",
       "normalized_render_manifest_sha256": "fce4fd4beb3085fc2b82123ed4966560e8a20e37b123359b8f0267042ab9b9d7",
       "per_channel_metrics": [
         {
