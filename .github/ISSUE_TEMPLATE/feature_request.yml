@@ -1,0 +1,127 @@
+name: Feature request
+description: Propose a feature, workflow improvement, or contract extension.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion.
+
+        MMO changes tend to touch contracts, fixtures, receipts, and docs together, so the most helpful feature requests explain:
+        - the user outcome you want
+        - the current pain or missing capability
+        - what artifacts, schemas, receipts, or workflows would likely change
+        - clear acceptance criteria
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of MMO would this feature affect most?
+      options:
+        - CLI workflow
+        - Safe render / render QA
+        - Scene build / scene locks / scene binding
+        - Plugins / plugin authoring
+        - Schemas / ontology / validation
+        - Desktop Tauri app
+        - Fixtures / golden coverage / CI
+        - Docs / examples
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the user or workflow problem first.
+      placeholder: |
+        Example:
+        MMO can validate a render after the fact, but it does not expose a stable preflight summary for this workflow in the receipt.
+    validations:
+      required: true
+
+  - type: textarea
+    id: desired_outcome
+    attributes:
+      label: Desired outcome
+      description: What should a successful result look like for the user?
+      placeholder: |
+        Example:
+        A render receipt should include a stable machine-readable summary that a GUI or golden fixture can rely on.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_change
+    attributes:
+      label: Proposed change
+      description: If you already have an approach in mind, describe it here.
+      placeholder: |
+        Example:
+        Add a reduced preflight summary to the safe-render receipt and document it in the schema and docs.
+
+  - type: checkboxes
+    id: touchpoints
+    attributes:
+      label: Likely touchpoints
+      description: Check the areas you think this feature would affect.
+      options:
+        - label: JSON schema changes
+        - label: Ontology or stable IDs
+        - label: Render receipts or render manifests
+        - label: CLI commands or workflow behavior
+        - label: Desktop GUI / Tauri screens
+        - label: Plugin API or plugin manifests
+        - label: Fixtures / golden snapshots / deterministic hashes
+        - label: Docs or examples
+
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Artifacts or files that should change
+      description: If you know the relevant artifacts or files, list them.
+      placeholder: |
+        - `safe_render_receipt.json`
+        - `render_manifest.json`
+        - `schemas/...`
+        - `docs/...`
+        - `fixtures/golden/...`
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance criteria
+      description: Please write the feature in testable terms.
+      placeholder: |
+        - [ ] The receipt includes ...
+        - [ ] The schema validates ...
+        - [ ] Golden fixtures cover ...
+        - [ ] Docs explain ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What alternatives, workarounds, or rejected approaches have you considered?
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks, tradeoffs, or compatibility concerns
+      description: Note any determinism, schema, UX, or backward-compatibility concerns you already see.
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked the docs and existing issues first.
+          required: true
+        - label: I described the user outcome, not just a solution idea.
+          required: true
+        - label: I understand this feature may need docs, fixture, and contract updates in the same change.
+          required: true

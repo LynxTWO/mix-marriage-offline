@@ -1,0 +1,166 @@
+name: Bug report
+description: Report a bug, regression, or contract failure with enough detail to reproduce it.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        MMO is contract-heavy and deterministic by design, so the most helpful reports include:
+        - exact commands or UI steps
+        - exact artifact paths
+        - expected vs actual machine-readable behavior
+        - whether this looks like a render, schema, plugin, QA, or golden-fixture regression
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of MMO looks wrong?
+      options:
+        - CLI workflow
+        - Safe render / render QA
+        - Scene build / scene binding
+        - Plugins / plugin manifests
+        - Schemas / ontology / validation
+        - Desktop Tauri app
+        - Fixtures / golden tests / CI
+        - Docs
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the bug in one or two paragraphs. Include the contract-level symptom, not just the UI wording.
+      placeholder: |
+        Example:
+        `safe-render` completed, but the receipt status is `completed` even though the deliverables summary shows a full failure.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide exact numbered steps, commands, flags, fixture names, or UI actions.
+      placeholder: |
+        1. Run `PYTHONPATH=src python3 -m pytest -q tests/test_golden_fixtures.py`
+        2. Observe failure in `normalized_receipt_sha256`
+        3. Open `fixtures/golden/.../expected/expected_metrics.json`
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected behavior
+      description: What should have happened instead?
+      placeholder: |
+        Example:
+        The render should stay blocked with `status=blocked`, and the receipt should include `ISSUE.RENDER.SCENE_STEM_BINDING_EMPTY`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: Actual behavior
+      description: What actually happened? Include exact issue IDs, statuses, gate outcomes, or hashes when possible.
+      placeholder: |
+        Example:
+        The receipt status changed from `blocked` to `completed`, and `normalized_receipt_sha256` changed while the manifest hash stayed stable.
+    validations:
+      required: true
+
+  - type: textarea
+    id: commands
+    attributes:
+      label: Exact commands or UI flow used
+      description: Include the exact command line, flags, env vars, or GUI actions. This is especially important for render, plugin, and golden-fixture issues.
+      placeholder: |
+        PYTHONPATH=src python3 -m pytest -q tests/test_golden_fixtures.py
+        python tools/validate_contracts.py
+        mmo safe-render --report ... --scene ... --receipt-out ...
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Relevant artifacts or paths
+      description: List the files that show the failure. If possible, include relative repo or workspace paths.
+      placeholder: |
+        - `report.json`
+        - `safe_render_receipt.json`
+        - `render_manifest.json`
+        - `render_qa.json`
+        - `fixtures/golden/.../expected/expected_metrics.json`
+        - plugin manifest or scene file path
+
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Regression?
+      description: Did this work before?
+      options:
+        - "Yes"
+        - "No"
+        - "Unsure"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: contract_surfaces
+    attributes:
+      label: Which contract surfaces look affected?
+      options:
+        - label: Render receipt / status semantics
+        - label: Render manifest / outputs
+        - label: Scene or scene-binding semantics
+        - label: Schema or ontology validation
+        - label: Plugin execution or plugin manifest semantics
+        - label: Golden fixture or deterministic hash coverage
+        - label: Desktop GUI behavior
+        - label: Docs / examples only
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the host details that matter for reproducing the bug.
+      placeholder: |
+        - OS:
+        - Install mode: source / packaged app / packaged CLI
+        - Python:
+        - ffmpeg / ffprobe availability:
+        - Branch or commit:
+        - Plugin setup:
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation already attempted
+      description: Tell us what you already ran and what happened.
+      placeholder: |
+        - `PYTHONPATH=src python3 -m pytest -q tests/test_golden_fixtures.py` -> failed
+        - `python tools/validate_contracts.py` -> passed
+        - `mmo env doctor --format text` -> passed
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and docs first.
+          required: true
+        - label: I used exact commands, paths, or UI steps instead of a high-level summary only.
+          required: true
+        - label: I removed secrets, private file paths, or other sensitive data from the report.
+          required: true
