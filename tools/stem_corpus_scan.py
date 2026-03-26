@@ -216,28 +216,30 @@ def _scan_payload(
         else []
     )
 
-    by_file_id: dict[str, dict[str, Any]] = {}
+    by_stem_id: dict[str, dict[str, Any]] = {}
     for assignment in assignment_rows:
-        file_id = assignment.get("file_id")
-        if isinstance(file_id, str):
-            by_file_id[file_id] = assignment
+        stem_id = assignment.get("stem_id")
+        if isinstance(stem_id, str):
+            by_stem_id[stem_id] = assignment
 
     corpus_rows: list[dict[str, Any]] = []
     for file_row in file_rows:
-        file_id = file_row.get("file_id")
+        stem_id = file_row.get("stem_id")
+        source_file_id = file_row.get("source_file_id")
         rel_path = file_row.get("rel_path")
         basename = file_row.get("basename")
         ext = file_row.get("ext")
         tokens = file_row.get("tokens")
         folder_tokens = file_row.get("folder_tokens")
         set_id = file_row.get("set_id")
-        if not isinstance(file_id, str) or not isinstance(rel_path, str):
+        if not isinstance(stem_id, str) or not isinstance(rel_path, str):
             continue
         if not isinstance(basename, str) or not isinstance(ext, str):
             continue
 
         row: dict[str, Any] = {
-            "file_id": file_id,
+            "stem_id": stem_id,
+            "source_file_id": source_file_id if isinstance(source_file_id, str) else None,
             "set_id": set_id if isinstance(set_id, str) else "",
             "basename": basename,
             "ext": ext,
@@ -256,7 +258,7 @@ def _scan_payload(
             row["rel_path"] = rel_path
             row["rel_dir"] = rel_dir
 
-        assignment = by_file_id.get(file_id)
+        assignment = by_stem_id.get(stem_id)
         if isinstance(assignment, dict):
             row["role_id"] = assignment.get("role_id", UNKNOWN_ROLE_ID)
             row["confidence"] = assignment.get("confidence", 0.0)
@@ -271,7 +273,7 @@ def _scan_payload(
         key=lambda item: (
             item.get("rel_path", ""),
             item.get("basename", ""),
-            item.get("file_id", ""),
+            item.get("stem_id", ""),
         )
     )
     return corpus_rows, stems_map, explanations, role_lexicon_payload
@@ -316,10 +318,11 @@ def _build_stats(
         ):
             per_role_token_frequency[role_id].update(token_values)
 
-        file_id = row.get("file_id")
-        if not isinstance(file_id, str):
-            continue
-        explain = explanations.get(file_id)
+        stem_id = row.get("stem_id")
+        rel_path = row.get("rel_path")
+        explain = explanations.get(stem_id) if isinstance(stem_id, str) else None
+        if not isinstance(explain, dict) and isinstance(rel_path, str):
+            explain = explanations.get(rel_path)
         if not isinstance(explain, dict):
             continue
         candidates = explain.get("candidates")

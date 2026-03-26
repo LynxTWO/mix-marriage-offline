@@ -11,6 +11,17 @@
       "value": 50
     },
     {
+      "issue_id": "ISSUE.RENDER.QA.LOUDNESS_NON_MEASURABLE",
+      "job_id": "JOB.001",
+      "measurement_state": "measurement_failed",
+      "message": "MMO expected audible program material, but loudness measurement did not produce a usable result.",
+      "metric": "integrated_lufs",
+      "output_path": "/home/daniel-boyd/venvs/Projects/mix-marriage-offline/sandbox_tmp/plugin_chain_registry_baseline/renders/2_0/mix.wav",
+      "severity": "error",
+      "threshold": null,
+      "value": null
+    },
+    {
       "issue_id": "ISSUE.RENDER.QA.PLUGIN_DELTA_CREST_EXCESSIVE",
       "job_id": "JOB.001",
       "message": "Plugin-chain crest-factor delta exceeds configured error threshold.",
@@ -893,6 +904,7 @@
     "plugin_delta_lufs_error_abs": 4.0,
     "plugin_delta_lufs_warn_abs": 2.0,
     "polarity_error_correlation_lte": -0.6,
+    "silent_peak_dbfs_lte": -120.0,
     "true_peak_error_dbtp_gt": -1.0,
     "true_peak_warn_dbtp_gt": -2.0
   }

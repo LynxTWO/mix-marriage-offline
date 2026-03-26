@@ -46,7 +46,7 @@ class TestRecommendationScopeContract(unittest.TestCase):
                 "downmix_qa": {
                     "issues": [
                         {
-                            "issue_id": "ISSUE.DOWNMIX.QA.TEST",
+                            "issue_id": "ISSUE.DOWNMIX.QA.LUFS_MISMATCH",
                             "severity": 50,
                             "confidence": 1.0,
                             "evidence": [

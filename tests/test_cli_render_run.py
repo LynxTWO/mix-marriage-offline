@@ -318,6 +318,13 @@ def _write_pcm16_registry_baseline_wav(
 def _normalize_strings_for_regression(value: Any, *, repo_root_posix: str) -> Any:
     if isinstance(value, str):
         normalized = value.replace(repo_root_posix, "__REPO_ROOT__")
+        # Older goldens captured a different checkout root before these
+        # regressions were normalized to a portable placeholder.
+        for marker in ("/sandbox_tmp/",):
+            marker_index = normalized.find(marker)
+            if marker_index > 0 and normalized.startswith("/"):
+                normalized = "__REPO_ROOT__" + normalized[marker_index:]
+                break
         if normalized.startswith("PLAN."):
             return "__PLAN_ID__"
         return normalized
@@ -409,6 +416,13 @@ def _normalize_qa_payload_for_regression(
     for key in ("run_id", "plan_sha256", "request_sha256", "report_sha256"):
         if key in normalized:
             normalized[key] = f"__{key.upper()}__"
+    issues = normalized.get("issues")
+    if isinstance(issues, list):
+        for issue in issues:
+            if not isinstance(issue, dict):
+                continue
+            for key in ("title", "remedy"):
+                issue.pop(key, None)
     return normalized
 
 

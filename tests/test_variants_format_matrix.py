@@ -52,7 +52,7 @@ def _build_scan_report(stems_dir: Path) -> dict[str, Any]:
                 "action_id": "ACTION.UTILITY.GAIN",
                 "risk": "low",
                 "requires_approval": False,
-                "target": {"scope": "stem", "stem_id": "kick"},
+                "scope": {"stem_id": "kick"},
                 "params": [{"param_id": "PARAM.GAIN.DB", "value": -2.0}],
                 "eligible_auto_apply": True,
                 "eligible_render": True,

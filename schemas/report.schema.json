@@ -39,7 +39,6 @@
     "artifacts": { "$ref": "#/$defs/artifacts" },
     "run_config": { "$ref": "#/$defs/run_config" },
     "routing_plan": { "$ref": "#/$defs/routing_plan" },
-    "timeline": { "$ref": "timeline.schema.json" },
     "downmix_qa": {
       "type": "object",
       "properties": {
@@ -68,7 +67,10 @@
       "maxItems": 5,
       "items": { "$ref": "#/$defs/preset_recommendation" }
     },
-    "metering": { "$ref": "#/$defs/metering_summary" }
+    "metering": { "$ref": "#/$defs/metering_summary" },
+    "timeline": {
+      "$ref": "https://mix-marriage-offline.dev/schemas/timeline.schema.json"
+    }
   },
   "$defs": {
     "raw_tag": {

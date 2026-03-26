@@ -74,7 +74,7 @@ def _base_report(stems_dir: Path) -> dict:
                 "action_id": "ACTION.UTILITY.GAIN",
                 "risk": "low",
                 "requires_approval": False,
-                "target": {"scope": "stem", "stem_id": "lead"},
+                "scope": {"stem_id": "lead"},
                 "params": [{"param_id": "PARAM.GAIN.DB", "value": -6.0}],
             }
         ],

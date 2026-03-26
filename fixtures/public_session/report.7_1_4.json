@@ -17,8 +17,7 @@
       "recommendation_id": "REC.PUBLIC.SESSION.001",
       "requires_approval": false,
       "risk": "low",
-      "target": {
-        "scope": "stem",
+      "scope": {
         "stem_id": "bed_7_1_4_smpte"
       }
     }

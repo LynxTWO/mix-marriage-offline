@@ -79,7 +79,7 @@ class TestPipelineClipHeadroom(unittest.TestCase):
         )
 
         rec_pairs = [
-            (rec["issue_id"], rec.get("target", {}).get("stem_id"), rec["params"][0]["value"])
+            (rec["issue_id"], rec.get("scope", {}).get("stem_id"), rec["params"][0]["value"])
             for rec in recommendations
         ]
         self.assertEqual(
@@ -89,6 +89,8 @@ class TestPipelineClipHeadroom(unittest.TestCase):
                 ("ISSUE.SAFETY.INSUFFICIENT_HEADROOM", "stem-headroom", -0.8),
             ],
         )
+        for recommendation in recommendations:
+            self.assertNotIn("target", recommendation)
 
 
 if __name__ == "__main__":

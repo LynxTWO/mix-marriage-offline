@@ -16,7 +16,14 @@ from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
 from mmo.cli import main
+from mmo.cli_commands._renderers import (
+    _artifact_result_details,
+    _default_preflight_summary,
+    _default_scene_binding_summary,
+    _deliverable_result_payload,
+)
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd
+from mmo.core.pipeline import build_deliverables_for_renderer_manifests
 
 
 def _write_wav_16bit(path: Path, *, sample_rate_hz: int = 48000, duration_s: float = 0.1) -> None:
@@ -127,7 +134,6 @@ def _mock_render_many_run_variant_plan(
             bundle_path = variant_dir / "ui_bundle.json"
 
             outputs: list[dict[str, object]] = []
-            deliverables: list[dict[str, object]] = []
             if include_stereo_deliverable and variant_label == "TARGET.STEREO.2_0":
                 stereo_file_path = variant_dir / "render" / "mix.stereo.wav"
                 _write_stereo_wav_16bit(stereo_file_path)
@@ -136,21 +142,13 @@ def _mock_render_many_run_variant_plan(
                         "output_id": "OUTPUT.STEREO.001",
                         "file_path": "mix.stereo.wav",
                         "format": "wav",
+                        "layout_id": "LAYOUT.2_0",
                         "channel_count": 2,
+                        "sample_rate_hz": 48_000,
                         "metadata": {
                             "routing_applied": True,
                             "target_layout_id": "LAYOUT.2_0",
                         },
-                    }
-                )
-                deliverables.append(
-                    {
-                        "deliverable_id": "DELIV.LAYOUT.2_0.2CH",
-                        "label": "LAYOUT.2_0 deliverable",
-                        "target_layout_id": "LAYOUT.2_0",
-                        "channel_count": 2,
-                        "formats": ["wav"],
-                        "output_ids": ["OUTPUT.STEREO.001"],
                     }
                 )
             elif variant_label in enabled_surround_targets and variant_label in surround_layouts:
@@ -167,37 +165,42 @@ def _mock_render_many_run_variant_plan(
                         "output_id": output_id,
                         "file_path": rendered_name,
                         "format": "wav",
+                        "layout_id": target_layout_id,
                         "channel_count": channel_count,
+                        "sample_rate_hz": 48_000,
                         "metadata": {
                             "routing_applied": True,
                             "target_layout_id": target_layout_id,
                         },
                     }
                 )
-                deliverables.append(
-                    {
-                        "deliverable_id": f"DELIV.{target_layout_id}.{channel_count}CH",
-                        "label": f"{target_layout_id} deliverable",
-                        "target_layout_id": target_layout_id,
-                        "channel_count": channel_count,
-                        "formats": ["wav"],
-                        "output_ids": [output_id],
-                    }
-                )
+
+            renderer_manifests = [
+                {
+                    "renderer_id": "PLUGIN.RENDERER.SAFE",
+                    "outputs": outputs,
+                    "skipped": [],
+                }
+            ]
+            deliverables = build_deliverables_for_renderer_manifests(renderer_manifests)
+            deliverables_summary = _deliverable_result_payload(deliverables)
+            deliverable_summary_rows, result_summary = _artifact_result_details(
+                renderer_manifests=renderer_manifests,
+                deliverables=deliverables,
+                deliverables_summary=deliverables_summary,
+            )
 
             render_manifest: dict[str, object] = {
                 "schema_version": "0.1.0",
                 "report_id": str(source_report.get("report_id", "")),
-                "renderer_manifests": [
-                    {
-                        "renderer_id": "PLUGIN.RENDERER.SAFE",
-                        "outputs": outputs,
-                        "skipped": [],
-                    }
-                ],
+                "renderer_manifests": renderer_manifests,
+                "scene_binding_summary": _default_scene_binding_summary(),
+                "preflight_summary": _default_preflight_summary(),
+                "deliverables_summary": deliverables_summary,
+                "deliverable_summary_rows": deliverable_summary_rows,
+                "result_summary": result_summary,
             }
-            if deliverables:
-                render_manifest["deliverables"] = deliverables
+            render_manifest["deliverables"] = deliverables
             render_manifest_path.write_text(
                 json.dumps(render_manifest, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",

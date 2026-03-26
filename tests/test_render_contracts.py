@@ -211,6 +211,7 @@ MINIMAL_RENDER_QA = {
         "plugin_delta_lufs_error_abs": 4.0,
         "plugin_delta_crest_warn_abs": 3.0,
         "plugin_delta_crest_error_abs": 6.0,
+        "silent_peak_dbfs_lte": -120.0,
     },
     "jobs": [
         {

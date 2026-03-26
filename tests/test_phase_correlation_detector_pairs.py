@@ -89,9 +89,8 @@ class TestPhaseCorrelationDetectorPairs(unittest.TestCase):
         self.assertEqual(
             recommendations[0]["issue_id"], "ISSUE.IMAGING.NEGATIVE_CORRELATION"
         )
-        self.assertEqual(
-            recommendations[0].get("target", {}).get("stem_id"), "stem-stereo"
-        )
+        self.assertEqual(recommendations[0].get("scope"), {"stem_id": "stem-stereo"})
+        self.assertNotIn("target", recommendations[0])
 
 
 if __name__ == "__main__":

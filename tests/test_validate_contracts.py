@@ -53,7 +53,6 @@ REQUIRED_REPO_DIRS = [
     "gui",
     "ontology",
     "plugins",
-    "presets",
     "schemas",
     "src",
 ]
@@ -90,6 +89,15 @@ class TestValidateContracts(unittest.TestCase):
         tools_dir.mkdir(parents=True, exist_ok=True)
         for script_name in REQUIRED_TOOL_SCRIPTS:
             shutil.copy2(repo_root / "tools" / script_name, tools_dir / script_name)
+
+    def test_copy_repo_subset_preserves_canonical_preset_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            self._copy_repo_subset(temp_root)
+
+            self.assertFalse((temp_root / "presets").exists())
+            self.assertTrue((temp_root / "ontology" / "presets").is_dir())
+            self.assertTrue((temp_root / "ontology" / "presets" / "index.json").is_file())
 
     def test_validate_contracts_current_repo_is_ok(self) -> None:
         result = subprocess.run(

@@ -284,7 +284,12 @@ def enrich_issue_for_user(issue: dict[str, Any]) -> dict[str, Any]:
         copy_payload.update(_FAILURE_REASON_COPY[failure_reason])
 
     title = _coerce_str(payload.get("title")).strip() or _coerce_str(copy_payload.get("title")).strip()
-    message = _coerce_str(copy_payload.get("message")).strip() or _coerce_str(payload.get("message")).strip()
+    payload_message = _coerce_str(payload.get("message")).strip()
+    copy_message = _coerce_str(copy_payload.get("message")).strip()
+    if issue_id.startswith("ISSUE.VALIDATION.") and payload_message:
+        message = payload_message
+    else:
+        message = copy_message or payload_message
     remedy = _coerce_str(payload.get("remedy")).strip() or _coerce_str(copy_payload.get("remedy")).strip()
 
     if title:

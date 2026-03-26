@@ -1,6 +1,5 @@
 {
   "engine_version": "0.1.0",
-  "features": {},
   "generated_at": "2026-01-01T00:00:00Z",
   "issues": [],
   "ontology_version": "0.1.0",
@@ -8,7 +7,6 @@
   "recommendations": [
     {
       "action_id": "ACTION.UTILITY.GAIN",
-      "confidence": 0.95,
       "issue_id": "ISSUE.SAFETY.CLIPPING_SAMPLES",
       "params": [
         {
@@ -19,8 +17,7 @@
       "recommendation_id": "REC.DEMO.IMM.GAIN.001",
       "requires_approval": false,
       "risk": "low",
-      "target": {
-        "scope": "stem",
+      "scope": {
         "stem_id": "bed_7_1_4"
       }
     }
@@ -35,10 +32,12 @@
         "measurements": [
           {
             "evidence_id": "EVID.METER.CLIP_SAMPLE_COUNT",
+            "unit_id": "UNIT.COUNT",
             "value": 0
           },
           {
             "evidence_id": "EVID.METER.PEAK_DBFS",
+            "unit_id": "UNIT.DBFS",
             "value": -2.0
           }
         ],
@@ -49,10 +48,12 @@
         "measurements": [
           {
             "evidence_id": "EVID.METER.CLIP_SAMPLE_COUNT",
+            "unit_id": "UNIT.COUNT",
             "value": 0
           },
           {
             "evidence_id": "EVID.METER.PEAK_DBFS",
+            "unit_id": "UNIT.DBFS",
             "value": -2.0
           }
         ],

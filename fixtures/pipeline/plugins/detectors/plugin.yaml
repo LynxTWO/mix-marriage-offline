@@ -9,4 +9,16 @@ mmo_min_version: "0.1.0"
 ontology_min_version: "0.1.0"
 entrypoint: "fixtures.pipeline.plugins.detectors.deterministic_detector:DeterministicDetector"
 capabilities:
-  - "ISSUE.FIXTURE.DETERMINISTIC"
+  max_channels: 32
+  channel_mode: "per_channel"
+  supported_group_sizes:
+    - 1
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+declares:
+  emits_issue_ids:
+    - "ISSUE.FIXTURE.DETERMINISTIC"
+  target_scopes:
+    - "session"
