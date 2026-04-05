@@ -61,6 +61,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `docs/semantic_contracts.md` ownership map for canonical IDs and intentional
   render-surface mirroring, and tighten the split between plugin
   `capabilities`, `declares`, and `behavior_contract`.
+- The GitHub Pages landing page now advertises the shipped `1.0.0` release
+  line again instead of stale `v1.1` copy, keeping the public site aligned
+  with README, packaged app metadata, and the tagged desktop release story.
 - Backend status vocabularies are now frozen in one shared module with a
   matching shared schema-defs file for new enum usage, while CLI and desktop
   labels map from those backend semantics instead of inventing per-surface
