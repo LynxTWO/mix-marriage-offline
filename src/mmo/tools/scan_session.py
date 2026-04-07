@@ -6,7 +6,10 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import sys
+import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -37,21 +40,45 @@ from mmo.core.vibe_signals import derive_vibe_signals  # noqa: E402
 from mmo.dsp.decoders import detect_format_from_path  # noqa: E402
 from mmo.dsp.backends.ffmpeg_discovery import resolve_ffmpeg_cmd  # noqa: E402
 from mmo.dsp.backends.ffmpeg_decode import iter_ffmpeg_float64_samples  # noqa: E402
-from mmo.dsp.correlation import (  # noqa: E402
-    PairCorrelationAccumulator,
-    compute_pair_correlations_wav,
-)
+from mmo.dsp.correlation import PairCorrelationAccumulator  # noqa: E402
 from mmo.dsp.meters import (  # noqa: E402
     compute_basic_stats_from_float64,
-    compute_clip_sample_count_wav,
-    compute_crest_factor_db_wav,
-    compute_dc_offset_wav,
-    compute_rms_dbfs_wav,
     compute_sample_peak_dbfs_wav,
     iter_wav_float64_samples,
 )
 from mmo.dsp.stereo import compute_stereo_correlation_wav  # noqa: E402
 from mmo.resources import ontology_dir, presets_dir  # noqa: E402
+from mmo.core.progress import ExplainableLogEvent, format_live_log_line  # noqa: E402
+
+
+def _emit_live(
+    *,
+    what: str,
+    why: str,
+    where: List[str],
+    kind: str = "meter",
+    scope: str = "scan",
+    step_index: int = 0,
+    total_steps: int = 0,
+    progress: float = 0.0,
+    eta_seconds: float | None = None,
+    evidence: Dict[str, Any] | None = None,
+) -> None:
+    """Emit a [MMO-LIVE] progress line to stderr."""
+    event = ExplainableLogEvent(
+        kind=kind,
+        scope=scope,
+        what=what,
+        why=why,
+        where=tuple(where),
+        confidence=1.0,
+        evidence=evidence or {},
+        step_index=step_index,
+        total_steps=total_steps,
+        progress=progress,
+        eta_seconds=eta_seconds,
+    )
+    print(format_live_log_line(event), file=sys.stderr, flush=True)
 
 
 def upsert_measurement(stem: Dict[str, Any], evidence_id: str, value: Any, unit_id: str) -> None:
@@ -243,385 +270,432 @@ def _add_peak_metrics(session: Dict[str, Any], stems_dir: Path) -> None:
         )
 
 
-def _add_basic_meter_measurements(
-    session: Dict[str, Any], stems_dir: Path
-) -> bool:
-    missing_ffmpeg = False
-    ffmpeg_cmd = None
-    stems = session.get("stems", [])
-    for stem in stems:
-        if not isinstance(stem, dict):
-            continue
-        stem_path = _resolved_stem_path_for_scan(stem, stems_dir)
-        if stem_path is None:
-            continue
-        format_id = detect_format_from_path(stem_path)
-        if format_id == "wav":
-            if "sample_rate_hz" not in stem or "bits_per_sample" not in stem:
-                continue
-        elif format_id in {"flac", "wavpack", "aiff", "ape"}:
-            if ffmpeg_cmd is None:
-                ffmpeg_cmd = resolve_ffmpeg_cmd()
-            if ffmpeg_cmd is None:
-                missing_ffmpeg = True
-                continue
+def _worker_basic_meters(
+    stem: Dict[str, Any],
+    stems_dir_str: str,
+    step_index: int,
+    total_steps: int,
+    phase_start: float,
+) -> Dict[str, Any]:
+    """Top-level worker for ProcessPoolExecutor: compute basic meters for one stem.
 
-            try:
-                (
-                    peak,
-                    clip_count,
-                    dc_offset,
-                    rms_dbfs,
-                    crest_factor_db,
-                ) = compute_basic_stats_from_float64(
-                    iter_ffmpeg_float64_samples(stem_path, ffmpeg_cmd)
-                )
-            except ValueError:
-                continue
+    Returns a dict with keys: stem_id, measurements, stereo_correlation, missing_ffmpeg.
+    Emits [MMO-LIVE] lines to stderr.
+    """
+    stems_dir = Path(stems_dir_str)
+    stem_id = stem.get("stem_id", "")
+    result: Dict[str, Any] = {
+        "stem_id": stem_id,
+        "measurements": [],
+        "stereo_correlation": None,
+        "missing_ffmpeg": False,
+    }
 
-            if peak <= 0.0:
-                peak_dbfs = float("-inf")
-            else:
-                peak_dbfs = 20.0 * math.log10(peak)
+    stem_path = _resolved_stem_path_for_scan(stem, stems_dir)
+    if stem_path is None:
+        return result
 
-            upsert_measurement(
-                stem,
-                evidence_id="EVID.METER.SAMPLE_PEAK_DBFS",
-                value=peak_dbfs,
-                unit_id="UNIT.DBFS",
-            )
-            upsert_measurement(
-                stem,
-                evidence_id="EVID.METER.PEAK_DBFS",
-                value=peak_dbfs,
-                unit_id="UNIT.DBFS",
-            )
-            upsert_measurement(
-                stem,
-                evidence_id="EVID.METER.CLIP_SAMPLE_COUNT",
-                value=clip_count,
-                unit_id="UNIT.COUNT",
-            )
-            upsert_measurement(
-                stem,
-                evidence_id="EVID.QUALITY.CLIPPED_SAMPLES_COUNT",
-                value=clip_count,
-                unit_id="UNIT.COUNT",
-            )
-            upsert_measurement(
-                stem,
-                evidence_id="EVID.METER.DC_OFFSET",
-                value=dc_offset,
-                unit_id="UNIT.RATIO",
-            )
-            upsert_measurement(
-                stem,
-                evidence_id="EVID.QUALITY.DC_OFFSET_PERCENT",
-                value=dc_offset * 100.0,
-                unit_id="UNIT.PERCENT",
-            )
-            upsert_measurement(
-                stem,
-                evidence_id="EVID.METER.RMS_DBFS",
-                value=rms_dbfs,
-                unit_id="UNIT.DBFS",
-            )
-            upsert_measurement(
-                stem,
-                evidence_id="EVID.METER.CREST_FACTOR_DB",
-                value=crest_factor_db,
-                unit_id="UNIT.DB",
-            )
-            continue
-        else:
-            continue
+    format_id = detect_format_from_path(stem_path)
+    measurements: List[Dict[str, Any]] = []
 
+    if format_id == "wav":
+        if "sample_rate_hz" not in stem or "bits_per_sample" not in stem:
+            return result
         try:
-            clip_count = compute_clip_sample_count_wav(stem_path)
-            dc_offset = compute_dc_offset_wav(stem_path)
-            rms_dbfs = compute_rms_dbfs_wav(stem_path)
-            crest_factor_db = compute_crest_factor_db_wav(stem_path)
+            (
+                _basic_peak,
+                clip_count,
+                dc_offset,
+                rms_dbfs,
+                crest_factor_db,
+            ) = compute_basic_stats_from_float64(
+                iter_wav_float64_samples(stem_path, error_context="basic meters")
+            )
         except ValueError:
-            continue
+            return result
 
-        upsert_measurement(
-            stem,
-            evidence_id="EVID.METER.CLIP_SAMPLE_COUNT",
-            value=clip_count,
-            unit_id="UNIT.COUNT",
-        )
-        upsert_measurement(
-            stem,
-            evidence_id="EVID.QUALITY.CLIPPED_SAMPLES_COUNT",
-            value=clip_count,
-            unit_id="UNIT.COUNT",
-        )
-        upsert_measurement(
-            stem,
-            evidence_id="EVID.METER.DC_OFFSET",
-            value=dc_offset,
-            unit_id="UNIT.RATIO",
-        )
-        upsert_measurement(
-            stem,
-            evidence_id="EVID.QUALITY.DC_OFFSET_PERCENT",
-            value=dc_offset * 100.0,
-            unit_id="UNIT.PERCENT",
-        )
-        upsert_measurement(
-            stem,
-            evidence_id="EVID.METER.RMS_DBFS",
-            value=rms_dbfs,
-            unit_id="UNIT.DBFS",
-        )
-        upsert_measurement(
-            stem,
-            evidence_id="EVID.METER.CREST_FACTOR_DB",
-            value=crest_factor_db,
-            unit_id="UNIT.DB",
-        )
+        measurements = [
+            {"evidence_id": "EVID.METER.CLIP_SAMPLE_COUNT", "value": clip_count, "unit_id": "UNIT.COUNT"},
+            {"evidence_id": "EVID.QUALITY.CLIPPED_SAMPLES_COUNT", "value": clip_count, "unit_id": "UNIT.COUNT"},
+            {"evidence_id": "EVID.METER.DC_OFFSET", "value": dc_offset, "unit_id": "UNIT.RATIO"},
+            {"evidence_id": "EVID.QUALITY.DC_OFFSET_PERCENT", "value": dc_offset * 100.0, "unit_id": "UNIT.PERCENT"},
+            {"evidence_id": "EVID.METER.RMS_DBFS", "value": rms_dbfs, "unit_id": "UNIT.DBFS"},
+            {"evidence_id": "EVID.METER.CREST_FACTOR_DB", "value": crest_factor_db, "unit_id": "UNIT.DB"},
+        ]
 
         if stem.get("channel_count") == 2:
             try:
                 correlation = compute_stereo_correlation_wav(stem_path)
+                result["stereo_correlation"] = correlation
             except ValueError:
-                correlation = None
-            if correlation is not None:
-                upsert_measurement(
-                    stem,
-                    evidence_id="EVID.IMAGE.CORRELATION",
-                    value=correlation,
-                    unit_id="UNIT.CORRELATION",
-                )
-    return missing_ffmpeg
+                pass
+
+    elif format_id in {"flac", "wavpack", "aiff", "ape"}:
+        ffmpeg_cmd = resolve_ffmpeg_cmd()
+        if ffmpeg_cmd is None:
+            result["missing_ffmpeg"] = True
+            return result
+        try:
+            (
+                peak,
+                clip_count,
+                dc_offset,
+                rms_dbfs,
+                crest_factor_db,
+            ) = compute_basic_stats_from_float64(
+                iter_ffmpeg_float64_samples(stem_path, ffmpeg_cmd)
+            )
+        except ValueError:
+            return result
+
+        if peak <= 0.0:
+            peak_dbfs = float("-inf")
+        else:
+            peak_dbfs = 20.0 * math.log10(peak)
+
+        measurements = [
+            {"evidence_id": "EVID.METER.SAMPLE_PEAK_DBFS", "value": peak_dbfs, "unit_id": "UNIT.DBFS"},
+            {"evidence_id": "EVID.METER.PEAK_DBFS", "value": peak_dbfs, "unit_id": "UNIT.DBFS"},
+            {"evidence_id": "EVID.METER.CLIP_SAMPLE_COUNT", "value": clip_count, "unit_id": "UNIT.COUNT"},
+            {"evidence_id": "EVID.QUALITY.CLIPPED_SAMPLES_COUNT", "value": clip_count, "unit_id": "UNIT.COUNT"},
+            {"evidence_id": "EVID.METER.DC_OFFSET", "value": dc_offset, "unit_id": "UNIT.RATIO"},
+            {"evidence_id": "EVID.QUALITY.DC_OFFSET_PERCENT", "value": dc_offset * 100.0, "unit_id": "UNIT.PERCENT"},
+            {"evidence_id": "EVID.METER.RMS_DBFS", "value": rms_dbfs, "unit_id": "UNIT.DBFS"},
+            {"evidence_id": "EVID.METER.CREST_FACTOR_DB", "value": crest_factor_db, "unit_id": "UNIT.DB"},
+        ]
+    else:
+        return result
+
+    result["measurements"] = measurements
+
+    elapsed = time.perf_counter() - phase_start
+    done = step_index + 1
+    eta = (elapsed / done) * (total_steps - done) if done < total_steps else 0.0
+    _emit_live(
+        what="basic meters",
+        why="peak, RMS, crest factor, DC offset, clip count",
+        where=[stem_id],
+        step_index=done,
+        total_steps=total_steps,
+        progress=done / total_steps if total_steps else 1.0,
+        eta_seconds=eta,
+        evidence={"format": format_id},
+    )
+    return result
 
 
-def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> bool:
+def _worker_truth_meters(
+    stem: Dict[str, Any],
+    stems_dir_str: str,
+    method_id: str,
+    step_index: int,
+    total_steps: int,
+    phase_start: float,
+) -> Dict[str, Any]:
+    """Top-level worker for ProcessPoolExecutor: compute truth meters for one stem.
+
+    Returns a dict with keys: stem_id, measurements, missing_ffmpeg.
+    Emits [MMO-LIVE] lines to stderr.
+    """
     from mmo.dsp.meters_truth import (  # noqa: WPS433
+        _read_wav_float64,
         bs1770_weighting_info,
         compute_lufs_integrated_float64,
-        compute_lufs_integrated_wav,
         compute_lufs_shortterm_float64,
-        compute_lufs_shortterm_wav,
         compute_true_peak_dbtp_float64,
-        compute_true_peak_dbtp_wav,
         loudness_weighting_receipt,
     )
     import numpy as np  # noqa: WPS433
 
+    stems_dir = Path(stems_dir_str)
+    stem_id = stem.get("stem_id", "")
+    result: Dict[str, Any] = {
+        "stem_id": stem_id,
+        "measurements": [],
+        "missing_ffmpeg": False,
+    }
+
+    stem_path = _resolved_stem_path_for_scan(stem, stems_dir)
+    if stem_path is None:
+        return result
+
+    format_id = detect_format_from_path(stem_path)
+    channels = stem.get("channels")
+    if not isinstance(channels, int) or channels <= 0:
+        channels = stem.get("channel_count")
+    if not isinstance(channels, int) or channels <= 0:
+        return result
+
+    sample_rate_hz = stem.get("sample_rate_hz")
+    if not isinstance(sample_rate_hz, (int, float)) or sample_rate_hz <= 0:
+        return result
+
+    mask = stem.get("wav_channel_mask")
+    channel_mask = mask if isinstance(mask, int) else None
+    weights, order_csv, mode_str = bs1770_weighting_info(
+        channels, channel_mask, channel_layout=stem.get("channel_layout")
+    )
+    weighting_receipt = loudness_weighting_receipt(
+        channels, channel_mask,
+        channel_layout=stem.get("channel_layout"),
+        method_id=method_id,
+    )
+    pairs, pair_meta, skip_reason = _plan_correlation_pairs(order_csv, mode_str, channels)
+    pair_correlations: Dict[str, float] | None = None
+    pair_source: str | None = None
+
+    if format_id == "wav":
+        try:
+            samples_array, _sr = _read_wav_float64(stem_path)
+            pair_accumulator = PairCorrelationAccumulator(channels, pairs) if pairs else None
+            if pair_accumulator is not None and samples_array.size > 0:
+                for idx in range(0, len(samples_array), channels):
+                    chunk = samples_array[idx : idx + channels].tolist()
+                    pair_accumulator.update_chunk(chunk)
+            truepeak_dbtp = compute_true_peak_dbtp_float64(samples_array, int(sample_rate_hz))
+            lufs_i = compute_lufs_integrated_float64(
+                samples_array, int(sample_rate_hz), channels,
+                channel_mask=stem.get("wav_channel_mask"),
+                channel_layout=stem.get("channel_layout"),
+                method_id=method_id,
+            )
+            lufs_s = compute_lufs_shortterm_float64(
+                samples_array, int(sample_rate_hz), channels,
+                channel_mask=stem.get("wav_channel_mask"),
+                channel_layout=stem.get("channel_layout"),
+                method_id=method_id,
+            )
+        except ValueError:
+            return result
+        if pair_accumulator is not None:
+            pair_correlations = pair_accumulator.correlations()
+            pair_source = "wav_reader"
+
+    elif format_id in {"flac", "wavpack", "aiff", "ape"}:
+        ffmpeg_cmd = resolve_ffmpeg_cmd()
+        if ffmpeg_cmd is None:
+            result["missing_ffmpeg"] = True
+            return result
+        try:
+            samples: list[float] = []
+            pair_accumulator = PairCorrelationAccumulator(channels, pairs) if pairs else None
+            for chunk in iter_ffmpeg_float64_samples(stem_path, ffmpeg_cmd):
+                samples.extend(chunk)
+                if pair_accumulator is not None:
+                    pair_accumulator.update_chunk(chunk)
+            if samples:
+                samples_array = np.asarray(samples, dtype=np.float64)
+                total = (len(samples_array) // channels) * channels
+                if total != len(samples_array):
+                    samples_array = samples_array[:total]
+                samples_array = samples_array.reshape(-1, channels)
+            else:
+                samples_array = np.zeros((0, channels), dtype=np.float64)
+        except ValueError:
+            return result
+        try:
+            truepeak_dbtp = compute_true_peak_dbtp_float64(samples_array, int(sample_rate_hz))
+            lufs_i = compute_lufs_integrated_float64(
+                samples_array, int(sample_rate_hz), channels,
+                channel_mask=stem.get("wav_channel_mask"),
+                channel_layout=stem.get("channel_layout"),
+                method_id=method_id,
+            )
+            lufs_s = compute_lufs_shortterm_float64(
+                samples_array, int(sample_rate_hz), channels,
+                channel_mask=stem.get("wav_channel_mask"),
+                channel_layout=stem.get("channel_layout"),
+                method_id=method_id,
+            )
+        except ValueError:
+            return result
+        if pair_accumulator is not None:
+            pair_correlations = pair_accumulator.correlations()
+            pair_source = "ffmpeg_f64le"
+    else:
+        return result
+
+    gi_csv = ",".join(f"{weight:.2f}" for weight in weights)
+    receipt_json = json.dumps(
+        {
+            "method_id": weighting_receipt.method_id,
+            "mode": weighting_receipt.mode_str,
+            "order": weighting_receipt.order_csv,
+            "warnings": list(weighting_receipt.warnings),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    measurements: List[Dict[str, Any]] = [
+        {"evidence_id": "EVID.METER.TRUEPEAK_DBTP", "value": truepeak_dbtp, "unit_id": "UNIT.DBTP"},
+        {"evidence_id": "EVID.METER.LUFS_I", "value": lufs_i, "unit_id": "UNIT.LUFS"},
+        {"evidence_id": "EVID.METER.LUFS_S", "value": lufs_s, "unit_id": "UNIT.LUFS"},
+        {"evidence_id": "EVID.METER.LUFS_WEIGHTING_MODE", "value": mode_str, "unit_id": "UNIT.NONE"},
+        {"evidence_id": "EVID.METER.LUFS_WEIGHTING_ORDER", "value": order_csv, "unit_id": "UNIT.NONE"},
+        {"evidence_id": "EVID.METER.LUFS_WEIGHTING_GI", "value": gi_csv, "unit_id": "UNIT.NONE"},
+        {"evidence_id": "EVID.METER.LUFS_WEIGHTING_RECEIPT", "value": receipt_json, "unit_id": "UNIT.NONE"},
+    ]
+
+    if pair_correlations is not None and pair_source is not None and pair_meta:
+        for meta in pair_meta:
+            token = meta["token"]
+            corr = pair_correlations.get(token)
+            if corr is None:
+                continue
+            measurements.append(
+                {"evidence_id": meta["evidence_id"], "value": corr, "unit_id": "UNIT.CORRELATION"}
+            )
+        pairs_log = _build_pairs_log(
+            mode_str=mode_str,
+            order_csv=order_csv,
+            channels=channels,
+            source=pair_source,
+            pair_meta=pair_meta,
+            correlations=pair_correlations,
+        )
+        measurements.append(
+            {"evidence_id": "EVID.IMAGE.CORRELATION_PAIRS_LOG", "value": pairs_log, "unit_id": "UNIT.NONE"}
+        )
+    elif skip_reason and channels >= 2:
+        layout = stem.get("channel_layout")
+        if order_csv != "unknown" or channel_mask is not None or layout is not None:
+            payload = {
+                "mode": mode_str,
+                "order": order_csv,
+                "channels": channels,
+                "source": "unknown",
+                "skipped": True,
+                "reason": skip_reason,
+                "pairs": [],
+            }
+            pairs_log = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+            measurements.append(
+                {"evidence_id": "EVID.IMAGE.CORRELATION_PAIRS_LOG", "value": pairs_log, "unit_id": "UNIT.NONE"}
+            )
+
+    result["measurements"] = measurements
+
+    elapsed = time.perf_counter() - phase_start
+    done = step_index + 1
+    eta = (elapsed / done) * (total_steps - done) if done < total_steps else 0.0
+    _emit_live(
+        what="truth meters",
+        why="TruePeak, LUFS-I, LUFS-S, correlation",
+        where=[stem_id],
+        step_index=done,
+        total_steps=total_steps,
+        progress=done / total_steps if total_steps else 1.0,
+        eta_seconds=eta,
+        evidence={"format": format_id, "sample_rate_hz": int(sample_rate_hz)},
+    )
+    return result
+
+
+def _add_basic_meter_measurements(
+    session: Dict[str, Any], stems_dir: Path
+) -> bool:
+    stems = [s for s in session.get("stems", []) if isinstance(s, dict)]
+    if not stems:
+        return False
+
+    stems_by_id = {s.get("stem_id"): s for s in stems if s.get("stem_id")}
+    total = len(stems)
     missing_ffmpeg = False
-    ffmpeg_cmd = None
-    method_id = DEFAULT_LOUDNESS_METHOD_ID
-    stems = session.get("stems", [])
-    for stem in stems:
-        if not isinstance(stem, dict):
-            continue
-        stem_path = _resolved_stem_path_for_scan(stem, stems_dir)
-        if stem_path is None:
-            continue
-        format_id = detect_format_from_path(stem_path)
-        channels = stem.get("channels")
-        if not isinstance(channels, int) or channels <= 0:
-            channels = stem.get("channel_count")
-        if not isinstance(channels, int) or channels <= 0:
-            continue
-        sample_rate_hz = stem.get("sample_rate_hz")
-        if not isinstance(sample_rate_hz, (int, float)) or sample_rate_hz <= 0:
-            continue
-        mask = stem.get("wav_channel_mask")
-        channel_mask = mask if isinstance(mask, int) else None
-        weights, order_csv, mode_str = bs1770_weighting_info(
-            channels,
-            channel_mask,
-            channel_layout=stem.get("channel_layout"),
-        )
-        weighting_receipt = loudness_weighting_receipt(
-            channels,
-            channel_mask,
-            channel_layout=stem.get("channel_layout"),
-            method_id=method_id,
-        )
-        pairs, pair_meta, skip_reason = _plan_correlation_pairs(
-            order_csv, mode_str, channels
-        )
-        pair_correlations: Dict[str, float] | None = None
-        pair_source: str | None = None
+    phase_start = time.perf_counter()
 
-        if format_id == "wav":
-            try:
-                truepeak_dbtp = compute_true_peak_dbtp_wav(stem_path)
-                lufs_i = compute_lufs_integrated_wav(
-                    stem_path,
-                    method_id=method_id,
-                )
-                lufs_s = compute_lufs_shortterm_wav(
-                    stem_path,
-                    method_id=method_id,
-                )
-            except ValueError:
-                continue
-            if pairs:
-                try:
-                    pair_correlations = compute_pair_correlations_wav(stem_path, pairs)
-                except ValueError:
-                    pair_correlations = None
-                else:
-                    pair_source = "wav_reader"
-        elif format_id in {"flac", "wavpack", "aiff", "ape"}:
-            if ffmpeg_cmd is None:
-                ffmpeg_cmd = resolve_ffmpeg_cmd()
-            if ffmpeg_cmd is None:
-                missing_ffmpeg = True
-                continue
+    _emit_live(
+        what="basic meters: starting",
+        why="peak, RMS, crest factor, DC offset, clip count for all stems",
+        where=["session"],
+        kind="action",
+        step_index=0,
+        total_steps=total,
+        progress=0.0,
+    )
 
-            try:
-                samples: list[float] = []
-                pair_accumulator = (
-                    PairCorrelationAccumulator(channels, pairs) if pairs else None
-                )
-                for chunk in iter_ffmpeg_float64_samples(stem_path, ffmpeg_cmd):
-                    samples.extend(chunk)
-                    if pair_accumulator is not None:
-                        pair_accumulator.update_chunk(chunk)
-                if samples:
-                    samples_array = np.asarray(samples, dtype=np.float64)
-                    total = (len(samples_array) // channels) * channels
-                    if total != len(samples_array):
-                        samples_array = samples_array[:total]
-                    samples_array = samples_array.reshape(-1, channels)
-                else:
-                    samples_array = np.zeros((0, channels), dtype=np.float64)
-            except ValueError:
-                continue
-
-            try:
-                truepeak_dbtp = compute_true_peak_dbtp_float64(
-                    samples_array, int(sample_rate_hz)
-                )
-                lufs_i = compute_lufs_integrated_float64(
-                    samples_array,
-                    int(sample_rate_hz),
-                    channels,
-                    channel_mask=stem.get("wav_channel_mask"),
-                    channel_layout=stem.get("channel_layout"),
-                    method_id=method_id,
-                )
-                lufs_s = compute_lufs_shortterm_float64(
-                    samples_array,
-                    int(sample_rate_hz),
-                    channels,
-                    channel_mask=stem.get("wav_channel_mask"),
-                    channel_layout=stem.get("channel_layout"),
-                    method_id=method_id,
-                )
-            except ValueError:
-                continue
-            if pair_accumulator is not None:
-                pair_correlations = pair_accumulator.correlations()
-                pair_source = "ffmpeg_f64le"
-        else:
-            continue
-
-        upsert_measurement(
-            stem,
-            evidence_id="EVID.METER.TRUEPEAK_DBTP",
-            value=truepeak_dbtp,
-            unit_id="UNIT.DBTP",
-        )
-        upsert_measurement(
-            stem,
-            evidence_id="EVID.METER.LUFS_I",
-            value=lufs_i,
-            unit_id="UNIT.LUFS",
-        )
-        upsert_measurement(
-            stem,
-            evidence_id="EVID.METER.LUFS_S",
-            value=lufs_s,
-            unit_id="UNIT.LUFS",
-        )
-        gi_csv = ",".join(f"{weight:.2f}" for weight in weights)
-
-        upsert_measurement(
-            stem,
-            evidence_id="EVID.METER.LUFS_WEIGHTING_MODE",
-            value=mode_str,
-            unit_id="UNIT.NONE",
-        )
-        upsert_measurement(
-            stem,
-            evidence_id="EVID.METER.LUFS_WEIGHTING_ORDER",
-            value=order_csv,
-            unit_id="UNIT.NONE",
-        )
-        upsert_measurement(
-            stem,
-            evidence_id="EVID.METER.LUFS_WEIGHTING_GI",
-            value=gi_csv,
-            unit_id="UNIT.NONE",
-        )
-        receipt_json = json.dumps(
-            {
-                "method_id": weighting_receipt.method_id,
-                "mode": weighting_receipt.mode_str,
-                "order": weighting_receipt.order_csv,
-                "warnings": list(weighting_receipt.warnings),
-            },
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        upsert_measurement(
-            stem,
-            evidence_id="EVID.METER.LUFS_WEIGHTING_RECEIPT",
-            value=receipt_json,
-            unit_id="UNIT.NONE",
-        )
-
-        if pair_correlations is not None and pair_source is not None and pair_meta:
-            for meta in pair_meta:
-                token = meta["token"]
-                corr = pair_correlations.get(token)
-                if corr is None:
-                    continue
-                upsert_measurement(
-                    stem,
-                    evidence_id=meta["evidence_id"],
-                    value=corr,
-                    unit_id="UNIT.CORRELATION",
-                )
-            pairs_log = _build_pairs_log(
-                mode_str=mode_str,
-                order_csv=order_csv,
-                channels=channels,
-                source=pair_source,
-                pair_meta=pair_meta,
-                correlations=pair_correlations,
-            )
-            upsert_measurement(
+    max_workers = min(total, os.cpu_count() or 1)
+    futures = {}
+    with ProcessPoolExecutor(max_workers=max_workers) as pool:
+        for idx, stem in enumerate(stems):
+            future = pool.submit(
+                _worker_basic_meters,
                 stem,
-                evidence_id="EVID.IMAGE.CORRELATION_PAIRS_LOG",
-                value=pairs_log,
-                unit_id="UNIT.NONE",
+                str(stems_dir),
+                idx,
+                total,
+                phase_start,
             )
-        elif skip_reason and channels >= 2:
-            layout = stem.get("channel_layout")
-            if order_csv != "unknown" or channel_mask is not None or layout is not None:
-                payload = {
-                    "mode": mode_str,
-                    "order": order_csv,
-                    "channels": channels,
-                    "source": "unknown",
-                    "skipped": True,
-                    "reason": skip_reason,
-                    "pairs": [],
-                }
-                pairs_log = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-                upsert_measurement(
-                    stem,
-                    evidence_id="EVID.IMAGE.CORRELATION_PAIRS_LOG",
-                    value=pairs_log,
-                    unit_id="UNIT.NONE",
-                )
+            futures[future] = stem.get("stem_id")
+
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+            except Exception:
+                continue
+            stem_id = result.get("stem_id")
+            stem = stems_by_id.get(stem_id)
+            if stem is None:
+                continue
+            if result.get("missing_ffmpeg"):
+                missing_ffmpeg = True
+            for m in result.get("measurements", []):
+                upsert_measurement(stem, evidence_id=m["evidence_id"], value=m["value"], unit_id=m["unit_id"])
+            corr = result.get("stereo_correlation")
+            if corr is not None:
+                upsert_measurement(stem, evidence_id="EVID.IMAGE.CORRELATION", value=corr, unit_id="UNIT.CORRELATION")
+
+    return missing_ffmpeg
+
+
+def _add_truth_meter_measurements(session: Dict[str, Any], stems_dir: Path) -> bool:
+    stems = [s for s in session.get("stems", []) if isinstance(s, dict)]
+    if not stems:
+        return False
+
+    stems_by_id = {s.get("stem_id"): s for s in stems if s.get("stem_id")}
+    method_id = DEFAULT_LOUDNESS_METHOD_ID
+    total = len(stems)
+    missing_ffmpeg = False
+    phase_start = time.perf_counter()
+
+    _emit_live(
+        what="truth meters: starting",
+        why="TruePeak, LUFS-I, LUFS-S, stereo correlation for all stems",
+        where=["session"],
+        kind="action",
+        step_index=0,
+        total_steps=total,
+        progress=0.0,
+    )
+
+    max_workers = min(total, os.cpu_count() or 1)
+    futures = {}
+    with ProcessPoolExecutor(max_workers=max_workers) as pool:
+        for idx, stem in enumerate(stems):
+            future = pool.submit(
+                _worker_truth_meters,
+                stem,
+                str(stems_dir),
+                method_id,
+                idx,
+                total,
+                phase_start,
+            )
+            futures[future] = stem.get("stem_id")
+
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+            except Exception:
+                continue
+            stem_id = result.get("stem_id")
+            stem = stems_by_id.get(stem_id)
+            if stem is None:
+                continue
+            if result.get("missing_ffmpeg"):
+                missing_ffmpeg = True
+            for m in result.get("measurements", []):
+                upsert_measurement(stem, evidence_id=m["evidence_id"], value=m["value"], unit_id=m["unit_id"])
 
     return missing_ffmpeg
 
@@ -1333,6 +1407,7 @@ def build_report(
     mix_complexity: Dict[str, Any] | None = None
     numpy_available: bool | None = None
     metering_summary: Dict[str, Any] | None = None
+    scan_timings: Dict[str, float] = {}
 
     # Detect numpy availability early (shared by truth meters, mix complexity, LFE audit)
     try:
@@ -1341,9 +1416,29 @@ def build_report(
     except ImportError:
         numpy_available = False
 
+    stem_count = len(stems)
+    phase_total = (
+        (2 if meters == "truth" else 1 if meters == "basic" else 0) + 1 + 1
+    )  # basic + optional truth + mix_complexity + lfe
+    phase_index = 0
+
     # truth mode subsumes basic: run both so crest/RMS/peak are always present
     if meters in {"basic", "truth"}:
+        phase_index += 1
+        _emit_live(
+            what="basic meters",
+            why="peak, RMS, crest, DC offset, clip count across all stems",
+            where=["session"],
+            kind="action",
+            step_index=phase_index,
+            total_steps=phase_total,
+            progress=phase_index / phase_total,
+            evidence={"stem_count": stem_count},
+        )
+        t_start = time.perf_counter()
         missing_ffmpeg = _add_basic_meter_measurements(session, stems_dir)
+        t_elapsed = (time.perf_counter() - t_start) * 1000
+        scan_timings["basic_meters_ms"] = t_elapsed
     issues = validate_session(session, strict=strict)
 
     # Role naming convention validation (lightweight keyword check)
@@ -1357,10 +1452,38 @@ def build_report(
                 hint="Reinstall base MMO deps or install numpy: pip install .",
             )
         else:
+            phase_index += 1
+            _emit_live(
+                what="truth meters",
+                why="TruePeak dBTP, LUFS-I, LUFS-S, stereo correlation across all stems",
+                where=["session"],
+                kind="action",
+                step_index=phase_index,
+                total_steps=phase_total,
+                progress=phase_index / phase_total,
+                evidence={"stem_count": stem_count},
+            )
+            t_start = time.perf_counter()
             missing_ffmpeg = _add_truth_meter_measurements(session, stems_dir) or missing_ffmpeg
+            t_elapsed = (time.perf_counter() - t_start) * 1000
+            scan_timings["truth_meters_ms"] = t_elapsed
     if meters in {"basic", "truth"}:
         if numpy_available:
+            phase_index += 1
+            _emit_live(
+                what="mix complexity",
+                why="spectral density and masking risk across stem pairs",
+                where=["session"],
+                kind="action",
+                step_index=phase_index,
+                total_steps=phase_total,
+                progress=phase_index / phase_total,
+                evidence={"stem_count": stem_count},
+            )
+            t_start = time.perf_counter()
             mix_complexity, mix_missing_ffmpeg = _build_mix_complexity(session, stems_dir)
+            t_elapsed = (time.perf_counter() - t_start) * 1000
+            scan_timings["mix_complexity_ms"] = t_elapsed
             missing_ffmpeg = mix_missing_ffmpeg or missing_ffmpeg
         else:
             mix_complexity = _default_mix_complexity_payload()
@@ -1371,7 +1494,10 @@ def build_report(
             )
 
     # LFE content audit — always attempt when numpy is available
+    t_start = time.perf_counter()
     lfe_missing_numpy = _add_lfe_audit_issues(session, stems_dir, issues, strict=strict)
+    t_elapsed = (time.perf_counter() - t_start) * 1000
+    scan_timings["lfe_audit_ms"] = t_elapsed
     if lfe_missing_numpy and not numpy_available:
         # Only surface numpy issue once
         _add_optional_dep_issue(
@@ -1412,6 +1538,8 @@ def build_report(
         )
     if metering_summary is not None:
         report["metering"] = metering_summary
+    if scan_timings:
+        report["scan_timings_ms"] = scan_timings
     return report
 
 
