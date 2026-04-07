@@ -68,16 +68,6 @@
       "items": { "$ref": "#/$defs/preset_recommendation" }
     },
     "metering": { "$ref": "#/$defs/metering_summary" },
-    "scan_timings_ms": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "basic_meters_ms": { "type": "number", "minimum": 0 },
-        "truth_meters_ms": { "type": "number", "minimum": 0 },
-        "mix_complexity_ms": { "type": "number", "minimum": 0 },
-        "lfe_audit_ms": { "type": "number", "minimum": 0 }
-      }
-    },
     "timeline": {
       "$ref": "https://mix-marriage-offline.dev/schemas/timeline.schema.json"
     }

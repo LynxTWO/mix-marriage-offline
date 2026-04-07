@@ -1539,7 +1539,17 @@ def build_report(
     if metering_summary is not None:
         report["metering"] = metering_summary
     if scan_timings:
-        report["scan_timings_ms"] = scan_timings
+        _emit_live(
+            kind="action",
+            scope="scan",
+            what="scan complete",
+            why="phase timing summary",
+            where=["session"],
+            evidence={k: round(v) for k, v in scan_timings.items()},
+            step_index=phase_total,
+            total_steps=phase_total,
+            progress=1.0,
+        )
     return report
 
 
