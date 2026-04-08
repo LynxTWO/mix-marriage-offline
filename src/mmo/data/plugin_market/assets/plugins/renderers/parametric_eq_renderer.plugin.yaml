@@ -1,0 +1,75 @@
+plugin_id: "PLUGIN.RENDERER.PARAMETRIC_EQ"
+plugin_type: "renderer"
+name: "Parametric EQ Renderer"
+version: "0.1.0"
+license: "Apache-2.0"
+description: >
+  Apply conservative parametric EQ corrections (bell cuts, notch cuts) to stems
+  using minimum-phase IIR biquad filters.  Accepts low-risk, non-approval-required
+  recommendations only.  Output is always 24-bit PCM WAV.
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "mmo.plugins.renderers.parametric_eq_renderer:ParametricEqRenderer"
+optional_deps:
+  - "scipy>=1.10"
+capabilities:
+  max_channels: 32
+  channel_mode: "linked_group"
+  supported_group_sizes:
+    - 1
+    - 2
+  supported_link_groups:
+    - "front"
+    - "custom"
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  deterministic_seed_policy: "none"
+  purity:
+    audio_buffer: "typed_f64_interleaved"
+    randomness: "forbidden"
+    wall_clock: "forbidden"
+    thread_scheduling: "forbidden"
+  supported_contexts:
+    - "render"
+    - "auto_apply"
+  dsp_traits:
+    tier: "information_preserving"
+    linearity: "linear"
+    phase_behavior: "minimum_phase"
+    adds_noise: false
+    introduces_harmonics: false
+    anti_aliasing: "na"
+    measurable_claims:
+      - metric_id: "METER.INTEGRATED_LUFS_DELTA"
+        expected_direction: "within"
+        threshold: 3.0
+        note: "Conservative cuts produce at most a few dB of loudness change."
+      - metric_id: "METER.TRUE_PEAK_DBTP"
+        expected_direction: "within"
+        threshold: 0.5
+        note: "Cuts never boost true-peak."
+  notes:
+    - "Cuts only: gain_db must be negative. Boosts are rejected."
+    - "scipy is required; render is skipped with missing_dep if not installed."
+declares:
+  problem_domains:
+    - "spectral"
+    - "correction"
+    - "rendering"
+  consumes_action_ids:
+    - "ACTION.EQ.BELL_CUT"
+    - "ACTION.EQ.NOTCH_CUT"
+  target_scopes:
+    - "stem"
+behavior_contract:
+  loudness_behavior: "bounded"
+  max_integrated_lufs_delta: 3.0
+  peak_behavior: "bounded"
+  max_true_peak_delta_db: 0.5
+  phase_behavior: "minimum_phase"
+  stereo_image_behavior: "preserve"
+  gain_compensation: "not_required"
+  rationale: >
+    Applies frequency-specific cuts only.  Minimum-phase IIR biquads have
+    minimal group-delay impact in practical bands; declare minimum_phase
+    rather than linear_phase since we use direct-form biquads.

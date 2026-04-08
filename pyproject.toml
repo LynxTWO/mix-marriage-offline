@@ -44,6 +44,7 @@ pdf = ["reportlab>=4"]
 truth = []
 screenshots = ["mss>=9", "Pillow>=10", "numpy>=2.0"]
 watch = ["watchdog>=4.0"]
+dsp = ["scipy>=1.10"]
 dev = ["pytest>=7.0", "pytest-xdist>=3.6.1"]
 
 [project.scripts]

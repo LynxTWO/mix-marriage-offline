@@ -146,6 +146,23 @@ entries:
       - "render"
       - "safety"
     manifest_path: "plugins/renderers/placement_mixdown_renderer.plugin.yaml"
+  - plugin_id: "PLUGIN.RENDERER.PARAMETRIC_EQ"
+    plugin_type: "renderer"
+    name: "Parametric EQ Renderer"
+    summary: "Apply conservative bell and notch cuts to stems using IIR biquad filters."
+    preview:
+      tagline: "Deterministic EQ corrections tuned for transparency."
+      gradient: "tide"
+      chips:
+        - "EQ"
+        - "Spectral"
+        - "Correction"
+    version: "0.1.0"
+    tags:
+      - "render"
+      - "spectral"
+      - "correction"
+    manifest_path: "plugins/renderers/parametric_eq_renderer.plugin.yaml"
   - plugin_id: "PLUGIN.RENDERER.SAFE"
     plugin_type: "renderer"
     name: "Safe Renderer"
