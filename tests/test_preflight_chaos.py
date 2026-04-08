@@ -179,12 +179,15 @@ class TestPreflightChaos(unittest.TestCase):
         self.assertEqual(phase_gate["details"]["polarity_risk"], "high")
         self.assertEqual(receipt["final_decision"], "block")
 
-    def test_qa_polarity_issue_triggers_phase_gate_block(self) -> None:
+    def test_qa_phase_issue_triggers_phase_gate_block(self) -> None:
+        # _extract_phase_report checks for "POLARITY" or "PHASE" in issue_id.
+        # ISSUE.SURROUND.DOWNMIX_PHASE_CANCELLATION is a registered ID that
+        # contains "PHASE" and therefore triggers polarity_inverted=True.
         receipt = evaluate_preflight(
             {},
             {
                 "qa_issues": [
-                    {"issue_id": "ISSUE.PHASE.POLARITY_INVERSION", "value": -0.9}
+                    {"issue_id": "ISSUE.SURROUND.DOWNMIX_PHASE_CANCELLATION"}
                 ]
             },
             "stereo",
