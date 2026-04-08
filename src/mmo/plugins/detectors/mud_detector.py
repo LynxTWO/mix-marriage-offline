@@ -12,20 +12,6 @@ from typing import Any, Dict, List, Optional
 
 from mmo.core.source_locator import resolved_stem_path
 from mmo.dsp.io import read_wav_metadata
-
-
-def _stem_path(stem: Dict[str, Any]) -> Optional[Path]:
-    """Resolve stem path: try resolved_path first, then file_path if absolute."""
-    path = resolved_stem_path(stem)
-    if path is not None:
-        return path
-    raw = stem.get("file_path")
-    if not isinstance(raw, str) or not raw.strip():
-        return None
-    candidate = Path(raw.strip())
-    if candidate.is_absolute() and candidate.is_file():
-        return candidate
-    return None
 from mmo.dsp.meters import iter_wav_float64_samples
 from mmo.plugins.interfaces import DetectorPlugin, Issue
 
@@ -52,6 +38,20 @@ _EPSILON = 1e-30
 
 def _coerce_str(value: Any) -> str:
     return value if isinstance(value, str) else ""
+
+
+def _stem_path(stem: Dict[str, Any]) -> Optional[Path]:
+    """Resolve stem path: try resolved_path first, then file_path if absolute."""
+    path = resolved_stem_path(stem)
+    if path is not None:
+        return path
+    raw = stem.get("file_path")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    candidate = Path(raw.strip())
+    if candidate.is_absolute() and candidate.is_file():
+        return candidate
+    return None
 
 
 def _band_energy(power_spectrum: Any, freqs: Any, low_hz: float, high_hz: float) -> float:

@@ -1,0 +1,75 @@
+plugin_id: "PLUGIN.RENDERER.COMPRESSOR"
+plugin_type: "renderer"
+name: "Compressor Renderer"
+version: "0.1.0"
+license: "Apache-2.0"
+description: >
+  Applies ACTION.DYN.COMPRESSOR recommendations to stems using a feed-forward
+  RMS compressor (no lookahead).  Pure Python implementation with no numpy
+  dependency.  Accepts low- and medium-risk, non-approval-required
+  recommendations only.  Ratio is capped at 4:1; makeup gain is capped at
+  +6 dB; outputs are rejected if the post-compression peak exceeds 0.9999 FS.
+  Output is always 24-bit PCM WAV with a .mmo_comp.wav suffix.
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "mmo.plugins.renderers.compressor_renderer:CompressorRenderer"
+capabilities:
+  max_channels: 32
+  channel_mode: "linked_group"
+  supported_group_sizes:
+    - 1
+    - 2
+  supported_link_groups:
+    - "front"
+    - "custom"
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  deterministic_seed_policy: "none"
+  purity:
+    audio_buffer: "typed_f64_interleaved"
+    randomness: "forbidden"
+    wall_clock: "forbidden"
+    thread_scheduling: "forbidden"
+  supported_contexts:
+    - "render"
+    - "auto_apply"
+  dsp_traits:
+    tier: "information_preserving"
+    linearity: "nonlinear"
+    phase_behavior: "minimum_phase"
+    adds_noise: false
+    introduces_harmonics: false
+    anti_aliasing: "na"
+    measurable_claims:
+      - metric_id: "METER.INTEGRATED_LUFS_DELTA"
+        expected_direction: "within"
+        threshold: 6.0
+        note: "Compression reduces peaks; makeup gain is capped at +6 dB."
+      - metric_id: "METER.TRUE_PEAK_DBTP"
+        expected_direction: "within"
+        threshold: 0.1
+        note: "Post-compression peak is checked; clip_risk outputs are rejected."
+  notes:
+    - "Feed-forward RMS compressor; no lookahead; ratio capped at 4:1."
+    - "Outputs rejected if post-compression peak exceeds 0.9999 FS (clip_risk)."
+declares:
+  problem_domains:
+    - "dynamics"
+    - "correction"
+    - "rendering"
+  consumes_action_ids:
+    - "ACTION.DYN.COMPRESSOR"
+  target_scopes:
+    - "stem"
+behavior_contract:
+  loudness_behavior: "bounded"
+  max_integrated_lufs_delta: 6.0
+  peak_behavior: "bounded"
+  max_true_peak_delta_db: 0.1
+  phase_behavior: "minimum_phase"
+  stereo_image_behavior: "preserve"
+  gain_compensation: "not_required"
+  rationale: >
+    Feed-forward RMS compressor with bounded ratio and makeup gain.  The clip
+    ceiling check ensures outputs stay below 0.9999 FS; loudness delta is
+    bounded by the capped makeup gain.

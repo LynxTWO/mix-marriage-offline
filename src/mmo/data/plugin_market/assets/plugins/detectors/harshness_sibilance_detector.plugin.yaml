@@ -1,0 +1,36 @@
+plugin_id: "PLUGIN.DETECTOR.HARSHNESS"
+plugin_type: "detector"
+name: "Harshness / Sibilance Detector"
+version: "0.1.0"
+license: "Apache-2.0"
+description: >
+  Detects upper-mid harshness (2–5 kHz) and sibilant energy excess (5–10 kHz)
+  per stem using windowed FFT band analysis.  Both issue types share a common
+  analysis path; the plugin emits ISSUE.SPECTRAL.HARSHNESS and/or
+  ISSUE.SPECTRAL.SIBILANCE when band energy ratios exceed per-band thresholds.
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "mmo.plugins.detectors.harshness_sibilance_detector:HarshnessDetector"
+optional_deps:
+  - "numpy>=1.21"
+capabilities:
+  max_channels: 32
+  channel_mode: "linked_group"
+  supported_group_sizes:
+    - 1
+    - 2
+  supported_link_groups:
+    - "front"
+    - "custom"
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+declares:
+  problem_domains:
+    - "spectral"
+    - "harshness"
+  emits_issue_ids:
+    - "ISSUE.SPECTRAL.HARSHNESS"
+  target_scopes:
+    - "stem"

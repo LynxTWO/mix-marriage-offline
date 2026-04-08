@@ -1,0 +1,36 @@
+plugin_id: "PLUGIN.DETECTOR.SIBILANCE"
+plugin_type: "detector"
+name: "Sibilance Detector"
+version: "0.1.0"
+license: "Apache-2.0"
+description: >
+  Detects sibilant energy excess (5–10 kHz) per stem using windowed FFT band
+  analysis.  Shares implementation with the harshness detector; emits
+  ISSUE.SPECTRAL.SIBILANCE when the sibilance band energy ratio exceeds the
+  configured threshold relative to broadband (200–16 kHz).
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "mmo.plugins.detectors.harshness_sibilance_detector:SibilanceDetector"
+optional_deps:
+  - "numpy>=1.21"
+capabilities:
+  max_channels: 32
+  channel_mode: "linked_group"
+  supported_group_sizes:
+    - 1
+    - 2
+  supported_link_groups:
+    - "front"
+    - "custom"
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+declares:
+  problem_domains:
+    - "spectral"
+    - "harshness"
+  emits_issue_ids:
+    - "ISSUE.SPECTRAL.SIBILANCE"
+  target_scopes:
+    - "stem"

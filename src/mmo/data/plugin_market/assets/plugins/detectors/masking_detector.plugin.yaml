@@ -1,0 +1,39 @@
+plugin_id: "PLUGIN.DETECTOR.MASKING"
+plugin_type: "detector"
+name: "Cross-Stem Masking Detector"
+version: "0.1.0"
+license: "Apache-2.0"
+description: >
+  Detects cross-stem frequency masking between pairs of stems.  Two issue types:
+  ISSUE.MASKING.KICK_BASS — kick drum (ROLE.DRUM.KICK) and bass (ROLE.BASS.*)
+  competing in the 60–200 Hz zone; ISSUE.MASKING.VOCAL_VS_MUSIC — lead vocal
+  masked by instruments in the 1–4 kHz intelligibility band.  Both require at
+  least two stems and operate at session (bus) scope.  Role IDs are used when
+  present; filename heuristics are used as fallback.
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "mmo.plugins.detectors.masking_detector:MaskingDetector"
+optional_deps:
+  - "numpy>=1.21"
+capabilities:
+  max_channels: 32
+  channel_mode: "linked_group"
+  supported_group_sizes:
+    - 1
+    - 2
+  supported_link_groups:
+    - "front"
+    - "custom"
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+declares:
+  problem_domains:
+    - "spectral"
+    - "masking"
+  emits_issue_ids:
+    - "ISSUE.MASKING.KICK_BASS"
+    - "ISSUE.MASKING.VOCAL_VS_MUSIC"
+  target_scopes:
+    - "bus"
