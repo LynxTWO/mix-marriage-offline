@@ -29,15 +29,29 @@ from mmo.plugins.interfaces import Recommendation, RenderManifest, RendererPlugi
 
 _PLUGIN_ID = "PLUGIN.RENDERER.PARAMETRIC_EQ"
 
-_ALLOWED_ACTIONS = {"ACTION.EQ.BELL_CUT", "ACTION.EQ.NOTCH_CUT"}
+_ALLOWED_ACTIONS = {
+    "ACTION.EQ.BELL_CUT",
+    "ACTION.EQ.NOTCH_CUT",
+    "ACTION.EQ.HIGH_PASS",
+    "ACTION.EQ.LOW_SHELF",
+}
+# Actions that use GAIN_DB / Q (peaking/shelf family)
+_GAIN_ACTIONS = {"ACTION.EQ.BELL_CUT", "ACTION.EQ.NOTCH_CUT", "ACTION.EQ.LOW_SHELF"}
+# Actions that use SLOPE_DB_PER_OCT (filter family)
+_SLOPE_ACTIONS = {"ACTION.EQ.HIGH_PASS"}
 
-# Safety gates for filter parameters
-_MAX_CUT_DB = -0.1        # gain must be <= this (cuts only)
+# Safety gates for gain-based filter parameters
+_MAX_CUT_DB = -0.1        # gain must be <= this (cuts only, no boosts)
 _MIN_GAIN_DB = -18.0      # floor for cuts
 _MIN_Q = 0.2
 _MAX_Q = 20.0
 _MIN_FREQ_HZ = 20.0
 _MAX_FREQ_HZ = 22_000.0
+
+# HPF-specific safety gates
+_HPF_MIN_FREQ_HZ = 20.0
+_HPF_MAX_FREQ_HZ = 600.0   # above this it's affecting musical content, not rumble
+_HPF_BUTTERWORTH_Q = 0.7071  # 1/√2 — 2nd-order Butterworth (12 dB/oct)
 
 _WAV_EXTENSIONS = {".wav", ".wave"}
 _OUTPUT_BIT_DEPTH = 24
@@ -86,18 +100,22 @@ def _biquad_coeffs(
     gain_db: float,
     sample_rate_hz: int,
 ) -> Optional[Tuple[List[float], List[float]]]:
-    """Return (b, a) biquad coefficients or None on invalid params."""
-    try:
-        import scipy.signal  # type: ignore[import-untyped]
-    except ImportError:
-        return None
+    """Return (b, a) biquad coefficients or None on invalid params.
 
+    Supported actions:
+      ACTION.EQ.BELL_CUT   — peaking EQ bell cut (Audio EQ Cookbook)
+      ACTION.EQ.NOTCH_CUT  — depth-moderated notch (peaking EQ used for safety)
+      ACTION.EQ.HIGH_PASS  — 2nd-order Butterworth HPF (12 dB/oct), q ignored
+      ACTION.EQ.LOW_SHELF  — low-shelf cut (Audio EQ Cookbook), cuts only
+    """
     w0 = 2.0 * math.pi * freq_hz / sample_rate_hz
     if w0 <= 0.0 or w0 >= math.pi:
         return None
 
-    if action_id == "ACTION.EQ.BELL_CUT":
-        # Peaking EQ biquad (Audio EQ Cookbook)
+    if action_id in ("ACTION.EQ.BELL_CUT", "ACTION.EQ.NOTCH_CUT"):
+        # Peaking EQ biquad (Audio EQ Cookbook).
+        # For NOTCH_CUT we re-use the peaking EQ at the notch freq with a
+        # controlled depth — a pure notch goes to -∞ which is too destructive.
         A = 10.0 ** (gain_db / 40.0)
         alpha = math.sin(w0) / (2.0 * q)
         b0 = 1.0 + alpha * A
@@ -110,17 +128,39 @@ def _biquad_coeffs(
         a = [1.0, a1 / a0, a2 / a0]
         return b, a
 
-    if action_id == "ACTION.EQ.NOTCH_CUT":
-        # Notch biquad: uses gain_db to moderate the notch depth via a
-        # peaking EQ at the notch frequency (pure notch would go to -inf)
-        A = 10.0 ** (gain_db / 40.0)
-        alpha = math.sin(w0) / (2.0 * q)
-        b0 = 1.0 + alpha * A
-        b1 = -2.0 * math.cos(w0)
-        b2 = 1.0 - alpha * A
-        a0 = 1.0 + alpha / A
+    if action_id == "ACTION.EQ.HIGH_PASS":
+        # 2nd-order Butterworth HPF (12 dB/oct).  Q is always the Butterworth
+        # value (1/√2); the incoming q param is ignored for safety.
+        alpha = math.sin(w0) / (2.0 * _HPF_BUTTERWORTH_Q)
+        b0 = (1.0 + math.cos(w0)) / 2.0
+        b1 = -(1.0 + math.cos(w0))
+        b2 = (1.0 + math.cos(w0)) / 2.0
+        a0 = 1.0 + alpha
         a1 = -2.0 * math.cos(w0)
-        a2 = 1.0 - alpha / A
+        a2 = 1.0 - alpha
+        b = [b0 / a0, b1 / a0, b2 / a0]
+        a = [1.0, a1 / a0, a2 / a0]
+        return b, a
+
+    if action_id == "ACTION.EQ.LOW_SHELF":
+        # Low-shelf biquad (Audio EQ Cookbook, S=1 shelf slope).
+        # Cuts only — gain_db must be negative; ensured by _parse_filter_spec.
+        A = 10.0 ** (gain_db / 40.0)
+        alpha = math.sin(w0) / 2.0 * math.sqrt((A + 1.0 / A) * (1.0 / 1.0 - 1.0) + 2.0)
+        # S=1 simplification: alpha = sin(w0)/2 * sqrt(2) for shelf at 0 dB gain.
+        # Use Q as a proxy for shelf slope bandwidth.
+        alpha = math.sin(w0) * math.sqrt((A ** 2.0 + 1.0) / (q * q) - (A - 1.0) ** 2.0) / 2.0
+        if math.isnan(alpha) or alpha <= 0.0:
+            # Fallback: use standard Butterworth shelf slope
+            alpha = math.sin(w0) / 2.0 * math.sqrt(2.0)
+        b0 = A * ((A + 1.0) - (A - 1.0) * math.cos(w0) + 2.0 * math.sqrt(A) * alpha)
+        b1 = 2.0 * A * ((A - 1.0) - (A + 1.0) * math.cos(w0))
+        b2 = A * ((A + 1.0) - (A - 1.0) * math.cos(w0) - 2.0 * math.sqrt(A) * alpha)
+        a0 = (A + 1.0) + (A - 1.0) * math.cos(w0) + 2.0 * math.sqrt(A) * alpha
+        a1 = -2.0 * ((A - 1.0) + (A + 1.0) * math.cos(w0))
+        a2 = (A + 1.0) + (A - 1.0) * math.cos(w0) - 2.0 * math.sqrt(A) * alpha
+        if a0 == 0.0:
+            return None
         b = [b0 / a0, b1 / a0, b2 / a0]
         a = [1.0, a1 / a0, a2 / a0]
         return b, a
@@ -170,11 +210,17 @@ def _parse_filter_spec(
     rec: Dict[str, Any],
     sample_rate_hz: int,
 ) -> Optional[Tuple[List[float], List[float]]]:
-    """Extract and validate filter params; return biquad (b, a) or None."""
+    """Extract and validate filter params; return biquad (b, a) or None.
+
+    Accepts risk=low or risk=medium recommendations with requires_approval=False.
+    The gate system has already decided eligibility; the renderer adds a
+    belt-and-suspenders param check.
+    """
     action_id = _coerce_str(rec.get("action_id"))
     if action_id not in _ALLOWED_ACTIONS:
         return None
-    if rec.get("risk") != "low":
+    risk = _coerce_str(rec.get("risk"))
+    if risk not in ("low", "medium"):
         return None
     if rec.get("requires_approval") is not False:
         return None
@@ -184,10 +230,21 @@ def _parse_filter_spec(
         return None
 
     freq_hz = _get_param(params, "PARAM.EQ.FREQ_HZ")
+    if freq_hz is None:
+        return None
+
+    # HPF: uses slope param, no gain_db
+    if action_id in _SLOPE_ACTIONS:
+        if not (_HPF_MIN_FREQ_HZ <= freq_hz <= min(_HPF_MAX_FREQ_HZ, sample_rate_hz / 2.0 * 0.95)):
+            return None
+        # Q is fixed to Butterworth in _biquad_coeffs; pass 0.0 as placeholder
+        return _biquad_coeffs(action_id, freq_hz, _HPF_BUTTERWORTH_Q, 0.0, sample_rate_hz)
+
+    # Gain-based actions (bell/notch/shelf): require gain_db and Q
     q = _get_param(params, "PARAM.EQ.Q")
     gain_db = _get_param(params, "PARAM.EQ.GAIN_DB")
 
-    if freq_hz is None or q is None or gain_db is None:
+    if q is None or gain_db is None:
         return None
     if not (_MIN_FREQ_HZ <= freq_hz <= min(_MAX_FREQ_HZ, sample_rate_hz / 2.0 * 0.95)):
         return None
@@ -324,7 +381,7 @@ class ParametricEqRenderer(RendererPlugin):
         out_dir = Path(output_dir)
         stems_by_id = _index_stems(session)
 
-        # Filter to applicable recs
+        # Filter to applicable recs (low or medium risk, no approval pending)
         applicable: List[Dict[str, Any]] = []
         for rec in recommendations:
             if not isinstance(rec, dict):
@@ -332,7 +389,10 @@ class ParametricEqRenderer(RendererPlugin):
             action_id = _coerce_str(rec.get("action_id"))
             if action_id not in _ALLOWED_ACTIONS:
                 continue
-            if rec.get("risk") != "low" or rec.get("requires_approval") is not False:
+            risk = _coerce_str(rec.get("risk"))
+            if risk not in ("low", "medium"):
+                continue
+            if rec.get("requires_approval") is not False:
                 continue
             if _stem_id_from_rec(rec) is None:
                 continue

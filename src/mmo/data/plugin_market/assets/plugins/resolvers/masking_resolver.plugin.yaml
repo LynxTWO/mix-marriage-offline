@@ -1,0 +1,41 @@
+plugin_id: "PLUGIN.RESOLVER.MASKING"
+plugin_type: "resolver"
+name: "Masking EQ Resolver"
+version: "0.1.0"
+license: "Apache-2.0"
+description: >
+  Maps cross-stem masking issues to corrective EQ recommendations.
+
+  ISSUE.MASKING.KICK_BASS: recommends a bell cut on the bass stem in the
+  60–200 Hz overlap zone (~100 Hz).  If the kick also has high energy in the
+  zone, a shallower secondary cut is added.
+
+  ISSUE.MASKING.VOCAL_VS_MUSIC: recommends a gentle bell cut on each
+  non-vocal stem in the session at 2 kHz (peak intelligibility band) to create
+  space for the lead vocal.  Up to 4 competing stems are targeted; cut depth
+  scales with the masking ratio.
+
+  All recommendations are medium-risk and require approval — cross-stem
+  decisions are taste-dependent and must be auditioned in context.
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "mmo.plugins.resolvers.masking_resolver:MaskingResolver"
+capabilities:
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+    - "render"
+declares:
+  problem_domains:
+    - "spectral"
+    - "masking"
+    - "correction"
+  consumes_issue_ids:
+    - "ISSUE.MASKING.KICK_BASS"
+    - "ISSUE.MASKING.VOCAL_VS_MUSIC"
+  emits_action_ids:
+    - "ACTION.EQ.BELL_CUT"
+  target_scopes:
+    - "stem"
+    - "bus"

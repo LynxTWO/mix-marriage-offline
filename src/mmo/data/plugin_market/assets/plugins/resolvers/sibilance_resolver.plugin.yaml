@@ -1,0 +1,33 @@
+plugin_id: "PLUGIN.RESOLVER.SIBILANCE"
+plugin_type: "resolver"
+name: "Sibilance EQ Resolver"
+version: "0.1.0"
+license: "Apache-2.0"
+description: >
+  Maps ISSUE.SPECTRAL.SIBILANCE to a bell cut in the 5–10 kHz sibilance zone.
+  Cut depth is scaled to the band energy ratio overhang.  All recommendations
+  are medium-risk and require approval because high-frequency cuts affect vocal
+  air and consonant intelligibility.  One recommendation per stem.
+  Note: a future ACTION.DYN.DEESSER renderer would provide a more transparent
+  frequency-adaptive alternative; this resolver emits a static EQ cut as the
+  renderable fallback.
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "mmo.plugins.resolvers.sibilance_resolver:SibilanceResolver"
+capabilities:
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+    - "render"
+declares:
+  problem_domains:
+    - "spectral"
+    - "harshness"
+    - "correction"
+  consumes_issue_ids:
+    - "ISSUE.SPECTRAL.SIBILANCE"
+  emits_action_ids:
+    - "ACTION.EQ.BELL_CUT"
+  target_scopes:
+    - "stem"

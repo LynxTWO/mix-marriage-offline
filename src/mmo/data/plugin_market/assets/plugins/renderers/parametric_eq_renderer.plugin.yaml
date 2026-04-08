@@ -49,8 +49,10 @@ capabilities:
         threshold: 0.5
         note: "Cuts never boost true-peak."
   notes:
-    - "Cuts only: gain_db must be negative. Boosts are rejected."
-    - "scipy is required; render is skipped with missing_dep if not installed."
+    - "Cuts only for gain-based actions: gain_db must be negative. Boosts are rejected."
+    - "HPF: 2nd-order Butterworth (12 dB/oct), frequency capped at 600 Hz for safety."
+    - "Low-shelf: cuts only; gain_db must be negative."
+    - "Accepts risk=low and risk=medium recommendations (requires_approval must be False)."
 declares:
   problem_domains:
     - "spectral"
@@ -59,6 +61,8 @@ declares:
   consumes_action_ids:
     - "ACTION.EQ.BELL_CUT"
     - "ACTION.EQ.NOTCH_CUT"
+    - "ACTION.EQ.HIGH_PASS"
+    - "ACTION.EQ.LOW_SHELF"
   target_scopes:
     - "stem"
 behavior_contract:

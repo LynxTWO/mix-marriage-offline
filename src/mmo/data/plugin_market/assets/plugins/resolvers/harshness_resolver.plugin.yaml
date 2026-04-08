@@ -1,0 +1,31 @@
+plugin_id: "PLUGIN.RESOLVER.HARSHNESS"
+plugin_type: "resolver"
+name: "Harshness EQ Resolver"
+version: "0.1.0"
+license: "Apache-2.0"
+description: >
+  Maps ISSUE.SPECTRAL.HARSHNESS to a broad bell cut in the 2–5 kHz zone.
+  Cut depth is scaled to the band energy ratio overhang from detector evidence.
+  Cuts ≤ 2 dB are emitted as low-risk / auto-apply; deeper cuts require
+  approval.  One recommendation per stem.
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "mmo.plugins.resolvers.harshness_resolver:HarshnessResolver"
+capabilities:
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+    - "auto_apply"
+    - "render"
+declares:
+  problem_domains:
+    - "spectral"
+    - "harshness"
+    - "correction"
+  consumes_issue_ids:
+    - "ISSUE.SPECTRAL.HARSHNESS"
+  emits_action_ids:
+    - "ACTION.EQ.BELL_CUT"
+  target_scopes:
+    - "stem"
