@@ -94,6 +94,14 @@ def _compare_input_hint(path: Path) -> str:
 def load_report_from_path_or_dir(path: Path | str) -> tuple[dict[str, Any], Path]:
     candidate = Path(path)
     if candidate.is_dir():
+        # Caller passed a path that looks like a file (e.g. ends in .json) but is
+        # actually a directory — give a clear message rather than a confusing
+        # "could not find report.json inside report.json/".
+        if candidate.suffix.lower() == ".json":
+            raise ValueError(
+                "MMO expected a `report.json` file but received a folder path instead. "
+                f"{_compare_input_hint(candidate)}"
+            )
         report_path = candidate / "report.json"
         if not report_path.exists():
             raise ValueError(
