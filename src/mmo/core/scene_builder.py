@@ -254,6 +254,7 @@ def _build_object_intent(
         if isinstance(stereo_hints, dict)
         else None
     )
+    stereo_depth = _safe_float(stereo_hints.get("depth_hint")) if isinstance(stereo_hints, dict) else None
     stereo_conf = _safe_float(stereo_hints.get("confidence")) if isinstance(stereo_hints, dict) else None
     stereo_hint_ready = bool(
         is_stereo
@@ -266,6 +267,10 @@ def _build_object_intent(
     if stereo_hint_ready and stereo_width is not None and stereo_conf is not None:
         width = max(0.0, min(1.0, stereo_width))
         width_conf = max(width_conf, stereo_conf)
+        # Prefer measured reverb depth over crest-factor proxy when available
+        if stereo_depth is not None:
+            depth = max(0.0, min(1.0, stereo_depth))
+            depth_conf = max(depth_conf, stereo_conf)
 
     # Cap confidence for advisory stereo inferences
     if is_stereo:

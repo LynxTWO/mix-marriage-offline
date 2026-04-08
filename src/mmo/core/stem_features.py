@@ -11,8 +11,15 @@ from mmo.dsp.meters import iter_wav_float64_samples
 _EPSILON = 1e-12
 _DEFAULT_WINDOW_FRAMES = 2_048
 
-_FRONT_STAGE_MAX_AZIMUTH_DEG = 60.0
-_ILD_DB_FOR_STAGE_EDGE = 12.0
+# Full stereo pan (very high ILD) maps to side speaker position in surround.
+_STEREO_PAN_MAX_AZIMUTH_DEG = 90.0
+_ILD_DB_FOR_FULL_PAN = 12.0
+
+# Transient/tail classification for per-window reverb separation.
+# Peak envelope decays per-window so reverb tails fall below the transient threshold.
+_PEAK_DECAY_PER_WINDOW = 0.85
+_TRANSIENT_THRESHOLD_DB = -12.0   # within 12 dB of peak → direct-sound window
+_TAIL_THRESHOLD_DB = -18.0        # more than 18 dB below peak → reverb-tail window
 
 
 def _clamp(value: float, minimum: float, maximum: float) -> float:
@@ -61,7 +68,13 @@ def compute_azimuth_hint(
     ild_db_windows: Sequence[float],
     window_weights: Sequence[float],
 ) -> tuple[float, float, float]:
-    """Return (azimuth_deg_hint, confidence, weighted_ild_db)."""
+    """Return (azimuth_deg_hint, confidence, weighted_ild_db).
+
+    Full stereo pan (ILD >= _ILD_DB_FOR_FULL_PAN) maps to
+    _STEREO_PAN_MAX_AZIMUTH_DEG (90°), placing hard-panned stems at the
+    surround side speakers rather than the front-stage edge.
+    Positive azimuth = right, negative = left.
+    """
     if not ild_db_windows or len(ild_db_windows) != len(window_weights):
         return 0.0, 0.0, 0.0
 
@@ -86,9 +99,9 @@ def compute_azimuth_hint(
     weighted_abs_ild_db = weighted_abs_sum / weight_total
 
     azimuth_deg = _clamp(
-        (weighted_ild_db / _ILD_DB_FOR_STAGE_EDGE) * _FRONT_STAGE_MAX_AZIMUTH_DEG,
-        -_FRONT_STAGE_MAX_AZIMUTH_DEG,
-        _FRONT_STAGE_MAX_AZIMUTH_DEG,
+        (weighted_ild_db / _ILD_DB_FOR_FULL_PAN) * _STEREO_PAN_MAX_AZIMUTH_DEG,
+        -_STEREO_PAN_MAX_AZIMUTH_DEG,
+        _STEREO_PAN_MAX_AZIMUTH_DEG,
     )
     if weighted_abs_ild_db <= _EPSILON:
         directional_consistency = 1.0
@@ -138,7 +151,21 @@ def infer_stereo_hints(
     *,
     window_frames: int = _DEFAULT_WINDOW_FRAMES,
 ) -> dict[str, Any]:
-    """Compute deterministic stereo placement hints for a WAV file."""
+    """Compute deterministic stereo placement hints for a WAV file.
+
+    Separates transient (direct-sound) windows from reverb-tail windows so
+    that azimuth_deg_hint reflects the actual pan of the dry signal rather
+    than being diluted by centred reverb returns, and depth_hint reflects
+    the wet/dry ratio of the stem.
+
+    Returns a dict with:
+      width_hint         [0, 1]   — stereo width (0 = mono, 1 = wide)
+      azimuth_deg_hint   degrees  — pan position, derived from transient ILD
+                                    (±90° range: full pan → side speaker)
+      depth_hint         [0, 1]   — reverb ratio (0 = dry/close, 1 = wet/far)
+      confidence         [0, 1]   — combined measurement quality
+      metrics            dict     — raw diagnostic values
+    """
     metadata = read_wav_metadata(path)
     channels = metadata.get("channels")
     if channels != 2:
@@ -146,6 +173,7 @@ def infer_stereo_hints(
 
     window_size = max(128, int(window_frames))
 
+    # Whole-signal accumulators
     frame_count = 0
     sum_l2 = 0.0
     sum_r2 = 0.0
@@ -153,11 +181,27 @@ def infer_stereo_hints(
     sum_mid2 = 0.0
     sum_side2 = 0.0
 
+    # Per-window accumulators
     window_l2 = 0.0
     window_r2 = 0.0
     window_count = 0
+
+    # ILD lists: all windows and transient-only windows
     ild_windows: list[float] = []
     window_weights: list[float] = []
+    transient_ild_windows: list[float] = []
+    transient_window_weights: list[float] = []
+
+    # Tail (reverb) accumulators for depth and tail correlation
+    tail_sum_l2 = 0.0
+    tail_sum_r2 = 0.0
+    tail_sum_lr = 0.0
+    tail_energy = 0.0
+    tail_window_count = 0
+    transient_window_count = 0
+
+    # Running peak RMS for transient/tail classification (slow decay)
+    peak_rms = 0.0
 
     for chunk in iter_wav_float64_samples(path, error_context="stereo hint inference"):
         total = len(chunk) - (len(chunk) % 2)
@@ -180,7 +224,23 @@ def infer_stereo_hints(
             window_l2 += left_sq
             window_r2 += right_sq
             window_count += 1
+
             if window_count >= window_size:
+                window_energy = window_l2 + window_r2
+                window_rms = math.sqrt(window_energy / (2.0 * window_count + _EPSILON))
+
+                # Update peak envelope with slow decay
+                peak_rms = max(peak_rms * _PEAK_DECAY_PER_WINDOW, window_rms)
+
+                # Classify window: transient, tail, or neither
+                is_transient = False
+                is_tail = False
+                if peak_rms > _EPSILON:
+                    db_below_peak = _safe_db(window_rms / peak_rms)
+                    is_transient = db_below_peak >= _TRANSIENT_THRESHOLD_DB
+                    is_tail = db_below_peak < _TAIL_THRESHOLD_DB
+
+                # All windows feed the global ILD list
                 _append_ild_window(
                     window_l2=window_l2,
                     window_r2=window_r2,
@@ -188,11 +248,39 @@ def infer_stereo_hints(
                     ild_windows=ild_windows,
                     window_weights=window_weights,
                 )
+
+                if is_transient:
+                    transient_window_count += 1
+                    _append_ild_window(
+                        window_l2=window_l2,
+                        window_r2=window_r2,
+                        window_frames=window_count,
+                        ild_windows=transient_ild_windows,
+                        window_weights=transient_window_weights,
+                    )
+                elif is_tail:
+                    tail_window_count += 1
+                    tail_sum_l2 += window_l2
+                    tail_sum_r2 += window_r2
+                    tail_sum_lr += math.sqrt(window_l2) * math.sqrt(window_r2) if (window_l2 > 0.0 and window_r2 > 0.0) else 0.0
+                    tail_energy += window_energy
+
                 window_l2 = 0.0
                 window_r2 = 0.0
                 window_count = 0
 
+    # Flush partial window
     if window_count > 0:
+        window_energy = window_l2 + window_r2
+        window_rms = math.sqrt(window_energy / (2.0 * window_count + _EPSILON))
+        peak_rms = max(peak_rms * _PEAK_DECAY_PER_WINDOW, window_rms)
+        is_transient = False
+        is_tail = False
+        if peak_rms > _EPSILON:
+            db_below_peak = _safe_db(window_rms / peak_rms)
+            is_transient = db_below_peak >= _TRANSIENT_THRESHOLD_DB
+            is_tail = db_below_peak < _TAIL_THRESHOLD_DB
+
         _append_ild_window(
             window_l2=window_l2,
             window_r2=window_r2,
@@ -200,20 +288,41 @@ def infer_stereo_hints(
             ild_windows=ild_windows,
             window_weights=window_weights,
         )
+        if is_transient:
+            transient_window_count += 1
+            _append_ild_window(
+                window_l2=window_l2,
+                window_r2=window_r2,
+                window_frames=window_count,
+                ild_windows=transient_ild_windows,
+                window_weights=transient_window_weights,
+            )
+        elif is_tail:
+            tail_window_count += 1
+            tail_sum_l2 += window_l2
+            tail_sum_r2 += window_r2
+            tail_sum_lr += math.sqrt(window_l2) * math.sqrt(window_r2) if (window_l2 > 0.0 and window_r2 > 0.0) else 0.0
+            tail_energy += window_energy
 
     if frame_count <= 0:
         return {
             "width_hint": 0.0,
             "azimuth_deg_hint": 0.0,
+            "depth_hint": 0.0,
             "confidence": 0.0,
             "metrics": {
                 "lr_correlation": 0.0,
                 "side_mid_ratio_db": -120.0,
                 "ild_weighted_db": 0.0,
                 "active_windows": 0,
+                "transient_windows": 0,
+                "tail_windows": 0,
+                "tail_correlation": 0.0,
+                "depth_ratio": 0.0,
             },
         }
 
+    # Whole-signal statistics
     denom = math.sqrt(max(sum_l2, _EPSILON) * max(sum_r2, _EPSILON))
     correlation = sum_lr / denom if denom > 0.0 else 0.0
     correlation = _clamp(correlation, -1.0, 1.0)
@@ -226,10 +335,28 @@ def infer_stereo_hints(
         lr_correlation=correlation,
         side_mid_ratio_db=side_mid_ratio_db,
     )
+
+    # Azimuth: prefer transient windows (direct sound), fall back to all windows
+    # when there are too few transients (e.g. sustained pads with no attacks)
+    if len(transient_ild_windows) >= 2:
+        azimuth_ild_windows = transient_ild_windows
+        azimuth_weights = transient_window_weights
+    else:
+        azimuth_ild_windows = ild_windows
+        azimuth_weights = window_weights
+
     azimuth_deg_hint, azimuth_confidence, ild_weighted_db = compute_azimuth_hint(
-        ild_db_windows=ild_windows,
-        window_weights=window_weights,
+        ild_db_windows=azimuth_ild_windows,
+        window_weights=azimuth_weights,
     )
+
+    # Depth: reverb-tail energy as fraction of total signal energy
+    total_energy = sum_l2 + sum_r2
+    depth_ratio = _clamp(tail_energy / (total_energy + _EPSILON), 0.0, 1.0)
+
+    # Tail L/R correlation (diffuseness of reverb returns)
+    tail_denom = math.sqrt(max(tail_sum_l2, _EPSILON) * max(tail_sum_r2, _EPSILON))
+    tail_correlation = _clamp(tail_sum_lr / tail_denom if tail_denom > _EPSILON else 0.0, -1.0, 1.0)
 
     rms_total = math.sqrt((sum_l2 + sum_r2) / (2.0 * frame_count))
     energy_confidence = _clamp((rms_total - 1e-4) / 0.02, 0.0, 1.0)
@@ -243,11 +370,16 @@ def infer_stereo_hints(
     return {
         "width_hint": round(width_hint, 3),
         "azimuth_deg_hint": round(azimuth_deg_hint, 3),
+        "depth_hint": round(depth_ratio, 3),
         "confidence": round(combined_confidence, 3),
         "metrics": {
             "lr_correlation": round(correlation, 6),
             "side_mid_ratio_db": round(side_mid_ratio_db, 6),
             "ild_weighted_db": round(ild_weighted_db, 6),
             "active_windows": len(ild_windows),
+            "transient_windows": transient_window_count,
+            "tail_windows": tail_window_count,
+            "tail_correlation": round(tail_correlation, 6),
+            "depth_ratio": round(depth_ratio, 6),
         },
     }

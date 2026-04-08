@@ -838,5 +838,141 @@ class TestPlacementPolicy(unittest.TestCase):
             self.assertTrue(any(note.startswith("section_slot:") for note in tuba_notes))
 
 
+    def _mini_band_scene(self, *, loudness_bias: str | None = None) -> dict[str, Any]:
+        """Build a minimal band scene with in_band perspective and explicit role_ids."""
+        kick_intent: dict[str, Any] = {"confidence": 0.8, "locks": []}
+        gtr_intent: dict[str, Any] = {"confidence": 0.8, "locks": []}
+        lead_intent: dict[str, Any] = {"confidence": 0.8, "locks": []}
+        if loudness_bias is not None:
+            kick_intent["loudness_bias"] = loudness_bias
+            gtr_intent["loudness_bias"] = loudness_bias
+            lead_intent["loudness_bias"] = loudness_bias
+        return {
+            "schema_version": "0.1.0",
+            "scene_id": "SCENE.MINI_BAND",
+            "source": {"stems_dir": "/tmp/mini_band", "created_from": "test"},
+            "intent": {"confidence": 0.0, "locks": [], "perspective": "in_band"},
+            "objects": [
+                {
+                    "object_id": "OBJ.KICK",
+                    "stem_id": "STEM.KICK",
+                    "label": "Kick",
+                    "channel_count": 1,
+                    "role_id": "ROLE.DRUM.KICK",
+                    "intent": kick_intent,
+                    "notes": [],
+                },
+                {
+                    "object_id": "OBJ.GTR",
+                    "stem_id": "STEM.GTR",
+                    "label": "Guitar",
+                    "channel_count": 1,
+                    "role_id": "ROLE.GTR.ELECTRIC",
+                    "intent": gtr_intent,
+                    "notes": [],
+                },
+                {
+                    "object_id": "OBJ.LEAD",
+                    "stem_id": "STEM.LEAD",
+                    "label": "Lead Vocal",
+                    "channel_count": 1,
+                    "role_id": "ROLE.VOCAL.LEAD",
+                    "intent": lead_intent,
+                    "notes": [],
+                },
+            ],
+            "beds": [
+                {
+                    "bed_id": "BED.FIELD.001",
+                    "label": "Field",
+                    "kind": "field",
+                    "intent": {"diffuse": 0.5, "confidence": 0.0, "locks": []},
+                    "notes": [],
+                }
+            ],
+            "metadata": {},
+        }
+
+    def test_in_band_drum_gets_rear_sends(self) -> None:
+        scene = self._mini_band_scene()
+        render_intent = build_render_intent(scene, "LAYOUT.7_1_4")
+        self.assertIsInstance(render_intent, dict)
+        if not isinstance(render_intent, dict):
+            return
+        kick = _stem_by_id(render_intent).get("STEM.KICK", {})
+        gains = kick.get("gains", {})
+        self.assertGreater(
+            gains.get("SPK.LRS", 0.0),
+            0.0,
+            "Kick drum must have signal in LRS (rear-left) in in_band perspective",
+        )
+        self.assertGreater(
+            gains.get("SPK.RRS", 0.0),
+            0.0,
+            "Kick drum must have signal in RRS (rear-right) in in_band perspective",
+        )
+        notes = kick.get("notes", [])
+        self.assertIsInstance(notes, list)
+        if isinstance(notes, list):
+            self.assertTrue(
+                any("azimuth_region:rear" in n for n in notes),
+                "Kick in in_band must report rear azimuth region",
+            )
+
+    def test_in_band_guitar_gets_side_sends(self) -> None:
+        scene = self._mini_band_scene()
+        render_intent = build_render_intent(scene, "LAYOUT.7_1_4")
+        self.assertIsInstance(render_intent, dict)
+        if not isinstance(render_intent, dict):
+            return
+        gtr = _stem_by_id(render_intent).get("STEM.GTR", {})
+        gains = gtr.get("gains", {})
+        self.assertGreater(
+            gains.get("SPK.LS", 0.0),
+            0.0,
+            "Guitar must have signal in LS (side-left) in in_band perspective",
+        )
+        self.assertGreater(
+            gains.get("SPK.LS", 0.0),
+            gains.get("SPK.LRS", 0.0),
+            "Guitar should be more side than rear (azimuth ~95°)",
+        )
+
+    def test_in_band_lead_vocal_anchors_to_center(self) -> None:
+        scene = self._mini_band_scene()
+        render_intent = build_render_intent(scene, "LAYOUT.7_1_4")
+        self.assertIsInstance(render_intent, dict)
+        if not isinstance(render_intent, dict):
+            return
+        lead = _stem_by_id(render_intent).get("STEM.LEAD", {})
+        gains = lead.get("gains", {})
+        self.assertEqual(gains.get("SPK.LS", 0.0), 0.0, "Lead vocal must not go to surround in in_band")
+        self.assertEqual(gains.get("SPK.RS", 0.0), 0.0, "Lead vocal must not go to surround in in_band")
+        self.assertEqual(gains.get("SPK.LRS", 0.0), 0.0, "Lead vocal must not go to rear in in_band")
+        self.assertGreater(gains.get("SPK.C", 0.0), 0.0, "Lead vocal must anchor to center")
+
+    def test_loudness_bias_back_boosts_surround_vs_neutral(self) -> None:
+        scene_neutral = self._mini_band_scene(loudness_bias=None)
+        scene_back = self._mini_band_scene(loudness_bias="back")
+        ri_neutral = build_render_intent(scene_neutral, "LAYOUT.7_1_4")
+        ri_back = build_render_intent(scene_back, "LAYOUT.7_1_4")
+        self.assertIsInstance(ri_neutral, dict)
+        self.assertIsInstance(ri_back, dict)
+        if not isinstance(ri_neutral, dict) or not isinstance(ri_back, dict):
+            return
+        kick_neutral = _stem_by_id(ri_neutral).get("STEM.KICK", {}).get("gains", {})
+        kick_back = _stem_by_id(ri_back).get("STEM.KICK", {}).get("gains", {})
+        self.assertGreater(
+            kick_back.get("SPK.LRS", 0.0),
+            kick_neutral.get("SPK.LRS", 0.0),
+            "loudness_bias:back must boost rear (LRS) relative to neutral",
+        )
+        self.assertLess(
+            kick_back.get("SPK.L", 0.0),
+            kick_neutral.get("SPK.L", 0.0),
+            "loudness_bias:back must reduce front (L) relative to neutral",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

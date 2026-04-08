@@ -565,6 +565,50 @@ def _role_default_azimuth(
     *,
     perspective: str | None,
 ) -> float:
+    # in_band: listener is at center of stage. Drummer behind, guitarists at sides,
+    # bass front-left, keys front-right, lead vocal front-center.
+    if perspective == "in_band":
+        if _is_lead_center_role(role_id):
+            return 0.0
+        if _is_backing_vocal_role(role_id):
+            return 20.0
+        # Drums: drummer is behind the listener
+        if role_id.startswith("ROLE.DRUM.KICK"):
+            return 160.0
+        if role_id.startswith("ROLE.DRUM.SNARE"):
+            return 155.0
+        if role_id.startswith(("ROLE.DRUM.HI_HAT", "ROLE.DRUM.CYMBALS")):
+            return 145.0
+        if role_id.startswith(("ROLE.DRUM.OVERHEADS", "ROLE.DRUM.ROOM")):
+            return 165.0
+        if role_id.startswith("ROLE.DRUM.TOMS"):
+            return 150.0
+        if role_id.startswith("ROLE.DRUM."):
+            return 155.0
+        # Guitars: at the sides of the listener
+        if role_id.startswith("ROLE.GTR.") and role_id.endswith("_L"):
+            return 100.0
+        if role_id.startswith("ROLE.GTR.") and role_id.endswith("_R"):
+            return -100.0
+        if role_id.startswith("ROLE.GTR."):
+            return 95.0
+        # Bass: front-left of listener (bassist traditionally stage-right, audience-left)
+        if role_id.startswith(("ROLE.BASS.", "ROLE.STRINGS.BASS")):
+            return -65.0
+        # Keys/synth: front-right of listener
+        if role_id.startswith(("ROLE.KEYS.", "ROLE.SYNTH.")):
+            return 70.0
+        # Strings: spread front-to-sides
+        if role_id.startswith("ROLE.STRINGS."):
+            return 55.0
+        # Winds, brass: front stage by convention
+        if _is_winds_role(role_id) or _is_brass_role(role_id):
+            return 30.0
+        # Percussion (non-drum-kit): behind listener
+        if _is_percussion_role(role_id):
+            return 148.0
+        return 0.0
+
     if _is_lead_center_role(role_id):
         return 0.0
     if _is_backing_vocal_role(role_id):
@@ -989,13 +1033,26 @@ def _object_send(
             front_pair_base *= 0.88
             notes.append("strings_section_wide_support")
 
-    if (_is_brass_role(role_id) or _is_percussion_role(role_id)) and immersive_perspective != "in_orchestra":
+    if (
+        (_is_brass_role(role_id) or _is_percussion_role(role_id))
+        and immersive_perspective not in {"in_orchestra", "in_band"}
+    ):
         if rear_pair_base > 0.0 or side_pair_base > 0.0:
             notes.append("rear_bias_softened_for_translation")
         rear_pair_base = 0.0
-        if side_pair_base > 0.0:
-            side_pair_base *= 0.35 if immersive_perspective == "in_band" else 0.0
+        side_pair_base = 0.0
         front_pair_base = max(front_pair_base, front_gain * 0.82)
+
+    loudness_bias = _coerce_str(intent_payload.get("loudness_bias")).strip().lower()
+    if loudness_bias == "back" and immersive_enabled:
+        front_pair_base *= 0.82
+        side_pair_base *= 1.35
+        rear_pair_base *= 1.35
+        notes.append("loudness_bias:back")
+    elif loudness_bias == "forward":
+        side_pair_base *= 0.65
+        rear_pair_base *= 0.55
+        notes.append("loudness_bias:forward")
 
     if immersive_perspective:
         notes.append(f"immersive_perspective:{immersive_perspective}")

@@ -325,5 +325,29 @@ templates:
         self.assertEqual(intent.get("locks"), ["LOCK.NO_STEREO_WIDENING"])
 
 
+    def test_you_are_there_template_sets_in_band_perspective(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            stems_dir = Path(temp_dir) / "stems"
+            stems_dir.mkdir()
+            scene = _sample_scene(stems_dir=stems_dir)
+            edited = apply_scene_templates(
+                scene,
+                ["TEMPLATE.SCENE.LIVE.YOU_ARE_THERE"],
+                scene_templates_path=repo_root / "ontology" / "scene_templates.yaml",
+                scene_locks_path=repo_root / "ontology" / "scene_locks.yaml",
+            )
+
+        intent = edited.get("intent")
+        self.assertIsInstance(intent, dict)
+        if not isinstance(intent, dict):
+            return
+        self.assertEqual(
+            intent.get("perspective"),
+            "in_band",
+            "YOU_ARE_THERE must set perspective: in_band to enable surround routing",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

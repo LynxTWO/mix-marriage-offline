@@ -2,8 +2,12 @@ schema_version: "0.1.0"
 templates:
   TEMPLATE.SCENE.LIVE.YOU_ARE_THERE:
     label: "Live: you are there"
-    description: "More depth and space, still safe on downmix."
+    description: "Listener at center of stage. Role-driven spatial placement with drums behind, guitars at sides, vocals front."
     patches:
+      - scope: "scene"
+        match: {}
+        set:
+          perspective: "in_band"
       - scope: "bed"
         match:
           bed_kind: "field"

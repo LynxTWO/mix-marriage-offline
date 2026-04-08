@@ -953,6 +953,7 @@ def run_variant_plan(
     render_plan: bool = False,
     cache_enabled: bool = True,
     cache_dir: Path | None = None,
+    scene_payload_override: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not isinstance(plan, dict):
         raise ValueError("plan must be an object.")
@@ -1206,6 +1207,8 @@ def run_variant_plan(
                 render_session = render_report.get("session")
                 if isinstance(render_session, dict):
                     render_session["workspace_dir"] = variant_out_dir.resolve().as_posix()
+                    if scene_payload_override is not None:
+                        render_session["scene_payload"] = _json_clone(scene_payload_override)
                 apply_gates_to_report(
                     render_report,
                     policy_path=ontology_dir() / "policies" / "gates.yaml",
@@ -1272,6 +1275,8 @@ def run_variant_plan(
                 apply_session = apply_report.get("session")
                 if isinstance(apply_session, dict):
                     apply_session["workspace_dir"] = variant_out_dir.resolve().as_posix()
+                    if scene_payload_override is not None:
+                        apply_session["scene_payload"] = _json_clone(scene_payload_override)
                 apply_gates_to_report(
                     apply_report,
                     policy_path=ontology_dir() / "policies" / "gates.yaml",

@@ -1958,6 +1958,56 @@ def _run_one_shot_workflow(
 # ── _run_render_many_workflow ────────────────────────────────────────
 
 
+def _enrich_scene_with_role_ids(
+    scene_payload: dict[str, Any],
+    stems_dir: Path,
+    role_overrides: dict[str, str] | None,
+) -> None:
+    """Classify stems by label/filename and inject role_id into scene objects in-place.
+
+    Silently skips if classification fails (e.g. roles.yaml missing).
+    role_overrides: explicit stem_id → role_id overrides applied on top of inference.
+    """
+    try:
+        from mmo.core.stems_index import build_stems_index  # noqa: WPS433
+        from mmo.core.stems_classifier import classify_stems  # noqa: WPS433
+        from mmo.core.roles import load_roles  # noqa: WPS433
+    except ImportError:
+        return
+
+    try:
+        stems_index = build_stems_index(stems_dir, root_dir=str(stems_dir))
+        roles_path = ontology_dir() / "roles.yaml"
+        roles_payload = load_roles(roles_path)
+        stems_map = classify_stems(stems_index, roles_payload, use_common_role_lexicon=True)
+    except Exception:  # noqa: BLE001
+        return
+
+    role_map: dict[str, str] = {}
+    for assignment in stems_map.get("assignments", []):
+        sid = _coerce_str(assignment.get("stem_id")).strip()
+        rid = _coerce_str(assignment.get("role_id")).strip()
+        if sid and rid:
+            role_map[sid] = rid
+
+    if role_overrides:
+        for sid, rid in role_overrides.items():
+            s = _coerce_str(sid).strip()
+            r = _coerce_str(rid).strip()
+            if s and r:
+                role_map[s] = r
+
+    for obj in scene_payload.get("objects", []):
+        if not isinstance(obj, dict):
+            continue
+        stem_id = _coerce_str(obj.get("stem_id")).strip()
+        if not stem_id:
+            continue
+        role_id = role_map.get(stem_id, "")
+        if role_id and role_id.startswith("ROLE."):
+            obj["role_id"] = role_id
+
+
 def _run_render_many_workflow(
     *,
     repo_root: Path,
@@ -1988,6 +2038,7 @@ def _run_render_many_workflow(
     output_formats: str | None = None,
     cache_enabled: bool = True,
     cache_dir: Path | None = None,
+    role_overrides: dict[str, str] | None = None,
 ) -> int:
     resolved_timeline_path: Path | None = None
     timeline_payload: dict[str, Any] | None = None
@@ -2201,6 +2252,9 @@ def _run_render_many_workflow(
         except SystemExit as exc:
             return int(exc.code) if isinstance(exc.code, int) else 1
 
+    if scene_payload is not None:
+        _enrich_scene_with_role_ids(scene_payload, stems_dir, role_overrides)
+
     if scene_payload is not None and isinstance(scene_template_ids, list) and scene_template_ids:
         try:
             scene_payload = _apply_scene_templates_to_payload(
@@ -2341,6 +2395,8 @@ def _run_render_many_workflow(
         run_variant_plan_kwargs["timeline"] = timeline_payload
     if resolved_timeline_path is not None:
         run_variant_plan_kwargs["timeline_path"] = resolved_timeline_path
+    if scene_payload is not None:
+        run_variant_plan_kwargs["scene_payload_override"] = scene_payload
 
     try:
         variant_result = run_variant_plan(
@@ -2571,6 +2627,23 @@ def _run_workflow_from_run_args(
                 return 1, "variants"
             translation_audition_segment_s = float(raw_segment)
 
+        role_overrides_parsed: dict[str, str] | None = None
+        role_overrides_path_value = getattr(args, "role_overrides", None)
+        if isinstance(role_overrides_path_value, str) and role_overrides_path_value.strip():
+            try:
+                import yaml as _yaml  # noqa: WPS433
+                with open(role_overrides_path_value, encoding="utf-8") as _f:
+                    _ov = _yaml.safe_load(_f)
+                if isinstance(_ov, dict) and isinstance(_ov.get("role_overrides"), dict):
+                    role_overrides_parsed = {
+                        str(k).strip(): str(v).strip()
+                        for k, v in _ov["role_overrides"].items()
+                        if k and v
+                    }
+            except Exception as _exc:
+                print(f"Failed to load role overrides: {_exc}", file=sys.stderr)
+                return 1, "variants"
+
         exit_code = _run_render_many_workflow(
             repo_root=None,
             tools_dir=tools_dir,
@@ -2600,6 +2673,7 @@ def _run_workflow_from_run_args(
             output_formats=args.output_formats,
             cache_enabled=args.cache == "on",
             cache_dir=Path(args.cache_dir) if args.cache_dir else None,
+            role_overrides=role_overrides_parsed,
         )
         return exit_code, "variants"
 

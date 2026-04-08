@@ -580,6 +580,33 @@ def main(argv: list[str] | None = None) -> int:
         help="Allow overwriting existing output files.",
     )
 
+    stems_roles_parser = stems_subparsers.add_parser(
+        "roles",
+        help="Show inferred roles for stems in a directory, with optional override writing.",
+    )
+    stems_roles_parser.add_argument(
+        "--stems",
+        required=True,
+        help="Path to a directory of audio stems.",
+    )
+    stems_roles_parser.add_argument(
+        "--overrides",
+        default=None,
+        help="Optional path to a role overrides YAML to apply before display.",
+    )
+    stems_roles_parser.add_argument(
+        "--write-overrides",
+        default=None,
+        dest="write_overrides",
+        help="Write a role overrides YAML template to this path (pre-filled with inferred roles).",
+    )
+    stems_roles_parser.add_argument(
+        "--format",
+        choices=["json", "text"],
+        default="text",
+        help="Output format (default: text table).",
+    )
+
     stems_audition_parser = stems_subparsers.add_parser(
         "audition",
         help="Render per-bus-group audition WAV bounces from a stems_map.",
@@ -714,6 +741,12 @@ def main(argv: list[str] | None = None) -> int:
         "--render-plan",
         action="store_true",
         help="Build a render_plan.json artifact (auto-builds scene.json if needed).",
+    )
+    run_parser.add_argument(
+        "--role-overrides",
+        default=None,
+        dest="role_overrides",
+        help="Path to a role overrides YAML (from 'mmo stems roles --write-overrides') applied before scene building.",
     )
     run_parser.add_argument(
         "--scene-templates",
@@ -4965,6 +4998,106 @@ def main(argv: list[str] | None = None) -> int:
                         f"Warnings: {missing} missing, "
                         f"{skipped} skipped (see manifest)"
                     )
+
+            return 0
+
+        if args.stems_command == "roles":
+            stems_dir_path = Path(args.stems)
+            if not stems_dir_path.is_dir():
+                print(f"Stems directory not found: {stems_dir_path}", file=sys.stderr)
+                return 1
+            roles_path = ontology / "roles.yaml"
+            try:
+                stems_index_payload, stems_index_ref = _load_stems_index_for_classification(
+                    repo_root=None,
+                    index_path=None,
+                    root_path=str(stems_dir_path),
+                )
+                roles_payload = load_roles(roles_path)
+                stems_map_payload, explanations = classify_stems_with_evidence(
+                    stems_index_payload,
+                    roles_payload,
+                    role_lexicon=None,
+                    use_common_role_lexicon=True,
+                    stems_index_ref=stems_index_ref,
+                    roles_ref="ontology/roles.yaml",
+                )
+            except (RuntimeError, ValueError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+
+            # Apply an existing role overrides YAML if provided
+            overrides_path = getattr(args, "overrides", None)
+            role_override_map: dict[str, str] = {}
+            if isinstance(overrides_path, str) and overrides_path.strip():
+                try:
+                    import yaml as _yaml
+                    with open(overrides_path, encoding="utf-8") as _f:
+                        _ov = _yaml.safe_load(_f)
+                    if isinstance(_ov, dict) and isinstance(_ov.get("role_overrides"), dict):
+                        role_override_map = {
+                            str(k).strip(): str(v).strip()
+                            for k, v in _ov["role_overrides"].items()
+                            if k and v
+                        }
+                except Exception as exc:
+                    print(f"Failed to load role overrides: {exc}", file=sys.stderr)
+                    return 1
+
+            stem_entries = stems_map_payload.get("assignments", [])
+            if not isinstance(stem_entries, list):
+                stem_entries = []
+
+            fmt = getattr(args, "format", "text")
+            if fmt == "json":
+                out_rows = []
+                for entry in stem_entries:
+                    stem_id = entry.get("stem_id", "")
+                    inferred = entry.get("role_id", "ROLE.OTHER.UNKNOWN")
+                    effective = role_override_map.get(stem_id, inferred)
+                    out_rows.append({
+                        "stem_id": stem_id,
+                        "label": entry.get("label", entry.get("rel_path", "")),
+                        "role_id": effective,
+                        "inferred_role_id": inferred,
+                        "overridden": stem_id in role_override_map,
+                        "confidence": entry.get("confidence", 0.0),
+                    })
+                print(json.dumps(sorted(out_rows, key=lambda r: r["stem_id"]), indent=2, sort_keys=True))
+            else:
+                col_id = max((len(e.get("stem_id", "")) for e in stem_entries), default=8)
+                col_role = 36
+                header = f"{'STEM_ID':<{col_id}}  {'ROLE':<{col_role}}  CONF  NOTE"
+                print(header)
+                print("-" * len(header))
+                for entry in sorted(stem_entries, key=lambda e: e.get("stem_id", "")):
+                    stem_id = entry.get("stem_id", "")
+                    inferred = entry.get("role_id", "ROLE.OTHER.UNKNOWN")
+                    effective = role_override_map.get(stem_id, inferred)
+                    conf = entry.get("confidence", 0.0)
+                    note = " [overridden]" if stem_id in role_override_map else ""
+                    print(f"{stem_id:<{col_id}}  {effective:<{col_role}}  {conf:.2f}{note}")
+
+            write_overrides_path = getattr(args, "write_overrides", None)
+            if isinstance(write_overrides_path, str) and write_overrides_path.strip():
+                try:
+                    import yaml as _yaml
+                    rows: dict[str, str] = {}
+                    for entry in sorted(stem_entries, key=lambda e: e.get("stem_id", "")):
+                        stem_id = entry.get("stem_id", "")
+                        effective = role_override_map.get(
+                            stem_id, entry.get("role_id", "ROLE.OTHER.UNKNOWN")
+                        )
+                        if stem_id:
+                            rows[stem_id] = effective
+                    out_doc = {"role_overrides": rows}
+                    Path(write_overrides_path).parent.mkdir(parents=True, exist_ok=True)
+                    with open(write_overrides_path, "w", encoding="utf-8") as _f:
+                        _yaml.dump(out_doc, _f, default_flow_style=False, sort_keys=True, allow_unicode=True)
+                    print(f"\nRole overrides template written to: {write_overrides_path}")
+                except Exception as exc:
+                    print(f"Failed to write role overrides: {exc}", file=sys.stderr)
+                    return 1
 
             return 0
 
