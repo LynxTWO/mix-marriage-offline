@@ -48,8 +48,27 @@ Approvals are explicit. Use `--approve` to override blocks when you
 intentionally want to cross a safety boundary. You can approve none, all, or a
 comma-separated list of recommendation IDs.
 
-Pro notes. LFE is treated as a creative send plus bass management rules, not as
-a mandatory “content must exist” channel. If you are delivering “.2” targets,
-treat that as a playback management detail unless a spec explicitly requires
-dual-LFE program content. Keep the receipt JSON with the deliverables. That is
-your defensible audit trail.
+LFE derivation. For surround and immersive targets (5.1, 7.1, 7.1.4, etc.) MMO
+derives LFE channel content automatically from the mixed L+R program audio using
+a Linkwitz-Riley 24 dB/oct low-pass filter. Two profiles are available:
+
+- `LFE_DERIVE.DOLBY_120_LR24_TRIM_10` — 120 Hz crossover, −10 dB trim (cinema default)
+- `LFE_DERIVE.MUSIC_80_LR24_TRIM_10` — 80 Hz crossover, −10 dB trim (music default)
+
+The derivation receipt (profile used, cutoff, phase mode, status) appears in
+`render_manifest.json` under `metadata.lfe_derivation` for each surround output.
+
+Reviewing pending approvals. Before running safe-render you can inspect which
+recommendations require explicit approval:
+
+```sh
+mmo review out/report.json
+```
+
+This prints a table of pending approvals with the exact `--approve-rec` flags to
+pass to `mmo safe-render`. Use `--format json` for machine-readable output or
+`--risk high` to filter by risk level.
+
+Pro notes. Keep the receipt JSON with the deliverables. That is your defensible
+audit trail. If you are delivering “.2” targets, the LFE derivation is applied
+automatically — check the receipt to confirm the profile and crossover used.

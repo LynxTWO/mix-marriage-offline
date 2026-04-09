@@ -27,6 +27,35 @@ Pro notes. `run` is the musician-friendly orchestrator. It can also do apply,
 render, render-many, translation, deliverables index, and listen pack outputs.
 Caching is on by default, keyed by lockfile plus run_config hash.
 
+## Workflow B+: I want spatial placement with a scene template
+
+Add `--scene-templates` to any `mmo run` call to apply a named placement
+template before the scene is built.
+
+```sh
+mmo run --stems ./stems --out out/run_001 \
+  --scene-templates TEMPLATE.SCENE.LIVE.YOU_ARE_THERE \
+  --render-many --targets stereo,5.1,7.1
+```
+
+Available templates:
+
+- `TEMPLATE.SCENE.LIVE.YOU_ARE_THERE` — listener at center of stage; drums
+  behind, guitars at sides, bass front-left, lead vocal front-center. Sets
+  `in_band` perspective so immersive routing is fully active.
+- `TEMPLATE.SEATING.BAND.IN_BAND` — role-driven stage seating for modern band
+  stems.
+- `TEMPLATE.SEATING.ORCHESTRA.IN_ORCHESTRA` — orchestral seating with
+  in-orchestra perspective.
+- `TEMPLATE.SEATING.ORCHESTRA_AUDIENCE` — audience-perspective orchestral map.
+- `TEMPLATE.SCENE.STEREO.BAND_WIDE_VOCAL_CENTER` — keep lead anchored, spread
+  band safely (stereo-focused).
+- `TEMPLATE.SCENE.SURROUND.FRONT_STAGE_CLEAR_REAR_FIELD` — front stage objects,
+  beds carry rear energy.
+
+Templates only fill missing intent fields — they do not overwrite locks you have
+already set.
+
 ## Workflow C: I want mix-once, render-many deliverables
 
 Quick path. mmo analyze ./stems --out-report out/report.json mmo safe-render
