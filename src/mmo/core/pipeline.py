@@ -1381,6 +1381,14 @@ def run_renderers(
     routing_plan = report.get("routing_plan") if isinstance(report, dict) else None
     if isinstance(routing_plan, dict):
         session_for_plugins["routing_plan"] = routing_plan
+    # Propagate lfe_derivation_profile_id from policies_applied so renderers
+    # can select the correct LFE derivation profile.
+    if "lfe_derivation_profile_id" not in session_for_plugins:
+        _pa = report.get("policies_applied") if isinstance(report, dict) else None
+        if isinstance(_pa, dict):
+            _lfe_pid = str(_pa.get("lfe_derivation_profile_id") or "").strip()
+            if _lfe_pid:
+                session_for_plugins["lfe_derivation_profile_id"] = _lfe_pid
     recommendations = report.get("recommendations") if isinstance(report, dict) else []
     recs = _coerce_list(recommendations)
     recs = [rec for rec in recs if isinstance(rec, dict)]

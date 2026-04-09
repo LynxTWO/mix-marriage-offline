@@ -14,6 +14,10 @@ from mmo.core.downmix import (
     compare_rendered_surround_to_stereo_reference,
     similarity_gate_score,
 )
+from mmo.core.lfe_derivation_profiles import (
+    DEFAULT_LFE_DERIVATION_PROFILE_ID,
+    get_lfe_derivation_profile,
+)
 from mmo.core.deliverables import (
     RENDER_RESULT_DOWNMIX_QA_FAILED,
     RENDER_RESULT_FALLBACK_APPLIED,
@@ -46,6 +50,7 @@ from mmo.dsp.export_finalize import (
     resolve_dither_policy_for_bit_depth,
 )
 from mmo.dsp.io import sha256_file, write_wav_ixml_chunk
+from mmo.dsp.lfe_derive import derive_missing_lfe
 from mmo.dsp.process_context import build_process_context
 from mmo.dsp.sample_rate import build_resampling_receipt, choose_target_rate_for_session
 from mmo.plugins.interfaces import Recommendation, RenderManifest, RendererPlugin
@@ -79,6 +84,9 @@ _OVERHEAD_CHANNEL_IDS: frozenset[str] = frozenset(
     {"SPK.TFL", "SPK.TFR", "SPK.TRL", "SPK.TRR", "SPK.TFC", "SPK.TBC"}
 )
 _BED_DECORRELATED_CHANNEL_IDS: frozenset[str] = _SURROUND_CHANNEL_IDS | _OVERHEAD_CHANNEL_IDS
+_LFE_SPEAKER_PREFIX = "SPK.LFE"
+_LFE_L_SPEAKER = "SPK.L"
+_LFE_R_SPEAKER = "SPK.R"
 _BED_DECORRELATED_CONTENT_HINTS: frozenset[str] = frozenset(
     {"ambience", "pad_texture", "reverb_return", "crowd"}
 )
@@ -1635,6 +1643,48 @@ def _write_trimmed_chunk(
     handle.writeframes(finalizer.finalize_chunk(trimmed))
 
 
+def _lfe_channel_indices(channel_order: Sequence[str]) -> list[int]:
+    """Return indices of LFE channels (prefix SPK.LFE) in channel_order."""
+    return [
+        idx
+        for idx, ch_id in enumerate(channel_order)
+        if ch_id.startswith(_LFE_SPEAKER_PREFIX)
+    ]
+
+
+def _resolve_lfe_profile(session: Dict[str, Any]) -> dict[str, Any]:
+    """Resolve LFE derivation profile from session, falling back to the default."""
+    profile_id = _coerce_str(session.get("lfe_derivation_profile_id")).strip()
+    return get_lfe_derivation_profile(profile_id or None)
+
+
+def _inject_lfe_into_chunk(
+    chunk: AudioBufferF64,
+    lfe_channels: list[list[float]],
+    lfe_indices: list[int],
+    frame_offset: int,
+) -> AudioBufferF64:
+    """Return a new chunk with LFE channel slots replaced from precomputed data."""
+    new_data = list(chunk.data)
+    n_channels = chunk.channels
+    frame_count = chunk.frame_count
+    for frame in range(frame_count):
+        flat_src = frame_offset + frame
+        for ch_pos, lfe_idx in enumerate(lfe_indices):
+            if ch_pos >= len(lfe_channels):
+                break
+            lfe_ch = lfe_channels[ch_pos]
+            new_data[frame * n_channels + lfe_idx] = (
+                lfe_ch[flat_src] if flat_src < len(lfe_ch) else 0.0
+            )
+    return AudioBufferF64(
+        data=new_data,
+        channels=chunk.channels,
+        channel_order=chunk.channel_order,
+        sample_rate_hz=chunk.sample_rate_hz,
+    )
+
+
 def _render_subbus_output(
     *,
     session: Dict[str, Any],
@@ -1928,6 +1978,17 @@ def _mix_layout_from_intent(
     if not normalized_channel_order:
         return [], [f"{layout_id}:invalid_channel_order"]
 
+    lfe_indices = _lfe_channel_indices(normalized_channel_order)
+    lfe_l_idx = next(
+        (idx for idx, ch in enumerate(normalized_channel_order) if ch == _LFE_L_SPEAKER),
+        None,
+    )
+    lfe_r_idx = next(
+        (idx for idx, ch in enumerate(normalized_channel_order) if ch == _LFE_R_SPEAKER),
+        None,
+    )
+    derive_lfe = bool(lfe_indices and lfe_l_idx is not None and lfe_r_idx is not None)
+
     stem_sends = render_intent.get("stem_sends")
     stem_send_rows = stem_sends if isinstance(stem_sends, list) else []
     sends_by_stem: dict[str, dict[str, Any]] = {}
@@ -1965,15 +2026,23 @@ def _mix_layout_from_intent(
             resampling_receipt = dict(resampling_receipt)
             resampling_receipt.setdefault("target_sample_rate_hz", sample_rate_hz)
     peak_by_channel = [0.0] * channel_count
+    lfe_l_acc: list[float] = []
+    lfe_r_acc: list[float] = []
+
+    def _on_pass1_chunk(chunk: AudioBufferF64) -> None:
+        _update_chunk_peak_by_channel(peak_by_channel=peak_by_channel, mixed_chunk=chunk)
+        if derive_lfe:
+            n_ch = chunk.channels
+            for frame_idx in range(chunk.frame_count):
+                lfe_l_acc.append(chunk.data[frame_idx * n_ch + lfe_l_idx])
+                lfe_r_acc.append(chunk.data[frame_idx * n_ch + lfe_r_idx])
+
     decoded_stems, pass1_frames, pass1_notes = _run_mix_pass(
         prepared_stems=prepared_stems,
         channel_order=normalized_channel_order,
         sample_rate_hz=sample_rate_hz,
         layout_id=layout_id,
-        on_chunk=lambda chunk: _update_chunk_peak_by_channel(
-            peak_by_channel=peak_by_channel,
-            mixed_chunk=chunk,
-        ),
+        on_chunk=_on_pass1_chunk,
     )
     if pass1_notes:
         notes.extend(pass1_notes)
@@ -1985,6 +2054,30 @@ def _mix_layout_from_intent(
     rendered_audio = pass1_frames > 0
     if not rendered_audio:
         notes.append(f"{layout_id}:rendered_silence:no_decodable_stems")
+
+    # ── LFE derivation (runs after pass 1, before trim calculation) ───────
+    lfe_derived_channels: list[list[float]] = []
+    lfe_derivation_receipt: dict[str, Any] = {}
+    if derive_lfe and lfe_l_acc:
+        try:
+            lfe_profile = _resolve_lfe_profile(session)
+            lfe_derived_channels, lfe_derivation_receipt = derive_missing_lfe(
+                left=lfe_l_acc,
+                right=lfe_r_acc,
+                sample_rate_hz=sample_rate_hz,
+                target_lfe_channel_count=len(lfe_indices),
+                profile=lfe_profile,
+            )
+            # Update peak_by_channel with actual LFE peaks so trim accounts for them.
+            for ch_pos, lfe_idx in enumerate(lfe_indices):
+                if ch_pos < len(lfe_derived_channels):
+                    lfe_ch = lfe_derived_channels[ch_pos]
+                    lfe_peak = max((abs(s) for s in lfe_ch), default=0.0)
+                    if lfe_peak > peak_by_channel[lfe_idx]:
+                        peak_by_channel[lfe_idx] = lfe_peak
+        except Exception as exc:
+            notes.append(f"{layout_id}:lfe_derivation_failed")
+            lfe_derivation_receipt = {"status": "error", "error": str(exc)[:200]}
 
     pre_trim_peak = max(peak_by_channel) if peak_by_channel else 0.0
     target_peak_linear = _db_to_linear(_TARGET_PEAK_DBFS)
@@ -2065,17 +2158,40 @@ def _mix_layout_from_intent(
                 handle.setframerate(sample_rate_hz)
 
                 if rendered_audio:
+                    lfe_frame_cursor: list[int] = [0]
+
+                    if lfe_derived_channels:
+                        def _write_chunk_with_lfe(chunk: AudioBufferF64) -> None:
+                            injected = _inject_lfe_into_chunk(
+                                chunk,
+                                lfe_channels=lfe_derived_channels,
+                                lfe_indices=lfe_indices,
+                                frame_offset=lfe_frame_cursor[0],
+                            )
+                            lfe_frame_cursor[0] += injected.frame_count
+                            _write_trimmed_chunk(
+                                handle=handle,
+                                mixed_chunk=injected,
+                                trim_linear=trim_linear,
+                                finalizer=finalizer,
+                            )
+                        pass2_callback: Callable[[AudioBufferF64], None] = (
+                            _write_chunk_with_lfe
+                        )
+                    else:
+                        pass2_callback = lambda chunk: _write_trimmed_chunk(
+                            handle=handle,
+                            mixed_chunk=chunk,
+                            trim_linear=trim_linear,
+                            finalizer=finalizer,
+                        )
+
                     _, pass2_frames, pass2_notes = _run_mix_pass(
                         prepared_stems=prepared_stems,
                         channel_order=normalized_channel_order,
                         sample_rate_hz=sample_rate_hz,
                         layout_id=layout_id,
-                        on_chunk=lambda chunk: _write_trimmed_chunk(
-                            handle=handle,
-                            mixed_chunk=chunk,
-                            trim_linear=trim_linear,
-                            finalizer=finalizer,
-                        ),
+                        on_chunk=pass2_callback,
                     )
                     if pass2_notes:
                         notes.extend(pass2_notes)
@@ -2127,6 +2243,7 @@ def _mix_layout_from_intent(
                         "chunk_frames": _RENDER_CHUNK_FRAMES,
                         "stereo_reinterpret_allowed": stereo_reinterpret_allowed,
                         "resampling": resampling_receipt,
+                        "lfe_derivation": lfe_derivation_receipt or None,
                         "bed_decorrelated_widening": dict(decorrelation_receipt),
                         "render_result": build_output_render_result(
                             artifact_role="master",

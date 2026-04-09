@@ -1211,6 +1211,96 @@ class TestPlacementMixdownRenderer(unittest.TestCase):
         self.assertEqual(resampling.get("resample_method_id"), "linear_interpolation_v1")
         self.assertEqual(resampling.get("resampled_stem_count"), 2)
 
+    # ── LFE derivation ────────────────────────────────────────────────────
+
+    def test_lfe_channel_has_audio_for_5_1_render(self) -> None:
+        """LFE channel (index 3 in 5.1) must have non-zero energy after derivation."""
+        # kick.wav at 55 Hz passes the 120 Hz LP filter and must appear in LFE.
+        session = dict(self.session)
+        session["target_layout_id"] = "LAYOUT.5_1"
+        manifest = PlacementMixdownRenderer().render(session, [], self.out_dir / "lfe_test")
+        row = _output_by_layout(manifest).get("LAYOUT.5_1")
+        self.assertIsNotNone(row)
+        if not isinstance(row, dict):
+            return
+        wav_path = self.out_dir / "lfe_test" / row["file_path"]
+        self.assertTrue(wav_path.exists())
+        # Read LFE channel (index 3 of 6 channels) and verify non-silent.
+        with wave.open(str(wav_path), "rb") as handle:
+            n_channels = handle.getnchannels()
+            n_frames = handle.getnframes()
+            sample_width = handle.getsampwidth()
+            raw_bytes = handle.readframes(n_frames)
+        self.assertEqual(n_channels, 6)
+        # Unpack 24-bit signed samples (3 bytes each, little-endian, sign-extend).
+        n_samples = len(raw_bytes) // sample_width
+        lfe_idx = 3
+        lfe_samples: list[int] = []
+        for i in range(lfe_idx, n_samples, n_channels):
+            offset = i * sample_width
+            raw = raw_bytes[offset: offset + sample_width]
+            pad = b"\xff" if raw[-1] & 0x80 else b"\x00"
+            lfe_samples.append(struct.unpack("<i", raw + pad)[0])
+        max_val = 1 << (sample_width * 8 - 1)
+        lfe_rms = math.sqrt(sum(s * s for s in lfe_samples) / len(lfe_samples)) / max_val
+        self.assertGreater(lfe_rms, 1e-5, "LFE channel must have non-zero energy")
+
+    def test_lfe_derivation_receipt_in_manifest_metadata(self) -> None:
+        """Manifest output metadata must include lfe_derivation receipt for surround layouts."""
+        session = dict(self.session)
+        session["target_layout_id"] = "LAYOUT.5_1"
+        manifest = PlacementMixdownRenderer().render(session, [], self.out_dir / "lfe_meta")
+        row = _output_by_layout(manifest).get("LAYOUT.5_1")
+        self.assertIsNotNone(row)
+        if not isinstance(row, dict):
+            return
+        metadata = row.get("metadata")
+        self.assertIsInstance(metadata, dict)
+        if not isinstance(metadata, dict):
+            return
+        lfe_receipt = metadata.get("lfe_derivation")
+        self.assertIsNotNone(lfe_receipt, "lfe_derivation must be present in metadata")
+        self.assertIsInstance(lfe_receipt, dict)
+        if not isinstance(lfe_receipt, dict):
+            return
+        self.assertEqual(lfe_receipt.get("status"), "derived")
+        self.assertTrue(lfe_receipt.get("derivation_applied"))
+
+    def test_stereo_layout_has_no_lfe_derivation(self) -> None:
+        """Stereo 2.0 render has no LFE channels so lfe_derivation should be None."""
+        session = dict(self.session)
+        session["target_layout_id"] = "LAYOUT.2_0"
+        manifest = PlacementMixdownRenderer().render(session, [], self.out_dir / "lfe_stereo")
+        row = _output_by_layout(manifest).get("LAYOUT.2_0")
+        self.assertIsNotNone(row)
+        if not isinstance(row, dict):
+            return
+        metadata = row.get("metadata")
+        if isinstance(metadata, dict):
+            lfe_receipt = metadata.get("lfe_derivation")
+            self.assertIsNone(lfe_receipt, "stereo layout should have no lfe_derivation")
+
+    def test_lfe_profile_id_from_session_selects_80hz_profile(self) -> None:
+        """Setting lfe_derivation_profile_id in session selects the 80 Hz music profile."""
+        session = dict(self.session)
+        session["target_layout_id"] = "LAYOUT.5_1"
+        session["lfe_derivation_profile_id"] = "LFE_DERIVE.MUSIC_80_LR24_TRIM_10"
+        manifest = PlacementMixdownRenderer().render(session, [], self.out_dir / "lfe_80hz")
+        row = _output_by_layout(manifest).get("LAYOUT.5_1")
+        self.assertIsNotNone(row)
+        if not isinstance(row, dict):
+            return
+        metadata = row.get("metadata")
+        self.assertIsInstance(metadata, dict)
+        if not isinstance(metadata, dict):
+            return
+        lfe_receipt = metadata.get("lfe_derivation")
+        self.assertIsInstance(lfe_receipt, dict)
+        if not isinstance(lfe_receipt, dict):
+            return
+        self.assertEqual(lfe_receipt.get("profile_id"), "LFE_DERIVE.MUSIC_80_LR24_TRIM_10")
+        self.assertEqual(lfe_receipt.get("profile_lowpass_hz"), 80.0)
+
 
 if __name__ == "__main__":
     unittest.main()
