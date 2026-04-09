@@ -72,6 +72,7 @@ __all__ = [
     "_validate_render_manifest",
     "_validate_apply_manifest",
     "_coerce_str",
+    "_render_review_text",
 ]
 
 
@@ -402,3 +403,79 @@ def _coerce_str(value: Any) -> str:
     if isinstance(value, str):
         return value
     return ""
+
+
+# ── Review (pending-approval) text renderer ───────────────────────
+
+
+def _render_review_text(pending: list[dict[str, Any]], *, report_path: str = "") -> str:
+    """Render pending-approval recommendations as a human-readable table.
+
+    Each row shows: index, stem_id, action_id, risk, rec_id (truncated), approve flag.
+    A footer prints the full safe-render command with all --approve-rec flags.
+    """
+    lines: list[str] = []
+
+    if not pending:
+        lines.append("No pending approvals — all recommendations are auto-eligible.")
+        return "\n".join(lines)
+
+    count = len(pending)
+    lines.append(
+        f"Pending Approvals: {count} recommendation{'s' if count != 1 else ''} "
+        "require --approve-rec to render."
+    )
+    lines.append("")
+
+    # Column widths
+    col_w_stem = max(
+        10,
+        max(
+            len(_coerce_str(r.get("scope", {}).get("stem_id") if isinstance(r.get("scope"), dict) else ""))
+            for r in pending
+        ),
+    )
+    col_w_action = max(
+        12,
+        max(len(_coerce_str(r.get("action_id"))) for r in pending),
+    )
+
+    header = (
+        f"  {'#':>3}  {'STEM':<{col_w_stem}}  {'ACTION':<{col_w_action}}  {'RISK':<6}  "
+        f"{'RECOMMENDATION_ID':<36}"
+    )
+    lines.append(header)
+    lines.append("  " + "-" * (len(header) - 2))
+
+    for idx, rec in enumerate(pending, start=1):
+        scope = rec.get("scope") if isinstance(rec.get("scope"), dict) else {}
+        stem_id = _coerce_str(scope.get("stem_id"))  # type: ignore[union-attr]
+        action_id = _coerce_str(rec.get("action_id"))
+        risk = _coerce_str(rec.get("risk"))
+        rec_id = _coerce_str(rec.get("recommendation_id"))
+        issue_id = _coerce_str(rec.get("issue_id"))
+
+        row = (
+            f"  {idx:>3}  {stem_id:<{col_w_stem}}  {action_id:<{col_w_action}}  "
+            f"{risk:<6}  {rec_id}"
+        )
+        lines.append(row)
+        if issue_id:
+            lines.append(f"       {'':>{col_w_stem}}  issue: {issue_id}")
+
+    lines.append("")
+
+    # Footer: approve command
+    report_arg = report_path if report_path else "<report.json>"
+    approve_flags = "".join(
+        f" \\\n      --approve-rec {_coerce_str(r.get('recommendation_id'))}"
+        for r in pending
+    )
+    lines.append("To approve all and re-run:")
+    lines.append(
+        f"  mmo safe-render --report {report_arg}{approve_flags}"
+    )
+    lines.append("")
+    lines.append("To approve selectively, pass only the --approve-rec flags you want.")
+
+    return "\n".join(lines)

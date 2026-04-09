@@ -2818,6 +2818,13 @@ class PlacementMixdownRenderer(RendererPlugin):
         stereo_reinterpret_allowed = _scene_stereo_reinterpret_allowed(scene)
         export_options = _resolve_export_options(session)
         bed_decorrelation_options = _resolve_bed_decorrelated_options(session)
+        # If export_layout_ids not explicitly set, fall back to the
+        # target_layout_id injected by the variants runner (or pipeline) so
+        # we render only the requested layout rather than every supported one.
+        if not export_options.export_layout_ids:
+            _tgt = _coerce_str(session.get("target_layout_id")).strip()
+            if _tgt in _SUPPORTED_LAYOUT_IDS:
+                export_options = replace(export_options, export_layout_ids=(_tgt,))
         selected_layouts = _selected_layout_ids(export_options)
         out_dir = Path(output_dir)
         stem_scene_refs = _scene_stem_reference_map(scene)

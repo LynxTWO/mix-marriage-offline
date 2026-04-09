@@ -1221,6 +1221,12 @@ def run_variant_plan(
                     variant,
                     effective_run_config or {},
                 )
+                # Inject target_layout_id into session so renderers (e.g.
+                # placement_mixdown) can constrain their per-layout output to
+                # exactly the requested target instead of rendering every
+                # supported layout.
+                if target_layout_id and isinstance(render_report.get("session"), dict):
+                    render_report["session"]["target_layout_id"] = target_layout_id
                 binaural_target_requested = is_binaural_layout(target_layout_id)
                 renderer_output_formats = (
                     ["wav"] if binaural_target_requested else render_output_formats

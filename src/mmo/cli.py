@@ -1035,6 +1035,30 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional output compare_report PDF path.",
     )
 
+    review_parser = subparsers.add_parser(
+        "review",
+        help=(
+            "Show pending-approval recommendations from a report in human-readable form. "
+            "Prints rec IDs and the --approve-rec flags needed for safe-render."
+        ),
+    )
+    review_parser.add_argument(
+        "report",
+        help="Path to report JSON, or a directory containing report.json.",
+    )
+    review_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        help="Output format (default: text).",
+    )
+    review_parser.add_argument(
+        "--risk",
+        choices=["low", "medium", "high"],
+        default=None,
+        help="Filter to recommendations of this risk level only.",
+    )
+
     render_parser = subparsers.add_parser(
         "render",
         help="Run renderer plugins for render-eligible recommendations.",
@@ -6036,6 +6060,31 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         except SystemExit as exc:
             return int(exc.code) if isinstance(exc.code, int) else 1
+        return 0
+    if args.command == "review":
+        try:
+            report_payload, _ = load_report_from_path_or_dir(Path(args.report))
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        recs = report_payload.get("recommendations")
+        if not isinstance(recs, list):
+            print("report has no recommendations list", file=sys.stderr)
+            return 1
+        pending = [
+            r for r in recs
+            if isinstance(r, dict) and r.get("requires_approval") is True
+        ]
+        if args.risk:
+            pending = [r for r in pending if r.get("risk") == args.risk]
+        if args.format == "json":
+            print(json.dumps(
+                {"pending_approvals": pending, "count": len(pending)},
+                indent=2,
+                sort_keys=True,
+            ))
+            return 0
+        print(_render_review_text(pending, report_path=args.report))
         return 0
     if args.command == "render":
         render_overrides: dict[str, Any] = {}
