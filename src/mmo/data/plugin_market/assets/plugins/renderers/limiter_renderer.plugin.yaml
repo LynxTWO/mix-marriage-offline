@@ -1,0 +1,55 @@
+plugin_id: "PLUGIN.RENDERER.LIMITER"
+plugin_type: "renderer"
+name: "True-Peak Limiter Renderer"
+version: "0.1.0"
+license: "Apache-2.0"
+description: >
+  Applies ACTION.DYN.LIMITER recommendations to stems using static true-peak
+  ceiling reduction (true_peak_limiter_v0).
+
+  Algorithm: compute true-peak of input via 4x-oversampled polyphase detection;
+  if peak exceeds the ceiling, apply the minimum uniform gain reduction to bring
+  it to exactly the ceiling.  This is a static (non-dynamic) gain stage — fully
+  deterministic and information-preserving for all content below the ceiling.
+
+  Safety gates:
+    - Only risk="low" or risk="medium" with requires_approval=False are rendered.
+    - Ceiling is clamped to [-6.0, 0.0] dBTP.
+    - After processing, true-peak is re-measured; output is rejected (skipped
+      with reason=ceiling_check_failed) if any sample exceeds 0.9999 (guard
+      against floating-point edge cases).
+    - Empty audio, non-WAV stems, and missing files are skipped explicitly.
+
+  Output is always 24-bit PCM WAV.
+  One output file per stem per render pass.
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "mmo.plugins.renderers.limiter_renderer:LimiterRenderer"
+capabilities:
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "render"
+  dsp_traits:
+    linearity: "linear"
+    anti_aliasing: "none"
+    measurable_claims:
+      - "output true-peak ≤ ceiling_dbtp for any non-rejected stem"
+      - "gain_applied_db ≤ 0.0 (never amplifies)"
+      - "output is 24-bit PCM WAV"
+  deterministic_seed_policy: "no_seed"
+  purity:
+    audio_buffer: "write"
+    randomness: "none"
+    wall_clock: "none"
+  behavior:
+    loudness_behavior: "may_reduce"
+    peak_behavior: "ceiling_enforced"
+declares:
+  problem_domains:
+    - "safety"
+    - "loudness"
+  consumes_action_ids:
+    - "ACTION.DYN.LIMITER"
+  target_scopes:
+    - "stem"

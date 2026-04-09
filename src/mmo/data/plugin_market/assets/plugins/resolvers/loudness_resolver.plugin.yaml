@@ -1,0 +1,43 @@
+plugin_id: "PLUGIN.RESOLVER.LOUDNESS"
+plugin_type: "resolver"
+name: "Loudness Resolver"
+version: "0.1.0"
+license: "Apache-2.0"
+description: >
+  Maps loudness and true-peak safety issues to corrective actions.
+
+  ISSUE.SAFETY.TRUEPEAK_OVER_CEILING → ACTION.DYN.LIMITER
+    Ceiling=-1.0 dBTP (from evidence), lookahead=5ms, release=100ms.
+    risk=medium, requires_approval=False.  The limiter renderer enforces a
+    hard ceiling check and rejects output that still clips.
+
+  ISSUE.TRANSLATION.LOUDNESS_OUT_OF_RANGE → ACTION.MASTER.NORMALIZE_LOUDNESS
+    Target LUFS taken from evidence EVID.DETECTOR.THRESHOLD_LUFS.
+    risk=high, requires_approval=True.  Loudness targets are
+    platform/taste-dependent; human confirmation required.
+
+  One recommendation per stem per issue type (deduplication by stem_id).
+  Recommendation IDs are stable (UUID5 from plugin+issue+action+stem_id).
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "mmo.plugins.resolvers.loudness_resolver:LoudnessResolver"
+capabilities:
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+    - "render"
+declares:
+  problem_domains:
+    - "safety"
+    - "loudness"
+    - "translation"
+  consumes_issue_ids:
+    - "ISSUE.SAFETY.TRUEPEAK_OVER_CEILING"
+    - "ISSUE.TRANSLATION.LOUDNESS_OUT_OF_RANGE"
+  emits_action_ids:
+    - "ACTION.DYN.LIMITER"
+    - "ACTION.MASTER.NORMALIZE_LOUDNESS"
+  target_scopes:
+    - "stem"
+    - "bus"

@@ -1,0 +1,57 @@
+plugin_id: "PLUGIN.DETECTOR.LOUDNESS"
+plugin_type: "detector"
+name: "Loudness Detector"
+version: "0.1.0"
+license: "Apache-2.0"
+description: >
+  Reads pre-computed LUFS-I and true-peak measurements from each stem's
+  scan measurements (EVID.METER.LUFS_I, EVID.METER.TRUEPEAK_DBTP) and
+  emits issues when values exceed safety or translation thresholds.
+
+  ISSUE.SAFETY.TRUEPEAK_OVER_CEILING: stem true peak > ceiling (default -1.0
+  dBTP).  Severity: error.  Feeds PLUGIN.RESOLVER.LOUDNESS which recommends
+  ACTION.DYN.LIMITER.
+
+  ISSUE.TRANSLATION.LOUDNESS_OUT_OF_RANGE: integrated LUFS is outside the
+  expected range for the selected profile (streaming/broadcast/theatrical/stems).
+  Severity: warn.  Feeds PLUGIN.RESOLVER.LOUDNESS which recommends
+  ACTION.MASTER.NORMALIZE_LOUDNESS (requires approval).
+
+  Supported profiles via session.detector_options.loudness_profile_id:
+    streaming:   target -14 LUFS, range [-16, -11]
+    broadcast:   target -23 LUFS, range [-25, -21]
+    theatrical:  target -24 LUFS, range [-26, -22]
+    stems:       range [-35, -6]  (default; catches only extreme outliers)
+
+  True-peak ceiling overridable via session.detector_options.loudness_ceiling_dbtp.
+
+  No audio I/O performed: reads from session.stems[].measurements only.
+mmo_min_version: "0.1.0"
+ontology_min_version: "0.1.0"
+entrypoint: "mmo.plugins.detectors.loudness_detector:LoudnessDetector"
+capabilities:
+  scene_scope: "object_capable"
+  layout_safety: "layout_agnostic"
+  supported_contexts:
+    - "suggest"
+    - "render"
+  dsp_traits:
+    linearity: "linear"
+    measurable_claims:
+      - "emits ISSUE.SAFETY.TRUEPEAK_OVER_CEILING when true_peak_dbtp > ceiling"
+      - "emits ISSUE.TRANSLATION.LOUDNESS_OUT_OF_RANGE when lufs_i outside profile range"
+  deterministic_seed_policy: "no_seed"
+  purity:
+    audio_buffer: "none"
+    randomness: "none"
+    wall_clock: "none"
+declares:
+  problem_domains:
+    - "safety"
+    - "loudness"
+    - "translation"
+  emits_issue_ids:
+    - "ISSUE.SAFETY.TRUEPEAK_OVER_CEILING"
+    - "ISSUE.TRANSLATION.LOUDNESS_OUT_OF_RANGE"
+  target_scopes:
+    - "stem"
