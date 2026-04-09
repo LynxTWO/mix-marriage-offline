@@ -42,8 +42,8 @@
         },
         {
           "integrated_lufs": null,
-          "peak_dbfs": null,
-          "rms_dbfs": null,
+          "peak_dbfs": -10.3835,
+          "rms_dbfs": -21.0817,
           "speaker_id": "SPK.LFE"
         },
         {
@@ -142,8 +142,8 @@
         },
         {
           "integrated_lufs": null,
-          "peak_dbfs": null,
-          "rms_dbfs": null,
+          "peak_dbfs": -10.3835,
+          "rms_dbfs": -21.0817,
           "speaker_id": "SPK.LFE"
         },
         {
