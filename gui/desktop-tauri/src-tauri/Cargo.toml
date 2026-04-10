@@ -1,6 +1,6 @@
 [package]
 name = "mmo-desktop-tauri"
-version = "1.0.0"
+version = "1.1.0"
 description = "Mix Marriage Offline desktop app scaffold"
 authors = ["MMO contributors"]
 edition = "2021"
