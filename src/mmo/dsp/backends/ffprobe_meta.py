@@ -118,6 +118,8 @@ def _extract_ffprobe_tags(payload: Dict[str, Any], *, container: str) -> dict[st
                     )
                 )
 
+    # Normalize through the shared media-tag path so ffprobe tags match the
+    # same shape and warning rules used by scan and export receipts.
     return tag_bag_to_mapping(canonicalize_tag_bag(raw_tags, warnings))
 
 
@@ -160,6 +162,8 @@ def read_metadata_ffprobe(path: Path) -> Dict[str, Any]:
 
     audio_stream = None
     for stream in streams:
+        # Use the first audio stream as the metadata authority. Callers expect
+        # one canonical stream summary, not a merge across alternate tracks.
         if isinstance(stream, dict) and stream.get("codec_type") == "audio":
             audio_stream = stream
             break
@@ -168,6 +172,8 @@ def read_metadata_ffprobe(path: Path) -> Dict[str, Any]:
 
     channels = _parse_int(audio_stream.get("channels"))
     sample_rate = _parse_int(audio_stream.get("sample_rate"))
+    # Missing core timing fields make later decode and resampling decisions
+    # unsafe, so treat them as hard errors instead of partial metadata.
     if channels is None or channels <= 0:
         raise ValueError("ffprobe JSON missing channels")
     if sample_rate is None or sample_rate <= 0:

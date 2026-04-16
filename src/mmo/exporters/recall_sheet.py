@@ -73,6 +73,8 @@ def _sort_key(issue: Dict[str, Any]) -> Tuple[int, float, str]:
 
 
 def _sorted_issues(issues: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    # Rank by review urgency first, then by stable issue id, so the same report
+    # stays comparable across repeated exports.
     return sorted(
         (issue for issue in issues if isinstance(issue, dict)),
         key=_sort_key,
@@ -162,6 +164,8 @@ def _extract_render_channel_orders(render_report: Optional[Dict[str, Any]]) -> s
 
     if not orders_by_layout:
         return ""
+    # Flatten to one deterministic string so CSV rows stay stable and easy to
+    # diff without embedding nested report payloads.
     return "|".join(
         f"{layout_id}:{orders_by_layout[layout_id]}"
         for layout_id in sorted(orders_by_layout.keys())
@@ -187,6 +191,7 @@ def _extract_render_export_warnings(render_report: Optional[Dict[str, Any]]) -> 
                     warnings.add(warning.strip())
     if not warnings:
         return ""
+    # Sort warning text so optional export paths do not reshuffle rows.
     return " | ".join(sorted(warnings))
 
 
@@ -318,7 +323,8 @@ def export_recall_sheet(
     issue_action_map = _build_issue_action_map(recommendations)
     sorted_issues = _sorted_issues(issues)
 
-    # Derive context values once — repeated on every row.
+    # Derive context once and repeat it on every row. Recall sheets are meant
+    # to be filtered or split without losing the scene and render context.
     ctx_scene_id = _extract_scene_id(scene)
     ctx_object_count = _extract_scene_object_count(scene)
     ctx_layout_ids = _extract_target_layout_ids(request)
@@ -336,6 +342,8 @@ def export_recall_sheet(
 
     with out_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
+        # Always emit the full header even when issues or optional artifacts are
+        # missing so downstream review tooling sees one stable CSV contract.
         writer.writerow(
             [
                 "rank",

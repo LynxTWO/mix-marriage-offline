@@ -217,6 +217,8 @@ def choose_target_rate_for_session(
     elif not observed_rates:
         selected_sample_rate_hz = default_rate
     elif uniform_source_sample_rate_hz is not None:
+        # Preserve a shared native rate when every decodable stem agrees. This
+        # avoids inventing a resample step that the session does not need.
         selected_sample_rate_hz = uniform_source_sample_rate_hz
         selection_policy = "uniform_source_rate_preserve"
         selection_reason = "uniform_source_sample_rate_hz"
@@ -225,6 +227,8 @@ def choose_target_rate_for_session(
         sample_rate_policy = "uniform_source_rate_preserve"
         sample_rate_policy_reason = "all_decodable_stems_share_one_rate"
     else:
+        # Mixed-rate sessions pick a dominant family first so 44.1k-derived and
+        # 48k-derived stems do not tie-break against unrelated exact rates.
         max_family_count = max(family_counts.values())
         candidate_families = [
             family_hz
@@ -359,6 +363,8 @@ def build_resampling_receipt(
         dict(row) for row in (decoder_warnings or []) if isinstance(row, Mapping)
     ]
     resampled_stem_count = len(normalized_resampled_stems)
+    # Use one receipt shape whether resampling happened or not. Later reports
+    # and tests still need the selection evidence and warning counts.
     resample_applied = resampled_stem_count > 0
     normalized_stage = _coerce_str(resample_stage).strip()
     if not normalized_stage:
@@ -442,6 +448,8 @@ def choose_render_sample_rate_hz(
         }
 
     max_count = max(count for _, count in ordered_counts)
+    # Render-rate ties resolve upward so the chosen rate is deterministic even
+    # when track counts are identical.
     tied_rates = [rate for rate, count in ordered_counts if count == max_count]
     selected_rate = max(tied_rates)
     selection_reason = "majority"
@@ -483,6 +491,8 @@ def iter_resampled_float64_samples(
                 yield [float(sample) for sample in chunk]
         return
 
+    # Interpolation state spans the whole iterator instead of resetting per
+    # chunk. Resetting it here would move samples at chunk boundaries.
     source_rate = int(source_sample_rate_hz)
     target_rate = int(target_sample_rate_hz)
     max_chunk_samples = chunk_frames * channels
@@ -538,6 +548,8 @@ def iter_resampled_float64_samples(
 
             next_required = phase_numer // target_rate
             min_keep_frame = max(0, int(next_required) - 1)
+            # Retain one look-back frame so the next interpolation step can
+            # reuse the same boundary sample instead of drifting at chunk edges.
             drop_frames = min_keep_frame - buffer_start_frame
             if drop_frames > 0:
                 max_drop = max(0, buffered_frames - 1)

@@ -55,6 +55,8 @@ def resolve_downmix_matrix(
     layouts_path: Path | None = None,
     registry_path: Path | None = None,
 ) -> Dict[str, Any]:
+    # The ontology layouts and policy packs own channel semantics here. Keep
+    # callers from hard-coding their own matrix folklore around this helper.
     layouts_path = layouts_path or (ontology_dir() / "layouts.yaml")
     registry_path = registry_path or (ontology_dir() / "policies" / "downmix.yaml")
     layouts = load_layouts(layouts_path)
@@ -178,6 +180,8 @@ def _build_source_pre_filters(
     }
     channel_filters: Dict[int, List[_Biquad]] = {}
     for speaker_id in sorted(source_pre_filters.keys(), key=str):
+        # Match filters by declared speaker id, not by caller order. A wrong
+        # speaker match here would silently filter the wrong channel.
         if speaker_id not in speaker_to_index:
             raise ValueError(
                 f"source_pre_filters speaker_id {speaker_id!r} not in source_speakers"
@@ -252,6 +256,8 @@ def apply_matrix_to_audio(
         source_speakers=source_speakers,
         sample_rate_hz=sample_rate_hz,
     )
+    # Apply source-side filters before matrix folding so policy-controlled
+    # preconditioning is reflected in every target speaker sum.
     filtered_source = _apply_source_pre_filters(
         source_interleaved,
         channels=source_channels,

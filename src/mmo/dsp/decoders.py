@@ -86,8 +86,12 @@ def is_lossless_format_id(format_id: str, *, codec_name: str | None = None) -> b
 def read_audio_metadata(path: Path) -> dict:
     format_id = detect_format_from_path(path)
     if format_id == _WAV_FORMAT_ID:
+        # WAV metadata stays on the local parser path so common sessions do not
+        # depend on ffprobe for basic decode authority.
         return read_wav_metadata(path)
     if format_id == "unknown":
+        # Unknown formats must fail explicitly. Guessing here would hide which
+        # backend owns the file and which artifact contract should apply.
         raise NotImplementedError(f"No decoder backend for format '{format_id}'")
     if find_ffprobe() is not None:
         metadata = read_metadata_ffprobe(path)
@@ -139,6 +143,8 @@ def iter_audio_float64_samples(
     else:
         resolved_metadata = read_audio_metadata(path)
 
+    # Channel count and sample rate come from the trusted metadata path before
+    # decode starts. The stream iterator below must match those values exactly.
     channels = _coerce_positive_int(resolved_metadata.get("channels"))
     source_sample_rate_hz = _coerce_positive_int(resolved_metadata.get("sample_rate_hz"))
     if channels is None:
@@ -147,10 +153,13 @@ def iter_audio_float64_samples(
         raise ValueError(f"invalid sample rate in metadata for {path}")
 
     if format_id == _WAV_FORMAT_ID:
+        # Use the local WAV path to avoid taking a subprocess dependency when
+        # the repo can already decode and meter it directly.
         source_iter = iter_wav_float64_samples(path, error_context=error_context)
     elif format_id in _FFMPEG_ONLY_FORMAT_IDS:
         decoder_cmd = list(ffmpeg_cmd) if ffmpeg_cmd is not None else resolve_ffmpeg_cmd()
         if decoder_cmd is None:
+            # Non-WAV decode has no safe fallback once FFmpeg is unavailable.
             raise ValueError(
                 "ffmpeg not available for non-WAV decode; install ffmpeg or set MMO_FFMPEG_PATH"
             )
@@ -171,6 +180,8 @@ def iter_audio_float64_samples(
     if target_rate is None:
         raise ValueError("target_sample_rate_hz must be a positive integer")
 
+    # Resample through the shared iterator so every non-native-rate path emits
+    # the same receipt policy and interpolation behavior.
     yield from iter_resampled_float64_samples(
         aligned_iter,
         channels=channels,
