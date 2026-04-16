@@ -14,6 +14,8 @@ from mmo.dsp.io import sha256_file
 
 def discover_stem_files(stems_dir: Path) -> list[Path]:
     """Discover known-audio stems under a directory (case-insensitive extension)."""
+    # Keep the intake allowlist explicit so session builds ignore unrelated
+    # workspace files and produce the same stem set on repeated scans.
     extensions = {
         ".wav",
         ".wave",
@@ -33,6 +35,8 @@ def discover_stem_files(stems_dir: Path) -> list[Path]:
         for path in stems_dir.rglob("*")
         if path.is_file() and path.suffix.lower() in extensions
     ]
+    # Sort before hashing and id assignment so session assembly does not depend
+    # on filesystem walk order.
     stems.sort(key=lambda p: p.as_posix().lower())
     return stems
 
@@ -43,6 +47,8 @@ def build_session_from_stems_dir(stems_dir: Path) -> dict:
     rel_paths_by_source: list[tuple[Path, str]] = []
     for path in stems:
         try:
+            # Relative paths keep sessions portable. Fall back to an absolute
+            # path only when the source is already outside the chosen stems root.
             rel_path = path.relative_to(resolved_stems_dir).as_posix()
         except ValueError:
             rel_path = path.resolve().as_posix()
@@ -64,6 +70,8 @@ def build_session_from_stems_dir(stems_dir: Path) -> dict:
         try:
             metadata = read_metadata(path)
         except (ValueError, NotImplementedError):
+            # Metadata gaps should not block session creation. Later validation
+            # and locator passes can still work from ids, hashes, and file paths.
             metadata = None
         if metadata:
             source_metadata = source_metadata_from_probe(metadata)
@@ -102,5 +110,7 @@ def build_session_from_stems_dir(stems_dir: Path) -> dict:
         "stems_dir": resolved_stems_dir.as_posix(),
         "stems": stem_entries,
     }
+    # Every freshly built session goes through the shared locator policy so
+    # analysis, scene, and render code all see the same canonical stem fields.
     resolve_session_stems(session, mutate=True)
     return session

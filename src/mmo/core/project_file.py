@@ -81,6 +81,8 @@ def _validate_project_payload(payload: dict[str, Any]) -> None:
 
 
 def _normalize_project_id(stems_dir: Path) -> str:
+    # Project ids derive from the resolved stems root so the same project folder
+    # keeps the same identity across save/load paths and operator machines.
     stem_name = stems_dir.resolve().name.strip() or "PROJECT"
     cleaned = _PROJECT_ID_CLEAN_RE.sub("_", stem_name).strip("_").upper()
     if not cleaned:
@@ -92,6 +94,8 @@ def _normalize_last_run(last_run: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(last_run, dict):
         raise ValueError("last_run must be an object.")
 
+    # last_run is an allowlist, not a generic dump of workspace state. Keep it
+    # limited to stable pointers the project schema already understands.
     normalized: dict[str, Any] = {}
     mode = last_run.get("mode")
     out_dir = last_run.get("out_dir")
@@ -116,6 +120,8 @@ def _normalized_project_payload(project: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(project, dict):
         raise ValueError("Project payload must be an object.")
 
+    # Read and write paths share one normalization pass so schema validation
+    # sees the same payload shape regardless of where the project came from.
     normalized = dict(project)
     if "last_run" in normalized:
         normalized["last_run"] = _normalize_last_run(normalized["last_run"])
@@ -139,6 +145,8 @@ def new_project(stems_dir: Path, *, notes: str | None) -> dict[str, Any]:
     if notes is not None:
         project["notes"] = notes
 
+    # Normalize before validation so new projects start with the same canonical
+    # shape later save/load code expects.
     normalized = _normalized_project_payload(project)
     _validate_project_payload(normalized)
     return normalized
@@ -153,6 +161,8 @@ def update_project_last_run(project: dict[str, Any], last_run: dict[str, Any]) -
 
 
 def write_project(path: Path, project: dict[str, Any]) -> None:
+    # Writes go through the same normalize-then-validate path as project
+    # creation so hand-edited payloads cannot bypass schema guardrails.
     normalized = _normalized_project_payload(project)
     _validate_project_payload(normalized)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -164,6 +174,8 @@ def write_project(path: Path, project: dict[str, Any]) -> None:
 
 def load_project(path: Path) -> dict[str, Any]:
     payload = _load_json_object(path, label="Project")
+    # Loads normalize before validation so older spellings of allowed fields do
+    # not create separate behavior from freshly written project files.
     normalized = _normalized_project_payload(payload)
     _validate_project_payload(normalized)
     return normalized
