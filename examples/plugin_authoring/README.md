@@ -36,6 +36,8 @@ Each example does three things on purpose:
 - emits deterministic evidence for tests and receipts
 - declares the manifest safety contract the host needs for explainable
   restriction or bypass decisions
+- keeps `render()` receipt-only so authors can learn the host contract before
+  they add file output side effects
 
 ## Quick workflow
 

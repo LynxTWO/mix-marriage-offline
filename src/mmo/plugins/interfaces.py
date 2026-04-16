@@ -6,6 +6,8 @@ from typing import Any, Dict, List, TypedDict
 
 
 PLUGIN_SUPPORTED_CONTEXTS = ("suggest", "auto_apply", "render")
+# Keep this tuple shared across loader, CLI, and UI surfaces so plugin context
+# claims do not drift by call site.
 
 
 @dataclass(frozen=True)
@@ -17,6 +19,8 @@ class PluginSceneCapabilities:
     supported_target_ids: tuple[str, ...] | None = None
 
     def to_dict(self) -> Dict[str, Any]:
+        # Emit only declared scene limits. Missing keys mean "not declared", not
+        # "false", and validators depend on that distinction.
         payload: Dict[str, Any] = {}
         if isinstance(self.supports_objects, bool):
             payload["supports_objects"] = self.supports_objects
@@ -39,6 +43,8 @@ class PluginPurityContract:
     thread_scheduling: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
+        # Keep the serialized contract sparse so manifests only claim the
+        # runtime guardrails they declare.
         payload: Dict[str, Any] = {}
         if isinstance(self.audio_buffer, str) and self.audio_buffer:
             payload["audio_buffer"] = self.audio_buffer
@@ -89,6 +95,8 @@ class PluginBehaviorContract:
     rationale: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
+        # Behavior contract fields end up in receipts and UI summaries. Do not
+        # fill missing policy with defaults that the manifest did not claim.
         payload: Dict[str, Any] = {}
         if isinstance(self.loudness_behavior, str) and self.loudness_behavior:
             payload["loudness_behavior"] = self.loudness_behavior
@@ -127,6 +135,8 @@ class PluginCapabilities:
     notes: tuple[str, ...] | None = None
 
     def to_dict(self) -> Dict[str, Any]:
+        # The loader serializes this into manifest-like JSON for CLI and UI
+        # inspection. Preserve declaration order and omit undeclared limits.
         payload: Dict[str, Any] = {}
         if isinstance(self.max_channels, int):
             payload["max_channels"] = self.max_channels
@@ -173,6 +183,8 @@ class Issue(TypedDict, total=False):
 
 
 class Recommendation(TypedDict, total=False):
+    # Resolver output is later consumed by gates, renderers, receipts, and UI.
+    # Field names here are part of that shared plugin contract.
     recommendation_id: str
     issue_id: str
     action_id: str
@@ -188,6 +200,8 @@ class Recommendation(TypedDict, total=False):
 
 
 class RenderOutput(TypedDict, total=False):
+    # Renderer receipts carry these fields into render manifests, QA, and GUI
+    # views. New keys should be additive rather than silent replacements.
     output_id: str
     file_path: str
     action_id: str
@@ -207,6 +221,8 @@ class RenderOutput(TypedDict, total=False):
 
 
 class RenderSkipped(TypedDict, total=False):
+    # Skipped rows are the audit trail for plugin safety bypasses and topology
+    # refusals. The host and UI rely on reason and details staying explicit.
     recommendation_id: str
     action_id: str
     reason: str
@@ -215,6 +231,8 @@ class RenderSkipped(TypedDict, total=False):
 
 
 class RenderManifest(TypedDict, total=False):
+    # Renderers return one manifest per plugin invocation. Receipt-only starter
+    # examples use the same shape so authors can test host policy without audio IO.
     renderer_id: str
     outputs: List[RenderOutput]
     notes: str

@@ -18,6 +18,8 @@ _DEFAULT_PURITY = PluginPurityContract(
     wall_clock="forbidden",
     thread_scheduling="forbidden",
 )
+# Default purity stays fail-closed. A manifest has to opt into narrower
+# exceptions before plugin execution may use them.
 
 
 class PluginPurityViolationError(RuntimeError):
@@ -62,6 +64,8 @@ def purity_contract_from_capabilities(
     if not isinstance(raw_purity, dict):
         return None
 
+    # Older manifests may only declare seed policy. Fill randomness from that
+    # field so runtime guards still match the manifest intent.
     randomness = raw_purity.get("randomness")
     if not isinstance(randomness, str) or not randomness.strip():
         if effective_seed_policy in {"seed_required", "seed_optional"}:
@@ -134,6 +138,8 @@ def _build_random_patches(
         }
 
         def guarded_random_ctor(*args: Any, **kwargs: Any) -> random.Random:
+            # Deterministic plugins may still use RNG when they bind it to the
+            # host-provided seed instead of process-global state.
             _seed_or_violation(*args, keyword="x", **kwargs)
             return original_random_class(*args, **kwargs)
 
@@ -209,6 +215,8 @@ def _build_random_patches(
     patched.append(mock.patch("random.SystemRandom", new=forbidden_system_random))
 
     if purity.randomness == "forbidden":
+        # Constructor patches close the back door where a plugin might bypass
+        # module-level helpers but still create its own RNG state.
         def forbidden_random_ctor(*args: Any, **kwargs: Any) -> Any:
             del args, kwargs
             _violation(
@@ -323,6 +331,8 @@ def plugin_purity_guard(
         if purity.thread_scheduling == "forbidden":
             for patcher in _build_thread_patches(plugin_id):
                 stack.enter_context(patcher)
+        # All guardrails stay scoped to one invoke call so plugin restrictions
+        # do not leak into the rest of the process.
         yield
 
 

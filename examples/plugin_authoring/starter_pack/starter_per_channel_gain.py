@@ -29,6 +29,8 @@ class StarterPerChannelGain:
         if channel.sample_rate_hz != sample_rate_hz:
             raise ValueError("AudioBufferF64 sample_rate_hz must match sample_rate_hz.")
 
+        # Target ids are semantic speaker ids from process_ctx, not positional
+        # channel indexes. That keeps the example portable across layout orders.
         target_channel_ids = {
             channel_id.strip()
             for channel_id in params.get("target_channel_ids", [])
@@ -58,6 +60,8 @@ class StarterPerChannelGain:
         output_dir=None,
     ):
         del session, output_dir
+        # Starter examples keep render() receipt-only so tests can inspect host
+        # routing and recommendation filtering without writing audio files.
         received_ids = sorted(
             {
                 rec.get("recommendation_id")
