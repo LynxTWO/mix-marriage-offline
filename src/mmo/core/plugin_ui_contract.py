@@ -213,6 +213,8 @@ def _resolve_manifest_relative_file(
 
     plugin_dir = manifest_path.resolve().parent
     candidate = (plugin_dir / candidate_rel).resolve()
+    # UI contract files stay inside the plugin directory so a manifest cannot
+    # lint or snapshot arbitrary local files.
     try:
         candidate.relative_to(plugin_dir)
     except ValueError as exc:
@@ -341,6 +343,8 @@ def _resolve_param_ref(
         resolved = index.by_pointer.get(normalized)
         return (resolved, "ok" if resolved is not None else "missing")
 
+    # Accept exact names first, then canonicalized tail tokens, so copied
+    # layouts remain readable without making ambiguous shortcuts succeed.
     by_name = index.by_name_lower.get(normalized.lower(), [])
     if len(by_name) == 1:
         return by_name[0], "ok"
@@ -374,6 +378,8 @@ def _lint_plugin(plugin: Any) -> dict[str, Any]:
     manifest = plugin.manifest if isinstance(getattr(plugin, "manifest", None), dict) else {}
 
     issues: list[dict[str, Any]] = []
+    # Keep collecting issues for one plugin so authors can fix schema, hint, and
+    # layout drift in one pass instead of chasing one failure at a time.
     config_schema = manifest.get("config_schema")
     has_config_schema = isinstance(config_schema, dict)
     if "config_schema" in manifest and config_schema is not None and not has_config_schema:
@@ -664,6 +670,9 @@ def _lint_plugin(plugin: Any) -> dict[str, Any]:
         for param_pointer in missing_hints:
             param_row = parameter_index.by_pointer.get(param_pointer)
             param_name = param_row.name if param_row is not None else ""
+            # Missing hints are warnings rather than hard errors because the
+            # layout can still render, but the UI loses schema-backed display
+            # metadata that authors are expected to provide.
             issues.append(
                 _issue(
                     plugin_id=plugin_id,
@@ -708,6 +717,7 @@ def _lint_plugin(plugin: Any) -> dict[str, Any]:
 def build_plugin_ui_contract_lint_payload(*, plugins_dir: Path) -> dict[str, Any]:
     resolved_plugins_dir = _validate_plugins_dir(plugins_dir)
     plugin_rows = [_lint_plugin(plugin) for plugin in load_plugins(resolved_plugins_dir)]
+    # Stable plugin ordering keeps lint snapshots diffable across runs and roots.
     plugin_rows.sort(
         key=lambda row: (
             _coerce_str(row.get("plugin_id")).strip(),

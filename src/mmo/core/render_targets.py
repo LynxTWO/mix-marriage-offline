@@ -194,6 +194,9 @@ def resolve_render_target_id(token: str, path: Path | None = None) -> str:
     try:
         registry = load_render_targets_registry(path)
     except ValueError:
+        # Fall back to the raw YAML only when the richer registry loader cannot
+        # run. This keeps CLI token resolution available for diagnostics while
+        # the registry remains the main authority when it is healthy.
         registry = None
     else:
         target_ids = registry.list_target_ids()
@@ -236,6 +239,8 @@ def resolve_render_target_id(token: str, path: Path | None = None) -> str:
     if len(alias_matches) == 1:
         return alias_matches[0]
     if len(alias_matches) > 1:
+        # Ambiguous aliases must fail closed. Picking one silently would route a
+        # render request to the wrong target layout.
         raise ValueError(
             (
                 f"Ambiguous render target token: {normalized_token}. "
