@@ -648,8 +648,12 @@ class MixdownRenderer(RendererPlugin):
             return manifest
 
         out_dir = Path(output_dir)
+        # Keep layout selection stable across runs so receipt ids and output
+        # paths do not depend on caller ordering.
         selected_layouts = _selected_layout_ids()
 
+        # Decode and trim once, then carry that same resampling receipt and
+        # headroom policy into every layout-specific output row.
         program = _read_stereo_program_from_stems(session)
         trim_linear, trim_db, trim_reason = _compute_trim(program)
 
@@ -660,6 +664,8 @@ class MixdownRenderer(RendererPlugin):
                 continue
             bit_depth = 24
             dither_policy = resolve_dither_policy_for_bit_depth(bit_depth)
+            # The render seed and export seed have to match the written file so
+            # later finalization receipts and trace metadata stay reproducible.
             render_seed = _session_render_seed(session)
             export_seed = derive_export_finalization_seed(
                 job_id=_export_job_id(session),
@@ -707,11 +713,15 @@ class MixdownRenderer(RendererPlugin):
                 list(program.notes),
                 list(program.resampling.get("decoder_warnings") or []),
             )
+            # Silence is still a completed render, but it stays a warning so
+            # downstream review does not treat an empty master as clean output.
             if rendered_frame_count > 0 and is_effectively_silent_peak_linear(rendered_peak_linear):
                 render_warning_codes = canonical_warning_codes(
                     render_warning_codes,
                     [RENDER_RESULT_SILENT_OUTPUT],
                 )
+            # Persist trim and resampling evidence on the output row. QA and
+            # exporters read the file contract, not the in-memory program.
             output_row: dict[str, Any] = {
                 "output_id": f"OUTPUT.MIXDOWN_BASELINE.{layout_slug}.{output_sha[:12]}",
                 "file_path": rel_path.as_posix(),
@@ -799,6 +809,8 @@ class MixdownRenderer(RendererPlugin):
                 output_row["metadata"]["warnings"] = sorted(set(normalized_warnings))
             outputs.append(output_row)
 
+        # Sort manifest outputs before return so tests and project receipts see
+        # one stable layout order.
         outputs.sort(key=lambda row: (_coerce_str(row.get("layout_id")), _coerce_str(row.get("file_path"))))
         manifest["outputs"] = outputs
         manifest["notes"] = (

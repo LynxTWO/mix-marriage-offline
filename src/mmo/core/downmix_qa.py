@@ -273,6 +273,8 @@ def run_downmix_qa(
     source_pre_filters_for_log: Dict[str, List[Dict[str, Any]]] = {}
     source_pre_filters_applied = False
 
+    # When decode tools are missing, record a hard QA issue instead of guessing
+    # at measurements that never ran.
     ffmpeg_cmd = resolve_ffmpeg_cmd()
     if ffmpeg_cmd is None:
         evidence = [
@@ -334,6 +336,8 @@ def run_downmix_qa(
             }
         }
 
+    # QA must resolve the same ontology-backed matrix the render path uses. A
+    # local fallback matrix here would hide policy drift.
     layouts_path = ontology_dir() / "layouts.yaml"
     registry_path = ontology_dir() / "policies" / "downmix.yaml"
     matrix = resolve_downmix_matrix(
@@ -427,6 +431,9 @@ def run_downmix_qa(
             }
         }
 
+    # Stop before measurement if the file shape is not trusted. The later
+    # tolerances only mean anything once channel counts, rates, and duration
+    # are confirmed.
     try:
         src_meta = read_metadata(src_path)
         ref_meta = read_metadata(ref_path)
@@ -493,6 +500,8 @@ def run_downmix_qa(
     ref_sample_rate = int(ref_meta.get("sample_rate_hz", 0) or 0)
     src_duration = float(src_meta.get("duration_s", 0.0) or 0.0)
     ref_duration = float(ref_meta.get("duration_s", 0.0) or 0.0)
+    # Compare only the shared overlap. Stretching the longer file would invent
+    # evidence and skew loudness or similarity deltas.
     seconds_available = min(src_duration, ref_duration)
     if max_seconds <= 0.0:
         seconds_compared = seconds_available
@@ -704,6 +713,8 @@ def run_downmix_qa(
     ref_metrics: Dict[str, float] = {}
 
     try:
+        # Apply the resolved matrix before measuring so QA verifies the shipped
+        # fold policy, not a looser approximation.
         folded_chunks = iter_apply_matrix_to_chunks(
             coeffs,
             src_aligned,
