@@ -80,6 +80,12 @@ Non-numbered one-offs are kept only as supporting reference when still useful.
 
 - [Status system (`STATUS.md` + `milestones.yaml`)](STATUS.md) Keep milestone
   checklist state and machine-readable milestone state aligned.
+- [architecture/system-map.md](architecture/system-map.md) Inventory of runtime
+  units, entrypoints, local artifact stores, config inputs, and trust
+  boundaries.
+- [unknowns/architecture-pass.md](unknowns/architecture-pass.md) Architecture
+  inventory uncertainty log. Record unresolved boundaries here instead of
+  guessing.
 - [13-plugin-authoring.md](13-plugin-authoring.md) Starter-pack workflow for
   first plugins, including execution mode, determinism, and safety semantics.
 - [../examples/plugin_authoring/README.md](../examples/plugin_authoring/README.md)
