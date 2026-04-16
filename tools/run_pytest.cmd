@@ -11,6 +11,8 @@ if defined PYTHONPATH (
   set "PYTHONPATH=%SRC_DIR%"
 )
 
+REM Resolve temp roots through repo code so Windows runs use the same local
+REM temp policy as the Python backend instead of %TEMP%.
 for /f "usebackq delims=" %%I in (`python -c "import sys; from pathlib import Path; repo = Path(r'%REPO_ROOT%'); sys.path.insert(0, str(repo / 'src')); from mmo.resources import temp_dir; print(temp_dir())"`) do set "TMP_ROOT=%%I"
 
 if not defined TMP_ROOT (
@@ -34,6 +36,7 @@ set "PYTEST_XDIST_ARGS="
 if defined MMO_PYTEST_N (
   python -c "import xdist" >nul 2>&1
   if errorlevel 1 (
+    REM Do not drop back to serial here. The caller asked for xdist coverage.
     >&2 echo MMO_PYTEST_N is set but pytest-xdist is not installed. Install dev deps.
     exit /b 2
   )

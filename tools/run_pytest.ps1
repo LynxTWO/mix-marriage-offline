@@ -12,6 +12,8 @@ else {
   $env:PYTHONPATH = $srcDir
 }
 
+# Mirror the shell runners by forcing repo-local temp roots. That keeps pytest
+# artifacts easy to inspect and avoids user-global temp drift.
 New-Item -ItemType Directory -Path $tmpRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $baseTemp -Force | Out-Null
 
@@ -34,6 +36,8 @@ if ($env:MMO_PYTEST_N) {
     $ErrorActionPreference = $previousErrorActionPreference
   }
   if ($xdistCheckExit -ne 0) {
+    # Keep the requested validation mode explicit. Silent serial fallback would
+    # hide the missing xdist dependency.
     [Console]::Error.WriteLine("MMO_PYTEST_N is set but pytest-xdist is not installed. Install dev deps.")
     exit 2
   }

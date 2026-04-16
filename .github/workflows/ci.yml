@@ -38,6 +38,8 @@ jobs:
       - name: Run golden fixtures
         run: python -m pytest -q tests/test_golden_fixtures.py
 
+      # Keep plugin mode goldens split out from the full suite. When these fail,
+      # the regression is usually in plugin contracts or dispatch topology.
       - name: Run plugin mode golden tests
         run: python -m pytest -q tests/test_plugin_modes_golden.py
 
@@ -78,6 +80,8 @@ jobs:
         shell: pwsh
         run: python -m pytest -q tests/test_golden_fixtures.py
 
+      # Match Linux and macOS by proving plugin mode semantics before the broad
+      # pytest runner hides that failure inside the full suite.
       - name: Run plugin mode golden tests
         shell: pwsh
         run: python -m pytest -q tests/test_plugin_modes_golden.py
@@ -121,6 +125,8 @@ jobs:
       - name: Run golden fixtures
         run: python -m pytest -q tests/test_golden_fixtures.py
 
+      # Keep this separate from the xdist run so plugin-mode regressions stay
+      # easy to spot in CI output.
       - name: Run plugin mode golden tests
         run: python -m pytest -q tests/test_plugin_modes_golden.py
 
@@ -141,6 +147,8 @@ jobs:
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,truth,pdf]"
 
       - name: Run tests (serial)
+        # The serial lane catches worker-order assumptions that the xdist jobs
+        # can hide.
         run: tools/run_pytest.sh -q
 
   screenshots-check:
@@ -184,6 +192,8 @@ jobs:
           path: /tmp/mmo-tauri-screenshots/
 
       - name: Perceptual diff check (committed vs generated)
+        # Uploading the regenerated screenshots above keeps review evidence even
+        # when the diff check fails.
         run: >
           python tools/check_screenshot_diff.py
           --committed docs/manual/assets/screenshots
@@ -351,6 +361,8 @@ jobs:
         run: npm test --if-present
 
       - name: Build desktop packaged bundle
+        # The packaged build depends on the sidecar path being prepared inside
+        # the desktop project first, not on a repo-root binary left from prior jobs.
         working-directory: gui/desktop-tauri
         env:
           PYTHON: python

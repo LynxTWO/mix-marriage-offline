@@ -18,6 +18,8 @@ def main() -> int:
         )
         return 2
 
+    # Keep the wrapper on the current interpreter so local env quirks do not
+    # split wrapper behavior from the real contract validator.
     command = [sys.executable, str(VALIDATE_CONTRACTS), *sys.argv[1:]]
     try:
         completed = subprocess.run(command, check=False)
