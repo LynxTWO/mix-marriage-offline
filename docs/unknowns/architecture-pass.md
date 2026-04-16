@@ -6,9 +6,9 @@ This file records unresolved architecture questions from read-only inventory
 passes. Add rows here instead of guessing when a runtime unit, boundary, or
 artifact cannot be explained from repo evidence.
 
-Status for the 2026-04-15 inventory pass: no unresolved architecture questions
+Status for the 2026-04-16 architecture refresh: no open architecture unknowns
 remained after inspection.
 
-| File or module | What is unclear | Why it matters | Evidence found so far | What would clarify it |
-| --- | --- | --- | --- | --- |
-| _None in the current pass_ | The current inventory pass could tie each reviewed runtime unit, entrypoint, artifact store, and trust boundary to repo evidence. | Keep this file present so later passes have a stable place to record uncertainty instead of hiding it in code or comments. | Reviewed repo docs, `src/mmo/cli.py`, `src/mmo/cli_commands/_gui_rpc.py`, `gui/server.mjs`, `src/mmo/resources.py`, plugin loader and market code, Tauri config, desktop docs, and CI or release workflows. | Add one row per unresolved boundary as soon as a future pass finds a gap. |
+| Area or file | Concern | Why it matters | Evidence found so far | Likely owner if known | Next best check | Risk level |
+| --- | --- | --- | --- | --- | --- | --- |
+| _None in current pass_ | The architecture refresh could tie each reviewed runtime unit, entry surface, state boundary, and trust boundary to repo evidence without leaving an open blocker. | Later passes still need one stable place to record uncertainty instead of pushing it into code or prose. | Reviewed repo docs, steering files, `pyproject.toml`, `requirements.txt`, `Makefile`, GUI `package.json` files, Tauri `Cargo.toml`, `.github/workflows/`, the existing system map, the prior unknowns log, smoke tooling, and the backend entry surfaces already mapped in the repo. | not declared in repo | Add a row when a later pass finds a boundary it cannot explain from repo evidence. | low |

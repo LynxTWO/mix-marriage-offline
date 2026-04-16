@@ -4,8 +4,8 @@
 
 This file is the repo inventory companion to
 [../02-architecture.md](../02-architecture.md). Use `02-architecture.md` for
-shipped product behavior and scene/render rules. Use this map for runtime
-units, entrypoints, on-disk state, configuration inputs, and trust boundaries.
+shipped product behavior and scene or render rules. Use this map for runtime
+units, entrypoints, runtime state, configuration inputs, and trust boundaries.
 
 ## 1. System summary
 
@@ -14,11 +14,27 @@ units, entrypoints, on-disk state, configuration inputs, and trust boundaries.
 | Repo type | Offline Python application with a packaged Tauri desktop app, a local web dev shell, packaged schemas and ontology data, and release tooling. |
 | Main runtime model | Users drive workflows through the `mmo` CLI, a frozen CLI binary, or the shipped Tauri desktop shell. Those paths write deterministic JSON and YAML artifacts into local project or workspace directories. |
 | Main data stores | No confirmed SQL, NoSQL, cache service, or object-store backend. Runtime state lives in local files: project and session JSON, render artifacts, compare artifacts, scene locks, cached plugin-market snapshots, repo-local or OS cache/temp roots, and packaged data under `schemas/`, `ontology/`, and `src/mmo/data/`. |
-| Main external dependencies | Local `ffmpeg` and `ffprobe`, OS filesystem and subprocess behavior, Tauri shell and WebView, Node/Vite/Playwright for dev and test, Rust/Tauri packaging, GitHub Actions, and GitHub Pages. |
+| Main external systems | Local `ffmpeg` and `ffprobe`, OS filesystem and subprocess behavior, Tauri shell and WebView, Node/Vite/Playwright for dev and test, Rust/Tauri packaging, GitHub Actions, and GitHub Pages. |
 | Main high-risk domains | Render mutation, fallback audio behavior, plugin authority and install roots, filesystem writes and deletes, packaged data resolution, local path handling, and sidecar packaging or release signing. |
-| Explicit absences | No confirmed runtime SaaS API, no database, no message broker, no Docker/Kubernetes/Terraform/Helm deployment stack, and no checked-in `.env.example`. |
+| Explicit absences | No confirmed runtime SaaS API, no database, no message broker, no Docker, Kubernetes, Terraform, or Helm deployment stack, no checked-in `.env.example`, and no `CODEOWNERS` file found. |
 
-## 2. Runtime units and entrypoints
+## 2. Coverage and confidence
+
+This pass relies on the companion ledger at
+[coverage-ledger.md](coverage-ledger.md). The ledger is the coverage source of
+truth. This file summarizes what was scanned and how confident the repo
+evidence looks.
+
+| Coverage topic | Notes |
+| --- | --- |
+| Scanned in this pass | Repo docs and steering files, `pyproject.toml`, `requirements.txt`, `Makefile`, GUI `package.json` files, Tauri `Cargo.toml`, `.github/workflows/`, the existing system map, the unknowns log, smoke harnesses, and the backend entry surfaces already documented in `src/mmo/cli.py`, `src/mmo/cli_commands/_gui_rpc.py`, `gui/server.mjs`, `src/mmo/resources.py`, plugin loading and market flows, and desktop config docs. |
+| Deferred or weaker areas | Deeper desktop frontend state flows and deeper Rust native-shell internals beyond manifests, scripts, documented entrypoints, and smoke surfaces. Those areas are represented in the ledger, but not claimed as fully mapped. |
+| Excluded surfaces | Clearly vendored third-party code such as `gui/desktop-tauri/src-tauri/vendor/glib-0.18.5/`. Generated build output under `target/` is not treated as repo-owned architecture. |
+| High-confidence areas | Python backend runtime units, CLI surfaces, packaged data resolution, project and artifact model, validation and release workflows, and local trust boundaries around artifacts, plugins, and subprocesses. |
+| Weaker-confidence areas | Desktop frontend state ownership behind the packaged UI, and native-shell details beyond the command and packaging surfaces that the docs and config files expose directly. |
+| Coverage claim | This file does not claim full repo coverage. Use the ledger status values to see what is `mapped`, what is only `scanned`, and what remains `deferred` or `excluded`. |
+
+## 3. Runtime units
 
 ### Product and runtime units
 
@@ -37,14 +53,14 @@ units, entrypoints, on-disk state, configuration inputs, and trust boundaries.
 | --- | --- | --- | --- | --- |
 | Validation and build tools | `tools/` | Direct Python or shell invocation, CI jobs | Validate contracts and policies, build docs, build binaries, prepare Tauri sidecar, run fixtures | Read repo state, write build outputs under `dist/`, `sandbox_tmp/`, screenshot dirs, or temp roots |
 | Packaged desktop smoke harness | `tools/smoke_packaged_desktop.py` | CI or local operator run | Launch built bundles, verify the packaged app and bundled sidecar on a clean temp root | Installs or launches desktop bundles, writes smoke summaries and temp workspace artifacts |
-| GitHub Actions CI, release, and docs deployment | `.github/workflows/ci.yml`, `release.yml`, `policy-validation.yml`, `pages.yml` | GitHub events or manual dispatch | Cross-platform validation, packaging, release artifact upload, Pages deploy | Publishes build artifacts, optional Windows signing setup, and `site/` deployment to GitHub Pages |
+| GitHub Actions CI, release, and docs deployment | `.github/workflows/ci.yml`, `release.yml`, `policy-validation.yml`, `pages.yml` | GitHub events or manual dispatch | Cross-platform validation, packaging, release artifact upload, and Pages deploy | Publishes build artifacts, optional Windows signing setup, and `site/` deployment to GitHub Pages |
 
-## 3. Interface surface
+## 4. Interface surface
 
 ### CLI command families
 
-Grouped from `src/mmo/cli.py`. This section lists the human-facing entry surface
-without repeating every parser line.
+Grouped from `src/mmo/cli.py`. This section lists the human-facing entry
+surface without repeating every parser line.
 
 | Command family | Trigger | What it does | Auth or special privilege | Reads and writes | Downstream systems touched |
 | --- | --- | --- | --- | --- | --- |
@@ -107,12 +123,12 @@ Grouped from `gui/server.mjs`.
 | Desktop frontend screens | `gui/desktop-tauri/index.html`, `docs/11-gui-vision.md`, `gui/desktop-tauri/README.md` | The shipped path covers `Doctor -> Validate -> Analyze -> Scene -> Render -> Results -> Compare`. The docs explicitly say the packaged app does not launch the old Node dev server. |
 | Dev-only browser frontend URL | `gui/desktop-tauri/src-tauri/tauri.conf.json` | `devUrl` points to `http://localhost:1420` during local development only. Packaged builds use `../dist`. |
 
-## 4. Data stores and schemas
+## 5. Data stores and runtime state
 
 MMO is artifact-first. The runtime stores state in local files instead of a
 database.
 
-| Store or schema surface | What it stores | Key files or entities | Retention or deletion notes | Non-obvious usage |
+| Store or state boundary | What it stores | Key files or entities | Retention or deletion notes | Non-obvious usage |
 | --- | --- | --- | --- | --- |
 | Packaged registries and contracts | Canonical schema, ontology, preset, and packaged plugin data | `schemas/`, `ontology/`, mirrored packaged data under `src/mmo/data/` | Packaged with the wheel or app. Replaced by reinstall or release upgrade, not by runtime mutation. | `src/mmo/resources.py` can resolve from `MMO_DATA_ROOT`, packaged data, or a repo checkout. That makes contract authority a trust boundary. |
 | Project scaffold and session state | Project metadata, session persistence, project validation, scene locks, and lockfiles | `.mmo_project.json`, session JSON, `project/validation.json`, `scene_locks.yaml`, lock or timeline files referenced by project commands | Persists until a user removes or overwrites it. No global retention policy found in code. | The project scaffold describes nested artifact locations, but later scene and render artifacts can also live at workspace-root paths outside the nested project folder. |
@@ -122,12 +138,12 @@ database.
 | Plugin stores | Built-in manifests, repo checkout plugins, user-installed plugins, and cached offline market snapshot | `plugins/`, `src/mmo/data/plugins/`, `examples/plugin_authoring/`, user plugin dir from `default_user_plugins_dir()`, cache snapshot `plugin_index.snapshot.json`, packaged market assets under `src/mmo/data/plugin_market/assets/plugins/` | User installs and cache snapshots persist until removed or replaced | Runtime plugin root order is primary `--plugins`, external `--plugin-dir` or `MMO_PLUGIN_DIR` or default user dir, then built-in packaged fallback. |
 | Cache and temp roots | Snapshot caches, temporary files, repo-local temp roots, and smoke temp data | `.mmo_cache`, `.mmo_tmp`, OS cache roots, OS temp roots, smoke harness temp dirs | Cache and temp data can be recreated. Cleanup is local or test-driven; no scheduled cleanup service was found. | `src/mmo/resources.py` prefers repo-local cache or temp roots in checkout mode, then falls back to OS locations. |
 
-## 5. External dependencies
+## 6. External systems
 
 The shipped product path is offline-first. No confirmed runtime SaaS or network
 API dependency was found in the application workflow.
 
-### Runtime dependencies
+### Runtime systems
 
 | External system | Why MMO uses it | How it is configured | Runtime units that depend on it | What breaks if it is down | Retry or fallback behavior confirmed in code |
 | --- | --- | --- | --- | --- | --- |
@@ -137,21 +153,21 @@ API dependency was found in the application workflow.
 | Local process spawning | Runs sidecar processes, CLI helpers, and tool discovery | Direct subprocess invocation | Dev shell, Tauri sidecar orchestration, watch-folder automation, smoke harness | RPC, watch-folder batches, or sidecar launches fail | CLI runner falls back from `mmo` to `python -m mmo` in the local dev shell. |
 | Tauri shell and WebView | Packaged desktop shell for the shipped app | `gui/desktop-tauri/src-tauri/tauri.conf.json` and Rust/Tauri build chain | Tauri desktop app | Desktop app cannot launch or render UI | No alternate packaged GUI path exists. Docs say Tauri is the only shipped desktop app. |
 
-### Build, test, and release dependencies
+### Build, test, and release systems
 
 | External system | Why MMO uses it | How it is configured | Who depends on it | What breaks if it is down |
 | --- | --- | --- | --- | --- |
 | Node 24, npm, Vite, local frontend deps | Build the dev shell and desktop frontend assets | `gui/package.json`, `gui/desktop-tauri/package.json` | GUI dev, Tauri frontend builds, GUI tests | Dev shell and desktop frontend builds fail |
-| Playwright | GUI and screenshot automation | `gui/desktop-tauri/tests/`, CI install steps | Screenshot capture and desktop UI tests | Screenshot regeneration and browser-based tests fail |
+| Playwright | GUI and screenshot automation | `gui/desktop-tauri/tests/`, CI install steps | Screenshot regeneration and desktop UI tests | Screenshot capture and browser-based tests fail |
 | Rust 1.94 and Cargo/Tauri toolchain | Build the desktop shell and sidecar integration layer | `gui/desktop-tauri/src-tauri/Cargo.toml`, Tauri workflows | Desktop packaging and smoke flows | Tauri bundles cannot be produced |
-| GitHub Actions | Cross-platform validation, packaging, release, smoke, docs deploy | `.github/workflows/*.yml` | CI, release, pages | Automated validation, packaging, and publication stop |
+| GitHub Actions | Cross-platform validation, packaging, release, smoke, and docs deploy | `.github/workflows/*.yml` | CI, release, and Pages | Automated validation, packaging, and publication stop |
 | GitHub Pages | Hosts `site/` output | `.github/workflows/pages.yml` | Docs site deploy | Site deployment stops |
 | Windows signing certificate and timestamp service | Optional code signing for Windows release bundles | GitHub secrets and release workflow env | Windows release packaging | Signed Windows builds are skipped or fail if signing is required |
 
-## 6. Secrets and configuration
+## 7. Secrets and configuration
 
-No checked-in secret values were found. Runtime and CI read key names from code,
-docs, or workflow env blocks.
+No checked-in secret values were found. Runtime and CI read key names from
+code, docs, or workflow env blocks.
 
 ### Runtime overrides
 
@@ -203,7 +219,7 @@ docs, or workflow env blocks.
 | `MMO_WINDOWS_TIMESTAMP_URL` | `.github/workflows/release.yml` | Optional release input | RFC3161 timestamp URL. Defaults to DigiCert when absent. |
 | `MMO_WINDOWS_SIGNING_ENABLED`, `MMO_WINDOWS_CERT_THUMBPRINT_EFFECTIVE`, `MMO_WINDOWS_TIMESTAMP_URL_EFFECTIVE` | Release workflow after secret validation | Derived CI env | Created inside CI after signing setup succeeds or is skipped. Not user-supplied secrets. |
 
-## 7. Trust boundaries and privilege edges
+## 8. Trust boundaries and privilege edges
 
 | Boundary | Validation or auth at the boundary | Assumptions the code makes | What can go wrong if the boundary is handled loosely |
 | --- | --- | --- | --- |
@@ -217,32 +233,34 @@ docs, or workflow env blocks.
 | Render artifact files -> dev-shell audio streaming | Allowlisted filenames, path checks, and project-root checks guard `/api/audio-stream` | `render_execute.json` points to intended audio files | If path allowlists are bypassed, the server could expose arbitrary local audio or other files |
 | CI and release jobs -> signing secrets and artifact publishing | GitHub Actions secret scoping, release workflow thumbprint checks, artifact path selection | Workflow definitions and secrets stay correct | Weak secret handling can produce unsigned or wrongly signed installers, or publish the wrong assets |
 
-## 8. Critical data flows
+## 9. Critical flows
 
 | Flow | Trigger | Main entrypoints | Data stores read or written | Jobs, queues, or external systems | Key trust boundaries crossed |
 | --- | --- | --- | --- | --- | --- |
-| Packaged desktop workflow `Validate -> Analyze -> Scene -> Render -> Results -> Compare` | User clicks through the shipped desktop app | Tauri frontend + bundled sidecar | Reads project dir, stems, schemas, ontology, plugin data. Writes validation output, `report.json`, `report.scan.json`, `stems_map.json`, `bus_plan.json`, `scene.json`, `scene_lint.json`, `render_manifest.json`, `safe_render_receipt.json`, `render_qa.json`, and `compare_report.json`. | Local sidecar process, `ffmpeg`, `ffprobe`, filesystem | Desktop UI -> sidecar, sidecar -> local tools, user-chosen paths -> project artifacts |
+| Packaged desktop workflow `Validate -> Analyze -> Scene -> Render -> Results -> Compare` | User clicks through the shipped desktop app | Tauri frontend plus bundled sidecar | Reads project dir, stems, schemas, ontology, and plugin data. Writes validation output, `report.json`, `report.scan.json`, `stems_map.json`, `bus_plan.json`, `scene.json`, `scene_lint.json`, `render_manifest.json`, `safe_render_receipt.json`, `render_qa.json`, and `compare_report.json`. | Local sidecar process, `ffmpeg`, `ffprobe`, filesystem | Desktop UI -> sidecar, sidecar -> local tools, user-chosen paths -> project artifacts |
 | CLI analyze to scene to render-many | User runs CLI workflow such as `analyze`, `scene`, `render`, or `variants run` | `mmo analyze`, `mmo scene ...`, `mmo render ...`, `mmo variants ...` | Reads stems, run config, and plugin data. Writes analysis, scene, render, QA, listen-pack, and deliverables artifacts. | Local subprocesses and DSP backends, `ffmpeg`, `ffprobe` | User inputs -> CLI, CLI -> plugin loader, CLI -> tool subprocesses |
 | Project open, edit, save, load, build GUI, and render run | User or GUI client works from a project root | `mmo project show|save|load|build-gui|write-render-request|render-run` and matching RPC methods | Reads `.mmo_project.json`, sessions, reports, scene and render files. Writes updated project state, session JSON, `ui_bundle.json`, `renders/render_request.json`, `renders/*`, and pack archives. | Local filesystem, sidecar or CLI render helpers, plugin metadata | GUI client -> RPC, project state -> artifact writers |
 | Offline plugin market list, update, and install | User inspects or installs a plugin | `mmo plugin list|update|install`, RPC `plugin.market.*` | Reads packaged market index, cached snapshot, installed plugin roots, bundled plugin assets. Writes snapshot cache and copied plugin files into the external user plugin dir or explicit plugin dir. | Cache dir, filesystem, plugin loader | Packaged or cached index -> installer, installer -> user plugin dir |
 | Watch-folder automation from changed stem set to render batch | Operator points MMO at a watch folder | `mmo watch ...` | Reads watched stem-set directories and project config. Writes batch output directories and downstream artifacts produced by invoked CLI runs. | Local polling loop, local subprocess launch, render backends | Untrusted folder contents -> watch queue, watch runner -> CLI subprocesses |
 
-## 9. Operational notes
+## 10. Operational notes
 
 | Topic | Confirmed notes |
 | --- | --- |
+| Environments | Verified runtime surfaces are local CLI, local dev shell, packaged desktop, and GitHub-hosted CI or release jobs. No long-lived service deployment environment was found. |
 | CI matrix | `ci.yml` runs Linux, Windows, and macOS jobs across Python `3.12`, `3.13`, and `3.14`, plus serial Linux, GUI, screenshot, docs-manual, and desktop Tauri jobs. |
 | Validation flow | CI and release both run `python tools/validate_contracts.py`. CI also runs ontology additive-change validation, golden fixtures, plugin-mode goldens, and repo pytest runners. `policy-validation.yml` adds policy, ontology-ref, plugin-manifest, and fixture checks. |
 | Release outputs | `release.yml` builds a manual PDF, Python sdist and wheel, standalone CLI binaries, packaged Tauri bundles, and release artifacts for all supported platforms. |
 | Docs site deployment | `pages.yml` uploads `site/` and deploys it to GitHub Pages on pushes to `main` that touch the site or the workflow itself. |
+| Feature flags | No confirmed remote feature-flag service was found. Behavior toggles are mainly CLI flags, project settings, schemas, and env vars. |
 | Screenshot capture and diff | CI installs Playwright, regenerates Tauri screenshots, uploads them for debugging, and runs `tools/check_screenshot_diff.py` against `docs/manual/assets/screenshots`. |
-| Determinism | The docs and artifact contracts repeatedly describe reports, scene artifacts, compare outputs, and bus plans as deterministic and diffable. |
+| Determinism and idempotency | The docs and artifact contracts repeatedly describe reports, scene artifacts, compare outputs, and bus plans as deterministic and diffable. Many artifact writers use explicit `--force` contracts instead of silent overwrite. |
 | Concurrency and locking | Watch-folder automation keeps a local queue with `pending`, `running`, `succeeded`, and `failed` states. Scene-lock state is stored in `scene_locks.yaml`. No external queue broker or distributed lock service was found. |
 | Retry and fallback | No confirmed general runtime retry or backoff framework was found. The dev shell falls back from `mmo` to `python -m mmo` for CLI startup, and resource resolution falls back across override, packaged, and checkout roots. |
-| Cleanup and maintenance | Cache and temp roots can be recreated. The plugin-market update rewrites its cached snapshot. No scheduled cleanup job or cron-like maintenance unit was found in the repo. |
-| Explicitly absent surfaces | No Dockerfiles, Compose files, Helm charts, Terraform files, Kubernetes manifests, or checked-in `.env.example` were found. No confirmed SQL, NoSQL, or object-storage backend was found. |
+| Cleanup, backfills, and migrations | Cache and temp roots can be recreated. The plugin-market update rewrites its cached snapshot. No scheduled cleanup job, SQL migration system, or backfill runner was found. Ontology additive-change validation is present in CI for schema and ontology discipline. |
+| Explicitly absent surfaces | No Dockerfiles, Compose files, Helm charts, Terraform files, Kubernetes manifests, checked-in `.env.example`, or `CODEOWNERS` file were found. No confirmed SQL, NoSQL, or object-storage backend was found. |
 
-## 10. Known gaps and rough edges
+## 11. Known rough edges
 
 - The same workflow is exposed through raw CLI commands, project helpers, GUI
   RPC, the local dev shell, and the packaged desktop app. Backend artifact
@@ -250,13 +268,17 @@ docs, or workflow env blocks.
   surfaces to understand who owns each step.
 - Artifact ownership is split across project-root files, nested `project/`
   files, and `renders/` outputs. The split is documented, but it is easy to
-  misread without checking both the project docs and the backend validators.
+  misread without checking both project docs and backend validators.
 - Plugin authority spans repo checkout plugins, packaged fallback plugins, and
   user-installed external plugins. The precedence rules are explicit in code,
   but they are not obvious if a reader only looks at one docs page.
+- Desktop frontend and native-shell details are only partly mapped here. The
+  repo has enough evidence to describe entrypoints and packaging, but not to
+  claim deep state-level coverage of the whole Tauri surface.
 - Release packaging spans Python, Node/Vite, Rust/Tauri, Playwright, and
   optional Windows signing. CI documents the path, but local reproduction still
   requires several toolchains.
-- The local dev shell is intentionally not a shipped surface, yet it still
-  exposes HTTP endpoints and artifact readers. Docs should keep calling that
-  distinction out so future work does not treat it like a product API.
+- The local dev shell is intentionally not a shipped surface, yet it still has
+  powerful local read and write capabilities through RPC and allowlisted
+  artifact endpoints. That makes it a real trust boundary even though it is
+  development-only.
