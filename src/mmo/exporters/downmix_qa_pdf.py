@@ -42,6 +42,8 @@ def _severity_label(severity: Any) -> str:
 
 
 def _sorted_measurements(measurements: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    # Match the CSV exporter ordering so the same QA payload reads the same way
+    # no matter which artifact the operator opens.
     return sorted(
         measurements,
         key=lambda item: (
@@ -58,6 +60,8 @@ def _sorted_issues(issues: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
         except (TypeError, ValueError):
             return 0
 
+    # Severity labels are presentation only, so the sort still follows the raw
+    # numeric severity before any PDF-specific wording is applied.
     return sorted(
         issues,
         key=lambda item: (
@@ -75,6 +79,8 @@ def _measurements_table(
     rows = [header]
     for measurement in _sorted_measurements(measurements):
         value = measurement.get("value")
+        # Truncate long evidence payloads here, but keep the table shape fixed
+        # so the PDF does not silently drop measurement rows.
         rendered = render_maybe_json(value, truncate_values)
         rows.append(
             [
@@ -99,6 +105,8 @@ def _issues_table(issues: List[Dict[str, Any]], *, truncate_values: int) -> Tabl
     header = ["issue_id", "severity_label", "message"]
     rows = [header]
     for issue in _sorted_issues(issues):
+        # The label is for readers. The underlying severity order was already
+        # fixed before this presentation layer runs.
         rows.append(
             [
                 _safe_str(issue.get("issue_id")),
@@ -137,6 +145,8 @@ def export_downmix_qa_pdf(
     styles = getSampleStyleSheet()
     story = []
 
+    # Keep the summary block at the top even when later sections are empty. It
+    # is the fixed anchor for every QA PDF.
     story.append(Paragraph("Downmix QA", styles["Title"]))
     story.append(Spacer(1, 12))
 
@@ -151,6 +161,8 @@ def export_downmix_qa_pdf(
 
     measurements = downmix_qa.get("measurements", [])
     if isinstance(measurements, list) and measurements:
+        # Optional sections appear only when the payload has real data. Empty
+        # headings would make missing evidence look like a render bug.
         story.append(Paragraph("Measurements", styles["Heading2"]))
         story.append(Spacer(1, 6))
         story.append(
@@ -179,6 +191,8 @@ def export_downmix_qa_pdf(
         story.append(Spacer(1, 6))
         raw_log = _safe_str(log_value)
         rendered_log = render_maybe_json(log_value, truncate_values, pretty=True)
+        # If truncation removes the whole rendered log, say so plainly instead
+        # of leaving an empty section that looks like a formatter bug.
         if raw_log and not rendered_log:
             story.append(Paragraph("log omitted (truncate limit <= 0)", styles["Normal"]))
         else:

@@ -11,11 +11,15 @@ def truncate_value(value: str, limit: int) -> str:
         return ""
     if len(value) <= limit:
         return value
+    # Keep the suffix explicit so truncated cells still read like partial
+    # evidence instead of a mysteriously short value.
     suffix_len = len(_TRUNCATION_SUFFIX)
     return f"{value[: max(limit - suffix_len, 0)]}{_TRUNCATION_SUFFIX}"
 
 
 def _truncate_json_strings(value: Any, limit: int) -> Any:
+    # Truncate leaf strings only. The JSON container shape stays intact so
+    # exported tables and paragraphs keep the same structure.
     if isinstance(value, str):
         return truncate_value(value, limit)
     if isinstance(value, list):
@@ -38,6 +42,8 @@ def render_maybe_json(value: Any, limit: int, *, pretty: bool = False) -> str:
     if isinstance(value, str):
         trimmed = value.strip()
         if trimmed.startswith("{") or trimmed.startswith("["):
+            # Parse only strings that really decode as JSON. Malformed text
+            # stays literal so the export does not rewrite evidence by guess.
             try:
                 parsed = json.loads(value)
             except json.JSONDecodeError:
