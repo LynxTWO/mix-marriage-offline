@@ -155,6 +155,8 @@ def load_gates_registry(path: Path | None = None) -> GatesRegistry:
         if isinstance(raw_pid, str) and raw_pid.strip():
             policy_id = raw_pid.strip()
     if not policy_id:
+        # The registry carries one policy, but downstream receipts still refer
+        # to it by id. Fail here instead of inventing a policy identifier.
         raise ValueError(
             f"Gates registry _meta.policy_id is required: {resolved_path}"
         )

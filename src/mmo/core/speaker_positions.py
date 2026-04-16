@@ -169,6 +169,8 @@ def load_speaker_positions(path: Path | None = None) -> dict[str, Any]:
 
     layouts = _layouts_map(payload)
     _validate_layout_order(layouts, path=resolved_path)
+    # Normalize every layout before returning it so speaker-index order is the
+    # same for scene builders, UI previews, and tests.
     normalized_layouts = _normalize_layouts(layouts, path=resolved_path)
     return {
         "schema_version": payload.get("schema_version"),

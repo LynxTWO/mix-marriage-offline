@@ -122,6 +122,8 @@ def _validate_patch_regexes(templates: dict[str, dict[str, Any]], *, path: Path)
                 try:
                     re.compile(pattern)
                 except re.error as exc:
+                    # Template matching is data-driven. Fail at load time so a
+                    # bad packaged regex cannot change preview or apply results.
                     raise ValueError(
                         "Scene template regex failed to compile: "
                         f"{template_id} patch[{index}] field={field_name} ({path}): {exc}"
@@ -140,6 +142,8 @@ def load_scene_templates(path: Path | None = None) -> dict[str, Any]:
     templates = _templates_map(payload)
     _validate_template_order(templates, path=resolved_path)
     _validate_patch_regexes(templates, path=resolved_path)
+    # Keep template ids sorted in the returned payload so preview and apply
+    # flows do not depend on YAML insertion order.
     normalized_payload = dict(payload)
     normalized_payload["templates"] = {
         template_id: dict(templates[template_id])

@@ -34,6 +34,8 @@ def build_schema_registry(schemas_dir: Path) -> Any:
     for schema_file in sorted(schemas_dir.glob("*.schema.json")):
         schema = load_json_schema(schema_file)
         resource = Resource.from_contents(schema, default_specification=DRAFT202012)
+        # Register both the file URI and the schema's own $id so packaged,
+        # repo-local, and copied validation callers resolve the same schema.
         registry = registry.with_resource(schema_file.resolve().as_uri(), resource)
         schema_id = schema.get("$id")
         if isinstance(schema_id, str) and schema_id:
@@ -96,6 +98,8 @@ def build_draft202012_validator(
             pass
 
     store: dict[str, dict[str, Any]] = {}
+    # Older jsonschema builds still need a store or RefResolver path. Rebuild a
+    # local store rather than dropping $ref support when registry support lags.
     if isinstance(schemas_dir, Path):
         try:
             store.update(build_schema_store(schemas_dir))
@@ -150,6 +154,8 @@ def unresolved_schema_refs(
         probe_schema = json.loads(json.dumps(schema))
         if base_uri and not isinstance(probe_schema.get("$id"), str):
             probe_schema["$id"] = base_uri
+        # Probe one ref at a time by grafting it into allOf. That keeps the
+        # failure receipt tied to the missing reference instead of instance data.
         all_of = probe_schema.get("allOf")
         if isinstance(all_of, list):
             probe_schema["allOf"] = [*all_of, {"$ref": ref}]

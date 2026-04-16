@@ -116,6 +116,8 @@ def load_intent_params(path: Path | None = None) -> dict[str, Any]:
         schema_path=schemas_dir() / "intent_params.schema.json",
         payload_name="Intent params registry",
     )
+    # Return params in sorted id order so scene editors and validation receipts
+    # compare the same packaged registry payload.
     return {
         "schema_version": payload.get("schema_version"),
         "params": _params_map(payload),
@@ -372,6 +374,8 @@ def validate_scene_intent(
     if not isinstance(params, dict):
         raise ValueError("intent_params.params must be an object.")
 
+    # Scene intent validation emits advisory issues instead of mutating the
+    # scene so editors can show drift against the packaged registry in place.
     normalized_params = {
         param_id: dict(param_spec)
         for param_id, param_spec in params.items()
