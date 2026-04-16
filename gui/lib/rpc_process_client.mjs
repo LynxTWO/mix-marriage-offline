@@ -48,6 +48,8 @@ export class RpcProcessClient {
     const failures = [];
     for (const candidate of this._candidates) {
       try {
+        // Try each CLI launch shape in order and keep the failure list. Startup
+        // errors here are usually environment drift, not RPC payload bugs.
         await this._startCandidate(candidate);
         return;
       } catch (error) {
@@ -73,6 +75,8 @@ export class RpcProcessClient {
     this._stderrLines = [];
     this._bindChild(child);
 
+    // The client is not live until rpc.discover succeeds. That handshake proves
+    // the subprocess can parse requests and return framed JSON responses.
     await this._sendRequestInternal("rpc.discover", {}, this._startupTimeoutMs);
   }
 
@@ -87,6 +91,8 @@ export class RpcProcessClient {
       if (!text) {
         return;
       }
+      // Keep a short stderr tail so startup and crash failures still have a
+      // clue for the browser shell without retaining unbounded process output.
       this._stderrLines.push(...text.split(/\r?\n/));
       if (this._stderrLines.length > 40) {
         this._stderrLines = this._stderrLines.slice(-40);
@@ -138,6 +144,8 @@ export class RpcProcessClient {
       return;
     }
     const id = payload.id;
+    // Match replies by request ID so overlapping browser calls cannot resolve
+    // the wrong pending promise.
     if (!this._pending.has(id)) {
       return;
     }
@@ -160,6 +168,8 @@ export class RpcProcessClient {
 
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
+        // Timeouts must clear the pending entry first so a late line from the
+        // subprocess cannot resolve a promise the caller already gave up on.
         this._pending.delete(requestId);
         reject(new Error(`RPC request timed out (${method}) after ${timeoutMs}ms.`));
       }, timeoutMs);
@@ -196,6 +206,8 @@ export class RpcProcessClient {
 
   async stop() {
     this._stopping = true;
+    // Clear pending callers before killing the subprocess so the browser does
+    // not keep promises alive after an intentional shutdown.
     this._clearPending();
 
     if (this._reader !== null) {
