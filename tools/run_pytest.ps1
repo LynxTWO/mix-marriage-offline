@@ -4,6 +4,21 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $srcDir = Join-Path $repoRoot "src"
 $tmpRoot = Join-Path $repoRoot ".tmp_pytest"
 $baseTemp = Join-Path $tmpRoot "basetemp"
+$pythonBin = $env:MMO_PYTHON_BIN
+
+if (-not $pythonBin) {
+  $repoVenvPython = Join-Path $repoRoot ".venv/bin/python"
+  $repoVenvPythonWin = Join-Path $repoRoot ".venv/Scripts/python.exe"
+  if (Test-Path $repoVenvPython) {
+    $pythonBin = $repoVenvPython
+  }
+  elseif (Test-Path $repoVenvPythonWin) {
+    $pythonBin = $repoVenvPythonWin
+  }
+  else {
+    $pythonBin = "python"
+  }
+}
 
 if ($env:PYTHONPATH) {
   $env:PYTHONPATH = "$srcDir;$($env:PYTHONPATH)"
@@ -27,7 +42,7 @@ if ($env:MMO_PYTEST_N) {
   $previousErrorActionPreference = $ErrorActionPreference
   try {
     $ErrorActionPreference = "Continue"
-    & python -c "import xdist" *> $null
+    & $pythonBin -c "import xdist" *> $null
     if ($null -ne $LASTEXITCODE) {
       $xdistCheckExit = $LASTEXITCODE
     }
@@ -44,5 +59,5 @@ if ($env:MMO_PYTEST_N) {
   $xdist = @('-n', $env:MMO_PYTEST_N, '--dist', 'loadscope')
 }
 
-& python -m pytest @xdist @args --basetemp $baseTemp
+& $pythonBin -m pytest @xdist @args --basetemp $baseTemp
 exit $LASTEXITCODE

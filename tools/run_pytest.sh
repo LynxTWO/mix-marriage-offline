@@ -11,7 +11,11 @@ mkdir -p "${BASE_TEMP}"
 
 PYTHON_BIN="${MMO_PYTHON_BIN:-}"
 if [[ -z "${PYTHON_BIN}" ]]; then
-  if command -v python >/dev/null 2>&1; then
+  # Prefer the repo venv when it exists. Falling through to the system
+  # interpreter breaks local runs on shells that do not expose a `python` shim.
+  if [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
+    PYTHON_BIN="${REPO_ROOT}/.venv/bin/python"
+  elif command -v python >/dev/null 2>&1; then
     PYTHON_BIN="python"
   elif command -v python3 >/dev/null 2>&1; then
     PYTHON_BIN="python3"
