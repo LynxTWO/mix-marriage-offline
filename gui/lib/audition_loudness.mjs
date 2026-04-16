@@ -9,6 +9,8 @@ function _normalizeStreamKind(value) {
 export function resolveAuditionLoudnessDb(pointer) {
   const meters = pointer && typeof pointer === "object" ? pointer.meters : null;
   if (meters && typeof meters === "object") {
+    // Integrated LUFS is the better match target when the receipt includes it.
+    // RMS stays as the fallback for lighter or older meter payloads.
     const integrated = _finiteNumber(meters.integrated_lufs);
     if (integrated !== null) {
       return integrated;
@@ -39,9 +41,13 @@ export function computeAuditionCompensation({
     };
   }
 
+  // Preview compensation trims the stream being auditioned against the other
+  // one. It does not rewrite the saved render or source audio.
   const deltaDb = outputDb - inputDb;
   let gainDb = normalizedStream === "input" ? deltaDb : -deltaDb;
 
+  // No-boost mode stays conservative so preview playback does not jump louder
+  // unless the caller opts into that behavior.
   if (!allowBoost && gainDb > 0) {
     gainDb = 0;
   }
@@ -68,6 +74,8 @@ export function formatAuditionCompensationReceipt(result, { enabled = true } = {
     return "Loudness match: meters unavailable";
   }
 
+  // Receipt text reports the browser preview action only. The wording should
+  // not imply that any gain change was saved back to disk.
   const streamLabel = result.streamKind === "input" ? "Input" : "Output";
   const gainDb = _finiteNumber(result.gainDb) || 0;
   if (gainDb < 0) {
