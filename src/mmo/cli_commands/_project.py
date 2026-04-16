@@ -64,6 +64,8 @@ _VALIDATE_CHECKS: list[tuple[str, str | None, bool]] = [
     ("ui_bundle.json", "ui_bundle.schema.json", False),
 ]
 
+# Keep bundled project artifacts on a narrow allowlist.
+# Adding files here makes them part of the GUI-facing project contract.
 _PROJECT_BUNDLE_ALLOWLIST: tuple[str, ...] = (
     "report.json",
     "listen_pack.json",
@@ -108,6 +110,8 @@ _PROJECT_SHOW_SCHEMA_BY_ARTIFACT: dict[str, str | None] = {
 }
 _PROJECT_SHOW_SCHEMA_BY_ARTIFACT["listen_pack.json"] = "listen_pack.schema.json"
 
+# project.write_render_request is a safe-edit surface, not a generic JSON patch.
+# New writable fields need explicit validation and ownership review.
 _PROJECT_RENDER_REQUEST_EDITABLE_FIELDS: frozenset[str] = frozenset(
     {
         "dry_run",
@@ -126,6 +130,8 @@ _PROJECT_RENDER_REQUEST_POLICY_FIELDS: frozenset[str] = frozenset(
         "gates_policy_id",
     }
 )
+# These outputs belong to the surrounding workspace flow.
+# project validate reports them as references so it does not overclaim scope.
 _PROJECT_VALIDATE_WORKSPACE_ROOT_OUTPUTS: tuple[str, ...] = (
     "scene.json",
     "render_manifest.json",
@@ -519,6 +525,8 @@ def _run_project_validate(
     ok = invalid_count == 0 and not has_missing_required
     has_compat_errors = False
 
+    # Keep scope explicit in the payload. Callers use this validator for project
+    # scaffolds, not as proof that every workspace-root artifact is valid.
     result: dict[str, Any] = {
         "ok": ok,
         "project_dir": project_dir.resolve().as_posix(),
@@ -709,6 +717,8 @@ def _run_project_build_gui(
             print("--scan-out requires --scan.", file=sys.stderr)
             return 1
 
+    # Core outputs share --force because this helper rebuilds them as one pipeline.
+    # Event logs keep a separate flag so audit history is harder to overwrite.
     blocked_force_paths: list[Path] = []
     if scan and normalized_scan_out is not None and normalized_scan_out.exists() and not force:
         blocked_force_paths.append(normalized_scan_out)
@@ -1307,6 +1317,8 @@ def _run_project_write_render_request(
     updated_fields: list[str] = []
     plugin_chain_notes: list[str] = []
 
+    # Only the allowlisted fields below may change.
+    # render_request.json stays a contract artifact, not an open-ended settings bag.
     if "dry_run" in normalized_updates:
         options["dry_run"] = normalized_updates["dry_run"]
         updated_fields.append("dry_run")
@@ -1356,6 +1368,8 @@ def _run_project_write_render_request(
         request_payload.pop("target_layout_id", None)
         updated_fields.append("target_layout_ids")
 
+    # Revalidate the full artifact after safe edits.
+    # Field-level parsing alone does not catch cross-field contract drift.
     try:
         _validate_json_payload(
             request_payload,
@@ -1572,6 +1586,8 @@ def _run_project_render_run(
         print("--recall-sheet-force requires --recall-sheet.", file=sys.stderr)
         return 1
 
+    # Keep overwrite flags split by artifact class. QA, preflight, execute, and
+    # recall outputs are operator-facing evidence, not one disposable temp blob.
     request_path = project_dir / "renders" / "render_request.json"
     scene_path = project_dir / "drafts" / "scene.draft.json"
     plan_out_path = project_dir / "renders" / "render_plan.json"
@@ -1615,6 +1631,8 @@ def _run_project_render_run(
 
         from mmo.cli_commands._scene import _run_render_run_command  # noqa: WPS433
 
+        # Reuse the canonical scene render path so project and non-project runs
+        # stay aligned. The project wrapper owns the only JSON summary it emits.
         # Reuse canonical render-run internals while keeping project wrapper
         # summary deterministic and command-specific.
         with contextlib.redirect_stdout(io.StringIO()):

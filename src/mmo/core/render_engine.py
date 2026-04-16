@@ -718,6 +718,8 @@ def _build_render_report(
     if options.get("gates_policy_id"):
         policies_applied["gates_policy_id"] = options["gates_policy_id"]
 
+    # Aggregate QA after all jobs finish so the report reflects whole-run state,
+    # not the order threads happened to complete.
     # Aggregate QA gates across all jobs.
     all_gates: list[dict[str, Any]] = []
     qa_statuses: list[str] = []
@@ -747,6 +749,8 @@ def _build_render_report(
         )
         loudness_profile_receipt["warnings"] = warnings
 
+    # Sort here so reports and receipts stay deterministic even when jobs ran in
+    # parallel and completed in a different order.
     # Build report job entries (sorted by job_id; strip internal _qa key).
     sorted_results = sorted(
         job_results, key=lambda r: _coerce_str(r.get("job_id"))
@@ -948,6 +952,8 @@ def render_scene_to_targets(
             log_listener=opts.get("log_listener"),
         )
 
+    # Cancellation can stop before planning or between jobs.
+    # Later code must treat completed job outputs as partial but real work.
     cancel_token.raise_if_cancelled()
     plan_started_at = time.monotonic()
     progress.set_phase("plan")
@@ -964,6 +970,8 @@ def render_scene_to_targets(
     source_layout_id = _extract_source_layout_id(scene)
     contract_index = _build_contract_index(contracts)
 
+    # Choose policy IDs before plan build so every job sees one stable decision.
+    # Report assembly records the applied policy state later.
     # Collect policies from contracts (deferred to report assembly); pass
     # explicit overrides to build_render_plan.
     policies: dict[str, str] = {}
@@ -982,6 +990,8 @@ def render_scene_to_targets(
                 policies.setdefault("downmix_policy_id", dmx)
 
     render_targets = contracts_to_render_targets(contracts)
+    # Build the full plan before any job runs.
+    # Partial planning would make retries and receipts depend on thread timing.
     plan = build_render_plan(
         scene,
         render_targets,
@@ -1018,6 +1028,8 @@ def render_scene_to_targets(
     execute_started_at = time.monotonic()
 
     def _run_job(plan_job: dict[str, Any]) -> dict[str, Any]:
+        # Check cancellation again per job so queued work stops before new side
+        # effects start, even if earlier jobs already wrote outputs.
         cancel_token.raise_if_cancelled()
         job_id = _coerce_str(plan_job.get("job_id")).strip()
         target_id = _coerce_str(plan_job.get("target_id")).strip()

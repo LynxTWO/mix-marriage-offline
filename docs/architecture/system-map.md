@@ -1,5 +1,7 @@
 # MMO System Map
 
+<!-- markdownlint-disable-file MD013 MD038 MD056 MD060 -->
+
 This file is the repo inventory companion to
 [../02-architecture.md](../02-architecture.md). Use `02-architecture.md` for
 shipped product behavior and scene/render rules. Use this map for runtime

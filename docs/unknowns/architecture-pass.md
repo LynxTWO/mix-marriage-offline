@@ -1,5 +1,7 @@
 # Architecture Pass Unknowns
 
+<!-- markdownlint-disable-file MD013 -->
+
 This file records unresolved architecture questions from read-only inventory
 passes. Add rows here instead of guessing when a runtime unit, boundary, or
 artifact cannot be explained from repo evidence.

@@ -78,6 +78,8 @@ def resolve_plugin_roots(
         if external not in roots:
             roots.append(external)
     elif external_is_explicit:
+        # An explicit external root is operator intent.
+        # Silent fallback here would load the wrong plugin set.
         raise ValueError(f"External plugin directory does not exist: {external.as_posix()}")
 
     built_in = packaged_plugins_dir()
@@ -122,6 +124,8 @@ def _validate_plugin_root(
     schema_path = schemas_dir() / "plugin.schema.json"
     errors_by_path: dict[str, list[str]] = {}
 
+    # Validate manifests before touching sys.path or importing entrypoints.
+    # A malformed external root should fail before any plugin code runs.
     for manifest_path in _collect_manifests(plugin_root):
         try:
             manifest = _load_yaml(manifest_path)
@@ -157,6 +161,8 @@ def _register_plugin_entries(
     for plugin_root, entries in loaded_by_root:
         source = plugin_root.as_posix()
         if has_non_built_in_entries and source == built_in_source:
+            # Once a repo or external root provides plugins, packaged copies stop
+            # being authoritative. Mixing both would hide stale duplicate IDs.
             # Built-in packaged manifests are only a fallback when no other roots load plugins.
             continue
         for entry in entries:
@@ -191,6 +197,8 @@ def load_registered_plugins(
     loaded_by_root: list[tuple[Path, list[PluginEntry]]] = []
 
     for plugin_root in roots:
+        # Validate each root before import so a bad earlier root cannot be masked
+        # by a later packaged fallback.
         _validate_plugin_root(plugin_root)
         with _plugin_import_paths(plugin_root):
             loaded_by_root.append((plugin_root, _load_plugins_from_dir(plugin_root)))

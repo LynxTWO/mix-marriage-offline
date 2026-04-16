@@ -1,0 +1,2 @@
+gui/desktop-tauri/node_modules/**
+gui/desktop-tauri/src-tauri/vendor/**

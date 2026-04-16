@@ -1,5 +1,9 @@
 # AGENTS.md — MMO Anti-Dark-Code Guide
+
+<!-- markdownlint-disable-file MD013 -->
+
 ## 1. Purpose and scope
+
 `AGENTS.md` is the primary steering file for AI-assisted work in this repo.
 `CLAUDE.md` is a compatibility companion and must follow this file.
 The goal is to keep Mix Marriage Offline explainable, reviewable, and safe to
@@ -9,10 +13,13 @@ This repo is an existing multi-surface system. Keep guidance tied to the real
 MMO surfaces: `src/mmo/`, `schemas/`, `ontology/`, `src/mmo/data/`,
 `plugins/`, `src/mmo/data/plugins/`, `examples/plugin_authoring/`,
 `gui/desktop-tauri/`, `gui/`, and `gui/desktop-tauri/src-tauri/`.
+
 ## 2. What dark code means in this repo
+
 Dark code is production behavior whose purpose, boundaries, failure modes, data
 handling, or ownership cannot be explained from the repo alone.
 In MMO, dark code includes:
+
 - hidden audio mutation, render behavior changes, or fallback behavior that is
   not obvious from code, schemas, receipts, fixtures, and docs
 - hidden filesystem side effects such as silent deletes, bundle rewrites,
@@ -22,35 +29,61 @@ In MMO, dark code includes:
 - schema, ontology, status, or artifact meanings redefined in random call sites
 - missing ownership, failure-mode notes, rollback notes, or sensitivity notes
   for local session data, corpus data, media tags, and machine paths
+
 ## 3. Working modes for existing code
+
 ### Pass 0: Read-only inventory
+
 - Inspection and analysis only.
 - No file changes.
-- Use this pass to identify ownership, contracts, side effects, risks, and missing evidence.
+- Use this pass to identify ownership, contracts, side effects, risks, and
+  missing evidence.
+
 ### Pass 1: Comment and docs only
-- Allowed: comments, manifests, ADRs, runbooks, architecture notes, README sections, and other explanatory docs.
-- Not allowed: logic changes, control-flow changes, import changes, dependency bumps, config changes, schema changes, ontology changes, or formatting sweeps outside touched comment lines.
-- Treat behavior-sensitive comments as code. Do not alter shebangs, encoding markers, pragma comments, linter directives, type-affecting docblocks, SQL hints, or framework magic comments in a docs-only pass.
+
+- Allowed: comments, manifests, ADRs, runbooks, architecture notes, README
+  sections, and other explanatory docs.
+- Not allowed: logic changes, control-flow changes, import changes, dependency
+  bumps, config changes, schema changes, ontology changes, or formatting sweeps
+  outside touched comment lines.
+- Treat behavior-sensitive comments as code. Do not alter shebangs, encoding
+  markers, pragma comments, linter directives, type-affecting docblocks, SQL
+  hints, or framework magic comments in a docs-only pass.
+
 ### Pass 2: Behavior-preserving cleanup
+
 - Only after the area has baseline docs or comments.
 - Requires tests, fixtures, or equivalent evidence that behavior is unchanged.
 - No feature work in the same PR.
 - Keep the cleanup narrow enough that a reviewer can explain why it is safe.
+
 ## 4. Rules for new code
+
 Every non-trivial change must:
+
 - state what changed and why
 - link tests or fixture evidence to the intended behavior
 - add security/privacy, observability, and rollback/failure notes when relevant
 - update docs, manifests, or contract notes when a subsystem changes
+
 Repo-specific rules:
+
 - Keep PRs small and single-purpose.
 - Preserve cross-platform install safety on Linux, Windows, and macOS.
-- Do not assume repo-root paths for packaged or runtime data. Use `mmo.resources`, packaged data, and install-safe entrypoints.
-- Prefer one shared resolver or contract implementation per concept. Do not add parallel CLI-only, desktop-only, or render-only logic unless the split is intentional and documented.
-- Stable IDs only. Never rename or repurpose published ontology IDs, schema enums, or `ISSUE.*` IDs silently. Add new IDs instead.
-- Register new `ISSUE.*` IDs in `ontology/issues.yaml` before they appear in code, tests, docs, or UI fixtures.
-- Keep backend status meanings owned by `src/mmo/core/statuses.py`, schema enums in `schemas/statuses.schema.json`, and display mappings in shared backend or desktop layers.
-- Do not infer success from artifact existence. Emit explicit status, warning, and failure reasons where validity matters.
+- Do not assume repo-root paths for packaged or runtime data. Use
+  `mmo.resources`, packaged data, and install-safe entrypoints.
+- Prefer one shared resolver or contract implementation per concept. Do not add
+  parallel CLI-only, desktop-only, or render-only logic unless the split is
+  intentional and documented.
+- Stable IDs only. Never rename or repurpose published ontology IDs, schema
+  enums, or `ISSUE.*` IDs silently. Add new IDs instead.
+- Register new `ISSUE.*` IDs in `ontology/issues.yaml` before they appear in
+  code, tests, docs, or UI fixtures.
+- Keep backend status meanings owned by `src/mmo/core/statuses.py`, schema
+  enums in `schemas/statuses.schema.json`, and display mappings in shared
+  backend or desktop layers.
+- Do not infer success from artifact existence. Emit explicit status, warning,
+  and failure reasons where validity matters.
 
 Environment preflight is mandatory:
 
@@ -68,6 +101,7 @@ A test command that does not run in the correct environment does not count as
 validation.
 
 ## 5. Unknowns and evidence
+
 Do not guess.
 
 If you cannot confidently explain a file, module, side effect, or contract:
@@ -82,6 +116,7 @@ requested behavior already exists, improve visibility, tests, receipts, or docs
 instead of duplicating enforcement.
 
 ## 6. Sensitive areas that require explicit human approval
+
 Require approval before changing anything that touches:
 
 - auth, access control, secrets, crypto, or any new credential flow
@@ -100,9 +135,10 @@ Require approval before changing anything that touches:
   behavior, GUI RPC flows, local servers, external callbacks, or any new side
   effect that acts outside the current process
 - compliance-sensitive data handling, including any future health, finance,
-  education, child, legal, location, or biometric data
+education, child, legal, location, or biometric data
 
 ## 7. What must never appear in logs, comments, tests, docs, or examples
+
 Never commit or paste:
 
 - passwords, access tokens, API keys, secrets, cookies, session identifiers,
@@ -124,6 +160,7 @@ data. Treat stems, render artifacts, workspace receipts, media tags, and local
 machine paths as sensitive by default.
 
 ## 8. Comment standard
+
 Comments explain why, not what.
 
 When non-obvious code needs a comment, cover the parts that matter:
@@ -140,6 +177,7 @@ Do not add comments that only narrate obvious syntax. Do not use comments to
 hide uncertainty, undocumented policy, or folklore.
 
 ## 9. Writing voice for comments and docs
+
 Use short sentences, plain words, active voice when clearer, and direct naming
 of risks, guardrails, and failure states.
 
@@ -157,6 +195,7 @@ Avoid filler such as:
   `actually`, `simply`, and `just`
 
 ## 10. Documentation minimums
+
 When a subsystem changes, update at least one practical source of truth:
 
 - service or module manifest
@@ -180,6 +219,7 @@ Keep this practical. Do not create policy graveyards or duplicate the same rule
 across multiple files without a reason.
 
 ## 11. PR close-out format
+
 End every PR with a short note that covers:
 
 - what changed in plain English
@@ -195,6 +235,7 @@ validation commands actually run plus blockers if full validation did not
 execute in the correct environment.
 
 ## 12. Repo-specific appendix
+
 Critical systems: `src/mmo/core/` for artifact contracts, planning, QA, and
 statuses; `src/mmo/dsp/` for decode, transcode, export, channel layout, and
 audio-processing boundaries; `src/mmo/plugins/`, `plugins/`, and
