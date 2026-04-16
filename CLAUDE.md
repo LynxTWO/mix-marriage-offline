@@ -1,23 +1,24 @@
-# CLAUDE.md — MMO Compatibility Notes
+# CLAUDE.md - MMO Compatibility Notes
 
 `AGENTS.md` is the authoritative steering file for AI-assisted work in this
-repo. Claude sessions must follow it for:
+repo.
 
-- anti-dark-code rules
-- approval boundaries
-- unknown handling
-- comment and docs standards
+Claude sessions must follow `AGENTS.md` for:
+
+- product principles and standing promises
+- working modes and approval gates
+- coverage-ledger rules
+- unknown and evidence handling
+- writing rules for comments, commits, docs, and PRs
 - sensitive-data handling
 - PR close-out expectations
 
-If this file and `AGENTS.md` ever disagree, follow `AGENTS.md`.
+If this file and `AGENTS.md` disagree, follow `AGENTS.md`.
 
-## Claude-specific workflow
+## Read first
 
-Read these first:
-
-1. `AGENTS.md`
-2. `PROJECT_WHEN_COMPLETE.md`
+1. `PROJECT_WHEN_COMPLETE.md`
+2. `AGENTS.md`
 3. `docs/README.md`
 4. `docs/semantic_contracts.md`
 
