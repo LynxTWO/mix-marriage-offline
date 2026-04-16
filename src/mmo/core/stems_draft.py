@@ -12,6 +12,8 @@ def _sorted_assignments(stems_map: dict[str, Any]) -> list[dict[str, Any]]:
     assignments = stems_map.get("assignments")
     if not isinstance(assignments, list):
         raise ValueError("stems_map has no 'assignments' list")
+    # Draft builders are review tools. One assignment order keeps scene and
+    # routing previews diffable across runs.
     return sorted(
         assignments,
         key=lambda a: (a.get("rel_path", ""), a.get("stem_id", "")),
@@ -54,6 +56,8 @@ def build_draft_scene(
     assignments = _sorted_assignments(stems_map)
     scene_hash = _scene_id_hash(assignments)
 
+    # This payload is preview scaffolding only. Use conservative defaults so
+    # callers do not mistake it for a safe render-ready scene.
     objects: list[dict[str, Any]] = []
     for idx, assignment in enumerate(assignments):
         rel_path = assignment.get("rel_path", "")
@@ -119,6 +123,8 @@ def build_draft_routing_plan(
 
     assignments = _sorted_assignments(stems_map)
 
+    # The default mono-to-stereo mapping is only a review aid for draft output.
+    # Authoritative routing policy lives in the real routing planner.
     routes: list[dict[str, Any]] = []
     for assignment in assignments:
         routes.append({

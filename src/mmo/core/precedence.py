@@ -422,6 +422,8 @@ def _resolve_precedence(
     if inferred_candidate is not None:
         candidates.append(inferred_candidate)
 
+    # Candidate order is the authority order for scene edits: locked override,
+    # explicit scene value, CLI layer, suggested layer, then inferred layer.
     if not candidates:
         return {
             "source": SOURCE_INFERRED,
@@ -633,6 +635,8 @@ def apply_precedence(
     if not isinstance(scene, dict):
         raise ValueError("scene must be an object.")
 
+    # Clone before mutation so callers can compare pre and post precedence
+    # state and so receipt generation never rewrites the input payload in place.
     merged_scene = _json_clone(scene)
     scene_id = _normalize_string(merged_scene.get("scene_id"))
     scene_intent = _ensure_scene_intent(merged_scene)
@@ -658,6 +662,8 @@ def apply_precedence(
     precedence_entries: list[dict[str, Any]] = []
     matched_stem_ids: set[str] = set()
 
+    # Apply scene-wide perspective first. Object and bed fields need the final
+    # scene intent when they look up hard locks.
     scene_perspective = _resolve_precedence(
         locked_value=_normalize_string(scene_override.get("perspective")),
         locked_lock_id=(
@@ -712,6 +718,8 @@ def apply_precedence(
             layer_suggested_obj = layer_objects["suggested"].get(stem_id)
             layer_inferred_obj = layer_objects["inferred"].get(stem_id)
 
+            # Resolve each field separately so one locked placement hint does
+            # not accidentally freeze unrelated role or send-cap changes.
             role_result = _resolve_precedence(
                 locked_value=_normalize_string(override_payload.get("role_id")),
                 locked_lock_id=(
@@ -954,6 +962,8 @@ def apply_precedence(
             )
 
     precedence_entries.sort(key=_entry_sort_key)
+    # Record unmatched override keys in the receipt. A silent miss here would
+    # make a typo in the locks file look like an accepted scene edit.
     unmatched_stem_ids = sorted(
         stem_id
         for stem_id in overrides.keys()
@@ -962,6 +972,8 @@ def apply_precedence(
 
     metadata = merged_scene.get("metadata")
     metadata_payload = metadata if isinstance(metadata, dict) else {}
+    # Write the sorted receipt last so every applied field and unmatched
+    # override reflects the final merged scene.
     precedence_receipt: dict[str, Any] = {
         "version": PRECEDENCE_RECEIPT_VERSION,
         "entries": precedence_entries,
@@ -1040,6 +1052,8 @@ def _lock_conflicts_for_recommendation(
 
     scene_lock_specs = _scene_lock_specs()
     conflicts: list[dict[str, Any]] = []
+    # Recommendation precedence checks collect scene and target locks together
+    # so auto-apply cannot slip past a hard object or bed lock.
     for lock_id in sorted(lock_ids):
         lock_spec = scene_lock_specs.get(lock_id)
         if not isinstance(lock_spec, dict):
@@ -1082,6 +1096,8 @@ def apply_recommendation_precedence(
         ]
         if not hard_conflicts:
             continue
+        # Leave the recommendation visible with conflict evidence, but hard
+        # locks still reject both auto-apply and render eligibility.
         gate_results = recommendation.get("gate_results")
         gate_results = gate_results if isinstance(gate_results, list) else []
         for context in ("auto_apply", "render"):
