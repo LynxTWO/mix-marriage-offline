@@ -108,6 +108,8 @@ def _iter_applicable_recommendations(
         if not recommendation_id:
             continue
         gain_db = _extract_gain_db(rec, param_id)
+        # This renderer is a conservative cleanup pass. Positive gain would
+        # change headroom and clip risk, so it stays out of scope here.
         if gain_db is None or gain_db > 0.0:
             continue
         applicable.append(
@@ -214,6 +216,8 @@ def _route_mapping_entries(
     target_channels: int,
 ) -> List[tuple[int, int, float]] | None:
     mapping_raw = route.get("mapping")
+    # Routing-plan mappings are the authority for channel remap. Invalid rows
+    # fail closed here instead of letting the renderer guess a speaker fold.
     if not isinstance(mapping_raw, list):
         return None
     if not mapping_raw:
@@ -315,6 +319,8 @@ def _render_gain_trim(
         raise ValueError("target_channel_order length must match output channels")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    # Export finalization owns deterministic dither and byte-level output, so
+    # gain-trim renders match the same receipt contract as the main renderers.
     finalizer = StreamingExportFinalizer(
         channels=output_frame_width,
         bit_depth=bits_per_sample,
@@ -342,6 +348,8 @@ def _render_gain_trim(
             pending_samples = pending_samples[aligned_sample_count:]
             output_buffer = aligned_buffer
             if route_mapping is not None:
+                # Route before gain so the rendered channel count and the
+                # manifest's layout metadata describe the same audio.
                 output_buffer = _apply_route_mapping(
                     aligned_buffer,
                     target_channel_order=normalized_target_channel_order,
@@ -351,6 +359,8 @@ def _render_gain_trim(
             out_handle.writeframes(finalizer.finalize_chunk(output_buffer.data))
 
         if pending_samples:
+            # A decoder that leaves a partial frame would desync channel order
+            # from the manifest and finalizer receipts.
             raise ValueError("decoder returned non-frame-aligned sample data")
     write_wav_ixml_chunk(output_path, build_trace_ixml_payload(trace_metadata))
 
@@ -376,6 +386,8 @@ def _resolve_source_and_relative_path(
             relative_path,
             _coerce_str(stem.get("resolve_error_code")).strip() or None,
         )
+    # The relative path is the portable artifact identity. Keep using it even
+    # when the local machine resolved an absolute source path.
     if relative_path is None:
         relative_path = Path(source_path.name)
     return source_path, relative_path, None
@@ -548,6 +560,8 @@ class GainTrimRenderer(RendererPlugin):
                 bits_per_sample = _output_bit_depth(input_bits)
                 render_samples_iter = _iter_wav_samples_for_render(source_path)
             elif extension in _LOSSLESS_FFMPEG_EXTENSIONS:
+                # FFmpeg is allowed only for lossless formats that preserve the
+                # source contract. Lossy sources stay blocked below.
                 if ffmpeg_cmd is None:
                     ffmpeg_cmd = resolve_ffmpeg_cmd()
                 if ffmpeg_cmd is None:
@@ -563,6 +577,8 @@ class GainTrimRenderer(RendererPlugin):
                 bits_per_sample = _output_bit_depth(stem.get("bits_per_sample"))
                 render_samples_iter = _iter_ffmpeg_samples_for_render(source_path, ffmpeg_cmd)
             elif extension in _LOSSY_EXTENSIONS:
+                # Gain trim is meant to preserve stem fidelity. Rewriting lossy
+                # sources would add codec damage to a cleanup recommendation.
                 _append_skipped(skipped, contributions, "lossy_input")
                 continue
             else:
@@ -621,6 +637,8 @@ class GainTrimRenderer(RendererPlugin):
             )
             render_seed = _session_render_seed(session)
             dither_policy = resolve_dither_policy_for_bit_depth(bits_per_sample)
+            # Seed derivation must stay stable for the same job, layout, and
+            # stem so repeated exports hash to the same byte pattern.
             export_seed = derive_export_finalization_seed(
                 job_id=_export_job_id(session),
                 layout_id=receipt_layout_id,
@@ -634,6 +652,8 @@ class GainTrimRenderer(RendererPlugin):
                     "layout_id": receipt_layout_id,
                     "render_seed": render_seed,
                 }
+                # Trace metadata and the finalization receipt are the audit
+                # trail for later bundle, compare, and support work.
                 _render_gain_trim(
                     render_samples_iter,
                     output_path,

@@ -108,6 +108,8 @@ def _parse_ceiling(rec: Dict[str, Any]) -> Optional[float]:
     ceiling = _get_param(params, "PARAM.LIMIT.CEILING_DBFS")
     if ceiling is None:
         ceiling = _DEFAULT_CEILING_DBTP
+    # Clamp to the renderer's safe operating range even if the recommendation
+    # asked for a more aggressive ceiling.
     ceiling = max(_MIN_CEILING_DBTP, min(_MAX_CEILING_DBTP, ceiling))
     return ceiling
 
@@ -133,6 +135,8 @@ def _read_samples_float64(path: Path) -> "tuple[Any, int, int, int]":
     sample_rate_hz = int(meta["sample_rate_hz"])
     channels = int(meta["channels"])
 
+    # The limiter DSP works on a full frame x channel matrix, not a streaming
+    # iterator, so normalize that boundary before the safety check runs.
     interleaved: list[float] = []
     for chunk in iter_wav_float64_samples(path, error_context="limiter render"):
         interleaved.extend(chunk)
@@ -177,6 +181,8 @@ class LimiterRenderer(RendererPlugin):
         try:
             import numpy as np  # noqa: PLC0415
         except ImportError:
+            # This renderer depends on numpy-backed true-peak math. Failing
+            # closed is safer than pretending a limiter pass happened.
             return {
                 "renderer_id": self.plugin_id,
                 "outputs": [],
@@ -226,6 +232,8 @@ class LimiterRenderer(RendererPlugin):
                 continue
 
             if stem_id in seen_stems:
+                # One-stem-once keeps repeated limiter recommendations from
+                # stacking multiple ceiling passes onto the same file.
                 skipped.append({
                     "recommendation_id": _coerce_str(rec.get("recommendation_id")),
                     "action_id": _coerce_str(rec.get("action_id")),
@@ -245,6 +253,8 @@ class LimiterRenderer(RendererPlugin):
                 continue
 
             if stem_path.suffix.lower() not in _WAV_EXTENSIONS:
+                # This renderer does not own decode or transcode policy.
+                # Non-WAV stems must go through the multiformat renderers.
                 skipped.append({
                     "recommendation_id": _coerce_str(rec.get("recommendation_id")),
                     "action_id": _coerce_str(rec.get("action_id")),
@@ -286,7 +296,8 @@ class LimiterRenderer(RendererPlugin):
                 })
                 continue
 
-            # Safety check: reject if any sample would clip
+            # Reject the output if the limiter still leaves a clip risk. A
+            # "best effort" file would hide a mastering failure.
             peak_abs = float(np.max(np.abs(processed))) if processed.size else 0.0
             if peak_abs > _CLIP_CEILING:
                 skipped.append({
