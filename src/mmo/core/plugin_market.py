@@ -350,6 +350,9 @@ def _resolve_install_source_path(
     source_path_raw = market_index.get("source_path")
     if isinstance(source_path_raw, str) and source_path_raw.strip():
         source_path = Path(source_path_raw).resolve()
+        # The index may live beside the install assets or inside a generated
+        # snapshot tree. Probe both relative locations without widening beyond
+        # the repo-managed data roots above.
         candidates.append(source_path.parent / normalized_relative)
         candidates.append(source_path.parent.parent / normalized_relative)
 
@@ -419,6 +422,8 @@ def _is_entry_installable(
         return False
 
     try:
+        # The marketplace list must answer installable or unavailable without
+        # mutating the user plugin root or importing plugin code.
         manifest_rel = _relative_path_without_plugins_prefix(
             manifest_path,
             field_name="manifest_path",
@@ -581,6 +586,8 @@ def install_plugin_market_entry(
         if plugins_dir is not None
         else default_user_plugins_dir().expanduser().resolve()
     )
+    # Marketplace installs write into a writable external root, never back into
+    # packaged plugin data. That keeps shipped data read-only and reinstallable.
     target_manifest = target_root / manifest_rel
     target_module = target_root / module_rel
 

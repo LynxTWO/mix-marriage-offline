@@ -92,6 +92,9 @@ def resolve_plugin_roots(
 @contextmanager
 def _plugin_import_paths(plugin_root: Path) -> Iterator[None]:
     """Temporarily add plugin root search paths for dynamic entrypoint imports."""
+    # Plugin entrypoints may import as either plugins.foo or mmo.plugins.foo.
+    # Keep both search roots scoped to one load call so plugin paths do not
+    # leak into the rest of the process.
     candidates = (plugin_root, plugin_root.parent)
     inserted: list[str] = []
     for candidate in candidates:

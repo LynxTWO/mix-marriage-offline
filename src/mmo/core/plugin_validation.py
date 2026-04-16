@@ -25,6 +25,8 @@ def _normalize_path_text(value: Path | str | None) -> str:
 
 def _resolve_plugins_dir(*, plugins_dir: Path | None, bundled_only: bool) -> Path:
     if bundled_only:
+        # Release and smoke checks use bundled_only so ambient user plugins do
+        # not make packaged validation look healthier than the shipped bundle.
         bundled_plugins_dir = packaged_plugins_dir()
         if bundled_plugins_dir is None:
             raise RuntimeError("Bundled plugins directory is unavailable.")
@@ -83,6 +85,8 @@ def build_plugin_validation_payload(
         entries = load_plugin_root_entries(resolved_plugins_dir)
         plugins = [_plugin_row(entry) for entry in entries]
     except PluginRegistryError as exc:
+        # Keep registry issues structured so CLI and GUI can render the same
+        # failure set without reparsing exception text.
         issues.extend(_issues_from_registry_error(exc))
         if not resolved_plugins_dir_text:
             fallback_path = packaged_plugins_dir() if bundled_only else plugins_dir
@@ -98,6 +102,8 @@ def build_plugin_validation_payload(
         )
 
     if not plugins and not issues:
+        # An empty root is still a failed validation outcome for install and CI
+        # flows. Treating it as success would hide missing packaged content.
         issues.append(
             _plugin_issue(
                 path=resolved_plugins_dir_text,

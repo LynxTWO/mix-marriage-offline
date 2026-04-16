@@ -2034,6 +2034,8 @@ def _build_plugins_validate_payload(
         build_plugin_validation_payload,
     )
 
+    # The CLI reuses the shared backend payload verbatim so validation receipts
+    # stay identical across CLI, GUI, and tests.
     return build_plugin_validation_payload(
         plugins_dir=plugins_dir,
         bundled_only=bundled_only,
@@ -2046,6 +2048,8 @@ def _build_plugin_market_list_payload(
     plugin_dir: Path | None = None,
     index_path: Path | None = None,
 ) -> dict[str, Any]:
+    # Marketplace list and install commands stay thin wrappers around the core
+    # helpers so installed-state and path checks have one authority.
     return build_plugin_market_list_payload(
         plugins_dir=plugins_dir,
         plugin_dir=plugin_dir,
@@ -2302,6 +2306,8 @@ def _build_plugins_show_payload(
     include_ui_layout_snapshot: bool = False,
     include_ui_hints: bool = False,
 ) -> dict[str, Any]:
+    # Plugin show must reuse the shared schema-index builder so manifest, UI
+    # layout, and hint receipts stay aligned with validation output.
     return build_plugin_show_payload(
         plugins_dir=plugins_dir,
         plugin_id=plugin_id,
