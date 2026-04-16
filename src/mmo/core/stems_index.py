@@ -96,6 +96,8 @@ def _set_rank_key(item: dict[str, Any]) -> tuple[int, int, str]:
 
 
 def _validated_root(root: Path) -> Path:
+    # Resolve once up front so every rel_path and set_id is anchored to one
+    # stable root. Mixed roots would change IDs for the same files.
     resolved = root.resolve()
     if not resolved.exists():
         raise ValueError(f"Root directory does not exist: {root}")
@@ -108,6 +110,8 @@ def _source_metadata_for_file(path: Path) -> dict[str, Any]:
     try:
         metadata = read_metadata(path)
     except (ValueError, NotImplementedError):
+        # Leave the file in the index even when probe metadata is missing.
+        # Intake needs a stable row and a warning, not a silent drop.
         return {
             "technical": {},
             "tags": {
@@ -131,12 +135,17 @@ def find_stem_sets(root: Path) -> list[Path]:
     if not audio_files:
         return []
 
+    # If audio already lives at the root, treat the root as the set. Splitting
+    # it into synthetic child sets would change IDs and duplicate coverage.
     if any(path.parent.resolve() == resolved_root for path in audio_files):
         return [resolved_root]
 
     audio_dirs = sorted({path.parent.resolve() for path in audio_files}, key=lambda p: p.as_posix())
     leaf_dirs: list[Path] = []
     for candidate in audio_dirs:
+        # When the root is only a container, prefer leaf stem-set dirs so the
+        # same nested audio tree does not produce overlapping parent and child
+        # candidates.
         has_audio_child = any(
             other != candidate and _is_relative_to(other, candidate)
             for other in audio_dirs
@@ -166,6 +175,8 @@ def _collect_stem_sets(root: Path) -> list[dict[str, Any]]:
                 "_folder_tokens": folder_tokens,
             }
         )
+    # Deterministic ranking keeps "best set" picks stable when several folders
+    # look like plausible stem roots.
     stem_sets.sort(key=_set_rank_key)
     return stem_sets
 
@@ -207,6 +218,8 @@ def build_stems_index(root: Path, *, root_dir: str | None = None) -> dict[str, A
     ]
 
     files: list[dict[str, Any]] = []
+    # Relative paths are the portable intake contract. Stem and source IDs
+    # derive from them so the same tree keeps its identity on another machine.
     rel_paths = [
         _relative_posix(file_path, root=resolved_root)
         for stem_set in stem_sets
@@ -232,6 +245,8 @@ def build_stems_index(root: Path, *, root_dir: str | None = None) -> dict[str, A
                     "source_metadata": _source_metadata_for_file(file_path),
                 }
             )
+    # Sort once here so later classifiers and planners inherit one file order
+    # instead of whatever the filesystem returned.
     files.sort(
         key=lambda item: (
             item["set_id"],

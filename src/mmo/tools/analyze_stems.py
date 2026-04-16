@@ -109,10 +109,15 @@ def _run_render_gain_trim(
 
 
 def _scan_report_path(out_report: Path) -> Path:
+    # The scan receipt is the canonical handoff artifact between raw intake and
+    # the plugin pipeline. Its stable name lets review and repair tooling find
+    # it predictably.
     return out_report.with_name(f"{out_report.stem}.scan{out_report.suffix}")
 
 
 def _resolve_scan_schema(schema: str | None) -> str | None:
+    # Accept the repo-root default token so wrappers can pass the same schema
+    # argument in source and packaged layouts.
     if schema == "schemas/report.schema.json":
         return str(schemas_dir() / "report.schema.json")
     return schema
@@ -184,6 +189,8 @@ def main() -> int:
     scan_report = _scan_report_path(out_report)
     tools_dir: Path | None = None
 
+    # Scan first and commit that receipt to disk before the pipeline mutates
+    # any report fields. That file is the review point for raw intake output.
     exit_code = _run_scan_session(
         tools_dir,
         stems_dir,
@@ -205,12 +212,17 @@ def main() -> int:
     if exit_code != 0:
         return exit_code
 
+    # Only remove the intermediate receipt after the pipeline has produced the
+    # final report. --keep-scan keeps the raw handoff artifact for review or
+    # repair.
     if not args.keep_scan:
         try:
             scan_report.unlink()
         except FileNotFoundError:
             pass
 
+    # Export and render-gain-trim read the committed pipeline output, not the
+    # pre-pipeline scan receipt.
     exit_code = _run_export_report(
         tools_dir,
         out_report,

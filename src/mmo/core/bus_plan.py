@@ -63,7 +63,8 @@ def _group_for_role(
     if raw_group in {"DRUMS", "BASS", "MUSIC"}:
         return raw_group
 
-    # Fall back to role family when explicit grouping is absent.
+    # Fall back to the role family only when explicit grouping is absent. That
+    # keeps older role data routable without adding a second grouping policy.
     if role_id.startswith("ROLE.DRUM."):
         return "DRUMS"
     if role_id.startswith("ROLE.BASS."):
@@ -123,6 +124,8 @@ def _bus_id_for_assignment(
     role_entry: dict[str, Any] | None,
     assignment: dict[str, Any],
 ) -> str:
+    # Honor explicit bus roles first so published bus IDs do not get renamed by
+    # later consolidation rules.
     if role_id.startswith("ROLE.BUS."):
         parts = [part for part in role_id.split(".") if part]
         if len(parts) >= 3:
@@ -140,7 +143,8 @@ def _bus_id_for_assignment(
     if drum_bus is not None:
         return drum_bus
 
-    # Bass stems are collapsed to one deterministic group bus.
+    # Bass stems collapse to one deterministic group bus so layered DI, amp,
+    # and synth tracks do not drift into per-role child buses.
     if role_id.startswith("ROLE.BASS."):
         return "BUS.BASS"
 
@@ -162,6 +166,8 @@ def _assignment_sort_key(item: dict[str, Any]) -> tuple[int, int, str, str]:
     has_track = isinstance(track_index, (int, float)) and not isinstance(track_index, bool)
     rel_path = item.get("rel_path") if isinstance(item.get("rel_path"), str) else ""
     stem_id = item.get("stem_id") if isinstance(item.get("stem_id"), str) else ""
+    # Use authored track order when present. rel_path and stem_id make the
+    # fallback deterministic when track indices are missing.
     return (
         0 if has_track else 1,
         int(track_index) if has_track else 0,
@@ -171,6 +177,8 @@ def _assignment_sort_key(item: dict[str, Any]) -> tuple[int, int, str, str]:
 
 
 def _bus_sort_key(bus_id: str) -> tuple[int, int, str, str]:
+    # Put master first, then parent groups, then children. That stable tree
+    # order keeps bus-plan diffs readable even when upstream dict order moves.
     if bus_id == _MASTER_BUS_ID:
         return (-1, 0, "MASTER", bus_id)
     parts = bus_id.split(".")
@@ -204,6 +212,8 @@ def build_bus_plan(stems_map: dict[str, Any], roles: dict[str, Any]) -> dict[str
         [item for item in assignments_raw if isinstance(item, dict)],
         key=_assignment_sort_key,
     )
+    # Build assignments, bus membership, and summary counts from the same sorted
+    # stream so the receipt cannot disagree with itself about routing totals.
 
     role_entries = _role_lookup(roles)
 
