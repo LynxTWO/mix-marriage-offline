@@ -1,204 +1,97 @@
-# CLAUDE.md — Mix Marriage Offline (MMO)
+# CLAUDE.md — MMO Compatibility Notes
 
-This repo is **Mix Marriage Offline (MMO)**: an offline, deterministic
-stem-folder mixing assistant. The system does objective analysis + safe,
-explainable planning. Humans own intent and taste.
+`AGENTS.md` is the authoritative steering file for AI-assisted work in this
+repo. Claude sessions must follow it for:
 
-Primary goals:
+- anti-dark-code rules
+- approval boundaries
+- unknown handling
+- comment and docs standards
+- sensitive-data handling
+- PR close-out expectations
 
-- Deterministic outputs (same inputs/settings => same outputs).
-- Explainability everywhere (what/why/where/confidence).
-- Strict schemas (JSON schema, `additionalProperties: false`).
-- Bounded authority (no “surprise” destructive actions).
-- Offline-first (no network assumptions in core flows).
+If this file and `AGENTS.md` ever disagree, follow `AGENTS.md`.
 
-## Cross-platform + distributable install contract (Linux, Windows, macOS)
+## Claude-specific workflow
 
-MMO must run correctly in these two modes:
+Read these first:
 
-1. Repo checkout (dev): running from the git workspace.
-2. Installed package (users): running from a wheel/sdist install where repo-root
-   folders are not available.
+1. `AGENTS.md`
+2. `PROJECT_WHEN_COMPLETE.md`
+3. `docs/README.md`
+4. `docs/semantic_contracts.md`
 
-Rules:
+Use this file only for Claude-specific local workflow notes that are not worth
+duplicating in `AGENTS.md`.
 
-- Never assume a repo-root path for loading schemas/ontology/presets/tools. Use
-  a single resolver (e.g., `mmo.resources`) and packaged data via
-  `importlib.resources`, with env overrides.
-- No OS-specific path assumptions:
-  - Use `pathlib` for filesystem paths.
-  - Do not hardcode `/`-absolute paths, drive letters, or shell-specific
-    locations.
-  - Tests must not assert raw path separators.
-- Do not shell out to repo scripts by filesystem path. Prefer
-  `python -m mmo.tools.<module>` for internal tools and keep CLIs install-safe.
-- External dependencies (FFmpeg, etc.) are optional unless explicitly required
-  by a feature. Detect capabilities, gate features, and emit clear “how to
-  enable” messages.
-- CI must test a matrix: ubuntu-latest, windows-latest, macos-latest, and the
-  supported Python range.
-- Encoding: always read/write text as UTF-8 unless a file format requires
-  otherwise.
+## Local Claude agent sync
 
-## Repo map (high level)
+Canonical Claude agent specs live in `docs/claude_agents/`.
+The local `.claude/agents/` directory is a synced workspace copy.
 
-- `src/mmo/core/` deterministic core logic (planners, registries, classifiers,
-  reports).
-- `src/mmo/cli.py` CLI entrypoints; outputs must be stable (ordering,
-  formatting).
-- `ontology/` canonical IDs + registries (roles, lexicons, translation profiles,
-  etc).
-- `schemas/` JSON schemas; keep strict; update contracts + tests together.
-- `tools/` developer tools (validators, corpus scanners, pytest runners).
-- `tests/` deterministic tests; prefer fixtures; assert stable stdout/stderr.
-- `docs/claude_agents/` canonical Claude agent specs (shared via git).
-
-## Claude agent workflow
-
-Agent specs live in `docs/claude_agents/` (tracked in git) and are synced to the
-local `.claude/agents/` directory (gitignored) via:
+Refresh it with:
 
 - `python tools/sync_claude_agents.py`
 
-Run this after cloning or pulling to keep your local agent definitions current.
-The sync is copy-only, allowlist-only, and deterministic.
+Run the sync after cloning or pulling when agent definitions matter.
 
-## Non-negotiables
+## Allowlist-only cleanup
 
-1. Determinism:
-
-- Stable sorting for IDs, rows, and JSON keys where relevant.
-- No timestamps, random IDs, or environment-dependent output.
-- When output is JSON: use stable serialization (e.g.,
-  `indent=2, sort_keys=True` where appropriate).
-
-1. Schema discipline:
-
-- If you add/change a payload, update schema + validate + tests in the same PR.
-- Prefer strict schemas with `additionalProperties: false`.
-
-1. Temp + artifact hygiene (Windows + OneDrive safe) DO NOT do “sweep”
-   deletions
-   based on patterns or name length. DO NOT delete arbitrary root folders.
-
-Allowlist-only cleanup is required. Only delete these repo-local temp dirs if
-they exist:
+Do not do sweep deletions based on patterns, hashes, or name length.
+Only these repo-local temp directories are safe cleanup targets:
 
 - `.tmp_pytest/`
 - `.tmp_codex/`
-- `.tmp_claude/` (new for Claude tooling)
+- `.tmp_claude/`
 - `sandbox_tmp/`
 - `.pytest_cache/`
-- `pytest-cache-files-*` (repo root only, if created by pytest)
+- `pytest-cache-files-*` at repo root
 
-Never delete or modify anything else unless it is an explicit PR change.
+Do not delete anything else unless the change is explicit and approved.
 
-1. Never commit private/local data These must remain untracked/ignored:
+## Repo-safe validation runners
 
-- `corpus/**`
-- `private/**`
-- `*.corpus.jsonl`
-- `*.corpus.stats.json`
-- `*.suggested.yaml` (if generated from private scans)
+Confirm environment truth before coding or validating:
 
-If you need to use local scan outputs, treat them as _inputs only_ and do not
-stage them.
-
-- Do not infer success from artifact existence alone. A written file, completed command, or preserved diagnostic output is not automatically a valid deliverable.
-- Where validity matters, expose explicit machine-readable status, failure reason, and warning state.
-
-## Engineering thoroughness
-
-Avoid speculative complexity: no abstractions for a single use, no hypothetical
-future features, no docstrings or comments on untouched code.
-
-However, do not skip defensive correctness at real system boundaries:
-
-- Handle distinct error modes separately with messages that name the exact
-  failing resource (interpreter path, file, API endpoint, etc.). Lumping all
-  failures into one generic message is not acceptable.
-- Normalize and de-duplicate inputs that can collide through different
-  representations (absolute vs. relative paths, env var aliases, case
-  differences on Windows).
-- Cover real failure paths users will actually hit in CI or cross-platform
-  installs, even if infrequent. Low-probability + high-pain edge cases belong in
-  the code.
-- Verify the reported gap before implementing the fix. If the requested behavior is already enforced indirectly, prefer clarifying visibility, coverage, or comments over adding duplicate enforcement.
-- Do not code from audit language alone; inspect the actual code path, contract, and tests first.
-- Validation order should usually be:
-  1. direct-path tests for the changed contract
-  2. adjacent regressions
-  3. broader smoke / packaged / determinism suites only when warranted
-
-The line: no complexity for hypothetical futures; full thoroughness for real
-operating environments.
-
-## Audio quality + digital-first DSP mandates
-
-All plugin work must preserve MMO's digital-native quality bar and objective QA
-model.
-
-- Prefer information-preserving DSP by default. Only use controlled or creative
-  coloration when explicitly declared in manifest DSP traits.
-- Nonlinearity must be declared. If `capabilities.dsp_traits.linearity` is
-  `nonlinear`, declare a non-`none` anti-aliasing strategy.
-- Determinism must be explicit. Every renderer manifest must declare
-  `capabilities.deterministic_seed_policy`.
-- Every plugin must declare a truth contract with measurable claims. Use
-  `capabilities.dsp_traits.measurable_claims` to define measurable outcome
-  expectations.
-- Plugins must not bypass gates. Plugins may propose or render within contract,
-  but must respect gate outcomes and gate feedback.
-
-## Environment truth first
-
-Before making or validating changes, confirm:
 - active branch
 - working directory
-- correct interpreter / venv
-- whether `pytest` and required dependencies exist in that environment
-- exact validation command that will be used
+- interpreter or virtualenv
+- whether the shell exposes `python`, `python3`, or only repo runners
+- whether `pytest` and extras are installed
+- exact validation command
 
-## Running tests safely (Windows)
+Preferred pytest runners:
 
-Prefer the repo runners that force temp locations into the repo:
+- `tools/run_pytest.sh -q`
+- `tools/run_pytest.ps1 -q`
+- `tools/run_pytest.cmd -q`
 
-- `tools\run_pytest.cmd -q`
-- `tools\run_pytest.cmd -q tests/test_tools_stem_corpus_scan.py`
-- PowerShell alternative:
-  `powershell -NoProfile -ExecutionPolicy Bypass -File tools\run_pytest.ps1 -q`
+These runners set `PYTHONPATH=src` and repo-local temp roots.
+Use `python tools/validate_contracts.py` as the main contract gate.
 
-If pytest capture/tempfile fails in this host environment, you may run with `-s`
-for diagnosis:
+If the environment blocks full validation, report the exact blocker and do not
+claim the change is fully verified.
 
-- `tools\run_pytest.cmd -q -s <test_path>`
+## Packaged desktop and sidecar expectations
 
-Always run:
+Keep packaged desktop behavior install-safe:
 
-- `python tools/validate_contracts.py` …and for UI examples when touched:
-- `python tools/validate_ui_examples.py`
+- no repo-root assumptions for runtime data
+- bundled data must resolve through packaged paths
+- the Tauri desktop app should use the packaged CLI sidecar, not a dev server
+- preserve the frozen CLI sidecar contract based on
+  `src/mmo/_frozen_cli_entrypoint.py` plus `mmo.cli:main`
+- keep sidecar packaging, smoke checks, and bundled plugin resolution explicit
+  and explainable
 
-## Git safety checks before commit
+## Git safety reminders
 
 Before committing:
 
-- `git status --porcelain` must show only intended changes.
-- Confirm nothing under `corpus/` or `private/` is staged.
-- If `.git/index.lock` exists, stop and fix the lock (often OneDrive or a
-  crashed git process).
+- run `git status --porcelain`
+- confirm only intended files are changed
+- confirm nothing under `corpus/` or `private/` is staged
+- stop if `.git/index.lock` exists and resolve the lock first
 
-## Docs Contract
-
-Any PR that changes CLI flags, GUI labels, default targets, profiles, locks,
-gates, or output artifact shapes must also update `docs/manual/` and must still
-pass `DOCS.USER_MANUAL` in `tools/validate_contracts.py`.
-
-## PR finish requirements
-
-Each PR must include:
-
-- A GitHub-ready Change Summary (title + bullets + files touched).
-- Validation commands actually run (and notes if the environment blocks full
-  suite).
-- Clean working tree at end (or a clear note about harmless untracked temp
-  dirs).
+Keep changes focused. Do not quietly mix docs, cleanup, and behavior changes in
+one review unless `AGENTS.md` clearly permits that pass.

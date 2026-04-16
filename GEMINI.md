@@ -7,9 +7,11 @@ You are working in the Mix Marriage Offline (MMO) repository.
 Read these first (source of truth):
 
 1. PROJECT_WHEN_COMPLETE.md (finish line and Definition of Done)
-2. AGENTS.md (repo workflow, commands, constraints)
+2. AGENTS.md (primary anti-dark-code steering file for repo workflow, commands, constraints, approval boundaries, unknown handling, sensitive-data rules, and comment/doc standards)
 3. docs/ (architecture + contracts)
 4. ontology/ and schemas/ (canonical IDs and strict validation)
+
+If guidance here and `AGENTS.md` disagree, follow `AGENTS.md`.
 
 Non-negotiables:
 
