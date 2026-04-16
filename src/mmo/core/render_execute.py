@@ -20,6 +20,8 @@ def _coerce_str(value: Any) -> str:
 
 
 def _canonical_sha256(payload: dict[str, Any]) -> str:
+    # Execute receipts hash canonical JSON so the same logical request or plan
+    # produces the same identity across platforms and dict insertion order.
     canonical = json.dumps(
         payload,
         sort_keys=True,
@@ -30,6 +32,8 @@ def _canonical_sha256(payload: dict[str, Any]) -> str:
 
 
 def _run_id(*, request_sha256: str, plan_sha256: str) -> str:
+    # A run is only reproducible when both the request and the planner output
+    # match. Keep both hashes in the run material so one cannot mask the other.
     material = f"{request_sha256}:{plan_sha256}"
     digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
     return f"RUN.{digest[:16]}"
@@ -66,6 +70,8 @@ def _normalize_paths(raw_paths: Any) -> list[Path]:
     if not isinstance(raw_paths, list):
         return []
 
+    # Resolve, dedupe, and sort paths before they enter the artifact so retries
+    # and platform-specific path spellings cannot reshuffle the same job.
     normalized: dict[str, Path] = {}
     for value in raw_paths:
         if isinstance(value, Path):
@@ -85,6 +91,8 @@ def _file_pointer(
     meters_cache: dict[str, dict[str, float | None]],
 ) -> dict[str, Any]:
     resolved = path.resolve()
+    # Missing files would turn the execute artifact into fake provenance. Fail
+    # here instead of writing a receipt that points to nothing real on disk.
     if not resolved.is_file():
         raise ValueError(f"render_execute file pointer path is missing: {resolved.as_posix()}")
     key = resolved.as_posix()
@@ -172,6 +180,8 @@ def build_render_execute_payload(
 
         ffmpeg_version = _coerce_str(row.get("ffmpeg_version")).strip() or "unknown"
         ffmpeg_commands = _normalize_ffmpeg_commands(row.get("ffmpeg_commands"))
+        # An execute artifact without concrete ffmpeg commands cannot explain
+        # how outputs were produced, so reject partial provenance here.
         if not ffmpeg_commands:
             raise ValueError(f"render_execute job {job_id} is missing ffmpeg_commands.")
 
@@ -201,6 +211,8 @@ def build_render_execute_payload(
 
     if not jobs:
         raise ValueError("render_execute requires at least one executed job row.")
+    # Sort after normalization so the receipt stays stable even if callers feed
+    # completed job rows back in filesystem or worker completion order.
     jobs.sort(key=lambda item: _coerce_str(item.get("job_id")).strip())
 
     return {
